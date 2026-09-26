@@ -28,6 +28,11 @@ WIRE_CLASSES = ("direct-entry", "related-entry", "entry-mention", "context-menti
 MAX_COPY_BYTES = 4_194_304
 MAX_PARTS = 1024
 MAX_COLUMN = 1_048_576
+MAX_NAME_BINDINGS = 32
+MAX_NAME_OCCURRENCES = 32
+MAX_NAME_FRAGMENTS = 32
+MAX_NAME_POSITIONS = 1024
+MAX_U32 = 2**32 - 1
 
 
 def checked_parts(selection: object) -> tuple[list[dict], list[dict]]:
@@ -80,7 +85,8 @@ def checked_parts(selection: object) -> tuple[list[dict], list[dict]]:
 def complete_form(selection: object) -> str:
     """Join only native-proven logical continuity, never screen adjacency."""
     parts, joins = checked_parts(selection)
-    text = ""
+    text = []
+    copied = 0
     for index, part in enumerate(parts):
         if not isinstance(part, dict) or not isinstance(part.get("text"), str):
             raise ValueError("invalid Fixed form part")
@@ -92,11 +98,15 @@ def complete_form(selection: object) -> str:
                 separator = join.get("text")
                 if not isinstance(separator, str) or not separator or set(separator) != {" "}:
                     raise ValueError("invalid native separator")
-                text += separator
+                copied += len(separator.encode("utf-8"))
+                text.append(separator)
             elif join.get("kind") != "direct-contact":
                 raise ValueError("form lacks proven logical continuity")
-        text += part["text"]
-    return text
+        copied += len(part["text"].encode("utf-8"))
+        if copied > MAX_COPY_BYTES:
+            raise ValueError("Fixed form exceeds copy budget")
+        text.append(part["text"])
+    return "".join(text)
 
 
 def displayed_body(selection: object) -> str:
@@ -123,6 +133,80 @@ def displayed_body(selection: object) -> str:
         rows.append(part["text"])
         end_column = part["column"] + part["width"]
     return "".join(rows)
+
+
+def checked_name_occurrences(value: object, forms: list[str], name: str) -> list[dict]:
+    if (not isinstance(value, list)
+            or not 1 <= len(value) <= MAX_NAME_OCCURRENCES):
+        raise ValueError("invalid Fixed name occurrence count")
+    checked = []
+    seen_ordinals = set()
+    for occurrence in value:
+        if not isinstance(occurrence, dict):
+            raise ValueError("invalid Fixed name occurrence")
+        ordinal = occurrence.get("sourceOccurrenceIndex")
+        fragments = occurrence.get("fixedForms")
+        if (type(ordinal) is not int or not 0 <= ordinal <= MAX_U32
+                or ordinal in seen_ordinals
+                or occurrence.get("forms") != [] or occurrence.get("content") != []
+                or not isinstance(fragments, list)
+                or not 1 <= len(fragments) <= MAX_NAME_FRAGMENTS):
+            raise ValueError("invalid Fixed name occurrence projection")
+        seen_ordinals.add(ordinal)
+        positions = []
+        spans: dict[int, tuple[int, int]] = {}
+        for fragment in fragments:
+            if not isinstance(fragment, dict):
+                raise ValueError("invalid Fixed name fragment")
+            form_index = fragment.get("formIndex")
+            start, end = fragment.get("startScalar"), fragment.get("endScalar")
+            if (type(form_index) is not int or type(start) is not int
+                    or type(end) is not int or not 0 <= form_index < len(forms)
+                    or not 0 <= start < end <= len(forms[form_index])):
+                raise ValueError("Fixed name fragment escapes a returned form")
+            # The checked Fixed transfer emits one complete scalar range per
+            # explicit form. A second range in that form could hide omitted
+            # glyphs between fragments while still passing a span check.
+            if form_index in spans:
+                raise ValueError("duplicate Fixed form in one name occurrence")
+            spans[form_index] = (start, end)
+            positions.append({"formIndex": form_index, "startScalar": start,
+                              "endScalar": end, "text": forms[form_index][start:end]})
+        visible = [forms[index][start:end] for index, (start, end) in spans.items()]
+        if not (all(text == name for text in visible)
+                or "".join(visible) == name):
+            raise ValueError("Fixed name fragments do not spell the binding")
+        checked.append({"sourceOccurrenceIndex": ordinal, "fixedForms": positions})
+    return checked
+
+
+def fixed_name_positions(entry: dict, forms: list[str]) -> list[dict]:
+    """Check response-relative scalar ranges against the actual Fixed forms."""
+    names, bindings = entry.get("names"), entry.get("nameBindings")
+    if (not isinstance(names, list) or not names
+            or not all(isinstance(name, str) and name for name in names)
+            or not isinstance(bindings, list)
+            or len(bindings) != len(names) or len(bindings) > MAX_NAME_BINDINGS):
+        raise ValueError("Fixed owner has missing or incomplete name bindings")
+    if sum(len(text.encode("utf-8")) for text in [*forms, *names]) > MAX_COPY_BYTES:
+        raise ValueError("Fixed names and forms exceed copy budget")
+    by_index: dict[int, dict] = {}
+    positions = 0
+    for binding in bindings:
+        if not isinstance(binding, dict):
+            raise ValueError("invalid Fixed name binding")
+        index = binding.get("nameIndex")
+        if (type(index) is not int or not 0 <= index < len(names)
+                or index in by_index):
+            raise ValueError("invalid Fixed name index")
+        occurrences = checked_name_occurrences(
+            binding.get("occurrences"), forms, names[index])
+        positions += sum(len(item["fixedForms"]) for item in occurrences)
+        if positions > MAX_NAME_POSITIONS:
+            raise ValueError("Fixed name positions exceed response budget")
+        by_index[index] = {"name": names[index], "nameIndex": index,
+                           "occurrences": occurrences}
+    return [by_index[index] for index in range(len(names))]
 
 
 def fixed_context(evidence: dict, supports: object) -> dict | None:
@@ -193,6 +277,13 @@ def owner_record(evidence: object, requested: str, supports: object) -> dict:
     if not isinstance(bases, list) or not bases or not all(isinstance(basis, dict) and isinstance(basis.get("kind"), str) for basis in bases):
         raise ValueError("Fixed direct owner lacks evidence bases")
     forms = [complete_form(form) for form in entry["fixedForms"]]
+    bindings = fixed_name_positions(entry, forms)
+    position_count = (len(content["readingBody"]["parts"])
+                      + sum(len(form["parts"]) for form in entry["fixedForms"])
+                      + sum(len(occurrence["fixedForms"]) for binding in bindings
+                            for occurrence in binding["occurrences"]))
+    copied_bytes = sum(len(text.encode("utf-8")) for text in [body, *forms,
+                     *entry["names"]])
     direct_match = False
     for basis in bases:
         basis_kind = basis["kind"]
@@ -200,9 +291,18 @@ def owner_record(evidence: object, requested: str, supports: object) -> dict:
             matches = basis.get("matches")
             if not isinstance(matches, list) or not matches or not all(
                 isinstance(match, dict) and match.get("name") == requested
-                and match["name"] in entry.get("names", []) for match in matches
+                and any(binding["name"] == match["name"]
+                        and binding["occurrences"] == checked_name_occurrences(
+                            match.get("occurrences"), forms, match["name"])
+                        for binding in bindings)
+                for match in matches
             ):
                 raise ValueError("Fixed name basis does not bind the request")
+            position_count += sum(len(occurrence["fixedForms"])
+                                  for match in matches
+                                  for occurrence in checked_name_occurrences(
+                                      match["occurrences"], forms, match["name"]))
+            copied_bytes += sum(len(match["name"].encode("utf-8")) for match in matches)
             direct_match = True
         elif basis_kind == "form":
             matches = basis.get("matches")
@@ -213,6 +313,11 @@ def owner_record(evidence: object, requested: str, supports: object) -> dict:
                 and forms[match["sourceFormIndex"]] == requested for match in matches
             ):
                 raise ValueError("Fixed form basis does not bind the request")
+            position_count += sum(len(occurrence["fixedForms"])
+                                  for match in matches
+                                  for occurrence in checked_name_occurrences(
+                                      match["occurrences"], forms, match["text"]))
+            copied_bytes += sum(len(match["text"].encode("utf-8")) for match in matches)
             direct_match = True
         elif basis_kind == "identity":
             fields = basis.get("fields")
@@ -223,6 +328,8 @@ def owner_record(evidence: object, requested: str, supports: object) -> dict:
             direct_match = True
     if not direct_match:
         raise ValueError("Fixed direct owner has no bound request basis")
+    if position_count > MAX_NAME_POSITIONS or copied_bytes > MAX_COPY_BYTES:
+        raise ValueError("Fixed evidence exceeds a response budget lower bound")
     return {
         "source": evidence.get("source"),
         "id": node.get("id"),
@@ -230,6 +337,7 @@ def owner_record(evidence: object, requested: str, supports: object) -> dict:
         "kind": kind.get("parameterKind", kind.get("kind")),
         "names": entry.get("names"),
         "forms": forms,
+        "nameBindings": bindings,
         "body": " ".join(body.split()),
         "emptyDescription": not body.strip(),
         "aliasGroups": entry.get("aliasGroups"),
@@ -326,6 +434,8 @@ def compare(probe: dict, response: object) -> tuple[str, list[str], list[dict]]:
         for field in ("kind", "names", "forms", "emptyDescription"):
             if got[field] != want[field]:
                 errors.append(f"{source} {field}: {got[field]!r} != {want[field]!r}")
+        if "nameBindings" in want and got["nameBindings"] != want["nameBindings"]:
+            errors.append(f"{source}: wrong Fixed name binding positions")
         for field in ("id", "path"):
             if field in want and got[field] != want[field]:
                 errors.append(f"{source} {field}: {got[field]!r} != {want[field]!r}")
@@ -494,11 +604,17 @@ def self_check() -> None:
         pass
     else:
         raise AssertionError("non-space generated join was accepted")
+    one_occurrence = {"sourceOccurrenceIndex": 0, "forms": [],
+                      "fixedForms": [{"formIndex": 0, "startScalar": 0,
+                                      "endScalar": 2}], "content": []}
     evidence = {"class": "direct-entry", "source": {"source": 1, "line": 4, "column": 2},
                 "outline": {"node": {"id": "x", "path": "1/e1"}},
-                "bases": [{"kind": "name", "matches": [{"name": "-a"}]}],
+                "bases": [{"kind": "name", "matches": [{"name": "-a",
+                                                         "occurrences": [one_occurrence]}]}],
                 "entry": {"kind": {"kind": "parameter", "parameterKind": "option"},
                           "names": ["-a"], "forms": [], "fixedForms": [selection],
+                          "nameBindings": [{"nameIndex": 0,
+                                            "occurrences": [one_occurrence]}],
                           "aliasGroups": []},
                 "content": {"kind": "fixed-owner", "readingBody": {
                     "parts": [{"slice": {"run": 2, "startByte": 0, "endByte": 4},
@@ -510,12 +626,60 @@ def self_check() -> None:
         "total": 1, "returned": 1, "outcome": "evidence",
         "truncation": {"candidates": False, "relations": False,
                        "content": False}, "evidence": [evidence]}
+    binding = {"name": "-a", "nameIndex": 0, "occurrences": [{
+        "sourceOccurrenceIndex": 0, "fixedForms": [{"formIndex": 0,
+            "startScalar": 0, "endScalar": 2, "text": "-a"}]}]}
     want = {"source": {"line": 4, "column": 2}, "kind": "option", "names": ["-a"],
-            "forms": ["-a"], "emptyDescription": False, "bodyIncludes": ["BODY"]}
+            "forms": ["-a"], "nameBindings": [binding], "emptyDescription": False,
+            "bodyIncludes": ["BODY"]}
     probe = {"query": "-a", "review": "source and fixed output checked", "expected": [want]}
     assert compare(probe, response)[0] == "passed"
     assert compare({**probe, "expected": []}, response)[0] == "failure"
     assert compare({**probe, "expected": [{**want, "bodyIncludes": ["OTHER"]}]}, response)[0] == "failure"
+    assert compare({**probe, "expected": [{**want, "nameBindings": []}]}, response)[0] == "failure"
+    wrong_position = {**one_occurrence, "fixedForms": [{"formIndex": 0,
+                       "startScalar": 0, "endScalar": 1}]}
+    assert compare(probe, {**response, "evidence": [{**evidence, "entry": {
+        **evidence["entry"], "nameBindings": [{"nameIndex": 0,
+        "occurrences": [wrong_position]}]}}]})[0] == "unresolved"
+    assert compare(probe, {**response, "evidence": [{**evidence,
+        "bases": [{"kind": "name", "matches": [{"name": "-a",
+             "occurrences": [wrong_position]}]}]}]})[0] == "unresolved"
+    both_shifted = json.loads(json.dumps(response))
+    shifted = {**one_occurrence, "fixedForms": [{"formIndex": 0,
+               "startScalar": 0, "endScalar": 1}]}
+    both_shifted["evidence"][0]["entry"]["nameBindings"][0]["occurrences"] = [shifted]
+    both_shifted["evidence"][0]["bases"][0]["matches"][0]["occurrences"] = [shifted]
+    assert compare(probe, both_shifted)[0] == "unresolved"
+    out_of_range_ordinal = {**one_occurrence, "sourceOccurrenceIndex": MAX_U32 + 1}
+    try:
+        checked_name_occurrences([out_of_range_ordinal], ["-a"], "-a")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("oversized source occurrence index was accepted")
+    skipped_middle = {**one_occurrence, "fixedForms": [
+        {"formIndex": 0, "startScalar": 0, "endScalar": 1},
+        {"formIndex": 0, "startScalar": 2, "endScalar": 3}]}
+    try:
+        checked_name_occurrences([skipped_middle], ["abc"], "abc")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("unreferenced glyph inside a name was accepted")
+    dense_forms = ["a" * 32, "b" * 32]
+    dense_bindings = [{"nameIndex": index, "occurrences": [
+        {"sourceOccurrenceIndex": ordinal, "forms": [], "content": [],
+         "fixedForms": [{"formIndex": index, "startScalar": position,
+                         "endScalar": position + 1} for position in range(32)]}
+        for ordinal in range(32)]} for index in range(2)]
+    try:
+        fixed_name_positions({"names": dense_forms,
+                              "nameBindings": dense_bindings}, dense_forms)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("aggregate name position budget was ignored")
     assert compare(probe, {**response, "evidence": [{**evidence, "contentOmitted": True}]})[0] == "failure"
     assert compare(probe, {**response, "counts": {**response["counts"],
         "directEntry": {"total": 1, "returned": 0}}})[0] == "unresolved"
