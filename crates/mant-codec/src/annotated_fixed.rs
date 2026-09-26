@@ -487,6 +487,7 @@ fn lower_annotated_document_inner(page: &mut AnnotatedDocument) -> Result<Docume
         }
         Ok(())
     })();
+    let mut fixed_validated = false;
     if let Err(error) = semantic_projection {
         isolation_diagnostics.push(isolation::rejected_annotation(
             &error.to_string(),
@@ -502,11 +503,19 @@ fn lower_annotated_document_inner(page: &mut AnnotatedDocument) -> Result<Docume
                 CoverageScope::Document,
             ));
             isolation::strip_invalid_annotations(&mut fixed);
+        } else {
+            fixed_validated = true;
         }
     }
-    fixed.validate().map_err(|error| {
-        AnnotatedProjectionError::RelationDetail(format!("invalid projected Fixed body: {error}"))
-    })?;
+    // A successful proof remains valid only while this Fixed body is
+    // unchanged. The isolation branches mutate it and must validate again.
+    if !fixed_validated {
+        fixed.validate().map_err(|error| {
+            AnnotatedProjectionError::RelationDetail(format!(
+                "invalid projected Fixed body: {error}"
+            ))
+        })?;
+    }
     let mut document = Document {
         parser: Some(ParserInfo {
             name: "libmandoc-annotated".to_owned(),
