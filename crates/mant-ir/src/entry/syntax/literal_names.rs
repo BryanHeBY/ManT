@@ -237,6 +237,34 @@ pub fn scan_option_declarations_with_style_ranges(
     bold_underline_starts: &[usize],
     numeric_name_starts: &[usize],
 ) -> Option<DeclarationScan> {
+    let starts =
+        checked_plain_italic_starts(form, plain_italic_ranges, ItalicStartMode::FirstVisible)?;
+    scan_option_declarations_with_style_core(
+        form,
+        native_operands,
+        &starts,
+        plain_italic_ranges,
+        bold_underline_starts,
+        numeric_name_starts,
+    )
+}
+
+/// Which existing scanner boundary an italic interval contributes.
+#[derive(Clone, Copy)]
+pub(super) enum ItalicStartMode {
+    /// Final-style evidence starts at the first non-whitespace glyph.
+    FirstVisible,
+    /// The legacy textless native-component rule uses the exact range start.
+    ExactRangeStart,
+}
+
+/// Validate final-style intervals and derive the scanner's boundary once.
+/// This walks only the supplied intervals, never the complete HEAD per range.
+pub(super) fn checked_plain_italic_starts(
+    form: &str,
+    plain_italic_ranges: &[Range<usize>],
+    mode: ItalicStartMode,
+) -> Option<Vec<usize>> {
     let mut previous_end = 0;
     let mut starts = Vec::with_capacity(plain_italic_ranges.len());
     for range in plain_italic_ranges {
@@ -247,20 +275,18 @@ pub fn scan_option_declarations_with_style_ranges(
         {
             return None;
         }
-        let visible = &form[range.clone()];
-        if let Some(first) = visible.find(|character: char| !character.is_whitespace()) {
-            starts.push(range.start + first);
+        match mode {
+            ItalicStartMode::FirstVisible => {
+                let visible = &form[range.clone()];
+                if let Some(first) = visible.find(|character: char| !character.is_whitespace()) {
+                    starts.push(range.start + first);
+                }
+            }
+            ItalicStartMode::ExactRangeStart => starts.push(range.start),
         }
         previous_end = range.end;
     }
-    scan_option_declarations_with_style_core(
-        form,
-        native_operands,
-        &starts,
-        plain_italic_ranges,
-        bold_underline_starts,
-        numeric_name_starts,
-    )
+    Some(starts)
 }
 
 fn scan_option_declarations_with_style_core(
@@ -296,7 +322,7 @@ fn scan_option_declarations_with_style_core(
     ))
 }
 
-fn valid_evidence(
+pub(super) fn valid_evidence(
     form: &str,
     native_operands: &[Range<usize>],
     argument_starts: &[usize],
@@ -338,7 +364,8 @@ fn valid_evidence(
     if numeric_name_starts.len() > 64 {
         return false;
     }
-    let head_start = form.len() - form.trim_start().len();
+    let head_start =
+        (!numeric_name_starts.is_empty()).then(|| form.len() - form.trim_start().len());
     let mut operand = 0;
     let mut previous_numeric = None;
     for &start in numeric_name_starts {
@@ -352,7 +379,7 @@ fn valid_evidence(
         }
         previous_numeric = Some(start);
         if native_operands.is_empty() {
-            if start != head_start {
+            if Some(start) != head_start {
                 return false;
             }
             continue;

@@ -429,9 +429,9 @@ fn styled_argument_scan_keeps_long_fragmented_head_bounded() {
     body.validate()
         .expect("scaled native-style selection is valid");
     let scan = body
-        .lexical_declaration_scan(&body.owners[0], &form)
+        .lexical_declaration_recognition(&body.owners[0], &form)
         .expect("complete head remains readable");
-    assert_eq!(scan.names(&form).0, [("-L".to_owned(), 0..2)]);
+    assert_eq!(scan.names(), [("-L".to_owned(), 0..2)]);
     assert_eq!(
         body.lexical_literal_names(&body.owners[0]).unwrap()[0].0,
         "-L"
@@ -490,10 +490,10 @@ fn styled_nonbreaking_space_does_not_consume_the_argument_boundary() {
     body.owners[0].head.joins = vec![TextJoin::DirectContact; 3];
     body.validate().expect("native-like display remains valid");
     let scan = body
-        .lexical_declaration_scan(&body.owners[0], form)
+        .lexical_declaration_recognition(&body.owners[0], form)
         .expect("complete lexical head");
     assert_eq!(
-        scan.names(form).0,
+        scan.names(),
         [("-o".to_owned(), 0..2), ("--output".to_owned(), 4..12)]
     );
     assert_eq!(

@@ -9,14 +9,16 @@ use std::ops::Range;
 type NameRange = (String, Range<usize>);
 
 mod literal_names;
+mod recognition;
+pub(crate) use literal_names::is_complete_hanging_option_head_with_provisional;
 pub use literal_names::{
     DeclarationScan, is_complete_hanging_option_head, literal_option_names,
     scan_option_declarations, scan_option_declarations_with_numeric,
     scan_option_declarations_with_style, scan_option_declarations_with_style_ranges,
 };
-pub(crate) use literal_names::{
-    StyledBoundaryRule, is_complete_hanging_option_head_with_provisional,
-    literal_declaration_scan_with_operands,
+pub use recognition::{
+    DeclarationContext, DeclarationView, RecognitionParts, RecognitionResult,
+    recognize_option_declarations,
 };
 
 /// Leading ordinary dash-option spelling within one visible token.

@@ -157,6 +157,17 @@ replace or merge their original content. Unannotated list and definition items,
 including those in table cells, are transparent to direct-child discovery;
 annotated owners establish a boundary even when their forms or names are invalid.
 
+Inference and read-time proof have different inputs. A native Flow producer
+may use parse-local macro evidence to choose a kind, but the serialized
+`DefinitionItem` retains only its `EntryFacts` and content. Rebuilding an index
+after JSON decoding or mutation verifies the extant kind's structural
+constraints and exact name/form bindings; it does not infer a missing original
+macro from font style. A Fixed owner instead retains its native role and
+component evidence, so its optional facts are checked against the current
+display surface on each untrusted read. `DocumentValidation` can reuse the
+complete Fixed proof only while borrowing that exact immutable body. Neither
+proof is an authenticity claim about a JSON author's stated provenance.
+
 Build both indexes and run shared validation after obtaining a document from
 `mant-engine` or another trusted producer:
 

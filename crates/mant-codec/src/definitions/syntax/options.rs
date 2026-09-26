@@ -6,8 +6,8 @@ use mant_ir::DefinitionItem;
 use mant_ir::inline_plain_text as plain_text;
 pub(crate) use mant_ir::option_prefix;
 use mant_ir::{
-    ContentContext, Inline, is_option_name_body, native_option_token,
-    scan_option_declarations_with_style_ranges,
+    ContentContext, DeclarationContext, DeclarationView, Inline, is_option_name_body,
+    native_option_token, recognize_option_declarations,
 };
 use std::collections::HashSet;
 
@@ -43,18 +43,25 @@ fn checked_option_occurrences_from_term(
 ) -> Option<Vec<RecognizedName>> {
     let form = plain_text(content, term);
     let style = forms::option_style_evidence(content, term, &form, ranges);
-    let scan = scan_option_declarations_with_style_ranges(
-        &form,
-        ranges,
-        &style.plain_italic_ranges,
-        &style.bold_underline_starts,
-        &style.numeric_name_starts,
+    let result = recognize_option_declarations(
+        DeclarationView {
+            visible: &form,
+            native_operands: ranges,
+            plain_italic_ranges: &style.plain_italic_ranges,
+            bold_underline_starts: &style.bold_underline_starts,
+            numeric_name_starts: &style.numeric_name_starts,
+        },
+        if ranges.is_empty() {
+            DeclarationContext::SingleTextOperand
+        } else {
+            DeclarationContext::NativeComponents
+        },
     )?;
-    let (names, over_limit) = scan.names(&form);
-    (!over_limit).then_some(
-        names
-            .into_iter()
-            .map(|(name, range)| RecognizedName::contiguous(&name, range.start))
+    (!result.over_limit()).then_some(
+        result
+            .names()
+            .iter()
+            .map(|(name, range)| RecognizedName::contiguous(name, range.start))
             .collect(),
     )
 }

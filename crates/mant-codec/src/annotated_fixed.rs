@@ -452,7 +452,7 @@ fn lower_annotated_document_inner(page: &mut AnnotatedDocument) -> Result<Docume
                         value_domain: None,
                     });
                 };
-                let identity = native_head_identity(&fixed, owner, &form);
+                let identity = fixed.native_head_identity(owner, &form);
                 let (kind, evidence, name, occurrence) = identity.unwrap_or_else(|| {
                     (
                         EntryKind::Term,
@@ -601,68 +601,6 @@ fn group_bindings(
         }
     }
     (names, bindings)
-}
-
-fn native_head_identity(
-    fixed: &FixedBody,
-    owner: &OwnerMark,
-    form: &str,
-) -> Option<(EntryKind, EntryNameEvidence, String, TextSelection)> {
-    let leading = form.trim_start();
-    let start = form.len() - leading.len();
-    if owner.head_role == Some(OwnerHeadRole::Literal) {
-        let (name, selection) = fixed.literal_command_component(owner)?;
-        let end = start.checked_add(name.len())?;
-        if form.get(start..end) != Some(name.as_str())
-            || !form
-                .get(end..)
-                .is_some_and(|suffix| suffix.is_empty() || suffix.starts_with(char::is_whitespace))
-            || fixed.selection_subrange(&owner.head, start..end).as_ref() != Some(selection)
-        {
-            return None;
-        }
-        return Some((
-            EntryKind::Command,
-            EntryNameEvidence::NativeMarkup,
-            name,
-            selection.clone(),
-        ));
-    }
-    let role_prefix = owner.head_role_prefix.as_deref()?;
-    if !leading.starts_with(role_prefix) {
-        return None;
-    }
-    let (kind, name) = match owner.head_role? {
-        OwnerHeadRole::Option => {
-            crate::definitions::native_option_token(role_prefix).then(|| {
-                (
-                    EntryKind::Parameter {
-                        parameter_kind: ParameterKind::Option,
-                    },
-                    role_prefix.to_owned(),
-                )
-            })?
-        }
-        OwnerHeadRole::Environment => (
-            EntryKind::EnvironmentVariable,
-            crate::definitions::environment_variable_alias(role_prefix)?,
-        ),
-        OwnerHeadRole::Lexical | OwnerHeadRole::Literal => return None,
-    };
-    let end = start.checked_add(name.len())?;
-    if owner.head_role == Some(OwnerHeadRole::Lexical)
-        && !matches!(form.get(end..)?.chars().next(), None | Some('='))
-        && !form.get(end..)?.starts_with(char::is_whitespace)
-    {
-        return None;
-    }
-    let occurrence = fixed.selection_subrange(&owner.head, start..end)?;
-    (fixed.selection_text(&occurrence).as_deref() == Some(name.as_str())).then_some((
-        kind,
-        EntryNameEvidence::NativeMarkup,
-        name,
-        occurrence,
-    ))
 }
 
 fn key(value: u32, error: &'static str) -> Result<NonZeroU32> {

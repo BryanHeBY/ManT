@@ -14,8 +14,6 @@ mod head;
 mod named;
 mod options;
 pub(super) use head::is_inferred_head;
-#[cfg(feature = "native-annotated")]
-pub(crate) use mant_ir::native_option_token;
 pub(crate) use mant_ir::option_prefix;
 pub(crate) use named::{environment_variable_alias, environment_variable_body};
 use named::{is_configuration_key, is_variable_term};

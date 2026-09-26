@@ -209,9 +209,12 @@ impl FixedBody {
             return None;
         }
         let form = self.owner_complete_form(owner)?;
-        let scan = self.lexical_declaration_scan(owner, &form)?;
-        let segments = &scan.ranges;
-        let (literal, over_limit) = scan.names(&form);
+        let scan = self.lexical_declaration_recognition(owner, &form)?;
+        let crate::RecognitionParts {
+            ranges: segments,
+            names: literal,
+            over_limit,
+        } = scan.into_parts();
         if over_limit {
             return None;
         }
@@ -232,7 +235,7 @@ impl FixedBody {
             }
             names.push((name, selection, range));
         }
-        let names = self.checked_lexical_names(owner, names, segments)?;
+        let names = self.checked_lexical_names(owner, names, &segments)?;
         // The parser-alive prefix is a candidate for the first declaration,
         // not permission to ignore the rest of the native HEAD.  Keep it
         // tied to the same final glyphs when it was recorded.
@@ -268,11 +271,11 @@ impl FixedBody {
         clippy::too_many_lines,
         reason = "collect one owner's native component and final-style evidence in display order"
     )]
-    pub(super) fn lexical_declaration_scan(
+    pub(super) fn lexical_declaration_recognition(
         &self,
         owner: &OwnerMark,
         form: &str,
-    ) -> Option<crate::entry::DeclarationScan> {
+    ) -> Option<crate::entry::RecognitionResult> {
         let component_ranges = component_part_ranges(&owner.head, &owner.head_components)
             .and_then(|parts| self.component_byte_ranges(&owner.head, &parts))
             .map(|ranges| owner.head_components.iter().zip(ranges).collect::<Vec<_>>())
@@ -424,31 +427,20 @@ impl FixedBody {
         if offset != form.len() {
             return None;
         }
-        if owner.head_components.is_empty() || !operands.is_empty() {
-            crate::scan_option_declarations_with_style_ranges(
-                form,
-                &operands,
-                &plain_italic_ranges,
-                &bold_underline_starts,
-                &numeric_name_starts,
-            )
-        } else {
-            // Preserve the existing conservative rule for a lexical owner
-            // whose native components are all non-lexical or textless.
-            let mut plain_italic_starts = plain_italic_ranges
-                .iter()
-                .map(|range| range.start)
-                .collect::<Vec<_>>();
-            plain_italic_starts.extend(bold_underline_starts);
-            plain_italic_starts.sort_unstable();
-            plain_italic_starts.dedup();
-            Some(crate::entry::literal_declaration_scan_with_operands(
-                form,
-                &operands,
-                &plain_italic_starts,
-                crate::entry::StyledBoundaryRule::NativeComponents,
-            ))
-        }
+        crate::recognize_option_declarations(
+            crate::DeclarationView {
+                visible: form,
+                native_operands: &operands,
+                plain_italic_ranges: &plain_italic_ranges,
+                bold_underline_starts: &bold_underline_starts,
+                numeric_name_starts: &numeric_name_starts,
+            },
+            if owner.head_components.is_empty() {
+                crate::DeclarationContext::SingleTextOperand
+            } else {
+                crate::DeclarationContext::NativeComponents
+            },
+        )
     }
 
     fn checked_lexical_names(
@@ -915,36 +907,79 @@ impl FixedBody {
         name: &str,
         occurrences: &[TextSelection],
     ) -> bool {
-        let start = form.len() - form.trim_start().len();
-        let Some(end) = start.checked_add(name.len()) else {
-            return false;
-        };
-        if kind == EntryKind::Command && owner.head_role == Some(OwnerHeadRole::Literal) {
-            let Some((native_name, component)) = self.literal_command_component(owner) else {
-                return false;
-            };
-            return native_name == name
-                && form.get(start..end) == Some(name)
-                && form.get(end..).is_some_and(|suffix| {
+        self.native_head_identity(owner, form).is_some_and(
+            |(proved_kind, evidence, proved_name, selection)| {
+                proved_kind == kind
+                    && evidence == EntryNameEvidence::NativeMarkup
+                    && proved_name == name
+                    && occurrences == std::slice::from_ref(&selection)
+            },
+        )
+    }
+
+    /// The same complete, surviving native prefix proof used by the Fixed
+    /// producer and by read-time fact validation. An authored macro role is
+    /// only a candidate: its name must still bind to final visible glyphs.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn native_head_identity(
+        &self,
+        owner: &OwnerMark,
+        form: &str,
+    ) -> Option<(EntryKind, EntryNameEvidence, String, TextSelection)> {
+        let leading = form.trim_start();
+        let start = form.len() - leading.len();
+        if owner.head_role == Some(OwnerHeadRole::Literal) {
+            let (name, selection) = self.literal_command_component(owner)?;
+            let end = start.checked_add(name.len())?;
+            if form.get(start..end) != Some(name.as_str())
+                || !form.get(end..).is_some_and(|suffix| {
                     suffix.is_empty() || suffix.starts_with(char::is_whitespace)
                 })
-                && self.selection_subrange(&owner.head, start..end).as_ref() == Some(component)
-                && occurrences == std::slice::from_ref(component);
-        }
-        let Some(role_prefix) = owner.head_role_prefix.as_deref() else {
-            return false;
-        };
-        let role_proves_name = match (kind, owner.head_role) {
-            (EntryKind::EnvironmentVariable, _) => {
-                crate::environment_variable_alias(role_prefix).as_deref() == Some(name)
+                || self.selection_subrange(&owner.head, start..end).as_ref() != Some(selection)
+            {
+                return None;
             }
-            _ => role_prefix == name && crate::native_option_token(name),
+            return Some((
+                EntryKind::Command,
+                EntryNameEvidence::NativeMarkup,
+                name,
+                selection.clone(),
+            ));
+        }
+        let role_prefix = owner.head_role_prefix.as_deref()?;
+        if !leading.starts_with(role_prefix) {
+            return None;
+        }
+        let (kind, name) = match owner.head_role? {
+            OwnerHeadRole::Option => crate::native_option_token(role_prefix).then(|| {
+                (
+                    EntryKind::Parameter {
+                        parameter_kind: ParameterKind::Option,
+                    },
+                    role_prefix.to_owned(),
+                )
+            })?,
+            OwnerHeadRole::Environment => (
+                EntryKind::EnvironmentVariable,
+                crate::environment_variable_alias(role_prefix)?,
+            ),
+            OwnerHeadRole::Lexical | OwnerHeadRole::Literal => return None,
         };
-        role_proves_name
-            && form.trim_start().starts_with(role_prefix)
-            && form.get(start..end) == Some(name)
-            && self.selection_subrange(&owner.head, start..end).as_ref() == occurrences.first()
-            && occurrences.len() == 1
+        let end = start.checked_add(name.len())?;
+        if owner.head_role == Some(OwnerHeadRole::Lexical)
+            && !matches!(form.get(end..)?.chars().next(), None | Some('='))
+            && !form.get(end..)?.starts_with(char::is_whitespace)
+        {
+            return None;
+        }
+        let occurrence = self.selection_subrange(&owner.head, start..end)?;
+        (self.selection_text(&occurrence).as_deref() == Some(name.as_str())).then_some((
+            kind,
+            EntryNameEvidence::NativeMarkup,
+            name,
+            occurrence,
+        ))
     }
 
     /// A first native Ic/Cm component may prove one complete command token

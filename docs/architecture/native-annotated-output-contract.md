@@ -307,6 +307,28 @@ primary body. An old top-level content tree or old three-optional-coordinate
 search occurrence is rejected by tagged deserialization even if unknown
 fields would otherwise be ignored.
 
+Declaration recognition operates on a borrowed complete visible HEAD. The
+source-neutral option scanner receives checked UTF-8 byte intervals for final
+style and independent native operands; it returns bounded name intervals, not
+another body or a durable cache. Flow maps those intervals back to original
+inline content; Fixed maps them to surviving display slices. Invalid evidence,
+no accepted name, and a name-budget overflow are distinct outcomes. A failed
+complete scan may not publish its first apparent name through another prefix
+fallback. Unknown joins never license a reconstructed complete HEAD.
+
+Native Flow macro-role hints are conversion-local and are not serialized in
+`DefinitionItem`. After a Flow JSON round trip or in-memory edit, read-time
+checks validate retained kind/field constraints and exact name/form/content
+bindings; they cannot certify which original Ev, Va or other macro produced a
+structurally valid category. Fixed retains owner/component evidence and
+rechecks optional entry facts against the current surface and that evidence.
+Neither path treats a previous immutable-operation validation result as a
+cross-edit `validated` flag. Markdown explicit entries retain their author's
+category authority, subject to the same binding and relation checks. Existing
+coverage diagnostics survive a round trip; the absence of Flow's ephemeral
+macro hint alone is not a semantic-coverage failure. This paragraph freezes
+the validation boundary, not expanded non-option recognition.
+
 ## Search and response coordinates
 
 For R02a, `scope=visible` retains Flow/TLDR's current canonical Markdown

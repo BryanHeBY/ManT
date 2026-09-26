@@ -1,6 +1,76 @@
 use super::*;
 
 #[test]
+fn flow_option_fact_roundtrip_keeps_binding_without_serializing_native_hint() {
+    // Exact input ran pinned CVS -Tutf8 -Owidth=78 before this assertion.
+    // man_term.c::pre_TP prints the real HEAD after layout operands and
+    // pre_B selects the initial font; term.c::term_word prints its glyphs.
+    let input = b".TH T 1\n.SH OPTIONS\n.TP\n.B --save\nBody.\n";
+    let mut document = parse_manual_bytes(std::path::Path::new("save.1"), input)
+        .expect("parse complete Flow definition");
+    document.diagnostics.push(mant_ir::Diagnostic {
+        level: mant_ir::DiagnosticLevel::Unsupported,
+        impact: mant_ir::DiagnosticImpact::SemanticCoverage,
+        code: Some("test.producer-coverage-gap".to_owned()),
+        message: "producer reported incomplete optional evidence".to_owned(),
+        source: None,
+        source_key: None,
+        coverage_scope: Some(mant_ir::CoverageScope::Document),
+    });
+    assert!(!mant_ir::semantics_complete(&document.diagnostics));
+    let before = mant_ir::SemanticIndex::build(&document);
+    assert_eq!(before.section("options")[0].names, ["--save"]);
+    let wire = serde_json::to_value(&document).expect("serialize Flow document");
+    let decoded: mant_ir::Document =
+        serde_json::from_value(wire).expect("decode validated Flow facts");
+    assert_eq!(mant_ir::SemanticIndex::build(&decoded), before);
+    assert_eq!(decoded.diagnostics, document.diagnostics);
+    assert!(!mant_ir::semantics_complete(&decoded.diagnostics));
+    assert_eq!(
+        visible_document_text(&decoded),
+        visible_document_text(&document)
+    );
+
+    // The serialized category is a producer fact, not a replayable proof of
+    // the original B macro. A structurally valid Term edit can retain the
+    // exact name; read-time checking must not claim native authentication.
+    let mut recategorized = decoded.clone();
+    let [Block::DefinitionList { items, .. }] =
+        recategorized.flow_mut().expect("Flow document").sections[0]
+            .blocks
+            .as_mut_slice()
+    else {
+        panic!("expected one definition list");
+    };
+    items[0].entry.as_mut().expect("retained facts").kind = mant_ir::EntryKind::Term;
+    let recategorized_index = mant_ir::SemanticIndex::build(&recategorized);
+    let recategorized_entry = &recategorized_index.section("options")[0];
+    assert_eq!(recategorized_entry.kind, mant_ir::EntryKind::Term);
+    assert_eq!(recategorized_entry.names, ["--save"]);
+
+    // A parse-local NativeHeadEvidence witness is absent after the round
+    // trip. Read-time validation checks the retained name against original
+    // content instead of fabricating another macro role from its font.
+    let mut stale = decoded;
+    let [Block::DefinitionList { items, .. }] = stale.flow_mut().expect("Flow document").sections
+        [0]
+    .blocks
+    .as_mut_slice() else {
+        panic!("expected one definition list");
+    };
+    items[0].entry.as_mut().expect("retained facts").names[0] = "--other".to_owned();
+    assert!(
+        mant_ir::SemanticIndex::build(&stale).section("options")[0]
+            .names
+            .is_empty()
+    );
+    assert_eq!(
+        visible_document_text(&stale),
+        visible_document_text(&document)
+    );
+}
+
+#[test]
 fn flow_complete_head_keeps_negative_and_quoted_arguments_out_of_names() {
     // Exact inputs ran the pinned CVS -Tutf8 reference first. man_term.c::
     // pre_TP/pre_IP retain one label; term.c::term_word executes the quoted
