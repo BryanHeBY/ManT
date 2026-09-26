@@ -36,12 +36,14 @@ use raw::{
     mant_annotated_offsetof_result_view_selection_parts,
     mant_annotated_offsetof_selection_part_end_byte,
     mant_annotated_offsetof_selection_part_join_text_start, mant_annotated_render,
-    mant_annotated_result_check, mant_annotated_result_free, mant_annotated_result_view,
+    mant_annotated_result_free, mant_annotated_result_view_sealed,
     mant_annotated_sizeof_coverage_check, mant_annotated_sizeof_coverage_issue,
     mant_annotated_sizeof_display_label, mant_annotated_sizeof_display_row,
     mant_annotated_sizeof_display_run, mant_annotated_sizeof_mark,
     mant_annotated_sizeof_result_view, mant_annotated_sizeof_selection_part,
 };
+#[cfg(test)]
+use raw::{mant_annotated_result_check, mant_annotated_result_view};
 
 struct Handle(NonNull<ResultHandleRaw>);
 
@@ -276,13 +278,11 @@ pub(crate) fn render_annotated(
         return Err(checked_failure(status, failure));
     }
     let handle = Handle(NonNull::new(pointer).ok_or_else(invalid_result)?);
-    let mut failure = FailureView::default();
-    let status = unsafe { mant_annotated_result_check(handle.0.as_ptr(), &raw mut failure) };
-    if status != STATUS_OK {
-        return Err(checked_failure(status, failure));
-    }
     let mut view = ResultView::default();
-    if unsafe { mant_annotated_result_view(handle.0.as_ptr(), &raw mut view) } != STATUS_OK
+    // render_session() made its only full final validation before sealing and
+    // transferring this private handle. The C borrow path rejects an unsealed
+    // or unfinished display; explicit check/view remain deep for C callers.
+    if unsafe { mant_annotated_result_view_sealed(handle.0.as_ptr(), &raw mut view) } != STATUS_OK
         || view.annotation_degraded > 1
         || view.root_source != 1
         || view.width != width

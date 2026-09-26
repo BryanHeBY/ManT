@@ -117,7 +117,8 @@ mant_annotated_build_selection_parts(struct structured_session *session,
 	uint32_t endpoint_count;
 	uint32_t index, first = 0, last_non_layout_run = 0;
 
-	if (session == NULL || result == NULL || display == NULL ||
+	if (session == NULL || result == NULL || result->checked != 0 ||
+	    display == NULL ||
 	    session->status != MANT_STRUCTURED_OK ||
 	    result->selection_parts != NULL || result->selection_part_count != 0 ||
 	    (result->mark_count != 0 && result->marks == NULL) ||

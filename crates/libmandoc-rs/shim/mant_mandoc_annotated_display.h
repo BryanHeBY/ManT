@@ -146,6 +146,11 @@ const struct mant_annotated_run_endpoint *mant_annotated_display_endpoints(
 	const struct mant_annotated_display *, uint32_t *);
 int mant_annotated_display_finish(struct mant_annotated_display *,
 	struct mant_annotated_display_view *);
+/* Borrow an already finished display without any lazy row commit.  Only the
+ * session's validated/sealed result may use this fast path. */
+int mant_annotated_display_view_sealed(
+	const struct mant_annotated_display *,
+	struct mant_annotated_display_view *);
 /* Called only after finish: discard semantic labels without touching glyphs,
  * style, source identities, rows, columns or the visible UTF-8 arena. */
 int mant_annotated_display_clear_annotations(struct mant_annotated_display *);

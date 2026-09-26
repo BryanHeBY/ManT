@@ -136,8 +136,9 @@ fn checked_display<'h>(
     {
         return Err(invalid_result());
     }
-    // The native result check establishes handle ownership; checked_bytes
-    // bounds the arenas, and alignment is checked before these typed borrows.
+    // The native session's final deep check sealed this handle before the
+    // private borrow. checked_bytes bounds transfer sizes, while alignment
+    // is checked before these typed borrows; the handle lives until transfer.
     let rows = if view.display.row_count == 0 {
         &[][..]
     } else {

@@ -152,11 +152,17 @@ unsafe extern "C" {
         result: *mut *mut ResultHandleRaw,
         failure: *mut FailureView,
     ) -> u32;
+    #[cfg(test)]
     pub(super) fn mant_annotated_result_check(
         result: *const ResultHandleRaw,
         failure: *mut FailureView,
     ) -> u32;
+    #[cfg(test)]
     pub(super) fn mant_annotated_result_view(
+        result: *const ResultHandleRaw,
+        view: *mut ResultView,
+    ) -> u32;
+    pub(super) fn mant_annotated_result_view_sealed(
         result: *const ResultHandleRaw,
         view: *mut ResultView,
     ) -> u32;

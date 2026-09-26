@@ -203,7 +203,7 @@ mant_annotated_coverage_build(struct structured_session *session,
 	uint32_t seen[9] = {0};
 	uint32_t producer, dimension, index;
 
-	if (session == NULL || result == NULL ||
+	if (session == NULL || result == NULL || result->checked != 0 ||
 	    session->status != MANT_STRUCTURED_OK ||
 	    (result->mark_count != 0 && result->marks == NULL))
 		return 0;

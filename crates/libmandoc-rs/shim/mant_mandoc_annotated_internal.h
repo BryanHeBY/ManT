@@ -35,6 +35,11 @@ int mant_annotated_result_is_surface_valid(
 	const struct mant_annotated_result *);
 int mant_annotated_result_strip_annotations(
 	struct mant_annotated_result *);
+/* The Rust production entry may borrow this session-sealed handle once.
+ * Explicit public check/view remain deep checks for untrusted C callers. */
+uint32_t mant_annotated_result_view_sealed(
+	const struct mant_annotated_result *,
+	struct mant_annotated_result_view *);
 /* One native join rule is shared by selection construction and validation. */
 uint32_t mant_annotated_native_join(
 	const struct mant_annotated_run_endpoint *, uint32_t, uint32_t,

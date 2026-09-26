@@ -789,6 +789,21 @@ mant_annotated_display_checkpoint(const struct mant_annotated_display *display,
 	return 1;
 }
 
+static void
+fill_view(const struct mant_annotated_display *display,
+    struct mant_annotated_display_view *view)
+{
+	view->bytes = display->bytes;
+	view->byte_count = display->byte_count;
+	view->rows = display->rows;
+	view->row_count = display->row_count;
+	view->runs = display->runs;
+	view->run_count = display->run_count;
+	view->input_bytes = display->input_bytes;
+	view->work = display->work;
+	view->peak_allocated_bytes = display->peak_allocated_bytes;
+}
+
 int
 mant_annotated_display_finish(struct mant_annotated_display *display,
     struct mant_annotated_display_view *view)
@@ -800,19 +815,27 @@ mant_annotated_display_finish(struct mant_annotated_display *display,
 		return 0;
 	if (display->pending_need != 0)
 		return fail(display, MANT_ANNOTATED_DISPLAY_INVALID);
-	if (!display->finished && display->row_touched &&
-	    !finish_row(display, 0))
+	if (!display->finished) {
+		if (display->row_touched && !finish_row(display, 0))
+			return 0;
+		display->finished = 1;
+	}
+	fill_view(display, view);
+	return 1;
+}
+
+int
+mant_annotated_display_view_sealed(
+    const struct mant_annotated_display *display,
+    struct mant_annotated_display_view *view)
+{
+	if (view != NULL)
+		memset(view, 0, sizeof(*view));
+	if (display == NULL || view == NULL || !display->finished ||
+	    display->status != MANT_ANNOTATED_DISPLAY_OK ||
+	    display->pending_need != 0)
 		return 0;
-	display->finished = 1;
-	view->bytes = display->bytes;
-	view->byte_count = display->byte_count;
-	view->rows = display->rows;
-	view->row_count = display->row_count;
-	view->runs = display->runs;
-	view->run_count = display->run_count;
-	view->input_bytes = display->input_bytes;
-	view->work = display->work;
-	view->peak_allocated_bytes = display->peak_allocated_bytes;
+	fill_view(display, view);
 	return 1;
 }
 

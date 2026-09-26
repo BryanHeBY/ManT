@@ -350,12 +350,48 @@ test_one_rejected_link_retains_other_marks(void)
 	mant_annotated_result_free(result);
 }
 
+static void
+test_sealed_private_borrow(void)
+{
+	struct mant_structured_limits cap = limits();
+	struct mant_annotated_result *result = NULL;
+	struct mant_annotated_result_view first, second;
+	struct mant_structured_failure_view failure;
+	struct structured_session session = {0};
+
+	assert(mant_annotated_render(&input, &cap, &result, &failure) ==
+	    MANT_STRUCTURED_OK);
+	assert(result != NULL && result->checked == 1);
+	assert(mant_annotated_result_view_sealed(result, &first) ==
+	    MANT_STRUCTURED_OK);
+	assert(mant_annotated_result_view_sealed(result, &second) ==
+	    MANT_STRUCTURED_OK);
+	assert(first.display.bytes == second.display.bytes &&
+	    first.display.byte_count == second.display.byte_count &&
+	    first.display.rows == second.display.rows &&
+	    first.display.runs == second.display.runs &&
+	    first.marks.ptr == second.marks.ptr);
+	/* A sealed result cannot be rebuilt after the final deep proof. */
+	assert(!mant_annotated_coverage_build(&session, result));
+	assert(!mant_annotated_build_selection_parts(&session, result,
+	    &first.display));
+	result->checked = 0;
+	assert(mant_annotated_result_view_sealed(result, &second) ==
+	    MANT_STRUCTURED_RELATION);
+	assert(second.display.bytes == NULL && second.marks.ptr == NULL);
+	result->checked = 1;
+	assert(mant_annotated_result_check(result, &failure) ==
+	    MANT_STRUCTURED_OK);
+	mant_annotated_result_free(result);
+}
+
 int
 main(void)
 {
 	test_hard_render_budget();
 	test_result_isolation();
 	test_one_rejected_link_retains_other_marks();
+	test_sealed_private_borrow();
 	puts("annotated result isolation: okay");
 	return 0;
 }

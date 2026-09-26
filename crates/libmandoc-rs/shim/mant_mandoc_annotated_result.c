@@ -58,18 +58,12 @@ mant_annotated_result_check(const struct mant_annotated_result *result,
 #define VIEW_SLICE(data, count, type) ((struct mant_slice_view){ \
 	(data), (count), sizeof(type) })
 
-uint32_t
-mant_annotated_result_view(const struct mant_annotated_result *result,
+static uint32_t
+fill_result_view(const struct mant_annotated_result *result,
     struct mant_annotated_result_view *view)
 {
 	const struct mant_structured_result *common;
 
-	if (view == NULL)
-		return MANT_STRUCTURED_INVALID_INPUT;
-	memset(view, 0, sizeof(*view));
-	if (result == NULL || result->checked == 0 ||
-	    !mant_annotated_result_is_valid(result))
-		return MANT_STRUCTURED_RELATION;
 	common = result->common;
 	view->root_source = common->root_source;
 	view->profile = common->profile;
@@ -98,9 +92,43 @@ mant_annotated_result_view(const struct mant_annotated_result *result,
 	    struct mant_annotated_selection_part);
 	view->join_text = VIEW_SLICE(result->join_text,
 	    result->join_text_count, uint8_t);
-	if (!mant_annotated_display_finish(result->display, &view->display))
+	if (!mant_annotated_display_view_sealed(result->display,
+	    &view->display)) {
+		memset(view, 0, sizeof(*view));
 		return MANT_STRUCTURED_RELATION;
+	}
 	return MANT_STRUCTURED_OK;
+}
+
+uint32_t
+mant_annotated_result_view(const struct mant_annotated_result *result,
+    struct mant_annotated_result_view *view)
+{
+	if (view == NULL)
+		return MANT_STRUCTURED_INVALID_INPUT;
+	memset(view, 0, sizeof(*view));
+	if (result == NULL || result->checked == 0 ||
+	    !mant_annotated_result_is_valid(result))
+		return MANT_STRUCTURED_RELATION;
+	return fill_result_view(result, view);
+}
+
+/* This is private to Rust's immediately returned handle.  Session owns all
+ * mutation until the final full check sets checked=1; there is no later lazy
+ * builder or writer.  It is not a replacement for the public deep-check API
+ * on a caller-retained, potentially corrupted handle. */
+uint32_t
+mant_annotated_result_view_sealed(const struct mant_annotated_result *result,
+    struct mant_annotated_result_view *view)
+{
+	if (view == NULL)
+		return MANT_STRUCTURED_INVALID_INPUT;
+	memset(view, 0, sizeof(*view));
+	if (result == NULL || result->checked != 1 ||
+	    result->magic != MANT_ANNOTATED_MAGIC ||
+	    result->common == NULL || result->display == NULL)
+		return MANT_STRUCTURED_RELATION;
+	return fill_result_view(result, view);
 }
 
 void
