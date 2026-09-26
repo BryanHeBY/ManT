@@ -2128,6 +2128,25 @@
           }
         ]
       },
+      "DisplayStyle": {
+        "description": "Final font style, not raw terminal overstrike bytes.",
+        "type": "object",
+        "properties": {
+          "bold": {
+            "description": "Native bold styling.",
+            "type": "boolean"
+          },
+          "underline": {
+            "description": "Native underline styling.",
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "bold",
+          "underline"
+        ]
+      },
       "DocumentAddress": {
         "description": "Stable selector for one discoverable document candidate.",
         "oneOf": [
@@ -2776,7 +2795,152 @@
               "outline",
               "entry"
             ]
+          },
+          {
+            "description": "Exact native content before the first Fixed section.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "fixed-document-root"
+              },
+              "outline": {
+                "description": "Complete logical location in the document outline.",
+                "$ref": "#/$defs/OutlineTrail"
+              },
+              "view": {
+                "description": "Checked physical display fragments, without a synthesized Flow body.",
+                "$ref": "#/$defs/FixedExcerptSelection"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "outline",
+              "view"
+            ]
+          },
+          {
+            "description": "One native Fixed section title, body, owners, regions and descendants.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "fixed-document-section"
+              },
+              "outline": {
+                "description": "Complete logical location in the document outline.",
+                "$ref": "#/$defs/OutlineTrail"
+              },
+              "view": {
+                "description": "Checked physical display fragments in final native order.",
+                "$ref": "#/$defs/FixedExcerptSelection"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "outline",
+              "view"
+            ]
+          },
+          {
+            "description": "One semantic Fixed owner and its complete native reading body.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "fixed-document-entry"
+              },
+              "outline": {
+                "description": "Complete logical location in the document outline.",
+                "$ref": "#/$defs/OutlineTrail"
+              },
+              "view": {
+                "description": "Checked physical display fragments in final native order.",
+                "$ref": "#/$defs/FixedExcerptSelection"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "outline",
+              "view"
+            ]
           }
+        ]
+      },
+      "FixedExcerptPart": {
+        "description": "One surviving native run slice in a selected structural reading view.",
+        "type": "object",
+        "properties": {
+          "column": {
+            "description": "Exact zero-based terminal column of this fragment.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "row": {
+            "description": "One-based final native physical row.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 1
+          },
+          "slice": {
+            "description": "Run-relative UTF-8 byte range checked by the producer.",
+            "$ref": "#/$defs/OutputSlice"
+          },
+          "source": {
+            "description": "Surviving source identity, when present on the final run.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SourceKey"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "style": {
+            "description": "Final style after native overstrike folding.",
+            "$ref": "#/$defs/DisplayStyle"
+          },
+          "text": {
+            "description": "Exact selected UTF-8 bytes.",
+            "type": "string"
+          },
+          "width": {
+            "description": "Native terminal-cell width, not UTF-8 length or Unicode scalar count.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "slice",
+          "row",
+          "column",
+          "width",
+          "style",
+          "text"
+        ]
+      },
+      "FixedExcerptSelection": {
+        "description": "A complete selected native display range, with no synthetic text joins.",
+        "type": "object",
+        "properties": {
+          "parts": {
+            "description": "Fragments in final surface order. Row gaps represent real blank lines.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/FixedExcerptPart"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "parts"
         ]
       },
       "FixedLine": {
@@ -3637,6 +3801,36 @@
         "additionalProperties": false,
         "required": [
           "node"
+        ]
+      },
+      "OutputSlice": {
+        "description": "One half-open UTF-8 byte range in a final run.",
+        "type": "object",
+        "properties": {
+          "endByte": {
+            "description": "Exclusive run-relative byte offset.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          },
+          "run": {
+            "description": "Final run key, not a temporary buffer token.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 1
+          },
+          "startByte": {
+            "description": "Inclusive run-relative byte offset.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "run",
+          "startByte",
+          "endByte"
         ]
       },
       "ParameterKind": {
@@ -17051,7 +17245,7 @@
         ]
       },
       "OwnerHeadRole": {
-        "description": "First significant native macro in a definition head, captured while the\nupstream AST is alive. This is authored role evidence, not a semantic kind.",
+        "description": "Native macro role in a definition head, captured while the upstream AST is\nalive. The typed owner retains the first surviving component role when an\nearlier authored instance emits no glyph. This is role evidence, not a\nsemantic kind.",
         "oneOf": [
           {
             "description": "An authored option head, such as mdoc `Fl`.",
@@ -17149,7 +17343,7 @@
             }
           },
           "headRole": {
-            "description": "Native first-head role, if one survived the head AST boundary.",
+            "description": "Native first-head role, if any. Projection replaces a zero-glyph first\ninstance with the first visible component role; a missing raw role is\nnever inferred from a later component. Read-time proof checks this\npersisted role against surviving component selections.",
             "anyOf": [
               {
                 "$ref": "#/$defs/OwnerHeadRole"

@@ -167,7 +167,7 @@ fn tldr() -> TldrDocument {
 }
 
 #[test]
-fn empty_fixed_body_uses_fixed_outline_without_flow_excerpt() {
+fn empty_fixed_body_uses_fixed_outline_and_rejects_absent_root_excerpt() {
     let mut query = query();
     query.document.as_mut().unwrap().body = mant_ir::DocumentBody::Fixed(mant_ir::FixedBody {
         surface: mant_ir::DisplaySurface {
@@ -185,7 +185,10 @@ fn empty_fixed_body_uses_fixed_outline_without_flow_excerpt() {
     assert!(outline.nodes.is_empty());
     assert_eq!(
         select_excerpt(&query, &[ContentSelector::path("root")]),
-        Err(ProjectionError::UnsupportedFixed)
+        Err(ProjectionError::UnknownSelector {
+            document: "demo".to_owned(),
+            selector: "path:root".to_owned(),
+        })
     );
     let explanation =
         super::select_explanation(&query, "needle").expect("empty Fixed explanation remains valid");

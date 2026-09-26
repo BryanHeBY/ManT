@@ -1,6 +1,7 @@
 //! Deterministic body and report renderers over existing IR and protocol facts.
 
 mod explanation;
+mod fixed_excerpt;
 mod json;
 pub use explanation::{
     render_explanation_markdown, render_explanation_text, render_explanation_text_with,

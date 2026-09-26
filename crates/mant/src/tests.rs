@@ -735,6 +735,271 @@ fn annotated_preview_uses_the_real_cli_query_and_recovers_after_rejected_input()
 
 #[test]
 #[cfg(feature = "annotated-preview")]
+fn annotated_preview_node_reads_native_template_head_without_a_flow_body() {
+    use std::{fs, path::PathBuf};
+
+    // Exact input ran target/mandoc-migration/reference/mandoc -Tutf8
+    // -O width=78 first. Pinned man_term.c::pre_TP/post_TP keeps the label
+    // in HEAD and its body indented; pre_SH owns the section boundary.
+    let source = b".TH ENTRY-TERMS 1\nNative preface.\n.SH ENVIRONMENT\n.TP\n.B FILE_TEMPLATE_*\nA family of names.\n";
+    let directory =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/annotated-preview-tests");
+    fs::create_dir_all(&directory).expect("repository target directory");
+    let path = directory.join(format!("node-template-{}.1", std::process::id()));
+    fs::write(&path, source).expect("write exact reference-checked source");
+    let name = path.to_str().expect("UTF-8 repository path");
+    let host = FakeHost::new();
+    let args = [
+        "--annotated-preview",
+        "--input",
+        name,
+        "--input-format",
+        "roff",
+        "--node",
+        "1",
+        "--display",
+        "direct",
+        "--format",
+        "text",
+    ];
+    let (status, text, diagnostics) = invoke(&args, b"", &host);
+    assert_eq!(status, 0, "{diagnostics}");
+    assert!(
+        text.contains("ENVIRONMENT\n     FILE_TEMPLATE_*\n            A family of names."),
+        "{text}"
+    );
+    assert_eq!(text.matches("FILE_TEMPLATE_*").count(), 1, "{text}");
+
+    let mut markdown_args = args;
+    markdown_args[10] = "markdown";
+    let (status, markdown, diagnostics) = invoke(&markdown_args, b"", &host);
+    assert_eq!(status, 0, "{diagnostics}");
+    assert!(
+        markdown
+            .contains("```text\nENVIRONMENT\n     FILE_TEMPLATE_*\n            A family of names."),
+        "{markdown}"
+    );
+
+    let mut json_args = args;
+    json_args[10] = "json";
+    let (status, json, diagnostics) = invoke(&json_args, b"", &host);
+    assert_eq!(status, 0, "{diagnostics}");
+    let excerpt: mant_protocol::QueryExcerpt =
+        serde_json::from_str(&json).expect("Fixed excerpt roundtrip");
+    assert!(excerpt.content_projection.is_none());
+    let [mant_protocol::ExcerptSelection::FixedDocumentSection { outline, view }] =
+        excerpt.selections.as_slice()
+    else {
+        panic!("one native section, not a synthesized Flow selection");
+    };
+    assert_eq!(outline.path(), "1");
+    assert!(
+        view.parts
+            .iter()
+            .any(|part| part.text.contains("FILE_TEMPLATE_*"))
+    );
+
+    let mut root_args = json_args;
+    root_args[6] = "root";
+    let (status, json, diagnostics) = invoke(&root_args, b"", &host);
+    assert_eq!(status, 0, "{diagnostics}");
+    let root: mant_protocol::QueryExcerpt =
+        serde_json::from_str(&json).expect("Fixed root roundtrip");
+    let [mant_protocol::ExcerptSelection::FixedDocumentRoot { view, .. }] =
+        root.selections.as_slice()
+    else {
+        panic!("native preface selection");
+    };
+    assert!(
+        view.parts
+            .iter()
+            .any(|part| part.text.contains("Native preface."))
+    );
+    assert!(
+        !view
+            .parts
+            .iter()
+            .any(|part| part.text.contains("FILE_TEMPLATE_*"))
+    );
+
+    let mut unknown_args = args;
+    unknown_args[6] = "1.9";
+    let (status, output, diagnostics) = invoke(&unknown_args, b"", &host);
+    fs::remove_file(&path).expect("remove test-owned source");
+    assert_ne!(status, 0);
+    assert!(output.is_empty());
+    assert!(diagnostics.contains("no outline node"), "{diagnostics}");
+    assert_eq!(
+        host.query_calls.get(),
+        0,
+        "preview must not use old lowering"
+    );
+}
+
+#[test]
+#[cfg(feature = "annotated-preview")]
+fn annotated_preview_template_head_is_searchable_mention_not_an_entry() {
+    use std::{fs, path::PathBuf};
+
+    // The same exact source was run through pinned CVS -Tutf8 first; the
+    // physical TP HEAD is visible even though it names a template family.
+    let source = b".TH ENTRY-TERMS 1\nNative preface.\n.SH ENVIRONMENT\n.TP\n.B FILE_TEMPLATE_*\nA family of names.\n";
+    let directory =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/annotated-preview-tests");
+    fs::create_dir_all(&directory).expect("repository target directory");
+    let path = directory.join(format!("template-head-query-{}.1", std::process::id()));
+    fs::write(&path, source).expect("write exact reference-checked source");
+    let name = path.to_str().expect("UTF-8 repository path");
+    let host = FakeHost::new();
+    let prefix = [
+        "--annotated-preview",
+        "--input",
+        name,
+        "--input-format",
+        "roff",
+    ];
+
+    let (status, json, diagnostics) = invoke(
+        &[
+            prefix.as_slice(),
+            ["--outline", "--outline-entries", "all", "--format", "json"].as_slice(),
+        ]
+        .concat(),
+        b"",
+        &host,
+    );
+    assert_eq!(status, 0, "{diagnostics}");
+    let outline: mant_protocol::QueryOutline =
+        serde_json::from_str(&json).expect("Fixed outline roundtrip");
+    assert!(
+        outline
+            .nodes
+            .iter()
+            .flat_map(mant_protocol::OutlineNode::children)
+            .all(|node| !matches!(node, mant_protocol::OutlineNode::DocumentEntry { .. })),
+        "a complete template HEAD is a readable mention, not a generated entry"
+    );
+    let (status, json, diagnostics) = invoke(
+        &[
+            prefix.as_slice(),
+            ["--search", "FILE_TEMPLATE_*", "--format", "json"].as_slice(),
+        ]
+        .concat(),
+        b"",
+        &host,
+    );
+    assert_eq!(status, 0, "{diagnostics}");
+    let search: mant_protocol::QuerySearch =
+        serde_json::from_str(&json).expect("Fixed visible search roundtrip");
+    assert_eq!(search.total, 1);
+    let (status, json, diagnostics) = invoke(
+        &[
+            prefix.as_slice(),
+            ["--explain=FILE_TEMPLATE_*", "--format", "json"].as_slice(),
+        ]
+        .concat(),
+        b"",
+        &host,
+    );
+    assert_eq!(status, 0, "{diagnostics}");
+    let explanation: mant_protocol::QueryExplanation =
+        serde_json::from_str(&json).expect("Fixed HEAD mention roundtrip");
+    assert_eq!(explanation.counts.direct_entry.total, 0);
+    assert_eq!(explanation.counts.context_mention.total, 1);
+    let (status, json, diagnostics) = invoke(
+        &[
+            prefix.as_slice(),
+            ["--explain=FILE_TEMPLATE_1", "--format", "json"].as_slice(),
+        ]
+        .concat(),
+        b"",
+        &host,
+    );
+    fs::remove_file(&path).expect("remove test-owned source");
+    assert_eq!(status, 0, "{diagnostics}");
+    let generated: mant_protocol::QueryExplanation =
+        serde_json::from_str(&json).expect("uninstantiated template roundtrip");
+    assert_eq!(generated.total, 0);
+    assert_eq!(
+        host.query_calls.get(),
+        0,
+        "preview must not use old lowering"
+    );
+}
+
+#[test]
+#[cfg(feature = "annotated-preview")]
+fn annotated_preview_entry_node_reads_only_its_native_owner() {
+    use std::{fs, path::PathBuf};
+
+    // Exact source ran pinned CVS -Tutf8 -Owidth=78. man_term.c::pre_TP
+    // also handles TQ and prints two independent HEADs before the shared
+    // BODY. --node is a structural-owner read; explain carries group context.
+    let source = b".TH T 1\n.SH OPTIONS\n.TP\n.B -a\n.TQ\n.B --all\nShared description.\n";
+    let directory =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/annotated-preview-tests");
+    fs::create_dir_all(&directory).expect("repository target directory");
+    let path = directory.join(format!("node-tq-{}.1", std::process::id()));
+    fs::write(&path, source).expect("write exact reference-checked source");
+    let name = path.to_str().expect("UTF-8 repository path");
+    let host = FakeHost::new();
+    let (status, json, diagnostics) = invoke(
+        &[
+            "--annotated-preview",
+            "--input",
+            name,
+            "--input-format",
+            "roff",
+            "--outline",
+            "--outline-entries",
+            "all",
+            "--format",
+            "json",
+        ],
+        b"",
+        &host,
+    );
+    assert_eq!(status, 0, "{diagnostics}");
+    let outline: mant_protocol::QueryOutline = serde_json::from_str(&json).unwrap();
+    let entries = outline
+        .nodes
+        .iter()
+        .flat_map(mant_protocol::OutlineNode::children)
+        .filter(|node| matches!(node, mant_protocol::OutlineNode::DocumentEntry { .. }))
+        .map(|node| node.path().to_owned())
+        .collect::<Vec<_>>();
+    assert_eq!(entries.len(), 2);
+    let read = |selector: &str| {
+        let (status, output, diagnostics) = invoke(
+            &[
+                "--annotated-preview",
+                "--input",
+                name,
+                "--input-format",
+                "roff",
+                "--node",
+                selector,
+                "--format",
+                "text",
+            ],
+            b"",
+            &host,
+        );
+        assert_eq!(status, 0, "{diagnostics}");
+        output
+    };
+    let first = read(&entries[0]);
+    assert!(first.contains("-a"), "{first}");
+    assert!(!first.contains("--all"), "{first}");
+    assert!(!first.contains("Shared description."), "{first}");
+    let second = read(&entries[1]);
+    assert!(second.contains("--all"), "{second}");
+    assert!(second.contains("Shared description."), "{second}");
+    fs::remove_file(&path).expect("remove test-owned source");
+}
+
+#[test]
+#[cfg(feature = "annotated-preview")]
 fn annotated_preview_explain_presents_fixed_forms_and_body_in_all_text_formats() {
     use std::{fs, path::PathBuf};
 

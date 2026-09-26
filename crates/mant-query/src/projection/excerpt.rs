@@ -14,6 +14,8 @@ use mant_protocol::{
 };
 use std::collections::HashSet;
 
+mod fixed;
+
 pub(super) fn selector_matches(selector: &ContentSelector, path: &OutlinePath, id: &str) -> bool {
     match selector {
         ContentSelector::Path { path: selected } => selected.as_str() == path.to_string(),
@@ -34,13 +36,6 @@ pub fn select_excerpt(
     query: &ResolvedContent,
     selectors: &[ContentSelector],
 ) -> Result<QueryExcerpt, ProjectionError> {
-    if query
-        .document
-        .as_ref()
-        .is_some_and(|document| document.flow().is_none())
-    {
-        return Err(ProjectionError::UnsupportedFixed);
-    }
     if selectors.is_empty() {
         return Err(ProjectionError::EmptySelection);
     }
@@ -58,6 +53,11 @@ pub fn select_excerpt(
         return Err(ProjectionError::MissingContent {
             document: query.label.clone(),
         });
+    }
+    if let Some(manual) = &query.document
+        && let mant_ir::DocumentBodyRef::Fixed(fixed) = manual.body()
+    {
+        return fixed::select_fixed_excerpt(query, fixed, selectors);
     }
     let mut located = Vec::new();
     if let Some(manual) = &query.document {
@@ -193,6 +193,11 @@ fn project_selections(
             ExcerptSelection::DocumentEntry { entry, .. } => builder
                 .include_blocks(std::slice::from_ref(entry))
                 .map_err(|_| ProjectionError::ContentProjection)?,
+            ExcerptSelection::FixedDocumentRoot { .. }
+            | ExcerptSelection::FixedDocumentSection { .. }
+            | ExcerptSelection::FixedDocumentEntry { .. } => {
+                unreachable!("Flow excerpt contains Fixed content")
+            }
         }
     }
     let (projection, remap) = builder
@@ -219,6 +224,11 @@ fn project_selections(
             ExcerptSelection::DocumentEntry { entry, .. } => remap
                 .remap_blocks(std::slice::from_mut(entry))
                 .map_err(|_| ProjectionError::ContentProjection)?,
+            ExcerptSelection::FixedDocumentRoot { .. }
+            | ExcerptSelection::FixedDocumentSection { .. }
+            | ExcerptSelection::FixedDocumentEntry { .. } => {
+                unreachable!("Flow excerpt contains Fixed content")
+            }
         }
     }
     Ok(projection)

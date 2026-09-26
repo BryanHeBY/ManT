@@ -313,6 +313,15 @@ impl FixedBody {
             earlier(owner.parent, owner.key)?;
             earlier(owner.preceding_owner, owner.key)?;
             reference(owner.section, self.headings.len())?;
+            if let Some(parent) = owner.parent
+                && self.owners[(parent.get() - 1) as usize].section != owner.section
+            {
+                // Structural reading follows parent ownership, while the
+                // outline indexes entries inside their native section. A
+                // cross-section parent would make one --node read another
+                // section's visible content even when both marks are sound.
+                return Err(FixedBodyError("owner crosses a section boundary"));
+            }
             if owner.hanging_candidate {
                 if owner.hanging_continuation.is_some()
                     && (owner.role != super::OwnerRole::Definition

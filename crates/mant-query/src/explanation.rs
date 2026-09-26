@@ -135,12 +135,12 @@ fn collection_plan<'a>(
     // whose bindings are damaged. Only complete, owner-local checked facts
     // may suppress literal HEAD support or become direct/related evidence.
     let accepted = content.document.as_ref().map_or_else(Vec::new, |document| {
-        let context = document.content();
+        let store_view = document.content();
         located
             .iter()
             .map(|node| {
                 owner(node).is_some_and(|owner| {
-                    context
+                    store_view
                         .entry_validated_names(owner)
                         .is_ok_and(|names| names.is_some())
                 })

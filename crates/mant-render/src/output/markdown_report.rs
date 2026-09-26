@@ -81,7 +81,11 @@ pub fn render_excerpt_markdown_with_options(
             content.expect("retained excerpt section has a content projection"),
             std::slice::from_ref(section),
         ),
-        ExcerptSelection::DocumentEntry { .. } | ExcerptSelection::Tldr { .. } => false,
+        ExcerptSelection::DocumentEntry { .. }
+        | ExcerptSelection::FixedDocumentRoot { .. }
+        | ExcerptSelection::FixedDocumentSection { .. }
+        | ExcerptSelection::FixedDocumentEntry { .. }
+        | ExcerptSelection::Tldr { .. } => false,
     });
     if heading_links {
         options.preserve_anchors = true;
@@ -131,6 +135,23 @@ pub fn render_excerpt_markdown_with_options(
                     std::slice::from_ref(entry),
                     options,
                 ));
+            }
+            ExcerptSelection::FixedDocumentRoot { view, .. }
+            | ExcerptSelection::FixedDocumentSection { view, .. }
+            | ExcerptSelection::FixedDocumentEntry { view, .. } => {
+                let body =
+                    super::fixed_excerpt::render_fixed_selection(view, &|_, text| text.to_owned());
+                // A literal fence preserves native physical rows and spaces.
+                // Its delimiter exceeds any backtick streak in the body.
+                let fence = "`".repeat(
+                    body.split(|character| character != '`')
+                        .map(str::len)
+                        .max()
+                        .unwrap_or(0)
+                        .max(2)
+                        + 1,
+                );
+                output.push(format!("{fence}text\n{body}\n{fence}"));
             }
         }
     }

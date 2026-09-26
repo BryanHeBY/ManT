@@ -192,7 +192,10 @@ fn sanitize_terminal_excerpt_headings(
             }
             mant_protocol::ExcerptSelection::Tldr { .. }
             | mant_protocol::ExcerptSelection::DocumentRoot { heading: None, .. }
-            | mant_protocol::ExcerptSelection::DocumentEntry { .. } => {}
+            | mant_protocol::ExcerptSelection::DocumentEntry { .. }
+            | mant_protocol::ExcerptSelection::FixedDocumentRoot { .. }
+            | mant_protocol::ExcerptSelection::FixedDocumentSection { .. }
+            | mant_protocol::ExcerptSelection::FixedDocumentEntry { .. } => {}
         }
     }
     let original = sanitize_terminal_atoms(store, &atoms);
@@ -210,7 +213,10 @@ fn sanitize_terminal_excerpt_headings(
             }
             mant_protocol::ExcerptSelection::Tldr { .. }
             | mant_protocol::ExcerptSelection::DocumentRoot { heading: None, .. }
-            | mant_protocol::ExcerptSelection::DocumentEntry { .. } => {}
+            | mant_protocol::ExcerptSelection::DocumentEntry { .. }
+            | mant_protocol::ExcerptSelection::FixedDocumentRoot { .. }
+            | mant_protocol::ExcerptSelection::FixedDocumentSection { .. }
+            | mant_protocol::ExcerptSelection::FixedDocumentEntry { .. } => {}
         }
     }
     remap_link_label_refs(store, &original);

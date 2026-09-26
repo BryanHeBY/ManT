@@ -67,6 +67,12 @@ fn render_selection<'a>(
         ExcerptSelection::Tldr { document, .. } => {
             join_parts(vec![breadcrumb, render_tldr_text(document)])
         }
+        ExcerptSelection::FixedDocumentRoot { view, .. }
+        | ExcerptSelection::FixedDocumentSection { view, .. }
+        | ExcerptSelection::FixedDocumentEntry { view, .. } => join_parts(vec![
+            breadcrumb,
+            crate::output::fixed_excerpt::render_fixed_selection(view, decorate),
+        ]),
         selection => {
             let content = content.expect("validated retained excerpt has a content projection");
             let names = styled.then(|| match selection {
@@ -79,7 +85,10 @@ fn render_selection<'a>(
                 ExcerptSelection::DocumentEntry { entry, .. } => {
                     EntryStyleMap::for_blocks(content, std::slice::from_ref(entry))
                 }
-                ExcerptSelection::Tldr { .. } => unreachable!(),
+                ExcerptSelection::Tldr { .. }
+                | ExcerptSelection::FixedDocumentRoot { .. }
+                | ExcerptSelection::FixedDocumentSection { .. }
+                | ExcerptSelection::FixedDocumentEntry { .. } => unreachable!(),
             });
             let renderer = blocks::BlockRenderer {
                 content,
@@ -105,7 +114,10 @@ fn render_selection<'a>(
                     breadcrumb,
                     renderer.render_blocks(std::slice::from_ref(entry), 0),
                 ]),
-                ExcerptSelection::Tldr { .. } => unreachable!(),
+                ExcerptSelection::Tldr { .. }
+                | ExcerptSelection::FixedDocumentRoot { .. }
+                | ExcerptSelection::FixedDocumentSection { .. }
+                | ExcerptSelection::FixedDocumentEntry { .. } => unreachable!(),
             }
         }
     }

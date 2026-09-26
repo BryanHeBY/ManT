@@ -8,7 +8,7 @@ use mant_ir::{
     EntryKind, EntrySummary, NameCase, NodeId, Section, TldrDocument,
 };
 
-use crate::{ContentSelector, NodePath, Producer, SourceContext};
+use crate::{ContentSelector, FixedExcerptSelection, NodePath, Producer, SourceContext};
 
 /// Exact schema marker for a query outline response.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -435,6 +435,7 @@ impl<'de> Deserialize<'de> for QueryExcerpt {
             &value.diagnostics,
         )
         .map_err(serde::de::Error::custom)?;
+        let has_fixed = validate_fixed_excerpt_views(&value).map_err(serde::de::Error::custom)?;
         let fallback = mant_ir::SourceRecord {
             key: mant_ir::SourceKey::FIRST,
             identity: mant_ir::SourceIdentity::Anonymous {
@@ -456,22 +457,34 @@ impl<'de> Deserialize<'de> for QueryExcerpt {
             blocks: Vec::new(),
             sections: Vec::new(),
         };
+        let mut has_flow = false;
         for selection in &value.selections {
             match selection {
                 ExcerptSelection::DocumentRoot {
                     heading, blocks, ..
                 } => {
+                    has_flow = true;
                     flow.heading.clone_from(heading);
                     flow.blocks.extend(blocks.clone());
                 }
                 ExcerptSelection::DocumentSection { section, .. } => {
+                    has_flow = true;
                     flow.sections.push(section.clone());
                 }
                 ExcerptSelection::DocumentEntry { entry, .. } => {
+                    has_flow = true;
                     flow.blocks.push(entry.clone());
                 }
-                ExcerptSelection::Tldr { .. } => {}
+                ExcerptSelection::FixedDocumentRoot { .. }
+                | ExcerptSelection::FixedDocumentSection { .. }
+                | ExcerptSelection::FixedDocumentEntry { .. }
+                | ExcerptSelection::Tldr { .. } => {}
             }
+        }
+        if has_fixed && (has_flow || value.content_projection.is_some()) {
+            return Err(serde::de::Error::custom(
+                "excerpt mixes content models or exceeds Fixed response budget",
+            ));
         }
         let document = mant_ir::Document {
             parser: None,
@@ -507,6 +520,50 @@ impl<'de> Deserialize<'de> for QueryExcerpt {
         mant_ir::validate_document_sources(&document).map_err(serde::de::Error::custom)?;
         Ok(value)
     }
+}
+
+/// A detached Fixed excerpt cannot replay its original surface, but it must
+/// still close source keys and keep all copied native geometry within one
+/// response budget before any consumer receives it.
+fn validate_fixed_excerpt_views(value: &QueryExcerpt) -> Result<bool, &'static str> {
+    let mut has_fixed = false;
+    let mut fixed_parts = 0usize;
+    let mut fixed_bytes = 0u64;
+    for selection in &value.selections {
+        let (ExcerptSelection::FixedDocumentRoot { view, .. }
+        | ExcerptSelection::FixedDocumentSection { view, .. }
+        | ExcerptSelection::FixedDocumentEntry { view, .. }) = selection
+        else {
+            continue;
+        };
+        has_fixed = true;
+        fixed_parts = fixed_parts
+            .checked_add(view.parts.len())
+            .ok_or("Fixed excerpt part count overflows")?;
+        fixed_bytes = fixed_bytes
+            .checked_add(view.budget_use()?)
+            .ok_or("Fixed excerpt budget overflows")?;
+        for part in &view.parts {
+            if let Some(source) = part.source {
+                let context = value
+                    .source_context
+                    .as_ref()
+                    .ok_or("Fixed excerpt source requires source context")?;
+                if context
+                    .sources
+                    .get((source.get() - 1) as usize)
+                    .is_none_or(|record| record.key != source)
+                {
+                    return Err("Fixed excerpt source key is not closed");
+                }
+            }
+        }
+    }
+    if fixed_parts > crate::MAX_FIXED_EXCERPT_PARTS || fixed_bytes > crate::MAX_FIXED_EXCERPT_BYTES
+    {
+        return Err("Fixed excerpt exceeds response budget");
+    }
+    Ok(has_fixed)
 }
 
 /// One selected document node together with its location in the complete outline.
@@ -550,6 +607,27 @@ pub enum ExcerptSelection {
         /// numbering. Its sole item owns the entry facts; no body is rewritten.
         entry: Block,
     },
+    /// Exact native content before the first Fixed section.
+    FixedDocumentRoot {
+        /// Complete logical location in the document outline.
+        outline: OutlineTrail,
+        /// Checked physical display fragments, without a synthesized Flow body.
+        view: FixedExcerptSelection,
+    },
+    /// One native Fixed section title, body, owners, regions and descendants.
+    FixedDocumentSection {
+        /// Complete logical location in the document outline.
+        outline: OutlineTrail,
+        /// Checked physical display fragments in final native order.
+        view: FixedExcerptSelection,
+    },
+    /// One semantic Fixed owner and its complete native reading body.
+    FixedDocumentEntry {
+        /// Complete logical location in the document outline.
+        outline: OutlineTrail,
+        /// Checked physical display fragments in final native order.
+        view: FixedExcerptSelection,
+    },
 }
 
 impl ExcerptSelection {
@@ -560,7 +638,10 @@ impl ExcerptSelection {
             Self::Tldr { outline, .. }
             | Self::DocumentRoot { outline, .. }
             | Self::DocumentSection { outline, .. }
-            | Self::DocumentEntry { outline, .. } => outline,
+            | Self::DocumentEntry { outline, .. }
+            | Self::FixedDocumentRoot { outline, .. }
+            | Self::FixedDocumentSection { outline, .. }
+            | Self::FixedDocumentEntry { outline, .. } => outline,
         }
     }
 }

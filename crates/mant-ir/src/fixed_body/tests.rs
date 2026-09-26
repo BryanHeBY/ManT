@@ -912,6 +912,28 @@ fn region_section_must_match_its_native_owner() {
 }
 
 #[test]
+fn nested_owner_cannot_cross_a_section_reading_boundary() {
+    let mut body = sample_body();
+    let mut heading = body.headings[0].clone();
+    heading.key = key(2);
+    heading.id = crate::NodeId::from("heading-2");
+    heading.at = DisplayPoint::DocumentEnd { row_count: 1 };
+    heading.title = empty_selection();
+    body.headings.push(heading);
+
+    let mut child = body.owners[0].clone();
+    child.key = key(2);
+    child.id = crate::NodeId::from("native-owner-2");
+    child.parent = Some(key(1));
+    child.section = Some(key(1));
+    body.owners.push(child);
+    body.validate().expect("same-section nested owner is valid");
+
+    body.owners[1].section = Some(key(2));
+    assert!(body.validate().is_err());
+}
+
+#[test]
 fn source_only_fixed_marks_round_trip_without_forging_authored_spans() {
     let mut body = sample_body();
     let source_key = SourceKey::FIRST;
