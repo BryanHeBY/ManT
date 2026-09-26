@@ -27,7 +27,8 @@ pub(crate) use syntax::native_variable_token;
 pub use syntax::{
     DeclarationContext, DeclarationScan, DeclarationView, EnvironmentNameLimit,
     EnvironmentNameOccurrences, RecognitionParts, RecognitionResult, SectionDeclarationFamily,
-    environment_declaration_names, recognize_option_declarations,
+    complete_term_label_range, environment_declaration_names, is_environment_template_label,
+    is_ordinal_marker, is_presentation_term, manual_call_name_range, recognize_option_declarations,
     scan_environment_declaration_names, scan_option_declarations,
     scan_option_declarations_with_numeric, scan_option_declarations_with_style,
     scan_option_declarations_with_style_ranges, section_declaration_family,

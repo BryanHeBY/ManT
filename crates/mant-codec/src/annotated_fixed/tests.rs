@@ -16,6 +16,7 @@ use mant_protocol::{
 use super::{isolation, lower_annotated_document, project_annotated_manual};
 
 mod declarations;
+mod en03;
 mod evidence;
 mod marks;
 mod non_option;

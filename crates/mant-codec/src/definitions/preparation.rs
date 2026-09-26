@@ -136,6 +136,7 @@ impl PreparedDefinitions {
                                 item,
                                 item_context,
                                 evidence.role(item),
+                                evidence.complete_term(item),
                                 evidence.option_ranges(item),
                                 evidence.operand_ranges(item),
                             )
@@ -153,6 +154,7 @@ impl PreparedDefinitions {
                             item,
                             item_context,
                             evidence.role(item),
+                            evidence.complete_term(item),
                             evidence.option_ranges(item),
                             evidence.operand_ranges(item),
                         );
@@ -241,6 +243,7 @@ fn normalize_blocks(
                         item,
                         item_context,
                         evidence.role(item),
+                        evidence.complete_term(item),
                         evidence.option_ranges(item),
                         evidence.operand_ranges(item),
                     );

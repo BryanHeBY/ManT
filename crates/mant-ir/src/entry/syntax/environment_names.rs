@@ -59,7 +59,7 @@ pub fn scan_environment_declaration_names(
                 .flatten()
         });
         let Some(name) = name else {
-            if environment_template(part.trim()) {
+            if is_environment_template_label(part.trim()) {
                 continue;
             }
             return Ok(None);
@@ -159,6 +159,29 @@ fn named_groups(text: &str) -> Result<Option<Vec<&str>>, EnvironmentNameLimit> {
     }
     parts.push(&text[start..]);
     Ok(Some(parts))
+}
+
+/// A complete environment-name family label, never an exact selector.
+/// The trailing glob is a documented family spelling, not permission to
+/// expand it into guessed instance names.
+#[doc(hidden)]
+#[must_use]
+pub fn is_environment_template_label(value: &str) -> bool {
+    let value = value.trim();
+    if value.len() > 512 {
+        return false;
+    }
+    if let Some(prefix) = value.strip_suffix('*')
+        && !prefix.is_empty()
+        && prefix
+            .chars()
+            .all(|ch| ch.is_ascii_uppercase() || ch.is_ascii_digit() || ch == '_')
+    {
+        let mut sample = String::from(prefix);
+        sample.push('X');
+        return environment_variable_alias(&sample).is_some();
+    }
+    environment_template(value)
 }
 
 fn environment_template(value: &str) -> bool {

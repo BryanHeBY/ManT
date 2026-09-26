@@ -448,6 +448,7 @@ pub(super) fn definition_item(
         terms,
         description,
         native_key: std::ptr::from_ref(node) as usize,
+        complete_term_witness: false,
         role: (context.macro_set == libmandoc_rs::MacroSet::Mdoc)
             .then(|| super::evidence::leading_role(head))
             .flatten(),
@@ -462,6 +463,7 @@ pub(in crate::mandoc::blocks::lists) struct PendingDefinitionItem {
     pub(super) terms: Vec<Vec<crate::mandoc::inline::DraftInline>>,
     pub(super) description: Vec<Block>,
     pub(super) native_key: usize,
+    pub(super) complete_term_witness: bool,
     pub(super) role: Option<crate::definitions::NativeHeadRole>,
     pub(super) native_option_ranges: Vec<Vec<std::ops::Range<usize>>>,
     pub(super) native_operand_ranges: Vec<Vec<std::ops::Range<usize>>>,
@@ -531,15 +533,17 @@ impl PendingDefinitionItem {
         }
         let mut evidence = context.native_heads.borrow_mut();
         evidence.groups.record(&item, self.native_key);
-        if self.role.is_some()
+        if self.complete_term_witness
+            || self.role.is_some()
             || self
                 .native_operand_ranges
                 .iter()
                 .any(|term| !term.is_empty())
         {
-            evidence.record_with_head_ranges(
+            evidence.record_with_term_witness(
                 &item,
                 self.role,
+                self.complete_term_witness,
                 self.native_option_ranges,
                 self.native_operand_ranges,
             );

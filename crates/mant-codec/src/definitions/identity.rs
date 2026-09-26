@@ -2,7 +2,7 @@
 #![allow(clippy::similar_names)] // ContentContext and DefinitionContext are distinct inputs.
 use super::{
     context::DefinitionContext,
-    syntax::{environment_variable_body, infer_identity, is_ordinal_marker},
+    syntax::{environment_variable_body, infer_identity},
 };
 use mant_ir::inline_plain_text as plain_text;
 use mant_ir::{
@@ -56,6 +56,7 @@ pub(super) fn identity_plan(
     item: &DefinitionItem,
     context: DefinitionContext,
     hint: Option<super::NativeHeadRole>,
+    complete_term_witness: bool,
     option_ranges: Option<&[Vec<std::ops::Range<usize>>]>,
     operand_ranges: Option<&[Vec<std::ops::Range<usize>>]>,
 ) -> IdentityPlan {
@@ -63,8 +64,15 @@ pub(super) fn identity_plan(
     let (kind, case, names, occurrences, value_domain, over_limit) =
         item.entry.as_ref().map_or_else(
             || {
-                let inferred =
-                    infer_identity(content, item, context, hint, option_ranges, operand_ranges);
+                let inferred = infer_identity(
+                    content,
+                    item,
+                    context,
+                    hint,
+                    complete_term_witness,
+                    option_ranges,
+                    operand_ranges,
+                );
                 (
                     inferred.kind,
                     inferred.case,
@@ -103,18 +111,36 @@ pub(super) fn identity_plan(
     // user-addressable concept. In particular, `.IP [1]` and singleton
     // `1.`/`(1)` tags survive as definitions when no complete list can prove
     // that they should become an ordered list. Do not turn that preserved
-    // presentation marker into an aliasless `term` entry. Explicit producer
-    // facts remain authoritative: this guard only applies to inferred native
-    // identities that have no recognized spelling.
-    let presentation_ordinal = inferred
-        && names.is_empty()
+    // presentation marker into a `term` entry, even when the complete-label
+    // fallback could bind its glyphs. A template-only environment label is
+    // likewise a real physical owner without a semantic entry. Explicit
+    // author-provided facts remain authoritative: both guards apply only to
+    // inferred native identities.
+    let presentation_marker = inferred
+        && !matches!(
+            hint,
+            Some(super::NativeHeadRole::Option | super::NativeHeadRole::LiteralTerm)
+        )
+        && !matches!(kind, EntryKind::Parameter { .. })
         && !item.terms.is_empty()
         && item
             .terms
             .iter()
-            .all(|term| is_ordinal_marker(plain_text(content, term).trim()));
-    let semantic =
-        hint != Some(super::NativeHeadRole::Presentation) && !presentation_ordinal && !over_limit;
+            .all(|term| mant_ir::is_presentation_term(&plain_text(content, term)));
+    let environment_template = inferred
+        && context == DefinitionContext::EnvironmentVariables
+        && hint != Some(super::NativeHeadRole::Option)
+        && !item.terms.is_empty()
+        && item
+            .terms
+            .iter()
+            .all(|term| mant_ir::is_environment_template_label(&plain_text(content, term)));
+    let unbound_environment = inferred
+        && (kind == EntryKind::EnvironmentVariable && names.is_empty() || environment_template);
+    let semantic = hint != Some(super::NativeHeadRole::Presentation)
+        && !presentation_marker
+        && !unbound_environment
+        && !over_limit;
     // A declaration group carries a stronger fact than adjacency: its final
     // member's body is useful reading context for every preceding member.
     // Keep that recovery to roles whose complete declaration grammar gives us

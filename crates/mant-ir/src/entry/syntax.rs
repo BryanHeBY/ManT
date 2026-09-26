@@ -12,10 +12,11 @@ mod environment_names;
 mod literal_names;
 mod recognition;
 mod section_context;
+mod term_names;
 pub(crate) use environment_names::is_variable_term as native_variable_token;
 pub use environment_names::{
     EnvironmentNameLimit, EnvironmentNameOccurrences, environment_declaration_names,
-    scan_environment_declaration_names,
+    is_environment_template_label, scan_environment_declaration_names,
 };
 pub(crate) use literal_names::is_complete_hanging_option_head_with_provisional;
 pub use literal_names::{
@@ -28,6 +29,9 @@ pub use recognition::{
     recognize_option_declarations,
 };
 pub use section_context::{SectionDeclarationFamily, section_declaration_family};
+pub use term_names::{
+    complete_term_label_range, is_ordinal_marker, is_presentation_term, manual_call_name_range,
+};
 
 /// Leading ordinary dash-option spelling within one visible token.
 #[must_use]

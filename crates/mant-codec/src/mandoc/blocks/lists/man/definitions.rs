@@ -37,6 +37,9 @@ pub(in crate::mandoc::blocks) fn lower_man_definition(
     let spacing_before =
         crate::mandoc::layout::man_paragraph_spacing(spacing_before, has_predecessor);
     let macro_name = node.macro_name.as_deref();
+    // man_macro.c::blk_imp and man_term.c::pre_TP keep TP/TQ as genuine
+    // definition heads; IP may instead be a presentation mark or continuation.
+    item.complete_term_witness = matches!(macro_name, Some("TP" | "TQ"));
     let bullet =
         matches!(macro_name, Some("IP" | "TP")) && is_explicit_bullet(node, &item, context);
     if macro_name == Some("IP") && !bullet {

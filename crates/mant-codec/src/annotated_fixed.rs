@@ -314,6 +314,12 @@ fn lower_annotated_document_inner(page: &mut AnnotatedDocument) -> Result<Docume
             .iter()
             .enumerate()
             .map(|(owner_index, owner)| {
+                // mdoc_term.c::termp_it_pre renders bullet/ordinal list
+                // labels as presentation. Only native definition owners may
+                // carry semantic entry facts; every owner remains readable.
+                if owner.role != OwnerRole::Definition {
+                    return None;
+                }
                 if owner.hanging_candidate && !fixed.hanging_declaration_ready(owner) {
                     return None;
                 }
@@ -370,6 +376,46 @@ fn lower_annotated_document_inner(page: &mut AnnotatedDocument) -> Result<Docume
                         kind: recognition.kind,
                         case: NameCase::Sensitive,
                         names,
+                        value_domain: None,
+                    });
+                }
+                if let Some(recognition) = fixed.manual_call_declaration(owner) {
+                    let (names, name_bindings) =
+                        group_bindings(recognition.occurrences, recognition.evidence);
+                    return Some(EntryFacts {
+                        name_bindings,
+                        alias_groups: Vec::new(),
+                        alias_of: None,
+                        forms: vec![owner.head.clone()],
+                        id: owner.id.clone(),
+                        kind: recognition.kind,
+                        case: NameCase::Sensitive,
+                        names,
+                        value_domain: None,
+                    });
+                }
+                if fixed.unbound_environment_head(owner) {
+                    // ENVIRONMENT templates and invalid lexical labels are
+                    // physical declarations without an exact semantic name.
+                    return None;
+                }
+                if fixed.presentation_only_head(owner) {
+                    return None;
+                }
+                if let Some((name, selection)) = fixed.plain_term_name(owner) {
+                    return Some(EntryFacts {
+                        name_bindings: vec![EntryNameBinding {
+                            name: 0,
+                            occurrences: vec![selection],
+                            evidence: EntryNameEvidence::Lexical,
+                        }],
+                        alias_groups: Vec::new(),
+                        alias_of: None,
+                        forms: vec![owner.head.clone()],
+                        id: owner.id.clone(),
+                        kind: EntryKind::Term,
+                        case: NameCase::Sensitive,
+                        names: vec![name],
                         value_domain: None,
                     });
                 }

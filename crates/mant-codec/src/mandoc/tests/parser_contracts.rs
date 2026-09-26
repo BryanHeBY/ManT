@@ -1,5 +1,4 @@
 use super::*;
-use std::fmt::Write as _;
 
 #[test]
 fn tp_tq_environment_owner_applies_name_budget_across_all_terms() {

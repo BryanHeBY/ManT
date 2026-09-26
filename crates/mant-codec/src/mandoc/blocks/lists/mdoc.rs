@@ -332,6 +332,10 @@ fn lower_mdoc_definition_item(
         },
         formatter,
     );
+    // mdoc_term.c::termp_it_pre executes each tag-list It as an independent
+    // definition head. Its complete visible label may name one Term even when
+    // it contains punctuation but has no authored Ev/Va/Fl role.
+    lowered.complete_term_witness = true;
     for targets::OwnedTarget {
         name: target,
         owner_source: source,

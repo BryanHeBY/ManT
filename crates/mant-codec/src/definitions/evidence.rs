@@ -19,6 +19,7 @@ struct HeadWitness {
     source: SourceSpan,
     terms: Vec<Vec<Inline>>,
     role: Option<NativeHeadRole>,
+    complete_term: bool,
     option_ranges: Vec<Vec<Range<usize>>>,
     operand_ranges: Vec<Vec<Range<usize>>>,
 }
@@ -39,14 +40,15 @@ pub(crate) struct NativeHeadEvidence {
 impl NativeHeadEvidence {
     #[cfg(test)]
     pub(crate) fn record(&mut self, item: &DefinitionItem, role: NativeHeadRole) {
-        self.record_with_head_ranges(item, Some(role), Vec::new(), Vec::new());
+        self.record_with_term_witness(item, Some(role), false, Vec::new(), Vec::new());
     }
 
     #[cfg(any(feature = "roff", test))]
-    pub(crate) fn record_with_head_ranges(
+    pub(crate) fn record_with_term_witness(
         &mut self,
         item: &DefinitionItem,
         role: Option<NativeHeadRole>,
+        complete_term: bool,
         option_ranges: Vec<Vec<Range<usize>>>,
         operand_ranges: Vec<Vec<Range<usize>>>,
     ) {
@@ -58,6 +60,7 @@ impl NativeHeadEvidence {
                 source,
                 terms: head_content(&item.terms),
                 role,
+                complete_term,
                 option_ranges,
                 operand_ranges,
             });
@@ -65,6 +68,11 @@ impl NativeHeadEvidence {
 
     pub(super) fn role(&self, item: &DefinitionItem) -> Option<NativeHeadRole> {
         self.witness(item)?.role
+    }
+
+    pub(super) fn complete_term(&self, item: &DefinitionItem) -> bool {
+        self.witness(item)
+            .is_some_and(|witness| witness.complete_term)
     }
 
     pub(super) fn option_ranges(&self, item: &DefinitionItem) -> Option<&[Vec<Range<usize>>]> {
@@ -92,6 +100,7 @@ impl NativeHeadEvidence {
         matches
             .all(|witness| {
                 witness.role == first.role
+                    && witness.complete_term == first.complete_term
                     && witness.option_ranges == first.option_ranges
                     && witness.operand_ranges == first.operand_ranges
             })
@@ -177,5 +186,16 @@ mod tests {
         assert_eq!(evidence.role(&moved), None);
         evidence.record(&original, NativeHeadRole::Literal);
         assert_eq!(evidence.role(&original), None);
+    }
+
+    #[test]
+    fn complete_term_witness_is_bound_to_the_native_head_not_plain_text() {
+        let original = item();
+        let mut evidence = NativeHeadEvidence::default();
+        evidence.record_with_term_witness(&original, None, true, Vec::new(), Vec::new());
+        assert!(evidence.complete_term(&original));
+        let mut edited = original;
+        edited.terms[0] = vec![fixture::text("PATH")];
+        assert!(!evidence.complete_term(&edited));
     }
 }

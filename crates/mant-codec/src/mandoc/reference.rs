@@ -52,7 +52,7 @@ pub(super) fn is_manual_section(section: &str) -> bool {
 }
 
 pub(super) fn is_manual_reference_name(name: &str) -> bool {
-    !name.is_empty() && name.len() <= 256 && name.chars().all(is_manual_reference_name_character)
+    mant_ir::is_inferred_manual_topic(name)
 }
 
 fn is_manual_reference_name_character(character: char) -> bool {

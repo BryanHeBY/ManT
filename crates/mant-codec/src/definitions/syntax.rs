@@ -4,7 +4,7 @@
 #![allow(clippy::similar_names)] // ContentContext and DefinitionContext are distinct inputs.
 use super::{RecognizedName, context::DefinitionContext};
 use mant_ir::inline_plain_text as plain_text;
-use mant_ir::{ContentContext, DefinitionItem, EntryKind, NameCase, ParameterKind};
+use mant_ir::{ContentContext, DefinitionItem, EntryKind, Inline, NameCase, ParameterKind};
 
 mod commands;
 mod decision;
@@ -15,9 +15,9 @@ mod named;
 mod options;
 pub(super) use head::is_inferred_head;
 pub(crate) use mant_ir::option_prefix;
+pub(super) use named::is_value_name;
 pub(crate) use named::{environment_variable_alias, environment_variable_body};
 use named::{is_configuration_key, is_variable_term};
-pub(super) use named::{is_ordinal_marker, is_value_name};
 #[cfg(test)]
 pub(super) use options::option_names;
 #[cfg(test)]
@@ -55,6 +55,7 @@ pub(super) fn infer_identity(
     item: &DefinitionItem,
     context: DefinitionContext,
     hint: Option<super::NativeHeadRole>,
+    complete_term_witness: bool,
     option_ranges: Option<&[Vec<std::ops::Range<usize>>]>,
     operand_ranges: Option<&[Vec<std::ops::Range<usize>>]>,
 ) -> InferredIdentity {
@@ -148,6 +149,7 @@ pub(super) fn infer_identity(
     }
     if !over_limit
         && occurrences.iter().all(Vec::is_empty)
+        && kind != EntryKind::EnvironmentVariable
         && !matches!(
             hint,
             Some(super::NativeHeadRole::Option | super::NativeHeadRole::Environment)
@@ -156,6 +158,16 @@ pub(super) fn infer_identity(
         occurrences = name_occurrences(content, item, EntryKind::Term, operand_ranges);
         kind = EntryKind::Term;
         case = NameCase::Sensitive;
+    }
+    if complete_term_witness && kind == EntryKind::Term {
+        // man_term.c::pre_TP and mdoc_term.c::termp_it_pre establish the
+        // physical owner independently. Only then can punctuation-bearing
+        // full labels fall back to one Term rather than delimiter-made aliases.
+        for (term, names) in item.terms.iter().zip(&mut occurrences) {
+            if names.is_empty() {
+                *names = complete_native_term_occurrences(content, term);
+            }
+        }
     }
     let mut names = Vec::new();
     let all = || occurrences.iter().flatten();
@@ -175,6 +187,7 @@ pub(super) fn infer_identity(
     }
     let (kind, case) = if names.is_empty()
         && !over_limit
+        && kind != EntryKind::EnvironmentVariable
         && !matches!(
             hint,
             Some(super::NativeHeadRole::Option | super::NativeHeadRole::Environment)
@@ -253,6 +266,12 @@ pub(super) fn name_occurrences(
                     named::named_occurrences(&text, validate).unwrap_or_default()
                 }
                 EntryKind::Command => {
+                    if let Some(range) = mant_ir::manual_call_name_range(&text) {
+                        return vec![super::RecognizedName::contiguous(
+                            &text[range.clone()],
+                            range.start,
+                        )];
+                    }
                     if let Some((name, _)) = super::context::key_binding_command_form(&text) {
                         return vec![locate(&text, name)];
                     }
@@ -274,9 +293,56 @@ pub(super) fn name_occurrences(
                         })
                         .collect()
                 }
-                EntryKind::Term => named::term_occurrences(&text).unwrap_or_default(),
+                EntryKind::Term => named::term_occurrences(&text)
+                    .or_else(|| styled_complete_term_occurrences(content, term, &text))
+                    .unwrap_or_default(),
                 EntryKind::Parameter { .. } => Vec::new(),
             }
         })
         .collect()
+}
+
+fn styled_complete_term_occurrences(
+    content: ContentContext<'_>,
+    term: &[Inline],
+    text: &str,
+) -> Option<Vec<RecognizedName>> {
+    // A real definition owner plus one complete authored bold label can bind
+    // a multiword subject. Unstyled prose has no equivalent evidence.
+    let styled = term
+        .iter()
+        .any(|inline| matches!(inline, Inline::Strong { .. }))
+        && term.iter().all(|inline| {
+            matches!(inline, Inline::Strong { .. })
+                || plain_text(content, std::slice::from_ref(inline))
+                    .trim()
+                    .is_empty()
+        });
+    if !styled {
+        return None;
+    }
+    let range = mant_ir::complete_term_label_range(text)?;
+    Some(vec![RecognizedName::contiguous(
+        &text[range.clone()],
+        range.start,
+    )])
+}
+
+fn complete_native_term_occurrences(
+    content: ContentContext<'_>,
+    term: &[Inline],
+) -> Vec<RecognizedName> {
+    let text = plain_text(content, term);
+    let Some(range) = mant_ir::complete_term_label_range(&text) else {
+        return Vec::new();
+    };
+    // A failed lexical option is not renamed as a generic Term. The native
+    // owner witness proves a definition boundary, not an option spelling.
+    if option_prefix(&text[range.clone()]).is_some() {
+        return Vec::new();
+    }
+    vec![RecognizedName::contiguous(
+        &text[range.clone()],
+        range.start,
+    )]
 }

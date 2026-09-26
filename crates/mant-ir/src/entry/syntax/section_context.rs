@@ -2,6 +2,8 @@
 //!
 //! A title is only a local classifier hint. A nearer recognized heading
 //! overrides an inherited family; an unrecognized heading inherits it.
+//! Complete non-declaration titles stop that inheritance without erasing
+//! the native section tree or its readable content.
 
 /// A bounded declaration family inferred from a complete section title.
 #[doc(hidden)]
@@ -12,6 +14,8 @@ pub enum SectionDeclarationFamily {
     EnvironmentVariables,
     Variables,
     ConfigurationKeys,
+    /// An explicit prose/reference scope, not an inherited declaration area.
+    NonDeclaration,
 }
 
 /// Select one local family without reading a page or guessing from body prose.
@@ -63,6 +67,12 @@ pub fn section_declaration_family(title: &str) -> Option<SectionDeclarationFamil
     if normalized.contains("CONFIGURATION") || normalized.trim() == "KEYWORDS" {
         return Some(Family::ConfigurationKeys);
     }
+    if matches!(
+        words.as_slice(),
+        ["DESCRIPTION" | "EXAMPLES"] | ["SEE", "ALSO"]
+    ) {
+        return Some(Family::NonDeclaration);
+    }
     None
 }
 
@@ -84,5 +94,25 @@ mod tests {
             Some(Family::Parameters)
         );
         assert_eq!(section_declaration_family("NOTES"), None);
+    }
+
+    #[test]
+    fn complete_prose_titles_stop_an_inherited_declaration_family() {
+        // This exact COMMANDS/SS/PP/RS input ran pinned CVS -Tutf8
+        // -Owidth=78 first. man_macro.c::blk_imp/rew_scope preserve the SH/SS
+        // nesting, while man_term.c::pre_SH/pre_SS render their own HEADs;
+        // the semantic inheritance barrier is ManT policy, not CVS typing.
+        for title in ["DESCRIPTION", "EXAMPLES", "SEE ALSO", "See also:"] {
+            assert_eq!(
+                section_declaration_family(title),
+                Some(Family::NonDeclaration),
+                "{title}"
+            );
+        }
+        assert_eq!(section_declaration_family("TOPIC"), None);
+        assert_eq!(
+            section_declaration_family("EXAMPLE OPTIONS"),
+            Some(Family::Parameters)
+        );
     }
 }

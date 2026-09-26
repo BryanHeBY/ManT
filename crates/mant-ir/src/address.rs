@@ -23,6 +23,19 @@ pub fn is_manual_section(value: &str) -> bool {
     }
 }
 
+/// Conservative visible topic spelling for inferred `name(section)` labels.
+/// Explicit roff reference macros remain governed by their native targets;
+/// this grammar never turns an arbitrary URL or filesystem path into one.
+#[doc(hidden)]
+#[must_use]
+pub fn is_inferred_manual_topic(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 256
+        && value.chars().all(|character| {
+            character.is_ascii_alphanumeric() || matches!(character, '.' | '_' | '+' | ':' | '-')
+        })
+}
+
 /// Storage identity of one registered Markdown document.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema)]
 #[serde(

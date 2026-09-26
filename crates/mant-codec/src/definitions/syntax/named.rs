@@ -2,6 +2,7 @@
 use crate::definitions::RecognizedName;
 use mant_ir::contains_additional_environment_assignment;
 use mant_ir::inline_plain_text as plain_text;
+pub(in crate::definitions) use mant_ir::is_ordinal_marker;
 use mant_ir::{ContentContext, EnvironmentNameLimit, Inline};
 pub(crate) use mant_ir::{environment_variable_alias, environment_variable_body};
 
@@ -29,22 +30,6 @@ pub(in crate::definitions) fn is_value_name(value: &str) -> bool {
             character.is_alphanumeric()
                 || matches!(character, '-' | '_' | '.' | '/' | ':' | '+' | '?')
         })
-}
-
-pub(in crate::definitions) fn is_ordinal_marker(value: &str) -> bool {
-    let value = value.trim();
-    let digits = if let Some(digits) = value.strip_suffix('.') {
-        Some(digits)
-    } else if let Some(digits) = value.strip_suffix(')') {
-        Some(digits.strip_prefix('(').unwrap_or(digits))
-    } else {
-        value
-            .strip_prefix('[')
-            .and_then(|digits| digits.strip_suffix(']'))
-    };
-    digits.is_some_and(|digits| {
-        !digits.is_empty() && digits.chars().all(|character| character.is_ascii_digit())
-    })
 }
 
 /// Accept a complete semantic name and bounded trailing annotations. The
@@ -198,7 +183,10 @@ pub(super) fn named_occurrences(
 /// treating prose as a declaration: its name must contain lowercase technical
 /// spelling and every remaining token must be an all-uppercase placeholder.
 pub(in crate::definitions) fn term_occurrences(text: &str) -> Option<Vec<RecognizedName>> {
+    // A TP/It term is one subject. Comma and pipe punctuation in its visible
+    // label do not create several names without independent authored roles.
     named_occurrences(text, is_variable_term)
+        .filter(|names| names.len() == 1)
         .or_else(|| {
             let name = invocation_name(text.trim())?;
             let offset = name.as_ptr() as usize - text.as_ptr() as usize;
@@ -211,7 +199,7 @@ pub(in crate::definitions) fn term_occurrences(text: &str) -> Option<Vec<Recogni
         })
 }
 
-fn invocation_name(value: &str) -> Option<&str> {
+pub(in crate::definitions) fn invocation_name(value: &str) -> Option<&str> {
     let (name, parameters) = value.split_once(char::is_whitespace)?;
     (is_variable_term(name)
         && name.chars().any(char::is_lowercase)
@@ -238,7 +226,7 @@ fn invocation_placeholder(token: &str) -> bool {
 /// without extracting a word from prose or treating arbitrary parenthetical
 /// text as an invocation.  The caller retains the full authored form; only
 /// the callable base becomes the selector.
-fn callable_invocation_name(value: &str) -> Option<&str> {
+pub(in crate::definitions) fn callable_invocation_name(value: &str) -> Option<&str> {
     let (name, arguments) = value.split_once('(')?;
     let arguments = arguments.strip_suffix(')')?;
     if name.is_empty()

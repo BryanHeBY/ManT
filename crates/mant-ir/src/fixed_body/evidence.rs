@@ -136,20 +136,45 @@ impl FixedBody {
     }
 
     fn section_is_environment(&self, owner: &OwnerMark) -> bool {
+        self.section_declaration_family(owner)
+            == Some(crate::SectionDeclarationFamily::EnvironmentVariables)
+    }
+
+    /// An unrecognized lexical label in ENVIRONMENT stays a physical owner,
+    /// not a substitute Term. A template such as `FILE_TEMPLATE_*` has no
+    /// exact environment-variable selector.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn unbound_environment_head(&self, owner: &OwnerMark) -> bool {
+        (owner.head_role == Some(OwnerHeadRole::Lexical)
+            || self
+                .owner_complete_form(owner)
+                .is_some_and(|form| crate::is_environment_template_label(&form)))
+            && self.section_is_environment(owner)
+    }
+
+    fn section_is_commands(&self, owner: &OwnerMark) -> bool {
+        self.section_declaration_family(owner) == Some(crate::SectionDeclarationFamily::Commands)
+    }
+
+    fn section_declaration_family(
+        &self,
+        owner: &OwnerMark,
+    ) -> Option<crate::SectionDeclarationFamily> {
         let mut section = owner.section;
         while let Some(key) = section {
-            let Some(heading) = self.headings.get((key.get() - 1) as usize) else {
-                return false;
-            };
-            let Some(title) = self.selection_text(&heading.title) else {
-                return false;
-            };
+            let heading = self.headings.get((key.get() - 1) as usize)?;
+            let title = self.selection_text(&heading.title)?;
+            // `NonDeclaration` is a scope barrier, not an unknown heading:
+            // stop here rather than finding an ancestor COMMANDS/OPTIONS.
+            // man_macro.c::rew_scope preserves the SH/SS nesting that this
+            // nearest-heading walk follows.
             if let Some(family) = crate::section_declaration_family(&title) {
-                return family == crate::SectionDeclarationFamily::EnvironmentVariables;
+                return Some(family);
             }
             section = heading.parent;
         }
-        false
+        None
     }
 
     fn native_non_option_declaration(
@@ -367,6 +392,132 @@ impl FixedBody {
     /// definition head, not merely a table or empty layout scope.
     #[must_use]
     pub fn hanging_declaration_ready(&self, owner: &OwnerMark) -> bool {
+        if !self.hanging_structure_ready(owner) {
+            return false;
+        }
+        self.owner_complete_form(owner).is_some_and(|form| {
+            crate::entry::is_complete_hanging_option_head_with_provisional(
+                &form,
+                |prefix, names| self.selection_ranges_bold(&owner.head, &form, prefix, names),
+            ) || self.section_is_commands(owner) && crate::manual_call_name_range(&form).is_some()
+        })
+    }
+
+    /// A native PP/RS pair proves only a reading continuation, while TP/TQ
+    /// already owns a real HEAD and BODY. In COMMANDS, a complete
+    /// `name(section)` spelling adds independent declaration evidence for
+    /// either structure; a merely bold word does not. `man_term.c::pre_TP`
+    /// executes the visible HEAD, and `pre_RS` only establishes indentation.
+    #[must_use]
+    pub fn manual_call_declaration(&self, owner: &OwnerMark) -> Option<FixedNonOptionRecognition> {
+        if owner.role != OwnerRole::Definition
+            || !matches!(
+                owner.head_role,
+                None | Some(OwnerHeadRole::Lexical | OwnerHeadRole::Literal)
+            )
+            || (owner.hanging_candidate && !self.hanging_structure_ready(owner))
+            || !self.section_is_commands(owner)
+        {
+            return None;
+        }
+        let form = self.owner_complete_form(owner)?;
+        let range = crate::manual_call_name_range(&form)?;
+        let selection = self.selection_subrange(&owner.head, range.clone())?;
+        let name = form.get(range)?.to_owned();
+        (self.selection_text(&selection).as_deref() == Some(name.as_str())).then_some(
+            FixedNonOptionRecognition {
+                kind: EntryKind::Command,
+                evidence: EntryNameEvidence::Lexical,
+                occurrences: vec![(name, selection)],
+            },
+        )
+    }
+
+    /// A structurally true definition with no specialized macro role may
+    /// still have a complete, multiword term. The entire checked label is its
+    /// name; no first-word option/command guess is made from display style.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn plain_term_name(&self, owner: &OwnerMark) -> Option<(String, TextSelection)> {
+        if owner.role != OwnerRole::Definition
+            || !matches!(owner.head_role, None | Some(OwnerHeadRole::Lexical))
+            || owner.hanging_candidate
+        {
+            return None;
+        }
+        let form = self.owner_complete_form(owner)?;
+        let styled_marker = self.styled_presentation_label(owner, &form);
+        let range = crate::complete_term_label_range(&form).or_else(|| {
+            styled_marker.then(|| {
+                let start = form.len() - form.trim_start().len();
+                start..start + form.trim().len()
+            })
+        })?;
+        // A failed italic/roman option candidate is not converted into a
+        // named Term merely because TP provided a physical head. The shared
+        // option grammar must prove that spelling independently.
+        if crate::option_prefix(form.get(range.clone())?).is_some() {
+            return None;
+        }
+        if owner.head_role == Some(OwnerHeadRole::Lexical)
+            && !owner.lexical_term_witness
+            && !styled_marker
+            && (owner.head_components.is_empty() || !self.complete_head_bold(&owner.head))
+        {
+            return None;
+        }
+        let selection = self.selection_subrange(&owner.head, range.clone())?;
+        let name = form.get(range)?.to_owned();
+        (self.selection_text(&selection).as_deref() == Some(name.as_str()))
+            .then_some((name, selection))
+    }
+
+    fn complete_head_bold(&self, head: &TextSelection) -> bool {
+        head.parts.iter().all(|part| {
+            let Some(run) = self.surface.runs.get((part.run.get() - 1) as usize) else {
+                return false;
+            };
+            let Some(text) = self.surface.run_text(part.run).and_then(|text| {
+                let start = usize::try_from(part.start_byte).ok()?;
+                let end = usize::try_from(part.end_byte).ok()?;
+                text.get(start..end)
+            }) else {
+                return false;
+            };
+            run.label.style.bold || text.chars().all(char::is_whitespace)
+        })
+    }
+
+    fn styled_presentation_label(&self, owner: &OwnerMark, form: &str) -> bool {
+        // man_macro.c::blk_imp gives IP its own displayed head, while a TP
+        // child macro is separately retained as a native component. An
+        // explicitly bold IP punctuation key remains addressable; a plain
+        // marker or a styled TP list bullet does not gain that evidence.
+        let mut glyphs = form.trim().chars();
+        owner.role == OwnerRole::Definition
+            && owner.head_role == Some(OwnerHeadRole::Lexical)
+            && !owner.hanging_candidate
+            && !owner.lexical_term_witness
+            && owner.head_components.is_empty()
+            && glyphs.next().is_some_and(|glyph| glyph.is_ascii())
+            && glyphs.next().is_none()
+            && crate::is_presentation_term(form)
+            && self.complete_head_bold(&owner.head)
+    }
+
+    /// A formatter marker can occupy a man TP head without becoming a name.
+    /// mdoc bullet/enum owners are already excluded by `OwnerRole::Other`.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn presentation_only_head(&self, owner: &OwnerMark) -> bool {
+        owner.role == OwnerRole::Definition
+            && !matches!(owner.head_role, Some(OwnerHeadRole::Option))
+            && self.owner_complete_form(owner).is_some_and(|form| {
+                crate::is_presentation_term(&form) && !self.styled_presentation_label(owner, &form)
+            })
+    }
+
+    fn hanging_structure_ready(&self, owner: &OwnerMark) -> bool {
         let Some(region) = owner
             .hanging_continuation
             .and_then(|key| self.regions.get((key.get() - 1) as usize))
@@ -402,12 +553,6 @@ impl FixedBody {
             && region.section == owner.section
             && (owner.hanging_nested_head.is_none() || nested_head_ready)
             && (!region.selection.parts.is_empty() || nested_head_ready)
-            && self.owner_complete_form(owner).is_some_and(|form| {
-                crate::entry::is_complete_hanging_option_head_with_provisional(
-                    &form,
-                    |prefix, names| self.selection_ranges_bold(&owner.head, &form, prefix, names),
-                )
-            })
     }
 
     /// Select names from one complete native lexical head. Source-neutral
@@ -948,6 +1093,11 @@ impl FixedBody {
         owner: &'a OwnerMark,
     ) -> Option<&'a EntryFacts<TextSelection>> {
         let entry = owner.entry.as_ref()?;
+        // A bullet/ordinal owner is a readable list item, not a definition.
+        // The native mdoc It list type, not its generated glyph, decides this.
+        if owner.role != OwnerRole::Definition {
+            return None;
+        }
         if self.option_component_over_limit(owner) {
             return None;
         }
@@ -985,6 +1135,22 @@ impl FixedBody {
         if let Some(recognition) = self.non_option_declaration(owner) {
             return Self::validated_non_option_names(owner, entry, recognition).then_some(entry);
         }
+        if let Some(recognition) = self.manual_call_declaration(owner) {
+            return Self::validated_non_option_names(owner, entry, recognition).then_some(entry);
+        }
+        if self.unbound_environment_head(owner)
+            && !matches!(
+                entry.kind,
+                EntryKind::Parameter {
+                    parameter_kind: ParameterKind::Option
+                }
+            )
+        {
+            return None;
+        }
+        if self.presentation_only_head(owner) {
+            return None;
+        }
         if matches!(
             owner.head_role,
             Some(
@@ -1007,6 +1173,25 @@ impl FixedBody {
         let [only_form] = entry.forms.as_slice() else {
             return None;
         };
+        if entry.kind == EntryKind::Term
+            && let Some((name, selection)) = self.plain_term_name(owner)
+        {
+            let valid = entry.id == owner.id
+                && entry.kind == EntryKind::Term
+                && entry.case == NameCase::Sensitive
+                && entry.alias_groups.is_empty()
+                && entry.alias_of.is_none()
+                && entry.value_domain.is_none()
+                && only_form == &owner.head
+                && entry.names.as_slice() == std::slice::from_ref(&name)
+                && entry.name_bindings.as_slice()
+                    == std::slice::from_ref(&crate::EntryNameBinding {
+                        name: 0,
+                        occurrences: vec![selection],
+                        evidence: EntryNameEvidence::Lexical,
+                    });
+            return valid.then_some(entry);
+        }
         if entry.kind == EntryKind::Term
             && (owner.head_role.is_none()
                 || owner.head_role == Some(OwnerHeadRole::Lexical)

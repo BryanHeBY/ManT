@@ -41,9 +41,7 @@ pub(in crate::definitions) fn is_inferred_head(
     }
     match context {
         DefinitionContext::EnvironmentVariables => named::environment_occurrences(&text).is_some(),
-        DefinitionContext::Commands => forms::declaration_groups(content, inlines)
-            .iter()
-            .all(|group| is_command_head(content, group)),
+        DefinitionContext::Commands => is_command_head(&text),
         DefinitionContext::ConfigurationKeys => {
             named::named_occurrences(&text, named::is_configuration_key).is_some()
                 && (commands::leading_styled_command_name(content, inlines).is_some()
@@ -59,16 +57,16 @@ pub(in crate::definitions) fn is_inferred_head(
     }
 }
 
-fn is_command_head(content: ContentContext<'_>, inlines: &[Inline]) -> bool {
-    let Some(name) = commands::leading_styled_command_name(content, inlines) else {
-        return false;
-    };
-    let mut literal = String::new();
-    append_syntax(content, inlines, &mut literal);
-    let Some(tail) = literal.trim_start().strip_prefix(&name) else {
-        return false;
-    };
-    arguments(tail.split_whitespace())
+fn is_command_head(text: &str) -> bool {
+    let text = text.trim();
+    // man_term.c::pre_PP/pre_RS establish only layout and the continuation.
+    // A bold word alone is not a command declaration: the complete visible
+    // head also needs a manual-call, parameter, or real key-binding syntax.
+    mant_ir::manual_call_name_range(text).is_some()
+        || named::invocation_name(text).is_some()
+        || named::callable_invocation_name(text).is_some()
+        || super::super::context::key_binding_command_form(text)
+            .is_some_and(|(_, binding)| binding.is_some())
 }
 
 fn is_option_head(content: ContentContext<'_>, inlines: &[Inline]) -> bool {

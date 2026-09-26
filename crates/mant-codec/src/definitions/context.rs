@@ -131,6 +131,7 @@ impl DefinitionContext {
             Some(Family::EnvironmentVariables) => Self::EnvironmentVariables,
             Some(Family::Variables) => Self::Variables,
             Some(Family::ConfigurationKeys) => Self::ConfigurationKeys,
+            Some(Family::NonDeclaration) => Self::Generic,
             None => inherited,
         }
     }
@@ -189,5 +190,16 @@ mod tests {
             Context::for_section("SUBCOMMAND VARIABLES", Context::Generic),
             Context::Variables
         );
+        assert_eq!(
+            Context::for_section("TOPIC", Context::Commands),
+            Context::Commands
+        );
+        for title in ["DESCRIPTION", "EXAMPLES", "SEE ALSO"] {
+            assert_eq!(
+                Context::for_section(title, Context::Commands),
+                Context::Generic,
+                "{title}"
+            );
+        }
     }
 }
