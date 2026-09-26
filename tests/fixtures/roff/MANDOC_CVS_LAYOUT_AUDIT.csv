@@ -1,0 +1,7 @@
+reference_kind,reference_id,corpus,path,section,source_sha256,layout_schema,scan_status,review_status,note
+mandoc,cvs-20260920T122115Z-linux-x86_64-gcc-16.2.1,fixtures,real/archlinux/btrfs-subvolume.8.gz,8,7aad0096c8fa69c22b8487f45ace7e38f820d4b7dc1a5877b2e95ebd9a28ae96,mant.roff-layout-audit/v3,clean,not-required,
+mandoc,cvs-20260920T122115Z-linux-x86_64-gcc-16.2.1,fixtures,real/archlinux/gzip.1.gz,1,107c35463c2fb970318b34ccca09db100e1b99bfab793196eab68ef91d350b78,mant.roff-layout-audit/v3,clean,not-required,
+mandoc,cvs-20260920T122115Z-linux-x86_64-gcc-16.2.1,fixtures,real/archlinux/tmux.1.gz,1,cbedf24cf75128a6794a24a4c380307f73515047945b6736933d313af4623ae7,mant.roff-layout-audit/v3,clean,not-required,
+mandoc,cvs-20260920T122115Z-linux-x86_64-gcc-16.2.1,fixtures,real/archlinux/yay.8,8,7f5115d15c9647b77bbc4aa838dff90818a20f03763f1557e1a0e36292ab614e,mant.roff-layout-audit/v3,clean,not-required,
+mandoc,cvs-20260920T122115Z-linux-x86_64-gcc-16.2.1,fixtures,real/archlinux/zip.1.gz,1,b8cd4f0980a6a3abd243c00a146bf336564b2bf6c270d1101f541da4d9796623,mant.roff-layout-audit/v3,clean,not-required,
+mandoc,cvs-20260920T122115Z-linux-x86_64-gcc-16.2.1,fixtures,real/archlinux/zsh.1.gz,1,fee817f32be2ca893147affc5b9f82dce17ad8f44d77fcb40839450ea94dd15d,mant.roff-layout-audit/v3,clean,not-required,

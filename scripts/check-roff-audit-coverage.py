@@ -11,7 +11,9 @@ the complete historical fidelity baseline, cover every comparable result in
 its own layout ledger, and include every checked-in fixture in both ledgers.
 The independent zero-width target and semantic-entry precision routes must
 cover every checked-in fixture, but their distribution sweeps do not have to
-mirror the visible-fidelity sample.
+mirror the visible-fidelity sample. Historical package-mandoc conclusions and
+new pinned-CVS fixture supplements are separate renderer cohorts: their source
+identities must not overlap, and each content/layout pair is checked alone.
 """
 
 from __future__ import annotations
@@ -21,9 +23,9 @@ import csv
 import re
 import sys
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Iterable, Sequence
+from typing import Callable, Iterable, Sequence
 
 from roff_audit_common import discover_pages, relative_label, source_digest
 
@@ -39,7 +41,11 @@ DEFAULT_TARGET_DB = ROFF_ROOT / "TARGET_AUDIT.csv"
 DEFAULT_SEMANTIC_DB = ROFF_ROOT / "SEMANTIC_AUDIT.csv"
 DEFAULT_MANDOC_FIDELITY_DB = ROFF_ROOT / "MANDOC_FIDELITY_AUDIT.csv"
 DEFAULT_MANDOC_LAYOUT_DB = ROFF_ROOT / "MANDOC_LAYOUT_AUDIT.csv"
+DEFAULT_MANDOC_CVS_FIDELITY_DB = ROFF_ROOT / "MANDOC_CVS_FIDELITY_AUDIT.csv"
+DEFAULT_MANDOC_CVS_LAYOUT_DB = ROFF_ROOT / "MANDOC_CVS_LAYOUT_AUDIT.csv"
 DEFAULT_DEVIATION_DB = ROFF_ROOT / "REFERENCE_RENDERER_DEVIATIONS.csv"
+PACKAGE_MANDOC_REFERENCE_ID = "mandoc-1.14.6-1"
+CVS_MANDOC_REFERENCE_ID = "cvs-20260920T122115Z-linux-x86_64-gcc-16.2.1"
 
 IDENTITY_FIELDS = ["corpus", "path", "section", "source_sha256"]
 FIDELITY_FIELDS = IDENTITY_FIELDS + ["scan_status", "review_status", "note"]
@@ -108,6 +114,9 @@ class Coverage:
     mandoc_fidelity: frozenset[Identity]
     mandoc_comparable: frozenset[Identity]
     mandoc_layout: frozenset[Identity]
+    mandoc_cvs_fidelity: frozenset[Identity]
+    mandoc_cvs_comparable: frozenset[Identity]
+    mandoc_cvs_layout: frozenset[Identity]
     current_mandoc_deviations: int
     fixture_inventory: frozenset[Identity]
     pending: tuple[tuple[str, frozenset[Identity]], ...]
@@ -138,6 +147,12 @@ def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
         "--mandoc-fidelity-db", type=Path, default=DEFAULT_MANDOC_FIDELITY_DB
     )
     parser.add_argument("--mandoc-layout-db", type=Path, default=DEFAULT_MANDOC_LAYOUT_DB)
+    parser.add_argument(
+        "--mandoc-cvs-fidelity-db", type=Path, default=DEFAULT_MANDOC_CVS_FIDELITY_DB
+    )
+    parser.add_argument(
+        "--mandoc-cvs-layout-db", type=Path, default=DEFAULT_MANDOC_CVS_LAYOUT_DB
+    )
     parser.add_argument("--deviation-db", type=Path, default=DEFAULT_DEVIATION_DB)
     parser.add_argument("--self-check", action="store_true", help=argparse.SUPPRESS)
     return parser.parse_args(argv)
@@ -192,15 +207,34 @@ def identities(
 
 
 def mandoc_renderer_identity(
-    path: Path, rows: Iterable[dict[str, str]]
+    path: Path,
+    rows: Iterable[dict[str, str]],
+    expected_id: str,
+    *,
+    allow_empty: bool = False,
 ) -> tuple[str, str]:
-    identities = {(row["reference_kind"], row["reference_id"]) for row in rows}
-    if len(identities) != 1:
-        raise ValueError(f"{path} must contain exactly one mandoc renderer identity")
-    identity = next(iter(identities))
-    if identity[0] != "mandoc" or not identity[1]:
-        raise ValueError(f"invalid mandoc renderer identity in {path}")
-    return identity
+    renderers = {(row["reference_kind"], row["reference_id"]) for row in rows}
+    expected = ("mandoc", expected_id)
+    # The CVS supplement starts header-only. Its fixed, registered reference
+    # identity is a contract for future rows, not evidence that any page ran.
+    if not renderers and allow_empty:
+        return expected
+    if renderers != {expected}:
+        raise ValueError(
+            f"{path} must contain only mandoc renderer identity {expected_id}"
+        )
+    return expected
+
+
+def validate_mandoc_cohorts(
+    package_rows: Iterable[dict[str, str]], cvs_rows: Iterable[dict[str, str]]
+) -> None:
+    overlap = identities(package_rows) & identities(cvs_rows)
+    if overlap:
+        raise ValueError(
+            "package and pinned-CVS mandoc fidelity cohorts overlap in "
+            f"{len(overlap)} source identities"
+        )
 
 
 def read_deviation_rows(path: Path) -> list[dict[str, str]]:
@@ -238,7 +272,8 @@ def validate_current_mandoc_deviations(
     renderer: tuple[str, str],
 ) -> int:
     reference_kind, reference_id = renderer
-    assert reference_kind == "mandoc"
+    if (reference_kind, reference_id) != ("mandoc", PACKAGE_MANDOC_REFERENCE_ID):
+        raise ValueError("historical mandoc deviations require the package cohort")
     expected_renderer = f"{reference_id} -T utf8 -O width=200"
     evidence = {
         Identity(row["corpus"], row["path"], row["source_sha256"]): row
@@ -247,6 +282,11 @@ def validate_current_mandoc_deviations(
     current = 0
     for number, row in enumerate(deviations, 2):
         renderer_id = row["reference_renderer"].split(" ", 1)[0]
+        if renderer_id == CVS_MANDOC_REFERENCE_ID:
+            raise ValueError(
+                f"pinned-CVS deviation needs a separate reviewed route at "
+                f"{path}:{number}"
+            )
         if renderer_id != reference_id:
             continue
         current += 1
@@ -342,17 +382,49 @@ def load_coverage(arguments: argparse.Namespace) -> Coverage:
         {"clean", "review", "hard-failure"},
         "layout_schema",
     )
+    mandoc_cvs_fidelity_rows = read_rows(
+        arguments.mandoc_cvs_fidelity_db,
+        MANDOC_FIDELITY_FIELDS,
+        {"clean", "review", "hard-failure", "skipped"},
+    )
+    mandoc_cvs_layout_rows = read_rows(
+        arguments.mandoc_cvs_layout_db,
+        MANDOC_LAYOUT_FIELDS,
+        {"clean", "review", "hard-failure"},
+        "layout_schema",
+    )
     deviation_rows = read_deviation_rows(arguments.deviation_db)
     mandoc_fidelity_renderer = mandoc_renderer_identity(
-        arguments.mandoc_fidelity_db, mandoc_fidelity_rows
+        arguments.mandoc_fidelity_db,
+        mandoc_fidelity_rows,
+        PACKAGE_MANDOC_REFERENCE_ID,
     )
     mandoc_layout_renderer = mandoc_renderer_identity(
-        arguments.mandoc_layout_db, mandoc_layout_rows
+        arguments.mandoc_layout_db,
+        mandoc_layout_rows,
+        PACKAGE_MANDOC_REFERENCE_ID,
     )
     if mandoc_fidelity_renderer != mandoc_layout_renderer:
         raise ValueError(
-            "mandoc fidelity and layout ledgers use different renderer identities"
+            "package mandoc fidelity and layout ledgers use different renderer identities"
         )
+    mandoc_cvs_fidelity_renderer = mandoc_renderer_identity(
+        arguments.mandoc_cvs_fidelity_db,
+        mandoc_cvs_fidelity_rows,
+        CVS_MANDOC_REFERENCE_ID,
+        allow_empty=True,
+    )
+    mandoc_cvs_layout_renderer = mandoc_renderer_identity(
+        arguments.mandoc_cvs_layout_db,
+        mandoc_cvs_layout_rows,
+        CVS_MANDOC_REFERENCE_ID,
+        allow_empty=True,
+    )
+    if mandoc_cvs_fidelity_renderer != mandoc_cvs_layout_renderer:
+        raise ValueError(
+            "pinned-CVS mandoc fidelity and layout ledgers use different renderer identities"
+        )
+    validate_mandoc_cohorts(mandoc_fidelity_rows, mandoc_cvs_fidelity_rows)
     current_mandoc_deviations = validate_current_mandoc_deviations(
         arguments.deviation_db,
         deviation_rows,
@@ -385,12 +457,24 @@ def load_coverage(arguments: argparse.Namespace) -> Coverage:
         for row in mandoc_layout_rows
         if row["layout_schema"] == CURRENT_LAYOUT_SCHEMA
     ]
+    current_mandoc_cvs_layout = [
+        row
+        for row in mandoc_cvs_layout_rows
+        if row["layout_schema"] == CURRENT_LAYOUT_SCHEMA
+    ]
     mandoc_fidelity = identities(mandoc_fidelity_rows)
     mandoc_comparable = identities(
         row
         for row in mandoc_fidelity_rows
         if row["scan_status"] in {"clean", "review"}
     )
+    mandoc_cvs_fidelity = identities(mandoc_cvs_fidelity_rows)
+    mandoc_cvs_comparable = identities(
+        row
+        for row in mandoc_cvs_fidelity_rows
+        if row["scan_status"] in {"clean", "review"}
+    )
+    fixtures = fixture_identities()
     summaries = tuple(
         LedgerSummary(
             name,
@@ -414,10 +498,12 @@ def load_coverage(arguments: argparse.Namespace) -> Coverage:
             ("structure", current_structure, fidelity),
             ("projection", current_projection, fidelity),
             ("layout", current_layout, comparable),
-            ("target", current_target, fixture_identities()),
-            ("semantic", current_semantic, fixture_identities()),
-            ("mandoc-fidelity", mandoc_fidelity_rows, mandoc_fidelity),
-            ("mandoc-layout", current_mandoc_layout, mandoc_comparable),
+            ("target", current_target, fixtures),
+            ("semantic", current_semantic, fixtures),
+            ("mandoc-package-fidelity", mandoc_fidelity_rows, mandoc_fidelity),
+            ("mandoc-package-layout", current_mandoc_layout, mandoc_comparable),
+            ("mandoc-cvs-fidelity", mandoc_cvs_fidelity_rows, fixtures),
+            ("mandoc-cvs-layout", current_mandoc_cvs_layout, fixtures),
         )
     )
     pending = tuple(
@@ -432,8 +518,10 @@ def load_coverage(arguments: argparse.Namespace) -> Coverage:
             ("layout", current_layout),
             ("target", current_target),
             ("semantic", current_semantic),
-            ("mandoc-fidelity", mandoc_fidelity_rows),
-            ("mandoc-layout", current_mandoc_layout),
+            ("mandoc-package-fidelity", mandoc_fidelity_rows),
+            ("mandoc-package-layout", current_mandoc_layout),
+            ("mandoc-cvs-fidelity", mandoc_cvs_fidelity_rows),
+            ("mandoc-cvs-layout", current_mandoc_cvs_layout),
         )
     )
     return Coverage(
@@ -451,8 +539,11 @@ def load_coverage(arguments: argparse.Namespace) -> Coverage:
         mandoc_fidelity=mandoc_fidelity,
         mandoc_comparable=mandoc_comparable,
         mandoc_layout=identities(current_mandoc_layout),
+        mandoc_cvs_fidelity=mandoc_cvs_fidelity,
+        mandoc_cvs_comparable=mandoc_cvs_comparable,
+        mandoc_cvs_layout=identities(current_mandoc_cvs_layout),
         current_mandoc_deviations=current_mandoc_deviations,
-        fixture_inventory=fixture_identities(),
+        fixture_inventory=fixtures,
         pending=pending,
         summaries=summaries,
     )
@@ -472,13 +563,20 @@ def missing_sets(coverage: Coverage) -> dict[str, frozenset[Identity]]:
         "mandoc-layout/comparable-mandoc-fidelity": coverage.mandoc_comparable
         - coverage.mandoc_layout,
         "mandoc-fidelity/fixtures": coverage.fixture_inventory
-        - coverage.mandoc_fidelity,
-        "mandoc-layout/fixtures": coverage.fixture_inventory - coverage.mandoc_layout,
-        "mandoc-fidelity/unexpected": coverage.mandoc_fidelity
-        - coverage.fidelity
+        - coverage.mandoc_fidelity
+        - coverage.mandoc_cvs_fidelity,
+        "mandoc-layout/comparable-cvs-fidelity": coverage.mandoc_cvs_comparable
+        - coverage.mandoc_cvs_layout,
+        "mandoc-layout/fixtures": coverage.fixture_inventory
+        - coverage.mandoc_layout
+        - coverage.mandoc_cvs_layout,
+        "mandoc-fidelity/unexpected": coverage.mandoc_fidelity - coverage.fidelity,
+        "mandoc-cvs-fidelity/unexpected": coverage.mandoc_cvs_fidelity
         - coverage.fixture_inventory,
         "mandoc-layout/unexpected": coverage.mandoc_layout
         - coverage.mandoc_comparable,
+        "mandoc-cvs-layout/unexpected": coverage.mandoc_cvs_layout
+        - coverage.mandoc_cvs_comparable,
         **{f"pending/{name}": items for name, items in coverage.pending},
     }
 
@@ -521,22 +619,55 @@ def self_check() -> None:
     b = Identity("alpha", "man/man1/b.1", "b" * 64)
     fixture = Identity("fixtures", "real/a.1", "c" * 64)
     aligned = Coverage(
-        fidelity=frozenset({a, b}),
-        comparable=frozenset({a}),
+        fidelity=frozenset({a, b, fixture}),
+        comparable=frozenset({a, fixture}),
         structure=frozenset({a, b, fixture}),
         projection=frozenset({a, b, fixture}),
-        layout=frozenset({a}),
+        layout=frozenset({a, fixture}),
         target=frozenset({fixture}),
         semantic=frozenset({fixture}),
         mandoc_fidelity=frozenset({a, b, fixture}),
         mandoc_comparable=frozenset({a, fixture}),
         mandoc_layout=frozenset({a, fixture}),
+        mandoc_cvs_fidelity=frozenset(),
+        mandoc_cvs_comparable=frozenset(),
+        mandoc_cvs_layout=frozenset(),
         current_mandoc_deviations=0,
         fixture_inventory=frozenset({fixture}),
-        pending=(("mandoc-fidelity", frozenset()),),
+        pending=(("mandoc-package-fidelity", frozenset()),),
         summaries=(),
     )
     assert all(not missing for missing in missing_sets(aligned).values())
+    cvs_fixture = Identity("fixtures", "real/new.1", "d" * 64)
+    supplemented = replace(
+        aligned,
+        structure=aligned.structure | {cvs_fixture},
+        projection=aligned.projection | {cvs_fixture},
+        target=aligned.target | {cvs_fixture},
+        semantic=aligned.semantic | {cvs_fixture},
+        mandoc_cvs_fidelity=frozenset({cvs_fixture}),
+        mandoc_cvs_comparable=frozenset({cvs_fixture}),
+        mandoc_cvs_layout=frozenset({cvs_fixture}),
+        fixture_inventory=aligned.fixture_inventory | {cvs_fixture},
+    )
+    assert all(not missing for missing in missing_sets(supplemented).values())
+    assert missing_sets(
+        replace(supplemented, mandoc_cvs_layout=frozenset())
+    )["mandoc-layout/comparable-cvs-fidelity"] == frozenset({cvs_fixture})
+    cross_cohort_layout = missing_sets(
+        replace(
+            supplemented,
+            mandoc_layout=supplemented.mandoc_layout | {cvs_fixture},
+            mandoc_cvs_layout=frozenset(),
+        )
+    )
+    assert cross_cohort_layout["mandoc-layout/comparable-cvs-fidelity"] == frozenset(
+        {cvs_fixture}
+    )
+    assert cross_cohort_layout["mandoc-layout/unexpected"] == frozenset({cvs_fixture})
+    assert missing_sets(
+        replace(supplemented, mandoc_cvs_fidelity=frozenset())
+    )["mandoc-fidelity/fixtures"] == frozenset({cvs_fixture})
     incomplete = Coverage(
         fidelity=aligned.fidelity,
         comparable=aligned.comparable,
@@ -548,24 +679,74 @@ def self_check() -> None:
         mandoc_fidelity=frozenset({a}),
         mandoc_comparable=frozenset({a}),
         mandoc_layout=frozenset(),
+        mandoc_cvs_fidelity=frozenset(),
+        mandoc_cvs_comparable=frozenset(),
+        mandoc_cvs_layout=frozenset(),
         current_mandoc_deviations=0,
         fixture_inventory=aligned.fixture_inventory,
-        pending=(("mandoc-fidelity", frozenset({a})),),
+        pending=(("mandoc-package-fidelity", frozenset({a})),),
         summaries=(),
     )
     missing = missing_sets(incomplete)
-    assert missing["structure/fidelity"] == frozenset({b})
-    assert missing["projection/fidelity"] == frozenset({a})
-    assert missing["layout/comparable-fidelity"] == frozenset({a})
+    assert missing["structure/fidelity"] == frozenset({b, fixture})
+    assert missing["projection/fidelity"] == frozenset({a, fixture})
+    assert missing["layout/comparable-fidelity"] == frozenset({a, fixture})
     assert missing["structure/fixtures"] == frozenset({fixture})
     assert missing["projection/fixtures"] == frozenset({fixture})
     assert missing["target/fixtures"] == frozenset({fixture})
     assert missing["semantic/fixtures"] == frozenset({fixture})
-    assert missing["mandoc-fidelity/historical-fidelity"] == frozenset({b})
+    assert missing["mandoc-fidelity/historical-fidelity"] == frozenset({b, fixture})
     assert missing["mandoc-layout/comparable-mandoc-fidelity"] == frozenset({a})
     assert missing["mandoc-fidelity/fixtures"] == frozenset({fixture})
     assert missing["mandoc-layout/fixtures"] == frozenset({fixture})
-    assert missing["pending/mandoc-fidelity"] == frozenset({a})
+    assert missing["pending/mandoc-package-fidelity"] == frozenset({a})
+
+    def rejected(action: Callable[[], object], reason: str) -> None:
+        try:
+            action()
+        except ValueError:
+            return
+        raise AssertionError(f"{reason} was accepted")
+
+    cvs_row = {
+        "corpus": cvs_fixture.corpus,
+        "path": cvs_fixture.path,
+        "source_sha256": cvs_fixture.digest,
+        "reference_kind": "mandoc",
+        "reference_id": CVS_MANDOC_REFERENCE_ID,
+    }
+    package_row = {
+        **cvs_row,
+        "path": fixture.path,
+        "source_sha256": fixture.digest,
+        "reference_id": PACKAGE_MANDOC_REFERENCE_ID,
+    }
+    assert mandoc_renderer_identity(
+        Path("cvs.csv"), [], CVS_MANDOC_REFERENCE_ID, allow_empty=True
+    ) == ("mandoc", CVS_MANDOC_REFERENCE_ID)
+    assert mandoc_renderer_identity(
+        Path("cvs.csv"), [cvs_row], CVS_MANDOC_REFERENCE_ID, allow_empty=True
+    ) == ("mandoc", CVS_MANDOC_REFERENCE_ID)
+    rejected(
+        lambda: mandoc_renderer_identity(
+            Path("cvs.csv"),
+            [cvs_row, package_row],
+            CVS_MANDOC_REFERENCE_ID,
+            allow_empty=True,
+        ),
+        "mixed renderer IDs",
+    )
+    rejected(
+        lambda: mandoc_renderer_identity(
+            Path("package.csv"), [cvs_row], PACKAGE_MANDOC_REFERENCE_ID
+        ),
+        "CVS evidence under the historical package ID",
+    )
+    rejected(
+        lambda: validate_mandoc_cohorts([package_row], [package_row]),
+        "overlapping renderer cohorts",
+    )
+    validate_mandoc_cohorts([package_row], [cvs_row])
 
     mandoc_fidelity = {
         "corpus": a.corpus,
@@ -580,7 +761,7 @@ def self_check() -> None:
         "path": a.path,
         "section": "1",
         "source_sha256": a.digest,
-        "reference_renderer": "mandoc-test -T utf8 -O width=200",
+        "reference_renderer": f"{PACKAGE_MANDOC_REFERENCE_ID} -T utf8 -O width=200",
         "review_state": "reproduced",
     }
     assert (
@@ -588,7 +769,7 @@ def self_check() -> None:
             Path("deviations.csv"),
             [mandoc_deviation],
             [mandoc_fidelity],
-            ("mandoc", "mandoc-test"),
+            ("mandoc", PACKAGE_MANDOC_REFERENCE_ID),
         )
         == 1
     )
@@ -602,7 +783,7 @@ def self_check() -> None:
             Path("deviations.csv"),
             [mandoc_deviation],
             [fixed_fidelity],
-            ("mandoc", "mandoc-test"),
+            ("mandoc", PACKAGE_MANDOC_REFERENCE_ID),
         )
         == 1
     )
@@ -612,12 +793,37 @@ def self_check() -> None:
             Path("deviations.csv"),
             [invalid_deviation],
             [mandoc_fidelity],
-            ("mandoc", "mandoc-test"),
+            ("mandoc", PACKAGE_MANDOC_REFERENCE_ID),
         )
     except ValueError:
         pass
     else:
         raise AssertionError("a mismatched mandoc deviation section was accepted")
+    rejected(
+        lambda: validate_current_mandoc_deviations(
+            Path("deviations.csv"),
+            [mandoc_deviation],
+            [mandoc_fidelity],
+            ("mandoc", CVS_MANDOC_REFERENCE_ID),
+        ),
+        "historical deviation reassigned to CVS",
+    )
+    rejected(
+        lambda: validate_current_mandoc_deviations(
+            Path("deviations.csv"),
+            [
+                {
+                    **mandoc_deviation,
+                    "reference_renderer": (
+                        f"{CVS_MANDOC_REFERENCE_ID} -T utf8 -O width=200"
+                    ),
+                }
+            ],
+            [mandoc_fidelity],
+            ("mandoc", PACKAGE_MANDOC_REFERENCE_ID),
+        ),
+        "CVS deviation silently accepted in historical index",
+    )
 
 
 def main(argv: Sequence[str]) -> int:
@@ -645,7 +851,7 @@ def main(argv: Sequence[str]) -> int:
     for summary in coverage.summaries:
         statuses = ", ".join(
             f"{status}={count}" for status, count in sorted(summary.scan_statuses.items())
-        )
+        ) or "no rows"
         print(
             f"    {summary.name}: {summary.current_rows} "
             f"(baseline={summary.baseline_rows}; {statuses}; "
