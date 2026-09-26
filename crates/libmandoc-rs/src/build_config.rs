@@ -118,7 +118,16 @@ mod tests {
         for symbol in [
             "mparse_alloc",
             "mandoc_malloc",
+            "mandoc_msg_getcoordinateorigin",
+            "mandoc_msg_setcoordinateorigin",
             "roff_alloc",
+            "term_collect_draw",
+            "term_collect_endline",
+            "term_collect_owner_point",
+            "term_collect_region_point",
+            "term_collect_table_cell",
+            "term_collect_table_cell_position",
+            "term_collect_tag_point",
             "strlcpy",
             "ohash_init",
         ] {
