@@ -1,0 +1,32 @@
+.Dd September 26, 2026
+.Dt ENTRY-ROLES 1
+.Os
+.Sh NAME
+.Nm entry-roles
+.Nd declaration recognition probe
+.Sh DESCRIPTION
+.Bl -tag -width Ds
+.It Ev DEMO_HOME
+Home directory for the program.
+.It Va counter
+A variable, not an environment variable.
+.It Ic activity-action
+A named setting without an explicit command context.
+.It Dv MODE_FAST
+A symbolic constant.
+.El
+.Sh CONFIGURATION
+.Bl -tag -width Ds
+.It Cm BatchMode
+Set the batch processing behavior.
+.El
+.Sh COMMANDS
+.Bl -tag -width Ds
+.It Ic attach-session Ar target
+Attach to a session.
+.El
+.Sh ENVIRONMENT
+.Bl -tag -width Ds
+.It Ev TMPDIR , Ev TEMP , Ev TMP
+Variables checked in this order.
+.El
