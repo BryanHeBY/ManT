@@ -524,10 +524,23 @@ allocation, typed mark projection, and diagnostics under one assembly entry;
 `mant-ir/fixed_body` separates the public model, read-time owner/head evidence
 closure, and surface/mark validation.
 These are internal moves, not new response models or another render path.
-The native collector remains one state writer through R04; split its
-column/slot/point lifecycle from mark observation only as a separately tested
-unit before R05. The UI's Fixed/Flow lowering split belongs with R06's
-selection consumers, not with this Rust transfer cleanup.
+The native collector remained one state writer through R04. Its pre-R05
+internal split keeps one per-render session and one event order:
+`mant_mandoc_annotated_collector.c` coordinates accounting and final cleanup;
+`_buffer.c` alone writes active columns/slots, pending glyphs, point chains and
+the terminal sink; `_marks.c` writes AST frames, owner/table/link marks and
+structural event state; `_declarations.c` supplies parser-alive declaration
+and reading-neighbor evidence without classifying final names. Their private
+header carries per-render state and narrow cross-module operations; no module
+installs its own TLS or causes a semantic node close to flush the formatter.
+Mark and point arrays reserve the same one-based key before mark insertion
+commits it. Partial consume, truncate-point transfer, reset, and column free
+remain one buffer lifecycle; cumulative work and mutation budgets do not
+refund retired slots. `FIELD_PLACE` holds its label until pending device
+spaces are emitted, then `LETTER` computes the final predecessor edge.
+Selection, final display, result validation and transfer remain separate
+existing owners. The UI's Fixed/Flow lowering split belongs with R06's
+selection consumers, not with this native refactor.
 
 Patch ownership at P1: 0020 supplies raw output capture; 0029 and 0032–0036
 supply current observation/region boundaries; 0030–0031 supply target

@@ -230,6 +230,9 @@ fn selected_native_sources(
     }
     if selection.has(NativeSelection::STRUCTURED) {
         owned.push(crate_dir.join("shim/mant_mandoc_annotated_collector.c"));
+        owned.push(crate_dir.join("shim/mant_mandoc_annotated_collector_buffer.c"));
+        owned.push(crate_dir.join("shim/mant_mandoc_annotated_collector_declarations.c"));
+        owned.push(crate_dir.join("shim/mant_mandoc_annotated_collector_marks.c"));
         owned.push(crate_dir.join("shim/mant_mandoc_annotated_coverage.c"));
         owned.push(crate_dir.join("shim/mant_mandoc_annotated_display.c"));
         owned.push(crate_dir.join("shim/mant_mandoc_annotated_result.c"));
