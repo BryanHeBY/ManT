@@ -74,6 +74,9 @@ stage timing and opt-in counters must be reported separately, with their
 probe boundaries and overhead documented; do not infer native collector
 cost by subtracting total CLI times. Keep raw reports under `target` and
 commit only compact summaries, identities, methods, and limitations here.
+The accepted PERF01–PERF02c changes, same-session paired comparison, and
+remaining profiling work are recorded in
+[the optimization checkpoint](OPTIMIZATION-CHECKPOINT.md).
 
 ## Frozen baseline at `da6ddd7d` (2026-09-26)
 
