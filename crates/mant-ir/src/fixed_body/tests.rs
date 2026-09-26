@@ -1249,6 +1249,56 @@ fn checked_logical_subrange_maps_only_final_glyphs() {
     assert_eq!(body.selection_text(&clipped).as_deref(), Some("界"));
     assert!(body.selection_subrange(&direct, 2..4).is_none());
     assert_eq!(body.selection_subrange(&direct, 0..4), Some(direct.clone()));
+    assert_eq!(
+        body.selection_subranges_from_form(&direct, "a界", &[0..1, 1..4]),
+        Some(vec![
+            body.selection_subrange(&direct, 0..1).unwrap(),
+            clipped.clone(),
+        ])
+    );
+    assert!(
+        body.selection_subranges_from_form(&direct, "a界", &[2..4])
+            .is_none()
+    );
+    let empty_middle = TextSelection {
+        parts: vec![
+            direct.parts[0],
+            OutputSlice {
+                run: key(1),
+                start_byte: 1,
+                end_byte: 1,
+            },
+            direct.parts[1],
+        ],
+        joins: vec![
+            TextJoin::DirectContact,
+            TextJoin::AuthoredSeparator(String::new()),
+        ],
+    };
+    assert_eq!(body.selection_text(&empty_middle).as_deref(), Some("a界"));
+    assert_eq!(
+        body.selection_subranges_from_form(&empty_middle, "a界", &[0..4]),
+        body.selection_subrange(&empty_middle, 0..4)
+            .map(|one| vec![one])
+    );
+    let empty_direct = TextSelection {
+        joins: vec![TextJoin::DirectContact; 2],
+        ..empty_middle
+    };
+    assert_eq!(
+        body.selection_subranges_from_form(&empty_direct, "a界", &[0..4]),
+        body.selection_subrange(&empty_direct, 0..4)
+            .map(|one| vec![one])
+    );
+    let interrupted = TextSelection {
+        joins: vec![TextJoin::Unknown],
+        ..direct.clone()
+    };
+    assert!(body.selection_text(&interrupted).is_none());
+    assert!(
+        body.selection_subranges_from_form(&interrupted, "a界", &[0..4])
+            .is_none()
+    );
 
     let separated = TextSelection {
         parts: direct.parts,
@@ -1256,6 +1306,17 @@ fn checked_logical_subrange_maps_only_final_glyphs() {
     };
     assert_eq!(body.selection_text(&separated).as_deref(), Some("a 界"));
     assert!(body.selection_subrange(&separated, 0..5).is_none());
+    assert!(
+        body.selection_subranges_from_form(&separated, "a 界", &[0..5])
+            .is_none()
+    );
+    assert_eq!(
+        body.selection_subranges_from_form(&separated, "a 界", &[0..1, 2..5]),
+        Some(vec![
+            body.selection_subrange(&separated, 0..1).unwrap(),
+            body.selection_subrange(&separated, 2..5).unwrap(),
+        ])
+    );
     assert_eq!(
         body.selection_text(&body.selection_subrange(&separated, 2..5).unwrap())
             .as_deref(),
@@ -1269,6 +1330,92 @@ fn checked_logical_subrange_maps_only_final_glyphs() {
     };
     assert_eq!(body.selection_text(&generated).as_deref(), Some("a 界"));
     assert!(body.selection_subrange(&generated, 0..5).is_none());
+    assert!(
+        body.selection_subranges_from_form(&generated, "a 界", &[0..5])
+            .is_none()
+    );
+}
+
+#[test]
+fn many_name_ranges_share_one_long_head_walk() {
+    // This synthetic scale check compares the private operation-local cursor
+    // to the existing public mapper; it asserts no new roff interpretation.
+    let (body, form) = scaled_styled_argument_body(8_192);
+    let head = &body.owners[0].head;
+    let ranges = (2..66).map(|start| start..start + 1).collect::<Vec<_>>();
+    let mapped = body
+        .selection_subranges_from_form(head, &form, &ranges)
+        .expect("64 disjoint glyph ranges");
+    for (range, selection) in ranges.into_iter().zip(mapped) {
+        assert_eq!(Some(selection), body.selection_subrange(head, range));
+    }
+    let spanning = [2..5, 5..8];
+    let mapped = body
+        .selection_subranges_from_form(head, &form, &spanning)
+        .expect("two multi-run ranges");
+    for (range, selection) in spanning.into_iter().zip(mapped) {
+        assert_eq!(Some(selection), body.selection_subrange(head, range));
+    }
+}
+
+#[test]
+fn batched_name_ranges_match_single_mapper_across_join_matrix() {
+    let body = sample_body();
+    let parts = vec![
+        OutputSlice {
+            run: key(1),
+            start_byte: 0,
+            end_byte: 1,
+        },
+        OutputSlice {
+            run: key(2),
+            start_byte: 0,
+            end_byte: 3,
+        },
+    ];
+    for join in [
+        TextJoin::DirectContact,
+        TextJoin::AuthoredSeparator(" ".to_owned()),
+        TextJoin::GeneratedSeparator(" ".to_owned()),
+        TextJoin::AuthoredSeparator(String::new()),
+    ] {
+        let selection = TextSelection {
+            parts: parts.clone(),
+            joins: vec![join],
+        };
+        let form = body.selection_text(&selection).unwrap();
+        for first_start in 0..form.len() {
+            for first_end in first_start + 1..=form.len() {
+                let first = first_start..first_end;
+                let expected = body.selection_subrange(&selection, first.clone());
+                assert_eq!(
+                    body.selection_subranges_from_form(&selection, &form, &[first.clone()]),
+                    expected.map(|part| vec![part]),
+                    "join={:?} first={first:?}",
+                    selection.joins[0]
+                );
+                for second_start in first_end..form.len() {
+                    for second_end in second_start + 1..=form.len() {
+                        let second = second_start..second_end;
+                        let expected = body
+                            .selection_subrange(&selection, first.clone())
+                            .zip(body.selection_subrange(&selection, second.clone()))
+                            .map(|(left, right)| vec![left, right]);
+                        assert_eq!(
+                            body.selection_subranges_from_form(
+                                &selection,
+                                &form,
+                                &[first.clone(), second.clone()],
+                            ),
+                            expected,
+                            "join={:?} first={first:?} second={second:?}",
+                            selection.joins[0]
+                        );
+                    }
+                }
+            }
+        }
+    }
 }
 
 #[test]

@@ -215,13 +215,22 @@ impl FixedBody {
         if over_limit {
             return None;
         }
-        let mut names = Vec::new();
-        for (name, range) in &literal {
-            let selection = self.selection_subrange(&owner.head, range.clone())?;
-            if self.selection_text(&selection).as_deref() != Some(name.as_str()) {
+        // With no candidate there is no name-to-glyph mapping to perform.
+        // checked_lexical_names also accepts this empty, non-rejected case.
+        if literal.is_empty() {
+            return Some(Vec::new());
+        }
+        let ranges = literal
+            .iter()
+            .map(|(_, range)| range.clone())
+            .collect::<Vec<_>>();
+        let selections = self.selection_subranges_from_form(&owner.head, &form, &ranges)?;
+        let mut names = Vec::with_capacity(literal.len());
+        for ((name, range), selection) in literal.into_iter().zip(selections) {
+            if form.get(range.clone()) != Some(name.as_str()) {
                 return None;
             }
-            names.push((name.clone(), selection, range.clone()));
+            names.push((name, selection, range));
         }
         let names = self.checked_lexical_names(owner, names, segments)?;
         // The parser-alive prefix is a candidate for the first declaration,
@@ -1148,6 +1157,102 @@ impl FixedBody {
             cursor = end;
         }
         (cursor == logical.len() && !parts.is_empty()).then_some(TextSelection { parts, joins })
+    }
+
+    /// Map disjoint declaration names against the already materialized HEAD.
+    /// Unlike the public single-range helper, this private path walks the
+    /// native selection once for all names. `form` is the unmodified result
+    /// of `selection_text(selection)` in the same lexical proof operation.
+    pub(super) fn selection_subranges_from_form(
+        &self,
+        selection: &TextSelection,
+        form: &str,
+        ranges: &[Range<usize>],
+    ) -> Option<Vec<TextSelection>> {
+        if selection.joins.len() != selection.parts.len().saturating_sub(1) {
+            return None;
+        }
+        let mut previous_end = 0usize;
+        for range in ranges {
+            if range.start < previous_end
+                || range.start >= range.end
+                || form.get(range.clone()).is_none()
+            {
+                return None;
+            }
+            previous_end = range.end;
+        }
+        let mut found = ranges
+            .iter()
+            .map(|_| TextSelection {
+                parts: Vec::new(),
+                joins: Vec::new(),
+            })
+            .collect::<Vec<_>>();
+        let mut current = 0usize;
+        let mut cursor = 0usize;
+        for (index, part) in selection.parts.iter().enumerate() {
+            if index != 0 {
+                match &selection.joins[index - 1] {
+                    TextJoin::DirectContact => {}
+                    TextJoin::AuthoredSeparator(separator)
+                    | TextJoin::GeneratedSeparator(separator) => {
+                        let end = cursor.checked_add(separator.len())?;
+                        if ranges
+                            .get(current)
+                            .is_some_and(|range| range.start < end && cursor < range.end)
+                        {
+                            return None;
+                        }
+                        cursor = end;
+                    }
+                    TextJoin::HardBoundary | TextJoin::Unknown => return None,
+                }
+            }
+            let start_byte = usize::try_from(part.start_byte).ok()?;
+            let end_byte = usize::try_from(part.end_byte).ok()?;
+            let run_text = self.surface.run_text(part.run)?;
+            let visible = run_text.get(start_byte..end_byte)?;
+            let end = cursor.checked_add(visible.len())?;
+            // The public mapper skips zero-width parts even in an otherwise
+            // malformed mutable selection; never emit an empty output slice.
+            if visible.is_empty() {
+                continue;
+            }
+            while let Some(range) = ranges.get(current)
+                && range.start < end
+            {
+                if range.end <= cursor {
+                    return None;
+                }
+                let clip_start = range.start.max(cursor);
+                let clip_end = range.end.min(end);
+                let slice_start = start_byte.checked_add(clip_start - cursor)?;
+                let slice_end = start_byte.checked_add(clip_end - cursor)?;
+                run_text.get(slice_start..slice_end)?;
+                let target = found.get_mut(current)?;
+                if !target.parts.is_empty() {
+                    target
+                        .joins
+                        .push(selection.joins.get(index.checked_sub(1)?)?.clone());
+                }
+                target.parts.push(OutputSlice {
+                    run: part.run,
+                    start_byte: u64::try_from(slice_start).ok()?,
+                    end_byte: u64::try_from(slice_end).ok()?,
+                });
+                if range.end <= end {
+                    current += 1;
+                } else {
+                    break;
+                }
+            }
+            cursor = end;
+        }
+        (cursor == form.len()
+            && current == ranges.len()
+            && found.iter().all(|selection| !selection.parts.is_empty()))
+        .then_some(found)
     }
 
     /// Read one complete surviving definition head without inferring bytes
