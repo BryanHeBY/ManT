@@ -1922,6 +1922,9 @@ both structural locations and rendered coordinates.
 `query` always echoes all defaults, even when the request omitted them.
 A no-match search is successful and returns `total = 0` with an empty
 `matches` array.
+Readers reject a search response that reports `contentComplete=true` (including
+the omitted default) while retaining a `content-coverage` diagnostic. A false
+summary remains valid when a bounded transport omits diagnostic details.
 
 ### Coordinate Model
 

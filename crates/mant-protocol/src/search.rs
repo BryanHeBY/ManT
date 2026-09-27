@@ -3,7 +3,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use mant_ir::{DocumentMeta, DocumentSource, SourceSpan};
+use mant_ir::{DocumentMeta, DocumentSource, SourceSpan, content_complete};
 
 use crate::OutlineTrail;
 
@@ -142,7 +142,11 @@ pub struct SearchRender {
 
 /// Complete, paginatable search result returned to agents and scripts.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(
+    rename_all = "camelCase",
+    deny_unknown_fields,
+    try_from = "QuerySearchUnchecked"
+)]
 #[schemars(extend("$id" = "urn:mant:search:v0.12"))]
 pub struct QuerySearch {
     /// Exact response schema discriminator.
@@ -181,6 +185,57 @@ pub struct QuerySearch {
     pub next_offset: Option<u32>,
     /// Matching line groups in render order.
     pub matches: Vec<SearchHit>,
+}
+
+// A retained diagnostic proves loss even when an absent summary defaults to
+// true. A false summary remains valid after bounded transports omit details.
+#[derive(Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct QuerySearchUnchecked {
+    schema: SearchSchema,
+    label: String,
+    source: Option<DocumentSource>,
+    meta: Option<DocumentMeta>,
+    #[serde(default)]
+    diagnostics: Vec<mant_ir::Diagnostic>,
+    #[serde(default = "default_content_complete")]
+    content_complete: bool,
+    query: SearchQuery,
+    render: SearchRender,
+    total: u32,
+    returned: u32,
+    offset: u32,
+    truncated: bool,
+    next_offset: Option<u32>,
+    matches: Vec<SearchHit>,
+}
+
+impl TryFrom<QuerySearchUnchecked> for QuerySearch {
+    type Error = &'static str;
+
+    fn try_from(value: QuerySearchUnchecked) -> Result<Self, Self::Error> {
+        if value.content_complete && !content_complete(&value.diagnostics) {
+            return Err(
+                "search contentComplete contradicts a retained content-coverage diagnostic",
+            );
+        }
+        Ok(Self {
+            schema: value.schema,
+            label: value.label,
+            source: value.source,
+            meta: value.meta,
+            diagnostics: value.diagnostics,
+            content_complete: value.content_complete,
+            query: value.query,
+            render: value.render,
+            total: value.total,
+            returned: value.returned,
+            offset: value.offset,
+            truncated: value.truncated,
+            next_offset: value.next_offset,
+            matches: value.matches,
+        })
+    }
 }
 
 /// One rendered line or line span containing one or more exact occurrences.

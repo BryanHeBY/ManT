@@ -122,6 +122,54 @@ fn shared_query_fixture_round_trips_without_shape_changes() {
 }
 
 #[test]
+fn search_rejects_a_complete_summary_after_known_content_loss() {
+    let mut search = serde_json::json!({
+        "schema": "mant.search/v0.12",
+        "label": "review",
+        "diagnostics": [{
+            "level": "warning",
+            "impact": "content-coverage",
+            "message": "visible content omitted"
+        }],
+        "query": {"pattern": "x"},
+        "render": {
+            "schema": "mant.markdown/v1",
+            "format": "markdown",
+            "scope": "full",
+            "lineBase": 1,
+            "columnBase": 1,
+            "lineCount": 1
+        },
+        "total": 0,
+        "returned": 0,
+        "offset": 0,
+        "truncated": false,
+        "matches": []
+    });
+    let wire = serde_json::to_string(&search).unwrap();
+    assert!(serde_json::from_str::<mant_protocol::QuerySearch>(&wire).is_err());
+    assert!(serde_json::from_value::<mant_protocol::QuerySearch>(search.clone()).is_err());
+
+    search["contentComplete"] = true.into();
+    let wire = serde_json::to_string(&search).unwrap();
+    assert!(serde_json::from_str::<mant_protocol::QuerySearch>(&wire).is_err());
+    assert!(serde_json::from_value::<mant_protocol::QuerySearch>(search.clone()).is_err());
+
+    search["contentComplete"] = false.into();
+    let wire = serde_json::to_string(&search).unwrap();
+    let retained: mant_protocol::QuerySearch = serde_json::from_str(&wire).unwrap();
+    assert!(!retained.content_complete);
+
+    // A bounded transport can omit diagnostic detail while retaining the
+    // producer's false summary across a text JSON round trip.
+    search.as_object_mut().unwrap().remove("diagnostics");
+    let wire = serde_json::to_string(&search).unwrap();
+    let bounded: mant_protocol::QuerySearch = serde_json::from_str(&wire).unwrap();
+    assert!(!bounded.content_complete);
+    assert!(bounded.diagnostics.is_empty());
+}
+
+#[test]
 fn v0_12_breaking_projection_shapes_have_cross_language_golden_examples() {
     let outline: QueryOutline = serde_json::from_str(ROOTED_OUTLINE).expect("rooted outline");
     assert_eq!(
