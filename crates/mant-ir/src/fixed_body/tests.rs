@@ -964,6 +964,8 @@ fn sample_body() -> FixedBody {
         }],
         links: vec![LinkMark {
             key: key(1),
+            section: None,
+            owner: None,
             target: Some(LinkTarget::External {
                 uri: "https://example.test".to_owned(),
             }),

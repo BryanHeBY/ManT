@@ -16801,6 +16801,24 @@
             "description": "Surviving visible label slices; no-href instances are not clickable.",
             "$ref": "#/$defs/TextSelection"
           },
+          "owner": {
+            "description": "Nearest native definition/list owner at the occurrence origin.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint32",
+            "minimum": 1
+          },
+          "section": {
+            "description": "Native section in which this macro or compatible source instance began.\nThis is occurrence context, not a claim that every label glyph belongs\nto that section when an explicit link spans a later boundary.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint32",
+            "minimum": 1
+          },
           "source": {
             "description": "Authored macro location when known.",
             "anyOf": [
@@ -16838,6 +16856,8 @@
         "additionalProperties": false,
         "required": [
           "key",
+          "section",
+          "owner",
           "target",
           "label",
           "source"

@@ -1003,6 +1003,8 @@ mod tests {
             owners: Vec::new(),
             links: vec![crate::LinkMark {
                 key: std::num::NonZeroU32::new(1).unwrap(),
+                section: None,
+                owner: None,
                 target: Some(LinkTarget::External {
                     uri: "https://unsafe host".to_owned(),
                 }),

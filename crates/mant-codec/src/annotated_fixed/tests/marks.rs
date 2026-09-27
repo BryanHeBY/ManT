@@ -74,6 +74,9 @@ fn malformed_public_mark_keys_and_parent_cycles_return_errors() {
         ]))
         .is_err()
     );
+    let mut forged = malformed_anchor(1, 0);
+    forged.owner = 1;
+    assert!(lower_annotated_document(malformed_marks(vec![forged])).is_err());
 }
 
 #[test]
@@ -273,6 +276,32 @@ fn skipped_compatible_link_does_not_shift_surviving_typed_keys() {
     let rebuilt: mant_ir::Document =
         serde_json::from_value(serde_json::to_value(&document).unwrap()).unwrap();
     assert!(validate_document(&rebuilt).is_empty());
+}
+
+#[test]
+fn fixed_link_origin_context_follows_native_section_and_owner() {
+    // Exact input first ran pinned CVS -Tutf8 -O width=78. man_term.c's
+    // SH/TP traversal establishes the context in which each MR macro starts;
+    // the later section does not borrow the preceding definition owner.
+    let input = b".TH T 1\n.SH TOP\n.MR root 1\n.TP\n.B --foo\n.MR own 2\n.SH NEXT\n.MR next 3\n";
+    let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Man).unwrap();
+    assert!(validate_document(&document).is_empty());
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        panic!("native output did not become Fixed");
+    };
+    assert_eq!(fixed.links.len(), 3);
+    assert_eq!(fixed.links[0].section, Some(fixed.headings[0].key));
+    assert_eq!(fixed.links[0].owner, None);
+    assert_eq!(fixed.links[1].section, Some(fixed.headings[0].key));
+    assert_eq!(fixed.links[1].owner, Some(fixed.owners[0].key));
+    assert_eq!(fixed.links[2].section, Some(fixed.headings[1].key));
+    assert_eq!(fixed.links[2].owner, None);
+    let rebuilt: mant_ir::Document =
+        serde_json::from_value(serde_json::to_value(&document).unwrap()).unwrap();
+    assert!(validate_document(&rebuilt).is_empty());
+    let mut forged = serde_json::to_value(&document).unwrap();
+    forged["body"]["links"][1]["section"] = serde_json::json!(fixed.headings[1].key);
+    assert!(serde_json::from_value::<mant_ir::Document>(forged).is_err());
 }
 
 #[test]

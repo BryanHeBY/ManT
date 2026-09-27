@@ -67,6 +67,13 @@ projection, plus consumer updates. It must not pretend a Fixed occurrence is
 an `Inline::Link` or fabricate a Flow body. R05d cannot claim end-to-end
 outline/reference coverage until this is implemented and tested.
 
+As the first R05d bridge, each Fixed `LinkMark` now retains the native
+section/owner context at the occurrence's start. This is checked against the
+typed section and owner tables on IR validation and survives JSON roundtrip.
+It is not a Flow location, a copied body, or by itself a completed reference
+inventory; later response projection can use it to select the correct read
+scope without guessing from terminal columns.
+
 Pre-change directed tests on the current source passed: native
 `annotated_links.rs` 15/15, codec `annotated_fixed::tests` 169/169, and
 `mant-ui` reference-filtered tests 33/33 (plus one real Git integration

@@ -468,6 +468,15 @@ impl FixedBody {
         let mut link_covered_bytes = vec![0u64; self.surface.runs.len()];
         for (index, link) in self.links.iter().enumerate() {
             dense_key(link.key, index)?;
+            reference(link.section, self.headings.len())?;
+            reference(link.owner, self.owners.len())?;
+            if let Some(owner) = link.owner
+                && self.owners[(owner.get() - 1) as usize].section != link.section
+            {
+                return Err(FixedBodyError(
+                    "link origin owner crosses a section boundary",
+                ));
+            }
             if let Some(target) = &link.target {
                 validate_link_target(target)?;
             }

@@ -177,6 +177,8 @@ fn fixture() -> ResolvedContent {
         ],
         links: vec![LinkMark {
             key: key(1),
+            section: None,
+            owner: None,
             target: Some(LinkTarget::External {
                 uri: "https://example.test/printf".into(),
             }),

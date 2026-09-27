@@ -217,6 +217,8 @@ fn direct_contact_must_not_skip_bytes_in_one_run() {
     let mut body = body_with_run("abc", 3);
     body.links.push(LinkMark {
         key: key(1),
+        section: None,
+        owner: None,
         target: Some(LinkTarget::External {
             uri: "https://example.test".to_owned(),
         }),
@@ -510,6 +512,8 @@ fn link_run_labels_require_complete_occurrence_coverage() {
     body.surface.runs[0].label.link = Some(key(1));
     body.links.push(LinkMark {
         key: key(1),
+        section: None,
+        owner: None,
         target: Some(LinkTarget::External {
             uri: "https://example.test".to_owned(),
         }),
@@ -590,6 +594,8 @@ fn a_native_link_instance_may_have_no_href() {
     let mut body = body_with_run("()", 2);
     body.links.push(LinkMark {
         key: key(1),
+        section: None,
+        owner: None,
         target: None,
         label: selection(&[(0, 2)], Vec::new()),
         source_key: None,
@@ -615,6 +621,8 @@ fn fixed_links_obey_the_shared_target_grammar() {
     let mut body = body_with_run("a", 1);
     body.links.push(LinkMark {
         key: key(1),
+        section: None,
+        owner: None,
         target: Some(LinkTarget::External {
             uri: "https://example.test".to_owned(),
         }),

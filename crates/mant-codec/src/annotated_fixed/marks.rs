@@ -353,6 +353,8 @@ pub(super) fn project_link(
     };
     Ok(LinkMark {
         key: keys.required(mark.key, 3)?,
+        section: keys.nearest(mark.owner, 1)?,
+        owner: keys.nearest(mark.owner, 2)?,
         target,
         label: selection(page, mark)?,
         source: authored,

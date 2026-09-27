@@ -452,6 +452,11 @@ impl KeyMap {
                     "native mark parent does not precede child",
                 ));
             }
+            if mark.owner >= mark.key {
+                return Err(AnnotatedProjectionError::Relation(
+                    "native mark owner does not precede child",
+                ));
+            }
             if mark.kind == 4 && identities.consumed_anchor(mark.key)? {
                 // tag.c::tag_move_id can make a manual target the heading's
                 // authored alias. The original global mark stays in native

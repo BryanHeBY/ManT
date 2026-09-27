@@ -410,6 +410,12 @@ pub use evidence::{
 pub struct LinkMark {
     /// Dense one-based occurrence key.
     pub key: NonZeroU32,
+    /// Native section in which this macro or compatible source instance began.
+    /// This is occurrence context, not a claim that every label glyph belongs
+    /// to that section when an explicit link spans a later boundary.
+    pub section: Option<NonZeroU32>,
+    /// Nearest native definition/list owner at the occurrence origin.
+    pub owner: Option<NonZeroU32>,
     /// Typed destination decoded while the native source is still available.
     /// `None` preserves a real link macro instance that rendered without href.
     #[schemars(with = "RequiredNullableLinkTarget")]
@@ -460,6 +466,8 @@ impl<'de> Deserialize<'de> for RequiredNullableLinkTarget {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct LinkMarkWire {
     key: NonZeroU32,
+    section: Option<NonZeroU32>,
+    owner: Option<NonZeroU32>,
     target: RequiredNullableLinkTarget,
     label: TextSelection,
     source: Option<SourceSpan>,
@@ -472,6 +480,8 @@ impl<'de> Deserialize<'de> for LinkMark {
         let wire = LinkMarkWire::deserialize(deserializer)?;
         Ok(Self {
             key: wire.key,
+            section: wire.section,
+            owner: wire.owner,
             target: wire.target.0,
             label: wire.label,
             source: wire.source,
