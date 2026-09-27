@@ -1,12 +1,12 @@
 //! Assemble native tbl rows; source recovery has a separate transaction boundary.
+use crate::mandoc::roff_escape::RoffFont;
 use crate::mandoc::{LoweringContext, layout::layout, source_span};
 use libmandoc_rs::{
     Node, TableAlignment as MandocTableAlignment, TableCellKind, TableFont,
     TableRowKind as MandocTableRowKind, TableRuleCellKind as MandocTableRuleCellKind,
 };
 use mant_ir::{
-    Block, Inline, LayoutHint, TableAlignment as AstTableAlignment, TableCell as AstTableCell,
-    TableRow,
+    Block, LayoutHint, TableAlignment as AstTableAlignment, TableCell as AstTableCell, TableRow,
 };
 mod recovery;
 use recovery::lower_table_cell;
@@ -65,6 +65,12 @@ pub(super) fn append_table_row(
                     // payload: source recovery must never resurrect it.
                     Vec::new()
                 } else {
+                    // CVS tbl_html.c::print_tbl and tbl_term.c::tbl_word
+                    // select the layout font before printing the cell word.
+                    // In-word \f escapes can therefore override it, while
+                    // the selection itself ends at the cell boundary.
+                    let saved_font =
+                        table_cell_font(cell.font).map(|font| formatter.font.push_scope(font));
                     let children = lower_table_cell(
                         cell,
                         recovery::CellPosition {
@@ -79,7 +85,9 @@ pub(super) fn append_table_row(
                     // A successfully decoded control-only cell is empty, not
                     // missing source that needs synthetic recovery.
                     .unwrap_or_default();
-                    let children = style_table_cell(children, cell.font);
+                    if let Some(saved_font) = saved_font {
+                        formatter.font.pop_scope(saved_font);
+                    }
                     // `tbl_term.c` clears BACKAFTER/BACKBEFORE before every
                     // cell and the row flush clears them again whenever this
                     // cell actually populated the native buffer.  Only a
@@ -121,49 +129,18 @@ pub(super) fn append_table_row(
     }
 }
 
-// CVS tbl_html.c::print_tbl applies layout->font around each data cell.
-// Preserve this parsed fact without changing table payload or link identity.
-fn style_table_cell(children: Vec<Inline>, font: Option<TableFont>) -> Vec<Inline> {
-    if children.is_empty() {
-        return children;
-    }
-    let children = if matches!(
-        font,
-        Some(TableFont::Code | TableFont::CodeBold | TableFont::CodeItalic)
-    ) {
-        children.into_iter().map(code_font_text).collect()
-    } else {
-        children
-    };
+fn table_cell_font(font: Option<TableFont>) -> Option<RoffFont> {
     match font {
-        Some(TableFont::Bold | TableFont::CodeBold) => vec![Inline::Strong { children }],
-        Some(TableFont::Italic | TableFont::CodeItalic) => vec![Inline::Emphasis { children }],
-        Some(TableFont::BoldItalic) => vec![Inline::Strong {
-            children: vec![Inline::Emphasis { children }],
-        }],
-        Some(TableFont::Code | TableFont::Roman) | None => children,
-    }
-}
-
-fn code_font_text(inline: Inline) -> Inline {
-    match inline {
-        Inline::Text { value } => Inline::Code { value },
-        Inline::Strong { children } => Inline::Strong {
-            children: children.into_iter().map(code_font_text).collect(),
-        },
-        Inline::Emphasis { children } => Inline::Emphasis {
-            children: children.into_iter().map(code_font_text).collect(),
-        },
-        Inline::Link {
-            target,
-            title,
-            children,
-        } => Inline::Link {
-            target,
-            title,
-            children: children.into_iter().map(code_font_text).collect(),
-        },
-        other => other,
+        Some(TableFont::Bold) => Some(RoffFont::Strong),
+        Some(TableFont::Italic) => Some(RoffFont::Emphasis),
+        Some(TableFont::BoldItalic) => Some(RoffFont::StrongEmphasis),
+        Some(TableFont::Code) => Some(RoffFont::Code),
+        Some(TableFont::CodeBold) => Some(RoffFont::CodeStrong),
+        Some(TableFont::CodeItalic) => Some(RoffFont::CodeEmphasis),
+        // CVS tbl_term.c::tbl_word deliberately does not push a Roman
+        // layout font, preserving an enclosing .Bf/.ft font. There is no
+        // cell-local selection to pop in this case.
+        Some(TableFont::Roman) | None => None,
     }
 }
 

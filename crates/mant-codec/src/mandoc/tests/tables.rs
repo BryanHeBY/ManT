@@ -28,6 +28,103 @@ fn table_layout_font_reaches_inline_consumers() {
 }
 
 #[test]
+fn table_layout_font_can_be_overridden_and_restored_within_one_cell() {
+    // Exact input checked with the fixed -Thtml/-Tutf8/-Tlint oracle.
+    // CVS tbl_html.c::print_tbl selects layout->font before print_text(),
+    // where html.c::print_text() executes each \fR and \fP in source order.
+    let document = parse_manual_bytes(
+        std::path::Path::new("table-font-override.7"),
+        b".TH REVIEW 7\n.SH DESCRIPTION\n.TS\nlb.\nA\\fRB\\fPC\n.TE\nafter\n",
+    )
+    .unwrap();
+    let [
+        Block::Table { rows, .. },
+        Block::Paragraph {
+            children: after, ..
+        },
+    ] = document.sections[0].blocks.as_slice()
+    else {
+        panic!("table and following paragraph");
+    };
+    let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
+        panic!("table cell");
+    };
+    assert!(matches!(children.as_slice(),
+        [Inline::Strong { children: a }, Inline::Text { value: b }, Inline::Strong { children: c }]
+        if matches!(a.as_slice(), [Inline::Text { value }] if value == "A")
+            && b == "B"
+            && matches!(c.as_slice(), [Inline::Text { value }] if value == "C")));
+    assert!(matches!(after.as_slice(), [Inline::Text { value }] if value == "after"));
+}
+
+#[test]
+fn table_cell_font_selection_does_not_leak_to_next_cell_or_prose() {
+    // Exact input checked with the fixed -Thtml/-Tutf8/-Tlint oracle.
+    // CVS tbl_term.c::tbl_word pushes layout->font and term_fontpopq()
+    // restores the prior current font before rendering the next cell.
+    let document = parse_manual_bytes(
+        std::path::Path::new("table-font-scope.7"),
+        b".TH REVIEW 7\n.SH DESCRIPTION\n.TS\ntab(|);\nlb l.\nA\\fIB|C\n.TE\nafter\n",
+    )
+    .unwrap();
+    let [
+        Block::Table { rows, .. },
+        Block::Paragraph {
+            children: after, ..
+        },
+    ] = document.sections[0].blocks.as_slice()
+    else {
+        panic!("table and following paragraph");
+    };
+    let cell = |index: usize| match rows[0].cells[index].blocks.as_slice() {
+        [Block::Paragraph { children, .. }] => children.as_slice(),
+        other => panic!("cell {index}: {other:?}"),
+    };
+    assert!(matches!(cell(0),
+        [Inline::Strong { children: a }, Inline::Emphasis { children: b }]
+        if matches!(a.as_slice(), [Inline::Text { value }] if value == "A")
+            && matches!(b.as_slice(), [Inline::Text { value }] if value == "B")));
+    assert!(matches!(cell(1), [Inline::Text { value }] if value == "C"));
+    assert!(matches!(after.as_slice(), [Inline::Text { value }] if value == "after"));
+}
+
+#[test]
+fn roman_table_cell_keeps_terminal_font_register_at_its_stack_level() {
+    // Exact input checked with the fixed -Tutf8/-Thtml oracle.  The outputs
+    // differ: CVS tbl_term.c::tbl_word does not push for ESCAPE_FONTROMAN, so
+    // term.c::term_fontrepl() in the first cell changes the current stack
+    // level and subsequent terminal words inherit it. HTML restores metac
+    // after each cell instead. This IR follows the terminal font register.
+    let document = parse_manual_bytes(
+        std::path::Path::new("table-roman-register.7"),
+        b".TH REVIEW 7\n.SH DESCRIPTION\n.TS\ntab(|);\nl l.\nA\\fIB|C\n.TE\nafter\n",
+    )
+    .unwrap();
+    let [
+        Block::Table { rows, .. },
+        Block::Paragraph {
+            children: after, ..
+        },
+    ] = document.sections[0].blocks.as_slice()
+    else {
+        panic!("table and following paragraph");
+    };
+    let cell = |index: usize| match rows[0].cells[index].blocks.as_slice() {
+        [Block::Paragraph { children, .. }] => children.as_slice(),
+        other => panic!("cell {index}: {other:?}"),
+    };
+    assert!(matches!(cell(0),
+        [Inline::Text { value: a }, Inline::Emphasis { children: b }]
+        if a == "A" && matches!(b.as_slice(), [Inline::Text { value }] if value == "B")));
+    assert!(matches!(cell(1), [Inline::Emphasis { children }] if
+        matches!(children.as_slice(), [Inline::Text { value }] if value == "C")));
+    assert!(
+        matches!(after.as_slice(), [Inline::Emphasis { children }] if
+        matches!(children.as_slice(), [Inline::Text { value }] if value == "after"))
+    );
+}
+
+#[test]
 fn native_table_constant_width_fonts_reach_ir_without_flattening_style() {
     // The exact input was checked with the fixed -Thtml/-Ttree oracle.
     // CVS tbl_layout.c::cellmod selects CR/CB/CI and tbl_html.c::print_tbl
