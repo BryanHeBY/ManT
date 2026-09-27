@@ -98,66 +98,36 @@ enum ProjectionContext {
 }
 
 struct ProjectionFences<'a> {
-    before_left: Option<&'static str>,
     left: Option<&'a str>,
-    before_right: Option<&'static str>,
     right: Option<&'a str>,
-    after_right: Option<&'static str>,
 }
 
 impl ProjectionFences<'_> {
     fn append_open(&self, output: &mut String) {
-        if let Some(before_left) = self.before_left {
-            output.push_str(before_left);
-        }
         if let Some(left) = self.left {
             output.push_str(left);
         }
     }
 
     fn append_close(&self, output: &mut String) {
-        if let Some(before_right) = self.before_right {
-            output.push_str(before_right);
-        }
         if let Some(right) = self.right {
             output.push_str(right);
         }
-        if let Some(after_right) = self.after_right {
-            output.push_str(after_right);
-        }
     }
 }
 
-fn matching_right(left: &str) -> Option<&'static str> {
-    match left {
-        "(" => Some(")"),
-        "[" => Some("]"),
-        "{" => Some("}"),
-        "<" => Some(">"),
-        "|" => Some("|"),
-        "‖" => Some("‖"),
-        "⌈" => Some("⌉"),
-        "\\[lc]" => Some("\\[rc]"),
-        "⌊" => Some("⌋"),
-        "\\[lf]" => Some("\\[rf]"),
-        _ => None,
-    }
+fn opens_scope(fence: &str) -> bool {
+    matches!(
+        fence,
+        "(" | "[" | "{" | "<" | "|" | "‖" | "⌈" | "⌊" | "\\[lc]" | "\\[lf]"
+    )
 }
 
-fn matching_left(right: &str) -> Option<&'static str> {
-    match right {
-        ")" => Some("("),
-        "]" => Some("["),
-        "}" => Some("{"),
-        ">" => Some("<"),
-        "|" => Some("|"),
-        "‖" => Some("‖"),
-        "⌉" => Some("⌈"),
-        "\\[rc]" => Some("\\[lc]"),
-        "⌋" => Some("⌊"),
-        "\\[rf]" => Some("\\[lf]"),
-        _ => None,
-    }
+fn closes_scope(fence: &str) -> bool {
+    matches!(
+        fence,
+        ")" | "]" | "}" | ">" | "|" | "‖" | "⌉" | "⌋" | "\\[rc]" | "\\[rf]"
+    )
 }
 
 impl EquationBox {
@@ -176,19 +146,20 @@ impl EquationBox {
 
     fn append_in_context(&self, output: &mut String, context: ProjectionContext) {
         let fences = self.projection_fences();
+        let incomplete_fence = self.has_fence() && !self.has_scope_fence_pair();
         let grouped = match context {
-            ProjectionContext::Root => false,
+            ProjectionContext::Root => {
+                incomplete_fence && fences.left.is_none() && fences.right.is_none()
+            }
             ProjectionContext::Sequence { has_sibling } => {
-                (self.is_explicit_group() || self.kind == EquationKind::Pile && has_sibling)
-                    && self.left.is_none()
-                    && self.right.is_none()
+                incomplete_fence && (has_sibling || fences.left.is_none() && fences.right.is_none())
+                    || (self.is_explicit_group() || self.kind == EquationKind::Pile && has_sibling)
+                        && !self.has_fence()
             }
             ProjectionContext::Operand => self.needs_operand_group(),
             ProjectionContext::PileRow => {
-                self.is_explicit_group()
-                    && self.actual_args > 1
-                    && self.left.is_none()
-                    && self.right.is_none()
+                incomplete_fence
+                    || self.is_explicit_group() && self.actual_args > 1 && !self.has_fence()
             }
         };
         if grouped {
@@ -343,38 +314,26 @@ fn joins_explicit_group(previous: &EquationBox, current: &EquationBox) -> bool {
 
 impl EquationBox {
     fn projection_fences(&self) -> ProjectionFences<'_> {
-        // CVS eqn_html.c::eqn_box keeps even invisible left/right as an
-        // mfenced expression. Supply readable counterpart delimiters so an
-        // empty or single-sided fence cannot erase that operand boundary.
-        if self.left.is_none() && self.right.is_none() {
-            return ProjectionFences {
-                before_left: None,
-                left: None,
-                before_right: None,
-                right: None,
-                after_right: None,
-            };
-        }
-        let left = self.left.as_deref().unwrap_or("");
-        let right = self.right.as_deref().unwrap_or("");
-        let (before_left, before_right, after_right) =
-            if !left.is_empty() && matching_right(left) == Some(right) {
-                (None, None, None)
-            } else {
-                match (matching_right(left), matching_left(right)) {
-                    (Some(close), Some(open)) => (Some(open), Some(close), None),
-                    (Some(close), None) => (None, Some(close), None),
-                    (None, Some(open)) => (Some(open), None, None),
-                    (None, None) => (Some("("), None, Some(")")),
-                }
-            };
+        // CVS eqn.c::eqn_parse stores left/right independently, and
+        // eqn_html.c::eqn_box emits them unchanged as mfenced attributes.
+        // Parentheses added by this projection are separate scope markers;
+        // never infer or replace an author's visible fence from its mate.
         ProjectionFences {
-            before_left,
-            left: (!left.is_empty()).then_some(left),
-            before_right,
-            right: (!right.is_empty()).then_some(right),
-            after_right,
+            left: self.left.as_deref().filter(|fence| !fence.is_empty()),
+            right: self.right.as_deref().filter(|fence| !fence.is_empty()),
         }
+    }
+
+    fn has_fence(&self) -> bool {
+        self.left.is_some() || self.right.is_some()
+    }
+
+    fn has_scope_fence_pair(&self) -> bool {
+        // The pinned parser accepts arbitrary left/right text independently.
+        // Only test each side's ability to mark its own boundary; never
+        // require its glyph to be the other side's conventional mate.
+        self.left.as_deref().is_some_and(opens_scope)
+            && self.right.as_deref().is_some_and(closes_scope)
     }
 
     fn is_explicit_group(&self) -> bool {
@@ -386,8 +345,8 @@ impl EquationBox {
     /// boxes retain their scope; a transparent List inherits its child's scope.
     #[must_use]
     pub fn needs_operand_group(&self) -> bool {
-        if self.left.is_some() || self.right.is_some() {
-            return false;
+        if self.has_fence() {
+            return !self.has_scope_fence_pair();
         }
         if self.kind == EquationKind::Matrix || self.position == EquationPosition::Sqrt {
             return false;

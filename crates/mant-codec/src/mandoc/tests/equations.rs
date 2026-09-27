@@ -190,21 +190,55 @@ fn pile_rows_use_row_scope_without_erasing_explicit_groups() {
 }
 
 #[test]
+fn authored_fence_sides_survive_mixed_intervals_and_operands() {
+    // Each exact source was run with the pinned -Tutf8/-Thtml oracle before
+    // these assertions. CVS eqn.c::eqn_parse saves both sides independently;
+    // eqn_html.c::eqn_box emits open/close directly, including legal mixed
+    // interval ends and unusual unmatched pairs. Projection grouping may not
+    // replace an author-supplied side with a guessed counterpart.
+    for (expression, expected) in [
+        ("left [ 0 , 1 right )", "[0 , 1)"),
+        ("left ( 0 , 1 right ]", "(0 , 1]"),
+        ("left [ 0 , 1 right ]", "[0 , 1]"),
+        ("left ( 0 , 1 right )", "(0 , 1)"),
+        ("left [ a + b right (", "[a + b("),
+        ("left ( a + b right [", "(a + b["),
+        ("left [ a + b right }", "[a + b}"),
+        ("left | a + b right |", "|a + b|"),
+        ("a sup left [ b + c right )", "a ^ [b + c)"),
+        ("left [ a + b right ) sup 2", "[a + b) ^ 2"),
+        ("f left [ a + b right )", "f[a + b)"),
+        ("a sup left [ b + c right (", "a ^ ([b + c()"),
+        ("f left . a + b right )", "f(.a + b))"),
+        (
+            "left [ a + b right ) left ( c + d right ]",
+            "[a + b)(c + d]",
+        ),
+    ] {
+        assert_projection(expression, expected);
+    }
+    // CVS eqn.c normalizes the named ceiling/floor tokens to roff glyphs;
+    // the codec decodes those glyphs for IR while keeping their side roles.
+    assert_decoration_projection("left ceiling a + b right floor", "⌈a + b⌋");
+}
+
+#[test]
 fn invisible_and_one_sided_fences_keep_operand_boundaries() {
     // Each exact source was checked with fixed CVS -Tutf8/-Thtml/-Tlint
     // before these assertions. CVS eqn.c stores an empty left/right fence,
     // and eqn_html.c::eqn_box still emits mfenced/mrow around the operands.
-    // The readable projection supplies its missing visible delimiter.
+    // An outer projection parenthesis can show that invisible boundary, but
+    // it must not masquerade as a guessed author-supplied matching fence.
     for (expression, expected) in [
         ("a sup left \"\" b + c right \"\"", "a ^ (b + c)"),
         ("a over left \"\" b + c right \"\"", "a / (b + c)"),
         ("left \"\" a + b right \"\" sup 2", "(a + b) ^ 2"),
-        ("a sup left \"\" b + c right )", "a ^ (b + c)"),
-        ("a sup left ( b + c right \"\"", "a ^ (b + c)"),
-        ("a sup left \"\" b + c right ]", "a ^ [b + c]"),
-        ("a sup left [ b + c right \"\"", "a ^ [b + c]"),
-        ("a sup left \"\" b + c right |", "a ^ |b + c|"),
-        ("a sup left | b + c right \"\"", "a ^ |b + c|"),
+        ("a sup left \"\" b + c right )", "a ^ (b + c))"),
+        ("a sup left ( b + c right \"\"", "a ^ ((b + c)"),
+        ("a sup left \"\" b + c right ]", "a ^ (b + c])"),
+        ("a sup left [ b + c right \"\"", "a ^ ([b + c)"),
+        ("a sup left \"\" b + c right |", "a ^ (b + c|)"),
+        ("a sup left | b + c right \"\"", "a ^ (|b + c)"),
         ("left \"\" a + b right \"\"", "(a + b)"),
         ("f left \"\" a + b right \"\"", "f(a + b)"),
         (
@@ -212,14 +246,14 @@ fn invisible_and_one_sided_fences_keep_operand_boundaries() {
             "(a + b)(c + d)",
         ),
         ("left \"\" a + b right \"\" + c", "(a + b) + c"),
-        ("f left [ a + b right \"\"", "f[a + b]"),
+        ("f left [ a + b right \"\"", "f([a + b)"),
         (
             "left \"\" a + b right ) left \"\" c + d right ]",
-            "(a + b)[c + d]",
+            "(a + b))(c + d])",
         ),
-        ("a sup left ( b + c right .", "a ^ (b + c)."),
-        ("a sup left [ b + c right )", "a ^ ([b + c])"),
-        ("a sup left . b + c right )", "a ^ (.b + c)"),
+        ("a sup left ( b + c right .", "a ^ ((b + c.)"),
+        ("a sup left [ b + c right )", "a ^ [b + c)"),
+        ("a sup left . b + c right )", "a ^ (.b + c))"),
     ] {
         assert_projection(expression, expected);
     }
