@@ -25,3 +25,4 @@
 0025-retain-tbl-source-provenance.patch
 0026-track-tbl-cell-execution-provenance.patch
 0027-bound-escape-parser-depth.patch
+0028-retain-eqn-ldots-token-eligibility.patch

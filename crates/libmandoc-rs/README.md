@@ -376,7 +376,7 @@ or changing the patch stack.
 ### Local vendor patches
 
 The checked-in vendor tree differs from the pinned CVS source subset only by
-the 27 ordered patches in `patches/series`. The following group contains
+the 28 ordered patches in `patches/series`. The following group contains
 independently reviewable correctness, compatibility, and portability changes;
 they are candidates for separate upstream evaluation, not claims of submission
 or acceptance:
@@ -421,6 +421,9 @@ or acceptance:
 - `0027-bound-escape-parser-depth.patch` bounds nested escape-argument parsing
   and consumes a rejected nesting suffix instead of allowing hostile input to
   grow the native C stack without limit.
+- `0028-retain-eqn-ldots-token-eligibility.patch` records whether an eqn text
+  box came from a complete unquoted `ldots` token after macro substitution
+  and before font splitting, so compatibility normalization preserves literals.
 
 The remaining patches implement the synchronous embedding boundary:
 
@@ -469,7 +472,7 @@ libmandoc but unavailable through a public C API:
 
 - normalized mdoc enclosures, list/display/font/author roles, source flags,
   table cells and spans, equations, and validated tags;
-- normalized eqn operators plus the common GNU `ldots` macro, which the
+- normalized eqn operators plus the common complete, unquoted GNU `ldots` macro, which the
   pinned parser otherwise retains as an unexpanded identifier;
 - tbl multiline-cell and vertical-continuation flags, including both tbl(7)
   spellings of vertical continuation;

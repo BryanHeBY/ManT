@@ -58,6 +58,7 @@ struct	eqn_box {
 	struct eqn_box	 *first;   /* First child node. */
 	struct eqn_box	 *last;    /* Last child node. */
 	char		 *text;    /* Text (or NULL). */
+	int		  gnu_ldots; /* Complete unquoted ldots token. */
 	char		 *left;    /* Left-hand fence. */
 	char		 *right;   /* Right-hand fence. */
 	char		 *top;     /* Symbol above. */

@@ -69,6 +69,7 @@ struct mant_mandoc_eqn_box_view {
 	size_t			 expected_args;
 	size_t			 actual_args;
 	const char		*text;
+	int			 gnu_ldots;
 	const char		*left;
 	const char		*right;
 	const char		*top;

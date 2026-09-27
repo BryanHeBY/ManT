@@ -186,7 +186,7 @@ impl EquationExpression {
         }
         fences.append_open(output);
         if let Some(text) = &self.text {
-            output.push_str(if text == "ldots" { "..." } else { text });
+            output.push_str(text);
         }
         if self.kind == EquationKind::Matrix {
             self.append_matrix(output);
@@ -433,4 +433,35 @@ impl EquationExpression {
 #[expect(clippy::trivially_copy_pass_by_ref, reason = "serde requires &bool")]
 fn is_false(value: &bool) -> bool {
     !*value
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn source_neutral_text_atom_preserves_literal_ldots() {
+        // CVS eqn.c::eqn_next bypasses macro/symbol lookup for quoted text.
+        // A standalone IR atom has no parse provenance, so its bytes are
+        // literal even when they match a GNU compatibility macro name.
+        let expression = EquationExpression {
+            kind: EquationKind::Text,
+            font: EquationFont::Italic,
+            position: EquationPosition::None,
+            size: None,
+            expected_args: Some(0),
+            actual_args: 0,
+            summarized_operand_group: false,
+            text: Some("ldots".to_owned()),
+            left: None,
+            right: None,
+            top: None,
+            bottom: None,
+            children: Vec::new(),
+        };
+        assert_eq!(expression.readable_text(), "ldots");
+        let encoded = serde_json::to_string(&expression).expect("encode equation");
+        let decoded: EquationExpression = serde_json::from_str(&encoded).expect("decode equation");
+        assert_eq!(decoded.readable_text(), "ldots");
+    }
 }

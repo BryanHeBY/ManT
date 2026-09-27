@@ -77,6 +77,8 @@ pub struct EquationBox {
     pub actual_args: usize,
     /// Atom spelling, when present.
     pub text: Option<String>,
+    /// Whether this atom was a complete unquoted `ldots` token after macro expansion.
+    pub gnu_ldots: bool,
     /// Opening and closing fences.
     pub left: Option<String>,
     /// Closing fence.
@@ -170,7 +172,10 @@ impl EquationBox {
         }
         fences.append_open(output);
         if let Some(text) = &self.text {
-            output.push_str(if text == "ldots" { "..." } else { text });
+            // CVS eqn.c::eqn_next substitutes macros before eqn_parse splits
+            // mixed-font text. The compatibility flag records a complete
+            // unquoted token before that split, never a resulting fragment.
+            output.push_str(if self.gnu_ldots { "..." } else { text });
         }
         if self.kind == EquationKind::Matrix {
             self.append_matrix(output);

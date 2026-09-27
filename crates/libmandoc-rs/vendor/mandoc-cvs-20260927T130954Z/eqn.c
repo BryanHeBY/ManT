@@ -1043,6 +1043,9 @@ next_tok:
 		cur = eqn_box_alloc(ep, parent);
 		cur->type = EQN_TEXT;
 		cur->text = p;
+		/* Check the whole post-substitution token before font splitting. */
+		cur->gnu_ldots = tok == EQN_TOK__MAX &&
+		    strcmp(p, "ldots") == 0;
 		switch (tok) {
 		case EQN_TOK_FUNC:
 			cur->font = EQNFONT_ROMAN;

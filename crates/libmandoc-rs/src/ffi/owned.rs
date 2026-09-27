@@ -443,6 +443,11 @@ unsafe fn copy_equation(
         expected_args: view.expected_args,
         actual_args: view.actual_args,
         text,
+        gnu_ldots: match view.gnu_ldots {
+            0 => false,
+            1 => true,
+            _ => return Err("libmandoc returned an invalid GNU ldots flag".to_owned()),
+        },
         left,
         right,
         top,

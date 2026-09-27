@@ -1440,6 +1440,7 @@ mant_mandoc_eqn_box_view_offsets(size_t *count)
 		offsetof(struct mant_mandoc_eqn_box_view, expected_args),
 		offsetof(struct mant_mandoc_eqn_box_view, actual_args),
 		offsetof(struct mant_mandoc_eqn_box_view, text),
+		offsetof(struct mant_mandoc_eqn_box_view, gnu_ldots),
 		offsetof(struct mant_mandoc_eqn_box_view, left),
 		offsetof(struct mant_mandoc_eqn_box_view, right),
 		offsetof(struct mant_mandoc_eqn_box_view, top),
@@ -1661,6 +1662,7 @@ mant_mandoc_eqn_box_snapshot(const struct mant_mandoc_document *document,
 	view->expected_args = source->expectargs;
 	view->actual_args = source->args;
 	view->text = source->text;
+	view->gnu_ldots = source->gnu_ldots;
 	view->left = source->left;
 	view->right = source->right;
 	view->top = source->top;

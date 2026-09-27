@@ -168,6 +168,7 @@ mod tests {
                 expected_args,
                 actual_args,
                 text,
+                gnu_ldots,
                 left,
                 right,
                 top,
