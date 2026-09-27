@@ -11,8 +11,12 @@ mod windows_root;
 use crate::{InputFormat, Node};
 #[cfg(test)]
 use raw::{
-    CEquationBoxView, CNodeView, CTableCellView, CTableRuleCellView, mant_mandoc_eqn_box_view_size,
-    mant_mandoc_node_view_size, mant_mandoc_table_cell_view_size,
+    CEquationBoxView, CNodeView, CTableCellView, CTableRuleCellView,
+    mant_mandoc_eqn_box_view_align, mant_mandoc_eqn_box_view_offsets,
+    mant_mandoc_eqn_box_view_size, mant_mandoc_node_view_align, mant_mandoc_node_view_offsets,
+    mant_mandoc_node_view_size, mant_mandoc_table_cell_view_align,
+    mant_mandoc_table_cell_view_offsets, mant_mandoc_table_cell_view_size,
+    mant_mandoc_table_rule_cell_view_align, mant_mandoc_table_rule_cell_view_offsets,
     mant_mandoc_table_rule_cell_view_size,
 };
 #[cfg(windows)]
@@ -46,27 +50,119 @@ mod tests {
 
     use super::{
         CEquationBoxView, CNodeView, CTableCellView, CTableRuleCellView, InputFormat, Node,
-        mant_mandoc_eqn_box_view_size, mant_mandoc_node_view_size,
-        mant_mandoc_table_cell_view_size, mant_mandoc_table_rule_cell_view_size, parse_buffer,
+        mant_mandoc_eqn_box_view_align, mant_mandoc_eqn_box_view_offsets,
+        mant_mandoc_eqn_box_view_size, mant_mandoc_node_view_align, mant_mandoc_node_view_offsets,
+        mant_mandoc_node_view_size, mant_mandoc_table_cell_view_align,
+        mant_mandoc_table_cell_view_offsets, mant_mandoc_table_cell_view_size,
+        mant_mandoc_table_rule_cell_view_align, mant_mandoc_table_rule_cell_view_offsets,
+        mant_mandoc_table_rule_cell_view_size, parse_buffer,
     };
 
     #[test]
     fn borrowed_snapshot_views_match_the_native_abi() {
-        assert_eq!(
-            unsafe { mant_mandoc_node_view_size() },
-            std::mem::size_of::<CNodeView>()
+        macro_rules! check_view {
+            ($name:literal, $view:ty, $size:path, $align:path, $offsets:path, [$($field:ident),+ $(,)?]) => {{
+                assert_eq!(unsafe { $size() }, std::mem::size_of::<$view>(), "{} size", $name);
+                assert_eq!(unsafe { $align() }, std::mem::align_of::<$view>(), "{} alignment", $name);
+                let expected = [$(std::mem::offset_of!($view, $field)),+];
+                let mut count = 0;
+                let native = unsafe { $offsets(&mut count) };
+                assert_eq!(count, expected.len(), "{} field count", $name);
+                assert!(!native.is_null(), "{} field offsets", $name);
+                // The shim returns immutable static storage, and the checked
+                // length bounds this slice before any native offset is read.
+                let actual = unsafe { std::slice::from_raw_parts(native, count) };
+                assert_eq!(actual, expected, "{} field offsets", $name);
+            }};
+        }
+
+        check_view!(
+            "node",
+            CNodeView,
+            mant_mandoc_node_view_size,
+            mant_mandoc_node_view_align,
+            mant_mandoc_node_view_offsets,
+            [
+                kind,
+                section,
+                end_kind,
+                end_body,
+                reference_quotes_title,
+                macro_name,
+                text,
+                tag,
+                line,
+                column,
+                flow_epoch,
+                table_escape,
+                table_source_recovery_safe,
+                table_row_kind,
+                flags,
+                list_kind,
+                definition_list_style,
+                display_kind,
+                font_kind,
+                author_mode,
+                compact,
+                offset,
+                width,
+                enclosure_open,
+                enclosure_close,
+                equation,
+                table_cells,
+                table_rule_cells,
+                child,
+                next,
+            ]
         );
-        assert_eq!(
-            unsafe { mant_mandoc_table_cell_view_size() },
-            std::mem::size_of::<CTableCellView>()
+        check_view!(
+            "table cell",
+            CTableCellView,
+            mant_mandoc_table_cell_view_size,
+            mant_mandoc_table_cell_view_align,
+            mant_mandoc_table_cell_view_offsets,
+            [
+                text,
+                kind,
+                text_block,
+                source_recovery_safe,
+                vertical_continuation,
+                column_span,
+                row_span,
+                alignment,
+                font,
+                next,
+            ]
         );
-        assert_eq!(
-            unsafe { mant_mandoc_table_rule_cell_view_size() },
-            std::mem::size_of::<CTableRuleCellView>()
+        check_view!(
+            "table rule cell",
+            CTableRuleCellView,
+            mant_mandoc_table_rule_cell_view_size,
+            mant_mandoc_table_rule_cell_view_align,
+            mant_mandoc_table_rule_cell_view_offsets,
+            [kind, next]
         );
-        assert_eq!(
-            unsafe { mant_mandoc_eqn_box_view_size() },
-            std::mem::size_of::<CEquationBoxView>()
+        check_view!(
+            "equation",
+            CEquationBoxView,
+            mant_mandoc_eqn_box_view_size,
+            mant_mandoc_eqn_box_view_align,
+            mant_mandoc_eqn_box_view_offsets,
+            [
+                kind,
+                font,
+                position,
+                size,
+                expected_args,
+                actual_args,
+                text,
+                left,
+                right,
+                top,
+                bottom,
+                first,
+                next,
+            ]
         );
     }
 

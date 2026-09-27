@@ -210,11 +210,27 @@ unsafe extern "C" {
     #[cfg(test)]
     pub(super) fn mant_mandoc_node_view_size() -> usize;
     #[cfg(test)]
+    pub(super) fn mant_mandoc_node_view_align() -> usize;
+    #[cfg(test)]
+    pub(super) fn mant_mandoc_node_view_offsets(count: *mut usize) -> *const usize;
+    #[cfg(test)]
     pub(super) fn mant_mandoc_table_cell_view_size() -> usize;
+    #[cfg(test)]
+    pub(super) fn mant_mandoc_table_cell_view_align() -> usize;
+    #[cfg(test)]
+    pub(super) fn mant_mandoc_table_cell_view_offsets(count: *mut usize) -> *const usize;
     #[cfg(test)]
     pub(super) fn mant_mandoc_table_rule_cell_view_size() -> usize;
     #[cfg(test)]
+    pub(super) fn mant_mandoc_table_rule_cell_view_align() -> usize;
+    #[cfg(test)]
+    pub(super) fn mant_mandoc_table_rule_cell_view_offsets(count: *mut usize) -> *const usize;
+    #[cfg(test)]
     pub(super) fn mant_mandoc_eqn_box_view_size() -> usize;
+    #[cfg(test)]
+    pub(super) fn mant_mandoc_eqn_box_view_align() -> usize;
+    #[cfg(test)]
+    pub(super) fn mant_mandoc_eqn_box_view_offsets(count: *mut usize) -> *const usize;
     pub(super) fn mant_mandoc_document_root(document: *const CDocument) -> *const CNode;
     pub(super) fn mant_mandoc_node_snapshot(
         document: *mut CDocument,
