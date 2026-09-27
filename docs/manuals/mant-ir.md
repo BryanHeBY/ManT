@@ -97,12 +97,20 @@ the shared, source-neutral text projection; a block's `value` is a compatibility
 cache and must agree with that projection whenever `expression` is present.
 Validation reports a content-coverage error for a mismatch. This projection is
 readable text, not a math layout or a second independently editable source.
-When a complete owned formula approaches the conservative JSON depth budget,
-the affected subtree becomes a text leaf retaining that subtree's complete
-readable text. `summarizedOperandGroup` records whether its parent must still
-group the operand. The producer reports `semantic-coverage` for lost internal
-formula structure. If the owned tree was already truncated, its separate
-`content-coverage` diagnostic still reports the missing source content.
+The roff producer counts JSON container depth from the final document position,
+including enclosing sections, lists, definitions, tables, and styled inlines.
+When a complete formula exceeds the remaining reader budget, the affected
+subtree becomes a text leaf retaining its complete readable text.
+`summarizedOperandGroup` records whether its parent must still group the operand;
+`manual.equation-structure-depth-summarized` reports lost structure as
+`semantic-coverage`. Deep surrounding document containers are likewise reduced
+to readable text with `manual.document-structure-depth-summarized`, including
+when no formula is present. The producer checks the final query-shaped JSON
+against the reader's recursion limit and retains a flat readable body if an
+unusual remaining structure still exceeds it. These reductions leave
+`contentComplete` true and `semanticsComplete` false. If the owned tree was
+already truncated, its separate `content-coverage` diagnostic still reports
+missing source content.
 
 ### Consecutive declaration context
 

@@ -5,48 +5,14 @@ use mant_ir::{
     EquationPosition as IrPosition,
 };
 
-// Each recursive box adds an object and a children array to JSON. This cap
-// leaves room for the ordinary QueryBundle / section / block envelope; the
-// real string round-trip tests cover its boundary. Independently excessive
-// surrounding document nesting remains subject to serde_json's own limit.
-const MAX_WIRE_EQUATION_DEPTH: usize = 48;
-
 /// Transfer the bounded owned eqn tree into source-neutral IR. Fields remain
-/// independently addressable until the wire-safe depth; deeper structure is
-/// summarized as its complete readable text, with a semantic diagnostic.
+/// independently addressable here; the complete document position determines
+/// the wire-safe budget after structural lowering.
 pub(super) fn expression_from_ast(box_node: &EquationBox) -> EquationExpression {
-    expression_at_depth(box_node, 0)
+    expression_from_box(box_node)
 }
 
-pub(super) fn requires_wire_summary(box_node: &EquationBox) -> bool {
-    let mut pending = vec![(box_node, 0)];
-    while let Some((box_node, depth)) = pending.pop() {
-        if depth >= MAX_WIRE_EQUATION_DEPTH {
-            return true;
-        }
-        pending.extend(box_node.children.iter().map(|child| (child, depth + 1)));
-    }
-    false
-}
-
-fn expression_at_depth(box_node: &EquationBox, depth: usize) -> EquationExpression {
-    if depth >= MAX_WIRE_EQUATION_DEPTH {
-        return EquationExpression {
-            kind: IrKind::Text,
-            font: IrFont::None,
-            position: IrPosition::None,
-            size: None,
-            expected_args: None,
-            actual_args: 0,
-            summarized_operand_group: box_node.needs_operand_group(),
-            text: Some(super::visible_text(&box_node.readable_text())),
-            left: None,
-            right: None,
-            top: None,
-            bottom: None,
-            children: Vec::new(),
-        };
-    }
+fn expression_from_box(box_node: &EquationBox) -> EquationExpression {
     EquationExpression {
         kind: match box_node.kind {
             EquationKind::Text => IrKind::Text,
@@ -86,11 +52,7 @@ fn expression_at_depth(box_node: &EquationBox, depth: usize) -> EquationExpressi
         right: box_node.right.as_deref().map(super::visible_text),
         top: box_node.top.as_deref().map(super::visible_text),
         bottom: box_node.bottom.as_deref().map(super::visible_text),
-        children: box_node
-            .children
-            .iter()
-            .map(|child| expression_at_depth(child, depth + 1))
-            .collect(),
+        children: box_node.children.iter().map(expression_from_box).collect(),
     }
 }
 

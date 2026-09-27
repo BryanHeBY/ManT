@@ -25,8 +25,6 @@ pub(super) use owned::{OwnedTarget, PendingTargets};
 #[derive(Debug)]
 pub(super) struct NativeTargetPlan {
     explicit: HashSet<String>,
-    equation_summarized: bool,
-    equation_summary_source: Option<SourceSpan>,
 }
 
 impl NativeTargetPlan {
@@ -34,20 +32,9 @@ impl NativeTargetPlan {
         let mut nodes = Vec::new();
         flatten_nodes(root, &mut nodes);
         let mut retained = HashSet::new();
-        let mut equation_summarized = false;
-        let mut equation_summary_source = None;
         for node in &nodes {
             if let Some(target) = raw_target(node) {
                 retained.insert(target);
-            }
-            if !equation_summarized
-                && node
-                    .equation
-                    .as_ref()
-                    .is_some_and(super::equations::requires_wire_summary)
-            {
-                equation_summarized = true;
-                equation_summary_source = super::source_span(node);
             }
         }
         let mut explicit = HashSet::new();
@@ -81,23 +68,11 @@ impl NativeTargetPlan {
                 explicit.insert(target);
             }
         }
-        Self {
-            explicit,
-            equation_summarized,
-            equation_summary_source,
-        }
+        Self { explicit }
     }
 
     pub(super) fn explicit(&self) -> &HashSet<String> {
         &self.explicit
-    }
-
-    pub(super) fn equation_summarized(&self) -> bool {
-        self.equation_summarized
-    }
-
-    pub(super) fn equation_summary_source(&self) -> Option<SourceSpan> {
-        self.equation_summary_source
     }
 }
 

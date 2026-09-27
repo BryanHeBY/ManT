@@ -17,6 +17,7 @@ pub use redirect::{RedirectSyntaxError, redirect_target};
 mod source_context;
 mod source_lines;
 use source_context::{LoweringContext, TableTextBlock};
+mod equation_wire;
 mod equations;
 use equations::{EquationDelimiterChange, equation_delimiter_changes};
 mod ast;
@@ -104,16 +105,6 @@ fn lower_mandoc_document_with_source(
     declaration_groups::record(&parsed.root, &mut context.native_heads.borrow_mut());
     context.reserve_section_ids(explicit_targets);
     let mut diagnostics = diagnostics::lower_diagnostics(&report.diagnostics);
-    if target_plan.equation_summarized() {
-        diagnostics.push(Diagnostic {
-            impact: mant_ir::DiagnosticImpact::SemanticCoverage,
-            level: DiagnosticLevel::Unsupported,
-            code: Some("manual.equation-structure-depth-summarized".to_owned()),
-            message: "deep equation structure was summarized as readable text for JSON consumers"
-                .to_owned(),
-            source: target_plan.equation_summary_source(),
-        });
-    }
     let (mut root_blocks, mut sections) =
         blocks::lower_document_structure(&parsed.root, &mut context);
     diagnostics.extend(context.take_diagnostics());
@@ -170,6 +161,7 @@ fn lower_mandoc_document_with_source(
         blocks: root_blocks,
         sections,
     };
+    equation_wire::bound_wire_structure(&mut document);
     document.diagnostics.extend(validate_document(&document));
     document
 }

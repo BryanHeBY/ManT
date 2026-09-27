@@ -931,11 +931,19 @@ reader rejects a conflicting `value`. Inline equations use
 `{"type":"equation","value":...,"expression":...}` between neighboring
 prose nodes; their `expression` is required. Matrix children retain parsed
 column order, while the readable projection visits every retained row.
-When a complete owned formula approaches the conservative JSON depth budget,
-the producer keeps the summarized subtree's complete readable text in one
-expression leaf and reports `semantic-coverage`. `summarizedOperandGroup`
-retains the grouping needed by an outer fraction or script; a false value is
-omitted. A prior owned-tree truncation still reports `content-coverage`.
+The roff producer budgets recursive JSON from each expression's final position
+inside the complete query response. Formula subtrees that exceed the remaining
+budget become readable text leaves and report
+`manual.equation-structure-depth-summarized` with `semantic-coverage`.
+`summarizedOperandGroup` retains the grouping needed by an outer operand; a
+false value is omitted. Deep surrounding lists, definitions, tables, or inline
+wrappers can themselves be reduced to readable text with
+`manual.document-structure-depth-summarized`, even without an equation. A final
+query-shaped JSON parse checks the reader depth boundary; an unusual residual
+overflow becomes one readable document body with the same structural diagnostic.
+These reductions preserve source-visible text and `contentComplete` while
+marking `semanticsComplete` false. A prior owned-tree truncation still reports
+`content-coverage`.
 
 Both ordinary-list and definition-list items may carry the same `entry` facts.
 Their `forms` and `nameBindings` reference final-IR inline positions rather than
