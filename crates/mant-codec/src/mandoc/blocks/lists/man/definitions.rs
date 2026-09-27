@@ -487,7 +487,7 @@ fn record_ambiguous_ip_mark(item: &DefinitionItem, context: &LoweringContext<'_>
 
     fn styled(inlines: &[Inline], in_style: bool) -> bool {
         inlines.iter().all(|inline| match inline {
-            Inline::Anchor { .. } | Inline::Code { .. } => true,
+            Inline::Anchor { .. } | Inline::Code { .. } | Inline::Equation { .. } => true,
             Inline::Text { value } => value.trim().is_empty() || in_style,
             Inline::Strong { children } => styled(children, true),
             Inline::Emphasis { children } | Inline::Link { children, .. } => {

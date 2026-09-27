@@ -44,6 +44,68 @@ pub enum NodeKind {
     Equation,
 }
 
+/// Normalized mdoc section assigned by the pinned parser, independent of the
+/// visible heading spelling or its inline styling.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum NormalizedSection {
+    /// No named section.
+    None,
+    /// NAME.
+    Name,
+    /// LIBRARY.
+    Library,
+    /// SYNOPSIS.
+    Synopsis,
+    /// DESCRIPTION.
+    Description,
+    /// CONTEXT.
+    Context,
+    /// IMPLEMENTATION NOTES.
+    Implementation,
+    /// RETURN VALUES.
+    ReturnValues,
+    /// ENVIRONMENT.
+    Environment,
+    /// FILES.
+    Files,
+    /// EXIT STATUS.
+    ExitStatus,
+    /// EXAMPLES.
+    Examples,
+    /// DIAGNOSTICS.
+    Diagnostics,
+    /// COMPATIBILITY.
+    Compatibility,
+    /// ERRORS.
+    Errors,
+    /// SEE ALSO.
+    SeeAlso,
+    /// STANDARDS.
+    Standards,
+    /// HISTORY.
+    History,
+    /// AUTHORS.
+    Authors,
+    /// CAVEATS.
+    Caveats,
+    /// BUGS.
+    Bugs,
+    /// SECURITY.
+    Security,
+    /// An authored heading outside the standard set.
+    Custom,
+}
+
+/// Explicit mdoc body close marker. `body_id` identifies the original body
+/// within this owned document; it is never a native pointer or source line.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ScopeEnd {
+    /// Identity of the original body closed by this marker.
+    pub body_id: u32,
+}
+
 /// Normalized mdoc list behavior copied independently of upstream enum values.
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -138,6 +200,26 @@ pub enum TableAlignment {
     Right,
 }
 
+/// Effective layout font for one native tbl(7) data cell.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TableFont {
+    /// Roman text.
+    Roman,
+    /// Bold text.
+    Bold,
+    /// Italic text.
+    Italic,
+    /// Bold italic text.
+    BoldItalic,
+    /// Constant-width text.
+    Code,
+    /// Bold constant-width text.
+    CodeBold,
+    /// Italic constant-width text.
+    CodeItalic,
+}
+
 /// Effective native tbl cell content after layout-rule precedence.
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -194,10 +276,15 @@ pub enum TableRuleCellKind {
 pub struct TableCell {
     /// Native content kind; rule cells suppress even a nonempty text payload.
     pub kind: TableCellKind,
+    /// Native tbl layout font, when this cell has a layout slot.
+    pub font: Option<TableFont>,
     /// Native cell payload, or `None` for a spanning/empty cell.
     /// Only printable when [`Self::kind`] is [`TableCellKind::Text`] and the
     /// cell is not a vertical continuation.
     pub text: Option<String>,
+    /// Parser text before native layout sentinels are normalized. Present
+    /// only when such a sentinel occurs; never emit it into public IR text.
+    pub native_text: Option<String>,
     /// The cell was written using a multiline tbl(7) `T{`/`T}` text block.
     pub text_block: bool,
     /// Whether the complete native input for this cell bypassed user-defined
@@ -219,6 +306,14 @@ pub struct TableCell {
     pub row_span: u16,
     /// Horizontal alignment requested by tbl(7).
     pub alignment: TableAlignment,
+}
+
+impl TableCell {
+    /// Text spelling for the roff decoder, including private parser sentinels.
+    #[must_use]
+    pub fn decoder_text(&self) -> Option<&str> {
+        self.native_text.as_deref().or(self.text.as_deref())
+    }
 }
 
 /// Source and renderer flags needed by a lowering or rendering pass.
@@ -264,13 +359,24 @@ pub struct NodeFlags {
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Node {
+    /// Stable identity within one owned parse report.
+    pub id: u32,
     /// Structural role of this node in the libmandoc tree.
     pub kind: NodeKind,
+    /// Parser-normalized mdoc section, including custom sections.
+    pub section: NormalizedSection,
+    /// Explicit body close marker, when the node closes another body.
+    pub scope_end: Option<ScopeEnd>,
+    /// Normalized `%T` title quote rule inside an `Rs` reference.
+    pub reference_quotes_title: bool,
     /// Source macro name, without the leading dot, when applicable.
     pub macro_name: Option<String>,
     /// Visible text carried by a text node, with libmandoc's internal break,
     /// discretionary-hyphen, and non-breaking-space sentinels normalized.
     pub text: Option<String>,
+    /// Parser text before native layout sentinels are normalized. Present
+    /// only when a sentinel occurs; the ordinary `text` stays printable.
+    pub native_text: Option<String>,
     /// Canonical same-document tag assigned during libmandoc validation, with
     /// libmandoc's internal text sentinels normalized.
     pub tag: Option<String>,
@@ -323,10 +429,18 @@ pub struct Node {
     pub width: Option<String>,
     /// Cells copied from a tbl(7) row represented by this node.
     pub table_cells: Vec<TableCell>,
-    /// Normalized eqn(7) expression carried by this node.
-    pub equation: Option<String>,
+    /// Owned native eqn(7) expression carried by this node.
+    pub equation: Option<crate::EquationBox>,
     /// Child nodes in source order.
     pub children: Vec<Self>,
+}
+
+impl Node {
+    /// Text spelling for the roff decoder, including private parser sentinels.
+    #[must_use]
+    pub fn decoder_text(&self) -> Option<&str> {
+        self.native_text.as_deref().or(self.text.as_deref())
+    }
 }
 
 /// Metadata copied from a completed libmandoc parse.

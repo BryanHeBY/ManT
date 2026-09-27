@@ -1,5 +1,5 @@
 //! Outline DTOs and relationship projection of already indexed semantic nodes.
-use super::{ProjectionError, TLDR_TITLE, semantics_complete};
+use super::{ProjectionError, TLDR_TITLE, content_complete, semantics_complete};
 use crate::{
     ResolvedContent,
     selectors::{
@@ -74,6 +74,7 @@ pub fn build_outline_with_references(
         .as_ref()
         .map_or_else(Vec::new, |document| document.diagnostics.clone());
     let semantics_complete = semantics_complete(&diagnostics);
+    let content_complete = content_complete(&diagnostics);
     let materialized_entries =
         if root.is_some() && !matches!(entries, EntryProjection::None | EntryProjection::Summary) {
             EntryProjection::All
@@ -158,6 +159,7 @@ pub fn build_outline_with_references(
             .map(|document| document.meta.clone()),
         diagnostics,
         semantics_complete,
+        content_complete,
         nodes,
     })
 }

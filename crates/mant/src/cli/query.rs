@@ -96,6 +96,19 @@ pub(super) fn execute_query(
             application::execute_query(&request, policy, host)?
         }
     };
+    let content_complete = match &result {
+        mant_engine::QueryViewResult::Full(query) => query
+            .document
+            .as_ref()
+            .is_none_or(|document| mant_ir::content_complete(&document.diagnostics)),
+        mant_engine::QueryViewResult::Outline(outline) => outline.content_complete,
+        mant_engine::QueryViewResult::Excerpt(excerpt) => excerpt.content_complete,
+        mant_engine::QueryViewResult::Explanation(explanation) => explanation.content_complete,
+        mant_engine::QueryViewResult::Search(search) => search.content_complete,
+    };
+    if !content_complete {
+        eprintln!("mant: warning: source document content is incomplete; inspect diagnostics");
+    }
     if policy == LoadPolicy::TldrOnly && output.presentation.format.is_none() {
         let color = output.presentation.color;
         let mant_engine::QueryViewResult::Excerpt(mant_protocol::QueryExcerpt {
@@ -154,6 +167,16 @@ fn execute_scope_request(
     host: &dyn CliHost,
 ) -> Result<String, Failure> {
     let response = application::execute_scope_query(request, host)?;
+    let content_complete = match &response.result {
+        mant_protocol::ScopeQueryResult::Search { search } => search.content_complete,
+        mant_protocol::ScopeQueryResult::Explain { explanation } => explanation
+            .documents
+            .iter()
+            .all(|document| document.content_complete),
+    };
+    if !content_complete {
+        eprintln!("mant: warning: source document content is incomplete; inspect diagnostics");
+    }
     presentation::render_scope_query_result(&response, output.render_options())
 }
 

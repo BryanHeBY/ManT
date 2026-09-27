@@ -27,7 +27,7 @@ pub fn definition_run_in_width(terms: &[Vec<Inline>]) -> Option<usize> {
 fn append(nodes: &[Inline], row: &mut String, present: &mut bool) {
     for node in nodes {
         match node {
-            Inline::Text { value } | Inline::Code { value } => {
+            Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. } => {
                 *present |= !value.is_empty();
                 if let Some((_, tail)) = value.rsplit_once('\n') {
                     row.clear();

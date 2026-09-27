@@ -311,7 +311,7 @@ pub(super) fn node_emits_visible_output(node: &Node, default_name: Option<&str>)
         return false;
     }
     if node.kind == NodeKind::Text {
-        return node.text.as_deref().is_some_and(source_has_visible_glyph);
+        return node.decoder_text().is_some_and(source_has_visible_glyph);
     }
     if node
         .macro_name
@@ -342,7 +342,7 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
     if node.flags.delimiter_close {
         builder.tighten_next_boundary();
     }
-    let source = node.text.as_deref().unwrap_or_default();
+    let source = node.decoder_text().unwrap_or_default();
     // `term_word()` consumes its inter-word boundary even for an explicit
     // empty operand. That word event can resolve a preceding `\\z` glyph
     // before generated enclosure punctuation is emitted. Control *nodes* are
@@ -418,10 +418,11 @@ pub(super) fn append_inline_nodes(
 /// Generated equations have no inline child stream to execute.
 fn lower_equation_node(node: &Node) -> Vec<Inline> {
     node.equation
-        .as_deref()
-        .map(visible_text)
-        .filter(|value| !value.trim().is_empty())
-        .map(|value| vec![Inline::Code { value }])
+        .as_ref()
+        .map(crate::mandoc::equations::expression_from_ast)
+        .map(|expression| (expression.readable_text(), expression))
+        .filter(|(value, _)| !value.trim().is_empty())
+        .map(|(value, expression)| vec![Inline::Equation { value, expression }])
         .unwrap_or_default()
 }
 

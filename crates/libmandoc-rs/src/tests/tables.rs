@@ -1,6 +1,20 @@
 //! Owned table/column payloads and normalized equations.
 
 use super::*;
+use crate::TableFont;
+
+#[test]
+fn table_layout_font_survives_owned_transfer() {
+    let source = b".TH FONT 7\n.TS\ntab(|);\nlb li.\nLEFT|RIGHT\n.TE\nafter\n";
+    let report = Parser::default()
+        .parse_bytes("table-font.7", source)
+        .unwrap();
+    let row = find_kind(&report.document.root, NodeKind::Table).unwrap();
+    // CVS tbl_layout.c assigns ESCAPE_FONTBOLD/ITALIC; tbl_html.c::print_tbl
+    // uses each cell's layout->font around its visible payload.
+    assert_eq!(row.table_cells[0].font, Some(TableFont::Bold));
+    assert_eq!(row.table_cells[1].font, Some(TableFont::Italic));
+}
 
 #[test]
 fn parser_preserves_infix_eqn_operators() {
@@ -11,7 +25,8 @@ fn parser_preserves_infix_eqn_operators() {
         )
         .expect("parse infix eqn operators");
     let equation = find_kind(&report.document.root, NodeKind::Equation)
-        .and_then(|node| node.equation.as_deref())
+        .and_then(|node| node.equation.as_ref())
+        .map(crate::EquationBox::readable_text)
         .expect("normalized equation");
 
     assert!(equation.contains("width / 2"), "{equation}");
@@ -27,7 +42,8 @@ fn parser_normalizes_the_common_gnu_ldots_equation_macro() {
         )
         .expect("parse GNU ldots equation macro");
     let equation = find_kind(&report.document.root, NodeKind::Equation)
-        .and_then(|node| node.equation.as_deref())
+        .and_then(|node| node.equation.as_ref())
+        .map(crate::EquationBox::readable_text)
         .expect("normalized equation");
 
     assert_eq!(equation, "x _ 1 ... x _ n");
@@ -42,7 +58,8 @@ fn parser_preserves_eqn_decorations_from_native_boxes() {
         )
         .expect("parse decorated equations");
     let equations = find_kind(&report.document.root, NodeKind::Equation)
-        .and_then(|node| node.equation.as_deref())
+        .and_then(|node| node.equation.as_ref())
+        .map(crate::EquationBox::readable_text)
         .expect("normalized equation");
 
     // CVS eqn.c records these on eqn_box::top/bottom, not as children.
@@ -176,8 +193,8 @@ fn parser_copies_table_cells_and_equation_text() {
     assert!(
         equation
             .equation
-            .as_deref()
-            .is_some_and(|value| value.contains('x'))
+            .as_ref()
+            .is_some_and(|value| value.readable_text().contains('x'))
     );
 }
 

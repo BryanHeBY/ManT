@@ -468,10 +468,12 @@ fn collect_blocks(blocks: &[Block], output: &mut Vec<ExpectedFragment>, independ
 fn collect_inlines(inlines: &[Inline], output: &mut Vec<ExpectedFragment>, independent: bool) {
     for inline in inlines {
         match inline {
-            Inline::Text { value } | Inline::Code { value } => output.push(ExpectedFragment {
-                value: value.clone(),
-                independent,
-            }),
+            Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. } => {
+                output.push(ExpectedFragment {
+                    value: value.clone(),
+                    independent,
+                });
+            }
             Inline::Strong { children }
             | Inline::Emphasis { children }
             | Inline::Link { children, .. } => {

@@ -186,7 +186,9 @@ pub(super) fn invariant_at(code: &str, message: String, source: SourceSpan) -> D
 }
 
 fn invariant_impact(code: &str) -> crate::DiagnosticImpact {
-    if is_semantic_completeness_diagnostic(code) {
+    if code == "ir.equation-projection-mismatch" {
+        crate::DiagnosticImpact::ContentCoverage
+    } else if is_semantic_completeness_diagnostic(code) {
         crate::DiagnosticImpact::SemanticCoverage
     } else {
         crate::DiagnosticImpact::None
@@ -270,6 +272,18 @@ impl<'ir> Visit<'ir> for InvariantCollector {
     }
 
     fn visit_block(&mut self, block: &'ir Block) {
+        if let Block::Equation {
+            value,
+            expression: Some(expression),
+            ..
+        } = block
+            && *value != expression.readable_text()
+        {
+            self.diagnostics.push(invariant(
+                "ir.equation-projection-mismatch",
+                "equation text does not match its owned expression".to_owned(),
+            ));
+        }
         if let Block::DefinitionList {
             items,
             declaration_groups,
@@ -347,6 +361,14 @@ impl<'ir> Visit<'ir> for InvariantCollector {
     }
 
     fn visit_inline(&mut self, inline: &'ir Inline) {
+        if let Inline::Equation { value, expression } = inline
+            && *value != expression.readable_text()
+        {
+            self.diagnostics.push(invariant(
+                "ir.equation-projection-mismatch",
+                "inline equation text does not match its owned expression".to_owned(),
+            ));
+        }
         match inline {
             Inline::Link {
                 target: LinkTarget::Section { id },
@@ -441,6 +463,53 @@ mod tests {
             children: Vec::new(),
             source: None,
         }
+    }
+
+    #[test]
+    fn rejects_equation_text_caches_that_disagree_with_the_structure() {
+        let expression = crate::EquationExpression {
+            kind: crate::EquationKind::Text,
+            font: crate::EquationFont::None,
+            position: crate::EquationPosition::None,
+            size: None,
+            expected_args: Some(0),
+            actual_args: 0,
+            text: Some("x".into()),
+            left: None,
+            right: None,
+            top: None,
+            bottom: None,
+            children: Vec::new(),
+        };
+        let document = document(
+            Vec::new(),
+            vec![
+                Block::Equation {
+                    value: "other".into(),
+                    expression: Some(expression.clone()),
+                    display: true,
+                    layout: LayoutHint::default(),
+                    source: None,
+                },
+                Block::Paragraph {
+                    children: vec![Inline::Equation {
+                        value: "other".into(),
+                        expression,
+                    }],
+                    layout: LayoutHint::default(),
+                    source: None,
+                },
+            ],
+        );
+        let restored: Document =
+            serde_json::from_str(&serde_json::to_string(&document).unwrap()).unwrap();
+        let findings = validate_document(&restored);
+        assert_eq!(findings.iter().filter(|finding| finding.code.as_deref() == Some("ir.equation-projection-mismatch")).count(), 2);
+        assert!(
+            findings
+                .iter()
+                .all(|finding| finding.impact == crate::DiagnosticImpact::ContentCoverage)
+        );
     }
 
     #[test]

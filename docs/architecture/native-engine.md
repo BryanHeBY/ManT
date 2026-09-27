@@ -206,6 +206,18 @@ route borrowed children to inline or structural consumers; physical-line cursors
 advance at executed words, independently of font wrappers. List controls execute
 in source order instead of being replayed by a second spacing scan.
 
+The native wrapper copies borrowed libmandoc nodes before freeing the parse
+session. It retains raw text sentinels beside printable text, table cell fonts,
+normalized section and reference quote decisions, and mdoc body-close targets.
+Borrowed C addresses are used only to resolve those targets during one transfer;
+owned IDs cross the crate boundary. Successful internal strings require valid
+UTF-8. Syntax and equation copies have cumulative node and byte budgets as
+well as depth limits; known truncation enters the IR as a content-coverage
+diagnostic. Native equation boxes remain structured through IR. Their checked
+readable projection serves existing text consumers, and inline equations retain
+their location among surrounding prose. Source-cell equation recovery has its
+own bounded work budget and keeps raw cell content on failure.
+
 One block driver retains routing and execution order. Container scopes, control
 requests, filled flow, no-fill flow and synopsis declarations own their respective
 transitions. Control classification is read-only; execution explicitly distinguishes

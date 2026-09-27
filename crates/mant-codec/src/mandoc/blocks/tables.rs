@@ -1,11 +1,12 @@
 //! Assemble native tbl rows; source recovery has a separate transaction boundary.
 use crate::mandoc::{LoweringContext, layout::layout, source_span};
 use libmandoc_rs::{
-    Node, TableAlignment as MandocTableAlignment, TableCellKind,
+    Node, TableAlignment as MandocTableAlignment, TableCellKind, TableFont,
     TableRowKind as MandocTableRowKind, TableRuleCellKind as MandocTableRuleCellKind,
 };
 use mant_ir::{
-    Block, LayoutHint, TableAlignment as AstTableAlignment, TableCell as AstTableCell, TableRow,
+    Block, Inline, LayoutHint, TableAlignment as AstTableAlignment, TableCell as AstTableCell,
+    TableRow,
 };
 mod recovery;
 use recovery::lower_table_cell;
@@ -78,6 +79,7 @@ pub(super) fn append_table_row(
                     // A successfully decoded control-only cell is empty, not
                     // missing source that needs synthetic recovery.
                     .unwrap_or_default();
+                    let children = style_table_cell(children, cell.font);
                     // `tbl_term.c` clears BACKAFTER/BACKBEFORE before every
                     // cell and the row flush clears them again whenever this
                     // cell actually populated the native buffer.  Only a
@@ -116,6 +118,52 @@ pub(super) fn append_table_row(
             layout: layout(indent_columns),
             source: source_span(node),
         });
+    }
+}
+
+// CVS tbl_html.c::print_tbl applies layout->font around each data cell.
+// Preserve this parsed fact without changing table payload or link identity.
+fn style_table_cell(children: Vec<Inline>, font: Option<TableFont>) -> Vec<Inline> {
+    if children.is_empty() {
+        return children;
+    }
+    let children = if matches!(
+        font,
+        Some(TableFont::Code | TableFont::CodeBold | TableFont::CodeItalic)
+    ) {
+        children.into_iter().map(code_font_text).collect()
+    } else {
+        children
+    };
+    match font {
+        Some(TableFont::Bold | TableFont::CodeBold) => vec![Inline::Strong { children }],
+        Some(TableFont::Italic | TableFont::CodeItalic) => vec![Inline::Emphasis { children }],
+        Some(TableFont::BoldItalic) => vec![Inline::Strong {
+            children: vec![Inline::Emphasis { children }],
+        }],
+        Some(TableFont::Code | TableFont::Roman) | None => children,
+    }
+}
+
+fn code_font_text(inline: Inline) -> Inline {
+    match inline {
+        Inline::Text { value } => Inline::Code { value },
+        Inline::Strong { children } => Inline::Strong {
+            children: children.into_iter().map(code_font_text).collect(),
+        },
+        Inline::Emphasis { children } => Inline::Emphasis {
+            children: children.into_iter().map(code_font_text).collect(),
+        },
+        Inline::Link {
+            target,
+            title,
+            children,
+        } => Inline::Link {
+            target,
+            title,
+            children: children.into_iter().map(code_font_text).collect(),
+        },
+        other => other,
     }
 }
 

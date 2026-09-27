@@ -281,6 +281,8 @@ mod tests {
             schema: SearchSchema::V0Dot12,
             label: "tar".to_owned(),
             source: None,
+            diagnostics: Vec::new(),
+            content_complete: true,
             meta: Some(mant_ir::DocumentMeta {
                 manual_section: Some("1".to_owned()),
                 ..mant_ir::DocumentMeta::default()

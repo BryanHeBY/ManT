@@ -1,4 +1,54 @@
 //! Bounded native equation normalization and source delimiter state.
+use libmandoc_rs::{EquationBox, EquationFont, EquationKind, EquationPosition};
+use mant_ir::{
+    EquationExpression, EquationFont as IrFont, EquationKind as IrKind,
+    EquationPosition as IrPosition,
+};
+
+/// Transfer the bounded owned eqn tree into source-neutral IR. Fields remain
+/// independently addressable; text is projected from this structure later.
+pub(super) fn expression_from_ast(box_node: &EquationBox) -> EquationExpression {
+    EquationExpression {
+        kind: match box_node.kind {
+            EquationKind::Text => IrKind::Text,
+            EquationKind::Subexpression => IrKind::Subexpression,
+            EquationKind::List => IrKind::List,
+            EquationKind::Pile => IrKind::Pile,
+            EquationKind::Matrix => IrKind::Matrix,
+        },
+        font: match box_node.font {
+            EquationFont::None => IrFont::None,
+            EquationFont::Roman => IrFont::Roman,
+            EquationFont::Bold => IrFont::Bold,
+            EquationFont::Fat => IrFont::Fat,
+            EquationFont::Italic => IrFont::Italic,
+        },
+        position: match box_node.position {
+            EquationPosition::None => IrPosition::None,
+            EquationPosition::Superscript => IrPosition::Superscript,
+            EquationPosition::SubscriptSuperscript => IrPosition::SubscriptSuperscript,
+            EquationPosition::Subscript => IrPosition::Subscript,
+            EquationPosition::To => IrPosition::To,
+            EquationPosition::From => IrPosition::From,
+            EquationPosition::FromTo => IrPosition::FromTo,
+            EquationPosition::Over => IrPosition::Over,
+            EquationPosition::Sqrt => IrPosition::Sqrt,
+        },
+        size: (box_node.size != i32::MIN).then_some(box_node.size),
+        // CVS eqn.c::eqn_box_new initializes expectargs to UINT_MAX for a
+        // list with no fixed grammar maximum. Do not leak that sentinel into
+        // source-neutral IR or the unpublished JSON contract.
+        expected_args: (box_node.expected_args != u32::MAX as usize)
+            .then_some(box_node.expected_args),
+        actual_args: box_node.actual_args,
+        text: box_node.text.as_deref().map(super::visible_text),
+        left: box_node.left.as_deref().map(super::visible_text),
+        right: box_node.right.as_deref().map(super::visible_text),
+        top: box_node.top.as_deref().map(super::visible_text),
+        bottom: box_node.bottom.as_deref().map(super::visible_text),
+        children: box_node.children.iter().map(expression_from_ast).collect(),
+    }
+}
 use super::{
     LoweringContext, MAX_INLINE_EQUATION_NORMALIZATIONS, Node, Parser, Path, visible_text,
 };
@@ -24,9 +74,10 @@ impl EquationDelimiterDirective {
     }
 }
 
-fn first_equation(node: &Node) -> Option<&str> {
+fn first_equation(node: &Node) -> Option<String> {
     node.equation
-        .as_deref()
+        .as_ref()
+        .map(libmandoc_rs::EquationBox::readable_text)
         .or_else(|| node.children.iter().find_map(first_equation))
 }
 
@@ -107,11 +158,24 @@ impl LoweringContext<'_> {
                 return visible_text(source);
             }
         }
+        // Every attempted local parse, including a failed one, consumes the
+        // same per-document byte/work allowance. The synthetic input contains
+        // only this fragment, so parser work is bounded by charged bytes.
+        if !self
+            .equation_normalization_budget
+            .borrow_mut()
+            .charge(source.len())
+        {
+            self.warn_inline_equation_budget(line);
+            return visible_text(source);
+        }
         let synthetic = format!(".TH MANT-EQN 7\n.EQ\n{source}\n.EN\n");
         let normalized = Parser::default()
             .parse_bytes(Path::new("mant-inline-eqn.7"), synthetic.as_bytes())
             .ok()
-            .and_then(|report| first_equation(&report.document.root).map(visible_text))
+            .and_then(|report| {
+                first_equation(&report.document.root).map(|text| visible_text(&text))
+            })
             .filter(|value| !value.trim().is_empty())
             .unwrap_or_else(|| visible_text(source));
         self.normalized_equations

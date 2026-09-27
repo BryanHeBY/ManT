@@ -154,7 +154,9 @@ pub(super) fn paired_option_tokens(inlines: &[Inline]) -> Option<[(String, usize
 fn append_name_prefix(nodes: &[Inline], output: &mut String) -> bool {
     for node in nodes {
         match node {
-            Inline::Text { value } | Inline::Code { value } => output.push_str(value),
+            Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. } => {
+                output.push_str(value);
+            }
             Inline::Strong { children } | Inline::Link { children, .. } => {
                 if !append_name_prefix(children, output) {
                     return false;
@@ -262,7 +264,7 @@ fn split_groups(
                     }]
                 })
                 .collect(),
-            Inline::Code { value } => value
+            Inline::Code { value } | Inline::Equation { value, .. } => value
                 .split(|character| {
                     state.separator(character, take_separator(character, separators, remaining))
                 })
@@ -326,7 +328,7 @@ fn starts_with_parameter(term: &[Inline]) -> bool {
 fn first_content_is_parameter(term: &[Inline]) -> Option<bool> {
     term.iter().find_map(|inline| match inline {
         Inline::Anchor { .. } | Inline::LineBreak => None,
-        Inline::Text { value } | Inline::Code { value } => {
+        Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. } => {
             (!value.trim().is_empty()).then_some(false)
         }
         Inline::Strong { children } | Inline::Link { children, .. } => {

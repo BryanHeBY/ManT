@@ -178,7 +178,12 @@ impl<'a> EntryOwner<'a> {
                 if part.path.is_empty() || range.start >= range.end {
                     return false;
                 }
-                let [Inline::Text { value } | Inline::Code { value }] = nodes else {
+                let [
+                    Inline::Text { value }
+                    | Inline::Code { value }
+                    | Inline::Equation { value, .. },
+                ] = nodes
+                else {
                     return false;
                 };
                 let Some(text) = value.get(range.clone()) else {
@@ -271,11 +276,13 @@ impl<'a> EntryOwner<'a> {
                 return None;
             }
             let value = match node {
-                Inline::Text { value } | Inline::Code { value } => value.get(range.clone())?,
+                Inline::Text { value }
+                | Inline::Code { value }
+                | Inline::Equation { value, .. } => value.get(range.clone())?,
                 _ => return None,
             };
             match node {
-                Inline::Code { .. } => Inline::Code {
+                Inline::Code { .. } | Inline::Equation { .. } => Inline::Code {
                     value: value.into(),
                 },
                 _ => Inline::Text {
@@ -369,9 +376,9 @@ impl<'a> EntryOwner<'a> {
         match &slice.bytes {
             None => true,
             Some(range) if range.start < range.end => match node {
-                Inline::Text { value } | Inline::Code { value } => {
-                    value.get(range.clone()).is_some()
-                }
+                Inline::Text { value }
+                | Inline::Code { value }
+                | Inline::Equation { value, .. } => value.get(range.clone()).is_some(),
                 _ => false,
             },
             Some(_) => false,
@@ -412,7 +419,9 @@ impl<'a> EntryOwner<'a> {
 fn consume_text(nodes: &[Inline], expected: &mut &str) -> bool {
     for node in nodes {
         let text = match node {
-            Inline::Text { value } | Inline::Code { value } => value.as_str(),
+            Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. } => {
+                value.as_str()
+            }
             Inline::LineBreak => "\n",
             Inline::Anchor { .. } => continue,
             Inline::Strong { children }
@@ -644,7 +653,7 @@ mod tests {
         let owner = EntryOwner::List(&item);
         assert!(
             matches!(owner.content_slice(&slice).unwrap().as_slice(), [Inline::Link { children, .. }]
-            if matches!(children.as_slice(), [Inline::Strong { children }] if matches!(children.as_slice(), [Inline::Code { value }] if value == "é")))
+            if matches!(children.as_slice(), [Inline::Strong { children }] if matches!(children.as_slice(), [Inline::Code { value } | Inline::Equation { value, .. }] if value == "é")))
         );
         for invalid in [
             EntryContentSlice {

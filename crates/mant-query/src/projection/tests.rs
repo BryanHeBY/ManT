@@ -499,6 +499,7 @@ fn custom_producer_impact_reaches_outline_and_excerpt_without_known_codes() {
     for impact in [
         mant_ir::DiagnosticImpact::None,
         mant_ir::DiagnosticImpact::SemanticCoverage,
+        mant_ir::DiagnosticImpact::ContentCoverage,
     ] {
         let mut content = query();
         content
@@ -514,6 +515,7 @@ fn custom_producer_impact_reaches_outline_and_excerpt_without_known_codes() {
                 source: None,
             });
         let complete = impact == mant_ir::DiagnosticImpact::None;
+        let content_complete = impact != mant_ir::DiagnosticImpact::ContentCoverage;
         assert_eq!(
             build_outline(&content).unwrap().semantics_complete,
             complete
@@ -523,6 +525,16 @@ fn custom_producer_impact_reaches_outline_and_excerpt_without_known_codes() {
                 .unwrap()
                 .semantics_complete,
             complete
+        );
+        assert_eq!(
+            build_outline(&content).unwrap().content_complete,
+            content_complete
+        );
+        assert_eq!(
+            select_excerpt(&content, &[ContentSelector::path("1")])
+                .unwrap()
+                .content_complete,
+            content_complete
         );
     }
 }

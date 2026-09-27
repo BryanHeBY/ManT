@@ -97,8 +97,8 @@ impl super::BlockLowerer<'_, '_> {
         if node.kind == NodeKind::Equation
             && node
                 .equation
-                .as_deref()
-                .is_none_or(|value| value.trim().is_empty())
+                .as_ref()
+                .is_none_or(|value| value.readable_text().trim().is_empty())
         {
             return true;
         }

@@ -31,7 +31,9 @@ fn visible_document_text(document: &mant_ir::Document) -> String {
     impl<'ir> Visit<'ir> for TextCollector {
         fn visit_inline(&mut self, inline: &'ir Inline) {
             match inline {
-                Inline::Text { value } | Inline::Code { value } => {
+                Inline::Text { value }
+                | Inline::Code { value }
+                | Inline::Equation { value, .. } => {
                     self.0.push_str(value);
                     self.0.push(' ');
                 }
@@ -56,7 +58,9 @@ fn projected_document_text(document: &mant_ir::Document) -> String {
     impl<'ir> Visit<'ir> for TextCollector {
         fn visit_inline(&mut self, inline: &'ir Inline) {
             match inline {
-                Inline::Text { value } | Inline::Code { value } => self.0.push_str(value),
+                Inline::Text { value }
+                | Inline::Code { value }
+                | Inline::Equation { value, .. } => self.0.push_str(value),
                 Inline::LineBreak => self.0.push('\n'),
                 Inline::Strong { .. }
                 | Inline::Emphasis { .. }
@@ -98,7 +102,9 @@ fn inline_text(children: &[Inline]) -> String {
     children
         .iter()
         .map(|child| match child {
-            Inline::Text { value } | Inline::Code { value } => value.clone(),
+            Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. } => {
+                value.clone()
+            }
             Inline::Strong { children }
             | Inline::Emphasis { children }
             | Inline::Link { children, .. } => inline_text(children),

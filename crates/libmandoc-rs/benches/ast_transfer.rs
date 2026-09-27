@@ -118,12 +118,14 @@ fn measure_node(node: &Node, root: bool, size: &mut AstSize) {
         node.tag.as_ref(),
         node.offset.as_ref(),
         node.width.as_ref(),
-        node.equation.as_ref(),
     ]
     .into_iter()
     .flatten()
     {
         size.string_storage += value.capacity();
+    }
+    if let Some(equation) = &node.equation {
+        size.string_storage += equation.readable_text().len();
     }
     if let Some(enclosure) = &node.enclosure {
         size.string_storage += enclosure.opening.capacity();

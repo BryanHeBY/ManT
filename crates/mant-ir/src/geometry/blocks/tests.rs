@@ -76,6 +76,7 @@ fn variants(source: Option<SourceSpan>) -> Vec<(Block, bool)> {
         (
             Block::Equation {
                 value: "x + y".into(),
+                expression: None,
                 display: true,
                 layout,
                 source,

@@ -47,7 +47,9 @@ pub(super) fn flatten_inline(children: &[Inline]) -> String {
     let mut output = String::new();
     for child in children {
         match child {
-            Inline::Text { value } | Inline::Code { value } => output.push_str(value),
+            Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. } => {
+                output.push_str(value);
+            }
             Inline::Strong { children }
             | Inline::Emphasis { children }
             | Inline::Link { children, .. } => {
@@ -205,7 +207,9 @@ fn render_inline_raw(nodes: &[Inline], options: MarkdownOptions, manual_links: b
                 pieces.push(InlinePiece::styled(rendered, "*", "_"));
                 continue;
             }
-            Inline::Code { value } => pieces.push(InlinePiece::plain(code_span(value))),
+            Inline::Code { value } | Inline::Equation { value, .. } => {
+                pieces.push(InlinePiece::plain(code_span(value)));
+            }
             Inline::Link {
                 target,
                 title,

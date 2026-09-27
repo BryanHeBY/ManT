@@ -76,7 +76,7 @@ fn collect(nodes: &[Inline], path: &mut Vec<usize>, text: &mut String, leaves: &
     for (index, node) in nodes.iter().enumerate() {
         path.push(index);
         match node {
-            Inline::Text { value } | Inline::Code { value } => {
+            Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. } => {
                 let start = text.len();
                 text.push_str(value);
                 leaves.push(Leaf {

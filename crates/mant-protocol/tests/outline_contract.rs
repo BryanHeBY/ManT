@@ -35,6 +35,7 @@ fn outline_contract_exposes_both_human_paths_and_document_ids() {
         meta: Some(DocumentMeta::default()),
         diagnostics: Vec::new(),
         semantics_complete: true,
+        content_complete: true,
         nodes: vec![OutlineNode::DocumentSection {
             path: "2".to_owned().into(),
             id: "options-2".to_owned().into(),
@@ -135,6 +136,7 @@ fn excerpt_contract_keeps_breadcrumbs_separate_from_complete_sections() {
         schema: ExcerptSchema::V0Dot12,
         address: None,
         semantics_complete: true,
+        content_complete: true,
         label: "demo(1)".to_owned(),
         producer: Some(Producer {
             name: "mant".to_owned(),
@@ -204,6 +206,7 @@ fn excerpt_contract_can_return_one_semantic_definition() {
         label: "demo(1)".to_owned(),
         address: None,
         semantics_complete: true,
+        content_complete: true,
         producer: None,
         source: Some(source()),
         meta: None,
@@ -264,6 +267,7 @@ fn document_root_contract_addresses_content_before_the_first_heading() {
         meta: Some(DocumentMeta::default()),
         diagnostics: Vec::new(),
         semantics_complete: true,
+        content_complete: true,
         nodes: vec![OutlineNode::DocumentRoot {
             path: "root".to_owned().into(),
             id: "document-overview".to_owned().into(),
@@ -278,6 +282,7 @@ fn document_root_contract_addresses_content_before_the_first_heading() {
         label: "guide.md".to_owned(),
         address: None,
         semantics_complete: true,
+        content_complete: true,
         producer: None,
         source: outline.source.clone(),
         meta: outline.meta.clone(),
@@ -331,6 +336,7 @@ fn tldr_uses_the_reserved_zero_path_in_outline_and_excerpt_contracts() {
         meta: None,
         diagnostics: Vec::new(),
         semantics_complete: true,
+        content_complete: true,
         nodes: vec![OutlineNode::Tldr {
             path: "0".to_owned().into(),
             id: "tldr".to_owned().into(),
@@ -343,6 +349,7 @@ fn tldr_uses_the_reserved_zero_path_in_outline_and_excerpt_contracts() {
         label: "demo".to_owned(),
         address: None,
         semantics_complete: true,
+        content_complete: true,
         producer: None,
         source: None,
         meta: None,

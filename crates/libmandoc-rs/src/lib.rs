@@ -7,6 +7,7 @@ mod build_config;
 mod ast;
 mod compression;
 mod diagnostics;
+mod equation;
 #[allow(unsafe_code)]
 mod ffi;
 mod parser;
@@ -19,11 +20,12 @@ mod transport;
 
 pub use ast::{
     AuthorMode, DefinitionListStyle, DisplayKind, Document, MacroSet, Metadata, Node, NodeFlags,
-    NodeKind, NormalizedEnclosure, NormalizedFont, NormalizedListKind, TableAlignment, TableCell,
-    TableCellKind, TableRowKind, TableRuleCellKind,
+    NodeKind, NormalizedEnclosure, NormalizedFont, NormalizedListKind, NormalizedSection, ScopeEnd,
+    TableAlignment, TableCell, TableCellKind, TableFont, TableRowKind, TableRuleCellKind,
 };
 pub use compression::MAX_DECOMPRESSED_SOURCE_BYTES;
 pub use diagnostics::{Diagnostic, DiagnosticCode, DiagnosticLevel, SourceLocation};
+pub use equation::{EquationBox, EquationFont, EquationKind, EquationPosition};
 pub use parser::{
     Compression, IncludePolicy, InputFormat, ParseError, ParseErrorKind, ParseOptions, ParseReport,
     Parser,

@@ -310,7 +310,10 @@ fn collect_inlines(
                     owner_source_line,
                 );
             }
-            Inline::Text { .. } | Inline::Code { .. } | Inline::LineBreak => {}
+            Inline::Text { .. }
+            | Inline::Code { .. }
+            | Inline::Equation { .. }
+            | Inline::LineBreak => {}
         }
     }
 }

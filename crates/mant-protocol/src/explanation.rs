@@ -341,6 +341,12 @@ pub struct QueryExplanation {
     pub truncation: ExplanationTruncation,
     /// Semantic validation coverage, never a recall-completeness claim.
     pub semantics_complete: bool,
+    /// False when the source document is known to have lost visible content.
+    #[serde(
+        default = "default_content_complete",
+        skip_serializing_if = "content_is_complete"
+    )]
+    pub content_complete: bool,
     /// Original recoverable validation/parser findings.
     pub diagnostics: Vec<Diagnostic>,
     /// Records in class-then-source order, with independent owners never merged.
@@ -385,6 +391,11 @@ struct QueryExplanationWire {
     pub next_offset: Option<u32>,
     pub truncation: ExplanationTruncation,
     pub semantics_complete: bool,
+    #[serde(
+        default = "default_content_complete",
+        skip_serializing_if = "content_is_complete"
+    )]
+    pub content_complete: bool,
     pub diagnostics: Vec<Diagnostic>,
     pub evidence: Vec<ExplanationEvidence>,
 }
@@ -396,4 +407,13 @@ impl<'de> Deserialize<'de> for QueryExplanation {
             .map_err(serde::de::Error::custom)?;
         Ok(value)
     }
+}
+
+const fn default_content_complete() -> bool {
+    true
+}
+// Serde's `skip_serializing_if` predicate receives a reference.
+#[allow(clippy::trivially_copy_pass_by_ref)]
+const fn content_is_complete(value: &bool) -> bool {
+    *value
 }

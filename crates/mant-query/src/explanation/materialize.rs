@@ -65,6 +65,7 @@ pub(super) fn response(
             next_offset: (end < total).then_some(end),
             truncation,
             semantics_complete: crate::projection::semantics_complete(&plan.diagnostics),
+            content_complete: crate::projection::content_complete(&plan.diagnostics),
             diagnostics: plan.diagnostics,
             evidence,
         },

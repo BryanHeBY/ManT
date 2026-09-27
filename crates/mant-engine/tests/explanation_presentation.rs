@@ -330,6 +330,7 @@ fn scoped_serialized_owners_with_the_same_id_keep_independent_name_roles() {
             producer: None,
             diagnostics: vec![],
             semantics_complete: true,
+            content_complete: true,
             outcome: result.outcome,
             total: 1,
             returned: 1,

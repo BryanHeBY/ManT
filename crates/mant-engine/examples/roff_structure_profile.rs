@@ -394,8 +394,13 @@ fn collect_ast_structure(
             .count();
     }
     if node.kind == NodeKind::Equation {
-        match node.equation.as_deref().map(str::trim) {
-            None | Some("") => profile.equation_configurations += 1,
+        match node
+            .equation
+            .as_ref()
+            .map(libmandoc_rs::EquationBox::readable_text)
+        {
+            None => profile.equation_configurations += 1,
+            Some(value) if value.trim().is_empty() => profile.equation_configurations += 1,
             Some(_) if inside_table => profile.table_equations += 1,
             Some(_) if node.flags.line_start => profile.display_equations += 1,
             Some(_) => profile.inline_equations += 1,
@@ -731,7 +736,10 @@ fn mdoc_column_rows(node: &Node) -> Vec<AstTableRowTopology> {
 
 fn collect_ast_topology(node: &Node, inside_table: bool, topology: &mut AstTopology) {
     if node.kind == NodeKind::Equation
-        && let Some(value) = node.equation.as_deref().map(str::trim)
+        && let Some(value) = node
+            .equation
+            .as_ref()
+            .map(libmandoc_rs::EquationBox::readable_text)
         && !value.is_empty()
     {
         topology.equations.push(AstEquationTopology {
@@ -743,7 +751,7 @@ fn collect_ast_topology(node: &Node, inside_table: bool, topology: &mut AstTopol
             } else {
                 EquationContext::Inline
             },
-            value: equation_visible_text(value),
+            value: equation_visible_text(&value),
         });
     }
     if node.kind == NodeKind::Block
@@ -903,6 +911,7 @@ fn collect_blocks(
                 display,
                 layout,
                 source,
+                ..
             } => {
                 profile.max_indent_columns = profile.max_indent_columns.max(layout.indent_columns);
                 if *display {
@@ -1012,7 +1021,9 @@ fn collect_blocks(
 
 fn has_visible_inline(inlines: &[Inline]) -> bool {
     inlines.iter().any(|inline| match inline {
-        Inline::Text { value } | Inline::Code { value } => !value.is_empty(),
+        Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. } => {
+            !value.is_empty()
+        }
         Inline::Strong { children }
         | Inline::Emphasis { children }
         | Inline::Link { children, .. } => has_visible_inline(children),
@@ -1045,7 +1056,7 @@ fn collect_inlines(
                 collect_inlines(children, source_line, inside_table, profile, topology);
             }
             Inline::LineBreak => profile.hard_breaks += 1,
-            Inline::Code { value } => {
+            Inline::Code { value } | Inline::Equation { value, .. } => {
                 if inside_table {
                     profile.table_equation_candidates += 1;
                 } else {
@@ -1074,7 +1085,10 @@ fn line_break_count(inlines: &[Inline]) -> usize {
             | Inline::Emphasis { children }
             | Inline::Link { children, .. } => line_break_count(children),
             Inline::LineBreak => 1,
-            Inline::Text { .. } | Inline::Code { .. } | Inline::Anchor { .. } => 0,
+            Inline::Text { .. }
+            | Inline::Code { .. }
+            | Inline::Equation { .. }
+            | Inline::Anchor { .. } => 0,
         })
         .sum()
 }
@@ -1433,16 +1447,19 @@ fn normalize_equation_fragment(source: &str) -> Result<String, String> {
     .parse_bytes("audit-equation.7", synthetic.as_bytes())
     .map_err(|error| error.to_string())?;
     find_equation(&report.document.root)
-        .map(equation_visible_text)
+        .map(|value| equation_visible_text(&value))
         .ok_or_else(|| format!("could not normalize table equation {source:?}"))
 }
 
-fn find_equation(node: &Node) -> Option<&str> {
+fn find_equation(node: &Node) -> Option<String> {
     if node.kind == NodeKind::Equation
-        && let Some(value) = node.equation.as_deref()
+        && let Some(value) = node
+            .equation
+            .as_ref()
+            .map(libmandoc_rs::EquationBox::readable_text)
         && !value.trim().is_empty()
     {
-        return Some(value.trim());
+        return Some(value.trim().to_owned());
     }
     node.children.iter().find_map(find_equation)
 }

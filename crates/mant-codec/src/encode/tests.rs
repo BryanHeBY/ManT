@@ -600,6 +600,7 @@ fn chooses_safe_fences_and_preserves_native_table_and_equation_content() {
                 },
                 Block::Equation {
                     value: "x = y + 1".to_owned(),
+                    expression: None,
                     display: true,
                     layout: LayoutHint::default(),
                     source: None,

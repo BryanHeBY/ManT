@@ -19,7 +19,7 @@ pub(super) fn source_span(node: &Node) -> Option<SourceSpan> {
 pub(super) fn first_part_children(node: &Node, kind: libmandoc_rs::NodeKind) -> &[Node] {
     node.children
         .iter()
-        .find(|child| child.kind == kind)
+        .find(|child| child.kind == kind && child.scope_end.is_none())
         .map_or(&[], |child| child.children.as_slice())
 }
 
@@ -30,6 +30,11 @@ pub(super) fn part_child_groups(
 ) -> impl Iterator<Item = &[Node]> {
     node.children
         .iter()
-        .filter(move |child| child.kind == kind)
+        // CVS mdoc_endbody_alloc creates an empty BODY marker whose `body`
+        // points at the original scope. It executes post handling, not a
+        // second content body. Nonempty markers still carry child payload.
+        .filter(move |child| {
+            child.kind == kind && (child.scope_end.is_none() || !child.children.is_empty())
+        })
         .map(|child| child.children.as_slice())
 }

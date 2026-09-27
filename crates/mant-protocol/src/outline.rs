@@ -130,6 +130,9 @@ pub struct QueryOutline {
     /// steady-state bandwidth cost.
     #[serde(default = "default_true", skip_serializing_if = "is_true")]
     pub semantics_complete: bool,
+    /// False when the source document is known to have lost visible content.
+    #[serde(default = "default_true", skip_serializing_if = "is_true")]
+    pub content_complete: bool,
     /// Addressable nodes in document order.
     pub nodes: Vec<OutlineNode>,
 }
@@ -353,6 +356,9 @@ pub struct QueryExcerpt {
     /// This is document-wide, not a claim restricted to the selected range.
     #[serde(default = "default_true", skip_serializing_if = "is_true")]
     pub semantics_complete: bool,
+    /// False when the source document is known to have lost visible content.
+    #[serde(default = "default_true", skip_serializing_if = "is_true")]
+    pub content_complete: bool,
     /// Process and parser provenance, when a document was loaded.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub producer: Option<Producer>,

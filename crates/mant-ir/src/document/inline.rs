@@ -1,5 +1,5 @@
 //! Inline content and typed navigation intent, independent of host actions.
-use super::SourceSpan;
+use super::{EquationExpression, SourceSpan};
 use crate::NodeId;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -9,7 +9,8 @@ use serde::{Deserialize, Serialize};
 #[serde(
     tag = "type",
     rename_all = "kebab-case",
-    rename_all_fields = "camelCase"
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
 )]
 pub enum Inline {
     /// Plain visible text.
@@ -31,6 +32,13 @@ pub enum Inline {
     Code {
         /// Literal text value.
         value: String,
+    },
+    /// Equation in its original prose position.
+    Equation {
+        /// Shared readable projection of `expression`.
+        value: String,
+        /// Parsed expression structure.
+        expression: EquationExpression,
     },
     /// A typed link whose navigation semantics are explicit in the IR.
     ///

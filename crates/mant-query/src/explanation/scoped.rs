@@ -138,6 +138,7 @@ fn source_report(
             .as_ref()
             .map(mant_protocol::Producer::for_document),
         semantics_complete: crate::projection::semantics_complete(&plan.diagnostics),
+        content_complete: crate::projection::content_complete(&plan.diagnostics),
         diagnostics: plan.diagnostics,
         outcome: outcome(total),
         total,

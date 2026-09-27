@@ -22,15 +22,27 @@ pub struct Diagnostic {
     pub source: Option<SourceSpan>,
 }
 
-/// Producer-declared effect of a finding on semantic extraction completeness.
+/// Producer-declared effect of a finding on document coverage.
 /// This is not a measure of rendering fidelity or proof of exhaustive recall.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 pub enum DiagnosticImpact {
-    /// This finding does not invalidate semantic extraction coverage.
+    /// This finding leaves both semantic and visible-content coverage intact.
     None,
     /// Semantic declarations, facts or coverage were rejected or incomplete.
     SemanticCoverage,
+    /// Visible source content was omitted from the returned document.
+    /// Such loss also makes semantic extraction incomplete.
+    ContentCoverage,
+}
+
+/// Whether producers and shared validators know of any lost document content.
+/// Presentation simplification and bounded query pages do not affect this flag.
+#[must_use]
+pub fn content_complete(diagnostics: &[Diagnostic]) -> bool {
+    diagnostics
+        .iter()
+        .all(|diagnostic| diagnostic.impact != DiagnosticImpact::ContentCoverage)
 }
 
 /// Whether all producers and shared validators permit a complete projection.
@@ -39,7 +51,7 @@ pub enum DiagnosticImpact {
 pub fn semantics_complete(diagnostics: &[Diagnostic]) -> bool {
     diagnostics
         .iter()
-        .all(|diagnostic| diagnostic.impact != DiagnosticImpact::SemanticCoverage)
+        .all(|diagnostic| diagnostic.impact == DiagnosticImpact::None)
 }
 
 /// Severity reported by the parser without turning useful output into failure.

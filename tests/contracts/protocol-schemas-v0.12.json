@@ -646,6 +646,10 @@
           }
         ]
       },
+      "contentComplete": {
+        "description": "False when the source document is known to have lost visible content.",
+        "type": "boolean"
+      },
       "diagnostics": {
         "description": "Recoverable parser and validation findings.",
         "type": "array",
@@ -943,6 +947,17 @@
                 "description": "Whether the equation occupies its own display block.",
                 "type": "boolean"
               },
+              "expression": {
+                "description": "Parsed equation structure, when the source parser provides it.\n`value` must equal this structure's readable projection.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/EquationExpression"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
               "layout": {
                 "description": "Source-derived indentation and vertical spacing.",
                 "$ref": "#/$defs/LayoutHint"
@@ -1226,10 +1241,10 @@
         ]
       },
       "DiagnosticImpact": {
-        "description": "Producer-declared effect of a finding on semantic extraction completeness.\nThis is not a measure of rendering fidelity or proof of exhaustive recall.",
+        "description": "Producer-declared effect of a finding on document coverage.\nThis is not a measure of rendering fidelity or proof of exhaustive recall.",
         "oneOf": [
           {
-            "description": "This finding does not invalidate semantic extraction coverage.",
+            "description": "This finding leaves both semantic and visible-content coverage intact.",
             "type": "string",
             "const": "none"
           },
@@ -1237,6 +1252,11 @@
             "description": "Semantic declarations, facts or coverage were rejected or incomplete.",
             "type": "string",
             "const": "semantic-coverage"
+          },
+          {
+            "description": "Visible source content was omitted from the returned document.\nSuch loss also makes semantic extraction incomplete.",
+            "type": "string",
+            "const": "content-coverage"
           }
         ]
       },
@@ -1811,6 +1831,207 @@
           }
         ]
       },
+      "EquationExpression": {
+        "description": "Self-contained equation box copied from the parser before it is freed.",
+        "type": "object",
+        "properties": {
+          "actualArgs": {
+            "description": "Parser recorded argument count.",
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0
+          },
+          "bottom": {
+            "description": "Decoration below the expression.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "children": {
+            "description": "Ordered children; matrix children retain parsed column order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/EquationExpression"
+            }
+          },
+          "expectedArgs": {
+            "description": "Grammar maximum argument count, or no fixed maximum when absent.\nThis can differ from the actual child count.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint",
+            "minimum": 0
+          },
+          "font": {
+            "description": "Parsed font selection.",
+            "$ref": "#/$defs/EquationFont"
+          },
+          "kind": {
+            "description": "Box role.",
+            "$ref": "#/$defs/EquationKind"
+          },
+          "left": {
+            "description": "Opening and closing fences.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "position": {
+            "description": "Positional operator.",
+            "$ref": "#/$defs/EquationPosition"
+          },
+          "right": {
+            "description": "Closing fence.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "size": {
+            "description": "Parsed font size, or the parser's default when absent.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "text": {
+            "description": "Atom spelling, when present.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "top": {
+            "description": "Decoration above the expression.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "font",
+          "position",
+          "actualArgs",
+          "children"
+        ]
+      },
+      "EquationFont": {
+        "description": "Parsed font selection for an equation box.",
+        "oneOf": [
+          {
+            "description": "Inherited/default font.",
+            "type": "string",
+            "const": "None"
+          },
+          {
+            "description": "Roman font.",
+            "type": "string",
+            "const": "Roman"
+          },
+          {
+            "description": "Bold font.",
+            "type": "string",
+            "const": "Bold"
+          },
+          {
+            "description": "Fat font.",
+            "type": "string",
+            "const": "Fat"
+          },
+          {
+            "description": "Italic font.",
+            "type": "string",
+            "const": "Italic"
+          }
+        ]
+      },
+      "EquationKind": {
+        "description": "Structural role of one parsed equation box.",
+        "oneOf": [
+          {
+            "description": "Number, variable, operator, or other text atom.",
+            "type": "string",
+            "const": "Text"
+          },
+          {
+            "description": "Positioned subexpression such as a fraction or script.",
+            "type": "string",
+            "const": "Subexpression"
+          },
+          {
+            "description": "Group or ordered expression list.",
+            "type": "string",
+            "const": "List"
+          },
+          {
+            "description": "Vertical pile of expression rows.",
+            "type": "string",
+            "const": "Pile"
+          },
+          {
+            "description": "Matrix whose parsed children are columns.",
+            "type": "string",
+            "const": "Matrix"
+          }
+        ]
+      },
+      "EquationPosition": {
+        "description": "Operator relating children of a parsed subexpression.",
+        "oneOf": [
+          {
+            "description": "No positional operator.",
+            "type": "string",
+            "const": "None"
+          },
+          {
+            "description": "Superscript.",
+            "type": "string",
+            "const": "Superscript"
+          },
+          {
+            "description": "Subscript and superscript.",
+            "type": "string",
+            "const": "SubscriptSuperscript"
+          },
+          {
+            "description": "Subscript.",
+            "type": "string",
+            "const": "Subscript"
+          },
+          {
+            "description": "Upper limit.",
+            "type": "string",
+            "const": "To"
+          },
+          {
+            "description": "Lower limit.",
+            "type": "string",
+            "const": "From"
+          },
+          {
+            "description": "Lower and upper limits.",
+            "type": "string",
+            "const": "FromTo"
+          },
+          {
+            "description": "Fraction.",
+            "type": "string",
+            "const": "Over"
+          },
+          {
+            "description": "Square root.",
+            "type": "string",
+            "const": "Sqrt"
+          }
+        ]
+      },
       "ExcerptSchema": {
         "description": "Exact schema marker for selected query content.",
         "oneOf": [
@@ -1984,6 +2205,7 @@
                 "type": "string"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "value"
@@ -2005,6 +2227,7 @@
                 "const": "strong"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "children"
@@ -2026,6 +2249,7 @@
                 "const": "emphasis"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "children"
@@ -2044,9 +2268,34 @@
                 "type": "string"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "value"
+            ]
+          },
+          {
+            "description": "Equation in its original prose position.",
+            "type": "object",
+            "properties": {
+              "expression": {
+                "description": "Parsed expression structure.",
+                "$ref": "#/$defs/EquationExpression"
+              },
+              "type": {
+                "type": "string",
+                "const": "equation"
+              },
+              "value": {
+                "description": "Shared readable projection of `expression`.",
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "type",
+              "value",
+              "expression"
             ]
           },
           {
@@ -2076,6 +2325,7 @@
                 "const": "link"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "target",
@@ -2113,6 +2363,7 @@
                 "const": "anchor"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "id"
@@ -2127,6 +2378,7 @@
                 "const": "line-break"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type"
             ]
@@ -3249,6 +3501,10 @@
           }
         ]
       },
+      "contentComplete": {
+        "description": "False when the source document is known to have lost visible content.",
+        "type": "boolean"
+      },
       "counts": {
         "description": "Per-class collected and returned owners; zero categories remain present.",
         "$ref": "#/$defs/EvidenceCounts"
@@ -3574,6 +3830,17 @@
               "display": {
                 "description": "Whether the equation occupies its own display block.",
                 "type": "boolean"
+              },
+              "expression": {
+                "description": "Parsed equation structure, when the source parser provides it.\n`value` must equal this structure's readable projection.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/EquationExpression"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               },
               "layout": {
                 "description": "Source-derived indentation and vertical spacing.",
@@ -3954,10 +4221,10 @@
         ]
       },
       "DiagnosticImpact": {
-        "description": "Producer-declared effect of a finding on semantic extraction completeness.\nThis is not a measure of rendering fidelity or proof of exhaustive recall.",
+        "description": "Producer-declared effect of a finding on document coverage.\nThis is not a measure of rendering fidelity or proof of exhaustive recall.",
         "oneOf": [
           {
-            "description": "This finding does not invalidate semantic extraction coverage.",
+            "description": "This finding leaves both semantic and visible-content coverage intact.",
             "type": "string",
             "const": "none"
           },
@@ -3965,6 +4232,11 @@
             "description": "Semantic declarations, facts or coverage were rejected or incomplete.",
             "type": "string",
             "const": "semantic-coverage"
+          },
+          {
+            "description": "Visible source content was omitted from the returned document.\nSuch loss also makes semantic extraction incomplete.",
+            "type": "string",
+            "const": "content-coverage"
           }
         ]
       },
@@ -4454,6 +4726,207 @@
             "description": "An author's explicit semantic declaration on visible content.",
             "type": "string",
             "const": "declared"
+          }
+        ]
+      },
+      "EquationExpression": {
+        "description": "Self-contained equation box copied from the parser before it is freed.",
+        "type": "object",
+        "properties": {
+          "actualArgs": {
+            "description": "Parser recorded argument count.",
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0
+          },
+          "bottom": {
+            "description": "Decoration below the expression.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "children": {
+            "description": "Ordered children; matrix children retain parsed column order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/EquationExpression"
+            }
+          },
+          "expectedArgs": {
+            "description": "Grammar maximum argument count, or no fixed maximum when absent.\nThis can differ from the actual child count.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint",
+            "minimum": 0
+          },
+          "font": {
+            "description": "Parsed font selection.",
+            "$ref": "#/$defs/EquationFont"
+          },
+          "kind": {
+            "description": "Box role.",
+            "$ref": "#/$defs/EquationKind"
+          },
+          "left": {
+            "description": "Opening and closing fences.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "position": {
+            "description": "Positional operator.",
+            "$ref": "#/$defs/EquationPosition"
+          },
+          "right": {
+            "description": "Closing fence.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "size": {
+            "description": "Parsed font size, or the parser's default when absent.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "text": {
+            "description": "Atom spelling, when present.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "top": {
+            "description": "Decoration above the expression.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "font",
+          "position",
+          "actualArgs",
+          "children"
+        ]
+      },
+      "EquationFont": {
+        "description": "Parsed font selection for an equation box.",
+        "oneOf": [
+          {
+            "description": "Inherited/default font.",
+            "type": "string",
+            "const": "None"
+          },
+          {
+            "description": "Roman font.",
+            "type": "string",
+            "const": "Roman"
+          },
+          {
+            "description": "Bold font.",
+            "type": "string",
+            "const": "Bold"
+          },
+          {
+            "description": "Fat font.",
+            "type": "string",
+            "const": "Fat"
+          },
+          {
+            "description": "Italic font.",
+            "type": "string",
+            "const": "Italic"
+          }
+        ]
+      },
+      "EquationKind": {
+        "description": "Structural role of one parsed equation box.",
+        "oneOf": [
+          {
+            "description": "Number, variable, operator, or other text atom.",
+            "type": "string",
+            "const": "Text"
+          },
+          {
+            "description": "Positioned subexpression such as a fraction or script.",
+            "type": "string",
+            "const": "Subexpression"
+          },
+          {
+            "description": "Group or ordered expression list.",
+            "type": "string",
+            "const": "List"
+          },
+          {
+            "description": "Vertical pile of expression rows.",
+            "type": "string",
+            "const": "Pile"
+          },
+          {
+            "description": "Matrix whose parsed children are columns.",
+            "type": "string",
+            "const": "Matrix"
+          }
+        ]
+      },
+      "EquationPosition": {
+        "description": "Operator relating children of a parsed subexpression.",
+        "oneOf": [
+          {
+            "description": "No positional operator.",
+            "type": "string",
+            "const": "None"
+          },
+          {
+            "description": "Superscript.",
+            "type": "string",
+            "const": "Superscript"
+          },
+          {
+            "description": "Subscript and superscript.",
+            "type": "string",
+            "const": "SubscriptSuperscript"
+          },
+          {
+            "description": "Subscript.",
+            "type": "string",
+            "const": "Subscript"
+          },
+          {
+            "description": "Upper limit.",
+            "type": "string",
+            "const": "To"
+          },
+          {
+            "description": "Lower limit.",
+            "type": "string",
+            "const": "From"
+          },
+          {
+            "description": "Lower and upper limits.",
+            "type": "string",
+            "const": "FromTo"
+          },
+          {
+            "description": "Fraction.",
+            "type": "string",
+            "const": "Over"
+          },
+          {
+            "description": "Square root.",
+            "type": "string",
+            "const": "Sqrt"
           }
         ]
       },
@@ -5528,6 +6001,7 @@
                 "type": "string"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "value"
@@ -5549,6 +6023,7 @@
                 "const": "strong"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "children"
@@ -5570,6 +6045,7 @@
                 "const": "emphasis"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "children"
@@ -5588,9 +6064,34 @@
                 "type": "string"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "value"
+            ]
+          },
+          {
+            "description": "Equation in its original prose position.",
+            "type": "object",
+            "properties": {
+              "expression": {
+                "description": "Parsed expression structure.",
+                "$ref": "#/$defs/EquationExpression"
+              },
+              "type": {
+                "type": "string",
+                "const": "equation"
+              },
+              "value": {
+                "description": "Shared readable projection of `expression`.",
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "type",
+              "value",
+              "expression"
             ]
           },
           {
@@ -5620,6 +6121,7 @@
                 "const": "link"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "target",
@@ -5657,6 +6159,7 @@
                 "const": "anchor"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "id"
@@ -5671,6 +6174,7 @@
                 "const": "line-break"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type"
             ]
@@ -6577,6 +7081,10 @@
           }
         ]
       },
+      "contentComplete": {
+        "description": "False when the source document is known to have lost visible content.",
+        "type": "boolean"
+      },
       "diagnostics": {
         "description": "Recoverable parser findings available to diagnostic-oriented transports.",
         "type": "array",
@@ -7100,10 +7608,10 @@
         ]
       },
       "DiagnosticImpact": {
-        "description": "Producer-declared effect of a finding on semantic extraction completeness.\nThis is not a measure of rendering fidelity or proof of exhaustive recall.",
+        "description": "Producer-declared effect of a finding on document coverage.\nThis is not a measure of rendering fidelity or proof of exhaustive recall.",
         "oneOf": [
           {
-            "description": "This finding does not invalidate semantic extraction coverage.",
+            "description": "This finding leaves both semantic and visible-content coverage intact.",
             "type": "string",
             "const": "none"
           },
@@ -7111,6 +7619,11 @@
             "description": "Semantic declarations, facts or coverage were rejected or incomplete.",
             "type": "string",
             "const": "semantic-coverage"
+          },
+          {
+            "description": "Visible source content was omitted from the returned document.\nSuch loss also makes semantic extraction incomplete.",
+            "type": "string",
+            "const": "content-coverage"
           }
         ]
       },
@@ -9276,6 +9789,17 @@
                 "description": "Whether the equation occupies its own display block.",
                 "type": "boolean"
               },
+              "expression": {
+                "description": "Parsed equation structure, when the source parser provides it.\n`value` must equal this structure's readable projection.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/EquationExpression"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
               "layout": {
                 "description": "Source-derived indentation and vertical spacing.",
                 "$ref": "#/$defs/LayoutHint"
@@ -9559,10 +10083,10 @@
         ]
       },
       "DiagnosticImpact": {
-        "description": "Producer-declared effect of a finding on semantic extraction completeness.\nThis is not a measure of rendering fidelity or proof of exhaustive recall.",
+        "description": "Producer-declared effect of a finding on document coverage.\nThis is not a measure of rendering fidelity or proof of exhaustive recall.",
         "oneOf": [
           {
-            "description": "This finding does not invalidate semantic extraction coverage.",
+            "description": "This finding leaves both semantic and visible-content coverage intact.",
             "type": "string",
             "const": "none"
           },
@@ -9570,6 +10094,11 @@
             "description": "Semantic declarations, facts or coverage were rejected or incomplete.",
             "type": "string",
             "const": "semantic-coverage"
+          },
+          {
+            "description": "Visible source content was omitted from the returned document.\nSuch loss also makes semantic extraction incomplete.",
+            "type": "string",
+            "const": "content-coverage"
           }
         ]
       },
@@ -10223,6 +10752,207 @@
           }
         ]
       },
+      "EquationExpression": {
+        "description": "Self-contained equation box copied from the parser before it is freed.",
+        "type": "object",
+        "properties": {
+          "actualArgs": {
+            "description": "Parser recorded argument count.",
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0
+          },
+          "bottom": {
+            "description": "Decoration below the expression.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "children": {
+            "description": "Ordered children; matrix children retain parsed column order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/EquationExpression"
+            }
+          },
+          "expectedArgs": {
+            "description": "Grammar maximum argument count, or no fixed maximum when absent.\nThis can differ from the actual child count.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint",
+            "minimum": 0
+          },
+          "font": {
+            "description": "Parsed font selection.",
+            "$ref": "#/$defs/EquationFont"
+          },
+          "kind": {
+            "description": "Box role.",
+            "$ref": "#/$defs/EquationKind"
+          },
+          "left": {
+            "description": "Opening and closing fences.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "position": {
+            "description": "Positional operator.",
+            "$ref": "#/$defs/EquationPosition"
+          },
+          "right": {
+            "description": "Closing fence.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "size": {
+            "description": "Parsed font size, or the parser's default when absent.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "text": {
+            "description": "Atom spelling, when present.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "top": {
+            "description": "Decoration above the expression.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "font",
+          "position",
+          "actualArgs",
+          "children"
+        ]
+      },
+      "EquationFont": {
+        "description": "Parsed font selection for an equation box.",
+        "oneOf": [
+          {
+            "description": "Inherited/default font.",
+            "type": "string",
+            "const": "None"
+          },
+          {
+            "description": "Roman font.",
+            "type": "string",
+            "const": "Roman"
+          },
+          {
+            "description": "Bold font.",
+            "type": "string",
+            "const": "Bold"
+          },
+          {
+            "description": "Fat font.",
+            "type": "string",
+            "const": "Fat"
+          },
+          {
+            "description": "Italic font.",
+            "type": "string",
+            "const": "Italic"
+          }
+        ]
+      },
+      "EquationKind": {
+        "description": "Structural role of one parsed equation box.",
+        "oneOf": [
+          {
+            "description": "Number, variable, operator, or other text atom.",
+            "type": "string",
+            "const": "Text"
+          },
+          {
+            "description": "Positioned subexpression such as a fraction or script.",
+            "type": "string",
+            "const": "Subexpression"
+          },
+          {
+            "description": "Group or ordered expression list.",
+            "type": "string",
+            "const": "List"
+          },
+          {
+            "description": "Vertical pile of expression rows.",
+            "type": "string",
+            "const": "Pile"
+          },
+          {
+            "description": "Matrix whose parsed children are columns.",
+            "type": "string",
+            "const": "Matrix"
+          }
+        ]
+      },
+      "EquationPosition": {
+        "description": "Operator relating children of a parsed subexpression.",
+        "oneOf": [
+          {
+            "description": "No positional operator.",
+            "type": "string",
+            "const": "None"
+          },
+          {
+            "description": "Superscript.",
+            "type": "string",
+            "const": "Superscript"
+          },
+          {
+            "description": "Subscript and superscript.",
+            "type": "string",
+            "const": "SubscriptSuperscript"
+          },
+          {
+            "description": "Subscript.",
+            "type": "string",
+            "const": "Subscript"
+          },
+          {
+            "description": "Upper limit.",
+            "type": "string",
+            "const": "To"
+          },
+          {
+            "description": "Lower limit.",
+            "type": "string",
+            "const": "From"
+          },
+          {
+            "description": "Lower and upper limits.",
+            "type": "string",
+            "const": "FromTo"
+          },
+          {
+            "description": "Fraction.",
+            "type": "string",
+            "const": "Over"
+          },
+          {
+            "description": "Square root.",
+            "type": "string",
+            "const": "Sqrt"
+          }
+        ]
+      },
       "FragmentAlias": {
         "description": "Exact source-authored fragment spelling for one local navigation target.\n\nA fragment alias is not a [`NodeId`]: formats such as mdoc deliberately\npermit stable external destinations containing uppercase letters or\npunctuation. Producers retain that spelling here while assigning the\ntarget a separate normalized internal identity. Shared validation rejects\nempty, whitespace-containing, and control-containing aliases.",
         "type": "string"
@@ -10271,6 +11001,7 @@
                 "type": "string"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "value"
@@ -10292,6 +11023,7 @@
                 "const": "strong"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "children"
@@ -10313,6 +11045,7 @@
                 "const": "emphasis"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "children"
@@ -10331,9 +11064,34 @@
                 "type": "string"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "value"
+            ]
+          },
+          {
+            "description": "Equation in its original prose position.",
+            "type": "object",
+            "properties": {
+              "expression": {
+                "description": "Parsed expression structure.",
+                "$ref": "#/$defs/EquationExpression"
+              },
+              "type": {
+                "type": "string",
+                "const": "equation"
+              },
+              "value": {
+                "description": "Shared readable projection of `expression`.",
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "type",
+              "value",
+              "expression"
             ]
           },
           {
@@ -10363,6 +11121,7 @@
                 "const": "link"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "target",
@@ -10400,6 +11159,7 @@
                 "const": "anchor"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "id"
@@ -10414,6 +11174,7 @@
                 "const": "line-break"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type"
             ]
@@ -12086,6 +12847,7 @@
         "$ref": "#/$defs/ResolvedDocumentScope"
       }
     },
+    "additionalProperties": false,
     "required": [
       "schema",
       "scope",
@@ -12314,6 +13076,17 @@
               "display": {
                 "description": "Whether the equation occupies its own display block.",
                 "type": "boolean"
+              },
+              "expression": {
+                "description": "Parsed equation structure, when the source parser provides it.\n`value` must equal this structure's readable projection.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/EquationExpression"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               },
               "layout": {
                 "description": "Source-derived indentation and vertical spacing.",
@@ -12694,10 +13467,10 @@
         ]
       },
       "DiagnosticImpact": {
-        "description": "Producer-declared effect of a finding on semantic extraction completeness.\nThis is not a measure of rendering fidelity or proof of exhaustive recall.",
+        "description": "Producer-declared effect of a finding on document coverage.\nThis is not a measure of rendering fidelity or proof of exhaustive recall.",
         "oneOf": [
           {
-            "description": "This finding does not invalidate semantic extraction coverage.",
+            "description": "This finding leaves both semantic and visible-content coverage intact.",
             "type": "string",
             "const": "none"
           },
@@ -12705,6 +13478,11 @@
             "description": "Semantic declarations, facts or coverage were rejected or incomplete.",
             "type": "string",
             "const": "semantic-coverage"
+          },
+          {
+            "description": "Visible source content was omitted from the returned document.\nSuch loss also makes semantic extraction incomplete.",
+            "type": "string",
+            "const": "content-coverage"
           }
         ]
       },
@@ -13356,6 +14134,207 @@
             "description": "An author's explicit semantic declaration on visible content.",
             "type": "string",
             "const": "declared"
+          }
+        ]
+      },
+      "EquationExpression": {
+        "description": "Self-contained equation box copied from the parser before it is freed.",
+        "type": "object",
+        "properties": {
+          "actualArgs": {
+            "description": "Parser recorded argument count.",
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0
+          },
+          "bottom": {
+            "description": "Decoration below the expression.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "children": {
+            "description": "Ordered children; matrix children retain parsed column order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/EquationExpression"
+            }
+          },
+          "expectedArgs": {
+            "description": "Grammar maximum argument count, or no fixed maximum when absent.\nThis can differ from the actual child count.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint",
+            "minimum": 0
+          },
+          "font": {
+            "description": "Parsed font selection.",
+            "$ref": "#/$defs/EquationFont"
+          },
+          "kind": {
+            "description": "Box role.",
+            "$ref": "#/$defs/EquationKind"
+          },
+          "left": {
+            "description": "Opening and closing fences.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "position": {
+            "description": "Positional operator.",
+            "$ref": "#/$defs/EquationPosition"
+          },
+          "right": {
+            "description": "Closing fence.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "size": {
+            "description": "Parsed font size, or the parser's default when absent.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "text": {
+            "description": "Atom spelling, when present.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "top": {
+            "description": "Decoration above the expression.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "font",
+          "position",
+          "actualArgs",
+          "children"
+        ]
+      },
+      "EquationFont": {
+        "description": "Parsed font selection for an equation box.",
+        "oneOf": [
+          {
+            "description": "Inherited/default font.",
+            "type": "string",
+            "const": "None"
+          },
+          {
+            "description": "Roman font.",
+            "type": "string",
+            "const": "Roman"
+          },
+          {
+            "description": "Bold font.",
+            "type": "string",
+            "const": "Bold"
+          },
+          {
+            "description": "Fat font.",
+            "type": "string",
+            "const": "Fat"
+          },
+          {
+            "description": "Italic font.",
+            "type": "string",
+            "const": "Italic"
+          }
+        ]
+      },
+      "EquationKind": {
+        "description": "Structural role of one parsed equation box.",
+        "oneOf": [
+          {
+            "description": "Number, variable, operator, or other text atom.",
+            "type": "string",
+            "const": "Text"
+          },
+          {
+            "description": "Positioned subexpression such as a fraction or script.",
+            "type": "string",
+            "const": "Subexpression"
+          },
+          {
+            "description": "Group or ordered expression list.",
+            "type": "string",
+            "const": "List"
+          },
+          {
+            "description": "Vertical pile of expression rows.",
+            "type": "string",
+            "const": "Pile"
+          },
+          {
+            "description": "Matrix whose parsed children are columns.",
+            "type": "string",
+            "const": "Matrix"
+          }
+        ]
+      },
+      "EquationPosition": {
+        "description": "Operator relating children of a parsed subexpression.",
+        "oneOf": [
+          {
+            "description": "No positional operator.",
+            "type": "string",
+            "const": "None"
+          },
+          {
+            "description": "Superscript.",
+            "type": "string",
+            "const": "Superscript"
+          },
+          {
+            "description": "Subscript and superscript.",
+            "type": "string",
+            "const": "SubscriptSuperscript"
+          },
+          {
+            "description": "Subscript.",
+            "type": "string",
+            "const": "Subscript"
+          },
+          {
+            "description": "Upper limit.",
+            "type": "string",
+            "const": "To"
+          },
+          {
+            "description": "Lower limit.",
+            "type": "string",
+            "const": "From"
+          },
+          {
+            "description": "Lower and upper limits.",
+            "type": "string",
+            "const": "FromTo"
+          },
+          {
+            "description": "Fraction.",
+            "type": "string",
+            "const": "Over"
+          },
+          {
+            "description": "Square root.",
+            "type": "string",
+            "const": "Sqrt"
           }
         ]
       },
@@ -14420,6 +15399,7 @@
                 "type": "string"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "value"
@@ -14441,6 +15421,7 @@
                 "const": "strong"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "children"
@@ -14462,6 +15443,7 @@
                 "const": "emphasis"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "children"
@@ -14480,9 +15462,34 @@
                 "type": "string"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "value"
+            ]
+          },
+          {
+            "description": "Equation in its original prose position.",
+            "type": "object",
+            "properties": {
+              "expression": {
+                "description": "Parsed expression structure.",
+                "$ref": "#/$defs/EquationExpression"
+              },
+              "type": {
+                "type": "string",
+                "const": "equation"
+              },
+              "value": {
+                "description": "Shared readable projection of `expression`.",
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "type",
+              "value",
+              "expression"
             ]
           },
           {
@@ -14512,6 +15519,7 @@
                 "const": "link"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "target",
@@ -14549,6 +15557,7 @@
                 "const": "anchor"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type",
               "id"
@@ -14563,6 +15572,7 @@
                 "const": "line-break"
               }
             },
+            "additionalProperties": false,
             "required": [
               "type"
             ]
@@ -15500,6 +16510,10 @@
         "description": "Globally paginated search over a resolved document scope.",
         "type": "object",
         "properties": {
+          "contentComplete": {
+            "description": "False when any readable document in the searched scope lost content,\nincluding documents with no hits on this page.",
+            "type": "boolean"
+          },
           "documents": {
             "description": "Non-empty document groups in scope order.",
             "type": "array",
@@ -15543,6 +16557,7 @@
             "type": "boolean"
           }
         },
+        "additionalProperties": false,
         "required": [
           "query",
           "total",
@@ -15597,6 +16612,10 @@
           "address": {
             "description": "Stable logical document identity.",
             "$ref": "#/$defs/DocumentAddress"
+          },
+          "contentComplete": {
+            "description": "False when this source document is known to have lost visible content.",
+            "type": "boolean"
           },
           "counts": {
             "description": "Local contributions to each global evidence category.",
@@ -15725,12 +16744,23 @@
             "description": "Stable logical document identity.",
             "$ref": "#/$defs/DocumentAddress"
           },
+          "contentComplete": {
+            "description": "False when this document is known to have lost visible content.",
+            "type": "boolean"
+          },
           "depth": {
             "description": "Distance retained from the resolved scope.",
             "type": "integer",
             "format": "uint16",
             "maximum": 65535,
             "minimum": 0
+          },
+          "diagnostics": {
+            "description": "Recoverable producer and shared invariant findings for this document.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/Diagnostic"
+            }
           },
           "matches": {
             "description": "Matching line groups retained from the globally paginated result set.\nTheir ordinals are global across all documents in the scope.",
@@ -15744,6 +16774,7 @@
             "$ref": "#/$defs/SearchRender"
           }
         },
+        "additionalProperties": false,
         "required": [
           "address",
           "depth",
@@ -16812,6 +17843,17 @@
     "description": "Complete, paginatable search result returned to agents and scripts.",
     "type": "object",
     "properties": {
+      "contentComplete": {
+        "description": "False when the source document is known to have lost visible content.",
+        "type": "boolean"
+      },
+      "diagnostics": {
+        "description": "Source document findings retained independently of result pagination.",
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/Diagnostic"
+        }
+      },
       "label": {
         "description": "Human-readable selected-document label.",
         "type": "string"
@@ -16889,6 +17931,7 @@
         "type": "boolean"
       }
     },
+    "additionalProperties": false,
     "required": [
       "schema",
       "label",
@@ -16901,6 +17944,92 @@
       "matches"
     ],
     "$defs": {
+      "Diagnostic": {
+        "description": "Recoverable parser or IR validation finding attached to the document.",
+        "type": "object",
+        "properties": {
+          "code": {
+            "description": "Stable machine-readable code, when the producer defines one.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "impact": {
+            "description": "Explicit effect on semantic extraction, independent of severity or code.\nRequired on the wire: missing producer coverage must never mean complete.",
+            "$ref": "#/$defs/DiagnosticImpact"
+          },
+          "level": {
+            "description": "Severity of the finding.",
+            "$ref": "#/$defs/DiagnosticLevel"
+          },
+          "message": {
+            "description": "Concise human-readable explanation.",
+            "type": "string"
+          },
+          "source": {
+            "description": "Original source location associated with the finding.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SourceSpan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "level",
+          "impact",
+          "message"
+        ]
+      },
+      "DiagnosticImpact": {
+        "description": "Producer-declared effect of a finding on document coverage.\nThis is not a measure of rendering fidelity or proof of exhaustive recall.",
+        "oneOf": [
+          {
+            "description": "This finding leaves both semantic and visible-content coverage intact.",
+            "type": "string",
+            "const": "none"
+          },
+          {
+            "description": "Semantic declarations, facts or coverage were rejected or incomplete.",
+            "type": "string",
+            "const": "semantic-coverage"
+          },
+          {
+            "description": "Visible source content was omitted from the returned document.\nSuch loss also makes semantic extraction incomplete.",
+            "type": "string",
+            "const": "content-coverage"
+          }
+        ]
+      },
+      "DiagnosticLevel": {
+        "description": "Severity reported by the parser without turning useful output into failure.",
+        "oneOf": [
+          {
+            "description": "Non-semantic source style issue.",
+            "type": "string",
+            "const": "style"
+          },
+          {
+            "description": "Recoverable source defect or portability concern.",
+            "type": "string",
+            "const": "warning"
+          },
+          {
+            "description": "Invalid source that left partial output available.",
+            "type": "string",
+            "const": "error"
+          },
+          {
+            "description": "Valid construct that the active parser cannot represent fully.",
+            "type": "string",
+            "const": "unsupported"
+          }
+        ]
+      },
       "DocumentMeta": {
         "description": "Metadata normalized from TH, Dt, and the validated libmandoc result.",
         "type": "object",

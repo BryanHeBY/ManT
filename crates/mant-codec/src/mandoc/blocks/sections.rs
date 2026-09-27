@@ -144,23 +144,17 @@ fn lower_section(
     }
 }
 
-/// Mirror CVS `mdoc_state.c::state_sh()` at the syntax-tree boundary.
-///
-/// Native section semantics are assigned only when the `.Sh` head contains
-/// exactly one direct text child.  A styled or otherwise structured heading
-/// that happens to render as `AUTHORS` or `SYNOPSIS` remains `SEC_CUSTOM` and
-/// must not activate renderer state associated with the standard section.
+/// Consume the parser's normalized `sec` rather than reconstructing it from
+/// the authored heading. CVS `mdoc_state.c::state_sh()` already decided when
+/// a direct text head names a standard section.
 fn native_mdoc_section_context(node: &Node) -> crate::mandoc::source_context::MdocSectionContext {
-    let head = first_part_children(node, NodeKind::Head);
-    let [title] = head else {
-        return crate::mandoc::source_context::MdocSectionContext::Other;
-    };
-    if title.kind != NodeKind::Text {
-        return crate::mandoc::source_context::MdocSectionContext::Other;
-    }
-    match title.text.as_deref() {
-        Some("SYNOPSIS") => crate::mandoc::source_context::MdocSectionContext::Synopsis,
-        Some("AUTHORS") => crate::mandoc::source_context::MdocSectionContext::Authors,
+    match node.section {
+        libmandoc_rs::NormalizedSection::Synopsis => {
+            crate::mandoc::source_context::MdocSectionContext::Synopsis
+        }
+        libmandoc_rs::NormalizedSection::Authors => {
+            crate::mandoc::source_context::MdocSectionContext::Authors
+        }
         _ => crate::mandoc::source_context::MdocSectionContext::Other,
     }
 }

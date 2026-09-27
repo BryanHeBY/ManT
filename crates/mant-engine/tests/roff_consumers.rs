@@ -342,7 +342,10 @@ fn real_groff_font_escape_definition_preserves_all_four_literal_terms() {
             self.0 |= item
                 .terms
                 .iter()
-                .any(|term| common::inline_text(term) == r"\fB, \fI, \fR, \fP");
+                // CVS term.c::term_word and html.c::print_encode keep the
+                // authored \~ after each comma nonbreaking. The exact
+                // minimal BR input was checked against the fixed oracle.
+                .any(|term| common::inline_text(term) == "\\fB,\u{a0}\\fI,\u{a0}\\fR,\u{a0}\\fP");
             visit::walk_definition_item(self, item);
         }
     }

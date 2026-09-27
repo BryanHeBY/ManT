@@ -97,7 +97,7 @@ fn empty_word_rows(node: &Node) -> usize {
             continue;
         }
         if node.kind == NodeKind::Text {
-            let text = node.text.as_deref().unwrap_or_default();
+            let text = node.decoder_text().unwrap_or_default();
             if text.is_empty() && empty_text_is_row {
                 blanks = blanks.saturating_add(1);
             } else {

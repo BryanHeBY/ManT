@@ -133,6 +133,14 @@ fn search_with_matcher(
             .document
             .as_ref()
             .map(|document| document.meta.clone()),
+        diagnostics: query
+            .document
+            .as_ref()
+            .map_or_else(Vec::new, |document| document.diagnostics.clone()),
+        content_complete: query
+            .document
+            .as_ref()
+            .is_none_or(|document| mant_ir::content_complete(&document.diagnostics)),
         query: request.clone(),
         render: SearchRender {
             schema: MarkdownSchema::V1,

@@ -117,13 +117,13 @@ pub(super) fn entry_signature(
 /// Linked and unlinked terms share exactly the same name/form grammar.
 pub(super) fn entry_term_text(inline: &Inline) -> Option<&str> {
     match inline {
-        Inline::Code { value } => Some(value),
+        Inline::Code { value } | Inline::Equation { value, .. } => Some(value),
         Inline::Link {
             target: LinkTarget::Document { .. } | LinkTarget::Manual { .. },
             children,
             ..
         } => match children.as_slice() {
-            [Inline::Code { value }] => Some(value),
+            [Inline::Code { value } | Inline::Equation { value, .. }] => Some(value),
             _ => None,
         },
         _ => None,

@@ -53,6 +53,7 @@ fn remove_inlines(inlines: &mut Vec<Inline>) {
             | Inline::Link { children, .. } => remove_inlines(children),
             Inline::Text { .. }
             | Inline::Code { .. }
+            | Inline::Equation { .. }
             | Inline::Anchor { .. }
             | Inline::LineBreak => {}
         }

@@ -23,8 +23,17 @@ pub(super) struct CTableRuleCell {
 }
 
 #[repr(C)]
+pub(super) struct CEquationBox {
+    pub(super) _private: [u8; 0],
+}
+
+#[repr(C)]
 pub(super) struct CNodeView {
     pub(super) kind: i32,
+    pub(super) section: i32,
+    pub(super) end_kind: i32,
+    pub(super) end_body: *const CNode,
+    pub(super) reference_quotes_title: i32,
     pub(super) macro_name: *const c_char,
     pub(super) text: *const c_char,
     pub(super) tag: *const c_char,
@@ -45,7 +54,7 @@ pub(super) struct CNodeView {
     pub(super) width: *const c_char,
     pub(super) enclosure_open: *const c_char,
     pub(super) enclosure_close: *const c_char,
-    pub(super) equation: *const c_char,
+    pub(super) equation: *const CEquationBox,
     pub(super) table_cells: *const CTableCell,
     pub(super) table_rule_cells: *const CTableRuleCell,
     pub(super) child: *const CNode,
@@ -62,6 +71,7 @@ pub(super) struct CTableCellView {
     pub(super) column_span: u32,
     pub(super) row_span: u32,
     pub(super) alignment: i32,
+    pub(super) font: i32,
     pub(super) next: *const CTableCell,
 }
 
@@ -69,6 +79,23 @@ pub(super) struct CTableCellView {
 pub(super) struct CTableRuleCellView {
     pub(super) kind: i32,
     pub(super) next: *const CTableRuleCell,
+}
+
+#[repr(C)]
+pub(super) struct CEquationBoxView {
+    pub(super) kind: i32,
+    pub(super) font: i32,
+    pub(super) position: i32,
+    pub(super) size: i32,
+    pub(super) expected_args: usize,
+    pub(super) actual_args: usize,
+    pub(super) text: *const c_char,
+    pub(super) left: *const c_char,
+    pub(super) right: *const c_char,
+    pub(super) top: *const c_char,
+    pub(super) bottom: *const c_char,
+    pub(super) first: *const CEquationBox,
+    pub(super) next: *const CEquationBox,
 }
 
 #[repr(C)]
@@ -179,7 +206,6 @@ unsafe extern "C" {
     pub(super) fn mant_mandoc_document_date(document: *const CDocument) -> *const c_char;
     pub(super) fn mant_mandoc_document_alias_target(document: *const CDocument) -> *const c_char;
     pub(super) fn mant_mandoc_document_has_body(document: *const CDocument) -> i32;
-    pub(super) fn mant_mandoc_document_equation_truncated(document: *const CDocument) -> i32;
     pub(super) fn mant_mandoc_is_native_roff_request(name: *const c_char, length: usize) -> i32;
     #[cfg(test)]
     pub(super) fn mant_mandoc_node_view_size() -> usize;
@@ -187,6 +213,8 @@ unsafe extern "C" {
     pub(super) fn mant_mandoc_table_cell_view_size() -> usize;
     #[cfg(test)]
     pub(super) fn mant_mandoc_table_rule_cell_view_size() -> usize;
+    #[cfg(test)]
+    pub(super) fn mant_mandoc_eqn_box_view_size() -> usize;
     pub(super) fn mant_mandoc_document_root(document: *const CDocument) -> *const CNode;
     pub(super) fn mant_mandoc_node_snapshot(
         document: *mut CDocument,
@@ -202,6 +230,11 @@ unsafe extern "C" {
         document: *const CDocument,
         cell: *const CTableRuleCell,
         view: *mut CTableRuleCellView,
+    ) -> i32;
+    pub(super) fn mant_mandoc_eqn_box_snapshot(
+        document: *const CDocument,
+        box_pointer: *const CEquationBox,
+        view: *mut CEquationBoxView,
     ) -> i32;
     #[cfg(feature = "render")]
     pub(super) fn mant_mandoc_document_output(document: *const CDocument) -> *const u8;

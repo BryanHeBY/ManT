@@ -539,9 +539,14 @@ Escape.
         children: Vec<Node>,
     ) -> Node {
         Node {
+            id: 0,
             kind,
+            section: libmandoc_rs::NormalizedSection::None,
+            scope_end: None,
+            reference_quotes_title: false,
             macro_name: macro_name.map(ToOwned::to_owned),
             text: text.map(ToOwned::to_owned),
+            native_text: None,
             tag: tag.map(ToOwned::to_owned),
             line,
             column: 1,

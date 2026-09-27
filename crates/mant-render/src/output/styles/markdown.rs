@@ -36,6 +36,20 @@ fn mark(nodes: &[Inline], cursor: &mut usize, spans: &[Span], strong: bool) -> V
     let mut output = Vec::new();
     for node in nodes {
         match node {
+            Inline::Equation { value, .. } => {
+                let end = cursor.saturating_add(value.chars().count());
+                let matched = spans
+                    .iter()
+                    .any(|span| span.matched && span.chars.start < end && *cursor < span.chars.end);
+                output.push(if matched && !strong {
+                    Inline::Strong {
+                        children: vec![node.clone()],
+                    }
+                } else {
+                    node.clone()
+                });
+                *cursor = end;
+            }
             Inline::Text { value } | Inline::Code { value } => {
                 pieces(
                     value,

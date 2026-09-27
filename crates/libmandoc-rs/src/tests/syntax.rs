@@ -28,6 +28,43 @@ fn upstream_version_is_pinned() {
 }
 
 #[test]
+fn normalized_sections_reference_quote_and_cross_close_survive_owned_transfer() {
+    // CVS mdoc_state.c::state_sh, mdoc_validate.c::post_rs, and
+    // mdoc.c::mdoc_endbody_alloc supply these facts. Both exact inputs were
+    // run through the fixed oracle before these assertions were added.
+    let normalized = Parser::default()
+        .parse_bytes("normalized-scope.1", b".Dd September 27, 2026\n.Dt NORMALIZED-SCOPE 1\n.Os\n.Sh SYNOPSIS\n.Nm normalized-scope\n.Sh AUTHORS\n.An -split\n.An Ada\n.An Babbage\n.Sh SEE ALSO\n.Rs\n.%A Ada\n.%T Title\n.%J Journal\n.Re\n")
+        .expect("parse normalized reference");
+    let sections = normalized
+        .document
+        .root
+        .children
+        .iter()
+        .filter(|node| node.macro_name.as_deref() == Some("Sh"))
+        .map(|node| node.section)
+        .collect::<Vec<_>>();
+    assert!(sections.windows(3).any(|part| part
+        == [
+            crate::NormalizedSection::Synopsis,
+            crate::NormalizedSection::Authors,
+            crate::NormalizedSection::SeeAlso,
+        ]));
+    let title = find_macro(&normalized.document.root, "%T").expect("bibliography title");
+    assert!(title.reference_quotes_title);
+
+    let crossed = Parser::default()
+        .parse_bytes("cross-close.1", b".Dd September 27, 2026\n.Dt CLOSE 1\n.Os\n.Sh DESCRIPTION\n.Ao\n.Bo\ninside\n.Ac\nafter-angle\n.Bc\ntail\n")
+        .expect("parse cross close");
+    let marker = find_node(&crossed.document.root, &|node| node.scope_end.is_some())
+        .expect("explicit close marker");
+    let end = marker.scope_end.expect("body relation");
+    let body = find_node(&crossed.document.root, &|node| node.id == end.body_id)
+        .expect("original body is owned");
+    assert_eq!(body.kind, NodeKind::Body);
+    assert_eq!(body.macro_name.as_deref(), marker.macro_name.as_deref());
+}
+
+#[test]
 fn parser_recognizes_the_modern_man_reference_macro() {
     let report = Parser::default()
         .parse_bytes(
@@ -255,6 +292,16 @@ fn public_text_normalizes_native_layout_sentinels() {
     collect_visible_text(&report.document.root, &mut visible);
 
     assert!(visible.join(" ").contains("well-known read-only thing"));
+    let hyphenated = find_node(&report.document.root, &|node| {
+        node.text.as_deref() == Some("well-known read-only thing")
+    })
+    .expect("hyphenated text node");
+    // CVS roff.c::roff_parseln() marks breakable hyphens with ASCII_HYPH.
+    // The visible AST text stays printable; the decoder spelling retains it.
+    assert_eq!(
+        hyphenated.decoder_text(),
+        Some("well\u{1c}known read\u{1c}only thing")
+    );
     assert!(
         find_node(&report.document.root, &|node| {
             node.text.as_deref().is_some_and(|text| {

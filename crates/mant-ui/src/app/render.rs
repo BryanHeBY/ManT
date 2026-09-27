@@ -382,6 +382,8 @@ impl App {
                 "{} ",
                 sanitize_terminal_text(notice.lines().next().unwrap_or_default())
             )
+        } else if !self.session.document.content_complete() {
+            "Warning: source content is incomplete ".into()
         } else if !self.search.query.is_empty() && !self.search.scope_matches.is_empty() {
             format!(
                 "Find “{}” · {} matches ",

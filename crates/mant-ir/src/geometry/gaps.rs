@@ -35,7 +35,7 @@ impl<'ir> Visit<'ir> for VisibleText {
             return;
         }
         match inline {
-            Inline::Text { value } | Inline::Code { value } => {
+            Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. } => {
                 self.0 = !value.trim().is_empty();
             }
             Inline::Strong { .. } | Inline::Emphasis { .. } | Inline::Link { .. } => {

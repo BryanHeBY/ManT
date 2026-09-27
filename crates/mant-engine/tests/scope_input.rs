@@ -115,6 +115,49 @@ fn pure_collection_queries_reuse_exact_borrowed_ir_and_global_order() {
 }
 
 #[test]
+fn scoped_search_keeps_source_content_loss_on_a_later_global_page() {
+    let (graph, mut documents) = snapshot();
+    documents[1]
+        .document
+        .as_mut()
+        .unwrap()
+        .diagnostics
+        .push(mant_ir::Diagnostic {
+            level: mant_ir::DiagnosticLevel::Warning,
+            impact: mant_ir::DiagnosticImpact::ContentCoverage,
+            code: Some("manual.syntax-depth-truncated".into()),
+            message: "owned tree was truncated".into(),
+            source: None,
+        });
+    let query = SearchQuery {
+        pattern: "needle".into(),
+        syntax: SearchSyntax::Literal,
+        case: SearchCase::Sensitive,
+        scope: SearchScope::Visible,
+        word: false,
+        context_lines: 0,
+        limit: 1,
+        offset: 1,
+    };
+    let page = search_scope(QueryScopeView::new(&graph, &documents).unwrap(), &query).unwrap();
+    assert_eq!(page.documents.len(), 1);
+    assert!(!page.content_complete);
+    assert!(!page.documents[0].content_complete);
+    assert_eq!(page.documents[0].diagnostics.len(), 1);
+    let restored: mant_protocol::ScopeSearch =
+        serde_json::from_str(&serde_json::to_string(&page).unwrap()).unwrap();
+    assert!(!restored.documents[0].content_complete);
+    let first_page = search_scope(
+        QueryScopeView::new(&graph, &documents).unwrap(),
+        &SearchQuery { offset: 0, ..query },
+    )
+    .unwrap();
+    assert_eq!(first_page.documents[0].address, address("a"));
+    assert!(first_page.documents[0].content_complete);
+    assert!(!first_page.content_complete);
+}
+
+#[test]
 fn mismatched_or_reordered_sets_cannot_silently_zip() {
     let (mut graph, mut documents) = snapshot();
     assert_eq!(

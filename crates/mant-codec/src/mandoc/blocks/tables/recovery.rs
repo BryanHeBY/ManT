@@ -196,7 +196,7 @@ pub(super) fn lower_table_cell(
     }
     if cell.text.as_deref().is_some_and(|text| !text.is_empty()) {
         return Some(lower_table_cell_text(
-            cell.text.as_deref().unwrap_or_default(),
+            cell.decoder_text().unwrap_or_default(),
             node.line,
             context,
             formatter,

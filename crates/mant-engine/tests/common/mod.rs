@@ -361,7 +361,9 @@ pub fn assert_document_has_no_source_markup(name: &str, document: &Document) {
     for block in document_blocks(document) {
         visit_block_inlines(block, &mut |inline| {
             let value = match inline {
-                Inline::Text { value } | Inline::Code { value } => value,
+                Inline::Text { value }
+                | Inline::Code { value }
+                | Inline::Equation { value, .. } => value,
                 Inline::Strong { .. }
                 | Inline::Emphasis { .. }
                 | Inline::Link { .. }
@@ -515,9 +517,11 @@ pub fn contains_strong(children: &[Inline], expected: &str) -> bool {
         Inline::Emphasis { children } | Inline::Link { children, .. } => {
             contains_strong(children, expected)
         }
-        Inline::Text { .. } | Inline::Code { .. } | Inline::Anchor { .. } | Inline::LineBreak => {
-            false
-        }
+        Inline::Text { .. }
+        | Inline::Code { .. }
+        | Inline::Equation { .. }
+        | Inline::Anchor { .. }
+        | Inline::LineBreak => false,
     })
 }
 
@@ -527,9 +531,11 @@ pub fn contains_emphasis(children: &[Inline], expected: &str) -> bool {
         Inline::Strong { children } | Inline::Link { children, .. } => {
             contains_emphasis(children, expected)
         }
-        Inline::Text { .. } | Inline::Code { .. } | Inline::Anchor { .. } | Inline::LineBreak => {
-            false
-        }
+        Inline::Text { .. }
+        | Inline::Code { .. }
+        | Inline::Equation { .. }
+        | Inline::Anchor { .. }
+        | Inline::LineBreak => false,
     })
 }
 
@@ -541,7 +547,10 @@ pub fn count_line_breaks(children: &[Inline]) -> usize {
             Inline::Strong { children }
             | Inline::Emphasis { children }
             | Inline::Link { children, .. } => count_line_breaks(children),
-            Inline::Text { .. } | Inline::Code { .. } | Inline::Anchor { .. } => 0,
+            Inline::Text { .. }
+            | Inline::Code { .. }
+            | Inline::Equation { .. }
+            | Inline::Anchor { .. } => 0,
         })
         .sum()
 }
@@ -554,7 +563,9 @@ pub fn inline_text(children: &[Inline]) -> String {
     children
         .iter()
         .map(|inline| match inline {
-            Inline::Text { value } | Inline::Code { value } => value.clone(),
+            Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. } => {
+                value.clone()
+            }
             Inline::Strong { children }
             | Inline::Emphasis { children }
             | Inline::Link { children, .. } => inline_text(children),
@@ -668,6 +679,7 @@ fn visit_inlines(children: &[Inline], visitor: &mut impl FnMut(&Inline)) {
             | Inline::Link { children, .. } => visit_inlines(children, visitor),
             Inline::Text { .. }
             | Inline::Code { .. }
+            | Inline::Equation { .. }
             | Inline::Anchor { .. }
             | Inline::LineBreak => {}
         }

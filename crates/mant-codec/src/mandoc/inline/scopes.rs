@@ -107,8 +107,19 @@ pub(super) fn append(builder: &mut InlineBuilder, node: &Node, name: Option<&str
             builder.append_text("— ");
             append_inline_nodes(builder, children, name);
         }
+        Some("%T") if node.reference_quotes_title => append_quoted_title(builder, children, name),
         _ => append_inline_nodes(builder, children, name),
     }
+}
+
+fn append_quoted_title(builder: &mut InlineBuilder, children: &[Node], name: Option<&str>) {
+    // post_rs() sets `norm.Rs.quote_T` after reordering fields. CVS
+    // mdoc_html.c::mdoc__x_pre/post encloses only the title field.
+    builder.append_text("“");
+    builder.tighten_next_boundary();
+    append_inline_nodes(builder, children, name);
+    builder.tighten_next_boundary();
+    builder.append_text("”");
 }
 
 /// Atomic syntax owns a semantic wrapper, but its visible components still

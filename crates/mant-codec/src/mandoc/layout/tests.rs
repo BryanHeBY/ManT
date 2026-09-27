@@ -8,9 +8,14 @@ use mant_ir::Block;
 
 fn node(kind: NodeKind, text: Option<&str>, offset: Option<&str>) -> Node {
     Node {
+        id: 0,
         kind,
+        section: libmandoc_rs::NormalizedSection::None,
+        scope_end: None,
+        reference_quotes_title: false,
         macro_name: None,
         text: text.map(ToOwned::to_owned),
+        native_text: None,
         tag: None,
         line: 0,
         column: 0,

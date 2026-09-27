@@ -349,7 +349,10 @@ pub(super) fn inline_anchor_ids(nodes: &[Inline], output: &mut Vec<String>) {
             Inline::Strong { children }
             | Inline::Emphasis { children }
             | Inline::Link { children, .. } => inline_anchor_ids(children, output),
-            Inline::Text { .. } | Inline::Code { .. } | Inline::LineBreak => {}
+            Inline::Text { .. }
+            | Inline::Code { .. }
+            | Inline::Equation { .. }
+            | Inline::LineBreak => {}
         }
     }
 }
@@ -361,7 +364,9 @@ pub(super) fn inline_anchor_owner_source(nodes: &[Inline]) -> Option<SourceSpan>
         Inline::Strong { children }
         | Inline::Emphasis { children }
         | Inline::Link { children, .. } => inline_anchor_owner_source(children),
-        Inline::Text { .. } | Inline::Code { .. } | Inline::LineBreak => None,
+        Inline::Text { .. } | Inline::Code { .. } | Inline::Equation { .. } | Inline::LineBreak => {
+            None
+        }
     })
 }
 
@@ -513,7 +518,9 @@ fn inlines_contain_anchor(nodes: &[Inline], target: &str) -> bool {
         Inline::Strong { children }
         | Inline::Emphasis { children }
         | Inline::Link { children, .. } => inlines_contain_anchor(children, target),
-        Inline::Text { .. } | Inline::Code { .. } | Inline::LineBreak => false,
+        Inline::Text { .. } | Inline::Code { .. } | Inline::Equation { .. } | Inline::LineBreak => {
+            false
+        }
     })
 }
 
@@ -575,9 +582,14 @@ mod tests {
         children: Vec<Node>,
     ) -> Node {
         Node {
+            id: 0,
             kind,
+            section: libmandoc_rs::NormalizedSection::None,
+            scope_end: None,
+            reference_quotes_title: false,
             macro_name: macro_name.map(ToOwned::to_owned),
             text: text.map(ToOwned::to_owned),
+            native_text: None,
             tag: tag.map(ToOwned::to_owned),
             line,
             column: 1,

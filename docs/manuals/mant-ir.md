@@ -63,7 +63,7 @@ The block union preserves structures that matter across renderers:
 | `list` | Bullet, ordered, or plain items containing blocks |
 | `definition-list` | Terms and block descriptions with item layout, source, and optional `entry` facts |
 | `table` | Rows and block-capable cells with spans and alignment |
-| `equation` | Normalized equation source |
+| `equation` | Parsed expression and its checked readable text projection when available; legacy producers may supply text alone |
 | `vertical-space` | Explicit source-requested blank terminal rows |
 | `thematic-break` | Semantic separator |
 | `unsupported` | Visible source preserved when no lossless semantic lowering exists |
@@ -87,6 +87,16 @@ are rejected. Canonical output omits empty layout but retains
 `ListItem.layout: ListItemLayout` has optional `spacingBeforeLines` with the same inheritance and closed-object rules. An explicit value precedes the entire marker and body, including a display or nested list as the first block; it is not extra spacing inside the body. This preserves per-item native paragraph distance without splitting a list or changing its entry paths.
 
 Lists contain block-capable items so nested lists and displays do not flatten into prose. Definition terms contain inline trees and descriptions contain blocks. Table cells likewise contain blocks even when a source parser currently produces a single paragraph.
+
+An equation expression retains the parser's box kind, font, position operator,
+fences, decorations, argument counts, and ordered children. Default font size
+and an unbounded grammar argument count are absent rather than exposed as
+parser-specific sentinel integers. Matrix children
+retain their columns and rows. `EquationExpression::readable_text()` supplies
+the shared, source-neutral text projection; a block's `value` is a compatibility
+cache and must agree with that projection whenever `expression` is present.
+Validation reports a content-coverage error for a mismatch. This projection is
+readable text, not a math layout or a second independently editable source.
 
 ### Consecutive declaration context
 
@@ -140,6 +150,7 @@ The inline union contains:
 | `strong` | Strong importance or source bold semantics |
 | `emphasis` | Emphasis or source italic semantics |
 | `code` | Literal inline text |
+| `equation` | Parsed equation in its original position between neighboring text |
 | `link` | Visible children plus a typed destination |
 | `anchor` | Zero-width document-local destination |
 | `line-break` | Explicit break inside one flow |
@@ -381,7 +392,7 @@ These addresses are valid within the actual loaded snapshot and rebuild after IR
 
 Diagnostics have `style`, `warning`, `error`, or `unsupported` severity, a required `impact`, an optional stable code, a message, and an optional source span. They describe recoverable source findings; fatal I/O, decompression, parsing, request, or transport failures remain ordinary errors outside the document.
 
-`DiagnosticImpact::SemanticCoverage` (`semantic-coverage`) records rejected or incomplete semantic declarations, facts or extraction coverage. `None` (`none`) means this finding does not invalidate that coverage. Producers set the effect explicitly; consumers use `semantics_complete` without matching source-specific codes or guessing from severity. Shared IR validation supplies the same effect for identity, binding and relationship failures. Custom producers must retain these findings after validation. An absent or unknown `impact` is rejected during deserialization, not silently treated as complete. This signal does not claim exhaustive discovery, rendering fidelity or complete behavioral knowledge.
+`DiagnosticImpact::SemanticCoverage` (`semantic-coverage`) records rejected or incomplete semantic declarations, facts or extraction coverage. `ContentCoverage` (`content-coverage`) records known loss of visible source content, including a rejected or truncated structural transfer. `None` (`none`) leaves both coverage signals intact. Producers set the effect explicitly; consumers use `semantics_complete` and `content_complete` without matching source-specific codes or guessing from severity. Known content loss also makes semantic coverage incomplete. Shared IR validation supplies the appropriate effect for structural and semantic failures. Custom producers must retain these findings after validation. An absent or unknown `impact` is rejected during deserialization, not silently treated as complete. These signals do not claim exhaustive discovery, rendering fidelity or complete behavioral knowledge.
 
 `Block::Unsupported` and an `unsupported` diagnostic are used when ManT can safely keep visible source but cannot represent its semantics. Consumers should display the retained content and may surface the diagnostic separately.
 

@@ -232,7 +232,11 @@ fn deeply_nested_equation_is_bounded_instead_of_overflowing_the_stack() {
         .expect("deeply nested equation parses");
 
     let node = find_kind(&report.document.root, NodeKind::Equation).expect("equation node");
-    let rendered = node.equation.as_deref().expect("equation text");
+    let rendered = node
+        .equation
+        .as_ref()
+        .expect("equation structure")
+        .readable_text();
     // The render stopped at the cap: the flattened text is far shorter than
     // the ~30k chars all 5000 `sqrt` levels would emit, proving it did not
     // recurse through every box (and so could not overflow the stack).

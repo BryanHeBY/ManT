@@ -267,6 +267,39 @@ fn structural_heading_breaks_survive_the_cli_sanitization_boundary() {
     assert!(!outline.contains('�'), "{outline:?}");
 }
 
+#[cfg(feature = "roff")]
+#[test]
+fn incomplete_native_equation_warns_on_stderr_without_changing_document_text() {
+    // The exact 260-deep equation was checked with the fixed -Ttree oracle;
+    // CVS eqn.h keeps descendants beyond the owned transfer limit.
+    let source = format!(
+        ".TH DEEP 1\n.SH BODY\n.EQ\n{}x{}\n.EN\n",
+        "sqrt { ".repeat(260),
+        " }".repeat(260),
+    );
+    let output = run_text_input(
+        &[
+            "--input",
+            "-",
+            "--input-format",
+            "roff",
+            "--format",
+            "text",
+            "--color",
+            "never",
+        ],
+        &source,
+    );
+    assert!(output.status.success(), "{:?}", output.stderr);
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        stderr.contains("source document content is incomplete"),
+        "{stderr:?}"
+    );
+    assert!(!stdout.contains("source document content is incomplete"));
+}
+
 #[test]
 fn default_file_stdin_and_request_outputs_are_text() {
     let path = std::env::temp_dir().join(format!("mant-text-default-{}.md", std::process::id()));

@@ -11,8 +11,9 @@ mod windows_root;
 use crate::{InputFormat, Node};
 #[cfg(test)]
 use raw::{
-    CNodeView, CTableCellView, CTableRuleCellView, mant_mandoc_node_view_size,
-    mant_mandoc_table_cell_view_size, mant_mandoc_table_rule_cell_view_size,
+    CEquationBoxView, CNodeView, CTableCellView, CTableRuleCellView, mant_mandoc_eqn_box_view_size,
+    mant_mandoc_node_view_size, mant_mandoc_table_cell_view_size,
+    mant_mandoc_table_rule_cell_view_size,
 };
 #[cfg(windows)]
 use raw::{CResolvedSource, CSourceResolver};
@@ -44,9 +45,9 @@ mod tests {
     use flate2::read::MultiGzDecoder;
 
     use super::{
-        CNodeView, CTableCellView, CTableRuleCellView, InputFormat, Node,
-        mant_mandoc_node_view_size, mant_mandoc_table_cell_view_size,
-        mant_mandoc_table_rule_cell_view_size, parse_buffer,
+        CEquationBoxView, CNodeView, CTableCellView, CTableRuleCellView, InputFormat, Node,
+        mant_mandoc_eqn_box_view_size, mant_mandoc_node_view_size,
+        mant_mandoc_table_cell_view_size, mant_mandoc_table_rule_cell_view_size, parse_buffer,
     };
 
     #[test]
@@ -62,6 +63,10 @@ mod tests {
         assert_eq!(
             unsafe { mant_mandoc_table_rule_cell_view_size() },
             std::mem::size_of::<CTableRuleCellView>()
+        );
+        assert_eq!(
+            unsafe { mant_mandoc_eqn_box_view_size() },
+            std::mem::size_of::<CEquationBoxView>()
         );
     }
 
@@ -163,7 +168,10 @@ emphasis
             + node.tag.as_ref().map_or(0, String::len)
             + node.offset.as_ref().map_or(0, String::len)
             + node.width.as_ref().map_or(0, String::len)
-            + node.equation.as_ref().map_or(0, String::len)
+            + node
+                .equation
+                .as_ref()
+                .map_or(0, |equation| equation.readable_text().len())
             + node.enclosure.as_ref().map_or(0, |enclosure| {
                 enclosure.opening.len() + enclosure.closing.as_ref().map_or(0, String::len)
             })

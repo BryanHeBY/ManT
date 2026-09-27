@@ -142,7 +142,7 @@ pub struct SearchRender {
 
 /// Complete, paginatable search result returned to agents and scripts.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[schemars(extend("$id" = "urn:mant:search:v0.12"))]
 pub struct QuerySearch {
     /// Exact response schema discriminator.
@@ -155,6 +155,15 @@ pub struct QuerySearch {
     /// Document metadata, when one was loaded.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub meta: Option<DocumentMeta>,
+    /// Source document findings retained independently of result pagination.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub diagnostics: Vec<mant_ir::Diagnostic>,
+    /// False when the source document is known to have lost visible content.
+    #[serde(
+        default = "default_content_complete",
+        skip_serializing_if = "content_is_complete"
+    )]
+    pub content_complete: bool,
     /// Normalized query applied by the engine.
     pub query: SearchQuery,
     /// Coordinate-space description shared by all matching line groups.
@@ -260,4 +269,13 @@ pub struct SearchContextLine {
     pub text: String,
     /// Whether this is one of the lines intersecting the match.
     pub matched: bool,
+}
+
+const fn default_content_complete() -> bool {
+    true
+}
+// Serde's `skip_serializing_if` predicate receives a reference.
+#[allow(clippy::trivially_copy_pass_by_ref)]
+const fn content_is_complete(value: &bool) -> bool {
+    *value
 }

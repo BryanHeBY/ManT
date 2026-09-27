@@ -34,7 +34,7 @@ fn append_literal_head(inlines: &[Inline], output: &mut String) -> bool {
                 output.push_str(value);
             }
             Inline::Strong { children } => output.push_str(&plain_text(children)),
-            Inline::Code { value } => output.push_str(value),
+            Inline::Code { value } | Inline::Equation { value, .. } => output.push_str(value),
             Inline::Link { children, .. } => {
                 if !append_literal_head(children, output) {
                     return false;

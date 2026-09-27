@@ -23,7 +23,9 @@ pub fn visit_inline_plain_text<'a>(nodes: &'a [Inline], mut emit: impl FnMut(&'a
     fn append<'a>(nodes: &'a [Inline], emit: &mut impl FnMut(&'a str)) {
         for node in nodes {
             match node {
-                Inline::Text { value } | Inline::Code { value } => emit(value),
+                Inline::Text { value }
+                | Inline::Code { value }
+                | Inline::Equation { value, .. } => emit(value),
                 Inline::Strong { children }
                 | Inline::Emphasis { children }
                 | Inline::Link { children, .. } => append(children, emit),
@@ -55,7 +57,7 @@ pub fn last_visible_character(nodes: &[Inline]) -> Option<char> {
 #[must_use]
 pub fn has_printable_character(nodes: &[Inline]) -> bool {
     nodes.iter().any(|node| match node {
-        Inline::Text { value } | Inline::Code { value } => {
+        Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. } => {
             value.chars().any(|character| character != '\n')
         }
         Inline::Strong { children }
@@ -67,7 +69,9 @@ pub fn has_printable_character(nodes: &[Inline]) -> bool {
 
 fn first_character(node: &Inline) -> Option<char> {
     match node {
-        Inline::Text { value } | Inline::Code { value } => value.chars().next(),
+        Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. } => {
+            value.chars().next()
+        }
         Inline::Strong { children }
         | Inline::Emphasis { children }
         | Inline::Link { children, .. } => first_visible_character(children),
@@ -78,7 +82,9 @@ fn first_character(node: &Inline) -> Option<char> {
 
 fn last_character(node: &Inline) -> Option<char> {
     match node {
-        Inline::Text { value } | Inline::Code { value } => value.chars().next_back(),
+        Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. } => {
+            value.chars().next_back()
+        }
         Inline::Strong { children }
         | Inline::Emphasis { children }
         | Inline::Link { children, .. } => last_visible_character(children),

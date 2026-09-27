@@ -5,13 +5,17 @@ use serde::{Deserialize, Serialize};
 
 mod blocks;
 mod diagnostic;
+mod equation;
 mod inline;
 mod source;
 pub use blocks::{
     Block, DefinitionItem, DefinitionLayout, LayoutHint, ListItem, ListItemLayout, ListKind,
     TableAlignment, TableCell, TableCellKind, TableRow, TableRowKind, TableRuleCellKind,
 };
-pub use diagnostic::{Diagnostic, DiagnosticImpact, DiagnosticLevel, semantics_complete};
+pub use diagnostic::{
+    Diagnostic, DiagnosticImpact, DiagnosticLevel, content_complete, semantics_complete,
+};
+pub use equation::{EquationExpression, EquationFont, EquationKind, EquationPosition};
 pub use inline::{Inline, LinkTarget};
 pub use source::{DocumentSource, SourceFormat, SourceSpan, TextRange, TextSize};
 

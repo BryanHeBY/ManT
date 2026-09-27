@@ -671,7 +671,7 @@ impl InlineBuilder {
             let mut index = self.nodes.len();
             while index > field.output_end_before_separator {
                 index -= 1;
-                if matches!(&self.nodes[index], Inline::Text { value } | Inline::Code { value } if value.chars().all(char::is_whitespace))
+                if matches!(&self.nodes[index], Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. } if value.chars().all(char::is_whitespace))
                 {
                     self.nodes.remove(index);
                 }

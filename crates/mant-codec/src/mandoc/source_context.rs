@@ -12,6 +12,22 @@ pub(super) enum MdocSectionContext {
     Authors,
 }
 
+#[derive(Default)]
+pub(super) struct EquationNormalizationBudget {
+    pub(super) attempts: usize,
+    pub(super) source_bytes: usize,
+}
+
+impl EquationNormalizationBudget {
+    pub(super) fn charge(&mut self, source_bytes: usize) -> bool {
+        self.attempts = self.attempts.saturating_add(1);
+        self.source_bytes = self.source_bytes.saturating_add(source_bytes);
+        self.attempts <= super::MAX_INLINE_EQUATION_NORMALIZATIONS
+            && source_bytes <= super::MAX_INLINE_EQUATION_FRAGMENT_BYTES
+            && self.source_bytes <= super::MAX_INLINE_EQUATION_TOTAL_BYTES
+    }
+}
+
 pub(super) struct LoweringContext<'a> {
     pub(super) macro_set: MacroSet,
     pub(super) native_heads: RefCell<crate::definitions::NativeHeadEvidence>,
@@ -21,6 +37,7 @@ pub(super) struct LoweringContext<'a> {
     pub(super) source_lines: Option<SourceLineIndex<'a>>,
     pub(super) equation_delimiters: Vec<EquationDelimiterChange>,
     pub(super) normalized_equations: RefCell<BTreeMap<String, String>>,
+    pub(super) equation_normalization_budget: RefCell<EquationNormalizationBudget>,
     native_table_requests: RefCell<HashMap<String, bool>>,
     pub(super) section_ids: HashMap<String, usize>,
     pub(super) assigned_section_ids: HashSet<String>,
@@ -112,6 +129,7 @@ impl<'a> LoweringContext<'a> {
             source_lines: source.map(SourceLineIndex::new),
             equation_delimiters: source.map_or_else(Vec::new, equation_delimiter_changes),
             normalized_equations: RefCell::new(BTreeMap::new()),
+            equation_normalization_budget: RefCell::default(),
             native_table_requests: RefCell::new(HashMap::new()),
             section_ids: HashMap::new(),
             assigned_section_ids: HashSet::new(),

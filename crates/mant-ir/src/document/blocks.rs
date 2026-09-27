@@ -1,5 +1,5 @@
 //! Block, item and table models with resolved source layout facts.
-use super::{Inline, SourceSpan, is_zero_u16};
+use super::{EquationExpression, Inline, SourceSpan, is_zero_u16};
 use crate::EntryFacts;
 use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize};
@@ -108,6 +108,10 @@ pub enum Block {
     Equation {
         /// Equation source after parser normalization.
         value: String,
+        /// Parsed equation structure, when the source parser provides it.
+        /// `value` must equal this structure's readable projection.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        expression: Option<EquationExpression>,
         /// Whether the equation occupies its own display block.
         #[serde(default, skip_serializing_if = "is_false")]
         display: bool,

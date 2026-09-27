@@ -108,6 +108,7 @@ fn outline() -> QueryOutline {
         meta: None,
         diagnostics: vec![],
         semantics_complete: true,
+        content_complete: true,
         nodes: vec![OutlineNode::DocumentSection {
             path: "1".into(),
             id: "overview".into(),
@@ -125,6 +126,7 @@ fn excerpt() -> QueryExcerpt {
         display_title: Some("Render specimen".into()),
         address: None,
         semantics_complete: true,
+        content_complete: true,
         producer: None,
         source: Some(source()),
         meta: None,

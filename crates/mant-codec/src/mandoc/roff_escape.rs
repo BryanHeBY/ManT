@@ -13,8 +13,10 @@ use glyphs::{
 use crate::text_safety::push_terminal_safe;
 use libmandoc_rs::SpecialCharacter;
 
+const ASCII_TABREF: char = '\u{1a}';
 const ASCII_BREAK: char = '\u{1d}';
-const ASCII_HYPH: char = '\u{1e}';
+const ASCII_HYPH: char = '\u{1c}';
+const ASCII_NBRZW: char = '\u{1e}';
 const ASCII_NBRSP: char = '\u{1f}';
 const MAX_NESTED_ESCAPE_SCAN_DEPTH: usize = 256;
 
@@ -480,7 +482,7 @@ impl Decoder {
             // These are formatter glyphs, not breakable source whitespace.
             // Keeping them as one glyph lets a pending `\\p` pass across the
             // displayed blank and break only at the next real word boundary.
-            ' ' | '~' | '0' => self.emit(RoffInlineEvent::Glyph(" ".to_owned())),
+            ' ' | '~' | '0' => self.emit(RoffInlineEvent::Glyph("\u{a0}".to_owned())),
             'p' => self.emit(RoffInlineEvent::LineBreak),
             // Opaque formatter state supported by mandoc_escape(3). These
             // operands must be consumed even though ManT does not render the
@@ -688,9 +690,9 @@ impl Decoder {
 
     fn push_source_character(&mut self, character: char) {
         match character {
-            ASCII_BREAK => {}
+            ASCII_TABREF | ASCII_BREAK | ASCII_NBRZW => {}
             ASCII_HYPH => self.text.push('-'),
-            ASCII_NBRSP => self.emit(RoffInlineEvent::Glyph(" ".to_owned())),
+            ASCII_NBRSP => self.emit(RoffInlineEvent::Glyph("\u{a0}".to_owned())),
             other => push_terminal_safe(&mut self.text, other),
         }
     }

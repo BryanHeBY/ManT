@@ -1,5 +1,5 @@
 //! Excerpt DTOs for source-ordered selections resolved by shared selector policy.
-use super::{ProjectionError, TLDR_TITLE, semantics_complete};
+use super::{ProjectionError, TLDR_TITLE, content_complete, semantics_complete};
 use crate::{
     ResolvedContent,
     selectors::{
@@ -127,6 +127,7 @@ pub fn select_excerpt(
         address: query.address.clone(),
         semantics_complete: document
             .is_none_or(|document| semantics_complete(&document.diagnostics)),
+        content_complete: document.is_none_or(|document| content_complete(&document.diagnostics)),
         producer: document.map(mant_protocol::Producer::for_document),
         source: document.map(|document| document.source.clone()),
         meta: document.map(|document| document.meta.clone()),

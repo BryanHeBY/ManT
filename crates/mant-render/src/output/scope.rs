@@ -194,6 +194,8 @@ fn scoped_search_projection(found: &ScopedSearchDocument, query: &SearchQuery) -
         label,
         source: None,
         meta,
+        diagnostics: found.diagnostics.clone(),
+        content_complete: found.content_complete,
         query: query.clone(),
         render: found.render.clone(),
         total: returned,

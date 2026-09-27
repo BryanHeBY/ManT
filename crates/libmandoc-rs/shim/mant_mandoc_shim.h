@@ -11,6 +11,7 @@ extern "C" {
 struct mant_mandoc_document;
 struct mant_mandoc_node;
 struct mant_mandoc_table_cell;
+struct mant_mandoc_eqn_box;
 struct mparse;
 
 struct mant_mandoc_source {
@@ -28,6 +29,10 @@ struct mant_mandoc_resolved_source {
 /* Borrowed scalar/string projection of one live libmandoc syntax node. */
 struct mant_mandoc_node_view {
 	int			 kind;
+	int			 section;
+	int			 end_kind;
+	const struct mant_mandoc_node *end_body;
+	int			 reference_quotes_title;
 	const char		*macro_name;
 	const char		*text;
 	const char		*tag;
@@ -48,11 +53,28 @@ struct mant_mandoc_node_view {
 	const char		*width;
 	const char		*enclosure_open;
 	const char		*enclosure_close;
-	const char		*equation;
+	const struct mant_mandoc_eqn_box *equation;
 	const struct mant_mandoc_table_cell *table_cells;
 	const struct mant_mandoc_table_rule_cell *table_rule_cells;
 	const struct mant_mandoc_node *child;
 	const struct mant_mandoc_node *next;
+};
+
+/* Borrowed, one-box eqn(7) facts. Child/sibling pointers remain parser-owned. */
+struct mant_mandoc_eqn_box_view {
+	int			 kind;
+	int			 font;
+	int			 position;
+	int			 size;
+	size_t			 expected_args;
+	size_t			 actual_args;
+	const char		*text;
+	const char		*left;
+	const char		*right;
+	const char		*top;
+	const char		*bottom;
+	const struct mant_mandoc_eqn_box *first;
+	const struct mant_mandoc_eqn_box *next;
 };
 
 /* Borrowed projection of one live tbl(7) data cell. */
@@ -65,6 +87,7 @@ struct mant_mandoc_table_cell_view {
 	unsigned int		 column_span;
 	unsigned int		 row_span;
 	int			 alignment;
+	int			 font;
 	const struct mant_mandoc_table_cell *next;
 };
 
@@ -194,12 +217,11 @@ const char *mant_mandoc_document_name(const struct mant_mandoc_document *);
 const char *mant_mandoc_document_date(const struct mant_mandoc_document *);
 const char *mant_mandoc_document_alias_target(const struct mant_mandoc_document *);
 int mant_mandoc_document_has_body(const struct mant_mandoc_document *);
-int mant_mandoc_document_equation_truncated(
-    const struct mant_mandoc_document *);
 int mant_mandoc_is_native_roff_request(const char *, size_t);
 size_t mant_mandoc_node_view_size(void);
 size_t mant_mandoc_table_cell_view_size(void);
 size_t mant_mandoc_table_rule_cell_view_size(void);
+size_t mant_mandoc_eqn_box_view_size(void);
 const struct mant_mandoc_node *mant_mandoc_document_root(
     const struct mant_mandoc_document *);
 int mant_mandoc_node_snapshot(struct mant_mandoc_document *,
@@ -210,6 +232,8 @@ int mant_mandoc_table_cell_snapshot(const struct mant_mandoc_document *,
 int mant_mandoc_table_rule_cell_snapshot(const struct mant_mandoc_document *,
     const struct mant_mandoc_table_rule_cell *,
     struct mant_mandoc_table_rule_cell_view *);
+int mant_mandoc_eqn_box_snapshot(const struct mant_mandoc_document *,
+    const struct mant_mandoc_eqn_box *, struct mant_mandoc_eqn_box_view *);
 #ifdef MANT_MANDOC_RENDER
 const unsigned char *mant_mandoc_document_output(
     const struct mant_mandoc_document *);

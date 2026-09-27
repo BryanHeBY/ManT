@@ -49,6 +49,11 @@ that crate was not published for that change.
 
 ### mant-ir, mant-protocol, mant-codec, mant-loader, mant-query, mant-render, mant-engine and mant 0.12.0
 
+- Extend the still-unreleased `v0.12` document wire with parsed equation
+  structure and reject a conflicting readable text projection. Outline,
+  excerpt, explanation, search, and scope results expose known content loss
+  separately from semantic coverage and pagination. The `v0.12` fixtures and
+  schema snapshot now describe this current unpublished shape.
 - Advance the unpublished native request, document, outline, excerpt,
   explanation, search, scope, and catalog contract family to `v0.12`. Published
   `v0.11` golden contracts remain checked in and unchanged. All affected Rust

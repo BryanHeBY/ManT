@@ -50,6 +50,7 @@ fn explanation() -> ScopeExplanation {
 }
 fn search() -> ScopeSearch {
     ScopeSearch {
+        content_complete: true,
         query: SearchQuery {
             pattern: "needle".into(),
             syntax: SearchSyntax::Literal,
@@ -70,6 +71,8 @@ fn search() -> ScopeSearch {
             .map(|path| ScopedSearchDocument {
                 address: address(path),
                 depth: 0,
+                diagnostics: vec![],
+                content_complete: true,
                 matches: vec![],
                 render: SearchRender {
                     schema: MarkdownSchema::V1,

@@ -80,6 +80,7 @@ mod tests {
             },
             result: ScopeQueryResult::Search {
                 search: ScopeSearch {
+                    content_complete: true,
                     query: local.query.clone(),
                     total: 0,
                     returned: 0,
@@ -89,6 +90,8 @@ mod tests {
                     documents: vec![ScopedSearchDocument {
                         address: address.clone(),
                         depth: 0,
+                        diagnostics: vec![],
+                        content_complete: true,
                         render: local.render.clone(),
                         matches: vec![],
                     }],

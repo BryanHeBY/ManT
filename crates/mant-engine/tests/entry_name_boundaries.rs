@@ -10,7 +10,9 @@ fn inline_text(inlines: &[mant_ir::Inline]) -> String {
     inlines
         .iter()
         .map(|inline| match inline {
-            mant_ir::Inline::Text { value } | mant_ir::Inline::Code { value } => value.clone(),
+            mant_ir::Inline::Text { value }
+            | mant_ir::Inline::Code { value }
+            | mant_ir::Inline::Equation { value, .. } => value.clone(),
             mant_ir::Inline::Strong { children }
             | mant_ir::Inline::Emphasis { children }
             | mant_ir::Inline::Link { children, .. } => inline_text(children),

@@ -27,7 +27,10 @@ pub use blocks::{block_layout, block_layout_mut, block_source, rebase_roots};
 #[must_use]
 pub fn has_literal_rows(nodes: &[crate::Inline]) -> bool {
     nodes.iter().any(|node| match node {
-        crate::Inline::Text { .. } | crate::Inline::Code { .. } | crate::Inline::LineBreak => true,
+        crate::Inline::Text { .. }
+        | crate::Inline::Code { .. }
+        | crate::Inline::Equation { .. }
+        | crate::Inline::LineBreak => true,
         crate::Inline::Strong { children }
         | crate::Inline::Emphasis { children }
         | crate::Inline::Link { children, .. } => has_literal_rows(children),

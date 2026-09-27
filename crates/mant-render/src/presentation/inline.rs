@@ -73,7 +73,7 @@ fn walk<'a>(
     for node in nodes {
         match node {
             Inline::Text { value } => text(value, style, target, names, cursor, emit),
-            Inline::Code { value } => text(
+            Inline::Code { value } | Inline::Equation { value, .. } => text(
                 value,
                 InlinePresentation {
                     code: true,

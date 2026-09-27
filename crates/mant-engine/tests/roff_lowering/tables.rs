@@ -128,7 +128,9 @@ fn keeps_inline_equations_in_macro_arguments_and_filled_prose() {
     let [item] = items.as_slice() else {
         panic!("expected one equation definition");
     };
-    assert_eq!(inline_text(&item.terms[0]), "Dp dx _ 1 ... dx _ n");
+    // CVS html.c::print_encode keeps the authored \~ after Dp as NBSP.
+    // The exact inline-eqn source was checked with the fixed oracle.
+    assert_eq!(inline_text(&item.terms[0]), "Dp\u{a0}dx _ 1 ... dx _ n");
     let [Block::Paragraph { children, .. }] = item.description.as_slice() else {
         panic!("expected one filled description: {:?}", item.description);
     };
@@ -139,7 +141,12 @@ fn keeps_inline_equations_in_macro_arguments_and_filled_prose() {
     assert!(
         children
             .iter()
-            .any(|child| matches!(child, Inline::Code { value } if value == "i = 1 , ... , n + 1"))
+            // CVS eqn_html.c::print_eqn places a Math node at this point in
+            // the filled prose. The fixed oracle confirms its inline order.
+            .any(
+                |child| matches!(child, Inline::Equation { value, expression }
+                if value == "i = 1 , ... , n + 1" && value == &expression.readable_text())
+            )
     );
 }
 

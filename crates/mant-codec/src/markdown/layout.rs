@@ -89,7 +89,7 @@ fn trim_code_framing_newline(children: &mut Vec<Inline>) {
         return;
     };
     match last {
-        Inline::Text { value } | Inline::Code { value } => {
+        Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. } => {
             if value.ends_with('\n') {
                 value.pop();
             }

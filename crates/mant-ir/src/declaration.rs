@@ -55,7 +55,9 @@ impl DeclarationGroup {
 
 fn readable_inline(inline: &Inline) -> bool {
     match inline {
-        Inline::Text { value } | Inline::Code { value } => !value.trim().is_empty(),
+        Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. } => {
+            !value.trim().is_empty()
+        }
         Inline::Strong { children }
         | Inline::Emphasis { children }
         | Inline::Link { children, .. } => children.iter().any(readable_inline),
@@ -84,7 +86,9 @@ pub fn blocks_have_readable_content(blocks: &[Block]) -> bool {
                 return;
             }
             match inline {
-                Inline::Text { value } | Inline::Code { value } => {
+                Inline::Text { value }
+                | Inline::Code { value }
+                | Inline::Equation { value, .. } => {
                     self.0 |= !value.trim().is_empty();
                 }
                 _ => visit::walk_inline(self, inline),
@@ -183,6 +187,7 @@ mod tests {
         assert!(!blocks_have_readable_content(&blocks));
         assert!(blocks_have_readable_content(&[Block::Equation {
             value: "x + y".into(),
+            expression: None,
             display: true,
             layout: crate::LayoutHint::default(),
             source: None

@@ -396,7 +396,7 @@ fn semantic_fingerprint(
                     self.field("text");
                     self.field(value);
                 }
-                Inline::Code { value } => {
+                Inline::Code { value } | Inline::Equation { value, .. } => {
                     self.field("code");
                     self.field(value);
                 }

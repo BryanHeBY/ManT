@@ -42,6 +42,8 @@ use self::{roff_escape::visible_text, source_lines::SourceLineIndex};
 use crate::text_safety::mask_terminal_control_bytes;
 
 const MAX_INLINE_EQUATION_NORMALIZATIONS: usize = 256;
+const MAX_INLINE_EQUATION_FRAGMENT_BYTES: usize = 8 * 1024;
+const MAX_INLINE_EQUATION_TOTAL_BYTES: usize = 1024 * 1024;
 
 /// Parse already prepared bytes; `path` is a source label, never opened.
 /// Includes are disabled and compression must already have been decoded.

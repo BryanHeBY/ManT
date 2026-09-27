@@ -6,7 +6,6 @@ use super::{
     layout_with_spacing, lower_blocks_with_predecessor, lower_blocks_with_spacing,
     lower_inline_nodes, lower_man_definition_block, lower_mdoc_list, lower_synopsis_head,
     part_child_groups, plain_text, preformatted_blocks, set_block_spacing, source_span,
-    visible_text,
 };
 
 pub(super) struct StructuralLowerer<'a, 'source, 'state> {
@@ -319,12 +318,20 @@ pub(super) fn parts_have_visible_text(nodes: &[Node], default_name: Option<&str>
 
 /// Retain display equation content with decoded glyphs and source geometry.
 fn equation_block(node: &Node, indent_columns: crate::mandoc::layout::SourceIndent) -> Block {
+    let expression = node
+        .equation
+        .as_ref()
+        .map(crate::mandoc::equations::expression_from_ast);
+    let value = expression
+        .as_ref()
+        .map_or_else(String::new, mant_ir::EquationExpression::readable_text);
     Block::Equation {
         // Equation boxes carry the same named-character escapes as ordinary
         // roff text, but they bypass inline-node lowering. Decode them here so
         // values such as `\[*p]` and `\[mi]` cannot leak into every output
         // projection.
-        value: visible_text(node.equation.as_deref().unwrap_or_default()),
+        value,
+        expression,
         display: true,
         layout: layout(indent_columns),
         source: source_span(node),

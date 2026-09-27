@@ -93,7 +93,8 @@ fn signed_legacy_size_consumes_one_digit_before_visible_text() {
 fn normalizes_internal_markers_and_known_zero_width_controls() {
     let source = format!("git{ASCII_HYPH}config{ASCII_NBRSP}(1){ASCII_BREAK}next\\&.\\|.\\|.");
 
-    assert_eq!(visible_text(&source), "git-config (1)next...");
+    // CVS term.c/roff_escape.c render ASCII_NBRSP as a nonbreaking space.
+    assert_eq!(visible_text(&source), "git-config\u{a0}(1)next...");
 }
 
 #[test]
@@ -328,8 +329,8 @@ fn visible_projection_applies_zero_advance_to_composite_formatter_glyphs() {
     assert_eq!(visible_text(r"A\zX\p   B"), "AX\nB");
     assert_eq!(visible_text("A\\pB\nC"), "AB\nC");
     assert_eq!(visible_text(r"A\pB \(em C"), "AB\n— C");
-    assert_eq!(visible_text(r"A\pB \~ C"), "AB\n  C");
-    assert_eq!(visible_text(r"A\pB \0 C"), "AB\n  C");
+    assert_eq!(visible_text(r"A\pB \~ C"), "AB\n\u{a0} C");
+    assert_eq!(visible_text(r"A\pB \0 C"), "AB\n\u{a0} C");
     assert_eq!(visible_text(r"A\pB \o'XY' C"), "AB\nY C");
     assert_eq!(visible_text(r"A\pB \*[.T] C"), "AB\nutf8 C");
     assert_eq!(visible_text(r"A\pB \fB C"), "AB\nC");

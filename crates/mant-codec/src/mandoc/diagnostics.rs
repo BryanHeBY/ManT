@@ -11,7 +11,13 @@ pub(super) fn lower_diagnostics(input: &[MandocDiagnostic]) -> Vec<Diagnostic> {
     input
         .iter()
         .map(|diagnostic| Diagnostic {
-            impact: mant_ir::DiagnosticImpact::None,
+            impact: match diagnostic.code() {
+                Some(
+                    MandocDiagnosticCode::SyntaxTreeDepthLimit
+                    | MandocDiagnosticCode::EquationTreeDepthLimit,
+                ) => mant_ir::DiagnosticImpact::ContentCoverage,
+                None => mant_ir::DiagnosticImpact::None,
+            },
             level: match diagnostic.level {
                 MandocDiagnosticLevel::Unsupported => DiagnosticLevel::Unsupported,
                 MandocDiagnosticLevel::Error => DiagnosticLevel::Error,
@@ -39,7 +45,10 @@ pub(super) fn lower_diagnostics(input: &[MandocDiagnostic]) -> Vec<Diagnostic> {
         .collect()
 }
 
-use super::{LoweringContext, MAX_INLINE_EQUATION_NORMALIZATIONS, Node, SourceSpan, source_span};
+use super::{
+    LoweringContext, MAX_INLINE_EQUATION_FRAGMENT_BYTES, MAX_INLINE_EQUATION_NORMALIZATIONS,
+    MAX_INLINE_EQUATION_TOTAL_BYTES, Node, SourceSpan, source_span,
+};
 
 impl LoweringContext<'_> {
     pub(super) fn warn_unhandled_structural_parts(&self, node: &Node) {
@@ -68,7 +77,7 @@ impl LoweringContext<'_> {
             level: DiagnosticLevel::Unsupported,
             code: Some("manual.inline-equation-budget".to_owned()),
             message: format!(
-                "more than {MAX_INLINE_EQUATION_NORMALIZATIONS} distinct inline table equations; later source spellings were retained without normalization"
+                "inline table equation normalization reached its allowance ({MAX_INLINE_EQUATION_NORMALIZATIONS} attempts, {MAX_INLINE_EQUATION_FRAGMENT_BYTES} bytes per fragment, {MAX_INLINE_EQUATION_TOTAL_BYTES} bytes total); later source spellings were retained without normalization"
             ),
             source: Some(SourceSpan {
                 byte_range: None,

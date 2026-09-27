@@ -478,6 +478,7 @@ fn scope_supports_are_document_local_even_when_node_ids_coincide() {
             producer: None,
             diagnostics: r.diagnostics.clone(),
             semantics_complete: r.semantics_complete,
+            content_complete: r.content_complete,
             outcome: r.outcome,
             total: r.total,
             returned: r.returned,

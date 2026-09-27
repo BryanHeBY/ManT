@@ -1,6 +1,30 @@
 use super::*;
 
 #[test]
+fn normalized_reference_title_quote_reaches_document_text() {
+    // The exact source was run through the fixed oracle before the assertion.
+    // CVS mdoc_validate.c::post_rs sets quote_T when %J is present;
+    // mdoc_html.c::mdoc__x_pre/post encloses the %T field in curly quotes.
+    let source = b".Dd September 27, 2026\n.Dt NORMALIZED-SCOPE 1\n.Os\n.Sh SYNOPSIS\n.Nm normalized-scope\n.Sh AUTHORS\n.An -split\n.An Ada\n.An Babbage\n.Sh SEE ALSO\n.Rs\n.%A Ada\n.%T Title\n.%J Journal\n.Re\n";
+    let document = parse_manual_bytes(std::path::Path::new("normalized-scope.1"), source)
+        .expect("lower normalized reference");
+    let section = document
+        .sections
+        .iter()
+        .find(|section| section.heading.plain_text() == "SEE ALSO")
+        .expect("reference section");
+    let text = section
+        .blocks
+        .iter()
+        .map(|block| match block {
+            Block::Paragraph { children, .. } => inline_text(children),
+            _ => String::new(),
+        })
+        .collect::<String>();
+    assert!(text.contains("“Title”"), "{text:?}");
+}
+
+#[test]
 fn formatter_request_boundaries_execute_inside_mdoc_scopes() {
     for (label, request, expected, breaks) in [
         ("filled-margin", ".mc |", "AX B", 0),

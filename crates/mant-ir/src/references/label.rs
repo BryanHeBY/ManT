@@ -42,7 +42,7 @@ fn append(
     for node in nodes {
         budget.consume(depth.saturating_add(1), 1, 0)?;
         match node {
-            Inline::Text { value } | Inline::Code { value } => {
+            Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. } => {
                 // Inspect only enough bytes to choose a UTF-8 prefix and prove
                 // truncation; never scan a huge omitted suffix merely to count it.
                 let inspect = value

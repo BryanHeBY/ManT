@@ -121,17 +121,17 @@ fn inline_execution_tracks_zero_advance_word_and_physical_line_states_independen
         (
             "word-end-break-crosses-unpaddable-space",
             b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.No \"A\\pB\\ C\"\n.No D\n".as_slice(),
-            "AB C\nD",
+            "AB\u{a0}C\nD",
         ),
         (
             "word-end-break-crosses-nonbreaking-space",
             b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.No \"A\\pB\\~C\"\n.No D\n".as_slice(),
-            "AB C\nD",
+            "AB\u{a0}C\nD",
         ),
         (
             "word-end-break-crosses_fixed-width_space",
             b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.No \"A\\pB\\0C\"\n.No D\n".as_slice(),
-            "AB C\nD",
+            "AB\u{a0}C\nD",
         ),
         (
             "projected-glyph-ends-only-the-consumed-break-whitespace-run",
@@ -141,12 +141,12 @@ fn inline_execution_tracks_zero_advance_word_and_physical_line_states_independen
         (
             "nonbreaking-glyph-preserves-the-following-ordinary-blank",
             b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.No \"A\\pB \\~ C\"\n".as_slice(),
-            "AB\n  C",
+            "AB\n\u{a0} C",
         ),
         (
             "fixed-width-glyph-preserves-the-following-ordinary-blank",
             b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.No \"A\\pB \\0 C\"\n".as_slice(),
-            "AB\n  C",
+            "AB\n\u{a0} C",
         ),
         (
             "overstrike-glyph-preserves-the-following-ordinary-blank",
@@ -566,8 +566,8 @@ fn numbered_and_named_nonbreaking_glyphs_defer_word_end_breaks() {
         ("numbered-nbsp", r"\N'160'", "\u{a0}"),
         ("unicode-nbsp", "\u{a0}", "\u{a0}"),
         ("named-unicode-nbsp", r"\[u00A0]", "\u{a0}"),
-        ("roff-nbsp", r"\~", " "),
-        ("roff-digit-width-space", r"\0", " "),
+        ("roff-nbsp", r"\~", "\u{a0}"),
+        ("roff-digit-width-space", r"\0", "\u{a0}"),
     ] {
         let manual = format!(
             ".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.No A\\pB{spelling}C\n.No D\n"

@@ -43,7 +43,9 @@ pub fn project_content_slice(
         if slice.path.is_empty() || bytes.start >= bytes.end {
             return None;
         }
-        let [Inline::Text { value } | Inline::Code { value }] = nodes else {
+        let [Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. }] =
+            nodes
+        else {
             return None;
         };
         let selected = value.get(bytes.clone())?;
@@ -65,7 +67,9 @@ pub fn inline_scalar_len(nodes: &[Inline]) -> usize {
     nodes
         .iter()
         .map(|node| match node {
-            Inline::Text { value } | Inline::Code { value } => value.chars().count(),
+            Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. } => {
+                value.chars().count()
+            }
             Inline::Strong { children }
             | Inline::Emphasis { children }
             | Inline::Link { children, .. } => inline_scalar_len(children),

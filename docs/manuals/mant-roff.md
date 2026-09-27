@@ -456,7 +456,7 @@ Separate native tables remain separate IR blocks even when adjacent. A `T&` layo
 
 Rule cells retain their column positions but no printable body. Both layout rules and data rules suppress their payload; source recovery never resurrects that intentionally hidden text. Escaped literal underscores remain ordinary text.
 
-[mandoc tbl(7)](https://mandoc.bsd.lv/man/tbl.7.html) rows become IR tables, including tables nested inside an mdoc literal or unfilled display. ManT retains cell text, left/center/right alignment, column spans, and row spans supplied by libmandoc. It does not reproduce line drawing, exact column widths, vertical positioning, tbl-specific font directives, or device-specific rules.
+[mandoc tbl(7)](https://mandoc.bsd.lv/man/tbl.7.html) rows become IR tables, including tables nested inside an mdoc literal or unfilled display. ManT retains cell text, left/center/right alignment, column spans, row spans, and parsed per-cell bold, italic, and code fonts supplied by libmandoc. It does not reproduce line drawing, exact column widths, vertical positioning, or device-specific rules.
 
 Cell text passes through the same roff escape decoder as ordinary prose. CVS `mandoc` sends operands of high-level controls to `tbl`, while GNU `tbl` expands its inline man/mdoc language before formatting. ManT makes that divergence explicit: a source-backed `T{`/`T}` block containing only a bounded, self-contained inline macro sequence is parsed as one isolated inline fragment. It therefore preserves source meanings such as `.Fl Fl help` → `--help`, `.Ns` joins, `.Sm` spacing, mdoc enclosures, man font alternation, and typed `Mt`/`UR` links. The fragment never creates document structure, targets, includes, or semantic entries.
 
@@ -468,17 +468,19 @@ Some formatter-specific strings disappear before libmandoc exposes a cell. For o
 
 ## Equations
 
-Display [mandoc eqn(7)](https://mandoc.bsd.lv/man/eqn.7.html) input becomes an `equation` block containing libmandoc's normalized expression text. Delimiter-selected equations inside filled prose remain inline symbolic tokens rather than splitting the paragraph. The same active delimiters are applied to ordinary `tbl(7)` cells, whose opaque cell strings are normalized through the pinned eqn parser. Configuration-only `EQ`/`EN` blocks emit no empty equation. The common GNU `ldots` macro is normalized to `...`.
+Display [mandoc eqn(7)](https://mandoc.bsd.lv/man/eqn.7.html) input becomes an `equation` block with libmandoc's parsed box structure and a checked readable text projection. Delimiter-selected equations inside filled prose remain inline equation nodes between the surrounding words. The same active delimiters are applied to ordinary `tbl(7)` cells, whose opaque cell strings are normalized through a separate bounded invocation of the pinned eqn parser. This isolated recovery cannot inherit the page's complete `delim`/`define` history; a declined or failed recovery retains the raw cell payload. Configuration-only `EQ`/`EN` blocks emit no empty equation. The common GNU `ldots` macro is projected as `...`.
 
-ManT preserves these expressions for text, Markdown, JSON, and TUI consumers; it does not typeset mathematical layout or execute an external `eqn` preprocessor. At most 256 distinct opaque table expressions are reparsed per document. Later expressions remain visible in their source spelling and produce `manual.inline-equation-budget`, preventing adversarial tables from turning semantic recovery into unbounded parser work.
+ManT preserves the owned structure and its shared readable projection for text, Markdown, JSON, search, and TUI consumers; it does not typeset mathematical layout or execute an external `eqn` preprocessor. At most 256 distinct opaque table expressions are reparsed per document, with 8 KiB per fragment and 1 MiB cumulative attempted input. Failed attempts also spend the allowance. Later expressions remain visible in their source spelling and produce `manual.inline-equation-budget`, preventing adversarial tables from turning semantic recovery into unbounded parser work.
 
 Deeply nested equations and document trees are bounded before recursive Rust lowering. The owned native tree stops descending after 256 levels and returns the finite prefix. A separate native construction guard stops input dispatch after a syntax node exceeds 512 parent levels, before finalization and validation; that larger violation returns a whole-document parse error. Native reference renderers reject syntax or equation nesting beyond 256 levels independently of output size. Native tree cleanup is iterative.
 Nested native escape arguments are likewise limited to 256 levels; a deeper
 suffix is consumed as one rejected escape argument so parsing remains finite
 without exposing its control spelling as prose.
 The retained document carries `manual.syntax-depth-truncated` or
-`manual.equation-depth-truncated`, respectively, so structured consumers can
-detect either omission without matching diagnostic prose.
+`manual.equation-depth-truncated`, respectively. Both have `content-coverage`
+impact, so structured consumers can use the shared `contentComplete=false`
+signal without matching diagnostic prose. Cumulative owned-transfer budgets
+can instead reject an unsafe parse rather than return a misleading partial tree.
 
 ## Diagnostics and Fallback
 

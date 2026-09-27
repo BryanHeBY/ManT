@@ -255,7 +255,7 @@ fn resembles_rejected_option_list(items: &[ListItem]) -> bool {
             matches!(
                 item.blocks.first(),
                 Some(Block::Paragraph { children, .. })
-                    if children.iter().any(|inline| matches!(inline, Inline::Code { value } if is_option_code(value)))
+                    if children.iter().any(|inline| matches!(inline, Inline::Code { value } | Inline::Equation { value, .. } if is_option_code(value)))
             )
         })
         .count();

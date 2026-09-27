@@ -188,7 +188,9 @@ fn arguments<'a>(tokens: impl Iterator<Item = &'a str>) -> bool {
 fn append_syntax(inlines: &[Inline], output: &mut String) {
     for inline in inlines {
         match inline {
-            Inline::Text { value } | Inline::Code { value } => output.push_str(value),
+            Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. } => {
+                output.push_str(value);
+            }
             Inline::Strong { children } | Inline::Link { children, .. } => {
                 append_syntax(children, output);
             }

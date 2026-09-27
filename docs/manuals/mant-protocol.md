@@ -681,7 +681,7 @@ Example:
 }
 ```
 
-The response uses `mant.scope-query/v0.12`. Its `scope` field contains the request, ordered resolved documents, unique edges, optional unresolved targets, and the typed traversal frontier. For `result.kind = "search"`, pagination lives under `result.search`: consumers read `result.search.total`, `returned`, `offset`, `truncated`, `nextOffset`, and `documents`. Each document group contains `address`, `depth`, its canonical Markdown `render` coordinate descriptor, and `matches`; it deliberately has no local pagination fields or nested `mant.search/v0.12` envelope. Hit `ordinal` values are one-based in the complete unpaginated scope and therefore remain unique across document groups and result pages. Search-level `truncated` describes result pagination, not document traversal. Limit and offset apply globally, not once per document.
+The response uses `mant.scope-query/v0.12`. Its `scope` field contains the request, ordered resolved documents, unique edges, optional unresolved targets, and the typed traversal frontier. For `result.kind = "search"`, pagination lives under `result.search`: consumers read `result.search.total`, `returned`, `offset`, `truncated`, `nextOffset`, and `documents`. Each document group contains `address`, `depth`, its canonical Markdown `render` coordinate descriptor, `matches`, optional `diagnostics`, and `contentComplete` when false; it has no local pagination fields or nested `mant.search/v0.12` envelope. The search-level `contentComplete` covers all readable scope documents, even those with no hit on this page. Hit `ordinal` values are one-based in the complete unpaginated scope and therefore remain unique across document groups and result pages. Search-level `truncated` describes result pagination, not source content loss. Limit and offset apply globally, not once per document.
 
 ```json
 {
@@ -710,7 +710,7 @@ It owns `query`, `order`, `counts`, aggregate `outcome`, `total`, `returned`,
 optional `nextOffset`, independent `truncation`, BFS `documents`, one globally
 ordered `evidence` list and `failures`. Each readable document report contains
 `address`, `depth`, `label`, optional `producer`, `diagnostics`,
-`semanticsComplete`, `outcome`, `total`, `returned`, `counts` and `truncation`,
+`semanticsComplete`, `contentComplete`, `outcome`, `total`, `returned`, `counts` and `truncation`,
 even when it found no evidence or contributed nothing to this page. Reports
 contain no nested query, cursor or evidence/body. Each flat record is
 `{documentIndex, evidence}`: the zero-based index refers to this explanation's
@@ -834,10 +834,12 @@ paths never replace the original `source.path`.
 Diagnostic levels are `style`, `warning`, `error`, and `unsupported`.
 A diagnostic can include a stable code and an original `SourceSpan`.
 Recoverable diagnostics do not imply that the returned document is unusable.
-Every diagnostic requires `impact`: `none` or `semantic-coverage`. The latter
-marks rejected or incomplete semantic coverage independently of severity and
-producer-specific codes. Missing or unknown impacts are rejected, including
-when a third-party producer supplies the document.
+Every diagnostic requires `impact`: `none`, `semantic-coverage`, or
+`content-coverage`. The second marks rejected or incomplete semantic coverage
+while retaining known source content. `content-coverage` marks known omitted
+source content and conservatively also makes semantic coverage incomplete.
+Neither effect depends on severity or producer-specific codes. Missing or
+unknown impacts are rejected, including for third-party documents.
 
 ### Sections and Source Locations
 
@@ -873,7 +875,7 @@ Every block is tagged by `type`:
 | `list` | structured `kind`, `items`, `compact` | Bullet, ordered, or plain list |
 | `definition-list` | `items`, `compact` | Terms with block-capable descriptions |
 | `table` | `rows` | Block-capable cells, spans, and alignment |
-| `equation` | `value`, `display` | Preserved equation source |
+| `equation` | `value`, optional `expression`, `display` | Readable text projected from parsed equation structure when available |
 | `vertical-space` | `lines` | Explicit source-requested blank rows |
 | `thematic-break` | None | Semantic horizontal break |
 | `unsupported` | optional `name`, `text` | Visible source ManT could not structure |
@@ -911,6 +913,16 @@ block-level `start`, and bullet/plain `start:null` are rejected.
 Table cells contain `blocks`;
 `columnSpan` and `rowSpan` default to `1`, and `alignment` can be `left`,
 `center`, or `right`.
+
+Native equation blocks carry `expression`, a nested box tree with `kind`,
+`font`, `position`, parsed text/fences/decorations, argument counts and ordered
+children. Optional fields are omitted when absent; omitted `size` uses the
+parser default and omitted `expectedArgs` means no fixed grammar maximum.
+`value` is the checked readable projection of that tree. The wire
+reader rejects a conflicting `value`. Inline equations use
+`{"type":"equation","value":...,"expression":...}` between neighboring
+prose nodes; their `expression` is required. Matrix children retain parsed
+column order, while the readable projection visits every retained row.
 
 Both ordinary-list and definition-list items may carry the same `entry` facts.
 Their `forms` and `nameBindings` reference final-IR inline positions rather than
@@ -1066,6 +1078,7 @@ before an agent requests content:
 | `source`, `meta` | Optional document identity |
 | `diagnostics` | Optional recoverable parser findings |
 | `semanticsComplete` | Present as `false` when semantic declarations were rejected, native definitions could not be classified without guessing, or shared IR validation found an identity or relationship violation |
+| `contentComplete` | Present as `false` when the source document is known to have lost visible content; omitted when true |
 | `nodes` | Recursive addressable tree |
 | `references` | Independent bounded occurrence inventory, policy, counts, source locations and resolution stages |
 
@@ -1619,6 +1632,7 @@ sections:
 | `label` | Query label |
 | `address` | Optional logical namespace for references in selected content |
 | `semanticsComplete` | Same document-wide completeness signal as outline; omitted when true |
+| `contentComplete` | Same document-wide known-content-loss signal as outline; omitted when true |
 | `producer`, `source`, `meta` | Optional document identity |
 | `diagnostics` | Relevant recoverable findings |
 | `selections` | Selected content in source order |
@@ -1647,12 +1661,14 @@ Excerpt clients can use the excerpt's `address` with
 node for its resolved relationship summary. Direct-file inputs have no logical
 namespace; an address never proves that a target document is installed.
 
-The completeness signal also travels inside single- and multi-document
-explanations. Text and MCP excerpts retain a concise incomplete-semantics notice
+Both completeness signals also travel inside single- and multi-document
+explanations. Text and MCP excerpts retain concise incomplete-coverage notices
 even when ordinary parser diagnostics are hidden. Full raw document responses
 carry diagnostics rather than an outline-completeness claim. Search responses
-make no semantic-index completeness claim: search examines rendered content,
-not just recognized entries. In-process producers must run
+carry `contentComplete` and `diagnostics`, but make no semantic-index
+completeness claim: search examines rendered content, not just recognized
+entries. The content signal is independent of pagination, preview clipping,
+and any later limit on diagnostic details. In-process producers must run
 `mant_ir::validate_document` and attach its
 findings before handing documents to projection APIs; projections reuse those
 findings rather than revalidating the whole tree for every selected node.
@@ -1694,7 +1710,7 @@ results. There is no strict-explain mode.
 | `outcome` | `evidence` or `no-evidence`, evaluated before result pagination |
 | `total`, `returned`, `nextOffset` | Matching owner count, current page size and optional continuation |
 | `truncation` | Separate `candidates`, `relations`, `content` flags; counts are lower bounds when candidate/relation traversal stops |
-| `semanticsComplete`, `diagnostics` | Semantic validation/producer coverage, not a promise of exhaustive recall |
+| `semanticsComplete`, `contentComplete`, `diagnostics` | Semantic and known-content-loss coverage, not a promise of exhaustive recall |
 | `order` | Always `class-then-source`: class, document BFS position, original IR position |
 | `counts` | Fixed `directEntry`, `relatedEntry`, `entryMention`, `contextMention`, each with `total` and `returned`; zero counts remain present |
 | `evidence` | One ordered page of independently owned records, classified before copying or paging |
@@ -1894,6 +1910,7 @@ both structural locations and rendered coordinates.
 | `returned` | Number of line groups in this page |
 | `offset` | Echoed line-group pagination offset |
 | `truncated` | Whether more matching line groups remain |
+| `contentComplete`, `diagnostics` | Known source-content loss and recoverable findings, independent of result pagination |
 | `nextOffset` | Next deterministic offset when truncated |
 | `matches` | Rendered-line groups containing exact occurrences |
 

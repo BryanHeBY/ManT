@@ -199,7 +199,10 @@ fn collect_entity_inlines(inlines: &[Inline], output: &mut Vec<String>) {
             Inline::Strong { children }
             | Inline::Emphasis { children }
             | Inline::Link { children, .. } => collect_entity_inlines(children, output),
-            Inline::Code { .. } | Inline::Anchor { .. } | Inline::LineBreak => {}
+            Inline::Code { .. }
+            | Inline::Equation { .. }
+            | Inline::Anchor { .. }
+            | Inline::LineBreak => {}
         }
     }
 }
@@ -517,7 +520,9 @@ fn block_has_projection(block: &Block) -> bool {
 
 fn has_visible_inline(inlines: &[mant_ir::Inline]) -> bool {
     inlines.iter().any(|inline| match inline {
-        mant_ir::Inline::Text { value } | mant_ir::Inline::Code { value } => !value.is_empty(),
+        mant_ir::Inline::Text { value }
+        | mant_ir::Inline::Code { value }
+        | Inline::Equation { value, .. } => !value.is_empty(),
         mant_ir::Inline::Strong { children }
         | mant_ir::Inline::Emphasis { children }
         | mant_ir::Inline::Link { children, .. } => has_visible_inline(children),

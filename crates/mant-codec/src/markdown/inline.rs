@@ -192,7 +192,9 @@ pub(super) fn inline_text(inlines: &[Inline]) -> String {
     let mut output = String::new();
     for inline in inlines {
         match inline {
-            Inline::Text { value } | Inline::Code { value } => output.push_str(value),
+            Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. } => {
+                output.push_str(value);
+            }
             Inline::Strong { children }
             | Inline::Emphasis { children }
             | Inline::Link { children, .. } => output.push_str(&inline_text(children)),

@@ -59,7 +59,9 @@ fn separates_definition_layout_arguments_from_visible_terms() {
             .flat_map(|item| item.terms.iter())
             .map(|term| inline_text(term))
             .collect::<Vec<_>>(),
-        ["man ls", "4", "1"]
+        // CVS html.c::print_encode preserves the authored `\ ` in the
+        // .BI head as a nonbreaking space; the fixed oracle emits &#x00A0;.
+        ["man\u{a0}ls", "4", "1"]
     );
     assert!(matches!(
         items[0].terms[0].as_slice(),

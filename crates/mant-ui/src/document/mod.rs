@@ -118,6 +118,7 @@ pub struct DocumentView {
     top_level_count: usize,
     section_count: usize,
     has_tldr: bool,
+    content_complete: bool,
     lines: Vec<LogicalLine>,
     navigation: Vec<NavNode>,
     anchors: HashMap<String, usize>,
@@ -298,6 +299,10 @@ impl DocumentView {
             top_level_count,
             section_count,
             has_tldr: bundle.tldr.is_some(),
+            content_complete: bundle
+                .document
+                .as_ref()
+                .is_none_or(|document| mant_ir::content_complete(&document.diagnostics)),
             lines: built.content.lines,
             navigation: built.navigation,
             anchors: built.content.anchors,
@@ -318,6 +323,12 @@ impl DocumentView {
     #[must_use]
     pub fn terminal_label(&self) -> &str {
         &self.terminal_label
+    }
+
+    /// Whether this view has no producer-reported document content loss.
+    #[must_use]
+    pub fn content_complete(&self) -> bool {
+        self.content_complete
     }
 
     /// Return the immutable navigation tree in source order.

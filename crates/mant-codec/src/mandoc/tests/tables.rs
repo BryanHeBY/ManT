@@ -2,6 +2,177 @@
 use super::*;
 
 #[test]
+fn table_layout_font_reaches_inline_consumers() {
+    let document = parse_manual_bytes(
+        std::path::Path::new("table-font.7"),
+        b".TH FONT 7\n.TS\ntab(|);\nlb li.\nLEFT|RIGHT\n.TE\nafter\n",
+    )
+    .unwrap();
+    let Block::Table { rows, .. } = &document.blocks[0] else {
+        panic!("table");
+    };
+    let [Block::Paragraph { children: left, .. }] = rows[0].cells[0].blocks.as_slice() else {
+        panic!("left cell");
+    };
+    let [
+        Block::Paragraph {
+            children: right, ..
+        },
+    ] = rows[0].cells[1].blocks.as_slice()
+    else {
+        panic!("right cell");
+    };
+    // CVS tbl_html.c::print_tbl scopes layout->font to one cell.
+    assert!(matches!(left.as_slice(), [Inline::Strong { .. }]));
+    assert!(matches!(right.as_slice(), [Inline::Emphasis { .. }]));
+}
+
+#[test]
+fn native_table_constant_width_fonts_reach_ir_without_flattening_style() {
+    // The exact input was checked with the fixed -Thtml/-Ttree oracle.
+    // CVS tbl_layout.c::cellmod selects CR/CB/CI and tbl_html.c::print_tbl
+    // applies html_setfont to each data cell independently.
+    let document = parse_manual_bytes(
+        std::path::Path::new("table-code-font.1"),
+        b".TH FONT 1\n.SH DESCRIPTION\n.TS\nl fCR l fCB l fCI.\nplain\tbold\titalic\n.TE\n",
+    )
+    .unwrap();
+    let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+        panic!("table");
+    };
+    let cell = |index: usize| match rows[0].cells[index].blocks.as_slice() {
+        [Block::Paragraph { children, .. }] => children.as_slice(),
+        other => panic!("cell {index}: {other:?}"),
+    };
+    assert!(matches!(cell(0), [Inline::Code { value }] if value == "plain"));
+    assert!(matches!(cell(1), [Inline::Strong { children }] if
+        matches!(children.as_slice(), [Inline::Code { value }] if value == "bold")));
+    assert!(matches!(cell(2), [Inline::Emphasis { children }] if
+        matches!(children.as_slice(), [Inline::Code { value }] if value == "italic")));
+}
+
+#[test]
+fn ragged_matrix_keeps_later_column_rows_through_ir_json() {
+    let document = parse_manual_bytes(
+        std::path::Path::new("short-matrix.7"),
+        b".TH MATRIX 7\n.EQ\nmatrix { lcol { a } rcol { b above c } }\n.EN\n",
+    )
+    .unwrap();
+    let Block::Equation {
+        value,
+        expression: Some(expression),
+        ..
+    } = &document.blocks[0]
+    else {
+        panic!("matrix block");
+    };
+    // CVS eqn.h stores a matrix as column piles. Pinned eqn_html.c uses the
+    // first column's row count and drops `c`; the native tree and UTF-8 oracle
+    // retain it, so the shared reading projection uses the longest column.
+    assert_eq!(expression.children[0].kind, mant_ir::EquationKind::Matrix);
+    assert_eq!(value, "matrix(a, b; , c)");
+    // CVS eqn.c::eqn_box_new uses UINT_MAX for an unbounded list, and
+    // EQN_DEFSIZE is INT_MIN. The IR has no parser sentinel numerals.
+    let wire = serde_json::to_value(&document).unwrap();
+    assert!(
+        wire["blocks"][0]["expression"]
+            .get("expectedArgs")
+            .is_none()
+    );
+    assert!(
+        wire["blocks"][0]["expression"]["children"][0]
+            .get("size")
+            .is_none()
+    );
+    let json = serde_json::to_vec(&document).unwrap();
+    let restored: mant_ir::Document = serde_json::from_slice(&json).unwrap();
+    let Block::Equation {
+        value: restored_value,
+        expression: Some(restored_expression),
+        ..
+    } = &restored.blocks[0]
+    else {
+        panic!("round-trip matrix");
+    };
+    assert_eq!(restored_value, &restored_expression.readable_text());
+    assert!(mant_ir::validate_document(&restored).is_empty());
+}
+
+#[test]
+fn ragged_matrix_keeps_earlier_column_rows_through_ir() {
+    // The exact input was checked with the fixed -Ttree/-Thtml/-Tutf8 oracle.
+    // CVS eqn_html.c::eqn_box traverses rows in matrix column order and emits
+    // an empty trailing cell when the second column is shorter.
+    let document = parse_manual_bytes(
+        std::path::Path::new("long-first-matrix.7"),
+        b".TH MATRIX 7\n.EQ\nmatrix { lcol { a above b } rcol { c } }\n.EN\n",
+    )
+    .unwrap();
+    let Block::Equation {
+        value,
+        expression: Some(expression),
+        ..
+    } = &document.blocks[0]
+    else {
+        panic!("matrix block");
+    };
+    assert_eq!(value, "matrix(a, c; b, )");
+    assert_eq!(value, &expression.readable_text());
+    assert!(mant_ir::validate_document(&document).is_empty());
+}
+
+#[test]
+fn inline_equation_stays_between_prose_siblings() {
+    let document = parse_manual_bytes(
+        std::path::Path::new("inline-equation.1"),
+        b".TH INLINE 1\n.SH DESCRIPTION\n.EQ\ndelim $$\n.EN\nleft $x sub i$ right\n",
+    )
+    .unwrap();
+    let paragraph = document.sections[0]
+        .blocks
+        .iter()
+        .find_map(|block| match block {
+            Block::Paragraph { children, .. } => Some(children),
+            _ => None,
+        })
+        .expect("prose paragraph");
+    let kinds = paragraph
+        .iter()
+        .filter_map(|part| match part {
+            Inline::Text { value } if value.contains("left") => Some("left"),
+            Inline::Equation { value, expression } => {
+                assert_eq!(value, &expression.readable_text());
+                Some("equation")
+            }
+            Inline::Text { value } if value.contains("right") => Some("right"),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(kinds, ["left", "equation", "right"]);
+}
+
+#[test]
+fn native_equation_depth_loss_marks_both_document_coverage_flags() {
+    let source = format!(
+        ".TH DEEP 1\n.SH BODY\n.EQ\n{}x{}\n.EN\n",
+        "sqrt { ".repeat(260),
+        " }".repeat(260),
+    );
+    let document =
+        parse_manual_bytes(std::path::Path::new("deep-equation.1"), source.as_bytes()).unwrap();
+    // The exact input was run with the pinned -Ttree oracle before this
+    // assertion. Its eqn boxes continue beyond the owned 256-level limit.
+    assert!(
+        document
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.impact == mant_ir::DiagnosticImpact::ContentCoverage)
+    );
+    assert!(!mant_ir::content_complete(&document.diagnostics));
+    assert!(!mant_ir::semantics_complete(&document.diagnostics));
+}
+
+#[test]
 fn bounds_distinct_tbl_equation_normalization_work() {
     let mut source =
         String::from(".TH TABLE-EQN-BUDGET 3\n.SH DESCRIPTION\n.EQ\ndelim %%\n.EN\n.TS\nl.\n");
@@ -25,6 +196,19 @@ fn bounds_distinct_tbl_equation_normalization_work() {
         panic!("expected equation table");
     };
     assert_eq!(rows.len(), MAX_INLINE_EQUATION_NORMALIZATIONS + 1);
+    // The pinned tbl tree still owns all 257 cells. Stopping the optional
+    // reparse leaves the native payload readable, so this is no content loss.
+    assert!(mant_ir::content_complete(&document.diagnostics));
+    assert!(mant_ir::semantics_complete(&document.diagnostics));
+    assert_eq!(
+        document
+            .diagnostics
+            .iter()
+            .find(|diagnostic| diagnostic.code.as_deref() == Some("manual.inline-equation-budget"))
+            .unwrap()
+            .impact,
+        mant_ir::DiagnosticImpact::None
+    );
 }
 
 #[test]
@@ -244,9 +428,11 @@ fn contains_manual_link(children: &[Inline]) -> bool {
         Inline::Strong { children }
         | Inline::Emphasis { children }
         | Inline::Link { children, .. } => contains_manual_link(children),
-        Inline::Text { .. } | Inline::Code { .. } | Inline::Anchor { .. } | Inline::LineBreak => {
-            false
-        }
+        Inline::Text { .. }
+        | Inline::Code { .. }
+        | Inline::Equation { .. }
+        | Inline::Anchor { .. }
+        | Inline::LineBreak => false,
     })
 }
 
@@ -254,9 +440,11 @@ fn contains_emphasis(children: &[Inline]) -> bool {
     children.iter().any(|inline| match inline {
         Inline::Emphasis { .. } => true,
         Inline::Strong { children } | Inline::Link { children, .. } => contains_emphasis(children),
-        Inline::Text { .. } | Inline::Code { .. } | Inline::Anchor { .. } | Inline::LineBreak => {
-            false
-        }
+        Inline::Text { .. }
+        | Inline::Code { .. }
+        | Inline::Equation { .. }
+        | Inline::Anchor { .. }
+        | Inline::LineBreak => false,
     })
 }
 

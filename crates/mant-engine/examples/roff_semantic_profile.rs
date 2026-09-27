@@ -486,7 +486,9 @@ fn inline_text(nodes: &[Inline]) -> String {
     let mut output = String::new();
     for node in nodes {
         match node {
-            Inline::Text { value } | Inline::Code { value } => output.push_str(value),
+            Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. } => {
+                output.push_str(value);
+            }
             Inline::Strong { children }
             | Inline::Emphasis { children }
             | Inline::Link { children, .. } => output.push_str(&inline_text(children)),

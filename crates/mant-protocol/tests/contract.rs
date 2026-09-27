@@ -172,6 +172,28 @@ fn unknown_query_schema_is_rejected() {
 }
 
 #[test]
+fn v0_12_rejects_v0_11_and_mixed_query_document_markers() {
+    let legacy = include_str!("../../../tests/contracts/minimal-query-v0.11.json");
+    assert!(serde_json::from_str::<QueryBundle>(legacy).is_err());
+    let mixed = MINIMAL_QUERY.replace("mant.document/v0.12", "mant.document/v0.11");
+    assert!(serde_json::from_str::<QueryBundle>(&mixed).is_err());
+}
+
+#[test]
+fn v0_12_scope_search_rejects_unknown_fields_at_each_changed_level() {
+    let original: Value = serde_json::from_str(SCOPE_SEARCH).unwrap();
+    for pointer in ["", "/result/search", "/result/search/documents/0"] {
+        let mut value = original.clone();
+        let object = value.pointer_mut(pointer).unwrap().as_object_mut().unwrap();
+        object.insert("future".into(), true.into());
+        assert!(
+            serde_json::from_value::<ScopeQueryResponse>(value).is_err(),
+            "{pointer}"
+        );
+    }
+}
+
+#[test]
 fn native_query_request_covers_every_projection_and_rejects_unknown_fields() {
     let request: QueryRequest = serde_json::from_str(
         r#"{"schema":"mant.request/v0.12","input":{"kind":"document","selector":"printf","manualSection":"3"},"view":{"kind":"full"}}"#,
@@ -289,7 +311,7 @@ fn native_search_defaults_and_closed_request_fields_are_enforced() {
 }
 
 #[test]
-fn request_v0_12_rejects_the_obsolete_outline_detail_field() {
+fn request_v0_13_rejects_the_obsolete_outline_detail_field() {
     let error = serde_json::from_str::<QueryRequest>(
         r#"{"schema":"mant.request/v0.12","input":{"kind":"document","selector":"tar"},"view":{"kind":"outline","detail":"options"}}"#,
     )
@@ -298,7 +320,7 @@ fn request_v0_12_rejects_the_obsolete_outline_detail_field() {
 }
 
 #[test]
-fn request_v0_12_rejects_unknown_fields_inside_outline_unions() {
+fn request_v0_13_rejects_unknown_fields_inside_outline_unions() {
     for request in [
         r#"{"schema":"mant.request/v0.12","input":{"kind":"document","selector":"tar"},"view":{"kind":"outline","entries":{"kind":"all","future":true}}}"#,
         r#"{"schema":"mant.request/v0.12","input":{"kind":"document","selector":"tar"},"view":{"kind":"outline","entries":{"kind":"kinds","kinds":[{"kind":"parameter","parameterKind":"option","typo":true}]}}}"#,
@@ -346,7 +368,7 @@ fn scope_request_is_closed_bounded_and_keeps_single_document_views_separate() {
 }
 
 #[test]
-fn request_v0_12_selects_one_configured_source_without_accepting_v4() {
+fn request_v0_13_selects_one_configured_source_without_accepting_v4() {
     let selected: QueryRequest = serde_json::from_str(
         r#"{"schema":"mant.request/v0.12","input":{"kind":"document","selector":"printf","source":"team"},"view":{"kind":"full"}}"#,
     )

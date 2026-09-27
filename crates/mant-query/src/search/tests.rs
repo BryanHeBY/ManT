@@ -105,6 +105,42 @@ fn request(pattern: &str) -> SearchQuery {
 }
 
 #[test]
+fn document_content_loss_survives_search_pagination() {
+    let mut content = query();
+    content
+        .document
+        .as_mut()
+        .unwrap()
+        .diagnostics
+        .push(mant_ir::Diagnostic {
+            impact: mant_ir::DiagnosticImpact::ContentCoverage,
+            level: mant_ir::DiagnosticLevel::Warning,
+            code: Some("test.omitted-content".into()),
+            message: "source content omitted".into(),
+            source: None,
+        });
+    let mut page = request("--acls");
+    page.limit = 1;
+    for offset in [0, 1] {
+        page.offset = offset;
+        let result = search_query(&content, &page).unwrap();
+        assert!(!result.content_complete);
+        assert_eq!(
+            result.diagnostics[0].impact,
+            mant_ir::DiagnosticImpact::ContentCoverage
+        );
+        // A transport may bound diagnostic details independently of search
+        // results. The explicit summary remains authoritative after that
+        // detail list is shortened and serialized.
+        let mut bounded = result.clone();
+        bounded.diagnostics.clear();
+        let restored: mant_protocol::QuerySearch =
+            serde_json::from_str(&serde_json::to_string(&bounded).unwrap()).unwrap();
+        assert!(!restored.content_complete);
+    }
+}
+
+#[test]
 fn visible_search_maps_inline_formatting_to_markdown_and_option_nodes() {
     let result = search_query(&query(), &request("access control")).expect("search");
 

@@ -235,9 +235,11 @@ fn lets_explicit_fonts_override_an_alternating_macro_default() {
         .collect::<Vec<_>>();
 
     assert_eq!(term.len(), 5);
-    assert!(matches!(term[0], Inline::Strong { children } if inline_text(children) == "-r "));
+    // CVS man_html.c::man_alt_pre keeps the escaped spaces inside the font
+    // operands; the fixed oracle emits &#x00A0; for each one.
+    assert!(matches!(term[0], Inline::Strong { children } if inline_text(children) == "-r\u{a0}"));
     assert!(matches!(term[1], Inline::Emphasis { children } if inline_text(children) == "prompt"));
-    assert!(matches!(term[2], Inline::Text { value } if value == ", "));
+    assert!(matches!(term[2], Inline::Text { value } if value == ",\u{a0}"));
     assert!(matches!(term[3], Inline::Strong { children } if inline_text(children) == "--prompt="));
     assert!(matches!(term[4], Inline::Emphasis { children } if inline_text(children) == "prompt"));
 }

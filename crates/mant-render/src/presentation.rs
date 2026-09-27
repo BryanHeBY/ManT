@@ -31,13 +31,14 @@ pub fn render_explanation_status(result: &mant_protocol::QueryExplanation) -> St
         mant_protocol::ExplanationOutcome::NoEvidence => "no-evidence",
     };
     let mut text = format!(
-        "{} — explanation {:?}: {outcome}; owners={}, returned={}, offset={}; semanticsComplete={}",
+        "{} — explanation {:?}: {outcome}; owners={}, returned={}, offset={}; semanticsComplete={}; contentComplete={}",
         sanitize_terminal_text(&result.label),
         sanitize_terminal_text(&result.query.entry),
         result.total,
         result.returned,
         result.query.options.offset,
-        result.semantics_complete
+        result.semantics_complete,
+        result.content_complete
     );
     if let Some(next) = result.next_offset {
         write!(text, "; nextOffset={next}").expect("String writer");

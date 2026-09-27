@@ -118,7 +118,9 @@ fn preserves_man_synopsis_flow_and_alternating_fonts() {
     };
     assert_eq!(
         inline_text(children),
-        "man [man options] [[section] page ...] ...\n\
+        // CVS man_html.c::man_alt_pre and html.c::print_encode retain the
+        // escaped spaces before both ellipsis groups. Oracle: &#x00A0;.
+        "man [man options] [[section] page\u{a0}...]\u{a0}...\n\
          man -k [apropos options] regexp ...\n\
          man -w|-W [man options] page ..."
     );
@@ -870,7 +872,9 @@ fn carries_mdoc_spacing_state_out_of_nested_synopsis_enclosures() {
     };
     assert_eq!(
         inline_text(children),
-        "demo [-m memory] [-o variable=value] name"
+        // CVS mdoc_html.c keeps the authored \~ after Fl m; the fixed
+        // oracle gives that boundary nonbreaking-space semantics.
+        "demo [-m\u{a0}memory] [-o variable=value] name"
     );
 }
 

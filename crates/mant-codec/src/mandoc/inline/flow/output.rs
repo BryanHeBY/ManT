@@ -45,7 +45,9 @@ impl InlineBuilder {
     ) -> bool {
         fn contains_glyph(nodes: &[Inline]) -> bool {
             nodes.iter().any(|node| match node {
-                Inline::Text { value } | Inline::Code { value } => {
+                Inline::Text { value }
+                | Inline::Code { value }
+                | Inline::Equation { value, .. } => {
                     value.chars().any(|character| !character.is_whitespace())
                 }
                 Inline::Strong { children }
@@ -795,7 +797,9 @@ pub(in crate::mandoc::inline) fn trailing_ascii_spaces(nodes: &[Inline]) -> usiz
             match node {
                 Inline::Anchor { .. } => {}
                 Inline::LineBreak => return false,
-                Inline::Text { value } | Inline::Code { value } => {
+                Inline::Text { value }
+                | Inline::Code { value }
+                | Inline::Equation { value, .. } => {
                     let trailing = value.chars().rev().take_while(|&ch| ch == ' ').count();
                     *count = count.saturating_add(trailing);
                     if trailing != value.chars().count() {
@@ -829,7 +833,9 @@ pub(super) fn trim_trailing_breakable_spaces(nodes: &mut Vec<Inline>, count: usi
             let remove = match &mut nodes[index] {
                 Inline::Anchor { .. } => continue,
                 Inline::LineBreak => return false,
-                Inline::Text { value } | Inline::Code { value } => {
+                Inline::Text { value }
+                | Inline::Code { value }
+                | Inline::Equation { value, .. } => {
                     let original_len = value.len();
                     while *remaining > 0 && value.ends_with(' ') {
                         value.pop();
@@ -873,7 +879,10 @@ fn line_break_count(nodes: &[Inline]) -> usize {
             Inline::Strong { children }
             | Inline::Emphasis { children }
             | Inline::Link { children, .. } => line_break_count(children),
-            Inline::Text { .. } | Inline::Code { .. } | Inline::Anchor { .. } => 0,
+            Inline::Text { .. }
+            | Inline::Code { .. }
+            | Inline::Equation { .. }
+            | Inline::Anchor { .. } => 0,
         })
         .sum()
 }
@@ -890,7 +899,7 @@ fn retained_hidden_layout(nodes: &[Inline]) -> Vec<Inline> {
             Inline::Strong { children }
             | Inline::Emphasis { children }
             | Inline::Link { children, .. } => retained.extend(retained_hidden_layout(children)),
-            Inline::Text { .. } | Inline::Code { .. } => {}
+            Inline::Text { .. } | Inline::Code { .. } | Inline::Equation { .. } => {}
         }
     }
     retained
@@ -922,7 +931,9 @@ fn retained_replacement_layout(nodes: Vec<Inline>) -> Vec<Inline> {
                 before_first_glyph = true;
             }
             Inline::Anchor { .. } => retained.push(node),
-            Inline::Text { value } | Inline::Code { value } if before_first_glyph => {
+            Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. }
+                if before_first_glyph =>
+            {
                 if let Some(prefix) = leading_whitespace(&value) {
                     retained.push(prefix);
                 }
@@ -941,6 +952,7 @@ fn retained_replacement_layout(nodes: Vec<Inline>) -> Vec<Inline> {
             }
             Inline::Text { .. }
             | Inline::Code { .. }
+            | Inline::Equation { .. }
             | Inline::Strong { .. }
             | Inline::Emphasis { .. }
             | Inline::Link { .. } => {}

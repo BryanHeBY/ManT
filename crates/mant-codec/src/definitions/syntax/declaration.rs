@@ -151,9 +151,11 @@ fn literal_ranges(
 ) {
     for node in nodes {
         match node {
-            Inline::Text { value } | Inline::Code { value } => {
+            Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. } => {
                 let end = *offset + value.len();
-                if (literal || matches!(node, Inline::Code { .. })) && !parameter {
+                if (literal || matches!(node, Inline::Code { .. } | Inline::Equation { .. }))
+                    && !parameter
+                {
                     ranges.push((*offset, end));
                 }
                 *offset = end;
@@ -182,7 +184,7 @@ fn collect_literal_starts(
 ) {
     for inline in inlines {
         match inline {
-            Inline::Text { value } | Inline::Code { value } => {
+            Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. } => {
                 if strong && !parameter && !value.trim_start().is_empty() {
                     starts.insert(*offset + value.len() - value.trim_start().len());
                 }

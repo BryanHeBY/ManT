@@ -357,7 +357,7 @@ pub struct ScopeReferenceLimit {
 
 /// One document's search hits inside a globally paginated scope result.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ScopedSearchDocument {
     /// Stable logical document identity.
     pub address: DocumentAddress,
@@ -365,6 +365,15 @@ pub struct ScopedSearchDocument {
     pub depth: u16,
     /// Canonical Markdown coordinate space for this document's hits.
     pub render: SearchRender,
+    /// Recoverable producer and shared invariant findings for this document.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub diagnostics: Vec<mant_ir::Diagnostic>,
+    /// False when this document is known to have lost visible content.
+    #[serde(
+        default = "default_content_complete",
+        skip_serializing_if = "content_is_complete"
+    )]
+    pub content_complete: bool,
     /// Matching line groups retained from the globally paginated result set.
     /// Their ordinals are global across all documents in the scope.
     pub matches: Vec<SearchHit>,
@@ -372,10 +381,17 @@ pub struct ScopedSearchDocument {
 
 /// Globally paginated search over a resolved document scope.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ScopeSearch {
     /// Normalized search configuration.
     pub query: SearchQuery,
+    /// False when any readable document in the searched scope lost content,
+    /// including documents with no hits on this page.
+    #[serde(
+        default = "default_content_complete",
+        skip_serializing_if = "content_is_complete"
+    )]
+    pub content_complete: bool,
     /// Matching line groups across all documents before pagination.
     pub total: u32,
     /// Matching line groups present in this response.
@@ -410,6 +426,12 @@ pub struct ScopedExplanation {
     pub diagnostics: Vec<mant_ir::Diagnostic>,
     /// Semantic validation, not evidence recall.
     pub semantics_complete: bool,
+    /// False when this source document is known to have lost visible content.
+    #[serde(
+        default = "default_content_complete",
+        skip_serializing_if = "content_is_complete"
+    )]
+    pub content_complete: bool,
     /// Normal local evidence/no-evidence outcome before global pagination.
     pub outcome: crate::ExplanationOutcome,
     /// Local collected owners.
@@ -494,7 +516,7 @@ pub struct ScopeExplanation {
 
 /// Complete bounded multi-document response.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[schemars(extend("$id" = "urn:mant:scope-query:v0.12"))]
 pub struct ScopeQueryResponse {
     /// Exact response schema discriminator.
@@ -535,4 +557,13 @@ impl<'de> Deserialize<'de> for ScopeExplanation {
             .map_err(serde::de::Error::custom)?;
         Ok(value)
     }
+}
+
+const fn default_content_complete() -> bool {
+    true
+}
+// Serde's `skip_serializing_if` predicate receives a reference.
+#[allow(clippy::trivially_copy_pass_by_ref)]
+const fn content_is_complete(value: &bool) -> bool {
+    *value
 }

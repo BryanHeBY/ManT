@@ -1,17 +1,18 @@
 //! Immediate borrowed snapshot to owned Rust AST transfer.
 use super::{
     raw::{
-        self, CDocument, CNode, CNodeView, CTableCell, CTableCellView, CTableRuleCell,
-        CTableRuleCellView,
+        self, CDocument, CEquationBox, CEquationBoxView, CNode, CNodeView, CTableCell,
+        CTableCellView, CTableRuleCell, CTableRuleCellView,
     },
     session::DocumentHandle,
 };
 use crate::{
-    AuthorMode, DefinitionListStyle, DisplayKind, Document, MacroSet, Metadata, Node, NodeFlags,
-    NodeKind, NormalizedEnclosure, NormalizedFont, NormalizedListKind, RawDocument, TableAlignment,
-    TableCell, TableCellKind, TableRowKind, TableRuleCellKind,
+    AuthorMode, DefinitionListStyle, DisplayKind, Document, EquationBox, EquationFont,
+    EquationKind, EquationPosition, MacroSet, Metadata, Node, NodeFlags, NodeKind,
+    NormalizedEnclosure, NormalizedFont, NormalizedListKind, NormalizedSection, RawDocument,
+    ScopeEnd, TableAlignment, TableCell, TableCellKind, TableFont, TableRowKind, TableRuleCellKind,
 };
-use std::{ffi::CStr, os::raw::c_char, ptr::NonNull};
+use std::{collections::HashMap, ffi::CStr, os::raw::c_char, ptr::NonNull};
 const NODE_GENERATED: u32 = 1 << 0;
 const NODE_SENTENCE_END: u32 = 1 << 1;
 const NODE_NO_PRINT: u32 = 1 << 2;
@@ -24,6 +25,65 @@ const NODE_DELIMITER_CLOSE: u32 = 1 << 8;
 const NODE_SYNOPSIS_PRETTY: u32 = 1 << 9;
 const NODE_TABLE_START: u32 = 1 << 10;
 const MAX_OWNED_NODE_DEPTH: usize = 256;
+const MAX_OWNED_EQUATION_DEPTH: usize = 256;
+const MAX_OWNED_EQUATION_NODES: usize = 50_000;
+const MAX_OWNED_EQUATION_BYTES: usize = 2 * 1024 * 1024;
+const MAX_OWNED_SYNTAX_ITEMS: usize = 250_000;
+const MAX_OWNED_SYNTAX_BYTES: usize = 128 * 1024 * 1024;
+
+#[derive(Default)]
+struct TransferBudget {
+    items: usize,
+    bytes: usize,
+}
+
+impl TransferBudget {
+    fn charge(&mut self, bytes: usize) -> Result<(), String> {
+        self.items = self.items.saturating_add(1);
+        self.bytes = self.bytes.saturating_add(bytes);
+        if self.items > MAX_OWNED_SYNTAX_ITEMS || self.bytes > MAX_OWNED_SYNTAX_BYTES {
+            return Err(format!(
+                "owned syntax transfer exceeded its cumulative node/byte budget ({} items, {} bytes)",
+                self.items, self.bytes
+            ));
+        }
+        Ok(())
+    }
+}
+
+#[derive(Default)]
+struct EquationBudget {
+    nodes: usize,
+    bytes: usize,
+    truncated: bool,
+}
+
+#[derive(Default)]
+struct IdentityState {
+    next: u32,
+    // Only BODY nodes can be targets of mdoc_endbody_alloc's `body` link.
+    // Keep their borrowed addresses for this synchronous transfer alone.
+    bodies: HashMap<*const CNode, u32>,
+}
+
+impl IdentityState {
+    fn assign(&mut self, pointer: *const CNode, body: bool) -> Result<u32, String> {
+        self.next = self
+            .next
+            .checked_add(1)
+            .ok_or_else(|| "owned syntax identity limit exceeded".to_owned())?;
+        if body {
+            self.bodies.insert(pointer, self.next);
+        }
+        Ok(self.next)
+    }
+
+    fn closed_body(&self, pointer: *const CNode) -> Result<u32, String> {
+        self.bodies.get(&pointer).copied().ok_or_else(|| {
+            "libmandoc returned a body close marker without an owned body".to_owned()
+        })
+    }
+}
 
 pub(super) fn copy_document(pointer: *mut CDocument) -> Result<RawDocument, String> {
     let handle = DocumentHandle(
@@ -44,33 +104,48 @@ pub(super) fn copy_document(pointer: *mut CDocument) -> Result<RawDocument, Stri
     }
 
     let mut node_truncated = false;
-    let root = unsafe { copy_node(document, root, 0, &mut node_truncated) }?.0;
+    let mut equation_budget = EquationBudget::default();
+    let mut transfer_budget = TransferBudget::default();
+    let mut identities = IdentityState::default();
+    let root = unsafe {
+        copy_node(
+            document,
+            root,
+            0,
+            &mut node_truncated,
+            &mut equation_budget,
+            &mut transfer_budget,
+            &mut identities,
+        )
+    }?
+    .0;
     Ok(RawDocument {
         document: Document {
             macro_set: macro_set(unsafe { raw::mant_mandoc_document_macroset(document) })?,
             metadata: Metadata {
-                title: unsafe { optional_string(raw::mant_mandoc_document_title(document)) },
-                section: unsafe { optional_string(raw::mant_mandoc_document_section(document)) },
-                volume: unsafe { optional_string(raw::mant_mandoc_document_volume(document)) },
-                os: unsafe { optional_string(raw::mant_mandoc_document_os(document)) },
-                arch: unsafe { optional_string(raw::mant_mandoc_document_arch(document)) },
-                name: unsafe { optional_string(raw::mant_mandoc_document_name(document)) },
-                date: unsafe { optional_string(raw::mant_mandoc_document_date(document)) },
+                title: unsafe { checked_string(raw::mant_mandoc_document_title(document)) }?,
+                section: unsafe { checked_string(raw::mant_mandoc_document_section(document)) }?,
+                volume: unsafe { checked_string(raw::mant_mandoc_document_volume(document)) }?,
+                os: unsafe { checked_string(raw::mant_mandoc_document_os(document)) }?,
+                arch: unsafe { checked_string(raw::mant_mandoc_document_arch(document)) }?,
+                name: unsafe { checked_string(raw::mant_mandoc_document_name(document)) }?,
+                date: unsafe { checked_string(raw::mant_mandoc_document_date(document)) }?,
                 alias_target: unsafe {
-                    optional_string(raw::mant_mandoc_document_alias_target(document))
-                },
+                    checked_string(raw::mant_mandoc_document_alias_target(document))
+                }?,
                 has_body: unsafe { raw::mant_mandoc_document_has_body(document) } != 0,
             },
             root,
         },
-        diagnostics: unsafe {
-            optional_string(raw::mant_mandoc_document_diagnostics(document)).unwrap_or_default()
-        },
+        diagnostics: unsafe { checked_string(raw::mant_mandoc_document_diagnostics(document)) }?
+            .unwrap_or_default(),
         node_truncated,
-        equation_truncated: unsafe { raw::mant_mandoc_document_equation_truncated(document) } != 0,
+        equation_truncated: equation_budget.truncated,
     })
 }
 
+// Native failure messages and locale probes are outside the successful owned
+// AST contract. Preserve a readable status even when their raw bytes are bad.
 pub(super) unsafe fn optional_string(pointer: *const c_char) -> Option<String> {
     if pointer.is_null() {
         None
@@ -83,31 +158,71 @@ pub(super) unsafe fn optional_string(pointer: *const c_char) -> Option<String> {
     }
 }
 
+unsafe fn checked_string(pointer: *const c_char) -> Result<Option<String>, String> {
+    if pointer.is_null() {
+        return Ok(None);
+    }
+    let bytes = unsafe { CStr::from_ptr(pointer) }.to_bytes();
+    let text =
+        std::str::from_utf8(bytes).map_err(|_| "libmandoc returned a non-UTF-8 internal string")?;
+    Ok(Some(text.to_owned()))
+}
+
+#[cfg(test)]
+mod string_boundary_tests {
+    use super::checked_string;
+
+    #[test]
+    fn successful_internal_strings_reject_invalid_utf8() {
+        let invalid = [0xff_u8, 0];
+        let result = unsafe { checked_string(invalid.as_ptr().cast()) };
+        assert_eq!(
+            result.unwrap_err(),
+            "libmandoc returned a non-UTF-8 internal string"
+        );
+    }
+}
+
 include!(concat!(env!("OUT_DIR"), "/text_sentinels.rs"));
 
-unsafe fn visible_string(pointer: *const c_char) -> Option<String> {
-    unsafe { optional_string(pointer) }.map(|text| {
-        if !text.chars().any(|character| {
-            [
-                ASCII_NBRSP,
-                ASCII_NBRZW,
-                ASCII_BREAK,
-                ASCII_HYPH,
-                ASCII_TABREF,
-            ]
-            .contains(&character)
-        }) {
-            return text;
-        }
-        text.chars()
-            .filter_map(|character| match character {
-                ASCII_NBRZW | ASCII_BREAK | ASCII_TABREF => None,
-                ASCII_HYPH => Some('-'),
-                ASCII_NBRSP => Some(' '),
-                other => Some(other),
-            })
-            .collect()
+unsafe fn visible_string(pointer: *const c_char) -> Result<Option<String>, String> {
+    Ok(unsafe { checked_string(pointer) }?.map(|text| normalize_visible_text(&text)))
+}
+
+fn has_native_text_sentinel(text: &str) -> bool {
+    text.chars().any(|character| {
+        [
+            ASCII_NBRSP,
+            ASCII_NBRZW,
+            ASCII_BREAK,
+            ASCII_HYPH,
+            ASCII_TABREF,
+        ]
+        .contains(&character)
     })
+}
+
+fn normalize_visible_text(text: &str) -> String {
+    if !text.chars().any(|character| {
+        [
+            ASCII_NBRSP,
+            ASCII_NBRZW,
+            ASCII_BREAK,
+            ASCII_HYPH,
+            ASCII_TABREF,
+        ]
+        .contains(&character)
+    }) {
+        return text.to_owned();
+    }
+    text.chars()
+        .filter_map(|character| match character {
+            ASCII_NBRZW | ASCII_BREAK | ASCII_TABREF => None,
+            ASCII_HYPH => Some('-'),
+            ASCII_NBRSP => Some(' '),
+            other => Some(other),
+        })
+        .collect()
 }
 
 fn macro_set(value: i32) -> Result<MacroSet, String> {
@@ -133,6 +248,36 @@ fn node_kind(value: i32) -> Result<NodeKind, String> {
         9 => Ok(NodeKind::Equation),
         _ => Err("libmandoc returned an unknown node kind".to_owned()),
     }
+}
+
+fn normalized_section(value: i32) -> Result<NormalizedSection, String> {
+    use NormalizedSection as S;
+    Ok(match value {
+        0 => S::None,
+        1 => S::Name,
+        2 => S::Library,
+        3 => S::Synopsis,
+        4 => S::Description,
+        5 => S::Context,
+        6 => S::Implementation,
+        7 => S::ReturnValues,
+        8 => S::Environment,
+        9 => S::Files,
+        10 => S::ExitStatus,
+        11 => S::Examples,
+        12 => S::Diagnostics,
+        13 => S::Compatibility,
+        14 => S::Errors,
+        15 => S::SeeAlso,
+        16 => S::Standards,
+        17 => S::History,
+        18 => S::Authors,
+        19 => S::Caveats,
+        20 => S::Bugs,
+        21 => S::Security,
+        22 => S::Custom,
+        _ => return Err("libmandoc returned an unknown normalized section".to_owned()),
+    })
 }
 
 fn list_kind(value: i32) -> Result<Option<NormalizedListKind>, String> {
@@ -204,33 +349,217 @@ fn table_row_kind(
     }
 }
 
+unsafe fn copy_equation(
+    document: *const CDocument,
+    pointer: *const CEquationBox,
+    depth: usize,
+    budget: &mut EquationBudget,
+) -> Result<Option<EquationBox>, String> {
+    if pointer.is_null() {
+        return Ok(None);
+    }
+    if depth >= MAX_OWNED_EQUATION_DEPTH || budget.nodes >= MAX_OWNED_EQUATION_NODES {
+        budget.truncated = true;
+        return Ok(None);
+    }
+    let mut view = std::mem::MaybeUninit::<CEquationBoxView>::uninit();
+    if unsafe { raw::mant_mandoc_eqn_box_snapshot(document, pointer, view.as_mut_ptr()) } == 0 {
+        return Err("libmandoc returned an invalid borrowed equation box".to_owned());
+    }
+    let view = unsafe { view.assume_init() };
+    let kind = match view.kind {
+        0 => EquationKind::Text,
+        1 => EquationKind::Subexpression,
+        2 => EquationKind::List,
+        3 => EquationKind::Pile,
+        4 => EquationKind::Matrix,
+        _ => return Err("libmandoc returned an unknown equation box kind".to_owned()),
+    };
+    let font = match view.font {
+        0 => EquationFont::None,
+        1 => EquationFont::Roman,
+        2 => EquationFont::Bold,
+        3 => EquationFont::Fat,
+        4 => EquationFont::Italic,
+        _ => return Err("libmandoc returned an unknown equation font".to_owned()),
+    };
+    let position = match view.position {
+        0 => EquationPosition::None,
+        1 => EquationPosition::Superscript,
+        2 => EquationPosition::SubscriptSuperscript,
+        3 => EquationPosition::Subscript,
+        4 => EquationPosition::To,
+        5 => EquationPosition::From,
+        6 => EquationPosition::FromTo,
+        7 => EquationPosition::Over,
+        8 => EquationPosition::Sqrt,
+        _ => return Err("libmandoc returned an unknown equation position".to_owned()),
+    };
+    let text = unsafe { checked_string(view.text) }?;
+    let left = unsafe { checked_string(view.left) }?;
+    let right = unsafe { checked_string(view.right) }?;
+    let top = unsafe { checked_string(view.top) }?;
+    let bottom = unsafe { checked_string(view.bottom) }?;
+    let required_bytes = std::mem::size_of::<EquationBox>()
+        + [&text, &left, &right, &top, &bottom]
+            .into_iter()
+            .filter_map(|part| part.as_ref())
+            .map(String::len)
+            .sum::<usize>();
+    budget.nodes += 1;
+    budget.bytes = budget.bytes.saturating_add(required_bytes);
+    if budget.bytes > MAX_OWNED_EQUATION_BYTES {
+        budget.truncated = true;
+        return Ok(None);
+    }
+    let mut children = Vec::new();
+    let mut child = view.first;
+    while !child.is_null() {
+        if budget.truncated {
+            break;
+        }
+        if let Some(owned) = unsafe { copy_equation(document, child, depth + 1, budget) }? {
+            children.push(owned);
+        }
+        if budget.truncated {
+            break;
+        }
+        // The borrowed snapshot is still valid for this synchronous walk.
+        // A separate one-box snapshot gives us the sibling without retaining
+        // any pointer in the returned owned tree.
+        let mut next_view = std::mem::MaybeUninit::<CEquationBoxView>::uninit();
+        if unsafe { raw::mant_mandoc_eqn_box_snapshot(document, child, next_view.as_mut_ptr()) }
+            == 0
+        {
+            return Err("libmandoc returned an invalid borrowed equation sibling".to_owned());
+        }
+        child = unsafe { next_view.assume_init() }.next;
+    }
+    Ok(Some(EquationBox {
+        kind,
+        font,
+        position,
+        size: view.size,
+        expected_args: view.expected_args,
+        actual_args: view.actual_args,
+        text,
+        left,
+        right,
+        top,
+        bottom,
+        children,
+    }))
+}
+
 unsafe fn copy_node(
     document: *mut CDocument,
     pointer: *const CNode,
     depth: usize,
     truncated: &mut bool,
+    equation_budget: &mut EquationBudget,
+    transfer_budget: &mut TransferBudget,
+    identities: &mut IdentityState,
 ) -> Result<(Node, *const CNode), String> {
+    // Keep native traversal state on the heap. A deep roff tree reaches the
+    // 256-level copy limit without consuming a thread's small C/Rust stack.
+    struct Frame {
+        node: Node,
+        child: *const CNode,
+        depth: usize,
+    }
+    let (node, child, root_next) = unsafe {
+        copy_node_shallow(
+            document,
+            pointer,
+            equation_budget,
+            transfer_budget,
+            identities,
+        )
+    }?;
+    let mut stack = vec![Frame { node, child, depth }];
+    while let Some(mut frame) = stack.pop() {
+        if !frame.child.is_null() && frame.depth + 1 < MAX_OWNED_NODE_DEPTH {
+            let (node, child, next) = unsafe {
+                copy_node_shallow(
+                    document,
+                    frame.child,
+                    equation_budget,
+                    transfer_budget,
+                    identities,
+                )
+            }?;
+            frame.child = next;
+            let child_depth = frame.depth + 1;
+            stack.push(frame);
+            stack.push(Frame {
+                node,
+                child,
+                depth: child_depth,
+            });
+            continue;
+        }
+        if !frame.child.is_null() {
+            *truncated = true;
+        }
+        if let Some(parent) = stack.last_mut() {
+            parent.node.children.push(frame.node);
+        } else {
+            return Ok((frame.node, root_next));
+        }
+    }
+    Err("libmandoc returned an empty syntax traversal".to_owned())
+}
+
+unsafe fn copy_node_shallow(
+    document: *mut CDocument,
+    pointer: *const CNode,
+    equation_budget: &mut EquationBudget,
+    transfer_budget: &mut TransferBudget,
+    identities: &mut IdentityState,
+) -> Result<(Node, *const CNode, *const CNode), String> {
     let mut view = std::mem::MaybeUninit::<CNodeView>::uninit();
     if unsafe { raw::mant_mandoc_node_snapshot(document, pointer, view.as_mut_ptr()) } == 0 {
         return Err("libmandoc returned an invalid borrowed syntax node".to_owned());
     }
     let view = unsafe { view.assume_init() };
-    let text = unsafe { visible_string(view.text) };
+    let raw_text = unsafe { checked_string(view.text) }?;
+    let native_text = raw_text
+        .as_ref()
+        .filter(|text| has_native_text_sentinel(text))
+        .cloned();
+    let text = raw_text.as_deref().map(normalize_visible_text);
     let line_continuation = text.as_deref().is_some_and(ends_with_no_space_escape);
-    let enclosure_open = unsafe { optional_string(view.enclosure_open) };
-    let enclosure_close = unsafe { optional_string(view.enclosure_close) };
-    let mut node = Node {
-        kind: node_kind(view.kind)?,
-        macro_name: unsafe { optional_string(view.macro_name) },
+    let enclosure_open = unsafe { checked_string(view.enclosure_open) }?;
+    let enclosure_close = unsafe { checked_string(view.enclosure_close) }?;
+    let kind = node_kind(view.kind)?;
+    let scope_end = match view.end_kind {
+        0 if view.end_body.is_null() => None,
+        1 if !view.end_body.is_null() => Some(ScopeEnd {
+            body_id: identities.closed_body(view.end_body)?,
+        }),
+        _ => return Err("libmandoc returned an invalid body close relation".to_owned()),
+    };
+    let node = Node {
+        id: identities.assign(pointer, kind == NodeKind::Body && scope_end.is_none())?,
+        kind,
+        section: normalized_section(view.section)?,
+        scope_end,
+        reference_quotes_title: match view.reference_quotes_title {
+            0 => false,
+            1 => true,
+            _ => return Err("libmandoc returned an invalid reference quote flag".to_owned()),
+        },
+        macro_name: unsafe { checked_string(view.macro_name) }?,
         text,
-        tag: unsafe { visible_string(view.tag) },
+        native_text,
+        tag: unsafe { visible_string(view.tag) }?,
         line: view.line.try_into().unwrap_or_default(),
         column: view.column.try_into().unwrap_or_default(),
         flow_epoch: view.flow_epoch,
         table_escape: u8::try_from(view.table_escape).ok(),
         table_source_recovery_safe: view.table_source_recovery_safe != 0,
         table_row_kind: table_row_kind(view.table_row_kind, unsafe {
-            copy_table_rule_cells(document, view.table_rule_cells)
+            copy_table_rule_cells(document, view.table_rule_cells, transfer_budget)
         }?)?,
         flags: NodeFlags {
             generated: view.flags & NODE_GENERATED != 0,
@@ -256,26 +585,27 @@ unsafe fn copy_node(
             closing: enclosure_close,
         }),
         compact: view.compact != 0,
-        offset: unsafe { optional_string(view.offset) },
-        width: unsafe { optional_string(view.width) },
-        table_cells: unsafe { copy_table_cells(document, view.table_cells) }?,
-        // The shim reuses this equation buffer on the next node snapshot, so
-        // copy it before descending into children or taking another snapshot.
-        equation: unsafe { visible_string(view.equation) },
+        offset: unsafe { checked_string(view.offset) }?,
+        width: unsafe { checked_string(view.width) }?,
+        table_cells: unsafe { copy_table_cells(document, view.table_cells, transfer_budget) }?,
+        equation: unsafe { copy_equation(document, view.equation, 0, equation_budget) }?,
         children: Vec::new(),
     };
 
-    if depth + 1 < MAX_OWNED_NODE_DEPTH {
-        let mut child = view.child;
-        while !child.is_null() {
-            let (owned, next) = unsafe { copy_node(document, child, depth + 1, truncated) }?;
-            node.children.push(owned);
-            child = next;
-        }
-    } else if !view.child.is_null() {
-        *truncated = true;
-    }
-    Ok((node, view.next))
+    let string_bytes = [
+        node.macro_name.as_ref(),
+        node.text.as_ref(),
+        node.native_text.as_ref(),
+        node.tag.as_ref(),
+        node.offset.as_ref(),
+        node.width.as_ref(),
+    ]
+    .into_iter()
+    .flatten()
+    .fold(0usize, |total, value| total.saturating_add(value.len()));
+    transfer_budget.charge(std::mem::size_of::<Node>().saturating_add(string_bytes))?;
+
+    Ok((node, view.child, view.next))
 }
 
 /// Match libmandoc's `man_hasc`: only an unescaped final `\c` continues the
@@ -298,6 +628,7 @@ fn ends_with_no_space_escape(text: &str) -> bool {
 unsafe fn copy_table_cells(
     document: *const CDocument,
     mut pointer: *const CTableCell,
+    transfer_budget: &mut TransferBudget,
 ) -> Result<Vec<TableCell>, String> {
     let mut cells = Vec::new();
     while !pointer.is_null() {
@@ -308,7 +639,8 @@ unsafe fn copy_table_cells(
             return Err("libmandoc returned an invalid borrowed table cell".to_owned());
         }
         let view = unsafe { view.assume_init() };
-        cells.push(TableCell {
+        let raw_text = unsafe { checked_string(view.text) }?;
+        let cell = TableCell {
             kind: match view.kind {
                 1 => TableCellKind::Empty,
                 2 => TableCellKind::HorizontalRule,
@@ -317,7 +649,19 @@ unsafe fn copy_table_cells(
                 5 => TableCellKind::IsolatedDoubleHorizontalRule,
                 _ => TableCellKind::Text,
             },
-            text: unsafe { visible_string(view.text) },
+            font: match view.font {
+                0 => None,
+                1 => Some(TableFont::Roman),
+                2 => Some(TableFont::Bold),
+                3 => Some(TableFont::Italic),
+                4 => Some(TableFont::BoldItalic),
+                5 => Some(TableFont::Code),
+                6 => Some(TableFont::CodeBold),
+                7 => Some(TableFont::CodeItalic),
+                _ => return Err("libmandoc returned an unknown table layout font".to_owned()),
+            },
+            text: raw_text.as_deref().map(normalize_visible_text),
+            native_text: raw_text.filter(|text| has_native_text_sentinel(text)),
             text_block: view.text_block != 0,
             source_recovery_safe: view.source_recovery_safe != 0,
             vertical_continuation: view.vertical_continuation != 0,
@@ -328,7 +672,13 @@ unsafe fn copy_table_cells(
                 2 => TableAlignment::Right,
                 _ => TableAlignment::Left,
             },
-        });
+        };
+        transfer_budget.charge(
+            std::mem::size_of::<TableCell>()
+                .saturating_add(cell.text.as_ref().map_or(0, String::len))
+                .saturating_add(cell.native_text.as_ref().map_or(0, String::len)),
+        )?;
+        cells.push(cell);
         pointer = view.next;
     }
     Ok(cells)
@@ -337,6 +687,7 @@ unsafe fn copy_table_cells(
 unsafe fn copy_table_rule_cells(
     document: *const CDocument,
     mut pointer: *const CTableRuleCell,
+    transfer_budget: &mut TransferBudget,
 ) -> Result<Vec<TableRuleCellKind>, String> {
     let mut cells = Vec::new();
     while !pointer.is_null() {
@@ -348,6 +699,7 @@ unsafe fn copy_table_rule_cells(
             return Err("libmandoc returned an invalid borrowed table rule cell".to_owned());
         }
         let view = unsafe { view.assume_init() };
+        transfer_budget.charge(std::mem::size_of::<TableRuleCellKind>())?;
         cells.push(match view.kind {
             1 => TableRuleCellKind::Horizontal,
             2 => TableRuleCellKind::DoubleHorizontal,
@@ -380,15 +732,19 @@ mod tests {
             let input = CString::new(format!("A{marker}B")).unwrap();
             // CString owns the NUL-terminated bytes for this complete call.
             assert_eq!(
-                unsafe { visible_string(input.as_ptr()) }.as_deref(),
+                unsafe { visible_string(input.as_ptr()) }
+                    .unwrap()
+                    .as_deref(),
                 Some(expected)
             );
         }
         let input = CString::new("café 日本 😀\t").unwrap();
         assert_eq!(
-            unsafe { visible_string(input.as_ptr()) }.as_deref(),
+            unsafe { visible_string(input.as_ptr()) }
+                .unwrap()
+                .as_deref(),
             Some("café 日本 😀\t")
         );
-        assert_eq!(unsafe { visible_string(std::ptr::null()) }, None);
+        assert_eq!(unsafe { visible_string(std::ptr::null()) }.unwrap(), None);
     }
 }

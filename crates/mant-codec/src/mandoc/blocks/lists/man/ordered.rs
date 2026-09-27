@@ -463,7 +463,10 @@ mod tests {
         struct Text(String);
         impl<'ir> mant_ir::visit::Visit<'ir> for Text {
             fn visit_inline(&mut self, inline: &'ir Inline) {
-                if let Inline::Text { value } | Inline::Code { value } = inline {
+                if let Inline::Text { value }
+                | Inline::Code { value }
+                | Inline::Equation { value, .. } = inline
+                {
                     self.0.push_str(value);
                 }
                 mant_ir::visit::walk_inline(self, inline);

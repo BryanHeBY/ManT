@@ -13,6 +13,7 @@ pub fn search_scope(
 ) -> Result<ScopeSearch, ScopeExecutionError> {
     let plan = crate::search::SearchPlan::new(query).map_err(ScopeExecutionError::Search)?;
     let mut total = 0_u32;
+    let mut content_complete = true;
     let mut remaining_skip = query.offset;
     let mut remaining_take = query.limit;
     let mut groups = Vec::new();
@@ -21,6 +22,7 @@ pub fn search_scope(
         let local = plan
             .execute(bundle, remaining_skip, remaining_take.max(1))
             .map_err(ScopeExecutionError::Search)?;
+        content_complete &= local.content_complete;
         total = total.saturating_add(local.total);
         remaining_skip = remaining_skip.saturating_sub(local.total);
         if remaining_take == 0 || local.matches.is_empty() {
@@ -40,6 +42,8 @@ pub fn search_scope(
             address: scoped.address.clone(),
             depth: scoped.depth,
             render: local.render,
+            diagnostics: local.diagnostics,
+            content_complete: local.content_complete,
             matches: hits,
         });
     }
@@ -47,6 +51,7 @@ pub fn search_scope(
     let end = query.offset.saturating_add(returned);
     Ok(ScopeSearch {
         query: query.clone(),
+        content_complete,
         total,
         returned,
         offset: query.offset,
