@@ -1,7 +1,7 @@
 {
   "schema": "mant.annotated-fixed-query-gold/v1",
-  "reviewed": "2026-09-25",
-  "scope": "Pinned-source Fixed direct-owner and reading-context controls, F007/F008 mention controls, and source-bound real-page positives/negatives for GCC, tmux, zsh, yay, gzip, zip, btrfs, and Windows rg. Only probes with explicit mention counts assert mention recall.",
+  "reviewed": "2026-09-27",
+  "scope": "Pinned-source Fixed direct-owner and reading-context controls, F007/F008 mention controls, and source-bound real-page positives/negatives for GCC, tmux, zsh, yay, gzip, zip, btrfs, Windows rg, Fedora git, DragonFly adduser, and Windows rclone. Only probes with explicit mention counts assert mention recall.",
   "roots": {
     "checkout": "../../.."
   },
@@ -201,6 +201,24 @@
       "path": "tests/fixtures/roff/real/archlinux/gcc.1.gz",
       "sha256": "a86bd1d671aa2afff558eb3b7c8b6e2a8bbaf55cb9fb2a6549b7538dd56e0f0f",
       "queries": [
+        {
+          "query": "CPATH",
+          "review": "The exact Arch GCC page ran pinned CVS -Tutf8 -Owidth=78. man_term.c::pre_IP prints the line-37163 CPATH HEAD independently; the following C_INCLUDE_PATH, CPLUS_INCLUDE_PATH, and OBJC_INCLUDE_PATH IP heads precede one shared paragraph. CPATH has no own body but keeps its four-head reading context, not a borrowed direct description.",
+          "expected": [
+            {
+              "source": {"line": 37163, "column": 2},
+              "kind": "environment-variable",
+              "names": ["CPATH"],
+              "forms": ["CPATH"],
+              "emptyDescription": true,
+              "readingContext": {
+                "heads": ["CPATH", "C_INCLUDE_PATH", "CPLUS_INCLUDE_PATH", "OBJC_INCLUDE_PATH"],
+                "bodyIncludes": ["Each variable's value is a list of directories"]
+              }
+            }
+          ],
+          "expectedCounts": {"directEntry": 1, "relatedEntry": 0}
+        },
         {
           "query": "-x",
           "review": "Pinned CVS man_macro.c::blk_imp preserves the distinct GCC IP heads at lines 1720 and 1755, while man_term.c::pre_IP prints their bold -x prefixes. The first has no own body; a later reading-context group must not rewrite that ownership.",
@@ -442,6 +460,21 @@
       "sha256": "cbedf24cf75128a6794a24a4c380307f73515047945b6736933d313af4623ae7",
       "queries": [
         {
+          "query": "activity-action",
+          "review": "The exact Arch tmux page ran pinned CVS -Tutf8 -Owidth=78. mdoc_macro.c::blk_full keeps the line-4676 Ic HEAD and its line-4679 BODY in one It owner; mdoc_term.c::termp_it_pre prints the list head. Ic under session OPTIONS without an independent command context is a named Term, not a Command. This EN04 target requires a later gold run.",
+          "expected": [
+            {
+              "source": {"line": 4676, "column": 2},
+              "kind": "term",
+              "names": ["activity-action"],
+              "forms": ["activity-action [any | none | current | other]"],
+              "emptyDescription": false,
+              "bodyIncludes": ["Set action on window activity"]
+            }
+          ],
+          "expectedCounts": {"directEntry": 1, "relatedEntry": 0}
+        },
+        {
           "query": "new-session",
           "review": "Pinned CVS mdoc_macro.c::blk_full keeps the line-1305 Xo command HEAD and its BODY in one It owner; mdoc_term.c prints Ic new-session, while term.c soft wraps its full option signature without changing the command name. The separately frozen upstream tmux page and its exact 78-column reference output were checked before this expectation.",
           "expected": [
@@ -585,9 +618,11 @@
         },
         {
           "query": "create",
-          "review": "Pinned CVS prints create [options] as a TP/B synopsis in SUBCOMMAND. Plain B supplies font only, not a native command macro; absent a separately proved command convention, the prefix create is not promoted to a direct Command name, while prose mentions remain visible.",
-          "expected": [],
-          "expectedCounts": {"directEntry": 0, "relatedEntry": 0}
+          "review": "Pinned CVS man_macro.c::blk_imp and man_term.c::pre_TP/pre_B preserve a separate TP/B head and body at lines 311-313. The SUBCOMMAND context plus the complete balanced create invocation supplies ManT Command evidence under EN04; B alone is only font and does not create this role.",
+          "expected": [{"source": {"line": 311, "column": 2}, "kind": "command", "names": ["create"], "forms": ["create [options] [<dest>/]<name> [[<dest2>/]<name2> ...]"], "nameBindings": [
+            {"name": "create", "nameIndex": 0, "occurrences": [{"sourceOccurrenceIndex": 0, "fixedForms": [{"formIndex": 0, "startScalar": 0, "endScalar": 6, "text": "create"}]}]}
+          ], "emptyDescription": false, "bodyIncludes": ["Create subvolume(s) at the destination(s)."]}],
+          "expectedCounts": {"directEntry": 1, "relatedEntry": 0}
         }
       ]
     },
@@ -790,6 +825,97 @@
           "review": "Pinned CVS keeps the line-2345 Ev CDPATH as a third independent list item. CDPATH must bind its complete visible name without being deduplicated into PATH or reusing PATH's description.",
           "expected": [{"source": {"line": 2345, "column": 2}, "kind": "environment-variable", "names": ["CDPATH"], "forms": ["CDPATH"], "emptyDescription": false, "bodyIncludes": ["The search path used with the cd builtin"], "bodyExcludes": ["The default search path for executables"]}],
           "expectedCounts": {"directEntry": 1, "relatedEntry": 0}
+        }
+      ]
+    },
+    {
+      "id": "F020",
+      "root": "checkout",
+      "path": "tests/fixtures/roff/real/fedora44/git.1.zst",
+      "sha256": "2ee1c5dd84a69dfc91d84840e943e7df0ee06b86bf27eb4bb9369c415f3351c1",
+      "queries": [
+        {
+          "query": "git-add",
+          "review": "The exact Fedora git page ran pinned CVS -Tutf8 -Owidth=78. man_term.c::pre_PP displays the complete line-351 git-add(1) declaration, and pre_RS indents the direct line-353 description. Its COMMANDS context and complete sectioned name support one Command, not an inferred command from a SEE ALSO reference.",
+          "expected": [
+            {
+              "source": {"line": 351, "column": 1},
+              "kind": "command",
+              "names": ["git-add"],
+              "forms": ["git-add(1)"],
+              "nameBindings": [
+                {"name": "git-add", "nameIndex": 0, "occurrences": [
+                  {"sourceOccurrenceIndex": 0, "fixedForms": [
+                    {"formIndex": 0, "startScalar": 0, "endScalar": 7, "text": "git-add"}
+                  ]}
+                ]}
+              ],
+              "emptyDescription": false,
+              "bodyIncludes": ["Add file contents to the index."]
+            }
+          ],
+          "expectedCounts": {"directEntry": 1, "relatedEntry": 0}
+        },
+        {
+          "query": "GIT_ADVICE",
+          "review": "Pinned CVS displays the line-2171 ENVIRONMENT PP followed by RS text, but the source provides no independent weak declaration syntax beyond a bare styled variable. The conservative EN03 policy keeps the occurrence searchable as context prose and does not promote it to a direct entry.",
+          "expected": [],
+          "expectedCounts": {"directEntry": 0, "relatedEntry": 0, "entryMention": 0, "contextMention": 1}
+        }
+      ]
+    },
+    {
+      "id": "F021",
+      "root": "checkout",
+      "path": "tests/fixtures/roff/real/bsd-closure/dragonfly-adduser.8.gz",
+      "sha256": "d2c2c09556f74e93bac34e9e3d17032c4f66daea96367854a096fbcc062d733e",
+      "queries": [
+        {
+          "query": "random",
+          "review": "The exact DragonFly adduser page ran pinned CVS -Tutf8 -Owidth=78. mdoc_macro.c::blk_full keeps the line-286 Cm random HEAD and line-287 description in one It owner; mdoc_term.c::termp_it_pre displays the pair. Without a checked local Value relationship, this is a named Term rather than a Command. This EN04 target requires a later gold run.",
+          "expected": [
+            {
+              "source": {"line": 286, "column": 2},
+              "kind": "term",
+              "names": ["random"],
+              "forms": ["random"],
+              "emptyDescription": false,
+              "bodyIncludes": ["Generate a random string and use it as a password."]
+            }
+          ],
+          "expectedCounts": {"directEntry": 1, "relatedEntry": 0}
+        },
+        {
+          "query": "randompass",
+          "review": "Pinned CVS displays line-290 Va randompass only inside random's description, not in a distinct It head. Its visible occurrence remains an entry-body mention; it must not become a direct variable definition.",
+          "expected": [],
+          "expectedCounts": {"directEntry": 0, "relatedEntry": 0, "entryMention": 1, "contextMention": 0}
+        }
+      ]
+    },
+    {
+      "id": "F022",
+      "root": "checkout",
+      "path": "tests/fixtures/roff/real/windows-releases/rclone.1.zst",
+      "sha256": "f35de3b3008f684a7db141a7626db68b08c46e5b3d45c97726bc6d97eebade4e",
+      "queries": [
+        {
+          "query": "--help",
+          "review": "The exact Windows rclone page ran pinned CVS -Tutf8 -Owidth=78. Its many --help occurrences are synopsis, examples, and prose, not independent native declaration heads; the optional heading adapter cannot retroactively promote them to direct entries.",
+          "expected": [],
+          "expectedCounts": {"directEntry": 0, "relatedEntry": 0, "entryMention": 0, "contextMention": 105}
+        },
+        {
+          "query": "rclone [command] --help",
+          "review": "Pinned CVS renders the exact synopsis instruction at source line 89 as readable text. It is a single context mention, not a command or option definition; this narrower control avoids conflating the page's repeated --help examples with a declaration.",
+          "expected": [],
+          "expectedCounts": {"directEntry": 0, "relatedEntry": 0, "entryMention": 0, "contextMention": 1}
+        },
+        {
+          "query": "--transfers int",
+          "review": "Pinned CVS displays repeated flag-summary mentions and the line-23434 .SS --transfers int heading. EN05's optional heading adapter is deferred, so the heading is not a direct owner in this EN06 gold; all eleven occurrences remain context mentions.",
+          "expected": [],
+          "expectedCounts": {"directEntry": 0, "relatedEntry": 0, "entryMention": 0, "contextMention": 11}
         }
       ]
     }

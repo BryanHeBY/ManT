@@ -330,6 +330,16 @@ def owner_record(evidence: object, requested: str, supports: object) -> dict:
         raise ValueError("Fixed direct owner has no bound request basis")
     if position_count > MAX_NAME_POSITIONS or copied_bytes > MAX_COPY_BYTES:
         raise ValueError("Fixed evidence exceeds a response budget lower bound")
+    alias_groups = entry.get("aliasGroups")
+    alias_of = entry.get("aliasOf")
+    value_domain = entry.get("valueDomain")
+    if (not isinstance(alias_groups, list)
+            or not all(isinstance(group, list) and all(
+                isinstance(name, str) and name for name in group)
+                for group in alias_groups)
+            or (alias_of is not None and not isinstance(alias_of, str))
+            or (value_domain is not None and not isinstance(value_domain, dict))):
+        raise ValueError("invalid Fixed entry relation")
     return {
         "source": evidence.get("source"),
         "id": node.get("id"),
@@ -340,8 +350,9 @@ def owner_record(evidence: object, requested: str, supports: object) -> dict:
         "nameBindings": bindings,
         "body": " ".join(body.split()),
         "emptyDescription": not body.strip(),
-        "aliasGroups": entry.get("aliasGroups"),
-        "aliasOf": entry.get("aliasOf"),
+        "aliasGroups": alias_groups,
+        "aliasOf": alias_of,
+        "valueDomain": value_domain,
         "basisKinds": [basis["kind"] for basis in bases],
         "omitted": any(evidence.get(field, False) for field in (
             "supportOmitted", "previewsOmitted", "detailsOmitted",
@@ -445,8 +456,14 @@ def compare(probe: dict, response: object) -> tuple[str, list[str], list[dict]]:
             errors.append(f"{source}: bases {got['basisKinds']!r} != {want['basisKinds']!r}")
         if got["omitted"]:
             errors.append(f"{source}: selected facts/body omitted")
-        if got["aliasGroups"] or got["aliasOf"]:
-            errors.append(f"{source}: unreviewed alias relation")
+        # A name group or a value-space edge is never inferred from visible
+        # adjacency in this panel. A reviewed probe may opt in to an exact
+        # relation; otherwise any newly emitted relation is a gold failure.
+        for field, default in (("aliasGroups", []), ("aliasOf", None),
+                               ("valueDomain", None)):
+            if got[field] != want.get(field, default):
+                errors.append(f"{source} {field}: {got[field]!r} != "
+                              f"{want.get(field, default)!r}")
         if "readingContext" in want:
             context = got["readingContext"]
             requested_context = want["readingContext"]
@@ -634,6 +651,21 @@ def self_check() -> None:
             "bodyIncludes": ["BODY"]}
     probe = {"query": "-a", "review": "source and fixed output checked", "expected": [want]}
     assert compare(probe, response)[0] == "passed"
+    domain = {"kind": "choices", "exhaustive": False}
+    related_entry = {**evidence["entry"], "valueDomain": domain}
+    related_response = {**response, "evidence": [{**evidence, "entry": related_entry}]}
+    assert compare(probe, related_response)[0] == "failure"
+    assert compare({**probe, "expected": [{**want, "valueDomain": domain}]},
+                   related_response)[0] == "passed"
+    assert compare({**probe, "expected": [{**want, "valueDomain": {
+        "kind": "choices", "exhaustive": True}}]}, related_response)[0] == "failure"
+    alias_entry = {**evidence["entry"], "aliasOf": "another-entry"}
+    alias_response = {**response, "evidence": [{**evidence, "entry": alias_entry}]}
+    assert compare(probe, alias_response)[0] == "failure"
+    assert compare({**probe, "expected": [{**want, "aliasOf": "another-entry"}]},
+                   alias_response)[0] == "passed"
+    assert compare(probe, {**response, "evidence": [{**evidence, "entry": {
+        **evidence["entry"], "valueDomain": "untyped"}}]})[0] == "unresolved"
     assert compare({**probe, "expected": []}, response)[0] == "failure"
     assert compare({**probe, "expected": [{**want, "bodyIncludes": ["OTHER"]}]}, response)[0] == "failure"
     assert compare({**probe, "expected": [{**want, "nameBindings": []}]}, response)[0] == "failure"
