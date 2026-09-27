@@ -555,11 +555,13 @@ mod tests {
             builder.with_font_scope(super::Font::Regular, |builder| {
                 builder.tighten_next_boundary();
             });
-            assert_eq!(builder.font.current, super::Font::Code);
-            assert_eq!(builder.font.previous, super::Font::Code);
+            assert_eq!(builder.font.current, super::Font::Regular);
+            assert_eq!(builder.font.previous, super::Font::Regular);
+            assert_eq!(builder.font.display_current(), super::Font::Code);
         });
         assert_eq!(builder.font.current, super::Font::Strong);
-        assert_eq!(builder.font.previous, super::Font::Code);
+        assert_eq!(builder.font.previous, super::Font::Regular);
+        assert_eq!(builder.font.display_current(), super::Font::Strong);
         assert!(builder.has_tight_boundary());
     }
 

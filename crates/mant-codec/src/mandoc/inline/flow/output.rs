@@ -311,7 +311,7 @@ impl InlineBuilder {
             && self.zero_advance.has_pending_glyph();
         let mut projected = Vec::new();
         self.zero_advance
-            .append_generated_text(value, &mut projected, self.font.current);
+            .append_generated_text(value, &mut projected, self.font.display_current());
         if kept_zero_boundary {
             // TERMP_KEEP inserts a non-breaking formatter blank.  A pending
             // BACKBEFORE glyph consumes that cell, so retain the glyph while
@@ -341,7 +341,7 @@ impl InlineBuilder {
         self.begin_word_projection(!value.is_empty());
         let mut projected = Vec::new();
         self.zero_advance
-            .append_generated_text(value, &mut projected, self.font.current);
+            .append_generated_text(value, &mut projected, self.font.display_current());
         self.append_word(projected);
         if !value.is_empty() {
             if let Some(cursor) = &mut self.source_cursor {

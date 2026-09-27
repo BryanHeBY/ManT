@@ -346,8 +346,11 @@ impl InlineBuilder {
         self.tighten_next_boundary();
         self.begin_word_projection(true);
         let mut projected = Vec::new();
-        self.zero_advance
-            .append_generated_cells(count, &mut projected, self.font.current);
+        self.zero_advance.append_generated_cells(
+            count,
+            &mut projected,
+            self.font.display_current(),
+        );
         self.append_word(projected);
         self.trailing_output = TrailingOutput::FixedBlank;
         // CVS sets TERMP_NOSPACE again before executing BODY children.

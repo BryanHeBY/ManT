@@ -71,6 +71,9 @@ pub(super) fn append_table_row(
                     // the selection itself ends at the cell boundary.
                     let saved_font =
                         table_cell_font(cell.font).map(|font| formatter.font.push_scope(font));
+                    if cell.font == Some(TableFont::Code) {
+                        formatter.font.begin_code_table_cell();
+                    }
                     let children = lower_table_cell(
                         cell,
                         recovery::CellPosition {
@@ -87,6 +90,9 @@ pub(super) fn append_table_row(
                     .unwrap_or_default();
                     if let Some(saved_font) = saved_font {
                         formatter.font.pop_scope(saved_font);
+                    }
+                    if cell.font == Some(TableFont::Code) {
+                        formatter.font.end_code_table_cell();
                     }
                     // `tbl_term.c` clears BACKAFTER/BACKBEFORE before every
                     // cell and the row flush clears them again whenever this
@@ -134,13 +140,12 @@ fn table_cell_font(font: Option<TableFont>) -> Option<RoffFont> {
         Some(TableFont::Bold) => Some(RoffFont::Strong),
         Some(TableFont::Italic) => Some(RoffFont::Emphasis),
         Some(TableFont::BoldItalic) => Some(RoffFont::StrongEmphasis),
-        Some(TableFont::Code) => Some(RoffFont::Code),
         Some(TableFont::CodeBold) => Some(RoffFont::CodeStrong),
         Some(TableFont::CodeItalic) => Some(RoffFont::CodeEmphasis),
-        // CVS tbl_term.c::tbl_word deliberately does not push a Roman
-        // layout font, preserving an enclosing .Bf/.ft font. There is no
-        // cell-local selection to pop in this case.
-        Some(TableFont::Roman) | None => None,
+        // CVS tbl_term.c::tbl_word does not push CR or Roman: an enclosing
+        // .Bf/.ft selection stays on the terminal stack. CR presentation is
+        // applied separately from that execution state.
+        Some(TableFont::Code | TableFont::Roman) | None => None,
     }
 }
 

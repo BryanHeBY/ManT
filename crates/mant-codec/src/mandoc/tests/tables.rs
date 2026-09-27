@@ -149,6 +149,177 @@ fn native_table_constant_width_fonts_reach_ir_without_flattening_style() {
 }
 
 #[test]
+fn constant_width_table_layout_keeps_terminal_font_registers_separate_from_display() {
+    fn runs(children: &[Inline]) -> Vec<(String, String)> {
+        fn visit(children: &[Inline], style: &str, output: &mut Vec<(String, String)>) {
+            for child in children {
+                match child {
+                    Inline::Text { value } => output.push((style.to_owned(), value.clone())),
+                    Inline::Code { value } => {
+                        output.push((format!("{style}code:"), value.clone()));
+                    }
+                    Inline::Strong { children } => {
+                        visit(children, &format!("{style}bold:"), output);
+                    }
+                    Inline::Emphasis { children } => {
+                        visit(children, &format!("{style}italic:"), output);
+                    }
+                    other => panic!("unexpected inline in font fixture: {other:?}"),
+                }
+            }
+        }
+        let mut output = Vec::new();
+        visit(children, "", &mut output);
+        output
+    }
+
+    // Each exact source was run through the fixed -Tutf8/-Thtml/-Tlint
+    // reference before these assertions. CVS tbl_term.c::tbl_word skips a
+    // terminal push for CR, pushes bold/underline for CB/CI, and pops each
+    // cell stack; term.c::term_fontlast controls the later \fP. In contrast,
+    // tbl_html.c::print_tbl/html.c::html_setfont keep a code presentation
+    // for all three layouts and restore it after in-cell font escapes.
+    for (label, layout, cell_text, expected_cell, expected_after) in [
+        ("cr", "CR", r"A", vec![("code:", "A")], ""),
+        ("cb", "CB", r"A", vec![("bold:code:", "A")], "bold:"),
+        ("ci", "CI", r"A", vec![("italic:code:", "A")], "bold:"),
+        (
+            "cr-inner",
+            "CR",
+            r"A\fIB\fPC",
+            vec![("code:", "A"), ("italic:", "B"), ("code:", "C")],
+            "italic:",
+        ),
+        (
+            "cb-inner",
+            "CB",
+            r"A\fRB\fPC",
+            vec![("bold:code:", "A"), ("", "B"), ("bold:code:", "C")],
+            "",
+        ),
+        (
+            "ci-inner",
+            "CI",
+            r"A\fRB\fPC",
+            vec![("italic:code:", "A"), ("", "B"), ("italic:code:", "C")],
+            "",
+        ),
+    ] {
+        let source = format!(
+            ".TH FONT 7\n.SH DESCRIPTION\n.ft B\n.TS\nl f{layout}.\n{cell_text}\n.TE\n\\fPAFTER\n"
+        );
+        let document = parse_manual_bytes(
+            std::path::Path::new(&format!("table-code-execution-{label}.7")),
+            source.as_bytes(),
+        )
+        .unwrap();
+        let [
+            Block::Table { rows, .. },
+            Block::Paragraph {
+                children: after, ..
+            },
+        ] = document.sections[0].blocks.as_slice()
+        else {
+            panic!("{label}: expected table and following paragraph");
+        };
+        let [Block::Paragraph { children: cell, .. }] = rows[0].cells[0].blocks.as_slice() else {
+            panic!("{label}: expected one text cell");
+        };
+        assert_eq!(
+            runs(cell),
+            expected_cell
+                .into_iter()
+                .map(|(style, value)| (style.to_owned(), value.to_owned()))
+                .collect::<Vec<_>>(),
+            "{label}: {cell:?}"
+        );
+        assert_eq!(
+            runs(after),
+            [(expected_after.to_owned(), "AFTER".to_owned())],
+            "{label}: {after:?}"
+        );
+    }
+}
+
+#[test]
+fn cr_cell_without_terminal_push_leaves_in_word_font_for_plain_next_cell() {
+    // Exact source checked with the fixed -Tutf8/-Thtml/-Tlint oracle. CVS
+    // tbl_term.c::tbl_word skips term_fontpush for CR, so its in-word \fI
+    // changes the base stack level inherited by the following Roman cell.
+    // HTML scopes each cell instead; this IR follows terminal execution
+    // across the table and retains constant width for the CR cell only.
+    let document = parse_manual_bytes(
+        std::path::Path::new("table-cr-next-cell.7"),
+        b".TH FONT 7\n.SH DESCRIPTION\n.ft B\n.TS\nl fCR l.\nA\\fIB\tC\n.TE\n\\fPAFTER\n",
+    )
+    .unwrap();
+    let [
+        Block::Table { rows, .. },
+        Block::Paragraph {
+            children: after, ..
+        },
+    ] = document.sections[0].blocks.as_slice()
+    else {
+        panic!("expected table and following paragraph");
+    };
+    let cell = |index: usize| match rows[0].cells[index].blocks.as_slice() {
+        [Block::Paragraph { children, .. }] => children.as_slice(),
+        other => panic!("unexpected cell {index}: {other:?}"),
+    };
+    assert!(matches!(cell(0),
+        [Inline::Code { value: a }, Inline::Emphasis { children: b }]
+        if a == "A" && matches!(b.as_slice(), [Inline::Text { value }] if value == "B")));
+    assert!(matches!(cell(1),
+        [Inline::Emphasis { children }]
+        if matches!(children.as_slice(), [Inline::Text { value }] if value == "C")));
+    assert!(matches!(after.as_slice(),
+        [Inline::Strong { children }]
+        if matches!(children.as_slice(), [Inline::Text { value }] if value == "AFTER")));
+}
+
+#[test]
+fn code_and_roman_with_equal_terminal_font_keep_distinct_previous_register_origins() {
+    // Both exact sources were checked with the fixed -Tutf8/-Thtml/-Tlint
+    // oracle. `.ft CR` gives terminal current=Roman and previous=Roman, but
+    // HTML current=Code and previous=Roman. CVS term.c::term_fontlast swaps
+    // register *positions*, not values; tbl_term.c::tbl_word never pushes CR.
+    // The temporary tbl_html.c::print_tbl code style therefore must not
+    // rewrite the terminal previous register after the cell.
+    for (label, text) in [("plain", r"A"), ("inword", r"A\fRB\fPC")] {
+        let source =
+            format!(".TH FONT 7\n.SH DESCRIPTION\n.ft CR\n.TS\nl fCR.\n{text}\n.TE\n\\fPAFTER\n");
+        let document = parse_manual_bytes(
+            std::path::Path::new(&format!("table-equal-terminal-font-{label}.7")),
+            source.as_bytes(),
+        )
+        .unwrap();
+        let [
+            Block::Table { rows, .. },
+            Block::Paragraph {
+                children: after, ..
+            },
+        ] = document.sections[0].blocks.as_slice()
+        else {
+            panic!("{label}: expected table and following paragraph");
+        };
+        let [Block::Paragraph { children: cell, .. }] = rows[0].cells[0].blocks.as_slice() else {
+            panic!("{label}: expected one text cell");
+        };
+        if label == "plain" {
+            assert!(matches!(cell.as_slice(), [Inline::Code { value }] if value == "A"));
+        } else {
+            assert!(matches!(cell.as_slice(),
+                [Inline::Code { value: a }, Inline::Text { value: b }, Inline::Code { value: c }]
+                if a == "A" && b == "B" && c == "C"));
+        }
+        assert!(
+            matches!(after.as_slice(), [Inline::Text { value }] if value == "AFTER"),
+            "{label}: {after:?}"
+        );
+    }
+}
+
+#[test]
 fn ragged_matrix_keeps_later_column_rows_through_ir_json() {
     let document = parse_manual_bytes(
         std::path::Path::new("short-matrix.7"),

@@ -160,7 +160,7 @@ fn execute_formatter_word_events(
     pending_word_end_break: bool,
 ) -> TextExecution {
     let (mut output, mut buffer) = (Vec::new(), String::new());
-    let mut font = state.current;
+    let mut font = state.display_current();
     let mut link: Option<String> = None;
     let mut explicit_line_continuation = None;
     let mut text_state = TextEventState::new(pending_word_end_break);
@@ -218,12 +218,12 @@ fn execute_formatter_word_events(
             FormatterWordEvent::Source(RoffInlineEvent::Font(next_font)) => {
                 flush_segment(&mut output, &mut buffer, font, link.as_deref());
                 state.select(*next_font);
-                font = state.current;
+                font = state.display_current();
             }
             FormatterWordEvent::Source(RoffInlineEvent::PreviousFont) => {
                 flush_segment(&mut output, &mut buffer, font, link.as_deref());
                 state.restore();
-                font = state.current;
+                font = state.display_current();
             }
             FormatterWordEvent::Source(RoffInlineEvent::Link(target)) => {
                 flush_segment(&mut output, &mut buffer, font, link.as_deref());

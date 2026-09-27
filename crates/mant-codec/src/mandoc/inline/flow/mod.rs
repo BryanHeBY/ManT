@@ -176,9 +176,32 @@ pub(in crate::mandoc) struct SourceFragmentState {
 /// Roff remembers the previous selection independently of the current font.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(in crate::mandoc) struct FontState {
+    /// Terminal execution registers used by `\\fP` and `.ft P`.
     pub(super) current: Font,
     pub(super) previous: Font,
+    /// The HTML/IR spelling of a font can retain constant width even when
+    /// the terminal renderer executes CR as roman, CB as bold, and CI as
+    /// italic. Keep that presentation out of the execution registers.
+    display_current: Font,
+    display_previous: Font,
+    /// `tbl_html.c` has an independent display selection for CR cells, but
+    /// `tbl_term.c` does not push a terminal font for them. Keep the temporary
+    /// HTML pair separate from both persistent register pairs.
+    table_presentation: Option<TablePresentationFont>,
     heading_bold_italic: bool,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct TablePresentationFont {
+    current: Font,
+    previous: Font,
+}
+
+#[derive(Clone, Copy)]
+pub(in crate::mandoc) struct FontScope {
+    current: Font,
+    display_current: Font,
+    table_presentation_current: Option<Font>,
 }
 
 impl FontState {
@@ -186,33 +209,92 @@ impl FontState {
         Self {
             current: Font::Regular,
             previous: Font::Regular,
+            display_current: Font::Regular,
+            display_previous: Font::Regular,
+            table_presentation: None,
             heading_bold_italic: false,
         }
     }
 
+    pub(in crate::mandoc) const fn display_current(self) -> Font {
+        match self.table_presentation {
+            Some(presentation) => presentation.current,
+            None => self.display_current,
+        }
+    }
+
     pub(super) fn select(&mut self, font: Font) {
-        self.previous = self.current;
-        self.current = if self.heading_bold_italic && font == Font::Emphasis {
+        let display = if self.heading_bold_italic && font == Font::Emphasis {
             Font::StrongEmphasis
         } else {
             font
         };
+        self.previous = self.current;
+        let terminal = match font {
+            Font::Code => Font::Regular,
+            Font::CodeStrong => Font::Strong,
+            Font::CodeEmphasis => Font::Emphasis,
+            font => font,
+        };
+        self.current = if self.heading_bold_italic && terminal == Font::Emphasis {
+            Font::StrongEmphasis
+        } else {
+            terminal
+        };
+        self.display_previous = self.display_current;
+        self.display_current = display;
+        if let Some(presentation) = &mut self.table_presentation {
+            presentation.previous = presentation.current;
+            presentation.current = display;
+        }
     }
 
     pub(super) fn restore(&mut self) {
         std::mem::swap(&mut self.current, &mut self.previous);
+        std::mem::swap(&mut self.display_current, &mut self.display_previous);
+        if let Some(presentation) = &mut self.table_presentation {
+            std::mem::swap(&mut presentation.current, &mut presentation.previous);
+        }
     }
 
     /// mdoc font scopes push a selection. Popping restores the saved current
     /// font, not the previous-selection register used by `\\fP` and `.ft P`.
-    pub(in crate::mandoc) fn push_scope(&mut self, font: Font) -> Font {
-        let saved = self.current;
+    pub(in crate::mandoc) fn push_scope(&mut self, font: Font) -> FontScope {
+        let saved = FontScope {
+            current: self.current,
+            display_current: self.display_current,
+            table_presentation_current: self.table_presentation.map(|font| font.current),
+        };
         self.select(font);
         saved
     }
 
-    pub(in crate::mandoc) fn pop_scope(&mut self, saved: Font) {
-        self.current = saved;
+    pub(in crate::mandoc) fn pop_scope(&mut self, saved: FontScope) {
+        self.current = saved.current;
+        self.display_current = saved.display_current;
+        if let (Some(presentation), Some(current)) = (
+            &mut self.table_presentation,
+            saved.table_presentation_current,
+        ) {
+            presentation.current = current;
+        }
+    }
+
+    /// CVS `tbl_term.c::tbl_word()` leaves terminal registers untouched for
+    /// a CR layout cell, while `tbl_html.c::print_tbl()` still displays it in
+    /// constant width. The subsequent in-cell `\\f` commands update both
+    /// projections independently.
+    pub(in crate::mandoc) fn begin_code_table_cell(&mut self) {
+        debug_assert!(self.table_presentation.is_none());
+        self.table_presentation = Some(TablePresentationFont {
+            current: Font::Code,
+            previous: self.display_current,
+        });
+    }
+
+    pub(in crate::mandoc) fn end_code_table_cell(&mut self) {
+        debug_assert!(self.table_presentation.is_some());
+        self.table_presentation = None;
     }
 
     /// Enter CVS `termp_sh_pre()`/`termp_ss_pre()` font execution.
@@ -222,14 +304,14 @@ impl FontState {
     /// selects bold-emphasis and updates the independent previous-font
     /// register.  The returned pair restores only the current stack and the
     /// mode flag; `previous` deliberately survives the scope.
-    pub(in crate::mandoc) fn push_heading_scope(&mut self) -> (Font, bool) {
+    pub(in crate::mandoc) fn push_heading_scope(&mut self) -> (FontScope, bool) {
         let saved_mode = self.heading_bold_italic;
         let saved_font = self.push_scope(Font::Strong);
         self.heading_bold_italic = true;
         (saved_font, saved_mode)
     }
 
-    pub(in crate::mandoc) fn pop_heading_scope(&mut self, saved: (Font, bool)) {
+    pub(in crate::mandoc) fn pop_heading_scope(&mut self, saved: (FontScope, bool)) {
         self.pop_scope(saved.0);
         self.heading_bold_italic = saved.1;
     }
