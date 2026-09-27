@@ -83,6 +83,12 @@ fn render_outline(outline: &QueryOutline, page: PageRequest) -> TextPage {
                 text.push_str(&read_hint_selector(address, &record.source_read));
             }
         }
+        for record in &outline.references.fixed_records {
+            if sources.insert(&record.source_read) {
+                text.push('\n');
+                text.push_str(&read_hint_selector(address, &record.source_read));
+            }
+        }
     }
     page_text(&text, page)
 }

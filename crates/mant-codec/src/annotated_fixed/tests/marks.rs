@@ -305,6 +305,112 @@ fn fixed_link_origin_context_follows_native_section_and_owner() {
 }
 
 #[test]
+fn native_links_project_bounded_fixed_reference_inventory_and_section_read() {
+    // Exact input first ran pinned CVS -Tutf8 -O width=78. term.c::term_word()
+    // leaves the two source-marked labels and <> markers in one section;
+    // man_term.c::pre_MR() emits an independent occurrence in the next.
+    let input = b".TH T 1\n.SH SEE ALSO\na(1) \\%<> and b(2) \\%<>\n.SH OTHER\n.MR c 3\n";
+    let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Man).unwrap();
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        panic!("native output did not become Fixed");
+    };
+    let other = fixed.headings[1].id.clone();
+    let query = mant_ir::ResolvedContent {
+        address: None,
+        label: "T(1)".to_owned(),
+        document: Some(document),
+        tldr: None,
+    };
+    let policy = mant_protocol::ReferenceProjection {
+        mode: mant_protocol::ReferenceProjectionMode::All,
+        target_types: vec![mant_ir::ReferenceTargetType::Manual],
+        offset: 0,
+        limit: 2,
+    };
+    let all = mant_query::build_outline_with_references(
+        &query,
+        mant_protocol::EntryProjection::None,
+        None,
+        &policy,
+    )
+    .unwrap();
+    assert_eq!(
+        all.references.occurrences,
+        mant_protocol::ReferenceCount::Exact { value: 3 }
+    );
+    assert_eq!(all.references.page.returned, 2);
+    assert_eq!(all.references.page.next_offset, Some(2));
+    assert!(all.references.records.is_empty());
+    assert!(all.references.content_projection.is_none());
+    assert_eq!(all.references.fixed_records[0].label_preview, "a(1)");
+    assert_eq!(all.references.fixed_records[1].label_preview, "b(2)");
+    assert_eq!(all.references.fixed_records[0].origin.link.get(), 1);
+    assert_eq!(all.references.fixed_records[1].origin.link.get(), 2);
+    assert_eq!(
+        all.references.fixed_records[0].source_read.value(),
+        "see-also"
+    );
+    let rebuilt: mant_protocol::ReferenceInventory =
+        serde_json::from_value(serde_json::to_value(&all.references).unwrap()).unwrap();
+    assert_eq!(rebuilt.fixed_records, all.references.fixed_records);
+    let selected = mant_query::build_outline_with_references(
+        &query,
+        mant_protocol::EntryProjection::None,
+        Some(mant_protocol::ContentSelector::id(other)),
+        &policy,
+    )
+    .unwrap();
+    assert_eq!(
+        selected.references.occurrences,
+        mant_protocol::ReferenceCount::Exact { value: 1 }
+    );
+    assert_eq!(selected.references.fixed_records[0].label_preview, "c(3)");
+}
+
+#[test]
+fn fixed_reference_inventory_can_select_the_native_entry_owner() {
+    // Exact input first ran pinned CVS -Tutf8 -O width=78.
+    // man_term.c::pre_TP() establishes the item owner before the body invokes
+    // pre_MR(), whose emitted label belongs to that item's native surface.
+    let input = b".TH T 1\n.SH SEE ALSO\n.TP\n.B --opt\n.MR printf 3\n";
+    let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Man).unwrap();
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        panic!("expected Fixed");
+    };
+    let owner = fixed
+        .owners
+        .iter()
+        .find(|owner| owner.entry.is_some())
+        .expect("entry");
+    let owner_id = owner.id.clone();
+    let owner_key = owner.key;
+    let query = mant_ir::ResolvedContent {
+        address: None,
+        label: "T(1)".into(),
+        document: Some(document),
+        tldr: None,
+    };
+    let policy = mant_protocol::ReferenceProjection {
+        mode: mant_protocol::ReferenceProjectionMode::All,
+        target_types: vec![mant_ir::ReferenceTargetType::Manual],
+        offset: 0,
+        limit: 10,
+    };
+    let selected = mant_query::build_outline_with_references(
+        &query,
+        mant_protocol::EntryProjection::All,
+        Some(mant_protocol::ContentSelector::id(owner_id)),
+        &policy,
+    )
+    .unwrap();
+    assert_eq!(selected.references.fixed_records.len(), 1);
+    assert_eq!(
+        selected.references.fixed_records[0].origin.owner,
+        Some(owner_key)
+    );
+}
+
+#[test]
 fn native_owner_role_distinguishes_definition_from_bullet_item() {
     // Exact input first ran pinned CVS -Tutf8 -O width=78. mdoc_term.c::
     // termp_it_pre reads the validated Bl type: tag heads are term labels,

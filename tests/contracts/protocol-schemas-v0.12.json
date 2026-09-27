@@ -11899,6 +11899,117 @@
         "format": "uint32",
         "minimum": 1
       },
+      "FixedReferenceOrigin": {
+        "description": "Checked origin of one Fixed link, without pretending it is a Flow inline.",
+        "type": "object",
+        "properties": {
+          "firstSlice": {
+            "description": "First surviving final-run slice, using explicitly byte-based storage coordinates.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/OutputSlice"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "link": {
+            "description": "Dense native occurrence key in the loaded Fixed document.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 1
+          },
+          "owner": {
+            "description": "Native owner in which the occurrence began.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint32",
+            "minimum": 1
+          },
+          "section": {
+            "description": "Native section in which the occurrence began.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint32",
+            "minimum": 1
+          },
+          "source": {
+            "description": "Authored declaration position when the native execution proved one.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SourceSpan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sourceKey": {
+            "description": "Authorized source identity even when no authored position can be proved.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SourceKey"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "link",
+          "section",
+          "owner",
+          "firstSlice",
+          "source",
+          "sourceKey"
+        ]
+      },
+      "FixedReferenceRecord": {
+        "description": "One bounded Fixed reference; its typed target and preview come from the\nvalidated native surface, not a reconstructed Flow content store.",
+        "type": "object",
+        "properties": {
+          "labelPreview": {
+            "description": "Bounded presentation preview, not authoritative body storage.",
+            "type": "string"
+          },
+          "labelPreviewTruncated": {
+            "description": "Whether the native label was longer than this preview.",
+            "type": "boolean"
+          },
+          "origin": {
+            "description": "Exact occurrence origin in the loaded Fixed snapshot.",
+            "$ref": "#/$defs/FixedReferenceOrigin"
+          },
+          "resolution": {
+            "description": "Offline address and fragment state, without target-document I/O.",
+            "$ref": "#/$defs/ReferenceResolution"
+          },
+          "sourceRead": {
+            "description": "A readable section/root selector, never the destination of this link.",
+            "$ref": "#/$defs/ContentSelector"
+          },
+          "target": {
+            "description": "Original typed target, retained without probing another document.",
+            "$ref": "#/$defs/LinkTarget"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "origin",
+          "sourceRead",
+          "target",
+          "labelPreview",
+          "labelPreviewTruncated",
+          "resolution"
+        ]
+      },
       "FixedView": {
         "description": "One document-local native display projection.",
         "type": "object",
@@ -12539,6 +12650,36 @@
           }
         ]
       },
+      "OutputSlice": {
+        "description": "One half-open UTF-8 byte range in a final run.",
+        "type": "object",
+        "properties": {
+          "endByte": {
+            "description": "Exclusive run-relative byte offset.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          },
+          "run": {
+            "description": "Final run key, not a temporary buffer token.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 1
+          },
+          "startByte": {
+            "description": "Inclusive run-relative byte offset.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "run",
+          "startByte",
+          "endByte"
+        ]
+      },
       "ParameterKind": {
         "description": "Semantic behavior of one command parameter.",
         "oneOf": [
@@ -12971,6 +13112,13 @@
           "coverage": {
             "description": "Source content scan coverage.",
             "$ref": "#/$defs/ReferenceCoverage"
+          },
+          "fixedRecords": {
+            "description": "Bounded Fixed occurrences. Exactly one of this and `records` is populated.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/FixedReferenceRecord"
+            }
           },
           "occurrences": {
             "description": "Occurrences within source root and selected target types.",

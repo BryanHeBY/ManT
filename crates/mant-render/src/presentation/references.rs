@@ -89,7 +89,52 @@ pub fn render_reference_inventory_with(
         let status = resolution_text(&record.resolution);
         lines.push(format!("  {}", paint(TextRole::Notice, &status)));
     }
+    lines.extend(render_fixed_records(inventory, &paint));
     lines.join("\n")
+}
+
+fn render_fixed_records(
+    inventory: &ReferenceInventory,
+    paint: &impl Fn(TextRole, &str) -> String,
+) -> Vec<String> {
+    let mut lines = Vec::new();
+    for record in &inventory.fixed_records {
+        let label = if record.label_preview.is_empty() {
+            "(empty label)"
+        } else {
+            record.label_preview.as_str()
+        };
+        lines.push(format!(
+            "- {} → {}",
+            paint(TextRole::Reference, label),
+            paint(TextRole::Reference, &target_parts(&record.target).concat())
+        ));
+        lines.push(format!(
+            "  {}",
+            paint(
+                TextRole::Path,
+                &format!(
+                    "source=fixed-link:{} section={:?} owner={:?} firstSlice={:?}",
+                    record.origin.link,
+                    record.origin.section,
+                    record.origin.owner,
+                    record.origin.first_slice
+                )
+            )
+        ));
+        lines.push(format!(
+            "  {}",
+            paint(
+                TextRole::Path,
+                &format!("readSource={}", record.source_read)
+            )
+        ));
+        lines.push(format!(
+            "  {}",
+            paint(TextRole::Notice, &resolution_text(&record.resolution))
+        ));
+    }
+    lines
 }
 
 fn resolution_text(resolution: &ReferenceResolution) -> String {

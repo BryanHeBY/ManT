@@ -36,6 +36,45 @@ fn link_for_record<'a>(references: &'a Value, record: &Value) -> &'a Value {
 }
 
 #[test]
+#[cfg(feature = "annotated-preview")]
+fn annotated_fixed_outline_projects_native_references_without_flow_store() {
+    // Exact input ran pinned CVS -Tutf8 -O width=78 before this assertion.
+    // term.c::term_word() emits both sourced labels in one section; the
+    // marker's visible <> bytes stay outside each clickable occurrence.
+    let path = std::env::temp_dir().join(format!("mant-fixed-references-{}.1", std::process::id()));
+    fs::write(&path, b".TH T 1\n.SH SEE ALSO\na(1) \\%<> and b(2) \\%<>\n").unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_mant"))
+        .args([
+            "--annotated-preview",
+            "--input",
+            path.to_str().unwrap(),
+            "--input-format",
+            "roff",
+            "--outline",
+            "--outline-references=all",
+            "--format",
+            "json",
+            "--compact",
+        ])
+        .output()
+        .unwrap();
+    fs::remove_file(path).unwrap();
+    let value = success(&output);
+    let references = &value["references"];
+    assert!(references.get("contentProjection").is_none());
+    assert_eq!(references["records"], json!([]));
+    assert_eq!(references["occurrences"], json!({"kind":"exact","value":2}));
+    assert_eq!(references["fixedRecords"][0]["labelPreview"], "a(1)");
+    assert_eq!(references["fixedRecords"][1]["labelPreview"], "b(2)");
+    assert_eq!(references["fixedRecords"][0]["target"]["kind"], "manual");
+    assert_eq!(
+        references["fixedRecords"][0]["sourceRead"],
+        json!({"kind":"id","id":"see-also"})
+    );
+    assert_eq!(references["fixedRecords"][0]["origin"]["link"], 1);
+}
+
+#[test]
 fn outline_reference_paging_and_strict_reads_share_one_source_snapshot() {
     let root = std::env::temp_dir().join(format!("mant-navigation-process-{}", std::process::id()));
     let documents = support::registered_documents_dir(&root);

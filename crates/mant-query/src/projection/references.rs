@@ -1,5 +1,6 @@
 //! Budgeted occurrence projection; never loads destinations or builds `SemanticIndex`.
 
+pub(super) mod fixed;
 mod resolution;
 #[cfg(test)]
 mod tests;
@@ -235,7 +236,13 @@ fn finish_inventory(
     result.occurrences = count(occurrences as u64, report.complete());
     result.targets = count(targets as u64, report.complete() && targets_complete);
     result.coverage = ReferenceCoverage::from_report(report);
-    result.page.returned = u32::try_from(result.records.len()).unwrap_or(u32::MAX);
+    result.page.returned = u32::try_from(
+        result
+            .records
+            .len()
+            .saturating_add(result.fixed_records.len()),
+    )
+    .unwrap_or(u32::MAX);
     if !report.complete()
         && result.policy.mode == ReferenceProjectionMode::All
         && result.page.limited.is_none()

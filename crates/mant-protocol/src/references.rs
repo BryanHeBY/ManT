@@ -3,10 +3,11 @@
 pub use mant_ir::ReferenceTargetType;
 use mant_ir::{
     ContentLocation, ContentProjection, ContentReveal, DocumentAddress, LinkOccurrenceKey,
-    ReferenceScanReport, ReferenceScanStop,
+    LinkTarget, OutputSlice, ReferenceScanReport, ReferenceScanStop, SourceKey, SourceSpan,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::num::NonZeroU32;
 
 /// Whether reference facts are omitted, counted, or materialized.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -321,6 +322,43 @@ pub struct ReferenceRecord {
     pub resolution: ReferenceResolution,
 }
 
+/// Checked origin of one Fixed link, without pretending it is a Flow inline.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct FixedReferenceOrigin {
+    /// Dense native occurrence key in the loaded Fixed document.
+    pub link: NonZeroU32,
+    /// Native section in which the occurrence began.
+    pub section: Option<NonZeroU32>,
+    /// Native owner in which the occurrence began.
+    pub owner: Option<NonZeroU32>,
+    /// First surviving final-run slice, using explicitly byte-based storage coordinates.
+    pub first_slice: Option<OutputSlice>,
+    /// Authored declaration position when the native execution proved one.
+    pub source: Option<SourceSpan>,
+    /// Authorized source identity even when no authored position can be proved.
+    pub source_key: Option<SourceKey>,
+}
+
+/// One bounded Fixed reference; its typed target and preview come from the
+/// validated native surface, not a reconstructed Flow content store.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct FixedReferenceRecord {
+    /// Exact occurrence origin in the loaded Fixed snapshot.
+    pub origin: FixedReferenceOrigin,
+    /// A readable section/root selector, never the destination of this link.
+    pub source_read: crate::ContentSelector,
+    /// Original typed target, retained without probing another document.
+    pub target: LinkTarget,
+    /// Bounded presentation preview, not authoritative body storage.
+    pub label_preview: String,
+    /// Whether the native label was longer than this preview.
+    pub label_preview_truncated: bool,
+    /// Offline address and fragment state, without target-document I/O.
+    pub resolution: ReferenceResolution,
+}
+
 /// Independent reference output embedded alongside an outline's content tree.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -343,6 +381,9 @@ pub struct ReferenceInventory {
     pub page: ReferencePage,
     /// Bounded records, empty for summary/none.
     pub records: Vec<ReferenceRecord>,
+    /// Bounded Fixed occurrences. Exactly one of this and `records` is populated.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fixed_records: Vec<FixedReferenceRecord>,
 }
 
 #[derive(Deserialize)]
@@ -361,6 +402,8 @@ struct ReferenceInventoryWire {
     pub targets: ReferenceCount,
     pub page: ReferencePage,
     pub records: Vec<ReferenceRecord>,
+    #[serde(default)]
+    pub fixed_records: Vec<FixedReferenceRecord>,
 }
 
 impl<'de> Deserialize<'de> for ReferenceInventory {
@@ -370,6 +413,46 @@ impl<'de> Deserialize<'de> for ReferenceInventory {
             return Err(serde::de::Error::custom(
                 "retained reference records require a content projection",
             ));
+        }
+        if !value.fixed_records.is_empty()
+            && (!value.records.is_empty() || value.content_projection.is_some())
+        {
+            return Err(serde::de::Error::custom(
+                "Fixed references cannot borrow a Flow content projection",
+            ));
+        }
+        if value.page.returned as usize
+            != value
+                .records
+                .len()
+                .saturating_add(value.fixed_records.len())
+        {
+            return Err(serde::de::Error::custom(
+                "reference page count does not match retained records",
+            ));
+        }
+        let mut previous_link = 0;
+        for record in &value.fixed_records {
+            if record.origin.link.get() <= previous_link || record.label_preview.len() > 4096 {
+                return Err(serde::de::Error::custom(
+                    "Fixed reference keys must increase and previews must be bounded",
+                ));
+            }
+            previous_link = record.origin.link.get();
+            if record.origin.source.is_some() && record.origin.source_key.is_some() {
+                return Err(serde::de::Error::custom(
+                    "Fixed reference source and source key must be exclusive",
+                ));
+            }
+            if record
+                .origin
+                .first_slice
+                .is_some_and(|slice| slice.start_byte >= slice.end_byte)
+            {
+                return Err(serde::de::Error::custom(
+                    "empty Fixed reference origin slice",
+                ));
+            }
         }
         if let Some(projection) = &value.content_projection {
             for record in &value.records {
@@ -411,6 +494,7 @@ impl ReferenceInventory {
             occurrences: ReferenceCount::Unknown { reason },
             targets: ReferenceCount::Unknown { reason },
             records: Vec::new(),
+            fixed_records: Vec::new(),
         }
     }
 }
@@ -569,5 +653,77 @@ mod tests {
         let mut dangling = encoded;
         dangling["records"][0]["occurrence"] = 2.into();
         assert!(serde_json::from_value::<ReferenceInventory>(dangling).is_err());
+    }
+
+    #[test]
+    fn fixed_records_are_detached_from_flow_and_preserve_byte_coordinate_kind() {
+        let mut inventory = ReferenceInventory::not_scanned(ReferenceProjection::default());
+        inventory.page.returned = 1;
+        inventory.fixed_records.push(FixedReferenceRecord {
+            origin: FixedReferenceOrigin {
+                link: NonZeroU32::new(1).unwrap(),
+                section: None,
+                owner: None,
+                first_slice: Some(OutputSlice {
+                    run: NonZeroU32::new(2).unwrap(),
+                    start_byte: 1,
+                    end_byte: 3,
+                }),
+                source: None,
+                source_key: None,
+            },
+            source_read: crate::ContentSelector::path("root"),
+            target: LinkTarget::External {
+                uri: "https://example.test".into(),
+            },
+            label_preview: "xy".into(),
+            label_preview_truncated: false,
+            resolution: ReferenceResolution::NotApplicable {},
+        });
+        let encoded = serde_json::to_value(&inventory).unwrap();
+        let restored = serde_json::from_value::<ReferenceInventory>(encoded.clone()).unwrap();
+        assert_eq!(
+            restored.fixed_records[0]
+                .origin
+                .first_slice
+                .unwrap()
+                .start_byte,
+            1
+        );
+
+        let mut missing = encoded.clone();
+        missing["page"]["returned"] = 0.into();
+        assert!(serde_json::from_value::<ReferenceInventory>(missing).is_err());
+
+        let mut empty_slice = encoded.clone();
+        empty_slice["fixedRecords"][0]["origin"]["firstSlice"]["endByte"] = 1.into();
+        assert!(serde_json::from_value::<ReferenceInventory>(empty_slice).is_err());
+
+        let mut duplicate = encoded.clone();
+        duplicate["fixedRecords"] = serde_json::json!([
+            encoded["fixedRecords"][0].clone(),
+            encoded["fixedRecords"][0].clone()
+        ]);
+        duplicate["page"]["returned"] = 2.into();
+        assert!(serde_json::from_value::<ReferenceInventory>(duplicate).is_err());
+
+        let mut conflicting_source = encoded.clone();
+        conflicting_source["fixedRecords"][0]["origin"]["source"] =
+            serde_json::to_value(SourceSpan {
+                source: SourceKey::FIRST,
+                byte_range: None,
+                line: 1,
+                column: 1,
+                end_line: None,
+                end_column: None,
+            })
+            .unwrap();
+        conflicting_source["fixedRecords"][0]["origin"]["sourceKey"] =
+            serde_json::to_value(SourceKey::FIRST).unwrap();
+        assert!(serde_json::from_value::<ReferenceInventory>(conflicting_source).is_err());
+
+        let mut mixed = encoded;
+        mixed["contentProjection"] = serde_json::json!({"contentStore": {}});
+        assert!(serde_json::from_value::<ReferenceInventory>(mixed).is_err());
     }
 }

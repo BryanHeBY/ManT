@@ -144,8 +144,10 @@ pub fn build_outline_with_references(
         reproject_selected_node(&mut selected, &entries, true);
         nodes = vec![selected];
     }
+    let selected = root.as_ref().and_then(|_| nodes.first());
+    let references = reference_inventory(query, root.as_ref(), selected, reference_policy)?;
     Ok(QueryOutline {
-        references: reference_inventory(query, root.as_ref(), reference_policy)?,
+        references,
         display_title: query
             .document
             .as_ref()
@@ -194,6 +196,7 @@ fn validate_outline_request(
 fn reference_inventory(
     query: &ResolvedContent,
     root: Option<&ContentSelector>,
+    selected: Option<&OutlineNode>,
     policy: &mant_protocol::ReferenceProjection,
 ) -> Result<mant_protocol::ReferenceInventory, ProjectionError> {
     use mant_ir::{EntryOwnerLocationRef, ReferenceScope};
@@ -202,11 +205,42 @@ fn reference_inventory(
             policy.clone(),
         ));
     };
-    if document.flow().is_none() {
-        // R02b does not yet expose a Fixed reference occurrence coordinate.
-        // The policy and semantic outline remain usable; inventory is honest.
-        return Ok(mant_protocol::ReferenceInventory::not_scanned(
-            policy.clone(),
+    if let mant_ir::DocumentBodyRef::Fixed(fixed) = document.body() {
+        use super::references::fixed::Scope;
+        let scope = match (root, selected) {
+            (None, _) => Scope::Document,
+            (Some(_), Some(OutlineNode::Tldr { .. })) => {
+                return Ok(mant_protocol::ReferenceInventory::not_scanned(
+                    policy.clone(),
+                ));
+            }
+            (Some(_), Some(OutlineNode::DocumentRoot { .. })) => Scope::Overview,
+            (Some(_), Some(OutlineNode::DocumentSection { id, .. })) => {
+                let key = fixed
+                    .headings
+                    .iter()
+                    .find(|heading| heading.id == *id)
+                    .ok_or(ProjectionError::ContentProjection)?
+                    .key;
+                Scope::Section(key)
+            }
+            (Some(_), Some(OutlineNode::DocumentEntry { id, .. })) => {
+                let key = fixed
+                    .owners
+                    .iter()
+                    .find(|owner| owner.entry.is_some() && owner.id == *id)
+                    .ok_or(ProjectionError::ContentProjection)?
+                    .key;
+                Scope::Owner(key)
+            }
+            (Some(_), None) => return Err(ProjectionError::ContentProjection),
+        };
+        return Ok(super::references::fixed::project(
+            fixed,
+            query.address.as_ref(),
+            scope,
+            policy,
+            super::ReferenceProjectionLimits::default(),
         ));
     }
     let scan = |scope| super::project_references(document, query.address.as_ref(), scope, policy);
