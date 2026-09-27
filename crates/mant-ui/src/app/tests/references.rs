@@ -54,6 +54,84 @@ fn native_fixed_reference_sidebar_opens_and_copies_exact_target() {
 }
 
 #[test]
+fn native_fixed_reference_reveal_survives_crop_scroll_and_resize() {
+    // Exact input ran pinned CVS -Tutf8 -O width=78 first. In
+    // man_term.c::pre_in(), the authored 40n indent moves BR's final cells;
+    // the TUI must reveal those same cells, not manufacture a new label.
+    let mut sources = libmandoc_rs::SourceBundle::new();
+    sources
+        .insert(
+            "x.1",
+            b".TH T 1\n.SH SEE ALSO\n.in 40n\n.BR printf (3)\n".to_vec(),
+        )
+        .unwrap();
+    let document = mant_codec::annotated_fixed::project_annotated_manual(
+        "x.1",
+        &sources,
+        libmandoc_rs::InputFormat::Man,
+    )
+    .unwrap();
+    let bundle = ResolvedContent {
+        label: "x.1".into(),
+        address: None,
+        document: Some(document),
+        tldr: None,
+    };
+    let mut app = App::new(&bundle);
+    let reference = app
+        .session
+        .document
+        .navigation()
+        .iter()
+        .find(|node| node.kind == NavKind::Reference)
+        .unwrap()
+        .id
+        .clone();
+    let mut narrow = Terminal::new(TestBackend::new(30, 12)).unwrap();
+    narrow.draw(|frame| app.draw(frame)).unwrap();
+    let width = app.geometry.content.width;
+    let native_column = app.session.rendered_cache[&width]
+        .anchor_column(&reference)
+        .unwrap();
+    assert!(native_column >= usize::from(width));
+    assert!(app.reveal_anchor(&reference));
+    assert!(app.session.horizontal_offset > 0);
+    narrow.draw(|frame| app.draw(frame)).unwrap();
+    let rendered = &app.session.rendered_cache[&width];
+    let row = rendered.anchor_row(&reference).unwrap();
+    let visible_column = native_column - app.session.horizontal_offset;
+    assert!(matches!(
+        app.session
+            .document
+            .link_target_at(rendered, row, visible_column),
+        Some(crate::document::LinkTarget::Document {
+            address: DocumentAddress::Manual { .. },
+            ..
+        })
+    ));
+    app.selected = app
+        .session
+        .document
+        .navigation()
+        .iter()
+        .position(|node| node.id == reference)
+        .unwrap();
+    app.handle_key(KeyEvent::new(KeyCode::Char('Y'), KeyModifiers::SHIFT));
+    assert!(
+        matches!(app.take_copy_request(), Some(CopyRequest::Reference { text }) if text == "man:printf(3)")
+    );
+
+    let mut wide = Terminal::new(TestBackend::new(100, 16)).unwrap();
+    wide.draw(|frame| app.draw(frame)).unwrap();
+    assert!(app.reveal_anchor(&reference));
+    assert!(
+        app.session.rendered_cache[&app.geometry.content.width]
+            .anchor_row(&reference)
+            .is_some()
+    );
+}
+
+#[test]
 fn unqualified_manual_link_preserves_manual_only_intent_for_the_host() {
     let mut bundle = navigation_bundle();
     bundle

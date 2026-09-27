@@ -1,7 +1,8 @@
-# R05 annotated-reference checkpoint
+# R05 annotated-reference baseline and acceptance
 
-Status: R05a design and evidence checkpoint, not a claim that compatible
-references are implemented. Branch `dev`, clean baseline
+Status: this file first freezes the historical R05a design and evidence
+checkpoint; the implementation and acceptance record is at the end. Branch
+`dev`, clean R05a baseline
 `b926eeb2c65b6630524385547d94812d81e0b5a4` (2026-09-27). The default
 roff entry still uses Flow; `--annotated-preview` selects Fixed. No version
 increment or production-entry switch is part of R05.
@@ -274,3 +275,43 @@ conservative non-match rather than an internal error. Synthetic post-render
 fault tests verify that bad optional link facts remove clickability without
 altering native body bytes or unrelated references; they do not claim a new
 roff spelling naturally triggers a decoder fault.
+
+## R05 implementation and acceptance record
+
+The implemented path uses one bounded native compatible-candidate producer,
+the existing final display and link-mark selection, and one checked Fixed
+reference projection. It does not reformat the body or switch the default
+Flow production entrance. L01–L10 evidence is partitioned as follows:
+
+| Panel | Executed check |
+| --- | --- |
+| L01–L05 | Native `annotated_links` exercises same-node distinct/repeated Sphinx markers, cross-node joined and rejected references, styled operands, weak negatives, explicit macros, identity and final-label survival. |
+| L06 | Native `annotated_link_boundaries` checks include source keys, heading labels, `.Tg`, margin output and explicit section `0`; a real-native `mant-ui` test checks crop, horizontal reveal, resize and typed-target copy. |
+| L07 | The 79 Fixed entry gold cases pass. Sorted outline `.nodes` subtrees and direct-text hashes of frozen GCC, Git, Clang and rclone inputs match the R05a baseline. |
+| L08 | Native C result-isolation faults, Rust FFI and codec tests check scoped rejected/ambiguous reasons, preserved body, other usable references, no false gap for weak candidates, and strict safety failures. |
+| L09 | Fixed JSON roundtrip, scoped/paged reference inventory, CLI/MCP text and JSON, native `mant://` reads, fragment validation and TUI activation/copy use checked typed Fixed origins and targets. |
+| L10 | `annotated_link_work` checks a long miss, 512 separate markers, many style fragments, a tight budget and a healthy following call. An ignored release-only scaling probe covers doubled miss and marker sizes. |
+
+The paired release candidate at `a7f99922` was built with
+`--features annotated-preview`; its SHA-256 is
+`ed88849e886bfe29ac51bfdcf0c54b62cc67efca7619bb38606a54d1918b4677`.
+Five alternating baseline/candidate calls per page found no obvious wall-time
+or peak-RSS regression: median GCC `.39s/58420 KiB` → `.38s/57972 KiB`,
+rclone `.73s/144244 KiB` → `.71s/143980 KiB`; Git and Clang timings were
+at this probe's 10 ms resolution. All four exact text and outline-node
+hashes matched. The ignored release scaling probe measured 512/1024/2048
+markers at 841/1552/3006 µs median and 32768/65536-character misses at
+7490/12940 µs median. Full raw measurements, input hashes, binary identity
+and caveats are in `target/r05-final-measurements.md` (local, untracked).
+These four real pages have zero current Fixed reference records; the link
+feature itself is proved by the separate vertical fixtures, not inferred
+from the page-performance probe.
+
+The earlier R05a and intermediate paragraphs above remain frozen historical
+checkpoints. They do not describe the final feature or imply that a weak
+candidate is an internal failure. The full `bash scripts/check.sh` gate
+passed, including vendor replay, isolated feature and consumer builds,
+packaged sources, docs, strict workspace lint, fuzz compilation and smoke.
+The initial sandboxed run stopped only because four `mant-sources` tests
+could not bind a local fixture server; the complete rerun with loopback
+permission passed. No v0.12 version increment was made.
