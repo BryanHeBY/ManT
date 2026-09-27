@@ -1301,6 +1301,121 @@ fn nested_literal_fallback_cannot_rebind_a_rejected_key_value_component() {
 }
 
 #[test]
+fn hard_head_boundaries_cannot_rebind_a_rejected_literal_key_value_prefix() {
+    // Every exact top-level and nested variant ran pinned CVS -Tutf8
+    // -Owidth=78 before these assertions. mdoc_macro.c::blk_part_exp keeps
+    // one Xo HEAD; roff_term.c::roff_term_pre_br/pre_sp and term.c::term_word
+    // only change its native display boundary. A missing logical join does
+    // not grant the first Cm component a different name grammar.
+    for nested in [false, true] {
+        for (boundary, request) in [
+            ("none", ""),
+            ("br", ".br\n"),
+            ("sp", ".sp\n"),
+            ("nf-fi", ".nf\n.fi\n"),
+            ("p", "\\p\n"),
+        ] {
+            let prefix = if nested {
+                ".Dd September 27, 2026\n.Dt T 5\n.Os\n.Sh CONFIGURATION\n.Bl -tag -width Ds\n.It Cm parent\nParent.\n.Bl -tag -width Ds\n"
+            } else {
+                ".Dd September 27, 2026\n.Dt T 5\n.Os\n.Sh CONFIGURATION\n.Bl -tag -width Ds\n"
+            };
+            let suffix = if nested { ".El\n.El\n" } else { ".El\n" };
+            let input = format!(
+                "{prefix}.It Xo Cm child=value Ar foo\n{request}.Ar bar\n.Xc\nChild description.\n{suffix}"
+            );
+            let document =
+                project_annotated_manual("t.1", &bundle(input.as_bytes()), InputFormat::Mdoc)
+                    .unwrap();
+            assert!(
+                validate_document(&document).is_empty(),
+                "{boundary}, nested={nested}"
+            );
+            let DocumentBody::Fixed(fixed) = &document.body else {
+                panic!("not Fixed")
+            };
+            assert!(fixed.surface.text.contains("child=value"));
+            assert!(fixed.surface.text.contains("Child description."));
+            let owner = &fixed.owners[usize::from(nested)];
+            assert!(
+                owner
+                    .entry
+                    .as_ref()
+                    .is_none_or(|entry| !entry.names.iter().any(|name| name == "child=value"))
+            );
+            let decoded: mant_ir::Document =
+                serde_json::from_value(serde_json::to_value(&document).unwrap()).unwrap();
+            assert!(validate_document(&decoded).is_empty());
+            for document in [document, decoded] {
+                let response = mant_query::explain_query(
+                    &mant_ir::ResolvedContent {
+                        address: None,
+                        label: "T(5)".to_owned(),
+                        document: Some(document),
+                        tldr: None,
+                    },
+                    &ExplanationQuery {
+                        entry: "child=value".to_owned(),
+                        options: ExplanationOptions::default(),
+                    },
+                )
+                .unwrap();
+                assert_eq!(
+                    response.counts.direct_entry.total, 0,
+                    "{boundary}, nested={nested}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn partial_literal_head_still_binds_an_independent_bare_command() {
+    // Both exact inputs ran pinned CVS -Tutf8 -Owidth=78 first. Xo retains
+    // the authored Cm instance across roff_term.c::roff_term_pre_br's line
+    // break; only its later HEAD joins are unavailable to logical matching.
+    for nested in [false, true] {
+        let prefix = if nested {
+            ".Dd September 27, 2026\n.Dt T 5\n.Os\n.Sh COMMANDS\n.Bl -tag -width Ds\n.It Cm parent\nParent.\n.Bl -tag -width Ds\n"
+        } else {
+            ".Dd September 27, 2026\n.Dt T 5\n.Os\n.Sh COMMANDS\n.Bl -tag -width Ds\n"
+        };
+        let suffix = if nested { ".El\n.El\n" } else { ".El\n" };
+        let input = format!(
+            "{prefix}.It Xo Cm run Ar foo\n.br\n.Ar bar\n.Xc\nChild description.\n{suffix}"
+        );
+        let document =
+            project_annotated_manual("t.1", &bundle(input.as_bytes()), InputFormat::Mdoc).unwrap();
+        assert!(validate_document(&document).is_empty());
+        let DocumentBody::Fixed(fixed) = &document.body else {
+            panic!("not Fixed")
+        };
+        let entry = fixed.owners[usize::from(nested)]
+            .entry
+            .as_ref()
+            .expect("partial native command");
+        assert_eq!(entry.names, ["run"]);
+        assert_eq!(
+            entry.kind,
+            if nested {
+                EntryKind::Term
+            } else {
+                EntryKind::Command
+            }
+        );
+        assert_eq!(
+            fixed.selection_text(&entry.forms[0]).as_deref(),
+            Some("run")
+        );
+        assert_direct_explain(&document, "run", "Child description.");
+        let decoded: mant_ir::Document =
+            serde_json::from_value(serde_json::to_value(&document).unwrap()).unwrap();
+        assert!(validate_document(&decoded).is_empty());
+        assert_direct_explain(&decoded, "run", "Child description.");
+    }
+}
+
+#[test]
 fn nested_manual_calls_keep_their_checked_names_when_category_downgrades() {
     // This exact input ran pinned CVS -Tutf8 -Owidth=78 before assertion.
     // mdoc_macro.c::blk_full retains the nested It HEADs; mdoc_term.c::

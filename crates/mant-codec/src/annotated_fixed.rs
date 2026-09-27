@@ -526,19 +526,19 @@ fn lower_annotated_document_inner(page: &mut AnnotatedDocument) -> Result<Docume
                     // Keep the complete physical HEAD in owner.head. Only this
                     // authored, delimited Ic/Cm component is a logical form:
                     // later Xo joins are Unknown and cannot be guessed into one.
-                    let (name, component) = fixed.literal_command_component(owner)?;
-                    let selection = component.clone();
+                    let recognition = entry_pass.partial_literal_declaration(owner)?;
+                    let (name, selection) = recognition.occurrences.into_iter().next()?;
                     return Some(EntryFacts {
                         name_bindings: vec![EntryNameBinding {
                             name: 0,
                             occurrences: vec![selection.clone()],
-                            evidence: EntryNameEvidence::NativeMarkup,
+                            evidence: recognition.evidence,
                         }],
                         alias_groups: Vec::new(),
                         alias_of: None,
                         forms: vec![selection],
                         id: owner.id.clone(),
-                        kind: entry_pass.partial_literal_entry_kind(owner),
+                        kind: recognition.kind,
                         case: NameCase::Sensitive,
                         names: vec![name],
                         value_domain: None,

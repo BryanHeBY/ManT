@@ -64,6 +64,15 @@ pub struct FixedNonOptionRecognition {
     pub occurrences: Vec<(String, TextSelection)>,
 }
 
+/// One native Ic/Cm prefix after the same base name grammar used by a
+/// complete Literal declaration, before parent context changes its category.
+struct LiteralPrefixProof<'a> {
+    base_kind: EntryKind,
+    name_kind: EntryKind,
+    name: String,
+    selection: &'a TextSelection,
+}
+
 /// Bounded name proof was omitted, not syntactically disproved. The producer
 /// must publish a semantic-coverage diagnostic while retaining the display.
 #[doc(hidden)]
@@ -141,7 +150,18 @@ impl<'a> FixedEntryPass<'a> {
             .scan_non_option_declaration_with_context(owner, self.nested_for(owner))
     }
 
-    /// Keep a partial native name while using the current parent category.
+    /// Bind a partial native name using the same base syntax as a complete
+    /// declaration, then apply the current parent category.
+    #[must_use]
+    pub fn partial_literal_declaration(
+        &self,
+        owner: &OwnerMark,
+    ) -> Option<FixedNonOptionRecognition> {
+        self.body
+            .partial_literal_declaration_with_context(owner, self.nested_for(owner))
+    }
+
+    /// Keep a partial native category while using the current parent context.
     #[must_use]
     pub fn partial_literal_entry_kind(&self, owner: &OwnerMark) -> EntryKind {
         self.body
@@ -606,6 +626,24 @@ impl FixedBody {
             EntryKind::ConfigurationKey => EntryKind::Term,
             kind => kind,
         }
+    }
+
+    fn partial_literal_declaration_with_context(
+        &self,
+        owner: &OwnerMark,
+        nested: bool,
+    ) -> Option<FixedNonOptionRecognition> {
+        let prefix = self.literal_prefix_proof(owner)?;
+        let kind = if prefix.name_kind == EntryKind::Term {
+            EntryKind::Term
+        } else {
+            self.partial_literal_entry_kind_with_context(owner, nested)
+        };
+        Some(FixedNonOptionRecognition {
+            kind,
+            evidence: EntryNameEvidence::NativeMarkup,
+            occurrences: vec![(prefix.name, prefix.selection.clone())],
+        })
     }
 
     /// A root config manual can declare keys in DESCRIPTION, but a SEE ALSO
@@ -2078,7 +2116,10 @@ impl FixedBody {
         entry: &EntryFacts<TextSelection>,
         nested: bool,
     ) -> bool {
-        let Some((name, component)) = self.literal_command_component(owner) else {
+        let Some(recognition) = self.partial_literal_declaration_with_context(owner, nested) else {
+            return false;
+        };
+        let [(name, component)] = recognition.occurrences.as_slice() else {
             return false;
         };
         let ([only_form], [only_name], [binding]) = (
@@ -2089,15 +2130,15 @@ impl FixedBody {
             return false;
         };
         entry.id == owner.id
-            && entry.kind == self.partial_literal_entry_kind_with_context(owner, nested)
+            && entry.kind == recognition.kind
             && entry.case == NameCase::Sensitive
             && entry.alias_groups.is_empty()
             && entry.alias_of.is_none()
             && entry.value_domain.is_none()
             && only_form == component
-            && only_name == &name
+            && only_name == name
             && binding.name == 0
-            && binding.evidence == EntryNameEvidence::NativeMarkup
+            && binding.evidence == recognition.evidence
             && binding.occurrences.as_slice() == std::slice::from_ref(component)
     }
 
@@ -2145,32 +2186,35 @@ impl FixedBody {
         let leading = form.trim_start();
         let start = form.len() - leading.len();
         if owner.head_role == Some(OwnerHeadRole::Literal) {
-            let (name, selection) = self.literal_command_component(owner)?;
-            let end = start.checked_add(name.len())?;
+            let prefix = self.literal_prefix_proof(owner)?;
+            let end = start.checked_add(prefix.name.len())?;
             // This conservative fallback must obey the same base syntax as
             // the complete Literal scan. Parent context may weaken the
             // category only after the prefix has passed that syntax; it
             // cannot turn an unbound key/value spelling into a Term name.
-            let base_kind = self.base_literal_entry_kind(owner);
-            let kind = if nested { EntryKind::Term } else { base_kind };
-            if form.get(start..end) != Some(name.as_str())
+            let kind = if nested {
+                EntryKind::Term
+            } else {
+                prefix.name_kind
+            };
+            if form.get(start..end) != Some(prefix.name.as_str())
                 || !form.get(end..).is_some_and(|suffix| {
                     suffix.is_empty() || suffix.starts_with(char::is_whitespace)
                 })
-                || self.selection_subrange(&owner.head, start..end).as_ref() != Some(selection)
-                || base_kind == EntryKind::ConfigurationKey
-                    && (crate::configuration_key_declaration_range(&name) != Some(0..name.len())
-                        || !form
-                            .get(end..)
-                            .is_some_and(|suffix| suffix.trim().is_empty()))
+                || self.selection_subrange(&owner.head, start..end).as_ref()
+                    != Some(prefix.selection)
+                || prefix.base_kind == EntryKind::ConfigurationKey
+                    && !form
+                        .get(end..)
+                        .is_some_and(|suffix| suffix.trim().is_empty())
             {
                 return None;
             }
             return Some((
                 kind,
                 EntryNameEvidence::NativeMarkup,
-                name,
-                selection.clone(),
+                prefix.name,
+                prefix.selection.clone(),
             ));
         }
         let role_prefix = owner.head_role_prefix.as_deref()?;
@@ -2257,6 +2301,29 @@ impl FixedBody {
             }
         };
         boundary.then_some((name, &component.selection))
+    }
+
+    fn literal_prefix_proof<'a>(&self, owner: &'a OwnerMark) -> Option<LiteralPrefixProof<'a>> {
+        let (name, selection) = self.literal_command_component(owner)?;
+        let base_kind = self.base_literal_entry_kind(owner);
+        let full = 0..name.len();
+        let name_kind = match Self::literal_name_range(&name, base_kind) {
+            Some(range) if range == full => base_kind,
+            // A complete component with an attached value has a shorter
+            // configuration name. Partial HEADs cannot bind its whole text.
+            None if base_kind == EntryKind::ConfigurationKey
+                && Self::literal_name_range(&name, EntryKind::Term) == Some(full) =>
+            {
+                EntryKind::Term
+            }
+            Some(_) | None => return None,
+        };
+        Some(LiteralPrefixProof {
+            base_kind,
+            name_kind,
+            name,
+            selection,
+        })
     }
 
     /// Close every lexical alias against the same original HEAD and one
