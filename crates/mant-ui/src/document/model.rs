@@ -205,6 +205,7 @@ impl LogicalLine {
         self
     }
 
+    #[cfg(test)]
     pub(super) fn wrap_mode(mut self, wrap_mode: WrapMode) -> Self {
         self.wrap_mode = wrap_mode;
         self

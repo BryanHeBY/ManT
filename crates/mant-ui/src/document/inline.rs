@@ -346,3 +346,11 @@ fn append_text(value: &str, style: Style, lines: &mut Vec<StyledInlineLine>) {
         }
     }
 }
+
+/// Split plain block payloads at the same source line boundaries as inline
+/// text. The resulting logical rows feed rendering, search and selection.
+pub(super) fn styled_plain_text_lines(value: &str, style: Style) -> Vec<StyledInlineLine> {
+    let mut lines = vec![StyledInlineLine::default()];
+    append_text(value, style, &mut lines);
+    lines
+}

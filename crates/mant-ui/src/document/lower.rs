@@ -1,5 +1,5 @@
 //! IR to logical terminal content and anchors.
-use super::inline::styled_reference_inline_lines;
+use super::inline::{styled_plain_text_lines, styled_reference_inline_lines};
 use super::{
     Arc, Block, DocumentAddress, ExternalUri, HashMap, Inline, LineSurface, LinkTarget,
     LogicalLine, LogicalLinkRange, Modifier, NavKind, NavNode, Section, SemanticIndex, Span, Style,
@@ -318,25 +318,35 @@ impl DocumentBuilder<'_> {
                 self.table(rows, compose_origin(base_indent, layout.indent_columns));
             }
             Block::Equation { value, layout, .. } => {
-                self.push(
-                    LogicalLine::plain(
-                        padding(compose_origin(base_indent, layout.indent_columns)),
-                        value.clone(),
-                        Style::default().fg(theme::YELLOW),
-                    )
-                    .wrap_mode(WrapMode::Character),
+                self.plain_block_lines(
+                    value,
+                    compose_origin(base_indent, layout.indent_columns),
+                    Style::default().fg(theme::YELLOW),
+                    WrapMode::Character,
                 );
             }
             Block::VerticalSpace { lines, .. } => self.spacing(*lines),
             Block::ThematicBreak { .. } => self.push(LogicalLine::rule(padding(base_indent))),
             Block::Unsupported { text, layout, .. } => {
-                self.push(LogicalLine::plain(
-                    padding(compose_origin(base_indent, layout.indent_columns)),
-                    text.clone(),
+                // mandoc mdoc_term.c::print_mdoc_node() breaks each authored
+                // NODE_LINE in no-fill mode before terminal cell handling.
+                self.plain_block_lines(
+                    text,
+                    compose_origin(base_indent, layout.indent_columns),
                     Style::default().fg(theme::PEACH),
-                ));
+                    WrapMode::Word,
+                );
             }
         }
+    }
+
+    fn plain_block_lines(&mut self, value: &str, indent: i32, style: Style, wrap_mode: WrapMode) {
+        self.push_styled_lines(
+            styled_plain_text_lines(value, style),
+            indent,
+            LineSurface::Normal,
+            wrap_mode,
+        );
     }
 
     pub(super) fn spacing(&mut self, lines: u16) {
@@ -394,26 +404,36 @@ impl DocumentBuilder<'_> {
         for (id, row) in targets {
             self.anchors.entry(id).or_insert(self.lines.len() + row);
         }
-        let lines = lines
-            .into_iter()
-            .map(|line| LogicalLine {
+        self.push_styled_lines(
+            lines,
+            indent,
+            surface,
+            if surface == LineSurface::Code {
+                WrapMode::Character
+            } else {
+                WrapMode::Word
+            },
+        );
+    }
+
+    fn push_styled_lines(
+        &mut self,
+        lines: Vec<super::StyledInlineLine>,
+        indent: i32,
+        surface: LineSurface,
+        wrap_mode: WrapMode,
+    ) {
+        for line in lines {
+            self.push(LogicalLine {
                 indent: padding(indent),
                 continuation_indent: padding(indent),
                 spans: line.spans,
                 surface,
-                wrap_mode: if surface == LineSurface::Code {
-                    WrapMode::Character
-                } else {
-                    WrapMode::Word
-                },
+                wrap_mode,
                 table_row: None,
                 links: line.links,
                 reference_marks: line.reference_marks,
-            })
-            .collect::<Vec<_>>();
-
-        for line in lines {
-            self.push(line);
+            });
         }
     }
 }

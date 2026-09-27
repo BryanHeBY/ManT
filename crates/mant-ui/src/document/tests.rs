@@ -462,4 +462,5 @@ mod references;
 mod search;
 mod source_geometry;
 mod tables;
+mod unsupported_hard_lines;
 mod zero_width;
