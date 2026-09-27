@@ -58,24 +58,24 @@ mod tests {
         mant_mandoc_table_rule_cell_view_size, parse_buffer,
     };
 
-    #[test]
-    fn borrowed_snapshot_views_match_the_native_abi() {
-        macro_rules! check_view {
-            ($name:literal, $view:ty, $size:path, $align:path, $offsets:path, [$($field:ident),+ $(,)?]) => {{
-                assert_eq!(unsafe { $size() }, std::mem::size_of::<$view>(), "{} size", $name);
-                assert_eq!(unsafe { $align() }, std::mem::align_of::<$view>(), "{} alignment", $name);
-                let expected = [$(std::mem::offset_of!($view, $field)),+];
-                let mut count = 0;
-                let native = unsafe { $offsets(&mut count) };
-                assert_eq!(count, expected.len(), "{} field count", $name);
-                assert!(!native.is_null(), "{} field offsets", $name);
-                // The shim returns immutable static storage, and the checked
-                // length bounds this slice before any native offset is read.
-                let actual = unsafe { std::slice::from_raw_parts(native, count) };
-                assert_eq!(actual, expected, "{} field offsets", $name);
-            }};
-        }
+    macro_rules! check_view {
+        ($name:literal, $view:ty, $size:path, $align:path, $offsets:path, [$($field:ident),+ $(,)?]) => {{
+            assert_eq!(unsafe { $size() }, std::mem::size_of::<$view>(), "{} size", $name);
+            assert_eq!(unsafe { $align() }, std::mem::align_of::<$view>(), "{} alignment", $name);
+            let expected = [$(std::mem::offset_of!($view, $field)),+];
+            let mut count = 0;
+            let native = unsafe { $offsets(&mut count) };
+            assert_eq!(count, expected.len(), "{} field count", $name);
+            assert!(!native.is_null(), "{} field offsets", $name);
+            // The shim returns immutable static storage, and the checked
+            // length bounds this slice before any native offset is read.
+            let actual = unsafe { std::slice::from_raw_parts(native, count) };
+            assert_eq!(actual, expected, "{} field offsets", $name);
+        }};
+    }
 
+    #[test]
+    fn borrowed_node_view_matches_the_native_abi() {
         check_view!(
             "node",
             CNodeView,
@@ -115,6 +115,10 @@ mod tests {
                 next,
             ]
         );
+    }
+
+    #[test]
+    fn borrowed_table_cell_view_matches_the_native_abi() {
         check_view!(
             "table cell",
             CTableCellView,
@@ -134,6 +138,10 @@ mod tests {
                 next,
             ]
         );
+    }
+
+    #[test]
+    fn borrowed_table_rule_cell_view_matches_the_native_abi() {
         check_view!(
             "table rule cell",
             CTableRuleCellView,
@@ -142,6 +150,10 @@ mod tests {
             mant_mandoc_table_rule_cell_view_offsets,
             [kind, next]
         );
+    }
+
+    #[test]
+    fn borrowed_equation_view_matches_the_native_abi() {
         check_view!(
             "equation",
             CEquationBoxView,
