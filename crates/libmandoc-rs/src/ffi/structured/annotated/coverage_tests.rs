@@ -1,5 +1,8 @@
 use super::{CoverageCheckView, CoverageIssueView, transfer_coverage};
-use crate::annotated::{AnnotatedSource, AnnotationCheckState, AnnotationScope};
+use crate::annotated::{
+    AnnotatedRenderer, AnnotatedSource, AnnotationCheckState, AnnotationIssueReason,
+    AnnotationScope,
+};
 
 fn checks() -> Vec<CoverageCheckView> {
     (1..=3)
@@ -104,4 +107,38 @@ fn source_scope_requires_a_known_source_key_and_valid_authored_triplet() {
         ..source.clone()
     };
     assert!(transfer_coverage(&checks, &[mismatched], &[], &[source, second]).is_err());
+}
+
+#[test]
+fn scoped_ambiguous_link_issue_survives_ffi_transfer() {
+    // Exact input first ran pinned CVS -Tutf8 -O width=78. The test changes
+    // only a synthetic coverage view, not term.c::term_word() output.
+    let mut bundle = crate::SourceBundle::new();
+    bundle
+        .insert("x.1", b".TH T 1\n.SH SEE ALSO\n.BR printf (3)\n".to_vec())
+        .unwrap();
+    let page = AnnotatedRenderer::default()
+        .render_bundle("x.1", &bundle, crate::InputFormat::Man)
+        .unwrap();
+    let link = page.marks.iter().find(|mark| mark.kind == 3).unwrap();
+    assert_ne!(link.owner, 0);
+    let mut table = checks();
+    table[3].state = 3;
+    let issue = CoverageIssueView {
+        producer: 1,
+        dimension: 4,
+        reason: 4,
+        scope: 4,
+        scope_key: link.owner,
+        ..CoverageIssueView::default()
+    };
+    let transferred = transfer_coverage(&table, &[issue], &page.marks, &page.sources).unwrap();
+    assert_eq!(
+        transferred.issues[0].reason,
+        AnnotationIssueReason::AmbiguousSurvival
+    );
+    assert_eq!(
+        transferred.issues[0].scope,
+        AnnotationScope::Region(link.owner)
+    );
 }

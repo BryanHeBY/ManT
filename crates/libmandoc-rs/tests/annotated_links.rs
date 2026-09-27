@@ -99,6 +99,13 @@ fn styled_macro_without_surviving_style_is_not_clickable() {
             .iter()
             .all(|key| { page.marks[(*key - 1) as usize].link_target.is_none() })
     );
+    assert!(!page.coverage.issues.iter().any(|issue| {
+        issue.dimension == AnnotationDimension::Link
+            && matches!(
+                issue.reason,
+                AnnotationIssueReason::Rejected | AnnotationIssueReason::AmbiguousSurvival
+            )
+    }));
 }
 
 #[test]

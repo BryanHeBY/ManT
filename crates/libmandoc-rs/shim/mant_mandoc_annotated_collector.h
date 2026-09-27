@@ -82,6 +82,11 @@ struct mant_annotated_selection_part {
 /* A ManT-compatible reference, not an upstream explicit link macro. Its
  * typed destination is revoked unless every final label glyph survives. */
 #define MANT_ANNOTATED_MARK_COMPATIBLE_LINK (1U << 14)
+/* The native href was withdrawn after semantic decoding, or a committed
+ * compatible candidate could not be mapped to its final surviving glyphs.
+ * These flags are evidence for scoped coverage, never clickable targets. */
+#define MANT_ANNOTATED_MARK_LINK_REJECTED (1U << 15)
+#define MANT_ANNOTATED_MARK_LINK_AMBIGUOUS (1U << 16)
 #define MANT_ANNOTATED_MARK_HEAD_ROLE_MASK (\
     MANT_ANNOTATED_MARK_HEAD_OPTION | \
     MANT_ANNOTATED_MARK_HEAD_ENVIRONMENT | \

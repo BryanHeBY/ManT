@@ -217,7 +217,17 @@ valid_marks(const struct mant_annotated_result *result)
 		    MANT_ANNOTATED_MARK_HANGING_CANDIDATE |
 		    MANT_ANNOTATED_MARK_DIRECT_TP_TEXT |
 		    MANT_ANNOTATED_MARK_COMPATIBLE_LINK |
+		    MANT_ANNOTATED_MARK_LINK_REJECTED |
+		    MANT_ANNOTATED_MARK_LINK_AMBIGUOUS |
 		    MANT_ANNOTATED_MARK_HEAD_ROLE_MASK)) != 0 ||
+		    ((mark->flags & (MANT_ANNOTATED_MARK_LINK_REJECTED |
+		    MANT_ANNOTATED_MARK_LINK_AMBIGUOUS)) != 0 &&
+		    (mark->kind != MANT_ANNOTATED_MARK_LINK ||
+		    mark->target_kind != 0)) ||
+		    ((mark->flags & MANT_ANNOTATED_MARK_LINK_AMBIGUOUS) != 0 &&
+		    (mark->flags & MANT_ANNOTATED_MARK_COMPATIBLE_LINK) == 0) ||
+		    ((mark->flags & MANT_ANNOTATED_MARK_LINK_REJECTED) != 0 &&
+		    (mark->flags & MANT_ANNOTATED_MARK_LINK_AMBIGUOUS) != 0) ||
 		    ((mark->flags & MANT_ANNOTATED_MARK_COMPATIBLE_LINK) != 0 &&
 		    mark->kind != MANT_ANNOTATED_MARK_LINK) ||
 		    ((mark->flags & MANT_ANNOTATED_MARK_HANGING_CANDIDATE) != 0 &&

@@ -23,7 +23,10 @@ const MDOC_AR_TOKEN: u32 = 273;
 const HEAD_ROLE_MASK: u32 =
     32 | 64 | 128 | 256 | HEAD_VARIABLE | HEAD_DEFINED_VARIABLE | HEAD_ARGUMENT;
 const COMPATIBLE_LINK: u32 = 1 << 14;
-const ALLOWED_MARK_FLAGS: u32 = 1 | 4 | 8 | 16 | 512 | 1024 | COMPATIBLE_LINK | HEAD_ROLE_MASK;
+const LINK_REJECTED: u32 = 1 << 15;
+const LINK_AMBIGUOUS: u32 = 1 << 16;
+const ALLOWED_MARK_FLAGS: u32 =
+    1 | 4 | 8 | 16 | 512 | 1024 | COMPATIBLE_LINK | LINK_REJECTED | LINK_AMBIGUOUS | HEAD_ROLE_MASK;
 
 #[allow(clippy::too_many_lines)] // Mirrors the checked one-copy wire transfer.
 pub(super) fn transfer(
@@ -312,6 +315,10 @@ pub(super) fn transfer(
             || mark.flags & !ALLOWED_MARK_FLAGS != 0
             || (mark.flags & 512 != 0 && mark.kind != 2)
             || (mark.flags & COMPATIBLE_LINK != 0 && mark.kind != 3)
+            || (mark.flags & (LINK_REJECTED | LINK_AMBIGUOUS) != 0
+                && (mark.kind != 3 || mark.target_kind != 0))
+            || (mark.flags & LINK_AMBIGUOUS != 0 && mark.flags & COMPATIBLE_LINK == 0)
+            || mark.flags & (LINK_REJECTED | LINK_AMBIGUOUS) == (LINK_REJECTED | LINK_AMBIGUOUS)
             || (mark.flags & 4 != 0 && mark.kind != 4)
             || (mark.flags & 8 != 0 && mark.kind != 1)
             || (mark.flags & 16 != 0 && mark.kind != 2)

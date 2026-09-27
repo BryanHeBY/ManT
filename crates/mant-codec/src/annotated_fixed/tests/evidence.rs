@@ -105,18 +105,24 @@ fn rejected_native_link_target_keeps_other_fixed_facts_and_reports_gap() {
         .unwrap();
     let expected = page.text.clone();
     let link = page.marks.iter_mut().find(|mark| mark.kind == 3).unwrap();
+    let source_region = link.owner;
+    assert_ne!(source_region, 0);
     link.link_target = None;
     page.coverage.issues.push(AnnotationCoverageIssue {
         producer: AnnotationProducer::Native,
         dimension: AnnotationDimension::Link,
         reason: AnnotationIssueReason::Rejected,
-        scope: AnnotationScope::Document,
+        scope: AnnotationScope::Region(source_region),
         source: None,
     });
     let document = lower_annotated_document(page).unwrap();
     assert!(validate_document(&document).is_empty());
     assert!(document.diagnostics.iter().any(|diagnostic| {
         diagnostic.code.as_deref() == Some("annotated.coverage.link.rejected")
+            && matches!(
+                diagnostic.coverage_scope,
+                Some(mant_ir::CoverageScope::Region { .. })
+            )
     }));
     let DocumentBody::Fixed(fixed) = &document.body else {
         panic!("not Fixed")
@@ -126,6 +132,65 @@ fn rejected_native_link_target_keeps_other_fixed_facts_and_reports_gap() {
     assert!(fixed.owners.iter().all(|owner| owner.entry.is_some()));
     assert_eq!(fixed.links.len(), 1);
     assert!(fixed.links[0].target.is_none());
+    let outline = mant_query::build_outline(&mant_ir::ResolvedContent {
+        address: None,
+        label: "T(1)".into(),
+        document: Some(document),
+        tldr: None,
+    })
+    .unwrap();
+    assert!(!outline.semantics_complete);
+    let wire = serde_json::to_value(&outline).unwrap();
+    assert_eq!(
+        wire["diagnostics"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|value| value["code"] == "annotated.coverage.link.rejected")
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn ambiguous_compatible_link_keeps_text_and_other_clickable_references() {
+    // Exact input first ran pinned CVS -Tutf8 -O width=78. The first
+    // pre_alternate() phrase and later pre_MR() phrase remain distinct.
+    // Inject only the optional final-glyph proof failure after native render.
+    let input = b".TH T 1\n.SH SEE ALSO\n.BR printf (3)\n.MR good 2\n";
+    let mut page = AnnotatedRenderer::default()
+        .render_bundle("t.1", &bundle(input), InputFormat::Man)
+        .unwrap();
+    let original = page.text.clone();
+    let failed = page.marks.iter_mut().find(|mark| mark.kind == 3).unwrap();
+    assert_ne!(failed.owner, 0);
+    let region = failed.owner;
+    failed.link_target = None;
+    page.coverage.issues.push(AnnotationCoverageIssue {
+        producer: AnnotationProducer::Native,
+        dimension: AnnotationDimension::Link,
+        reason: AnnotationIssueReason::AmbiguousSurvival,
+        scope: AnnotationScope::Region(region),
+        source: None,
+    });
+    let document = lower_annotated_document(page).unwrap();
+    assert!(validate_document(&document).is_empty());
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        panic!("not Fixed");
+    };
+    assert_eq!(fixed.surface.text, original);
+    assert_eq!(fixed.links.len(), 1);
+    assert_eq!(
+        fixed.selection_text(&fixed.links[0].label).as_deref(),
+        Some("good(2)")
+    );
+    assert!(document.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code.as_deref() == Some("annotated.coverage.link.ambiguous-survival")
+            && matches!(
+                diagnostic.coverage_scope,
+                Some(mant_ir::CoverageScope::Region { .. })
+            )
+    }));
 }
 
 #[test]

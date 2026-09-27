@@ -430,6 +430,7 @@ rejected_target:
 	memset(&mark->target_a, 0, sizeof(mark->target_a));
 	memset(&mark->target_b, 0, sizeof(mark->target_b));
 	mark->target_kind = mark->target_b_present = 0;
+	mark->flags |= MANT_ANNOTATED_MARK_LINK_REJECTED;
 	collector->link_annotation_rejected = 1;
 	collector->metrics.mark_count = collector->mark_count;
 	return mark->key;

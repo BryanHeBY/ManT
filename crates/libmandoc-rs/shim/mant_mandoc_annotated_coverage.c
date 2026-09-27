@@ -93,10 +93,37 @@ valid_source(const struct mant_annotated_result *result,
 	    issue->source, issue->line, issue->column - 1);
 }
 
+static uint32_t
+mark_scope(const struct mant_annotated_result *result,
+    const struct mant_annotated_mark *mark, uint32_t *key)
+{
+	uint32_t kind;
+
+	if (mark->owner != 0 && mark->owner <= result->mark_count) {
+		kind = result->marks[mark->owner - 1].kind;
+		if (kind == MANT_ANNOTATED_MARK_HEADING ||
+		    kind == MANT_ANNOTATED_MARK_OWNER ||
+		    kind == MANT_ANNOTATED_MARK_REGION) {
+			*key = mark->owner;
+			return kind == MANT_ANNOTATED_MARK_HEADING ?
+			    MANT_ANNOTATED_COVERAGE_SECTION_SCOPE :
+			    kind == MANT_ANNOTATED_MARK_OWNER ?
+			    MANT_ANNOTATED_COVERAGE_OWNER_SCOPE :
+			    MANT_ANNOTATED_COVERAGE_REGION_SCOPE;
+		}
+	}
+	if (mark->source != 0) {
+		*key = mark->source;
+		return MANT_ANNOTATED_COVERAGE_SOURCE_SCOPE;
+	}
+	*key = 0;
+	return MANT_ANNOTATED_COVERAGE_DOCUMENT;
+}
+
 static int
 append_issue(struct structured_session *session,
     struct mant_annotated_result *result, uint32_t dimension,
-    uint32_t reason)
+    uint32_t reason, const struct mant_annotated_mark *mark)
 {
 	struct mant_annotated_coverage_issue *issues, *issue;
 	uint64_t maximum = session->limits->max_transfer_objects;
@@ -123,7 +150,35 @@ append_issue(struct structured_session *session,
 	issue->dimension = dimension;
 	issue->reason = reason;
 	issue->scope = MANT_ANNOTATED_COVERAGE_DOCUMENT;
+	if (mark != NULL) {
+		issue->scope = mark_scope(result, mark, &issue->scope_key);
+		if (mark->source != 0 && mark->line != 0) {
+			issue->source = mark->source;
+			issue->line = mark->line;
+			issue->column = mark->column;
+		}
+	}
 	return 1;
+}
+
+static int
+failure_issue_matches_mark(const struct mant_annotated_coverage_issue *issue,
+    const struct mant_annotated_result *result,
+    const struct mant_annotated_mark *mark)
+{
+	uint32_t expected_scope, expected_key;
+
+	if (issue->reason != ((mark->flags &
+	    MANT_ANNOTATED_MARK_LINK_REJECTED) != 0 ?
+	    MANT_ANNOTATED_COVERAGE_REJECTED :
+	    MANT_ANNOTATED_COVERAGE_AMBIGUOUS_SURVIVAL))
+		return 0;
+	expected_scope = mark_scope(result, mark, &expected_key);
+	return issue->scope == expected_scope &&
+	    issue->scope_key == expected_key &&
+	    issue->source == (mark->line != 0 ? mark->source : 0) &&
+	    issue->line == mark->line &&
+	    issue->column == mark->column;
 }
 
 int
@@ -133,11 +188,12 @@ mant_annotated_coverage_is_valid(const struct mant_annotated_result *result)
 	const struct mant_annotated_coverage_issue *issue;
 	uint8_t seen_checks[3][8] = {{0}};
 	uint8_t seen_issues[3][8] = {{0}};
-	uint8_t rejected_link_issue = 0;
+	uint32_t failed_link_issues = 0, failed_link_marks = 0;
 	uint32_t observed_states[3][8] = {{0}};
-	uint32_t producer, dimension, index;
+	uint32_t producer, dimension, index, issue_cursor = 0;
 
 	if (result == NULL || result->common == NULL ||
+	    (result->mark_count != 0 && result->marks == NULL) ||
 	    (result->coverage_issue_count != 0) !=
 	    (result->coverage_issues != NULL) ||
 	    result->coverage_issue_count > result->coverage_issue_capacity)
@@ -178,13 +234,45 @@ mant_annotated_coverage_is_valid(const struct mant_annotated_result *result)
 			return 0;
 		if (issue->producer == MANT_ANNOTATED_COVERAGE_NATIVE &&
 		    issue->dimension == MANT_ANNOTATED_COVERAGE_LINK &&
-		    issue->reason == MANT_ANNOTATED_COVERAGE_REJECTED)
-			rejected_link_issue = 1;
+		    (issue->reason == MANT_ANNOTATED_COVERAGE_REJECTED ||
+		    issue->reason == MANT_ANNOTATED_COVERAGE_AMBIGUOUS_SURVIVAL))
+			failed_link_issues++;
 		seen_issues[producer][dimension] = 1;
 	}
+	for (index = 0; index < result->mark_count; index++)
+		if ((result->marks[index].flags &
+		    (MANT_ANNOTATED_MARK_LINK_REJECTED |
+		    MANT_ANNOTATED_MARK_LINK_AMBIGUOUS)) != 0)
+			failed_link_marks++;
 	if (result->native_link_rejected > 1 ||
-	    rejected_link_issue != result->native_link_rejected)
+	    (failed_link_issues != 0) != result->native_link_rejected ||
+	    (result->mark_count != 0 &&
+	    failed_link_issues != failed_link_marks) ||
+	    (result->mark_count == 0 && failed_link_issues > 1))
 		return 0;
+	/* Build emits one scoped failure issue per failed link in native mark
+	 * order.  Verify the relation, not merely the number of issue records. */
+	for (index = 0; index < result->mark_count; index++) {
+		const struct mant_annotated_mark *mark = result->marks + index;
+		const struct mant_annotated_coverage_issue *issue = NULL;
+
+		if ((mark->flags & (MANT_ANNOTATED_MARK_LINK_REJECTED |
+		    MANT_ANNOTATED_MARK_LINK_AMBIGUOUS)) == 0)
+			continue;
+		while (issue_cursor < result->coverage_issue_count) {
+			issue = result->coverage_issues + issue_cursor++;
+			if (issue->producer == MANT_ANNOTATED_COVERAGE_NATIVE &&
+			    issue->dimension == MANT_ANNOTATED_COVERAGE_LINK &&
+			    (issue->reason == MANT_ANNOTATED_COVERAGE_REJECTED ||
+			    issue->reason ==
+			    MANT_ANNOTATED_COVERAGE_AMBIGUOUS_SURVIVAL))
+				break;
+			issue = NULL;
+		}
+		if (issue == NULL ||
+		    !failure_issue_matches_mark(issue, result, mark))
+			return 0;
+	}
 	for (producer = 0; producer < 3; producer++)
 		for (dimension = 0; dimension < 8; dimension++)
 			if (seen_checks[producer][dimension] == 0 ||
@@ -252,6 +340,14 @@ mant_annotated_coverage_build(struct structured_session *session,
 			return 0;
 		}
 		seen[dimension] = 1;
+		if ((mark->flags & MANT_ANNOTATED_MARK_LINK_REJECTED) != 0 &&
+		    !append_issue(session, result, MANT_ANNOTATED_COVERAGE_LINK,
+		    MANT_ANNOTATED_COVERAGE_REJECTED, mark))
+			return 0;
+		if ((mark->flags & MANT_ANNOTATED_MARK_LINK_AMBIGUOUS) != 0 &&
+		    !append_issue(session, result, MANT_ANNOTATED_COVERAGE_LINK,
+		    MANT_ANNOTATED_COVERAGE_AMBIGUOUS_SURVIVAL, mark))
+			return 0;
 	}
 	for (dimension = MANT_ANNOTATED_COVERAGE_SECTION;
 	    dimension <= MANT_ANNOTATED_COVERAGE_ANCHOR; dimension++) {
@@ -274,22 +370,22 @@ mant_annotated_coverage_build(struct structured_session *session,
 		if (!append_issue(session, result, dimension,
 		    seen[dimension] != 0 ?
 		    MANT_ANNOTATED_COVERAGE_REASON_UNVERIFIED :
-		    MANT_ANNOTATED_COVERAGE_NOT_OBSERVED))
+		    MANT_ANNOTATED_COVERAGE_NOT_OBSERVED, NULL))
 			return 0;
 	}
-	/* A destination rejected by the native decoder is distinct from an
-	 * ordinary unverified link dimension.  Its label survives as no-href,
-	 * while this issue makes the lost semantics visible to consumers. */
-	if (result->native_link_rejected &&
+	/* If all annotations were stripped after a relation failure, no mark
+	 * remains to prove a narrower scope or the original failure subtype.
+	 * Preserve the link gap at document scope without inventing a location. */
+	if (result->native_link_rejected && result->mark_count == 0 &&
 	    !append_issue(session, result, MANT_ANNOTATED_COVERAGE_LINK,
-	    MANT_ANNOTATED_COVERAGE_REJECTED))
+	    MANT_ANNOTATED_COVERAGE_REJECTED, NULL))
 		return 0;
 	for (dimension = MANT_ANNOTATED_COVERAGE_RELATION;
 	    dimension <= MANT_ANNOTATED_COVERAGE_JOIN; dimension++) {
 		if (!append_issue(session, result, dimension,
 		    dimension == MANT_ANNOTATED_COVERAGE_JOIN ?
 		    MANT_ANNOTATED_COVERAGE_NOT_OBSERVED :
-		    MANT_ANNOTATED_COVERAGE_REASON_UNVERIFIED))
+		    MANT_ANNOTATED_COVERAGE_REASON_UNVERIFIED, NULL))
 			return 0;
 	}
 	return 1;

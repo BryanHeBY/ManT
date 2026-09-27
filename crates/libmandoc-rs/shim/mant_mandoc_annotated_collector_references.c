@@ -185,6 +185,7 @@ mant_annotated_refs_word_reject(struct mant_annotated_collector *collector)
 		memset(&mark->target_a, 0, sizeof(mark->target_a));
 		memset(&mark->target_b, 0, sizeof(mark->target_b));
 		mark->target_kind = mark->target_b_present = 0;
+		mark->flags |= MANT_ANNOTATED_MARK_LINK_AMBIGUOUS;
 	}
 	collector->link_annotation_rejected = 1;
 	mant_annotated_refs_word_leave(collector);

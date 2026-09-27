@@ -99,8 +99,10 @@ revoke_incomplete_compatible_links(struct structured_session *session,
 		memset(&mark->target_a, 0, sizeof(mark->target_a));
 		memset(&mark->target_b, 0, sizeof(mark->target_b));
 		mark->target_kind = mark->target_b_present = 0;
-		if (survived == 0)
+		if (survived == 0) {
+			mark->flags |= MANT_ANNOTATED_MARK_LINK_AMBIGUOUS;
 			result->native_link_rejected = 1;
+		}
 	}
 }
 

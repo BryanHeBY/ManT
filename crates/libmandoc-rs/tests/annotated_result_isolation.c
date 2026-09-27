@@ -249,6 +249,7 @@ test_result_isolation(void)
 	session.annotated_link_candidate = 1;
 	assert(mant_annotated_coverage_build(&session, result));
 	assert(session.status == MANT_STRUCTURED_OK);
+	assert(mant_annotated_coverage_is_valid(result));
 	assert(mant_annotated_result_is_valid(result));
 	result->checked = 1;
 	assert(mant_annotated_result_check(result, &failure) ==
@@ -314,6 +315,7 @@ test_one_rejected_link_retains_other_marks(void)
 	memset(&link->target_a, 0, sizeof(link->target_a));
 	memset(&link->target_b, 0, sizeof(link->target_b));
 	link->target_kind = link->target_b_present = 0;
+	link->flags |= MANT_ANNOTATED_MARK_LINK_REJECTED;
 	result->native_link_rejected = 1;
 	free(result->coverage_issues);
 	result->coverage_issues = NULL;
@@ -324,15 +326,30 @@ test_one_rejected_link_retains_other_marks(void)
 	session.annotated_link_candidate = 1;
 	assert(mant_annotated_coverage_build(&session, result));
 	assert(session.status == MANT_STRUCTURED_OK);
+	assert(mant_annotated_coverage_is_valid(result));
 	assert(mant_annotated_result_is_valid(result));
 	for (i = 0; i < result->coverage_issue_count; i++) {
-		const struct mant_annotated_coverage_issue *issue =
+		struct mant_annotated_coverage_issue *issue =
 		    result->coverage_issues + i;
 
 		if (issue->producer == MANT_ANNOTATED_COVERAGE_NATIVE &&
 		    issue->dimension == MANT_ANNOTATED_COVERAGE_LINK &&
-		    issue->reason == MANT_ANNOTATED_COVERAGE_REJECTED)
+		    issue->reason == MANT_ANNOTATED_COVERAGE_REJECTED) {
+			uint32_t original_scope = issue->scope;
+			uint32_t original_key = issue->scope_key;
+
+			assert(issue->scope == MANT_ANNOTATED_COVERAGE_REGION_SCOPE);
+			assert(issue->scope_key == link->owner);
+			assert(issue->source == link->source);
+			/* A different but individually valid source scope may not be
+			 * substituted for the proven native region relationship. */
+			issue->scope = MANT_ANNOTATED_COVERAGE_SOURCE_SCOPE;
+			issue->scope_key = link->source;
+			assert(!mant_annotated_coverage_is_valid(result));
+			issue->scope = original_scope;
+			issue->scope_key = original_key;
 			rejected_issues++;
+		}
 	}
 	assert(rejected_issues == 1);
 	assert(result->mark_count == view.marks.count);
@@ -346,6 +363,79 @@ test_one_rejected_link_retains_other_marks(void)
 	    MANT_STRUCTURED_OK);
 	assert(mant_annotated_result_view(result, &view) == MANT_STRUCTURED_OK);
 	assert(view.annotation_degraded == 0 && view.marks.count != 0);
+	free(body);
+	mant_annotated_result_free(result);
+}
+
+static void
+test_ambiguous_compatible_label_is_scoped_without_losing_body(void)
+{
+	/* Exact input ran the pinned CVS -Tutf8 -O width=78 first;
+	 * man_term.c::pre_alternate() prints this one styled reference. The
+	 * post-render fault below simulates a committed final-glyph mismatch. */
+	static const uint8_t compatible_roff[] =
+	    ".TH T 1\n.SH SEE ALSO\n.BR printf (3)\n";
+	struct mant_input_source_view member = source;
+	struct mant_structured_input_view candidate = input;
+	struct mant_structured_limits cap = limits();
+	struct mant_annotated_result *result = NULL;
+	struct mant_structured_failure_view failure;
+	struct mant_annotated_result_view view;
+	struct structured_session session = {0};
+	struct mant_annotated_mark *link = NULL;
+	uint8_t *body;
+	uint32_t i, ambiguous = 0;
+	size_t body_length;
+
+	member.source_bytes.ptr = compatible_roff;
+	member.source_bytes.len = sizeof(compatible_roff) - 1;
+	candidate.sources.ptr = &member;
+	assert(mant_annotated_render(&candidate, &cap, &result, &failure) ==
+	    MANT_STRUCTURED_OK);
+	assert(mant_annotated_result_view(result, &view) == MANT_STRUCTURED_OK);
+	body_length = (size_t)view.display.byte_count;
+	body = snapshot(view.display.bytes, body_length);
+	for (i = 0; i < result->mark_count; i++)
+		if (result->marks[i].kind == MANT_ANNOTATED_MARK_LINK) {
+			assert(link == NULL);
+			link = result->marks + i;
+		}
+	assert(link != NULL && link->target_kind == MANT_LINK_MANUAL &&
+	    (link->flags & MANT_ANNOTATED_MARK_COMPATIBLE_LINK) != 0 &&
+	    link->owner != 0 &&
+	    result->marks[link->owner - 1].kind ==
+	    MANT_ANNOTATED_MARK_REGION);
+	result->checked = 0;
+	free((void *)link->target_a.ptr);
+	free((void *)link->target_b.ptr);
+	memset(&link->target_a, 0, sizeof(link->target_a));
+	memset(&link->target_b, 0, sizeof(link->target_b));
+	link->target_kind = link->target_b_present = 0;
+	link->flags |= MANT_ANNOTATED_MARK_LINK_AMBIGUOUS;
+	result->native_link_rejected = 1;
+	free(result->coverage_issues);
+	result->coverage_issues = NULL;
+	result->coverage_issue_count = result->coverage_issue_capacity = 0;
+	session.limits = &cap;
+	session.status = MANT_STRUCTURED_OK;
+	session.annotated_section_candidate = 1;
+	session.annotated_link_candidate = 1;
+	assert(mant_annotated_coverage_build(&session, result));
+	assert(mant_annotated_result_is_valid(result));
+	for (i = 0; i < result->coverage_issue_count; i++) {
+		const struct mant_annotated_coverage_issue *issue =
+		    result->coverage_issues + i;
+		if (issue->producer == MANT_ANNOTATED_COVERAGE_NATIVE &&
+		    issue->dimension == MANT_ANNOTATED_COVERAGE_LINK &&
+		    issue->reason == MANT_ANNOTATED_COVERAGE_AMBIGUOUS_SURVIVAL) {
+			assert(issue->scope ==
+			    MANT_ANNOTATED_COVERAGE_REGION_SCOPE);
+			assert(issue->scope_key == link->owner);
+			ambiguous++;
+		}
+	}
+	assert(ambiguous == 1 &&
+	    memcmp(view.display.bytes, body, body_length) == 0);
 	free(body);
 	mant_annotated_result_free(result);
 }
@@ -391,6 +481,7 @@ main(void)
 	test_hard_render_budget();
 	test_result_isolation();
 	test_one_rejected_link_retains_other_marks();
+	test_ambiguous_compatible_label_is_scoped_without_losing_body();
 	test_sealed_private_borrow();
 	puts("annotated result isolation: okay");
 	return 0;

@@ -261,3 +261,16 @@ macro expansion; and both benign weak rejection and committed mapping
 failure. Every behavioral expectation must first be checked against the
 exact input in the fixed CVS, then through native, FFI, IR, query, CLI and
 TUI. L01–L10 in the guide remain open at this checkpoint.
+
+The R05 link-coverage unit keeps one private failure flag on each affected
+native link mark: rejected destination decoding and ambiguous committed
+candidate survival remain distinct. The existing bounded coverage table
+projects each failure to its actual region/owner/source when proven, with an
+authored source position only when valid; after wholesale annotation stripping
+it reports only a document-scope gap. C result checks verify reason, ordering
+and scope against the failed mark. FFI and codec carry the issue into a
+semantic-coverage diagnostic, while an ordinary weak candidate remains a
+conservative non-match rather than an internal error. Synthetic post-render
+fault tests verify that bad optional link facts remove clickability without
+altering native body bytes or unrelated references; they do not claim a new
+roff spelling naturally triggers a decoder fault.
