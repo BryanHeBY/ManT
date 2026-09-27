@@ -1043,6 +1043,158 @@ fn literal_group_keeps_interleaved_ar_arguments_out_of_names() {
 }
 
 #[test]
+fn literal_components_inside_one_argument_scope_do_not_become_names() {
+    // This exact input ran pinned CVS -Tutf8 -Owidth=78 first. Its
+    // mdoc_macro.c::blk_full/in_line path retains each Cm/Ar instance, while
+    // mdoc_term.c::termp_it_pre and termp_bold_pre execute one visible HEAD.
+    // A Cm instance inside an unclosed Ar bracket is still parameter text;
+    // the external comma after the closing Ar permits the later Cm next.
+    let input = b".Dd September 27, 2026\n.Dt T 1\n.Os\n.Sh COMMANDS\n.Bl -tag -width Ds\n.It Cm run Ar \"[first\" Cm fake Ar \"last]\" , Cm next\nBODY.\n.El\n";
+    let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Mdoc).unwrap();
+    assert!(validate_document(&document).is_empty());
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        panic!("not Fixed")
+    };
+    assert_group(
+        fixed,
+        &fixed.owners[0],
+        EntryKind::Command,
+        &["run", "next"],
+        mant_ir::EntryNameEvidence::NativeMarkup,
+    );
+    assert_direct_explain(&document, "run", "BODY.");
+    assert_direct_explain(&document, "next", "BODY.");
+    let resolved = mant_ir::ResolvedContent {
+        address: None,
+        label: "T(1)".to_owned(),
+        document: Some(document.clone()),
+        tldr: None,
+    };
+    let fake = mant_query::explain_query(
+        &resolved,
+        &ExplanationQuery {
+            entry: "fake".to_owned(),
+            options: ExplanationOptions::default(),
+        },
+    )
+    .unwrap();
+    assert_eq!(fake.counts.direct_entry.total, 0);
+    let decoded: mant_ir::Document =
+        serde_json::from_value(serde_json::to_value(&document).unwrap()).unwrap();
+    assert!(validate_document(&decoded).is_empty());
+}
+
+#[test]
+fn literal_parameter_scope_survives_component_and_font_boundaries() {
+    // This exact five-item input ran pinned CVS -Tutf8 -Owidth=78 first.
+    // mdoc_macro.c::in_line supplies separate Ar/Cm instances; mdoc_term.c::
+    // termp_under_pre/termp_bold_pre render their characters in one It HEAD.
+    // Only punctuation outside those executed instances and closed scopes
+    // can separate declarations.
+    let input = b".Dd September 27, 2026\n.Dt T 1\n.Os\n.Sh COMMANDS\n.Bl -tag -width Ds\n.It Cm run Ar \"\\(dqfirst\" Cm fake Ar \"last\\(dq\" , Cm next\nQuoted body.\n.It Cm run Ar \"\\(lqfirst\" Cm fake Ar \"last\\(rq\" , Cm next\nTypographic body.\n.It Cm run Ar \"(first\" Cm fake Ar \"last)\" , Cm next\nParenthesized body.\n.It Cm run Ar first, Cm fake Ar last, Cm next\nComma-argument body.\n.It Cm run Ar first , Cm next\nExternal-comma body.\n.El\n";
+    let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Mdoc).unwrap();
+    assert!(validate_document(&document).is_empty());
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        panic!("not Fixed")
+    };
+    assert_eq!(fixed.owners.len(), 5);
+    for (index, names) in [
+        ["run", "next"].as_slice(),
+        &["run", "next"],
+        &["run", "next"],
+        &["run"],
+        &["run", "next"],
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        assert_group(
+            fixed,
+            &fixed.owners[index],
+            EntryKind::Command,
+            names,
+            mant_ir::EntryNameEvidence::NativeMarkup,
+        );
+    }
+    let resolved = mant_ir::ResolvedContent {
+        address: None,
+        label: "T(1)".to_owned(),
+        document: Some(document),
+        tldr: None,
+    };
+    let fake = mant_query::explain_query(
+        &resolved,
+        &ExplanationQuery {
+            entry: "fake".to_owned(),
+            options: ExplanationOptions::default(),
+        },
+    )
+    .unwrap();
+    assert_eq!(fake.counts.direct_entry.total, 0);
+}
+
+#[test]
+fn nested_literal_names_keep_bindings_but_not_parent_key_or_command_type() {
+    // Both exact inputs ran pinned CVS -Tutf8 -Owidth=78 first. The nested
+    // mdoc_macro.c::blk_full It HEADs are distinct owners; termp_it_pre
+    // renders them without giving the child a new top-level section context.
+    // Native Cm name bindings survive a weak category downgrade to Term.
+    for (input, parent_kind, parent_name, child_names, child_body) in [
+        (
+            b".Dd September 27, 2026\n.Dt SSH_CONFIG 5\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width Ds\n.It Cm ChannelTimeout\nAvailable channel types:\n.Bl -tag -width Ds\n.It Cm session\nInteractive channel.\n.It Cm direct-tcpip , Cm direct-streamlocal@openssh.com\nForwarded channels.\n.El\n.El\n"
+                .as_slice(),
+            EntryKind::ConfigurationKey,
+            "ChannelTimeout",
+            vec!["session", "direct-tcpip", "direct-streamlocal@openssh.com"],
+            "Forwarded channels.",
+        ),
+        (
+            b".Dd September 27, 2026\n.Dt T 1\n.Os\n.Sh COMMANDS\n.Bl -tag -width Ds\n.It Cm run\nOuter.\n.Bl -tag -width Ds\n.It Cm sub\nInner.\n.El\n.El\n"
+                .as_slice(),
+            EntryKind::Command,
+            "run",
+            vec!["sub"],
+            "Inner.",
+        ),
+    ] {
+        let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Mdoc)
+            .expect("native Fixed document");
+        assert!(validate_document(&document).is_empty());
+        let DocumentBody::Fixed(fixed) = &document.body else {
+            panic!("not Fixed")
+        };
+        assert_eq!(fixed.owners[0].entry.as_ref().unwrap().kind, parent_kind);
+        assert_eq!(fixed.owners[0].entry.as_ref().unwrap().names, [parent_name]);
+        assert_eq!(fixed.owners[1].entry.as_ref().unwrap().kind, EntryKind::Term);
+        for name in child_names {
+            let owner = fixed
+                .owners
+                .iter()
+                .find(|owner| {
+                    owner
+                        .entry
+                        .as_ref()
+                        .is_some_and(|entry| entry.names.iter().any(|candidate| candidate == name))
+                })
+                .expect("child name remains bound");
+            assert_eq!(owner.entry.as_ref().unwrap().kind, EntryKind::Term);
+            assert_direct_explain(
+                &document,
+                name,
+                if name == "session" {
+                    "Interactive channel."
+                } else {
+                    child_body
+                },
+            );
+        }
+        let decoded: mant_ir::Document =
+            serde_json::from_value(serde_json::to_value(&document).unwrap()).unwrap();
+        assert!(validate_document(&decoded).is_empty());
+    }
+}
+
+#[test]
 fn expanded_va_dv_keep_source_key_only_role_and_display_binding() {
     // Exact macro-expanded input ran pinned CVS -Tutf8 before assertion.
     // mdoc_macro.c::in_line executes Va/Dv even when the expansion does not

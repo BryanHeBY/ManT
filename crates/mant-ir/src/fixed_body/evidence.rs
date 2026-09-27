@@ -4,6 +4,7 @@
 //! bindings against one Fixed surface. It neither formats roff nor owns the
 //! native collector state; every proof is recomputed for mutable documents.
 
+use super::literal_boundaries::literal_name_starts;
 use super::{
     FixedBody, OutputSlice, OwnerHeadComponent, OwnerHeadRole, OwnerMark, OwnerRole, RegionKind,
     TextJoin, TextSelection, validation,
@@ -97,7 +98,7 @@ impl FixedBody {
         }
         if owner.hanging_candidate {
             return if self.hanging_structure_ready(owner) {
-                self.lexical_non_option_declaration(owner, true)
+                self.contextual_lexical_non_option_declaration(owner, true)
             } else {
                 Ok(None)
             };
@@ -106,7 +107,7 @@ impl FixedBody {
             return Ok(None);
         };
         match head_role {
-            OwnerHeadRole::Lexical => self.lexical_non_option_declaration(owner, false),
+            OwnerHeadRole::Lexical => self.contextual_lexical_non_option_declaration(owner, false),
             OwnerHeadRole::Literal => self.native_literal_declaration(owner),
             OwnerHeadRole::Option
             | OwnerHeadRole::Environment
@@ -262,6 +263,20 @@ impl FixedBody {
         }))
     }
 
+    fn contextual_lexical_non_option_declaration(
+        &self,
+        owner: &OwnerMark,
+        hanging: bool,
+    ) -> Result<Option<FixedNonOptionRecognition>, FixedNonOptionLimit> {
+        // A real nested definition inherits its semantic parent context, not
+        // the section title alone. Keep the base lexical proof separate so
+        // ancestor checks never consult mutable EntryFacts or recurse.
+        if self.nested_under_semantic_parent(owner) {
+            return Ok(None);
+        }
+        self.lexical_non_option_declaration(owner, hanging)
+    }
+
     fn section_declaration_family(
         &self,
         owner: &OwnerMark,
@@ -288,12 +303,16 @@ impl FixedBody {
     #[doc(hidden)]
     #[must_use]
     pub fn literal_entry_kind(&self, owner: &OwnerMark) -> EntryKind {
-        if self.nested_under_option(owner) {
-            // A nested literal under a parameter is not a configuration key
-            // merely because the document's root is a configuration manual.
-            // Explicit Value evidence is not yet present, so keep a Term.
+        if self.nested_under_semantic_parent(owner) {
+            // Options, keys and commands put their child definitions in value
+            // or parameter context. No checked Value subtype exists here, so
+            // keep independently bound native names as Terms.
             return EntryKind::Term;
         }
+        self.base_literal_entry_kind(owner)
+    }
+
+    fn base_literal_entry_kind(&self, owner: &OwnerMark) -> EntryKind {
         match self.section_declaration_family(owner) {
             Some(crate::SectionDeclarationFamily::Commands) => EntryKind::Command,
             Some(crate::SectionDeclarationFamily::ConfigurationKeys) => EntryKind::ConfigurationKey,
@@ -365,11 +384,13 @@ impl FixedBody {
             })
     }
 
-    fn nested_under_option(&self, owner: &OwnerMark) -> bool {
+    fn nested_under_semantic_parent(&self, owner: &OwnerMark) -> bool {
         let mut parent = owner.parent;
-        // Native owner ancestry is structurally bounded for this semantic
-        // hint. Beyond the cap, withhold the weak key/command classification
-        // instead of spending quadratic work or losing an option barrier.
+        // Validation requires every parent key to precede its child. This
+        // bounded walk recomputes the parent proof from immutable native HEAD
+        // evidence: production has not yet filled owner.entry, while a
+        // detached IR may carry stale or forged EntryFacts. No recursive
+        // validated_entry() calls or whole-document context cache are needed.
         for _ in 0..64 {
             let Some(key) = parent else {
                 return false;
@@ -379,6 +400,48 @@ impl FixedBody {
             };
             if ancestor.head_role == Some(OwnerHeadRole::Option) {
                 return true;
+            }
+            if ancestor.role == OwnerRole::Definition {
+                let hanging_ready =
+                    !ancestor.hanging_candidate || self.hanging_structure_ready(ancestor);
+                if ancestor.head_role == Some(OwnerHeadRole::Lexical)
+                    && hanging_ready
+                    && self
+                        .lexical_names(ancestor)
+                        .is_some_and(|names| !names.is_empty())
+                {
+                    return true;
+                }
+                if ancestor.head_role == Some(OwnerHeadRole::Literal) {
+                    let base = self.base_literal_entry_kind(ancestor);
+                    if matches!(base, EntryKind::Command | EntryKind::ConfigurationKey)
+                        && self
+                            .native_literal_declaration_for_kind(ancestor, base)
+                            .ok()
+                            .flatten()
+                            .is_some_and(|recognition| recognition.kind == base)
+                    {
+                        return true;
+                    }
+                }
+                if self.manual_call_declaration_base(ancestor).is_some() {
+                    return true;
+                }
+                if ancestor.head_role == Some(OwnerHeadRole::Lexical)
+                    && hanging_ready
+                    && self
+                        .lexical_non_option_declaration(ancestor, ancestor.hanging_candidate)
+                        .ok()
+                        .flatten()
+                        .is_some_and(|recognition| {
+                            matches!(
+                                recognition.kind,
+                                EntryKind::Command | EntryKind::ConfigurationKey
+                            )
+                        })
+                {
+                    return true;
+                }
             }
             parent = ancestor.parent;
         }
@@ -484,16 +547,24 @@ impl FixedBody {
     }
 
     /// A complete literal HEAD may contain several independently executed
-    /// Ic/Cm instances. Each surviving component supplies its own name; a
-    /// comma/pipe only separates already-proved components and never creates
-    /// an alias or a name from an Ar parameter.
+    /// Ic/Cm instances. Only parameter-external separators can restart a
+    /// declaration; instances inside one Ar enclosure remain visible but
+    /// cannot become independent names.
+    fn native_literal_declaration(
+        &self,
+        owner: &OwnerMark,
+    ) -> Result<Option<FixedNonOptionRecognition>, FixedNonOptionLimit> {
+        self.native_literal_declaration_for_kind(owner, self.literal_entry_kind(owner))
+    }
+
     #[expect(
         clippy::too_many_lines,
         reason = "one bounded native Literal component pass keeps the name and argument state together"
     )]
-    fn native_literal_declaration(
+    fn native_literal_declaration_for_kind(
         &self,
         owner: &OwnerMark,
+        requested_kind: EntryKind,
     ) -> Result<Option<FixedNonOptionRecognition>, FixedNonOptionLimit> {
         if owner
             .head_components
@@ -539,12 +610,21 @@ impl FixedBody {
         let Some(byte_ranges) = self.component_byte_ranges(&owner.head, &part_ranges) else {
             return Ok(None);
         };
-        let kind = self.literal_entry_kind(owner);
+        let Some(name_starts) = literal_name_starts(&form, &owner.head_components, &byte_ranges)
+        else {
+            return Ok(None);
+        };
+        let mut kind = requested_kind;
         let mut names = Vec::with_capacity(byte_ranges.len());
         let mut previous_end = 0;
         let mut current_bare_name = false;
         let mut argument_count = 0usize;
-        for (component, range) in owner.head_components.iter().zip(byte_ranges) {
+        for ((component, range), starts_name) in owner
+            .head_components
+            .iter()
+            .zip(byte_ranges)
+            .zip(name_starts)
+        {
             if !component.has_source_identity() || range.start >= range.end {
                 return Ok(None);
             }
@@ -555,12 +635,37 @@ impl FixedBody {
             };
             match component.role {
                 OwnerHeadRole::Literal => {
+                    if !starts_name {
+                        // A Cm/Ic instance inside an authored Ar quote or
+                        // bracket is still an argument. Retain its display
+                        // and scan the rest of the HEAD for a later, real
+                        // separator rather than rejecting all earlier names.
+                        if names.is_empty()
+                            || !current_bare_name
+                            || !gap.chars().all(char::is_whitespace)
+                        {
+                            return Ok(None);
+                        }
+                        previous_end = range.end;
+                        continue;
+                    }
                     if (names.is_empty() && !gap.trim().is_empty())
                         || (!names.is_empty() && !crate::complete_literal_component_gap(gap))
                     {
                         return Ok(None);
                     }
-                    let Some(name_range) = Self::literal_name_range(visible, kind) else {
+                    // Bind each independently proved native name before
+                    // deciding its weak section-derived category. An `@` in
+                    // one child name cannot erase its sibling's binding just
+                    // because the pair is not a configuration-key group.
+                    let Some(name_range) = Self::literal_name_range(visible, requested_kind)
+                        .or_else(|| {
+                            (requested_kind == EntryKind::ConfigurationKey)
+                                .then(|| Self::literal_name_range(visible, EntryKind::Term))
+                                .flatten()
+                                .inspect(|_| kind = EntryKind::Term)
+                        })
+                    else {
                         return Ok(None);
                     };
                     let absolute = range.start + name_range.start..range.start + name_range.end;
@@ -862,6 +967,12 @@ impl FixedBody {
     /// executes the visible HEAD, and `pre_RS` only establishes indentation.
     #[must_use]
     pub fn manual_call_declaration(&self, owner: &OwnerMark) -> Option<FixedNonOptionRecognition> {
+        (!self.nested_under_semantic_parent(owner))
+            .then(|| self.manual_call_declaration_base(owner))
+            .flatten()
+    }
+
+    fn manual_call_declaration_base(&self, owner: &OwnerMark) -> Option<FixedNonOptionRecognition> {
         if owner.role != OwnerRole::Definition
             || !matches!(
                 owner.head_role,
