@@ -16,6 +16,8 @@ The disposition of each current module and the now 40 vendor patches is in the
 [`native-annotated-removal-ledger.md`](native-annotated-removal-ledger.md).
 The current product still uses AST lowering. An `annotated` result is a private
 migration path until R08; no P1 test is a claim that production has switched.
+R05 reference admission and its frozen baseline are recorded in
+[`baselines/native-annotated-links-r05/README.md`](baselines/native-annotated-links-r05/README.md).
 
 ## Authority and one-copy rule
 
@@ -45,14 +47,14 @@ as metadata where the native tree will be unavailable after return.
 | `TextSelection` | ordered output slices plus per-adjacency `TextJoin` | joins state exact consumed separator bytes, direct contact or hard/unknown boundary; not layout |
 | `HeadingMark` | native section key, parent, level hint, title selection | parent is root or earlier section; no derived depth stored as a competing source |
 | `OwnerMark` | native candidate key, parent, head/body and role | not itself a classified `EntryKind`; direct body and subtree reading differ |
-| `LinkMark` | occurrence key, optional destination, label selection, source | one macro instance can have multiple surviving slices; equal destinations do not merge occurrences |
+| `LinkMark` | occurrence key, optional destination, label selection, source | an explicit macro instance can have multiple surviving slices; compatible candidates require separate source evidence; equal destinations do not merge occurrences |
 | `AnchorMark` | native declaration, source and final zero-width point | authored `.Tg` source differs from migrated display location |
 | `RegionMark` | table/cell/other native identity, enclosing section and final selection/point | an ownerless table still belongs to its section; a cell need not own a physical row or another text copy |
 
 All offsets name their units: source bytes, output UTF-8 bytes, Unicode
 scalars, graphemes and terminal columns are distinct. `SourceTable` records
 authorized logical paths only; generated/unknown provenance is explicit. A
-link occurrence remains one native macro instance, but its clickable label
+explicit link occurrence remains one native macro instance, but its clickable label
 ends when pinned HTML execution closes the phrase (paragraph/list/table
 boundary or fill-mode change), even if terminal traversal continues inside
 the same macro body. A later nested link may open independently; returning
@@ -61,6 +63,51 @@ decoded destination, if any, remain even when the final label is empty. A
 native `.MR` with no operands still renders an `Xr` link instance with `()`
 but no `href` (`man_html.c::man_MR_pre`); its Fixed `LinkMark.target` is
 `null`, not a forged URI or an omitted occurrence.
+
+R05 compatible references are an additive annotation policy, not a new
+formatter or a change to the display surface. An explicit native link wins
+over an overlapping compatible candidate. Sphinx `name(section) \%<>`
+requires the authored marker, a complete preceding manual reference and
+checked native connection; its label excludes the still-visible separator
+and `<>`. A styled `.BR`/`.IR` candidate requires macro-instance and operand
+evidence together with the executed visible glyphs, not merely adjacent
+bold/italic runs. When Sphinx and styled evidence identify the same display
+reference, they produce one occurrence. Equal names at different source
+positions remain different occurrences.
+
+The private candidate identity is the source instance plus a bounded source
+subrange, not just the native text-node pointer. `term_word()` execution can
+expand escapes or emit no glyph for source bytes; the collector must associate
+each candidate subrange with the glyph events that actually survive buffer
+consumption and final display folding. An ordered candidate-to-glyph mapping
+is checked for UTF-8 boundaries, source-instance identity, ordering and final
+selection containment. A candidate with ambiguous survival or a hard/unknown
+join is not promoted by searching the finished text. Cross-node candidates
+require independent source/operand evidence and a checked join; physical
+adjacency alone is insufficient. Candidate work, failed mappings and retained
+fragments count against bounded annotation budgets. A rejected weak candidate
+does not imply a link coverage defect; an internal mapping failure does and
+must be observable in the link coverage dimension while the checked body
+remains readable. Unsafe display or source storage still fails strictly.
+
+R05 link acceptance is a vertical panel, not a mark-count assertion:
+
+| ID | Required proof |
+| --- | --- |
+| L01 | Same-node distinct/repeated Sphinx candidates and cross-node marker bind exact surviving labels while preserving `<>`, spaces, raw output and geometry. |
+| L02 | `.BR`/`.IR` operands, style and full manual syntax jointly prove a styled reference; ordinary bold text, missing sections and parameters do not. |
+| L03 | Bare `tool(1)`, ordinary `<>`, paths, mail, `function(0)` and code/no-fill remain conservative; legitimate explicit section `0` is unaffected. |
+| L04 | Existing `.MR/.Xr/.Lk/.Sx/.Mt/.UR/.MT` occurrence identities, labels and targets do not change. |
+| L05 | Repeated destinations keep separate occurrences, one occurrence may span runs, and hard/unknown joins or unrelated cells do not create a compatible link. |
+| L06 | Only final surviving glyphs are clickable; source/include, title, `.Tg`, margin, TUI crop, horizontal scroll, resize and copy are checked. |
+| L07 | Entry head and ordinary-body link additions leave entry kinds, names, forms, bindings and providers unchanged; all current Fixed entry gold cases stay green. |
+| L08 | Bad optional link facts isolate from safe body, while link-specific coverage reason, impact and bounded scope survive native → codec → protocol; weak rejection is not an internal error and safety/budget faults stay hard. |
+| L09 | Fixed JSON roundtrip, reference outline/read, `mant://`, unchecked fragments, scalar public offsets and TUI activation/copy all use the same typed target. |
+| L10 | Long misses, repeated markers, many fragments, tight budgets and a subsequent healthy call have near-linear bounded work and release transient state; paired real-page costs use the frozen baseline. |
+
+Each new behavior assertion requires the exact input to run on the pinned CVS
+first. CVS establishes execution and display facts; compatible-link promotion
+is separately specified ManT policy. R05a freezes this panel, not its result.
 
 A `direct-contact` join inserts no byte, including a proven native soft wrap
 between physical rows; the row keys carry that layout fact. An
