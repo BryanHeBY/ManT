@@ -26,6 +26,8 @@ mod cvs_renderer_contracts;
 mod driver;
 #[path = "roff_lowering/entry_forms.rs"]
 mod entry_forms;
+#[path = "roff_lowering/equation_json_depth.rs"]
+mod equation_json_depth;
 #[path = "roff_lowering/flow_controls.rs"]
 mod flow_controls;
 #[path = "roff_lowering/font_boundaries.rs"]

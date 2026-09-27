@@ -474,6 +474,7 @@ mod tests {
             size: None,
             expected_args: Some(0),
             actual_args: 0,
+            summarized_operand_group: false,
             text: Some("x".into()),
             left: None,
             right: None,

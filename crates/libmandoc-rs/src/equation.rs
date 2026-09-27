@@ -117,11 +117,7 @@ impl EquationBox {
         {
             let mut children = self.children.iter();
             if let Some(base) = children.next() {
-                if self.position == EquationPosition::Over {
-                    append_grouped(base, output);
-                } else {
-                    base.append_readable(output);
-                }
+                append_grouped(base, output);
             }
             let operator = match self.position {
                 EquationPosition::Over => " / ",
@@ -130,11 +126,7 @@ impl EquationBox {
             };
             if let Some(argument) = children.next() {
                 output.push_str(operator);
-                if self.position == EquationPosition::Over {
-                    append_grouped(argument, output);
-                } else {
-                    argument.append_readable(output);
-                }
+                append_grouped(argument, output);
             }
             if matches!(
                 self.position,
@@ -142,7 +134,7 @@ impl EquationBox {
             ) && let Some(upper) = children.next()
             {
                 output.push_str(" ^ ");
-                upper.append_readable(output);
+                append_grouped(upper, output);
             }
             for extra in children {
                 output.push(' ');
@@ -171,10 +163,36 @@ impl EquationBox {
     }
 
     fn append_matrix(&self, output: &mut String) {
-        // eqn_html.c::eqn_box traverses matrix columns, then pile rows.
-        // Use the longest column so a short first column cannot drop later
-        // cells, a documented edge case in the pinned HTML renderer.
-        let columns = self.children.first().map_or(&[][..], |list| &list.children);
+        // CVS eqn_html.c::eqn_box enters its row/column branch only for a
+        // non-singleton List operand. Other operands remain ordinary boxes.
+        // Check every level before interpreting it as columns and rows;
+        // malformed or alternative shapes still own visible operands.
+        let columns = self.children.first().filter(|list| {
+            self.children.len() == 1
+                && list.kind == EquationKind::List
+                && list.expected_args != 1
+                && list.children.iter().all(|column| {
+                    column.kind == EquationKind::Pile
+                        && column
+                            .children
+                            .iter()
+                            .all(|row| row.kind == EquationKind::List)
+                })
+        });
+        let Some(columns) = columns else {
+            output.push_str("matrix(");
+            for (index, child) in self.children.iter().enumerate() {
+                if index > 0 {
+                    output.push(' ');
+                }
+                child.append_readable(output);
+            }
+            output.push(')');
+            return;
+        };
+        let columns = &columns.children;
+        // Unlike the pinned HTML renderer, retain rows of later columns when
+        // the first column is shorter.
         let rows = columns
             .iter()
             .map(|column| column.children.len())
@@ -199,12 +217,36 @@ impl EquationBox {
 }
 
 fn append_grouped(box_node: &EquationBox, output: &mut String) {
-    let needs_group = box_node.children.len() > 1 && box_node.left.is_none();
+    let needs_group = box_node.needs_operand_group();
     if needs_group {
         output.push('(');
     }
     box_node.append_readable(output);
     if needs_group {
         output.push(')');
+    }
+}
+
+impl EquationBox {
+    /// Whether this box needs parentheses when used as an infix or script
+    /// operand in the readable projection. A transparent native List inherits
+    /// the requirement from its single child.
+    #[must_use]
+    pub fn needs_operand_group(&self) -> bool {
+        if self.left.is_some() || self.right.is_some() {
+            return false;
+        }
+        if self.kind == EquationKind::Matrix || self.position == EquationPosition::Sqrt {
+            return false;
+        }
+        if self.kind == EquationKind::Subexpression && self.position != EquationPosition::None {
+            return true;
+        }
+        if self.children.len() > 1 || self.text.is_some() && !self.children.is_empty() {
+            return true;
+        }
+        self.children
+            .first()
+            .is_some_and(EquationBox::needs_operand_group)
     }
 }

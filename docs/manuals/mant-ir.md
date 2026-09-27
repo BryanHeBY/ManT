@@ -97,6 +97,12 @@ the shared, source-neutral text projection; a block's `value` is a compatibility
 cache and must agree with that projection whenever `expression` is present.
 Validation reports a content-coverage error for a mismatch. This projection is
 readable text, not a math layout or a second independently editable source.
+When a complete owned formula approaches the conservative JSON depth budget,
+the affected subtree becomes a text leaf retaining that subtree's complete
+readable text. `summarizedOperandGroup` records whether its parent must still
+group the operand. The producer reports `semantic-coverage` for lost internal
+formula structure. If the owned tree was already truncated, its separate
+`content-coverage` diagnostic still reports the missing source content.
 
 ### Consecutive declaration context
 

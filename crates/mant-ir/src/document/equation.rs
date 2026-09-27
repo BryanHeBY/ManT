@@ -82,6 +82,10 @@ pub struct EquationExpression {
     pub expected_args: Option<usize>,
     /// Parser recorded argument count.
     pub actual_args: usize,
+    /// A depth-summarized leaf still needs grouping when used as an operand.
+    /// Absent for ordinary parsed boxes.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub summarized_operand_group: bool,
     /// Atom spelling, when present.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub text: Option<String>,
@@ -129,11 +133,7 @@ impl EquationExpression {
         {
             let mut children = self.children.iter();
             if let Some(base) = children.next() {
-                if self.position == EquationPosition::Over {
-                    append_grouped(base, output);
-                } else {
-                    base.append_readable(output);
-                }
+                append_grouped(base, output);
             }
             let operator = match self.position {
                 EquationPosition::Over => " / ",
@@ -142,11 +142,7 @@ impl EquationExpression {
             };
             if let Some(argument) = children.next() {
                 output.push_str(operator);
-                if self.position == EquationPosition::Over {
-                    append_grouped(argument, output);
-                } else {
-                    argument.append_readable(output);
-                }
+                append_grouped(argument, output);
             }
             if matches!(
                 self.position,
@@ -154,7 +150,7 @@ impl EquationExpression {
             ) && let Some(upper) = children.next()
             {
                 output.push_str(" ^ ");
-                upper.append_readable(output);
+                append_grouped(upper, output);
             }
             for extra in children {
                 output.push(' ');
@@ -183,10 +179,36 @@ impl EquationExpression {
     }
 
     fn append_matrix(&self, output: &mut String) {
-        // eqn_html.c::eqn_box traverses matrix columns, then pile rows.
-        // Use the longest column so a short first column cannot drop later
-        // cells, a documented edge case in the pinned HTML renderer.
-        let columns = self.children.first().map_or(&[][..], |list| &list.children);
+        // CVS eqn_html.c::eqn_box enters its row/column branch only for a
+        // non-singleton List operand. Other operands remain ordinary boxes.
+        // Check every level before interpreting it as columns and rows;
+        // malformed or alternative shapes still own visible operands.
+        let columns = self.children.first().filter(|list| {
+            self.children.len() == 1
+                && list.kind == EquationKind::List
+                && list.expected_args != Some(1)
+                && list.children.iter().all(|column| {
+                    column.kind == EquationKind::Pile
+                        && column
+                            .children
+                            .iter()
+                            .all(|row| row.kind == EquationKind::List)
+                })
+        });
+        let Some(columns) = columns else {
+            output.push_str("matrix(");
+            for (index, child) in self.children.iter().enumerate() {
+                if index > 0 {
+                    output.push(' ');
+                }
+                child.append_readable(output);
+            }
+            output.push(')');
+            return;
+        };
+        let columns = &columns.children;
+        // Unlike the pinned HTML renderer, retain rows of later columns when
+        // the first column is shorter.
         let rows = columns
             .iter()
             .map(|column| column.children.len())
@@ -211,7 +233,7 @@ impl EquationExpression {
 }
 
 fn append_grouped(box_node: &EquationExpression, output: &mut String) {
-    let needs_group = box_node.children.len() > 1 && box_node.left.is_none();
+    let needs_group = box_node.needs_operand_group();
     if needs_group {
         output.push('(');
     }
@@ -219,4 +241,33 @@ fn append_grouped(box_node: &EquationExpression, output: &mut String) {
     if needs_group {
         output.push(')');
     }
+}
+
+impl EquationExpression {
+    fn needs_operand_group(&self) -> bool {
+        if self.summarized_operand_group {
+            return true;
+        }
+        if self.left.is_some() || self.right.is_some() {
+            return false;
+        }
+        if self.kind == EquationKind::Matrix || self.position == EquationPosition::Sqrt {
+            return false;
+        }
+        if self.kind == EquationKind::Subexpression && self.position != EquationPosition::None {
+            return true;
+        }
+        if self.children.len() > 1 || self.text.is_some() && !self.children.is_empty() {
+            return true;
+        }
+        self.children
+            .first()
+            .is_some_and(EquationExpression::needs_operand_group)
+    }
+}
+
+// serde's skip_serializing_if callback takes a reference to the field.
+#[expect(clippy::trivially_copy_pass_by_ref, reason = "serde requires &bool")]
+fn is_false(value: &bool) -> bool {
+    !*value
 }

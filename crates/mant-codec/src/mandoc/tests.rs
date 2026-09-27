@@ -17,6 +17,7 @@ fn parse_manual_source(
     Ok(parse_manual_bytes(path, &fs::read(path)?)?)
 }
 
+mod equations;
 mod parser_contracts;
 
 fn temporary_source(label: &str, source: &str) -> std::path::PathBuf {

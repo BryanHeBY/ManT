@@ -25,16 +25,31 @@ pub(super) use owned::{OwnedTarget, PendingTargets};
 #[derive(Debug)]
 pub(super) struct NativeTargetPlan {
     explicit: HashSet<String>,
+    equation_summarized: bool,
+    equation_summary_source: Option<SourceSpan>,
 }
 
 impl NativeTargetPlan {
     pub(super) fn build(root: &Node) -> Self {
         let mut nodes = Vec::new();
         flatten_nodes(root, &mut nodes);
-        let retained = nodes
-            .iter()
-            .filter_map(|node| raw_target(node))
-            .collect::<HashSet<_>>();
+        let mut retained = HashSet::new();
+        let mut equation_summarized = false;
+        let mut equation_summary_source = None;
+        for node in &nodes {
+            if let Some(target) = raw_target(node) {
+                retained.insert(target);
+            }
+            if !equation_summarized
+                && node
+                    .equation
+                    .as_ref()
+                    .is_some_and(super::equations::requires_wire_summary)
+            {
+                equation_summarized = true;
+                equation_summary_source = super::source_span(node);
+            }
+        }
         let mut explicit = HashSet::new();
         // The list stream also recovers authored targets whose empty owner was
         // removed by native validation. Reserve exactly that recovery set so
@@ -66,11 +81,23 @@ impl NativeTargetPlan {
                 explicit.insert(target);
             }
         }
-        Self { explicit }
+        Self {
+            explicit,
+            equation_summarized,
+            equation_summary_source,
+        }
     }
 
     pub(super) fn explicit(&self) -> &HashSet<String> {
         &self.explicit
+    }
+
+    pub(super) fn equation_summarized(&self) -> bool {
+        self.equation_summarized
+    }
+
+    pub(super) fn equation_summary_source(&self) -> Option<SourceSpan> {
+        self.equation_summary_source
     }
 }
 

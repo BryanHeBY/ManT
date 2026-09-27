@@ -923,6 +923,11 @@ reader rejects a conflicting `value`. Inline equations use
 `{"type":"equation","value":...,"expression":...}` between neighboring
 prose nodes; their `expression` is required. Matrix children retain parsed
 column order, while the readable projection visits every retained row.
+When a complete owned formula approaches the conservative JSON depth budget,
+the producer keeps the summarized subtree's complete readable text in one
+expression leaf and reports `semantic-coverage`. `summarizedOperandGroup`
+retains the grouping needed by an outer fraction or script; a false value is
+omitted. A prior owned-tree truncation still reports `content-coverage`.
 
 Both ordinary-list and definition-list items may carry the same `entry` facts.
 Their `forms` and `nameBindings` reference final-IR inline positions rather than

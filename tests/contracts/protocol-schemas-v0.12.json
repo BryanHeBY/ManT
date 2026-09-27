@@ -1898,6 +1898,10 @@
             ],
             "format": "int32"
           },
+          "summarizedOperandGroup": {
+            "description": "A depth-summarized leaf still needs grouping when used as an operand.\nAbsent for ordinary parsed boxes.",
+            "type": "boolean"
+          },
           "text": {
             "description": "Atom spelling, when present.",
             "type": [
@@ -4795,6 +4799,10 @@
               "null"
             ],
             "format": "int32"
+          },
+          "summarizedOperandGroup": {
+            "description": "A depth-summarized leaf still needs grouping when used as an operand.\nAbsent for ordinary parsed boxes.",
+            "type": "boolean"
           },
           "text": {
             "description": "Atom spelling, when present.",
@@ -10819,6 +10827,10 @@
             ],
             "format": "int32"
           },
+          "summarizedOperandGroup": {
+            "description": "A depth-summarized leaf still needs grouping when used as an operand.\nAbsent for ordinary parsed boxes.",
+            "type": "boolean"
+          },
           "text": {
             "description": "Atom spelling, when present.",
             "type": [
@@ -14203,6 +14215,10 @@
               "null"
             ],
             "format": "int32"
+          },
+          "summarizedOperandGroup": {
+            "description": "A depth-summarized leaf still needs grouping when used as an operand.\nAbsent for ordinary parsed boxes.",
+            "type": "boolean"
           },
           "text": {
             "description": "Atom spelling, when present.",
