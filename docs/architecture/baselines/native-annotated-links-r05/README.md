@@ -182,6 +182,17 @@ measurement, binary hashes, alternating-run timing and exact text hashes are
 retained in `target/r05-word-hook-measurements.md`; those target artifacts are
 not packaged or treated as a completed R05d performance result.
 
+The next scoped R05b unit admits a literal two-operand `.BR name (section)`
+or `.IR name (section)` as a compatible Manual occurrence. The pinned
+`man_term.c::pre_alternate()` operand identity and the final-surface label
+selection are used; trailing punctuation is excluded. The source grammar is bounded
+and deliberately conservative: escaped operands, multi-pair macros and
+Sphinx markers still await the complete candidate-to-glyph mapping. This is
+only a partial L02 result, not closure of L01–L10. Its exact four-page text
+hashes match the frozen baseline; 79 Fixed entry gold queries pass. A small
+same-input paired release probe showed no obvious time/RSS regression; raw
+numbers are retained in `target/r05-styled-manual-measurements.md`.
+
 Mapping is monotone per executed input and bounded by actual input, active
 candidates and emitted glyphs. UTF-8 boundaries, execution identity,
 ordering and final selection containment are checked. A completely

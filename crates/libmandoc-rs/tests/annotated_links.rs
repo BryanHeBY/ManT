@@ -39,6 +39,61 @@ fn links(page: &AnnotatedDocument) -> Vec<u32> {
 }
 
 #[test]
+fn two_operand_styled_manual_reference_keeps_native_label_and_target() {
+    // These exact inputs first ran in pinned CVS -Ttree/-Tutf8. In
+    // man_term.c::pre_alternate(), BR/IR execute their two text operands
+    // with no inserted intra-macro space; a third punctuation operand is
+    // not part of the manual-reference label.
+    for (macro_name, name, section, suffix) in [
+        ("BR", "printf", "3", ""),
+        ("IR", "git", "1", ""),
+        ("BR", "printf", "3", " ,"),
+    ] {
+        let input = format!(".TH T 1\n.SH SEE ALSO\n.{macro_name} {name} ({section}){suffix}\n");
+        let page = render(input.as_bytes(), InputFormat::Man);
+        let keys = links(&page);
+        assert_eq!(keys.len(), 1, "{input}");
+        assert_eq!(labels(&page, keys[0]), format!("{name}({section})"));
+        let target = page.marks[(keys[0] - 1) as usize]
+            .link_target
+            .as_ref()
+            .unwrap();
+        assert_eq!(target.kind, 4);
+        assert_eq!(target.primary, name);
+        assert_eq!(target.secondary.as_deref(), Some(section));
+    }
+}
+
+#[test]
+fn styled_candidate_does_not_claim_ambiguous_or_explicit_link_content() {
+    // Exact inputs first ran in pinned CVS -Tutf8. The first two negative
+    // strings are visible but do not establish a safe inferred reference;
+    // no-fill is code-like, while an explicit UR remains the sole link.
+    for body in [".BR printf (0)", ".BR /tmp/foo (1)"] {
+        let input = format!(".TH T 1\n.SH SEE ALSO\n{body}\n");
+        assert!(links(&render(input.as_bytes(), InputFormat::Man)).is_empty());
+    }
+    let page = render(
+        b".TH T 1\n.SH D\n.nf\n.BR printf (3)\n.fi\n",
+        InputFormat::Man,
+    );
+    assert!(links(&page).is_empty());
+    let page = render(
+        b".TH T 1\n.SH D\n.UR https://outer.test\n.BR printf (3)\n.UE\n",
+        InputFormat::Man,
+    );
+    assert_eq!(links(&page).len(), 1);
+    assert_eq!(
+        page.marks[(links(&page)[0] - 1) as usize]
+            .link_target
+            .as_ref()
+            .unwrap()
+            .kind,
+        1
+    );
+}
+
+#[test]
 fn executed_word_byte_ranges_do_not_change_native_visible_text() {
     // Each exact input was first run with the pinned CVS -Ttree and
     // -Tutf8 -O width=78. term.c::term_word() consumes escapes before

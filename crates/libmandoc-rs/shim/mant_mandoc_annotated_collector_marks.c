@@ -198,6 +198,16 @@ mant_annotated_marks_visible_link(const struct mant_annotated_collector *collect
 		return macro->tok == MAN_MR || macro->tok == MDOC_Xr ?
 		    collector->active_link : 0;
 	switch (macro->tok) {
+	case MAN_BR:
+	case MAN_IR:
+		/* man_term.c::pre_alternate() executes these two operands with
+		 * no inserted space.  The styled candidate does not claim any
+		 * following punctuation or an enclosing explicit link. */
+		first = macro->child;
+		second = first == NULL ? NULL : first->next;
+		return reason != TERM_COLLECT_AUTO_SPACE &&
+		    (within_node(node, first) || within_node(node, second)) ?
+		    collector->active_link : 0;
 	case MAN_MR:
 		/* man_term.c::pre_MR prints name(section), then a separate suffix. */
 		first = macro->child;
@@ -336,6 +346,28 @@ add_mark(struct mant_annotated_collector *collector,
 			mark->target_kind = second == NULL ?
 			    MANT_LINK_DOCUMENT : MANT_LINK_MANUAL;
 			break;
+		case MAN_BR:
+		case MAN_IR:
+			/* This narrow structural candidate has already been checked
+			 * before mark allocation.  The first two actual pre_alternate()
+			 * operands spell one complete visible reference. */
+			first = node->child;
+			second = first->next;
+			mark->target_kind = MANT_LINK_MANUAL;
+			mark->target_b_present = 1;
+			mark->target_a.len = strlen(first->string);
+			mark->target_a.ptr = mant_structured_copy_bytes(
+			    collector->session, (const uint8_t *)first->string,
+			    mark->target_a.len, 1, MANT_STRUCTURED_STAGE_RENDER);
+			if (mark->target_a.ptr == NULL)
+				return 0;
+			mark->target_b.len = strlen(second->string) - 2;
+			mark->target_b.ptr = mant_structured_copy_bytes(
+			    collector->session, (const uint8_t *)second->string + 1,
+			    mark->target_b.len, 1, MANT_STRUCTURED_STAGE_RENDER);
+			if (mark->target_b.ptr == NULL)
+				return 0;
+			break;
 		case MDOC_Lk:
 			mark->target_kind = MANT_LINK_EXTERNAL;
 			first = node->child;
@@ -372,7 +404,8 @@ add_mark(struct mant_annotated_collector *collector,
 		if (node->tok != MDOC_Sx && first == NULL) {
 			mark->target_kind = 0;
 		}
-		if (mark->target_kind != 0 && first != NULL) {
+		if (mark->target_kind != 0 && first != NULL &&
+		    node->tok != MAN_BR && node->tok != MAN_IR) {
 			target_status =
 			    mant_structured_copy_link_target_allow_empty_classified(
 			    collector->session, &mark->target_a, first);
@@ -381,7 +414,8 @@ add_mark(struct mant_annotated_collector *collector,
 			if (target_status != MANT_LINK_TARGET_OK)
 				goto unsupported_target;
 		}
-		if (second != NULL) {
+		if (second != NULL && node->tok != MAN_BR &&
+		    node->tok != MAN_IR) {
 			mark->target_b_present = 1;
 			target_status =
 			    mant_structured_copy_link_target_allow_empty_classified(
@@ -641,6 +675,78 @@ copy_owner_head_operand(struct mant_annotated_collector *collector,
 	return 1;
 }
 
+/* Pinned man_term.c::pre_alternate() executes each direct text operand in
+ * order, with no auto-space between them.  This is a narrow source-backed
+ * candidate, not a scan of bold glyphs or final terminal text.  The section
+ * and topic bounds mirror the conservative inferred-reference contract;
+ * more complex escaped spellings must wait for checked word-range mapping. */
+static int
+ascii_alnum(unsigned char value)
+{
+	return (value >= 'A' && value <= 'Z') ||
+	    (value >= 'a' && value <= 'z') ||
+	    (value >= '0' && value <= '9');
+}
+
+static int
+styled_manual_candidate(struct mant_annotated_collector *collector,
+    const struct roff_node *node)
+{
+	const struct roff_node *name, *section, *punct;
+	const char *value;
+	size_t name_length, section_length;
+
+	if (node->type != ROFFT_ELEM ||
+	    (node->tok != MAN_BR && node->tok != MAN_IR) ||
+	    (node->flags & (NODE_NOPRT | NODE_NOFILL)) != 0 ||
+	    collector->html_nofill ||
+	    (collector->active_link != 0 &&
+	    collector->active_link_epoch == collector->phrase_epoch))
+		return 0;
+	name = node->child;
+	section = name == NULL ? NULL : name->next;
+	punct = section == NULL ? NULL : section->next;
+	if (name == NULL || section == NULL ||
+	    name->type != ROFFT_TEXT || section->type != ROFFT_TEXT ||
+	    ((name->flags | section->flags) & NODE_NOPRT) != 0 ||
+	    name->string == NULL || section->string == NULL ||
+	    (punct != NULL && (punct->next != NULL ||
+	    punct->type != ROFFT_TEXT || punct->string == NULL ||
+	    punct->string[0] == '\0' || punct->string[1] != '\0' ||
+	    strchr(".,;:", punct->string[0]) == NULL)))
+		return 0;
+	name_length = 0;
+	while (name_length <= 256 && name->string[name_length] != '\0')
+		name_length++;
+	section_length = 0;
+	while (section_length <= 18 &&
+	    section->string[section_length] != '\0')
+		section_length++;
+	if (!mant_annotated_charge_work(collector,
+	    name_length + section_length + 1))
+		return -1;
+	if (name_length == 0 || name_length > 256 ||
+	    section_length < 3 || section_length > 18 ||
+	    !ascii_alnum((unsigned char)name->string[0]) ||
+	    section->string[0] != '(' ||
+	    section->string[section_length - 1] != ')')
+		return 0;
+	for (value = name->string; *value != '\0'; value++)
+		if (!ascii_alnum((unsigned char)*value) &&
+		    strchr("._+:-", *value) == NULL)
+			return 0;
+	value = section->string + 1;
+	if (*value == '0' || (*value != 'l' && *value != 'n' &&
+	    (*value < '0' || *value > '9')))
+		return 0;
+	if (*value == 'l' || *value == 'n')
+		return section_length == 3;
+	for (; value < section->string + section_length - 1; value++)
+		if (!ascii_alnum((unsigned char)*value))
+			return 0;
+	return 1;
+}
+
 static int
 push_node(struct mant_annotated_collector *collector,
     const struct roff_node *node)
@@ -649,7 +755,7 @@ push_node(struct mant_annotated_collector *collector,
 	struct mant_annotated_mark *parent_mark;
 	const struct roff_node *hanging_rs;
 	uint32_t key, region_kind, parent;
-	int hanging_mode;
+	int hanging_mode, styled_candidate;
 
 	if (node == NULL || collector->frame_count >=
 	    collector->session->limits->max_nesting_depth ||
@@ -993,6 +1099,9 @@ push_node(struct mant_annotated_collector *collector,
 		}
 	}
 
+	styled_candidate = styled_manual_candidate(collector, node);
+	if (styled_candidate < 0)
+		return 0;
 	if ((node->type == ROFFT_BLOCK || node->type == ROFFT_ELEM) &&
 	    (node->tok == MAN_UR || node->tok == MAN_MT ||
 	    node->tok == MAN_MR || node->tok == MDOC_Lk ||
@@ -1006,6 +1115,14 @@ push_node(struct mant_annotated_collector *collector,
 	    node->child != NULL))) {
 		key = add_mark(collector, node, node,
 		    MANT_ANNOTATED_MARK_LINK, collector->active_link, 0, NULL);
+		if (key == 0)
+			return 0;
+		collector->active_link = key;
+		collector->active_link_node = node;
+		collector->active_link_epoch = collector->phrase_epoch;
+	} else if (styled_candidate) {
+		key = add_mark(collector, node, node,
+		    MANT_ANNOTATED_MARK_LINK, 0, 0, NULL);
 		if (key == 0)
 			return 0;
 		collector->active_link = key;

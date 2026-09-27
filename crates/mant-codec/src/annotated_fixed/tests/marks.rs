@@ -170,6 +170,34 @@ fn real_man_body_enters_one_fixed_surface_with_dense_typed_keys() {
 }
 
 #[test]
+fn styled_native_reference_projects_one_valid_fixed_manual_link() {
+    // Exact input first ran in pinned CVS -Ttree/-Tutf8. The two text
+    // operands are executed by man_term.c::pre_alternate() without a space;
+    // the following comma is a distinct operand outside the candidate.
+    let input = b".TH T 1\n.SH SEE ALSO\n.BR printf (3) ,\n";
+    let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Man).unwrap();
+    assert!(validate_document(&document).is_empty());
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        panic!("native output did not become Fixed");
+    };
+    assert_eq!(fixed.links.len(), 1);
+    assert_eq!(
+        fixed.links[0].target,
+        Some(mant_ir::LinkTarget::Manual {
+            name: "printf".into(),
+            manual_section: Some("3".into()),
+        })
+    );
+    assert_eq!(
+        fixed.selection_text(&fixed.links[0].label).as_deref(),
+        Some("printf(3)")
+    );
+    let rebuilt: mant_ir::Document =
+        serde_json::from_value(serde_json::to_value(&document).unwrap()).unwrap();
+    assert!(validate_document(&rebuilt).is_empty());
+}
+
+#[test]
 fn native_owner_role_distinguishes_definition_from_bullet_item() {
     // Exact input first ran pinned CVS -Tutf8 -O width=78. mdoc_term.c::
     // termp_it_pre reads the validated Bl type: tag heads are term labels,
