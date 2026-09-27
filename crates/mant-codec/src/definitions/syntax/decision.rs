@@ -20,6 +20,14 @@ pub(super) fn select_kind(
                 NameCase::Sensitive,
             );
         }
+        Some(NativeHeadRole::Operand) => {
+            return (
+                EntryKind::Parameter {
+                    parameter_kind: ParameterKind::Operand,
+                },
+                NameCase::Sensitive,
+            );
+        }
         Some(NativeHeadRole::Environment) => {
             return (EntryKind::EnvironmentVariable, NameCase::Sensitive);
         }

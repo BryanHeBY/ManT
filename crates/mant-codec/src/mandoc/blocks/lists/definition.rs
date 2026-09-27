@@ -374,7 +374,7 @@ pub(super) fn definition_item(
     let pending_head = pending_head_execution(
         body,
         context,
-        *formatter,
+        formatter.clone(),
         flow.head.generated_cells().is_some_and(|cells| cells > 0),
     );
     if flow.shares_pending_term_row && pending_head.placement_breaks {

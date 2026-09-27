@@ -10,6 +10,9 @@ pub(crate) enum NativeHeadRole {
     Literal,
     /// An explicitly styled, otherwise ambiguous man IP operator/key tag.
     LiteralTerm,
+    /// An explicitly styled single dash in a TP/TQ head is a shell operand.
+    #[cfg_attr(not(feature = "roff"), allow(dead_code))]
+    Operand,
     /// An unstyled man IP mark supplies layout, not declaration evidence.
     Presentation,
 }

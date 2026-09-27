@@ -74,13 +74,49 @@ fn dragonfly_gdb_restriction_bullets_are_not_semantic_terms() {
     ] {
         assert!(text.contains(body), "lost {body}");
     }
-    assert!(
-        section(document, "DESCRIPTION")
-            .blocks
-            .iter()
-            .any(|block| matches!(block,
-        mant_ir::Block::List { kind: mant_ir::ListKind::Bullet, items, .. } if items.len() == 4))
-    );
+    // The exact four-TP shape was checked with pinned CVS tree, HTML and
+    // UTF-8. man_html.c::list_continues groups TP heads as one Bl-tag DL;
+    // an authored `\ \ \ \(bu` head stays visible without becoming an entry.
+    let items = section(document, "DESCRIPTION")
+        .blocks
+        .iter()
+        .find_map(|block| match block {
+            mant_ir::Block::DefinitionList { items, .. } if items.len() == 4 => Some(items),
+            _ => None,
+        })
+        .expect("four tagged bullet rows");
+    let bodies = [
+        "Start your program",
+        "Make your program stop",
+        "Examine what has happened",
+        "Change things in your program",
+    ];
+    for (item, body) in items.iter().zip(bodies) {
+        assert_eq!(inline_text(&item.terms[0]).trim(), "•");
+        assert!(item.entry.is_none());
+        assert!(
+            block_slice_text(&item.description).contains(body),
+            "lost {body}"
+        );
+    }
+    let query = common::query_for_document("gdb", document);
+    let wire = serde_json::to_string(&mant_protocol::QueryBundle::from(&query))
+        .expect("serialize real gdb query");
+    let decoded: mant_protocol::QueryBundle = serde_json::from_str(&wire).expect("decode gdb");
+    let decoded: mant_ir::ResolvedContent = decoded.into();
+    for output in [
+        mant_codec::encode::render_markdown(&decoded),
+        mant_render::render_query_text(&decoded),
+    ] {
+        let mut previous = 0;
+        for body in bodies {
+            let next = output[previous..].find(body).map_or_else(
+                || panic!("lost {body}: {output}"),
+                |offset| previous + offset,
+            );
+            previous = next + body.len();
+        }
+    }
 }
 
 #[test]

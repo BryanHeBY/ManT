@@ -28,14 +28,18 @@ pub(super) fn preformatted_blocks(
         paragraph_predecessor,
         literal: true,
         honor_node_fill: node.macro_name.as_deref() == Some("Bd"),
-        formatter: *formatter,
+        formatter: std::mem::take(formatter),
     };
-    flow.line.font = formatter.font;
+    flow.line.font = flow.formatter.font;
     flow.line.scope_posts = context.scope_posts.clone();
+    flow.line.inherit_author_execution(
+        flow.formatter.author_flow(),
+        context.active_mdoc_section() == crate::mandoc::source_context::MdocSectionContext::Authors,
+    );
     flow.line
-        .inherit_vertical_space_debt(formatter.vertical_space_debt);
+        .inherit_vertical_space_debt(flow.formatter.vertical_space_debt);
     flow.line
-        .inherit_zero_advance_armed(std::mem::take(&mut formatter.zero_advance_armed));
+        .inherit_zero_advance_armed(std::mem::take(&mut flow.formatter.zero_advance_armed));
     flow.line.track_executed_lines();
     let body_index = node
         .children
@@ -54,10 +58,8 @@ pub(super) fn preformatted_blocks(
         }
     }
     flow.flush();
-    formatter.font = flow.line.font;
-    formatter.spacing = flow.line.spacing_enabled();
-    formatter.vertical_space_debt = flow.line.vertical_space_debt();
-    formatter.zero_advance_armed = flow.line.take_zero_advance_armed();
+    flow.commit_line_execution();
+    *formatter = flow.formatter;
     flow.output
 }
 
@@ -79,6 +81,35 @@ struct DisplayFlow<'a, 'source> {
 }
 
 impl DisplayFlow<'_, '_> {
+    /// A display line executes in the same formatter as the surrounding
+    /// document.  CVS `mdoc_term.c::termp_an_pre` changes global SPLIT flags;
+    /// `mdoc_term.c::termp_bd_pre/post` do not scope those flags to Bd.
+    fn commit_line_execution(&mut self) {
+        self.formatter.font = self.line.font;
+        self.formatter.spacing = self.line.spacing_enabled();
+        self.formatter.vertical_space_debt = self.line.vertical_space_debt();
+        self.formatter.zero_advance_armed = self.line.take_zero_advance_armed();
+        if let Some(author_flow) = self.line.author_flow() {
+            self.formatter.set_author_flow(author_flow);
+        }
+    }
+
+    fn resume_line_execution(&mut self) {
+        self.line.font = self.formatter.font;
+        self.line.inherit_spacing(self.formatter.spacing);
+        self.line
+            .inherit_vertical_space_debt(self.formatter.vertical_space_debt);
+        self.line
+            .inherit_zero_advance_armed(std::mem::take(&mut self.formatter.zero_advance_armed));
+        self.line.inherit_author_execution(
+            self.formatter.author_flow(),
+            self.context.active_mdoc_section()
+                == crate::mandoc::source_context::MdocSectionContext::Authors,
+        );
+        self.line.reset_source_cursor();
+        self.source = None;
+    }
+
     fn append_container(&mut self, node: &Node) -> bool {
         let mut saved_font = None;
         let mut started = false;
@@ -304,10 +335,7 @@ impl DisplayFlow<'_, '_> {
                 // termp_bd_pre()/post() restore geometry at this boundary;
                 // font and spacing changes still follow their normal scope.
                 self.flush();
-                self.formatter.font = self.line.font;
-                self.formatter.spacing = self.line.spacing_enabled();
-                self.formatter.vertical_space_debt = self.line.vertical_space_debt();
-                self.formatter.zero_advance_armed = self.line.take_zero_advance_armed();
+                self.commit_line_execution();
                 let nested = super::lower_blocks_with_predecessor(
                     std::slice::from_ref(node),
                     self.context,
@@ -319,24 +347,13 @@ impl DisplayFlow<'_, '_> {
                 );
                 self.output.extend(nested);
                 self.paragraph_predecessor = true;
-                self.line.font = self.formatter.font;
-                self.line.inherit_spacing(self.formatter.spacing);
-                self.line
-                    .inherit_vertical_space_debt(self.formatter.vertical_space_debt);
-                self.line.inherit_zero_advance_armed(std::mem::take(
-                    &mut self.formatter.zero_advance_armed,
-                ));
-                self.line.reset_source_cursor();
-                self.source = None;
+                self.resume_line_execution();
             } else if node.kind == NodeKind::Table
                 || (node.kind == NodeKind::Block
                     && matches!(node.macro_name.as_deref(), Some("Bl" | "Rs")))
             {
                 self.flush();
-                self.formatter.font = self.line.font;
-                self.formatter.spacing = self.line.spacing_enabled();
-                self.formatter.vertical_space_debt = self.line.vertical_space_debt();
-                self.formatter.zero_advance_armed = self.line.take_zero_advance_armed();
+                self.commit_line_execution();
                 if node.kind == NodeKind::Table {
                     append_table_row(
                         &mut self.output,
@@ -357,15 +374,7 @@ impl DisplayFlow<'_, '_> {
                         &mut self.formatter,
                     ));
                 }
-                self.line.font = self.formatter.font;
-                self.line.inherit_spacing(self.formatter.spacing);
-                self.line
-                    .inherit_vertical_space_debt(self.formatter.vertical_space_debt);
-                self.line.inherit_zero_advance_armed(std::mem::take(
-                    &mut self.formatter.zero_advance_armed,
-                ));
-                self.line.reset_source_cursor();
-                self.source = None;
+                self.resume_line_execution();
             } else if node.kind != NodeKind::Text && node.macro_name.is_none() {
                 self.append_nodes(&node.children);
             } else {

@@ -17,7 +17,7 @@ pub(in crate::mandoc) enum AuthorFlow {
     NoSplit,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct FormatterState {
     pub(super) font: FontState,
     pub(super) spacing: bool,
@@ -47,8 +47,29 @@ impl Default for FormatterState {
 }
 
 impl FormatterState {
-    /// Start an inline formatter session with every document-global register
-    /// transferred together.
+    /// Execute one source-order node in an already live paragraph builder.
+    /// The builder owns joins and buffered IR; this carrier owns the font
+    /// register between nodes. There is no independently writable font copy
+    /// while the node is executing.
+    pub(super) fn with_inline_node<R>(
+        &mut self,
+        builder: &mut InlineBuilder,
+        execute: impl FnOnce(&mut InlineBuilder) -> R,
+    ) -> R {
+        // The paragraph keeps a neutral slot between nodes. Swap the live
+        // register into it for this node, then return that same register to
+        // the formatter. CVS man_html.c::print_man_node processes one node's
+        // text/font before walking to the next sibling.
+        debug_assert_eq!(builder.font, FontState::new());
+        std::mem::swap(&mut builder.font, &mut self.font);
+        let result = execute(builder);
+        std::mem::swap(&mut builder.font, &mut self.font);
+        self.spacing = builder.spacing_enabled();
+        self.vertical_space_debt = builder.vertical_space_debt();
+        result
+    }
+
+    /// Move document-global registers into one active inline session.
     ///
     /// Keeping this paired with [`Self::finish_inline_line`] and
     /// [`Self::finish_inline_scope`] prevents callers from silently omitting
@@ -62,11 +83,12 @@ impl FormatterState {
         author_break_effect: AuthorBreakEffect,
     ) -> InlineBuilder {
         let mut builder = InlineBuilder::with_spacing(spacing);
-        builder.font = self.font;
-        builder.inherit_vertical_space_debt(self.vertical_space_debt);
+        builder.font = std::mem::replace(&mut self.font, FontState::new());
+        self.spacing = true;
+        builder.inherit_vertical_space_debt(std::mem::take(&mut self.vertical_space_debt));
         builder.inherit_zero_advance_armed(std::mem::take(&mut self.zero_advance_armed));
         builder.inherit_author_execution_with_effect(
-            self.author_flow,
+            std::mem::take(&mut self.author_flow),
             authors_section,
             author_break_effect,
         );
@@ -142,7 +164,7 @@ impl FormatterState {
         self.author_flow.execute(mode, authors_section)
     }
 
-    pub(super) const fn author_flow(self) -> AuthorFlow {
+    pub(super) const fn author_flow(&self) -> AuthorFlow {
         self.author_flow
     }
 

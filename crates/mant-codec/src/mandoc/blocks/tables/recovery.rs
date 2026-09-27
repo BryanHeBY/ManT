@@ -133,7 +133,9 @@ pub(super) fn lower_table_cell(
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> Option<Vec<Inline>> {
     if let Some(text_block) = text_block {
-        let initial_state = *formatter;
+        // Recovery tries independent candidates; the owned formatter state
+        // is cloned only for these deliberately speculative transactions.
+        let initial_state = formatter.clone();
         let diagnostic_start = context.diagnostics.borrow().len();
         let source = LoweringContext::table_execution_source(&text_block.source, text_block.escape);
         let source_operands = table_source_operands(context, &source);
@@ -154,7 +156,7 @@ pub(super) fn lower_table_cell(
                 context.macro_set,
                 context.default_name,
                 node.flags.synopsis_pretty,
-                initial_state,
+                initial_state.clone(),
             )
             && recovered.complete
         {
@@ -175,7 +177,7 @@ pub(super) fn lower_table_cell(
         // ineligible, and prevents an unavailable native payload from turning
         // into silent content loss.
         if cell.text.as_deref().is_none_or(str::is_empty) {
-            let mut candidate_state = initial_state;
+            let mut candidate_state = initial_state.clone();
             let recovered = lower_raw_table_text_block(&source, context, &mut candidate_state);
             // Recovery remains transactional: it can replace native text only
             // when a raw candidate agrees with this exact cell. A declined

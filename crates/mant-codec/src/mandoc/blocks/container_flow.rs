@@ -70,28 +70,30 @@ impl super::BlockLowerer<'_, '_> {
                         false,
                         false,
                         |builder| {
-                            builder.font = self.formatter.font;
-                            crate::mandoc::inline::function_argument(
-                                builder,
-                                argument,
-                                comma_after,
-                                self.context.default_name,
-                            );
-                            self.formatter.font = builder.font;
+                            self.formatter.with_inline_node(builder, |builder| {
+                                crate::mandoc::inline::function_argument(
+                                    builder,
+                                    argument,
+                                    comma_after,
+                                    self.context.default_name,
+                                );
+                            });
                         },
                     );
                 }
                 event => self
                     .state
                     .push_inline_with(source_span(node), false, false, |builder| {
-                        builder.font = self.formatter.font;
-                        match event {
-                            Event::Glyph(value) => builder.append_text(&value),
-                            Event::Tight => builder.tighten_next_boundary(),
-                            Event::Release => builder.release_next_boundary(),
-                            Event::EmptyWord => builder.execute_empty_word(),
-                            _ => unreachable!("container children and font scopes handled above"),
-                        }
+                        self.formatter
+                            .with_inline_node(builder, |builder| match event {
+                                Event::Glyph(value) => builder.append_text(&value),
+                                Event::Tight => builder.tighten_next_boundary(),
+                                Event::Release => builder.release_next_boundary(),
+                                Event::EmptyWord => builder.execute_empty_word(),
+                                _ => {
+                                    unreachable!("container children and font scopes handled above")
+                                }
+                            });
                     }),
             }
         });

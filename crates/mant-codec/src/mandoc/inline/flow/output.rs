@@ -545,11 +545,12 @@ impl InlineBuilder {
             }
         }
         if (incoming_has_printable || word)
-            && (self.pending_definition_indent.is_some() || self.pending_line_indent > 0)
+            && (self.pending_definition_indent().is_some() || self.pending_line_indent > 0)
         {
             let cells = self
-                .pending_definition_indent
-                .take()
+                .definition
+                .as_mut()
+                .and_then(|state| state.pending_indent.take())
                 .unwrap_or_else(|| std::mem::take(&mut self.pending_line_indent));
             self.append_fixed_cells(cells);
             self.boundary = PendingBoundary::Tight;
@@ -700,7 +701,7 @@ impl InlineBuilder {
             source_continuation: self.final_source_continuation,
             formatter_cell_occupied,
             pending_line_indent: self.pending_line_indent,
-            pending_definition_indent: self.pending_definition_indent,
+            pending_definition_indent: self.pending_definition_indent(),
             last_executed_source_line: self.last_executed_source_line,
         };
         (self.finish_nodes(), state)

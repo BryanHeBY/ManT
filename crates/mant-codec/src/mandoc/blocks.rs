@@ -16,7 +16,7 @@ use super::{
         FilledBoundary, FontState, InlineBuilder, NoFillInlineState, append_inline_node_with_next,
         is_enclosure_macro, lower_inline_nodes, lower_inline_nodes_with_font_state,
         lower_inline_nodes_with_spacing, lower_man_link, lower_no_fill_line_with_font_state,
-        plain_text, updated_spacing,
+        plain_text,
     },
     layout::{
         add_leading_spacing, layout, layout_with_spacing, section_spacing, set_block_spacing,
@@ -52,7 +52,10 @@ mod lists;
 mod preformatted;
 mod tables;
 
-use lists::man::ordered::{ManListState, append_relative_continuation};
+use lists::man::{
+    adjacent_ip_run,
+    ordered::{ManListState, append_relative_continuation},
+};
 use lists::{
     ManDefinitionState, lower_man_definition as lower_man_definition_block, lower_mdoc_list,
 };
@@ -120,7 +123,7 @@ fn lower_blocks_with_predecessor_and_run_in(
         paragraph_distance,
         spacing_enabled,
         Vec::new(),
-        *formatter,
+        std::mem::take(formatter),
     );
     if let Some((execution, generated_cells)) = run_in {
         lowerer
@@ -200,6 +203,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
                 nodes.get(index + 1),
                 table_plan.embedding(index),
                 synopsis_previous,
+                adjacent_ip_run(nodes, index),
             );
             // Source execution, not visible output, owns the predecessor fact.
             if self.context.macro_set == libmandoc_rs::MacroSet::Mdoc
@@ -219,6 +223,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         next: Option<&Node>,
         table_embedding: Option<&TableEmbedding>,
         synopsis_previous: Option<&Node>,
+        ip_run: Option<lists::man::IpRun>,
     ) {
         self.prepare_node_execution(node);
         if node.macro_name.as_deref() == Some("ft") {
@@ -306,6 +311,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
                 paragraph_predecessor: self.paragraph_predecessor,
                 definition_hanging_width: &mut self.definition_hanging_width,
                 man_list_state: &mut self.man_list_state,
+                ip_run,
                 spacing_enabled,
                 formatter: &mut self.formatter,
             }

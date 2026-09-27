@@ -24,6 +24,9 @@ impl InlineBuilder {
         authors_section: bool,
         break_effect: AuthorBreakEffect,
     ) {
+        if matches!(break_effect, AuthorBreakEffect::Field { .. }) {
+            self.definition_state_mut();
+        }
         self.author_execution = Some(AuthorExecution {
             flow,
             authors_section,
@@ -42,9 +45,12 @@ impl InlineBuilder {
             self.boundary = PendingBoundary::Tight;
         }
         if !self.has_formatter_cell()
-            && (self.pending_definition_indent.is_some() || self.pending_line_indent > 0)
+            && (self.pending_definition_indent().is_some() || self.pending_line_indent > 0)
         {
-            self.pending_definition_indent = None;
+            if let Some(state) = &mut self.definition {
+                state.pending_indent = None;
+                state.outcome.clear_body_gap_consumed();
+            }
             self.pending_line_indent = 0;
             // The native BRIND offset belongs to the immediately following
             // child scope, and `.ti` is likewise scoped to the formatter row
@@ -52,7 +58,6 @@ impl InlineBuilder {
             // transition can leave either scope without printing a word, so
             // a later author must not inherit abandoned geometry or its
             // consumed body gap.
-            self.definition_outcome.clear_body_gap_consumed();
         }
         let Some((break_effect, field_output_start)) =
             self.author_execution.as_mut().and_then(|execution| {
@@ -333,7 +338,9 @@ impl InlineBuilder {
             self.formatter_column = FormatterColumn::Advanced;
         }
         self.pending_line_indent = state.pending_line_indent;
-        self.pending_definition_indent = state.pending_definition_indent;
+        if state.pending_definition_indent.is_some() {
+            self.set_pending_definition_indent(state.pending_definition_indent);
+        }
     }
 
     /// Execute the generated no-break cells between an mdoc inset/diagnostic

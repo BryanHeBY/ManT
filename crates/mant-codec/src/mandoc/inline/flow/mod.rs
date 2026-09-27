@@ -24,7 +24,6 @@ pub(in crate::mandoc) struct InlineBuilder {
     pending_breakable_spaces: usize,
     pending_field_spaces: usize,
     pending_line_indent: usize,
-    pending_definition_indent: Option<usize>,
     word_end_break: WordEndBreak,
     vertical_space_debt: u16,
     keep: KeepState,
@@ -45,8 +44,9 @@ pub(in crate::mandoc) struct InlineBuilder {
     final_source_continuation: Option<bool>,
     execution_epoch: u64,
     author_execution: Option<AuthorExecution>,
-    definition_outcome: DefinitionOutcome,
-    no_break_field: Option<NoBreakField>,
+    /// Native tag/hang field geometry exists only in a definition head.
+    /// Ordinary paragraphs keep word and row events without field widths.
+    definition: Option<DefinitionFieldState>,
     last_executed_source_line: Option<u32>,
     pub(in crate::mandoc) scope_posts: crate::mandoc::containers::ScopePostState,
 }
@@ -60,6 +60,30 @@ struct AuthorExecution {
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct DefinitionOutcome(u8);
+
+#[derive(Default)]
+struct DefinitionFieldState {
+    pending_indent: Option<usize>,
+    outcome: DefinitionOutcome,
+    no_break: Option<NoBreakField>,
+}
+
+impl InlineBuilder {
+    fn definition_state_mut(&mut self) -> &mut DefinitionFieldState {
+        self.definition
+            .get_or_insert_with(DefinitionFieldState::default)
+    }
+
+    fn pending_definition_indent(&self) -> Option<usize> {
+        self.definition
+            .as_ref()
+            .and_then(|state| state.pending_indent)
+    }
+
+    fn set_pending_definition_indent(&mut self, indent: Option<usize>) {
+        self.definition_state_mut().pending_indent = indent;
+    }
+}
 
 impl DefinitionOutcome {
     const FIELD_EXITED: u8 = 1;
@@ -463,7 +487,6 @@ impl InlineBuilder {
             pending_breakable_spaces: 0,
             pending_field_spaces: 0,
             pending_line_indent: 0,
-            pending_definition_indent: None,
             word_end_break: WordEndBreak::Clear,
             vertical_space_debt: 0,
             keep: KeepState::new(),
@@ -475,8 +498,7 @@ impl InlineBuilder {
             final_source_continuation: None,
             execution_epoch: 0,
             author_execution: None,
-            definition_outcome: DefinitionOutcome(0),
-            no_break_field: None,
+            definition: None,
             last_executed_source_line: None,
             scope_posts: crate::mandoc::containers::ScopePostState::default(),
         }
@@ -495,7 +517,6 @@ impl InlineBuilder {
             pending_breakable_spaces: 0,
             pending_field_spaces: 0,
             pending_line_indent: 0,
-            pending_definition_indent: None,
             word_end_break: WordEndBreak::Clear,
             vertical_space_debt: 0,
             keep: KeepState::new(),
@@ -507,8 +528,7 @@ impl InlineBuilder {
             final_source_continuation: None,
             execution_epoch: 0,
             author_execution: None,
-            definition_outcome: DefinitionOutcome(0),
-            no_break_field: None,
+            definition: None,
             last_executed_source_line: None,
             scope_posts: crate::mandoc::containers::ScopePostState::default(),
         }

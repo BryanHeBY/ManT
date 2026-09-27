@@ -1,6 +1,6 @@
 //! IP renders an authored tag, not an inferred disposable punctuation mark.
 use mant_ir::{
-    DefinitionItem, Document,
+    Block, DefinitionItem, Document, ListItem, ListKind,
     visit::{self, Visit},
 };
 use mant_protocol::{ExplanationOptions, ExplanationQuery};
@@ -11,6 +11,26 @@ fn definitions(document: &Document) -> Vec<&DefinitionItem> {
         fn visit_definition_item(&mut self, item: &'a DefinitionItem) {
             self.0.push(item);
             visit::walk_definition_item(self, item);
+        }
+    }
+    let mut result = Items(Vec::new());
+    result.visit_document(document);
+    result.0
+}
+
+fn bullet_items(document: &Document) -> Vec<&ListItem> {
+    struct Items<'a>(Vec<&'a ListItem>);
+    impl<'a> Visit<'a> for Items<'a> {
+        fn visit_block(&mut self, block: &'a Block) {
+            if let Block::List {
+                kind: ListKind::Bullet,
+                items,
+                ..
+            } = block
+            {
+                self.0.extend(items);
+            }
+            visit::walk_block(self, block);
         }
     }
     let mut result = Items(Vec::new());
@@ -108,6 +128,9 @@ fn unstyled_marks_are_presentation_and_styled_keys_are_not_option_values() {
 
 #[test]
 fn licensed_gcc_and_rsync_marks_do_not_add_semantic_nodes() {
+    // Exact Fedora gcc fixture checked with pinned CVS HTML: adjacent raw
+    // `.IP *` blocks become Bl-bullet ULs in man_html.c::list_continues();
+    // singleton stars and rsync's `o` remain authored definition tags.
     for (fixture, mark, expected) in [
         ("archlinux/rsync.1.zst", "o", 157),
         ("fedora44/gcc.1.zst", "*", 102),
@@ -123,10 +146,19 @@ fn licensed_gcc_and_rsync_marks_do_not_add_semantic_nodes() {
                 item.terms.len() == 1 && mant_ir::inline_plain_text(&item.terms[0]).trim() == mark
             })
             .collect::<Vec<_>>();
-        assert_eq!(marked.len(), expected, "{fixture}");
+        let list_items = if mark == "*" {
+            bullet_items(&document)
+        } else {
+            Vec::new()
+        };
+        assert_eq!(marked.len() + list_items.len(), expected, "{fixture}");
         assert!(
             marked.iter().all(|item| item.entry.is_none()),
             "{fixture}: marks must not become Term or Value entries"
+        );
+        assert!(
+            list_items.iter().all(|item| item.entry.is_none()),
+            "{fixture}: presentation bullets must not become entries"
         );
     }
 }

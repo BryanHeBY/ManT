@@ -13,11 +13,9 @@ impl super::BlockLowerer<'_, '_> {
             ends_with_line_continuation(node),
             node.kind == NodeKind::Text && node.flags.line_start,
             |builder| {
-                builder.font = self.formatter.font;
-                append_inline_node_with_next(builder, node, next, self.context.default_name);
-                self.formatter.font = builder.font;
-                self.formatter.spacing = builder.spacing_enabled();
-                self.formatter.vertical_space_debt = builder.vertical_space_debt();
+                self.formatter.with_inline_node(builder, |builder| {
+                    append_inline_node_with_next(builder, node, next, self.context.default_name);
+                });
             },
         );
         self.state.inherit_spacing(self.formatter.spacing);

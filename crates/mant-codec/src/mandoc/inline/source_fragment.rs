@@ -64,7 +64,7 @@ pub(in crate::mandoc) fn lower_source_fragment_with_formatter_state(
         RecoveredFragment {
             inlines: parse_roff_text_with_state(source, &mut font, true),
             complete: false,
-            formatter,
+            formatter: formatter.clone(),
         }
     };
     // A separate parser invocation is intentionally small and finite.  More

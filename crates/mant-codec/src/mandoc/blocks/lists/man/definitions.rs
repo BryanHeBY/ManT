@@ -18,6 +18,7 @@ pub(in crate::mandoc::blocks) fn lower_man_definition(
         output,
         definition_hanging_width,
         list_state,
+        ip_run,
         has_predecessor,
     } = state;
     let LoweredManItem {
@@ -36,10 +37,9 @@ pub(in crate::mandoc::blocks) fn lower_man_definition(
     let spacing_before =
         crate::mandoc::layout::man_paragraph_spacing(spacing_before, has_predecessor);
     let macro_name = node.macro_name.as_deref();
-    let bullet = matches!(macro_name, Some("IP" | "TP")) && is_explicit_bullet(node, &item);
-    if macro_name == Some("IP") && !bullet {
-        record_ambiguous_ip_mark(&item, context);
-    }
+    let independent_mark = matches!(macro_name, Some("IP" | "TP" | "TQ"))
+        && ip_run.is_none()
+        && record_mark_role(node, &item, context);
     let ordinal = matches!(macro_name, Some("IP" | "TP"))
         .then(|| {
             ordinal_marker(
@@ -51,7 +51,10 @@ pub(in crate::mandoc::blocks) fn lower_man_definition(
     // Only TQ explicitly adds another tag to the immediately preceding empty
     // definition. Paragraph distance and empty independent IP/TP items never
     // authorize borrowing the next item's description.
-    let merge = if macro_name == Some("TQ") {
+    // A TQ carrying an ambiguous punctuation mark is its own native DT/DD
+    // pair. Joining it to a prior empty TP would attach its BODY to the
+    // earlier declaration and invalidate its exact head-role evidence.
+    let merge = if macro_name == Some("TQ") && !independent_mark {
         last_definition_location(output, indent_columns)
             .map_or(DefinitionMerge::None, DefinitionMerge::From)
     } else {
@@ -85,10 +88,11 @@ pub(in crate::mandoc::blocks) fn lower_man_definition(
             max_width,
             ordinal,
             merge,
-            bullet,
+            ip_run,
         },
     );
     if macro_name == Some("TQ")
+        && !independent_mark
         && let Some(Block::DefinitionList { items, .. }) = output.last()
         && let Some(item) = items.last()
     {
@@ -108,7 +112,7 @@ struct ManDefinitionEmission {
     max_width: usize,
     ordinal: Option<super::ordered::ManOrdinalMarker>,
     merge: DefinitionMerge,
-    bullet: bool,
+    ip_run: Option<IpRun>,
 }
 
 fn emit_man_definition(
@@ -124,11 +128,11 @@ fn emit_man_definition(
         max_width,
         ordinal,
         merge,
-        bullet,
+        ip_run,
     } = emission;
-    if bullet {
+    if let Some(run) = ip_run {
         list_state.reset();
-        append_ip_bullet(output, item, indent_columns, spacing_before, source);
+        append_ip_marked_list(output, item, indent_columns, spacing_before, source, run);
     } else {
         if let Some(marker) = ordinal {
             append_ordered(
@@ -224,6 +228,7 @@ pub(in crate::mandoc::blocks) struct ManDefinitionState<'a> {
     pub(in crate::mandoc::blocks) output: &'a mut Vec<Block>,
     pub(in crate::mandoc::blocks) definition_hanging_width: &'a mut crate::mandoc::layout::Distance,
     pub(in crate::mandoc::blocks) list_state: &'a mut ManListState,
+    pub(in crate::mandoc::blocks) ip_run: Option<IpRun>,
     pub(in crate::mandoc::blocks) has_predecessor: bool,
 }
 
@@ -425,28 +430,77 @@ fn first_node_text(node: &Node) -> Option<&str> {
         .or_else(|| node.children.iter().find_map(first_node_text))
 }
 
-/// Append a man(7) `.IP` bullet while the source macro is still known.
-///
-/// Inferring this later from the serialized term text is unsafe: a legitimate
-/// `.TP *` glossary entry looks identical after lowering. Keeping the decision
-/// at this boundary preserves explicit named-bullet lists without erasing
-/// punctuation-only definition terms or literal key names.
-fn append_ip_bullet(
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum IpMark {
+    Star,
+    Dash,
+    NamedBullet,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(in crate::mandoc::blocks) struct IpRun {
+    kind: ListKind,
+    continues: bool,
+}
+
+/// CVS `man_html.c::list_continues()` inspects the first raw HEAD child of
+/// adjacent IP blocks before deciding whether to open a UL. A single IP, a
+/// mixed pair, or a styled mark remains a definition with its authored term.
+pub(in crate::mandoc::blocks) fn adjacent_ip_run(nodes: &[Node], index: usize) -> Option<IpRun> {
+    fn mark(node: &Node) -> Option<IpMark> {
+        if node.kind != NodeKind::Block || node.macro_name.as_deref() != Some("IP") {
+            return None;
+        }
+        match first_part_children(node, NodeKind::Head)
+            .first()
+            .and_then(|child| child.text.as_deref())?
+        {
+            "*" => Some(IpMark::Star),
+            r"\-" => Some(IpMark::Dash),
+            r"\(bu" | r"\[bu]" => Some(IpMark::NamedBullet),
+            _ => None,
+        }
+    }
+    let current = mark(nodes.get(index)?)?;
+    let continues = nodes[..index]
+        .iter()
+        .rev()
+        .find(|node| crate::mandoc::adjacency::is_logical_sibling(node))
+        .and_then(mark)
+        == Some(current);
+    let followed =
+        crate::mandoc::adjacency::next(&nodes[index + 1..]).and_then(mark) == Some(current);
+    (continues || followed).then_some(IpRun {
+        kind: if current == IpMark::Dash {
+            ListKind::Dash
+        } else {
+            ListKind::Bullet
+        },
+        continues,
+    })
+}
+
+/// Convert only a source-proven adjacent IP run to a list. A new run remains
+/// separate even when the rendered glyph matches a prior run's list kind.
+fn append_ip_marked_list(
     output: &mut Vec<Block>,
     item: DefinitionItem,
     indent_columns: crate::mandoc::layout::SourceIndent,
     paragraph_distance: u16,
     source: Option<mant_ir::SourceSpan>,
+    run: IpRun,
 ) {
     let list_item = super::ordered::spaced_man_list_item(item, 2, source, paragraph_distance);
-    if let Some(Block::List {
-        kind: ListKind::Bullet,
-        compact,
-        items,
-        ..
-    }) = output
-        .last_mut()
-        .filter(|block| block_indent(block) == Some(indent_columns.relative_columns()))
+    if run.continues
+        && let Some(Block::List {
+            kind,
+            compact,
+            items,
+            ..
+        }) = output
+            .last_mut()
+            .filter(|block| block_indent(block) == Some(indent_columns.relative_columns()))
+        && *kind == run.kind
     {
         *compact = *compact && paragraph_distance == 0;
         items.push(list_item);
@@ -454,7 +508,7 @@ fn append_ip_bullet(
     }
 
     output.push(Block::List {
-        kind: ListKind::Bullet,
+        kind: run.kind,
         compact: paragraph_distance == 0,
         items: vec![list_item],
         layout: layout_with_spacing(indent_columns, 0),
@@ -462,26 +516,10 @@ fn append_ip_bullet(
     });
 }
 
-/// IP and TP both print authored tags; neither authorizes replacing arbitrary
-/// glyphs with bullets. Require a complete named bullet, not a section-name,
-/// styling, or adjacent-item heuristic: even `*` and `o` can name editor keys.
-fn is_explicit_bullet(node: &Node, item: &DefinitionItem) -> bool {
-    fn contains_bullet_escape(node: &Node) -> bool {
-        node.text
-            .as_ref()
-            .is_some_and(|text| text.contains(r"\(bu") || text.contains(r"\[bu]"))
-            || node.children.iter().any(contains_bullet_escape)
-    }
-    matches!(item.terms.as_slice(), [term] if plain_text(term).trim() == "•")
-        && super::super::definition::visible_definition_head(node)
-            .iter()
-            .any(contains_bullet_escape)
-}
-
 /// Preserve literal tags without turning typographical marks into discovered
 /// values or terms. Explicit bold/code marking is positive key-name evidence;
 /// section names and the role of a containing option are not.
-fn record_ambiguous_ip_mark(item: &DefinitionItem, context: &LoweringContext<'_>) {
+fn record_mark_role(node: &Node, item: &DefinitionItem, context: &LoweringContext<'_>) -> bool {
     use crate::definitions::NativeHeadRole;
     use mant_ir::Inline;
 
@@ -497,27 +535,84 @@ fn record_ambiguous_ip_mark(item: &DefinitionItem, context: &LoweringContext<'_>
         })
     }
     let [term] = item.terms.as_slice() else {
-        return;
+        return false;
     };
     let text = plain_text(term);
-    let mut chars = text.trim().chars();
-    let Some(mark) = chars.next() else { return };
-    if chars.next().is_some() || !mark.is_ascii() || (mark.is_ascii_alphanumeric() && mark != 'o') {
-        return;
-    }
-    context.native_heads.borrow_mut().record(
-        item,
-        if styled(term, false) {
+    // A named roff bullet is an authored DT in a singleton IP/TP, but still
+    // only a presentation mark unless its source explicitly styles the term.
+    // Require both its complete visible spelling and native escape evidence:
+    // a literal Unicode bullet need not have the same source role.
+    if text.trim() == "•"
+        && super::super::definition::visible_definition_head(node)
+            .iter()
+            .any(contains_named_bullet_escape)
+    {
+        let role = if styled(term, false) {
             NativeHeadRole::LiteralTerm
         } else {
             NativeHeadRole::Presentation
-        },
-    );
+        };
+        context.native_heads.borrow_mut().record(item, role);
+        return true;
+    }
+    let mut chars = text.trim().chars();
+    let Some(mark) = chars.next() else {
+        return false;
+    };
+    if chars.next().is_some() || !mark.is_ascii() || (mark.is_ascii_alphanumeric() && mark != 'o') {
+        return false;
+    }
+    // An explicitly styled dash in a TP/TQ head is a complete shell operand
+    // (for example, `set -`). An IP head uses the same visible DT for a
+    // literal punctuation key, so retain that separate source role.
+    // man_html.c::man_IP_pre() renders both spellings as authored tags.
+    if mark == '-' && styled(term, false) && node.macro_name.as_deref() != Some("IP") {
+        context
+            .native_heads
+            .borrow_mut()
+            .record(item, NativeHeadRole::Operand);
+        return true;
+    }
+    let role = if styled(term, false) {
+        NativeHeadRole::LiteralTerm
+    } else {
+        NativeHeadRole::Presentation
+    };
+    context.native_heads.borrow_mut().record(item, role);
+    true
+}
+
+fn contains_named_bullet_escape(node: &Node) -> bool {
+    node.text
+        .as_ref()
+        .is_some_and(|text| text.contains(r"\(bu") || text.contains(r"\[bu]"))
+        || node.children.iter().any(contains_named_bullet_escape)
 }
 
 #[cfg(test)]
 mod tests {
     use mant_ir::{Block, DefinitionItem};
+
+    #[test]
+    fn bold_single_dash_tp_retains_operand_identity() {
+        // Exact source checked with pinned CVS tree/HTML/UTF-8. The TP HEAD
+        // has a B child spelling `\-`; man_html.c::man_IP_pre prints that DT
+        // and man_term.c::pre_B keeps the authored strong style.
+        let source = b".TH SET 1\n.SH OPTIONS\n.TP\n.B \\-\nSignal the end of options.\n";
+        let document = crate::mandoc::parse_plain_manual(std::path::Path::new("set.1"), source)
+            .expect("lower styled dash operand");
+        let Block::DefinitionList { items, .. } = &document.sections[0].blocks[0] else {
+            panic!("styled dash must retain its definition");
+        };
+        let entry = items[0].entry.as_ref().expect("styled dash operand");
+        assert_eq!(entry.names, ["-"]);
+        assert_eq!(
+            entry.kind,
+            mant_ir::EntryKind::Parameter {
+                parameter_kind: mant_ir::ParameterKind::Operand,
+            }
+        );
+    }
 
     #[test]
     fn ip_literal_marks_and_styled_keys_are_not_inferred_bullets() {
@@ -548,18 +643,193 @@ mod tests {
     }
 
     #[test]
-    fn ip_named_bullets_retain_explicit_source_evidence() {
-        for mark in [r"\(bu", r"\[bu]", r"\fB\[bu]\fP", r"\ \(bu"] {
+    fn singleton_ip_bullet_stays_an_authored_definition_term() {
+        // CVS man_html.c::list_continues() needs an adjacent compatible IP
+        // before man_IP_pre() opens a UL; these exact inputs all yield DL.
+        for (mark, literal_term) in [
+            (r"\(bu", false),
+            (r"\[bu]", false),
+            (r"\fB\[bu]\fP", true),
+            (r"\ \(bu", false),
+        ] {
             let source = format!(".TH MARK 1\n.SH DESCRIPTION\n.IP \"{mark}\" 4\nBODY\n");
             let document = crate::mandoc::parse_plain_manual(
                 std::path::Path::new("mark.1"),
                 source.as_bytes(),
             )
             .unwrap();
+            let Block::DefinitionList { items, .. } = &document.sections[0].blocks[0] else {
+                panic!("singleton {mark:?} must keep its authored tag");
+            };
+            assert_eq!(items.len(), 1);
+            assert!(super::plain_text(&items[0].terms[0]).contains('•'));
+            assert_eq!(items[0].entry.is_some(), literal_term, "{mark:?}");
+        }
+    }
+
+    #[test]
+    fn adjacent_ip_runs_follow_native_head_marker_identity() {
+        // CVS man_html.c::list_continues() recognizes raw adjacent IP HEADs:
+        // two escaped dashes form Bl-dash, star and named-bullet runs form
+        // separate Bl-bullet lists, and mixed marks stay independent DLs.
+        for (source, expected) in [
+            (
+                ".TH MARK 1\n.SH DESCRIPTION\n.IP \\- 2\nfirst\n.IP \\- 2\nsecond\n",
+                vec![("dash", 2)],
+            ),
+            (
+                ".TH MARK 1\n.SH DESCRIPTION\n.IP \\(bu 2\nFIRST\n.IP \\[bu] 2\nSECOND\n",
+                vec![("bullet", 2)],
+            ),
+            (
+                ".TH MARK 1\n.SH DESCRIPTION\n.IP * 2\nONE\n.IP * 2\nTWO\n.IP \\(bu 2\nTHREE\n.IP \\(bu 2\nFOUR\n",
+                vec![("bullet", 2), ("bullet", 2)],
+            ),
+        ] {
+            let document = crate::mandoc::parse_plain_manual(
+                std::path::Path::new("ip-runs.1"),
+                source.as_bytes(),
+            )
+            .expect("lower adjacent IP run");
+            let actual = document.sections[0]
+                .blocks
+                .iter()
+                .map(|block| match block {
+                    Block::List { kind, items, .. } => (
+                        match kind {
+                            mant_ir::ListKind::Bullet => "bullet",
+                            mant_ir::ListKind::Dash => "dash",
+                            _ => "other",
+                        },
+                        items.len(),
+                    ),
+                    _ => ("definition", 0),
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(actual, expected, "{source}");
+        }
+    }
+
+    #[test]
+    fn mixed_ip_marks_and_single_tp_tq_bullets_keep_definition_owners() {
+        // Pinned CVS man_html.c::man_IP_pre() opens two DLs for mixed IP
+        // marks and one DL for a lone TP or TQ, even when a DT draws as a
+        // bullet. man_macro.c::blk_imp opens the next-line HEAD for both.
+        for source in [
+            ".TH MARK 1\n.SH DESCRIPTION\n.IP \\(bu 2\nfirst\n.IP \\- 2\nsecond\n",
+            ".TH MARK 1\n.SH DESCRIPTION\n.TP\n\\(bu\nBODY\n",
+            ".TH MARK 1\n.SH OPTIONS\n.TQ\n\\(bu\nBODY\n",
+        ] {
+            let document = crate::mandoc::parse_plain_manual(
+                std::path::Path::new("ip-mixed.1"),
+                source.as_bytes(),
+            )
+            .expect("lower mixed IP or lone TP");
             assert!(
-                matches!(&document.sections[0].blocks[0], Block::List { kind: mant_ir::ListKind::Bullet, items, .. } if items.len() == 1),
-                "{mark:?}"
+                document.sections[0]
+                    .blocks
+                    .iter()
+                    .all(|block| matches!(block, Block::DefinitionList { .. }))
             );
+            for block in &document.sections[0].blocks {
+                if let Block::DefinitionList { items, .. } = block {
+                    assert!(items.iter().all(|item| item.entry.is_none()), "{source}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn singleton_presentation_bullet_does_not_hide_following_option_identity() {
+        // Exact pinned CVS HTML: separate DLs for the bullet and --flag;
+        // man_html.c::man_IP_pre() keeps the later head as its own DT.
+        let source = b".TH MARK 1\n.SH OPTIONS\n.IP \\(bu 4\nBODY\n.TP\n.B --flag\nreal option\n";
+        let document =
+            crate::mandoc::parse_plain_manual(std::path::Path::new("bullet-option.1"), source)
+                .expect("lower presentation bullet and option");
+        let entries = document.sections[0]
+            .blocks
+            .iter()
+            .filter_map(|block| match block {
+                Block::DefinitionList { items, .. } => Some(items),
+                _ => None,
+            })
+            .flat_map(|items| items.iter())
+            .map(|item| item.entry.as_ref())
+            .collect::<Vec<_>>();
+        assert_eq!(entries.len(), 2);
+        assert!(entries[0].is_none());
+        assert!(
+            matches!(entries[1], Some(entry) if entry.names.iter().any(|name| name == "--flag"))
+        );
+    }
+
+    #[test]
+    fn tq_presentation_bullet_does_not_become_an_option_alias() {
+        // Exact source checked with pinned CVS tree/HTML/UTF-8. The TP HEAD
+        // carries --flag, while the following TQ HEAD is a separate visible
+        // bullet DT; man_html.c::man_IP_pre never treats it as a name.
+        let source = b".TH MARK 1\n.SH OPTIONS\n.TP\n.B --flag\n.TQ\n\\(bu\nBODY\n";
+        let document =
+            crate::mandoc::parse_plain_manual(std::path::Path::new("tq-combined.1"), source)
+                .expect("lower option followed by TQ bullet");
+        let Block::DefinitionList { items, .. } = &document.sections[0].blocks[0] else {
+            panic!("TP and TQ retain their authored definition rows");
+        };
+        assert_eq!(items.len(), 2);
+        assert!(items[0].description.is_empty(), "TP has its own empty DD");
+        assert!(items[1].entry.is_none(), "TQ bullet is presentation");
+        assert!(items[1].description.iter().any(|block| matches!(
+            block,
+            Block::Paragraph { children, .. } if super::plain_text(children) == "BODY"
+        )));
+        let names = document.sections[0]
+            .blocks
+            .iter()
+            .filter_map(|block| match block {
+                Block::DefinitionList { items, .. } => Some(items),
+                _ => None,
+            })
+            .flat_map(|items| items.iter())
+            .filter_map(|item| item.entry.as_ref())
+            .flat_map(|entry| entry.names.iter())
+            .collect::<Vec<_>>();
+        assert_eq!(names, ["--flag"]);
+    }
+
+    #[test]
+    fn tq_styled_punctuation_keeps_its_own_term_and_body() {
+        // Both exact inputs were checked with pinned CVS tree/HTML/UTF-8:
+        // man_html.c::man_IP_pre emits two DT/DD pairs, with an empty first
+        // DD. Operand versus Term is ManT's source-aware reading category.
+        for (head, name, kind) in [
+            (
+                r".B \-",
+                "-",
+                mant_ir::EntryKind::Parameter {
+                    parameter_kind: mant_ir::ParameterKind::Operand,
+                },
+            ),
+            (r".B #", "#", mant_ir::EntryKind::Term),
+        ] {
+            let source = format!(".TH MARK 1\n.SH OPTIONS\n.TP\n.B --foo\n.TQ\n{head}\nBODY\n");
+            let document = crate::mandoc::parse_plain_manual(
+                std::path::Path::new("tq-styled.1"),
+                source.as_bytes(),
+            )
+            .expect("lower styled TQ head");
+            let Block::DefinitionList { items, .. } = &document.sections[0].blocks[0] else {
+                panic!("expected separate TP and TQ rows");
+            };
+            assert_eq!(items.len(), 2, "{source}");
+            assert!(items[0].description.is_empty(), "{source}");
+            let entry = items[1].entry.as_ref().expect("styled TQ key");
+            assert_eq!(entry.names, [name], "{source}");
+            assert_eq!(entry.kind, kind, "{source}");
+            assert!(items[1].description.iter().any(|block| matches!(
+                block,
+                Block::Paragraph { children, .. } if super::plain_text(children) == "BODY"
+            )));
         }
     }
 

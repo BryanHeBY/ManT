@@ -16,6 +16,7 @@ pub(super) struct StructuralLowerer<'a, 'source, 'state> {
     pub(super) paragraph_predecessor: bool,
     pub(super) definition_hanging_width: &'state mut crate::mandoc::layout::Distance,
     pub(super) man_list_state: &'state mut ManListState,
+    pub(super) ip_run: Option<super::lists::man::IpRun>,
     pub(super) spacing_enabled: bool,
     pub(super) formatter: &'state mut crate::mandoc::formatter::FormatterState,
 }
@@ -36,6 +37,7 @@ impl StructuralLowerer<'_, '_, '_> {
                 output: self.output,
                 definition_hanging_width: self.definition_hanging_width,
                 list_state: self.man_list_state,
+                ip_run: self.ip_run,
                 has_predecessor,
             },
             self.spacing_enabled,
@@ -171,7 +173,7 @@ impl StructuralLowerer<'_, '_, '_> {
             self.paragraph_distance,
             self.spacing_enabled,
             Vec::new(),
-            *self.formatter,
+            std::mem::take(self.formatter),
         );
         if hanging && !children.is_empty() {
             lowerer.state.start_hanging(self.context.offset_indent(
@@ -228,7 +230,7 @@ impl StructuralLowerer<'_, '_, '_> {
                     self.paragraph_distance,
                     self.spacing_enabled,
                     output,
-                    *self.formatter,
+                    std::mem::take(self.formatter),
                 );
                 lowerer.paragraph_predecessor = paragraph_predecessor;
                 lowerer.push_nodes(first_part_children(node, NodeKind::Body));

@@ -71,7 +71,7 @@ The following [man(7)](https://mandoc.bsd.lv/man/man.7.html) macros documented b
 | `P`, `PP`, `LP` | Paragraph boundaries and retained vertical spacing |
 | `HP` | Hanging paragraph first/continuation origins; width inherited by later tagged paragraphs |
 | `RS`, `RE` | Nested indentation boundary |
-| `IP`, `TP`, `TQ` | Bullet, ordered-list, or definition-list items, explicit multi-tag heads, hanging layout, and widths |
+| `IP`, `TP`, `TQ` | Adjacent bullet/dash runs, ordered-list or definition-list items, explicit multi-tag heads, hanging layout, and widths |
 | `PD` | Paragraph, list-item, definition-item, and heading spacing |
 | `B`, `SB` | Strong inline content |
 | `I` | Emphasized inline content |
@@ -91,17 +91,20 @@ offsets use the default indentation; cumulative indentation is capped at 4096
 columns with a `manual.indentation-limit` warning rather than integer overflow.
 
 The `IP` and `TP` macros are source-ambiguous: a leading mark can introduce a
-bullet, an enumerated paragraph, or a glossary-style definition. ManT
-recognizes a bullet only when the complete visible tag is `•` and the native
-head retains an explicit named bullet escape (`\(bu` or `\[bu]`). Literal
-single-character tags, including `*`, `o`, `-`, `#`, `=`, `^`, `$`, and `\`,
-remain definitions: these can be real operator or editor-key names, even in
-consecutive or unstyled `IP` paragraphs. For ambiguous single ASCII punctuation
-or `o` tags in `IP`, the unstyled tag remains presentation with no semantic
-entry; explicit bold or code marking supplies a literal Term, never an inferred
-value merely because it is nested below an option. A punctuated
-integer such as `1.`, `1)`, or `(1)` is sufficient evidence for an
-ordered item, including a one-item footnote list. Bracketed numeric tags such
+list, an enumerated paragraph, or a glossary-style definition. Following the
+pinned man HTML renderer, adjacent `IP` blocks form a list when the first raw
+head tokens match `*`, `\-`, or the named bullet escapes `\(bu` and `\[bu]`.
+The dash form retains a dash marker; star and named bullets retain bullet
+markers but remain separate runs when their raw token classes differ. A lone
+`IP`, a mixed pair, and `TP`/`TQ` keep their authored definition tags, even
+when the tag draws as a bullet. Styled marks do not qualify for this adjacency
+rule. For ambiguous single ASCII punctuation or `o` tags in `IP`, `TP`, or
+`TQ`, an unstyled tag remains presentation with no semantic entry. Explicit
+bold or code marking supplies a literal Term for an `IP` punctuation key; an
+explicitly styled single dash in `TP`/`TQ` retains its operand identity. A
+single-mark `TQ` keeps its own body even when the preceding `TP` body is
+empty. A punctuated integer such as `1.`, `1)`, or `(1)` is sufficient evidence
+for an ordered item, including a one-item footnote list. Bracketed numeric tags
 as `[0]` remain exact definition labels: in man pages they commonly name array
 slots or structure fields, and the current ordered-list IR has no field for
 their non-decimal marker spelling. Retained punctuated numeric labels are
@@ -200,11 +203,11 @@ next item's physical body or treat the lack of an independent description as
 budget truncation. Truly isolated heads retain their containing-section reading
 coordinates instead of silently taking unrelated later prose.
 
-A `TP` whose complete tag is the named roff bullet `\(bu` or `\[bu]`
-(including leading escaped spacing) becomes a regular bullet item, not a
-semantic term named `•`. This narrow recovery retains body, layout and targets;
-the same evidence rule applies to `IP`, and never replaces literal operators
-such as `*`, `-`, or `+` with a generated bullet.
+Single `TP` and `IP` tags retain their visible mark and term/body relationship,
+including named roff bullets and escaped leading spaces. Only adjacent `IP`
+blocks with matching native head classes convert to a list, retaining their
+respective bodies, layout and targets without treating a presentation mark as
+a discovered semantic entry.
 
 ## Manual References
 
@@ -231,7 +234,8 @@ Parsing does not consult the installed manual index, so the same roff bytes prod
 
 | mdoc list type | IR result |
 | --- | --- |
-| `-bullet`, `-dash`, `-hyphen` | Bullet list |
+| `-bullet` | Bullet list |
+| `-dash`, `-hyphen` | Dash list |
 | `-enum` | Ordered list |
 | `-diag`, `-hang`, `-inset`, `-ohang` | Definition list |
 | `-tag` | Definition list, except a complete proven ordinal sequence |

@@ -1,5 +1,5 @@
 //! Paragraph and literal flow own pending text, provenance and flush boundaries.
-use super::{FilledBoundary, InlineBuilder, layout, targets, updated_spacing};
+use super::{FilledBoundary, InlineBuilder, layout, targets};
 use mant_ir::{Block, Inline};
 
 mod literal;
@@ -17,7 +17,6 @@ pub(super) struct BlockState {
     pending_targets: targets::PendingTargets,
     indent_columns: crate::mandoc::layout::SourceIndent,
     hanging_origin: Option<crate::mandoc::layout::SourceIndent>,
-    spacing_enabled: bool,
 }
 
 impl BlockState {
@@ -67,7 +66,6 @@ impl BlockState {
             pending_targets: targets::PendingTargets::new(),
             indent_columns,
             hanging_origin: None,
-            spacing_enabled,
         }
     }
 
@@ -75,13 +73,12 @@ impl BlockState {
         self.paragraph.inherit_scope_posts(posts);
     }
 
-    pub(super) const fn spacing_enabled(&self) -> bool {
-        self.spacing_enabled
+    pub(super) fn spacing_enabled(&self) -> bool {
+        self.paragraph.spacing_enabled()
     }
 
     pub(super) fn set_spacing(&mut self, setting: &str) {
         self.paragraph.set_spacing(setting);
-        self.spacing_enabled = updated_spacing(self.spacing_enabled, setting);
     }
 
     /// Carry formatter state out of a structural subtree.
@@ -91,11 +88,10 @@ impl BlockState {
     /// block builder. The nested builder has already applied the transition at
     /// its source position, so the parent inherits only the final state.
     pub(super) fn inherit_spacing(&mut self, spacing_enabled: bool) {
-        if spacing_enabled == self.spacing_enabled {
+        if spacing_enabled == self.spacing_enabled() {
             return;
         }
         self.paragraph.inherit_spacing(spacing_enabled);
-        self.spacing_enabled = spacing_enabled;
     }
 
     pub(super) fn push_inline(
@@ -254,7 +250,7 @@ impl BlockState {
         &mut self,
         formatter: &mut crate::mandoc::formatter::FormatterState,
     ) {
-        formatter.spacing = self.spacing_enabled;
+        formatter.spacing = self.spacing_enabled();
         formatter.vertical_space_debt = self.paragraph.vertical_space_debt();
         formatter.zero_advance_armed = self.paragraph.take_zero_advance_armed();
         if let Some(author_flow) = self.paragraph.author_flow() {
@@ -274,10 +270,9 @@ impl BlockState {
         let output_start = self.output.len();
         let (block, empty_word_end_break) = if vertical_request {
             self.paragraph
-                .take_for_vertical_request(self.indent_columns, self.spacing_enabled)
+                .take_for_vertical_request(self.indent_columns)
         } else {
-            self.paragraph
-                .take(self.indent_columns, self.spacing_enabled)
+            self.paragraph.take(self.indent_columns)
         };
         if let Some(block) = block {
             match block {

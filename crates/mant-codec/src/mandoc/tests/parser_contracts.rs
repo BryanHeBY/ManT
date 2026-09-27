@@ -1,6 +1,139 @@
 use super::*;
 
 #[test]
+fn literal_display_returns_author_mode_to_following_section_text() {
+    // Exact source checked with fixed CVS tree, HTML and UTF-8. In
+    // mdoc_term.c::termp_an_pre, -nosplit changes renderer-global flags;
+    // termp_bd_pre/post do not restore the prior author mode at .Ed.
+    let source = b".Dd September 28, 2026\n.Dt ANBD 1\n.Os\n.Sh AUTHORS\n.Bd -literal\n.An -nosplit\n.Ed\n.An Ada\n.An Babbage\n";
+    let document = parse_manual_bytes(std::path::Path::new("an-bd.1"), source)
+        .expect("lower author mode across literal display");
+    let author = document.sections[0]
+        .blocks
+        .iter()
+        .find_map(|block| match block {
+            Block::Paragraph { children, .. } => Some(children),
+            _ => None,
+        })
+        .expect("authors paragraph");
+    assert_eq!(inline_text(author), "Ada Babbage");
+    assert!(
+        !author
+            .iter()
+            .any(|inline| matches!(inline, Inline::LineBreak))
+    );
+}
+
+#[test]
+fn nested_display_list_returns_author_mode_to_following_section_text() {
+    // Exact source checked with fixed CVS tree/HTML/UTF-8. In
+    // mdoc_term.c::termp_an_pre, the An mode set in Bd > Bl > It BODY remains
+    // renderer-global after mdoc_term.c::termp_bd_post() closes the display.
+    let source = b".Dd September 28, 2026\n.Dt ANBD 1\n.Os\n.Sh AUTHORS\n.Bd -literal\n.Bl -tag\n.It tag\n.An -nosplit\n.El\n.Ed\n.An Ada\n.An Babbage\n";
+    let document = parse_manual_bytes(std::path::Path::new("an-nested.1"), source)
+        .expect("lower nested author mode");
+    let author = document.sections[0]
+        .blocks
+        .iter()
+        .find_map(|block| match block {
+            Block::Paragraph { children, .. } if inline_text(children).contains("Ada") => {
+                Some(children)
+            }
+            _ => None,
+        })
+        .expect("authors paragraph after nested display");
+    assert_eq!(inline_text(author), "Ada Babbage");
+    assert!(
+        !author
+            .iter()
+            .any(|inline| matches!(inline, Inline::LineBreak))
+    );
+}
+
+#[test]
+fn mdoc_head_spacing_outlives_speculative_body_placement() {
+    // Exact source checked with fixed CVS tree/HTML/UTF-8. mdoc_html.c runs
+    // the It HEAD's Xo children before its BODY; mdoc_sm_pre() keeps Sm off
+    // active through both `No` pairs, including the paragraph after El.
+    let source = b".Dd September 28, 2026\n.Dt XOSM 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag\n.It Xo\n.Sm off\n.Fl a\n.Xc\n.No a No b\n.El\n.No c No d\n";
+    let document = parse_manual_bytes(std::path::Path::new("xo-sm.1"), source)
+        .expect("lower mdoc head spacing");
+    let Block::DefinitionList { items, .. } = &document.sections[0].blocks[0] else {
+        panic!("expected native tag list");
+    };
+    let Block::Paragraph { children, .. } = &items[0].description[0] else {
+        panic!("expected definition body paragraph");
+    };
+    assert_eq!(inline_text(children), "ab");
+    let Block::Paragraph { children, .. } = &document.sections[0].blocks[1] else {
+        panic!("expected paragraph after list");
+    };
+    assert_eq!(inline_text(children), "cd");
+}
+
+#[test]
+fn display_line_inherits_and_returns_live_font_register() {
+    // Exact source checked with fixed CVS HTML/UTF-8. mdoc_html.c executes
+    // .ft before Bd; the literal text and following paragraph stay bold.
+    let source = b".Dd September 28, 2026\n.Dt BDFONT 1\n.Os\n.Sh DESCRIPTION\n.ft B\n.Bd -literal\nword\n.Ed\nafter\n";
+    let document = parse_manual_bytes(std::path::Path::new("bd-font.1"), source)
+        .expect("lower persistent display font");
+    let blocks = &document.sections[0].blocks;
+    let display = blocks
+        .iter()
+        .find_map(|block| match block {
+            Block::Preformatted { children, .. } => Some(children),
+            _ => None,
+        })
+        .expect("literal display");
+    assert!(
+        matches!(display.as_slice(), [Inline::Strong { children }] if inline_text(children) == "word")
+    );
+    let after = blocks
+        .iter()
+        .rev()
+        .find_map(|block| match block {
+            Block::Paragraph { children, .. } => Some(children),
+            _ => None,
+        })
+        .expect("paragraph after display");
+    assert!(
+        matches!(after.as_slice(), [Inline::Strong { children }] if inline_text(children) == "after")
+    );
+}
+
+#[test]
+fn man_request_font_order_follows_reading_terminal_registers() {
+    // Exact source checked with fixed CVS tree, HTML and ASCII output.
+    // man_term.c::print_man_node dispatches roff requests before resetting
+    // fonts for man macros; man_html.c::print_man_node resets before request
+    // dispatch. The reading IR preserves terminal request order, so `.br`
+    // and `.ta` retain bold and `\fP` restores the earlier Roman register.
+    let source = b".TH FONTS 1\n.SH BODY\n.ft B\none\n.br\ntwo\n.ta 8n\nthree\n\\fPfour\n";
+    let document = parse_manual_bytes(std::path::Path::new("man-font-order.1"), source)
+        .expect("lower man request font order");
+    let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+        panic!(
+            "unexpected man font blocks: {:#?}",
+            document.sections[0].blocks
+        );
+    };
+    assert!(
+        matches!(children.as_slice(), [
+        Inline::Strong { .. },
+        Inline::LineBreak,
+        Inline::Strong { .. },
+        Inline::Text { .. },
+        Inline::Strong { .. },
+        Inline::Text { .. },
+        Inline::Text { value },
+    ] if value == "four"),
+        "{children:#?}"
+    );
+    assert_eq!(inline_text(children), "one\ntwo three four");
+}
+
+#[test]
 fn retained_man_paragraph_macro_names_reset_persistent_font_state() {
     fn retain_paragraph_name(node: &mut libmandoc_rs::Node, name: &str) {
         if node.macro_name.as_deref() == Some("PP") {

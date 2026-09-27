@@ -112,7 +112,10 @@ fn an_explicit_tq_after_a_body_does_not_steal_that_body() {
 }
 
 #[test]
-fn named_roff_bullets_are_lists_but_literal_operator_definitions_survive() {
+fn named_tp_bullets_keep_presentation_terms_and_literal_operator_definitions() {
+    // All three exact inputs were checked with pinned CVS tree/HTML/UTF-8.
+    // man_html.c::list_continues groups TP heads in one Bl-tag DL; only
+    // adjacent IP heads with matching raw markers form a Bl-bullet UL.
     for marker in [r"\(bu", r"\[bu]", r"\ \(bu"] {
         let source = format!(
             ".TH PROBE 1\n.SH TOPIC\n.PD 0\n.TP 4\n{marker}\nFIRST\n.TP 4\n{marker}\nSECOND\n.RS 4\nNested continuation.\n.RE\n.TP 4\n.B *\nAn operator.\n.TP 4\n.B -\nStandard input.\n.TP 4\n.B +\nAnother operator.\n"
@@ -120,20 +123,27 @@ fn named_roff_bullets_are_lists_but_literal_operator_definitions_survive() {
         let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
         let document = query.document.as_ref().unwrap();
         let items = definitions(document);
-        assert_eq!(items.len(), 3, "{items:?}");
-        let Block::List {
-            kind: mant_ir::ListKind::Bullet,
-            items,
-            ..
-        } = &document.sections[0].blocks[0]
-        else {
-            panic!("bullet list")
+        assert_eq!(items.len(), 5, "{items:?}");
+        let Block::DefinitionList { items, .. } = &document.sections[0].blocks[0] else {
+            panic!("native tagged bullet definitions")
         };
         assert_eq!(items.len(), 2);
+        assert!(items.iter().all(|item| item.entry.is_none()
+            && item.source.is_some()
+            && mant_ir::inline_plain_text(&item.terms[0]).trim() == "•"));
         assert!(
-            items
+            serde_json::to_string(&items[0].description)
+                .unwrap()
+                .contains("FIRST")
+        );
+        let second = serde_json::to_string(&items[1].description).unwrap();
+        assert!(second.contains("SECOND") && second.contains("Nested continuation."));
+        assert_eq!(
+            definitions(document)[2..]
                 .iter()
-                .all(|item| item.entry.is_none() && item.source.is_some())
+                .map(|item| item.entry.as_ref().unwrap().names[0].as_str())
+                .collect::<Vec<_>>(),
+            ["*", "-", "+"]
         );
         let text = mant_render::render_query_text(&query);
         assert!(

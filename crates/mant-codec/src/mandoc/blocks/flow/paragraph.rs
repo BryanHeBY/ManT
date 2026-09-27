@@ -24,6 +24,9 @@ impl ParagraphFlow {
     pub(super) fn is_empty(&self) -> bool {
         self.builder.is_empty()
     }
+    pub(super) fn spacing_enabled(&self) -> bool {
+        self.builder.spacing_enabled()
+    }
     pub(super) fn set_spacing(&mut self, setting: &str) {
         self.builder.set_spacing(setting);
     }
@@ -146,25 +149,23 @@ impl ParagraphFlow {
     pub(super) fn take(
         &mut self,
         indent: crate::mandoc::layout::SourceIndent,
-        spacing: bool,
     ) -> (Option<Block>, bool) {
-        self.take_with(indent, spacing, false)
+        self.take_with(indent, false)
     }
 
     pub(super) fn take_for_vertical_request(
         &mut self,
         indent: crate::mandoc::layout::SourceIndent,
-        spacing: bool,
     ) -> (Option<Block>, bool) {
-        self.take_with(indent, spacing, true)
+        self.take_with(indent, true)
     }
 
     fn take_with(
         &mut self,
         indent: crate::mandoc::layout::SourceIndent,
-        spacing: bool,
         vertical_request: bool,
     ) -> (Option<Block>, bool) {
+        let spacing = self.builder.spacing_enabled();
         let mut next = Self::new(spacing);
         next.builder.scope_posts = self.builder.scope_posts.clone();
         let invisible_formatter_cell = self.builder.has_invisible_formatter_cell();
