@@ -65,6 +65,170 @@ fn two_operand_styled_manual_reference_keeps_native_label_and_target() {
 }
 
 #[test]
+fn styled_escaped_operands_use_pinned_target_decode_and_final_glyphs() {
+    // Exact inputs first ran pinned CVS -Ttree/-Tutf8. man_term.c::
+    // pre_alternate() executes the actual operands; term.c::term_word()
+    // resolves the hyphen/font escapes before the final selection is checked.
+    for (macro_name, raw_name, name) in [("BR", "a\\-b", "a-b"), ("IR", "a\\fBb\\fP", "ab")] {
+        let input = format!(".TH T 1\n.SH D\n.{macro_name} {raw_name} (1)\n");
+        let page = render(input.as_bytes(), InputFormat::Man);
+        let keys = links(&page);
+        assert_eq!(keys.len(), 1, "{input}");
+        assert_eq!(labels(&page, keys[0]), format!("{name}(1)"));
+        let target = page.marks[(keys[0] - 1) as usize]
+            .link_target
+            .as_ref()
+            .unwrap();
+        assert_eq!(target.primary, name);
+        assert_eq!(target.secondary.as_deref(), Some("1"));
+    }
+}
+
+#[test]
+fn styled_macro_without_surviving_style_is_not_clickable() {
+    // Exact input first ran pinned CVS -Ttree/-Tutf8. pre_alternate() starts
+    // the first operand bold, but term_word() immediately executes \fR,
+    // leaving no styled name glyph as evidence for a compatible link.
+    let page = render(
+        b".TH T 1\n.SH D\n.BR \"\\fRprintf\" (3)\n",
+        InputFormat::Man,
+    );
+    assert!(page.text.contains("printf(3)"));
+    assert!(
+        links(&page)
+            .iter()
+            .all(|key| { page.marks[(*key - 1) as usize].link_target.is_none() })
+    );
+}
+
+#[test]
+fn same_word_sphinx_markers_keep_distinct_manual_occurrences() {
+    // Both exact inputs first ran in pinned CVS -Ttree/-Tutf8. One ROFFT_TEXT
+    // node contains both markers, but term.c::term_word()/encode() execute
+    // distinct consumed byte ranges. The retained spaces and <> stay visible
+    // and are not clickable label bytes.
+    for (body, names) in [
+        ("a(1) \\%<> and b(2) \\%<>", [("a", "1"), ("b", "2")]),
+        ("a(1) \\%<> and a(1) \\%<>", [("a", "1"), ("a", "1")]),
+    ] {
+        let input = format!(".TH LINKS 1\n.SH DESCRIPTION\n{body}\n");
+        let page = render(input.as_bytes(), InputFormat::Man);
+        let keys = links(&page);
+        assert_eq!(keys.len(), 2, "{body}");
+        assert_ne!(keys[0], keys[1]);
+        for (key, (name, section)) in keys.iter().zip(names) {
+            assert_eq!(labels(&page, *key), format!("{name}({section})"));
+            let target = page.marks[(*key - 1) as usize]
+                .link_target
+                .as_ref()
+                .unwrap();
+            assert_eq!(target.kind, 4);
+            assert_eq!(target.primary, name);
+            assert_eq!(target.secondary.as_deref(), Some(section));
+        }
+        assert!(page.text.contains(body.replace("\\%", "").as_str()));
+    }
+}
+
+#[test]
+fn sphinx_label_can_survive_a_native_soft_wrap() {
+    // Exact input first ran pinned CVS -Tutf8 -O width=78. term.c::term_word()
+    // retains one sourced word while term_flushln() may place its glyphs on
+    // another physical row; this soft wrap is not a new link occurrence.
+    let page = render(
+        b".TH T 1\n.SH D\n.ll 20n\nbefore before a(1) \\%<> after\n",
+        InputFormat::Man,
+    );
+    let keys = links(&page);
+    assert_eq!(keys.len(), 1);
+    assert_eq!(labels(&page, keys[0]), "a(1)");
+    assert!(page.text.contains("before before"));
+    assert!(page.text.contains("a(1) <> after"));
+}
+
+#[test]
+fn sphinx_marker_is_not_a_bare_text_or_code_link() {
+    // Exact inputs first ran in pinned CVS -Tutf8. Only the authored \%
+    // marker can support this compatible link, and inferred section 0,
+    // filesystem paths, no-fill and an active explicit link are excluded.
+    for body in ["a(1) <>", "function(0) \\%<>", "/tmp/tool(1) \\%<>"] {
+        let input = format!(".TH T 1\n.SH D\n{body}\n");
+        assert!(links(&render(input.as_bytes(), InputFormat::Man)).is_empty());
+    }
+    let page = render(b".TH T 1\n.SH D\n.nf\na(1) \\%<>\n.fi\n", InputFormat::Man);
+    assert!(links(&page).is_empty());
+    let page = render(
+        b".TH T 1\n.SH D\n.UR https://outer.test\na(1) \\%<>\n.UE\n",
+        InputFormat::Man,
+    );
+    assert_eq!(links(&page).len(), 1);
+    assert_eq!(
+        page.marks[(links(&page)[0] - 1) as usize]
+            .link_target
+            .as_ref()
+            .unwrap()
+            .kind,
+        1
+    );
+}
+
+#[test]
+fn styled_pair_before_separate_sphinx_marker_is_one_link() {
+    // Exact input first ran pinned CVS -Ttree/-Tutf8. pre_alternate() emits
+    // the linked pair from distinct operands; a later TEXT node retains the
+    // \%<> marker, but node adjacency does not mint a second occurrence.
+    let page = render(b".TH T 1\n.SH D\n.BR a (1)\n\\%<>\n", InputFormat::Man);
+    let keys = links(&page);
+    assert_eq!(keys.len(), 1);
+    assert_eq!(labels(&page, keys[0]), "a(1)");
+    assert!(page.text.contains("a(1) <>"));
+}
+
+#[test]
+fn expanded_sphinx_marker_keeps_source_identity_without_invented_coordinate() {
+    // Exact input first ran pinned CVS -Ttree/-Tutf8. read.c reparses the
+    // macro body at the .REF invocation, so node line/column address an
+    // expanded execution rather than an authored byte substring.
+    let page = render(
+        b".TH T 1\n.SH D\n.de REF\na(1) \\%<>\n..\n.REF\n",
+        InputFormat::Man,
+    );
+    let keys = links(&page);
+    assert_eq!(keys.len(), 1);
+    assert_eq!(labels(&page, keys[0]), "a(1)");
+    let mark = &page.marks[(keys[0] - 1) as usize];
+    assert_ne!(mark.source, 0);
+    assert_eq!((mark.line, mark.column), (0, 0));
+}
+
+#[test]
+fn escaped_sphinx_name_uses_executed_glyphs_and_rejects_overprint() {
+    // Each exact input first ran pinned CVS -Ttree/-Tutf8. term_word()
+    // consumes \- and font escapes before glyph emission, while \z creates
+    // an ambiguous overprint relationship and is not compatible evidence.
+    for (body, expected_name) in [("a\\-b(1) \\%<>", "a-b"), ("a\\fBb\\fP(1) \\%<>", "ab")] {
+        let input = format!(".TH LINKS 1\n.SH DESCRIPTION\n{body}\n");
+        let page = render(input.as_bytes(), InputFormat::Man);
+        let keys = links(&page);
+        assert_eq!(keys.len(), 1, "{body}");
+        assert_eq!(labels(&page, keys[0]), format!("{expected_name}(1)"));
+        assert_eq!(
+            page.marks[(keys[0] - 1) as usize]
+                .link_target
+                .as_ref()
+                .unwrap()
+                .primary,
+            expected_name
+        );
+    }
+    let page = render(
+        b".TH LINKS 1\n.SH DESCRIPTION\na\\zX(1) \\%<>\n",
+        InputFormat::Man,
+    );
+    assert!(links(&page).is_empty());
+}
+
+#[test]
 fn styled_candidate_does_not_claim_ambiguous_or_explicit_link_content() {
     // Exact inputs first ran in pinned CVS -Tutf8. The first two negative
     // strings are visible but do not establish a safe inferred reference;

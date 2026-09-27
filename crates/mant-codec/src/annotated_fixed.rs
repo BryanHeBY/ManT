@@ -214,6 +214,7 @@ fn lower_annotated_document_inner(page: &mut AnnotatedDocument) -> Result<Docume
                 ));
                 owners.push(owner);
             }
+            3 if mark.flags & (1 << 14) != 0 && mark.link_target.is_none() => {}
             3 => links.push(project_link(
                 page,
                 &keys,

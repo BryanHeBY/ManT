@@ -15,6 +15,7 @@ pub(super) struct KeyMap {
     heading: Vec<u32>,
     owner: Vec<u32>,
     link: Vec<u32>,
+    skipped_compatible_link: Vec<bool>,
     anchor: Vec<u32>,
     region: Vec<u32>,
     // Inclusive nearest typed key for heading, owner, and region. Native marks
@@ -362,6 +363,7 @@ impl KeyMap {
             heading: vec![0; length],
             owner: vec![0; length],
             link: vec![0; length],
+            skipped_compatible_link: vec![false; length],
             anchor: vec![0; length],
             region: vec![0; length],
             nearest: vec![[0; 3]; length],
@@ -378,8 +380,9 @@ impl KeyMap {
             let allowed_flags = match mark.kind {
                 1 => 0b1001, // authored heading and subsection
                 2 => 1 | 16 | 512 | 1024 | super::NATIVE_HEAD_ROLE_MASK,
-                4 => 0b0101,     // authored anchor and manual target
-                3 | 5 => 0b0001, // authored link or region
+                4 => 0b0101,        // authored anchor and manual target
+                3 => 1 | (1 << 14), // authored or compatible link
+                5 => 0b0001,        // authored region
                 6 => 1 | super::NATIVE_HEAD_ROLE_MASK,
                 _ => unreachable!(),
             };
@@ -460,6 +463,15 @@ impl KeyMap {
                 map.nearest[mark.key as usize] = map.nearest[mark.parent as usize];
                 continue;
             }
+            if mark.kind == 3 && mark.flags & (1 << 14) != 0 && mark.link_target.is_none() {
+                // A weak candidate or a failed final-survival proof must
+                // leave visible body runs intact without inventing a
+                // no-href native macro occurrence. Only this marked case
+                // may resolve its private global link key to no typed link.
+                map.skipped_compatible_link[mark.key as usize] = true;
+                map.nearest[mark.key as usize] = map.nearest[mark.parent as usize];
+                continue;
+            }
             let slot = (mark.kind - 1) as usize;
             counts[slot] =
                 counts[slot]
@@ -510,6 +522,16 @@ impl KeyMap {
             }
         };
         let value = domain.get(global as usize).copied().unwrap_or(0);
+        if kind == 3
+            && value == 0
+            && self
+                .skipped_compatible_link
+                .get(global as usize)
+                .copied()
+                .unwrap_or(false)
+        {
+            return Ok(None);
+        }
         Ok(Some(key(value, "global mark has wrong typed key domain")?))
     }
 

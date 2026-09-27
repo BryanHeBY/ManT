@@ -265,6 +265,39 @@ decode_link_target(const char *source, uint32_t profile, uint8_t *output,
 	return MANT_LINK_TARGET_OK;
 }
 
+enum mant_link_target_copy_status
+mant_structured_decode_link_target_slice(struct structured_session *session,
+    const char *source, size_t source_length, uint8_t *output,
+    size_t capacity, size_t *output_length)
+{
+	char terminated[1025];
+	size_t needed, written;
+	enum mant_link_target_copy_status status;
+
+	if (source == NULL || output == NULL || output_length == NULL ||
+	    source_length == 0 || source_length > sizeof(terminated) - 1)
+		return MANT_LINK_TARGET_UNSUPPORTED;
+	if (!mant_structured_charge(session, &session->builder_operations,
+	    (uint64_t)source_length * 2, session->limits->max_builder_operations,
+	    8, MANT_STRUCTURED_STAGE_RENDER))
+		return MANT_LINK_TARGET_FAILED;
+	memcpy(terminated, source, source_length);
+	terminated[source_length] = '\0';
+	status = decode_link_target(terminated, session->result->profile,
+	    NULL, &needed);
+	if (status != MANT_LINK_TARGET_OK)
+		return status;
+	if (needed == 0 || needed > capacity)
+		return MANT_LINK_TARGET_UNSUPPORTED;
+	status = decode_link_target(terminated, session->result->profile,
+	    output, &written);
+	if (status != MANT_LINK_TARGET_OK || written != needed ||
+	    !mant_structured_valid_utf8(output, needed))
+		return MANT_LINK_TARGET_INVALID;
+	*output_length = needed;
+	return MANT_LINK_TARGET_OK;
+}
+
 static enum mant_link_target_copy_status
 copy_link_target(struct structured_session *session,
     struct mant_bytes_view *out, const struct roff_node *node,

@@ -79,6 +79,9 @@ struct mant_annotated_selection_part {
  * declaration role: mdoc_term.c renders Ar/Em alike, so final font is not
  * enough to authenticate a parameter after an Ic/Cm key. */
 #define MANT_ANNOTATED_MARK_HEAD_ARGUMENT (1U << 13)
+/* A ManT-compatible reference, not an upstream explicit link macro. Its
+ * typed destination is revoked unless every final label glyph survives. */
+#define MANT_ANNOTATED_MARK_COMPATIBLE_LINK (1U << 14)
 #define MANT_ANNOTATED_MARK_HEAD_ROLE_MASK (\
     MANT_ANNOTATED_MARK_HEAD_OPTION | \
     MANT_ANNOTATED_MARK_HEAD_ENVIRONMENT | \

@@ -32,6 +32,12 @@ enum mant_link_target_copy_status
 mant_structured_copy_link_target_allow_empty_classified(
     struct structured_session *, struct mant_bytes_view *,
     const struct roff_node *);
+/* Bounded source substring decoder for compatible-reference syntax only.
+ * The collector still requires term_word() byte/glyph and final-surface
+ * survival evidence before making the decoded destination clickable. */
+enum mant_link_target_copy_status mant_structured_decode_link_target_slice(
+    struct structured_session *, const char *, size_t, uint8_t *,
+    size_t, size_t *);
 int mant_structured_copy_deroff_target(struct structured_session *,
     struct mant_bytes_view *, const struct roff_node *);
 /* A visible .Sx macro can have no deroff() destination.  Its caller keeps

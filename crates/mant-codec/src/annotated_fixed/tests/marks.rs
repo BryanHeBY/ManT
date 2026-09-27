@@ -198,6 +198,84 @@ fn styled_native_reference_projects_one_valid_fixed_manual_link() {
 }
 
 #[test]
+fn two_same_node_sphinx_markers_roundtrip_with_distinct_fixed_keys() {
+    // Exact bytes first ran pinned CVS -Ttree/-Tutf8. term.c::term_word()
+    // executes two \% markers within one source node; only the immediately
+    // preceding name(section) glyph ranges become Manual links.
+    let input = b".TH LINKS 1\n.SH DESCRIPTION\na(1) \\%<> and b(2) \\%<>\n";
+    let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Man).unwrap();
+    assert!(validate_document(&document).is_empty());
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        panic!("native output did not become Fixed");
+    };
+    assert_eq!(fixed.links.len(), 2);
+    for (index, (name, section)) in [("a", "1"), ("b", "2")].into_iter().enumerate() {
+        let link = &fixed.links[index];
+        assert_eq!(link.key.get(), u32::try_from(index).unwrap() + 1);
+        assert_eq!(
+            link.target,
+            Some(mant_ir::LinkTarget::Manual {
+                name: name.into(),
+                manual_section: Some(section.into()),
+            })
+        );
+        assert_eq!(
+            fixed.selection_text(&link.label).as_deref(),
+            Some(format!("{name}({section})").as_str())
+        );
+        assert!(link.source.is_none());
+        assert!(link.source_key.is_some());
+    }
+    assert!(fixed.surface.text.contains("a(1) <> and b(2) <>"));
+    let rebuilt: mant_ir::Document =
+        serde_json::from_value(serde_json::to_value(&document).unwrap()).unwrap();
+    assert!(validate_document(&rebuilt).is_empty());
+}
+
+#[test]
+fn unstyled_styled_candidate_disappears_from_fixed_links_without_losing_text() {
+    // Exact input first ran pinned CVS -Ttree/-Tutf8. term_word() resets
+    // BR's first operand to roman before any name glyph; its weak native
+    // candidate must not become a no-href Fixed link or erase visible text.
+    let input = b".TH T 1\n.SH D\n.BR \"\\fRprintf\" (3)\n";
+    let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Man).unwrap();
+    assert!(validate_document(&document).is_empty());
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        panic!("native output did not become Fixed");
+    };
+    assert!(fixed.links.is_empty());
+    assert!(fixed.surface.text.contains("printf(3)"));
+}
+
+#[test]
+fn skipped_compatible_link_does_not_shift_surviving_typed_keys() {
+    // Exact input first ran pinned CVS -Tutf8 -O width=78. The first BR
+    // operand resets the initial font in term_word(); man_term.c::pre_MR()
+    // and the later sourced Sphinx marker retain separate, valid labels.
+    let input = b".TH T 1\n.SH D\n.BR \"\\fRbad\" (1)\n.MR good 2\na(1) \\%<>\n";
+    let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Man).unwrap();
+    assert!(validate_document(&document).is_empty());
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        panic!("native output did not become Fixed");
+    };
+    assert_eq!(fixed.links.len(), 2);
+    assert_eq!(fixed.links[0].key.get(), 1);
+    assert_eq!(fixed.links[1].key.get(), 2);
+    assert_eq!(
+        fixed.selection_text(&fixed.links[0].label).as_deref(),
+        Some("good(2)")
+    );
+    assert_eq!(
+        fixed.selection_text(&fixed.links[1].label).as_deref(),
+        Some("a(1)")
+    );
+    assert!(fixed.surface.text.contains("bad(1) good(2) a(1) <>"));
+    let rebuilt: mant_ir::Document =
+        serde_json::from_value(serde_json::to_value(&document).unwrap()).unwrap();
+    assert!(validate_document(&rebuilt).is_empty());
+}
+
+#[test]
 fn native_owner_role_distinguishes_definition_from_bullet_item() {
     // Exact input first ran pinned CVS -Tutf8 -O width=78. mdoc_term.c::
     // termp_it_pre reads the validated Bl type: tag heads are term labels,

@@ -2,7 +2,107 @@
 #include "mant_mandoc_annotated_internal.h"
 #include "mant_mandoc_structured_session.h"
 
+#include "roff.h"
+
+#include <stdlib.h>
 #include <string.h>
+
+/* A compatible link is a committed optional annotation.  Unlike an
+ * explicit macro, it has no native href to fall back on if a field crop,
+ * overwrite, hard boundary, or font fold removes part of its label.  Check
+ * the final coalesced bytes, not an earlier term_word() or buffer spelling. */
+static int
+compatible_label_survives(struct structured_session *session,
+    const struct mant_annotated_result *result,
+    const struct mant_annotated_display_view *display,
+    const struct mant_annotated_mark *mark)
+{
+	const struct mant_annotated_selection_part *part;
+	const struct mant_annotated_display_run *run;
+	uint64_t expected, offset = 0, index, byte;
+	uint32_t styled_required = mark->token == MAN_BR ?
+	    MANT_ANNOTATED_STYLE_BOLD : mark->token == MAN_IR ?
+	    MANT_ANNOTATED_STYLE_UNDERLINE : 0;
+	uint8_t actual, wanted;
+	int styled_seen = 0;
+
+	if (mark->target_kind != MANT_LINK_MANUAL ||
+	    mark->target_b_present != 1 ||
+	    mark->target_a.ptr == NULL || mark->target_b.ptr == NULL ||
+	    mark->target_b.len > UINT64_MAX - 2 ||
+	    mark->target_a.len > UINT64_MAX - 2 - mark->target_b.len)
+		return 0;
+	expected = mark->target_a.len + mark->target_b.len + 2;
+	if (expected > session->limits->max_content_bytes ||
+	    expected > UINT64_MAX - mark->selection_count ||
+	    !mant_structured_charge(session, &session->builder_operations,
+	    expected + mark->selection_count,
+	    session->limits->max_builder_operations, 8,
+	    MANT_STRUCTURED_STAGE_CHECK))
+		return -1;
+	for (index = 0; index < mark->selection_count; index++) {
+		part = result->selection_parts + mark->selection_first + index;
+		if (part->run == 0 || part->run > display->run_count ||
+		    (index != 0 && part->join_before !=
+		    MANT_ANNOTATED_JOIN_DIRECT_CONTACT))
+			return 0;
+		run = display->runs + part->run - 1;
+		if (part->start_byte > part->end_byte ||
+		    part->end_byte > run->byte_count ||
+		    part->end_byte > display->byte_count ||
+		    run->byte_start > display->byte_count - part->end_byte)
+			return 0;
+		for (byte = part->start_byte; byte < part->end_byte; byte++) {
+			if (offset >= expected)
+				return 0;
+			actual = display->bytes[run->byte_start + byte];
+			wanted = offset < mark->target_a.len ?
+			    mark->target_a.ptr[offset] :
+			    offset == mark->target_a.len ? '(' :
+			    offset < mark->target_a.len + mark->target_b.len + 1 ?
+			    mark->target_b.ptr[offset - mark->target_a.len - 1] : ')';
+			if (actual != wanted)
+				return 0;
+			if (offset < mark->target_a.len &&
+			    (run->label.style & styled_required) != 0)
+				styled_seen = 1;
+			offset++;
+		}
+	}
+	/* A BR/IR operand whose every surviving name glyph was explicitly
+	 * reset to roman has structural evidence but no executed style proof. */
+	return offset == expected ?
+	    (styled_required == 0 || styled_seen ? 1 : 2) : 0;
+}
+
+static void
+revoke_incomplete_compatible_links(struct structured_session *session,
+    struct mant_annotated_result *result,
+    const struct mant_annotated_display_view *display)
+{
+	struct mant_annotated_mark *mark;
+	uint32_t index;
+	int survived;
+
+	for (index = 0; index < result->mark_count; index++) {
+		mark = result->marks + index;
+		if ((mark->flags & MANT_ANNOTATED_MARK_COMPATIBLE_LINK) == 0)
+			continue;
+		survived = compatible_label_survives(session, result, display,
+		    mark);
+		if (survived < 0)
+			return;
+		if (survived == 1)
+			continue;
+		free((void *)mark->target_a.ptr);
+		free((void *)mark->target_b.ptr);
+		memset(&mark->target_a, 0, sizeof(mark->target_a));
+		memset(&mark->target_b, 0, sizeof(mark->target_b));
+		mark->target_kind = mark->target_b_present = 0;
+		if (survived == 0)
+			result->native_link_rejected = 1;
+	}
+}
 
 static int
 count_direct_part(struct structured_session *session,
@@ -215,5 +315,8 @@ mant_annotated_build_selection_parts(struct structured_session *session,
 		memset(result->join_text, ' ', (size_t)join_bytes);
 	}
 	result->join_text_count = join_bytes;
+	revoke_incomplete_compatible_links(session, result, display);
+	if (session->status != MANT_STRUCTURED_OK)
+		return 0;
 	return 1;
 }

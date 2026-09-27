@@ -22,7 +22,8 @@ const MDOC_VA_TOKEN: u32 = 295;
 const MDOC_AR_TOKEN: u32 = 273;
 const HEAD_ROLE_MASK: u32 =
     32 | 64 | 128 | 256 | HEAD_VARIABLE | HEAD_DEFINED_VARIABLE | HEAD_ARGUMENT;
-const ALLOWED_MARK_FLAGS: u32 = 1 | 4 | 8 | 16 | 512 | 1024 | HEAD_ROLE_MASK;
+const COMPATIBLE_LINK: u32 = 1 << 14;
+const ALLOWED_MARK_FLAGS: u32 = 1 | 4 | 8 | 16 | 512 | 1024 | COMPATIBLE_LINK | HEAD_ROLE_MASK;
 
 #[allow(clippy::too_many_lines)] // Mirrors the checked one-copy wire transfer.
 pub(super) fn transfer(
@@ -310,6 +311,7 @@ pub(super) fn transfer(
             || mark.point_reserved != 0
             || mark.flags & !ALLOWED_MARK_FLAGS != 0
             || (mark.flags & 512 != 0 && mark.kind != 2)
+            || (mark.flags & COMPATIBLE_LINK != 0 && mark.kind != 3)
             || (mark.flags & 4 != 0 && mark.kind != 4)
             || (mark.flags & 8 != 0 && mark.kind != 1)
             || (mark.flags & 16 != 0 && mark.kind != 2)

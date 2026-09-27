@@ -88,6 +88,12 @@ struct annotated_cell {
 	uint32_t mark;
 };
 
+struct annotated_compatible_candidate {
+	size_t first_byte;
+	size_t end_byte;
+	uint32_t key;
+};
+
 struct mant_annotated_collector {
 	struct structured_session *session;
 	struct mant_annotated_display *display;
@@ -116,6 +122,10 @@ struct mant_annotated_collector {
 	/* Borrowed only between synchronous WORD ENTER and LEAVE callbacks. */
 	const char *active_word;
 	size_t active_word_length;
+	struct annotated_compatible_candidate *compatible_candidates;
+	uint32_t compatible_count;
+	uint32_t compatible_capacity;
+	uint32_t compatible_cursor;
 	uint64_t active_link_epoch;
 	uint64_t phrase_epoch;
 	uint32_t active_heading;
@@ -182,6 +192,20 @@ uint32_t mant_annotated_marks_visible_link(
     enum term_collector_reason);
 uint32_t mant_annotated_marks_source_key(const struct roff_node *);
 uint32_t mant_annotated_marks_margin(struct mant_annotated_collector *);
+uint32_t mant_annotated_marks_add_compatible(struct mant_annotated_collector *,
+    const struct roff_node *, const char *, size_t, const char *, size_t);
+
+/* Compatible-reference state exists only for one synchronous word.  The
+ * buffer remains the sole writer of slot link keys and final glyph labels. */
+int mant_annotated_refs_word_enter(struct mant_annotated_collector *,
+    const struct term_collector_event *);
+void mant_annotated_refs_word_leave(struct mant_annotated_collector *);
+void mant_annotated_refs_word_reject(struct mant_annotated_collector *);
+uint32_t mant_annotated_refs_word_link(
+    struct mant_annotated_collector *,
+    const struct term_collector_event *);
+int mant_annotated_refs_literal_topic(const char *, size_t);
+int mant_annotated_refs_literal_section(const char *, size_t);
 
 /* Parsed-head and reading-neighbor facts are candidates, not entry names. */
 int mant_annotated_decl_reading_sibling_gap(const struct roff_node *);

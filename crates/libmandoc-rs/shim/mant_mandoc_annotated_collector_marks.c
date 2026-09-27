@@ -346,28 +346,6 @@ add_mark(struct mant_annotated_collector *collector,
 			mark->target_kind = second == NULL ?
 			    MANT_LINK_DOCUMENT : MANT_LINK_MANUAL;
 			break;
-		case MAN_BR:
-		case MAN_IR:
-			/* This narrow structural candidate has already been checked
-			 * before mark allocation.  The first two actual pre_alternate()
-			 * operands spell one complete visible reference. */
-			first = node->child;
-			second = first->next;
-			mark->target_kind = MANT_LINK_MANUAL;
-			mark->target_b_present = 1;
-			mark->target_a.len = strlen(first->string);
-			mark->target_a.ptr = mant_structured_copy_bytes(
-			    collector->session, (const uint8_t *)first->string,
-			    mark->target_a.len, 1, MANT_STRUCTURED_STAGE_RENDER);
-			if (mark->target_a.ptr == NULL)
-				return 0;
-			mark->target_b.len = strlen(second->string) - 2;
-			mark->target_b.ptr = mant_structured_copy_bytes(
-			    collector->session, (const uint8_t *)second->string + 1,
-			    mark->target_b.len, 1, MANT_STRUCTURED_STAGE_RENDER);
-			if (mark->target_b.ptr == NULL)
-				return 0;
-			break;
 		case MDOC_Lk:
 			mark->target_kind = MANT_LINK_EXTERNAL;
 			first = node->child;
@@ -404,8 +382,7 @@ add_mark(struct mant_annotated_collector *collector,
 		if (node->tok != MDOC_Sx && first == NULL) {
 			mark->target_kind = 0;
 		}
-		if (mark->target_kind != 0 && first != NULL &&
-		    node->tok != MAN_BR && node->tok != MAN_IR) {
+		if (mark->target_kind != 0 && first != NULL) {
 			target_status =
 			    mant_structured_copy_link_target_allow_empty_classified(
 			    collector->session, &mark->target_a, first);
@@ -414,8 +391,7 @@ add_mark(struct mant_annotated_collector *collector,
 			if (target_status != MANT_LINK_TARGET_OK)
 				goto unsupported_target;
 		}
-		if (second != NULL && node->tok != MAN_BR &&
-		    node->tok != MAN_IR) {
+		if (second != NULL) {
 			mark->target_b_present = 1;
 			target_status =
 			    mant_structured_copy_link_target_allow_empty_classified(
@@ -464,6 +440,48 @@ unsupported_target:
 		    MANT_STRUCTURED_UNSUPPORTED, MANT_STRUCTURED_STAGE_RENDER,
 		    0, 0, 0);
 	return 0;
+}
+
+uint32_t
+mant_annotated_marks_add_compatible(struct mant_annotated_collector *collector,
+    const struct roff_node *node, const char *name, size_t name_length,
+    const char *section, size_t section_length)
+{
+	struct mant_annotated_mark *mark;
+	uint32_t key;
+
+	if (node == NULL || name == NULL || section == NULL ||
+	    name_length == 0 || section_length == 0) {
+		mant_annotated_fail_relation(collector, name_length, section_length);
+		return 0;
+	}
+	key = add_mark(collector, node, node,
+	    MANT_ANNOTATED_MARK_LINK, 0, 0, NULL);
+	if (key == 0)
+		return 0;
+	mark = collector->marks + key - 1;
+	mark->flags |= MANT_ANNOTATED_MARK_COMPATIBLE_LINK;
+	/* A text node's source position begins at the node, not necessarily at
+	 * this candidate's byte range after roff expansion. Keep SourceKey, but
+	 * never fabricate an authored SourceSpan for a later substring. The BR/IR
+	 * macro's own authored location, in contrast, is an exact declaration. */
+	if (node->type == ROFFT_TEXT) {
+		mark->line = mark->column = 0;
+		mark->flags &= ~MANT_ANNOTATED_MARK_AUTHORED;
+	}
+	mark->target_kind = MANT_LINK_MANUAL;
+	mark->target_b_present = 1;
+	mark->target_a.len = name_length;
+	mark->target_a.ptr = mant_structured_copy_bytes(collector->session,
+	    (const uint8_t *)name, name_length, 1,
+	    MANT_STRUCTURED_STAGE_RENDER);
+	if (mark->target_a.ptr == NULL)
+		return 0;
+	mark->target_b.len = section_length;
+	mark->target_b.ptr = mant_structured_copy_bytes(collector->session,
+	    (const uint8_t *)section, section_length, 1,
+	    MANT_STRUCTURED_STAGE_RENDER);
+	return mark->target_b.ptr == NULL ? 0 : key;
 }
 
 static int
@@ -678,22 +696,15 @@ copy_owner_head_operand(struct mant_annotated_collector *collector,
 /* Pinned man_term.c::pre_alternate() executes each direct text operand in
  * order, with no auto-space between them.  This is a narrow source-backed
  * candidate, not a scan of bold glyphs or final terminal text.  The section
- * and topic bounds mirror the conservative inferred-reference contract;
- * more complex escaped spellings must wait for checked word-range mapping. */
-static int
-ascii_alnum(unsigned char value)
-{
-	return (value >= 'A' && value <= 'Z') ||
-	    (value >= 'a' && value <= 'z') ||
-	    (value >= '0' && value <= '9');
-}
-
+ * and topic bounds use the same literal grammar as Sphinx candidates;
+ * more complex escaped spellings require checked word-range mapping. */
 static int
 styled_manual_candidate(struct mant_annotated_collector *collector,
-    const struct roff_node *node)
+    const struct roff_node *node, uint8_t *decoded, size_t *decoded_length,
+    const char **section_value, size_t *section_value_length)
 {
 	const struct roff_node *name, *section, *punct;
-	const char *value;
+	enum mant_link_target_copy_status status;
 	size_t name_length, section_length;
 
 	if (node->type != ROFFT_ELEM ||
@@ -716,7 +727,7 @@ styled_manual_candidate(struct mant_annotated_collector *collector,
 	    strchr(".,;:", punct->string[0]) == NULL)))
 		return 0;
 	name_length = 0;
-	while (name_length <= 256 && name->string[name_length] != '\0')
+	while (name_length <= 1024 && name->string[name_length] != '\0')
 		name_length++;
 	section_length = 0;
 	while (section_length <= 18 &&
@@ -725,25 +736,25 @@ styled_manual_candidate(struct mant_annotated_collector *collector,
 	if (!mant_annotated_charge_work(collector,
 	    name_length + section_length + 1))
 		return -1;
-	if (name_length == 0 || name_length > 256 ||
+	if (name_length == 0 || name_length > 1024 ||
 	    section_length < 3 || section_length > 18 ||
-	    !ascii_alnum((unsigned char)name->string[0]) ||
 	    section->string[0] != '(' ||
 	    section->string[section_length - 1] != ')')
 		return 0;
-	for (value = name->string; *value != '\0'; value++)
-		if (!ascii_alnum((unsigned char)*value) &&
-		    strchr("._+:-", *value) == NULL)
-			return 0;
-	value = section->string + 1;
-	if (*value == '0' || (*value != 'l' && *value != 'n' &&
-	    (*value < '0' || *value > '9')))
+	if (!mant_annotated_refs_literal_section(section->string + 1,
+	    section_length - 2))
 		return 0;
-	if (*value == 'l' || *value == 'n')
-		return section_length == 3;
-	for (; value < section->string + section_length - 1; value++)
-		if (!ascii_alnum((unsigned char)*value))
-			return 0;
+	status = mant_structured_decode_link_target_slice(
+	    collector->session, name->string, name_length, decoded, 256,
+	    decoded_length);
+	if (status == MANT_LINK_TARGET_FAILED)
+		return -1;
+	if (status != MANT_LINK_TARGET_OK ||
+	    !mant_annotated_refs_literal_topic((const char *)decoded,
+	    *decoded_length))
+		return 0;
+	*section_value = section->string + 1;
+	*section_value_length = section_length - 2;
 	return 1;
 }
 
@@ -754,6 +765,9 @@ push_node(struct mant_annotated_collector *collector,
 	struct annotated_frame *frames, *frame;
 	struct mant_annotated_mark *parent_mark;
 	const struct roff_node *hanging_rs;
+	const char *styled_section = NULL;
+	uint8_t styled_name[256];
+	size_t styled_name_length = 0, styled_section_length = 0;
 	uint32_t key, region_kind, parent;
 	int hanging_mode, styled_candidate;
 
@@ -1099,7 +1113,9 @@ push_node(struct mant_annotated_collector *collector,
 		}
 	}
 
-	styled_candidate = styled_manual_candidate(collector, node);
+	styled_candidate = styled_manual_candidate(collector, node,
+	    styled_name, &styled_name_length, &styled_section,
+	    &styled_section_length);
 	if (styled_candidate < 0)
 		return 0;
 	if ((node->type == ROFFT_BLOCK || node->type == ROFFT_ELEM) &&
@@ -1121,8 +1137,9 @@ push_node(struct mant_annotated_collector *collector,
 		collector->active_link_node = node;
 		collector->active_link_epoch = collector->phrase_epoch;
 	} else if (styled_candidate) {
-		key = add_mark(collector, node, node,
-		    MANT_ANNOTATED_MARK_LINK, 0, 0, NULL);
+		key = mant_annotated_marks_add_compatible(collector, node,
+		    (const char *)styled_name, styled_name_length,
+		    styled_section, styled_section_length);
 		if (key == 0)
 			return 0;
 		collector->active_link = key;

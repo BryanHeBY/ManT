@@ -607,7 +607,7 @@ record_field_skip(struct mant_annotated_collector *collector,
 static void
 reject_word_evidence(struct mant_annotated_collector *collector)
 {
-	collector->link_annotation_rejected = 1;
+	mant_annotated_refs_word_reject(collector);
 	collector->active_word = NULL;
 	collector->active_word_length = 0;
 }
@@ -631,6 +631,7 @@ mant_annotated_collector_observe(struct termp *p, void *argument,
 	    event->phase == TERM_COLLECT_LEAVE &&
 	    (collector->session->status != MANT_STRUCTURED_OK ||
 	    mant_mandoc_output_active_failed())) {
+		mant_annotated_refs_word_leave(collector);
 		collector->active_word = NULL;
 		collector->active_word_length = 0;
 		return;
@@ -647,10 +648,13 @@ mant_annotated_collector_observe(struct termp *p, void *argument,
 		    event->word_start == 0) {
 			collector->active_word = event->word;
 			collector->active_word_length = event->word_end;
+			if (!mant_annotated_refs_word_enter(collector, event))
+				return;
 		} else if (event->phase == TERM_COLLECT_LEAVE &&
 		    collector->active_word == event->word &&
 		    event->word_start <= event->word_end &&
 		    event->word_end <= collector->active_word_length) {
+			mant_annotated_refs_word_leave(collector);
 			collector->active_word = NULL;
 			collector->active_word_length = 0;
 		} else
@@ -767,6 +771,11 @@ mant_annotated_collector_observe(struct termp *p, void *argument,
 		}
 		collector->pending_link = mant_annotated_marks_visible_link(collector,
 		    event->node, event->reason);
+		if (collector->pending_link == 0 && event->word != NULL &&
+		    event->word == collector->active_word &&
+		    event->reason != TERM_COLLECT_AUTO_SPACE)
+			collector->pending_link =
+			    mant_annotated_refs_word_link(collector, event);
 		collector->pending_source = mant_annotated_marks_source_key(event->node);
 		if (collector->active_cell != NULL &&
 		    collector->pending_source == 0)

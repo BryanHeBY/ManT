@@ -147,6 +147,7 @@ mant_annotated_collector_free(struct mant_annotated_collector *collector)
 		return;
 	mant_annotated_buffer_release(collector);
 	mant_annotated_marks_free(collector->marks, collector->mark_count);
+	free(collector->compatible_candidates);
 	free(collector->cells);
 	free(collector->frames);
 	free(collector);

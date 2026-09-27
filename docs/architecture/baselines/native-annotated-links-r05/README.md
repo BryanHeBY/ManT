@@ -193,6 +193,27 @@ hashes match the frozen baseline; 79 Fixed entry gold queries pass. A small
 same-input paired release probe showed no obvious time/RSS regression; raw
 numbers are retained in `target/r05-styled-manual-measurements.md`.
 
+The next R05b candidate uses the synchronous word-byte hook to admit
+source-marked `name(section) \%<>` text references, including distinct markers
+inside one text node. It checks escaped `.BR`/`.IR` names against surviving
+glyphs and revokes a styled candidate whose name has no surviving style
+evidence. Text-node candidates retain `SourceKey` without inventing a source
+column after expansion. A revoked compatible mark does not consume a Fixed
+typed link key, and the checked native body remains intact. These are scoped
+native/FFI/Fixed IR capabilities, not yet Fixed reference inventory,
+CLI/TUI end-to-end acceptance or closure of L01–L10.
+
+For this worktree candidate, all `libmandoc-rs` and `mant-codec` all-feature
+tests, strict two-package Clippy and 79 Fixed entry gold queries passed.
+Direct-text SHA-256 matched the frozen release baseline on GCC, Git, Clang
+and rclone. The release binary SHA-256 was
+`c50f1ce1b772d6d1d095fec7493e8c53dfa4fda7dfdbfe9f3e6367a222e4549e`.
+Three alternating same-input timing pairs (seconds / peak KiB) were GCC
+baseline `.42/.40/.40`, candidate `.38/.38/.38`, and rclone baseline
+`.74/.73/.74`, candidate `.70/.70/.70`; RSS stayed near 58 MiB for GCC and
+144 MiB for rclone in both. This small probe is not the final R05 performance
+gate or a claim of a statistically established speedup.
+
 Mapping is monotone per executed input and bounded by actual input, active
 candidates and emitted glyphs. UTF-8 boundaries, execution identity,
 ordering and final selection containment are checked. A completely
