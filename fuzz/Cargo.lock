@@ -279,17 +279,14 @@ dependencies = [
 name = "mant-loader"
 version = "0.12.0"
 dependencies = [
- "flate2",
  "grep-matcher",
  "grep-regex",
  "libc",
- "libmandoc-rs",
  "mant-codec",
  "mant-ir",
  "mant-protocol",
  "mant-sources",
  "serde_json",
- "zstd",
 ]
 
 [[package]]

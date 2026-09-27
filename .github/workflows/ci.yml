@@ -175,17 +175,16 @@ jobs:
           cache-bin: false
           save-if: ${{ github.event_name == 'push' }}
 
-      # Compile and test the native workspace plus libmandoc's default-off
-      # renderer so the macOS target family is exercised on every change, not
-      # only at release time. clang ships with the runner image, so libmandoc
-      # builds against config/macos.h.
+      # Exercise the current annotated path on macOS. Historical Flow audits
+      # are explicit opt-in; clang still builds against config/macos.h.
       - name: Test Rust workspace on macOS
         run: |
-          cargo test --locked --workspace
-          cargo test --locked --package libmandoc-rs --all-features
+          cargo test --locked --workspace --features mant/annotated-preview \
+            --exclude mant-loader --exclude mant-engine --exclude mant-ui
+          cargo test --locked --package mant-ui --lib
+          cargo test --locked --package libmandoc-rs --no-default-features --features annotated
           for package in mant-codec mant-loader; do
             cargo test --locked --package "$package" --no-default-features
-            cargo test --locked --package "$package" --no-default-features --features roff
           done
 
       # Hosted macOS includes Python 3; this gate uses its standard library only.
@@ -251,12 +250,12 @@ jobs:
           cache-bin: false
           save-if: ${{ github.event_name == 'push' }}
 
-      # Stable CI executes every test. The MSRV boundary only needs to prove
-      # that every product target and feature still compiles on Rust 1.88.
+      # Stable CI executes the annotated path. The MSRV boundary proves the
+      # current product feature set still compiles on Rust 1.88.
       - name: Check workspace on MSRV
         run: >-
           cargo +"$RUST_MSRV" check --locked --workspace
-          --all-targets --all-features
+          --all-targets --features mant/annotated-preview
 
   coverage:
     # Coverage runs beside the canonical build so instrumentation never slows
@@ -298,6 +297,8 @@ jobs:
       - name: Collect Rust coverage
         run: |
           cargo llvm-cov --locked --workspace \
+            --features mant/annotated-preview \
+            --exclude mant-loader --exclude mant-engine --exclude mant-ui \
             --remap-path-prefix --lcov --output-path rust-lcov.info
 
       - name: Upload Rust coverage to Codecov

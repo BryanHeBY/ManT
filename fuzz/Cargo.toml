@@ -11,10 +11,10 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4.13"
-libmandoc-rs = { path = "../crates/libmandoc-rs", features = ["render"] }
-mant-codec = { path = "../crates/mant-codec", features = ["roff"] }
+libmandoc-rs = { path = "../crates/libmandoc-rs", features = ["annotated"] }
+mant-codec = { path = "../crates/mant-codec", features = ["native-annotated"] }
 mant-ir = { path = "../crates/mant-ir" }
-mant-loader = { path = "../crates/mant-loader", features = ["roff"] }
+mant-loader = { path = "../crates/mant-loader" }
 mant-query = { path = "../crates/mant-query", default-features = false }
 mant-protocol = { path = "../crates/mant-protocol" }
 mant-render = { path = "../crates/mant-render", default-features = false }

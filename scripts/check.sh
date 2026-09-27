@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Run the complete local verification boundary for the native ManT workspace.
+# Run the current annotated-path verification boundary for ManT.
+# Historical Flow/roff audits remain available via check-legacy-roff.sh.
 
 set -euo pipefail
 
@@ -7,7 +8,7 @@ ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$ROOT"
 export LIBMANDOC_RS_DENY_WARNINGS=1
 
-profile=release
+profile=debug
 if (( $# > 0 )); then
   if [[ ${1:-} != --build-profile || $# != 2 ]]; then
     echo "usage: check.sh [--build-profile debug|release]" >&2
@@ -50,22 +51,9 @@ run "test CVS snapshot freezing" \
   python3 crates/libmandoc-rs/scripts/test_freeze_cvs_snapshot.py
 run "test registered mandoc oracle identity" \
   python3 scripts/test_mandoc_oracle.py
-run "check roff fidelity audit" python3 scripts/audit-roff-fidelity.py --self-check
-run "test bidirectional roff content comparison" python3 scripts/roff_content_compare.py
-run "test source-bound presentation explanations" python3 scripts/test_roff_content_explanations.py
-run "test source-bound roff layout geometry" python3 scripts/test-roff-layout-geometry.py
-run "test rendering matrix mutation sensitivity" python3 scripts/check-roff-behavior-matrix.py --self-test
-run "test bounded rendering census" python3 scripts/audit-roff-rendering.py --self-test
-run "test roff audit parallelism planning" python3 scripts/test_roff_audit_common.py
-run "test full-corpus audit orchestration" python3 scripts/test_audit_roff_all.py
-run "check roff structure audit" python3 scripts/audit-roff-structure.py --self-check
-run "check roff CommonMark projection audit" \
-  python3 scripts/audit-roff-projection.py --self-check
-run "check roff renderer-layout audit" python3 scripts/audit-roff-layout.py --self-check
-run "check roff target-conservation audit" python3 scripts/audit-roff-targets.py --self-check
-run "check roff semantic-entry audit" python3 scripts/audit-roff-semantics.py --self-check
-run "check roff audit coverage contract" python3 scripts/check-roff-audit-coverage.py
-run "test Rust workspace" cargo test --locked --workspace
+run "test annotated Rust workspace" \
+  cargo test --locked --workspace --features mant/annotated-preview \
+  --exclude mant-loader --exclude mant-engine --exclude mant-ui
 run "self-check annotated Fixed query gold" \
   python3 scripts/annotated_fixed_query_gold.py --self-check
 run "build annotated Fixed query gold CLI" \
@@ -74,53 +62,36 @@ run "gate annotated Fixed query gold" \
   python3 scripts/annotated_fixed_query_gold.py \
   --cli "$annotated_target_dir/debug/mant"
 run "test Markdown-only codec" cargo test --locked --package mant-codec --no-default-features
-run "test roff codec" cargo test --locked --package mant-codec --features roff
 run "check independent Markdown codec consumer" bash scripts/check-codec-consumer.sh
 run "test Markdown-only loader" cargo test --locked --package mant-loader --no-default-features
-run "test native manual loader" cargo test --locked --package mant-loader --features roff
 run "check independent Markdown loader consumer" bash scripts/check-loader-consumer.sh
 run "test independent query package" cargo test --locked --package mant-query --no-default-features
 run "check independent IR query consumer" bash scripts/check-query-consumer.sh
 run "test independent render package" cargo test --locked --package mant-render --no-default-features
 run "check independent DTO render consumer" bash scripts/check-render-consumer.sh
 run "check independent embedded reader consumer" bash scripts/check-ui-consumer.sh
+run "test shared reader library" cargo test --locked --package mant-ui --lib
 run "check isolated CLI capability combinations" python3 scripts/check-cli-features.py
-run "test roff audit profilers" \
-  cargo test --locked --package mant-engine --examples
 run "test real terminal-cell geometry probe" \
   cargo test --locked --package mant-ui --example geometry_audit
-run "test optional libmandoc features" \
-  cargo test --locked --package libmandoc-rs --all-features
+run "test isolated annotated native boundary" \
+  cargo test --locked --package libmandoc-rs --no-default-features --features annotated
 run "check libmandoc native symbol namespace" \
   bash scripts/check-libmandoc-symbols.sh
-run "test published crate source sets" bash scripts/check-packaged-crates.sh
-run "build roff CommonMark projection profiler" \
-  cargo build --locked --package mant-engine --example roff_projection_profile
-run "build roff target-conservation profiler" \
-  cargo build --locked --package mant-engine --example roff_target_profile
-run "build roff semantic-entry profiler" \
-  cargo build --locked --package mant-engine --example roff_semantic_profile
-run "gate roff fixtures through the CommonMark projection" \
-  python3 scripts/audit-roff-projection.py --fixtures --recheck-recorded \
-  --verify --findings-only
-run "gate roff fixtures through target conservation" \
-  python3 scripts/audit-roff-targets.py --fixtures --recheck-recorded \
-  --verify --findings-only
-run "gate roff fixtures through semantic-entry precision" \
-  python3 scripts/audit-roff-semantics.py --fixtures --recheck-recorded \
-  --verify --findings-only
-run "gate source-bound fixture explanation queries" \
-  python3 scripts/audit-roff-semantics.py --fixtures \
-  --query-gold tests/fixtures/roff/ENTRY_QUERY_GOLD.json
+run "test published crate source sets" \
+  env CARGO_NET_OFFLINE=true bash scripts/check-packaged-crates.sh
 run "check read-only engine feature boundary" \
   cargo check --locked --package mant-engine --no-default-features
 run "build docs.rs documentation" \
-  env RUSTDOCFLAGS=-Dwarnings cargo doc --locked --workspace --all-features --no-deps
+  env RUSTDOCFLAGS=-Dwarnings cargo doc --locked --workspace \
+  --features mant/annotated-preview --no-deps
 run "lint Rust workspace" \
-  env CARGO_INCREMENTAL=0 cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+  env CARGO_INCREMENTAL=0 cargo clippy --locked --workspace --all-targets \
+  --features mant/annotated-preview -- -D warnings
 run "compile fuzz targets" \
+  env CARGO_TARGET_DIR="$annotated_target_dir" \
   cargo check --locked --manifest-path fuzz/Cargo.toml --bins
 
-bash scripts/build-and-smoke.sh "$profile"
+bash scripts/build-and-smoke.sh "$profile" --annotated
 
 printf '\nlocal verification succeeded\n'

@@ -3,6 +3,15 @@
 
 set -euo pipefail
 
+legacy=false
+if (( $# > 0 )); then
+  if (( $# != 1 )) || [[ $1 != --legacy ]]; then
+    echo "usage: check-packaged-crates.sh [--legacy]" >&2
+    exit 2
+  fi
+  legacy=true
+fi
+
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 PACKAGES=(mant-ir mant-protocol libmandoc-rs mant-sources mant-codec mant-loader mant-query mant-render mant-engine mant-ui mant)
 mkdir -p "$ROOT/target"
@@ -70,30 +79,41 @@ cp -R "$ROOT/tests/contracts" "$PACKAGE_CHECK_ROOT/tests/"
 # Keep build products in the repository target tree; unrelated third-party
 # dependency artifacts can still be reused.
 export CARGO_TARGET_DIR="$ROOT/target"
-cargo test --manifest-path "$PACKAGE_CHECK_ROOT/Cargo.toml" --locked --workspace
-# Exercise both packaged codec surfaces separately. This checks packaged tests,
-# not native dependency exclusion: that requires an isolated minimal consumer.
-cargo test --manifest-path "$PACKAGE_CHECK_ROOT/Cargo.toml" --locked \
-  --package mant-codec --no-default-features
-cargo test --manifest-path "$PACKAGE_CHECK_ROOT/Cargo.toml" --locked \
-  --package mant-codec --no-default-features --features roff
-cargo test --manifest-path "$PACKAGE_CHECK_ROOT/Cargo.toml" --locked \
-  --package mant-codec --no-default-features --features native-annotated
-cargo test --manifest-path "$PACKAGE_CHECK_ROOT/Cargo.toml" --locked \
-  --package mant-loader --no-default-features
-cargo test --manifest-path "$PACKAGE_CHECK_ROOT/Cargo.toml" --locked \
-  --package mant-loader --no-default-features --features roff
-cargo test --manifest-path "$PACKAGE_CHECK_ROOT/Cargo.toml" --locked \
-  --package mant-query --no-default-features
-cargo test --manifest-path "$PACKAGE_CHECK_ROOT/Cargo.toml" --locked \
-  --package mant-render --no-default-features
-# Keep the executable's minimal unit surface independent of the workspace's
-# default full-product feature unification, using the same packaged sources.
-cargo test --manifest-path "$PACKAGE_CHECK_ROOT/Cargo.toml" --locked \
-  --package mant --no-default-features --lib
-cargo test --manifest-path "$PACKAGE_CHECK_ROOT/Cargo.toml" --locked \
-  --package mant --features annotated-preview --lib
-cargo test --manifest-path "$PACKAGE_CHECK_ROOT/Cargo.toml" --locked \
-  --package libmandoc-rs --all-features
+if $legacy; then
+  # Archived full package matrix. Use only while changing the old Flow route.
+  cargo test --manifest-path "$PACKAGE_CHECK_ROOT/Cargo.toml" --locked --workspace
+  cargo test --manifest-path "$PACKAGE_CHECK_ROOT/Cargo.toml" --locked \
+    --package mant-codec --no-default-features
+  cargo test --manifest-path "$PACKAGE_CHECK_ROOT/Cargo.toml" --locked \
+    --package mant-codec --no-default-features --features roff
+  cargo test --manifest-path "$PACKAGE_CHECK_ROOT/Cargo.toml" --locked \
+    --package mant-codec --no-default-features --features native-annotated
+  cargo test --manifest-path "$PACKAGE_CHECK_ROOT/Cargo.toml" --locked \
+    --package mant-loader --no-default-features
+  cargo test --manifest-path "$PACKAGE_CHECK_ROOT/Cargo.toml" --locked \
+    --package mant-loader --no-default-features --features roff
+  cargo test --manifest-path "$PACKAGE_CHECK_ROOT/Cargo.toml" --locked \
+    --package mant-query --no-default-features
+  cargo test --manifest-path "$PACKAGE_CHECK_ROOT/Cargo.toml" --locked \
+    --package mant-render --no-default-features
+  cargo test --manifest-path "$PACKAGE_CHECK_ROOT/Cargo.toml" --locked \
+    --package mant --no-default-features --lib
+  cargo test --manifest-path "$PACKAGE_CHECK_ROOT/Cargo.toml" --locked \
+    --package mant --features annotated-preview --lib
+  cargo test --manifest-path "$PACKAGE_CHECK_ROOT/Cargo.toml" --locked \
+    --package libmandoc-rs --all-features
+else
+  # Compile every published source set, including its test and example
+  # targets, once. Run the real native -> Fixed -> CLI path from extracted
+  # sources without relinking and executing the retired Flow test matrix.
+  cargo check --manifest-path "$PACKAGE_CHECK_ROOT/Cargo.toml" --locked \
+    --workspace --all-targets --features mant/annotated-preview
+  cargo test --manifest-path "$PACKAGE_CHECK_ROOT/Cargo.toml" --locked \
+    --package libmandoc-rs --no-default-features --features annotated annotated::
+  cargo test --manifest-path "$PACKAGE_CHECK_ROOT/Cargo.toml" --locked \
+    --package mant-codec --features native-annotated annotated_fixed::
+  cargo test --manifest-path "$PACKAGE_CHECK_ROOT/Cargo.toml" --locked \
+    --package mant --features annotated-preview --lib annotated_preview_
+fi
 
 printf 'packaged crate verification succeeded\n'

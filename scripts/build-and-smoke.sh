@@ -8,6 +8,11 @@ cd "$ROOT"
 export LIBMANDOC_RS_DENY_WARNINGS=1
 
 profile=${1:-release}
+mode=${2:-}
+if (( $# > 2 )) || [[ -n $mode && $mode != --annotated ]]; then
+  echo "usage: build-and-smoke.sh [debug|release] [--annotated]" >&2
+  exit 2
+fi
 case "$profile" in
   debug)
     cargo_args=(build --locked --package mant)
@@ -18,10 +23,13 @@ case "$profile" in
     output_dir=release
     ;;
   *)
-    echo "usage: build-and-smoke.sh [debug|release]" >&2
+    echo "usage: build-and-smoke.sh [debug|release] [--annotated]" >&2
     exit 2
     ;;
 esac
+if [[ $mode == --annotated ]]; then
+  cargo_args+=(--features annotated-preview)
+fi
 
 printf '\n==> build %s executable\n' "$profile"
 printf '$'
@@ -46,6 +54,16 @@ grep -Fq -- '--display' <<<"$help"
 query=$("$mant" --input README.md --format json --compact)
 grep -Fq '"schema":"mant.query/v0.12"' <<<"$query"
 grep -Fq '"schema":"mant.document/v0.12"' <<<"$query"
+
+if [[ $mode == --annotated ]]; then
+  # Pinned CVS man_term.c::pre_TP prints the tag HEAD and then its BODY.
+  # This exact fixture was rendered with the pinned CVS reference before
+  # asserting its body witness in the annotated product process.
+  fixture="$ROOT/tests/fixtures/roff/annotated-fixed-mentions.1"
+  body=$("$mant" --annotated-preview --input "$fixture" --input-format roff \
+    --format text --display direct --color never)
+  grep -Fq 'own --foo body' <<<"$body"
+fi
 
 printf '\nproduct build succeeded\n'
 printf '  executable: %s\n' "$mant"

@@ -2,7 +2,8 @@
 
 param(
     [ValidateSet("debug", "release")]
-    [string]$BuildProfile = "release"
+    [string]$BuildProfile = "release",
+    [switch]$Annotated
 )
 
 $ErrorActionPreference = "Stop"
@@ -19,6 +20,9 @@ $env:LIBMANDOC_RS_DENY_WARNINGS = "1"
 $CargoArguments = @("build", "--locked", "--package", "mant")
 if ($BuildProfile -eq "release") {
     $CargoArguments = @("build", "--locked", "--release", "--package", "mant")
+}
+if ($Annotated) {
+    $CargoArguments += @("--features", "annotated-preview")
 }
 
 Write-Host "`n==> build $BuildProfile executable"
@@ -45,6 +49,15 @@ if (
     $Query -notmatch '"schema":"mant.document/v0.12"'
 ) {
     throw "$BuildProfile Markdown query smoke test failed"
+}
+if ($Annotated) {
+    # Pinned CVS man_term.c::pre_TP prints this exact fixture's HEAD/BODY.
+    $Fixture = Join-Path $Root "tests/fixtures/roff/annotated-fixed-mentions.1"
+    $Body = (& $Mant --annotated-preview --input $Fixture --input-format roff `
+        --format text --display direct --color never) -join "`n"
+    if ($LASTEXITCODE -ne 0 -or -not $Body.Contains("own --foo body")) {
+        throw "$BuildProfile annotated roff smoke test failed"
+    }
 }
 
 Write-Host "`nproduct build succeeded"

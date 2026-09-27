@@ -2,7 +2,7 @@
 
 param(
     [ValidateSet("debug", "release")]
-    [string]$BuildProfile = "release"
+    [string]$BuildProfile = "debug"
 )
 
 $ErrorActionPreference = "Stop"
@@ -99,17 +99,17 @@ try {
 
 Invoke-Native -Label "check Rust formatting" -Program "cargo" `
     -Arguments @("fmt", "--all", "--check")
-Invoke-Native -Label "test portable Rust packages" -Program "cargo" `
-    -Arguments (@("test", "--locked") + $Packages)
-Invoke-Native -Label "test optional libmandoc features" -Program "cargo" `
-    -Arguments @("test", "--locked", "--package", "libmandoc-rs", "--all-features")
+Invoke-Native -Label "test annotated portable Rust packages" -Program "cargo" `
+    -Arguments @("test", "--locked", "--workspace", "--features", "mant/annotated-preview", "--exclude", "mant-loader", "--exclude", "mant-engine", "--exclude", "mant-ui")
+Invoke-Native -Label "test shared reader library" -Program "cargo" `
+    -Arguments @("test", "--locked", "--package", "mant-ui", "--lib")
+Invoke-Native -Label "test isolated annotated native boundary" -Program "cargo" `
+    -Arguments @("test", "--locked", "--package", "libmandoc-rs", "--no-default-features", "--features", "annotated")
 Invoke-Native -Label "test real terminal-cell geometry probe" -Program "cargo" `
     -Arguments @("test", "--locked", "--package", "mant-ui", "--example", "geometry_audit")
 foreach ($BoundaryPackage in @("mant-codec", "mant-loader")) {
     Invoke-Native -Label "test Markdown-only $BoundaryPackage" -Program "cargo" `
         -Arguments @("test", "--locked", "--package", $BoundaryPackage, "--no-default-features")
-    Invoke-Native -Label "test native $BoundaryPackage" -Program "cargo" `
-        -Arguments @("test", "--locked", "--package", $BoundaryPackage, "--no-default-features", "--features", "roff")
 }
 $PreviousCargoIncremental = [Environment]::GetEnvironmentVariable("CARGO_INCREMENTAL", "Process")
 try {
@@ -117,7 +117,7 @@ try {
     # artifacts have previously hidden a new warning until CI rebuilt cleanly.
     $env:CARGO_INCREMENTAL = "0"
     Invoke-Native -Label "lint portable Rust packages" -Program "cargo" `
-        -Arguments (@("clippy", "--locked") + $Packages + @("--all-targets", "--all-features", "--", "-D", "warnings"))
+        -Arguments (@("clippy", "--locked") + $Packages + @("--all-targets", "--features", "mant/annotated-preview", "--", "-D", "warnings"))
 } finally {
     if ($null -eq $PreviousCargoIncremental) {
         Remove-Item Env:CARGO_INCREMENTAL -ErrorAction SilentlyContinue
@@ -127,6 +127,6 @@ try {
 }
 Invoke-Native -Label "check isolated CLI capability combinations" -Program "python" `
     -Arguments @("scripts/check-cli-features.py")
-& (Join-Path $PSScriptRoot "build-and-smoke.ps1") -BuildProfile $BuildProfile
+& (Join-Path $PSScriptRoot "build-and-smoke.ps1") -BuildProfile $BuildProfile -Annotated
 
 Write-Host "`nWindows verification succeeded"

@@ -100,10 +100,21 @@ cargo run --locked -p mant -- git
 cargo run --locked -p mant -- --input README.md
 ```
 
-Run the complete local verification boundary before handing off a change:
+Run the current annotated-path verification boundary before handing off a change:
 
 ```sh
 bash scripts/check.sh
+```
+
+This defaults to a debug product build. Use `--build-profile release` when
+checking an optimized release candidate. The gate runs the real
+`annotated-preview` native → Fixed → query/display path, its source-bound query
+gold, and extracted-crate source checks. It does not make annotated the normal
+product loader yet. Historical Flow/roff audits are retained as an explicit
+maintenance command, not a second per-change gate:
+
+```sh
+bash scripts/check-legacy-roff.sh
 ```
 
 On Windows, run the native product boundary from PowerShell:
@@ -112,30 +123,32 @@ On Windows, run the native product boundary from PowerShell:
 .\scripts\check-windows.ps1
 ```
 
-It tests `libmandoc-rs`, `mant-ir`, `mant-protocol`, `mant-sources`, `mant-codec`, `mant-loader`, `mant-query`, `mant-render`, `mant-engine`, `mant-ui`, and `mant`,
-including the shared roff fixture suites.
+It compiles all eleven publishable crates. Its workspace test run excludes
+the old-route-only `mant-loader` and `mant-engine` suites and legacy real-page
+UI integrations; Markdown-only loader, shared UI library, and the annotated
+native, codec, CLI and consumer boundaries still run.
 
 The product crates are workspace `default-members`, so a bare `cargo build`,
 `cargo test`, or `cargo clippy` works on Windows. Both platform verification
 scripts include the standalone `libmandoc-rs` package and native parser tests.
-They also run that package with `--all-features`, as does native macOS CI, so
-its default-off reference renderers and Serde contract execute on every
-supported target without enabling unrelated workspace maintenance features.
+The default platform checks exercise its isolated `annotated` feature; the
+historical `--all-features` native tests remain in the opt-in legacy audit.
 
 The default `mant-codec` feature set is independently checked by
 `scripts/check-codec-consumer.sh`. Its separate consumer workspace exercises
 the public Markdown/tldr/encoding APIs and rejects enabled native, protocol,
 engine or frontend dependencies in its normal/build graph. This is distinct
-from workspace tests, where the product enables the codec's `roff` feature.
-Both packaged codec feature surfaces are tested as well. All consumer build
-products use the repository `target/` directory, not a temporary build directory.
+from workspace tests, where the product enables the codec's annotated feature.
+The extracted package compiles all targets and runs its annotated codec tests;
+the old roff package matrix is opt-in. All consumer build products use the
+repository `target/` directory, not a temporary build directory.
 
 `scripts/check-loader-consumer.sh` independently exercises read-only Markdown
 file loading with `mant-loader`'s default features. Its normal/build dependency
 graph excludes native parsers, compression, source acquisition, engine queries,
-and frontends. The default and `roff` loader surfaces also run as separate test
-and packaged-source checks; workspace feature unification is not evidence for
-the default-only boundary.
+and frontends. The default loader surface runs separately; the extracted
+package compiles its annotated-enabled targets. Workspace feature unification
+is not evidence for the default-only boundary.
 
 `scripts/check-query-consumer.sh` builds an independent consumer that supplies
 its own semantic IR and graph. It exercises single-document queries and borrowed
@@ -143,7 +156,7 @@ collection queries, and rejects enabled loader, renderer, frontend, native and
 update dependencies. This guards against accidentally restoring host authority
 through a query convenience API.
 
-`mant-render` is tested independently and in the packaged-source workspace.
+`mant-render` is tested independently and compiled in the packaged-source workspace.
 `scripts/check-render-consumer.sh` exercises authored IR/DTO rendering from an
 independent consumer and rejects query, loader, native and terminal dependencies.
 It renders caller-supplied IR and protocol results without executing queries or
@@ -325,7 +338,8 @@ fuzz/                        Standalone cargo-fuzz workspace
 tests/contracts/             Stable JSON contract fixtures consumed by Rust tests
 tests/fixtures/              Fixed Markdown and real roff integration sources
 tests/consumers/codec-markdown/  Independent default-codec consumer and feature resolver
-scripts/check.sh             Canonical local and CI verification sequence
+scripts/check.sh             Canonical annotated-path local and CI gate
+scripts/check-legacy-roff.sh  Opt-in historical Flow/roff audit sequence
 scripts/check-windows.ps1    Native Windows verification sequence
 scripts/check-libmandoc-symbols.sh  Reject downstream-visible unprefixed C symbols
 scripts/check-packaged-crates.sh  Build and test exact published crate source sets

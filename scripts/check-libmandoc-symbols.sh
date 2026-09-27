@@ -6,12 +6,16 @@ set -euo pipefail
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$ROOT"
 
-cargo build --locked --package libmandoc-rs --all-features
-TARGET_DIR=$(cargo metadata --format-version=1 --no-deps \
-  | python3 -c 'import json, sys; print(json.load(sys.stdin)["target_directory"])')
-ARCHIVE=$(find "$TARGET_DIR/debug/build" -type f -name libmant_mandoc.a \
-  -exec ls -t {} + | sed -n '1p')
-[[ -n $ARCHIVE ]] || {
+ARCHIVE=$(cargo build --locked --package libmandoc-rs --features annotated \
+  --message-format=json \
+  | python3 -c 'import json, pathlib, sys
+paths = [pathlib.Path(item["out_dir"]) / "libmant_mandoc.a"
+         for line in sys.stdin if (item := json.loads(line)).get("reason") == "build-script-executed"
+         and pathlib.Path(item["out_dir"]).parent.name.startswith("libmandoc-rs-")]
+if len(paths) != 1:
+    raise SystemExit(f"expected one libmandoc-rs build archive, got {len(paths)}")
+print(paths[0])')
+[[ -f $ARCHIVE ]] || {
   printf 'libmandoc symbol audit failed: native archive not found\n' >&2
   exit 1
 }

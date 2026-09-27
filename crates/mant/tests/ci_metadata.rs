@@ -30,10 +30,10 @@ fn ci_reuses_only_complete_exact_sha_runs_and_avoids_release_rebuilds() {
 
     let unix = include_str!("../../../scripts/check.sh");
     assert!(unix.contains("export LIBMANDOC_RS_DENY_WARNINGS=1"));
-    assert!(unix.contains("bash scripts/build-and-smoke.sh \"$profile\""));
+    assert!(unix.contains("bash scripts/build-and-smoke.sh \"$profile\" --annotated"));
     let windows = include_str!("../../../scripts/check-windows.ps1");
     assert!(windows.contains("$env:LIBMANDOC_RS_DENY_WARNINGS = \"1\""));
-    assert!(windows.contains("build-and-smoke.ps1\") -BuildProfile $BuildProfile"));
+    assert!(windows.contains("build-and-smoke.ps1\") -BuildProfile $BuildProfile -Annotated"));
 
     let verifier = include_str!("../../../scripts/find-successful-ci.sh");
     assert!(verifier.contains(r#"[[ "$run_event" != "push" ]]"#));

@@ -30,7 +30,8 @@ third-party pages are not redistributed by the manifest.
 
 `audit-roff-semantics.py --query-gold ENTRY_QUERY_GOLD.json` uses the existing
 collector via optional profiler probes. The `--fixtures` subset selects only
-the checked-in source root and is included in `scripts/check.sh`. Relocate the
+the checked-in source root and is included in the opt-in
+`scripts/check-legacy-roff.sh`. Relocate the
 external corpus with `--query-root corpus=/path/to/corpus`. Native AST matches
 are coordinate candidates for a reviewer to inspect, not another classifier or
 proof of owner equality. The comparator combines source coordinates with exact

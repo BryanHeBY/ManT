@@ -41,7 +41,7 @@ integrators must act.
 3. Run the complete local verification boundary:
 
    ```sh
-   bash scripts/check.sh
+   bash scripts/check.sh --build-profile release
    cargo deny check
    ```
 
@@ -57,7 +57,14 @@ integrators must act.
    `mant.request/v0.12` and its related identifiers, while a breaking wire change
    must choose a new protocol family regardless of the crate's current semver.
 
-4. Run a broad local roff fidelity audit before freezing the release. Use the
+4. While the normal product roff entrance still uses the old lowering route,
+   run its opt-in historical gate before freezing the release:
+
+   ```sh
+   bash scripts/check-legacy-roff.sh
+   ```
+
+   Then run a broad local roff fidelity audit. Use the
    syntax-priority, source-directed, and recorded-corpus workflows in the
    [development guide](development.md#roff-fidelity-audit), inspect every new
    candidate and hard failure, and promote each confirmed ManT defect to a
@@ -76,10 +83,10 @@ integrators must act.
 
 5. Inspect the publishable file list for all eleven crates. Each package must
    contain its applicable complete license texts and no unexpected fixture or
-   documentation assets. The canonical `scripts/check.sh` path also packages
-   all eleven crates and tests their exact source sets in an isolated temporary
-   workspace, so repository-only fixtures cannot silently break downstream
-   packager tests:
+   documentation assets. The canonical `scripts/check.sh` path packages all
+   eleven crates, compiles their extracted source sets, and runs the packaged
+   annotated path. The historical full package matrix remains available with
+   `bash scripts/check-packaged-crates.sh --legacy`:
 
    ```sh
    for package in mant-ir mant-protocol libmandoc-rs mant-sources mant-codec mant-loader mant-query mant-render mant-engine mant-ui mant; do
@@ -333,7 +340,7 @@ Packaging never builds or tests. It validates the Cargo version, optional tag,
 and native platform identity, then archives the already-built executable:
 
 ```sh
-bash scripts/check.sh
+bash scripts/check.sh --build-profile release
 MANT_RELEASE_TAG=vMAJOR.MINOR.PATCH bash scripts/package-release.sh
 ```
 

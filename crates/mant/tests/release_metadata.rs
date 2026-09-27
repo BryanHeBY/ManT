@@ -470,7 +470,7 @@ fn selected_crates_are_published_in_dependency_order_at_their_own_versions() {
 }
 
 #[test]
-fn packaged_and_windows_checks_include_extracted_package_test_surfaces() {
+fn packaged_and_windows_checks_prioritize_extracted_annotated_sources() {
     let packaged = include_str!("../../../scripts/check-packaged-crates.sh").replace("\r\n", "\n");
     assert!(packaged.contains(
         "PACKAGES=(mant-ir mant-protocol libmandoc-rs mant-sources mant-codec mant-loader mant-query mant-render mant-engine mant-ui mant)"
@@ -514,6 +514,11 @@ fn packaged_and_windows_checks_include_extracted_package_test_surfaces() {
     assert!(packaged.contains("--package mant-render --no-default-features\n"));
     assert!(packaged.contains("--package mant --no-default-features --lib\n"));
     assert!(packaged.contains("--package mant --features annotated-preview --lib\n"));
+    assert!(packaged.contains("if $legacy; then"));
+    assert!(packaged.contains("--workspace --all-targets --features mant/annotated-preview"));
+    assert!(packaged.contains("--features annotated annotated::"));
+    assert!(packaged.contains("--features native-annotated annotated_fixed::"));
+    assert!(packaged.contains("--features annotated-preview --lib annotated_preview_"));
 
     let windows = include_str!("../../../scripts/check-windows.ps1");
     assert!(windows.contains("\"--package\", \"mant-codec\""));
@@ -521,8 +526,9 @@ fn packaged_and_windows_checks_include_extracted_package_test_surfaces() {
     assert!(windows.contains("\"--package\", \"mant-query\""));
     assert!(windows.contains("\"--package\", \"mant-render\""));
     assert!(windows.contains("foreach ($BoundaryPackage in @(\"mant-codec\", \"mant-loader\"))"));
+    assert!(windows.contains("\"--features\", \"mant/annotated-preview\""));
     assert!(
-        windows.contains("$BoundaryPackage, \"--no-default-features\", \"--features\", \"roff\"")
+        !windows.contains("$BoundaryPackage, \"--no-default-features\", \"--features\", \"roff\"")
     );
 
     let check = include_str!("../../../scripts/check.sh");
@@ -530,6 +536,33 @@ fn packaged_and_windows_checks_include_extracted_package_test_surfaces() {
     assert!(check.contains("bash scripts/check-query-consumer.sh"));
     assert!(check.contains("bash scripts/check-render-consumer.sh"));
     assert!(check.contains("bash scripts/check-ui-consumer.sh"));
+}
+
+#[test]
+fn default_roff_gate_uses_annotated_and_keeps_historical_audits_opt_in() {
+    let check = include_str!("../../../scripts/check.sh");
+    let legacy = include_str!("../../../scripts/check-legacy-roff.sh");
+    assert!(check.contains("profile=debug"));
+    assert!(check.contains("--workspace --features mant/annotated-preview"));
+    assert!(check.contains("python3 scripts/annotated_fixed_query_gold.py"));
+    assert!(check.contains("bash scripts/check-packaged-crates.sh"));
+    assert!(check.contains("bash scripts/build-and-smoke.sh \"$profile\" --annotated"));
+    assert!(check.contains("env CARGO_TARGET_DIR=\"$annotated_target_dir\""));
+    for historical in [
+        "audit-roff-projection.py --fixtures",
+        "audit-roff-targets.py --fixtures",
+        "audit-roff-semantics.py --fixtures",
+        "--package mant-engine --examples",
+    ] {
+        assert!(
+            !check.contains(historical),
+            "historical gate in default check: {historical}"
+        );
+        assert!(
+            legacy.contains(historical),
+            "missing opt-in audit: {historical}"
+        );
+    }
 }
 
 #[test]
