@@ -24,7 +24,8 @@ unicode-width.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true
-mant-codec = { path = "../mant-codec", version = "^0.12.0", default-features = false }
+mant-codec = { path = "../mant-codec", version = "^0.12.0", default-features = false, features = ["native-annotated"] }
+libmandoc-rs = { path = "../libmandoc-rs", version = "^0.12.0", features = ["annotated"] }
 mant-engine = { path = "../mant-engine", version = "^0.12.0" }
 mant-loader = { path = "../mant-loader", version = "^0.12.0", features = ["roff"] }
 mant-query = { path = "../mant-query", version = "^0.12.0", default-features = false }

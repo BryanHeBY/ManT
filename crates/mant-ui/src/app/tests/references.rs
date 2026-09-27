@@ -3,6 +3,57 @@ use super::*;
 use std::sync::Arc;
 
 #[test]
+fn native_fixed_reference_sidebar_opens_and_copies_exact_target() {
+    // Pinned CVS man_term.c::pre_alternate() joined these exact operands;
+    // the input was run through the fixed CVS reference before this assertion.
+    let mut sources = libmandoc_rs::SourceBundle::new();
+    sources
+        .insert("x.1", b".TH T 1\n.SH SEE ALSO\n.BR printf (3)\n".to_vec())
+        .unwrap();
+    let document = mant_codec::annotated_fixed::project_annotated_manual(
+        "x.1",
+        &sources,
+        libmandoc_rs::InputFormat::Man,
+    )
+    .unwrap();
+    let bundle = ResolvedContent {
+        label: "x.1".into(),
+        address: None,
+        document: Some(document),
+        tldr: None,
+    };
+    let mut app = App::new(&bundle);
+    let index = app
+        .session
+        .document
+        .navigation()
+        .iter()
+        .position(|node| node.kind == NavKind::Reference)
+        .expect("Fixed reference row");
+    let id = app.session.document.navigation()[index].id.clone();
+    app.selected = index;
+    app.copy_selected_node(CopyFormat::Text);
+    assert!(app.take_copy_request().is_none());
+    app.handle_key(KeyEvent::new(KeyCode::Char('Y'), KeyModifiers::SHIFT));
+    assert!(
+        matches!(app.take_copy_request(), Some(CopyRequest::Reference { text }) if text == "man:printf(3)")
+    );
+    let mut terminal = Terminal::new(TestBackend::new(80, 20)).unwrap();
+    terminal.draw(|frame| app.draw(frame)).unwrap();
+    assert!(app.reveal_anchor(&id));
+    assert!(
+        app.session.rendered_cache[&app.geometry.content.width]
+            .anchor_row(&id)
+            .is_some()
+    );
+    app.open_selected_reference();
+    let request = app.take_open_request().expect("manual open");
+    assert!(
+        matches!(request.document, mant_protocol::DocumentOpenTarget::Address { address: DocumentAddress::Manual { name, manual_section } } if name == "printf" && manual_section == "3")
+    );
+}
+
+#[test]
 fn unqualified_manual_link_preserves_manual_only_intent_for_the_host() {
     let mut bundle = navigation_bundle();
     bundle

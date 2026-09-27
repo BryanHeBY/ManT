@@ -134,6 +134,128 @@ fn native_fixed_marks_drive_navigation_reveal_links_and_copy() {
 }
 
 #[test]
+fn fixed_reference_without_visible_label_does_not_invent_a_reveal_anchor() {
+    let fixed: mant_ir::FixedBody = serde_json::from_value(serde_json::json!({
+        "surface": {"text":"", "rows":[], "runs":[]},
+        "headings":[], "owners":[], "anchors":[], "regions":[],
+        "links":[{
+            "key":1, "section":null, "owner":null,
+            "target":{"kind":"manual","name":"printf","manualSection":"3"},
+            "label":{"parts":[],"joins":[]}, "source":null
+        }]
+    }))
+    .unwrap();
+    assert!(fixed.validate().is_ok());
+    let navigation = super::references::ReferenceNavigation::build_fixed(&fixed);
+    assert!(navigation.fixed_records.is_empty());
+    assert!(navigation.unlocated);
+}
+
+#[test]
+fn sourced_compatible_references_activate_and_copy_only_native_labels() {
+    // Exact input first ran pinned CVS -Tutf8 -O width=78. term.c::term_word()
+    // emits the sourced Sphinx labels and their still-visible <> markers;
+    // man_term.c::pre_alternate() places the separate styled c(3) label.
+    let input = b".TH T 1\n.SH SEE ALSO\na(1) \\%<> and b(2) \\%<>\n.BR c (3)\n";
+    let mut sources = libmandoc_rs::SourceBundle::new();
+    sources.insert("x.1", input.to_vec()).unwrap();
+    let document = mant_codec::annotated_fixed::project_annotated_manual(
+        "x.1",
+        &sources,
+        libmandoc_rs::InputFormat::Man,
+    )
+    .unwrap();
+    let view = DocumentView::new(&ResolvedContent {
+        address: None,
+        label: "x.1".to_owned(),
+        document: Some(document),
+        tldr: None,
+    });
+    let rendered = view.render(80);
+    let reference_nodes = view
+        .navigation()
+        .iter()
+        .filter(|node| node.kind == NavKind::Reference)
+        .collect::<Vec<_>>();
+    assert_eq!(reference_nodes.len(), 3);
+    for (node, (name, section)) in reference_nodes
+        .iter()
+        .zip([("a", "1"), ("b", "2"), ("c", "3")])
+    {
+        assert_eq!(
+            view.reference_uri(&node.id).as_deref(),
+            Some(format!("man:{name}({section})").as_str())
+        );
+        assert!(view.reference_identity(&node.id).is_some());
+        assert!(view.has_reference_location(&node.id));
+        assert!(rendered.anchor_row(&node.id).is_some());
+    }
+    for (name, section) in [("a", "1"), ("b", "2"), ("c", "3")] {
+        let target = LinkTarget::Document {
+            address: mant_ir::DocumentAddress::Manual {
+                name: name.to_owned(),
+                manual_section: section.to_owned(),
+            },
+            fragment: None,
+        };
+        let regions = rendered
+            .links
+            .iter()
+            .filter(|link| view.link_targets.get(&link.identity) == Some(&target))
+            .collect::<Vec<_>>();
+        let first = regions
+            .first()
+            .expect("native compatible link is activatable");
+        let last = regions.last().unwrap();
+        assert_eq!(first.row, last.row);
+        for region in &regions {
+            assert_eq!(
+                view.link_target_at(&rendered, region.row, region.start_column),
+                Some(&target)
+            );
+        }
+        assert_eq!(
+            view.selected_text(
+                &rendered,
+                RenderedSelection {
+                    anchor: TextPosition {
+                        row: first.row,
+                        column: first.start_column,
+                    },
+                    focus: TextPosition {
+                        row: last.row,
+                        column: last.end_column - 1,
+                    },
+                },
+            ),
+            format!("{name}({section})")
+        );
+    }
+    let text = rendered.text.to_string();
+    assert!(text.contains("a(1) <> and b(2) <> c(3)"));
+    let clipped = view.render_with_horizontal_offset(6, 7);
+    let first_target = LinkTarget::Document {
+        address: mant_ir::DocumentAddress::Manual {
+            name: "a".to_owned(),
+            manual_section: "1".to_owned(),
+        },
+        fragment: None,
+    };
+    assert_eq!(view.link_target_at(&clipped, 1, 0), Some(&first_target));
+    assert!(view.link_target_at(&clipped, 1, 3).is_none());
+    assert_eq!(
+        view.selected_text(
+            &clipped,
+            RenderedSelection {
+                anchor: TextPosition { row: 1, column: 0 },
+                focus: TextPosition { row: 1, column: 1 },
+            },
+        ),
+        "1)"
+    );
+}
+
+#[test]
 fn document_view_ignores_malformed_public_fixed_body() {
     // Direct Rust construction bypasses the deserializer's relationship
     // checks; an invalid row must not reach the unchecked native-row reader.

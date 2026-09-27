@@ -117,11 +117,15 @@ impl App {
         let Some(node) = self.session.document.navigation().get(self.selected) else {
             return;
         };
-        let Some(occurrence) = self.session.document.reference_occurrence(&node.id) else {
+        let Some(identity) = self.session.document.reference_identity(&node.id) else {
             self.toggle_selected();
             return;
         };
-        let Some(target) = self.session.document.activation_target(occurrence) else {
+        let Some(target) = self
+            .session
+            .document
+            .activation_target_for_identity(identity)
+        else {
             self.report_notice(
                 "This reference has no registered document context; its target was not opened"
                     .into(),

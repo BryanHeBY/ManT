@@ -589,7 +589,7 @@ impl App {
     fn complete_local_history(&mut self, location: &HistoryLocation, direction: HistoryDirection) {
         if let Some(target) = location.target().id() {
             if matches!(location.target(), LocalTarget::ReferenceOccurrence(_)) {
-                if self.session.document.reference_location(target).is_none() {
+                if !self.session.document.has_reference_location(target) {
                     self.report_notice(
                         "The historical reference location is no longer available".into(),
                     );

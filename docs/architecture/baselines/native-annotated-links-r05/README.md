@@ -74,6 +74,19 @@ It is not a Flow location, a copied body, or by itself a completed reference
 inventory; later response projection can use it to select the correct read
 scope without guessing from terminal columns.
 
+The next R05d candidate projects checked Fixed link marks into a distinct
+`fixedRecords` response array. Its native key, section/owner, first final-run
+byte slice and source evidence remain explicitly Fixed coordinates; it does
+not create a Flow content store. The bounded scan supports document and
+selected section/owner scopes, typed target filters, occurrence paging and
+source-read selectors. Text/JSON/MCP presentations and TUI reference rows
+consume these records or the same validated Fixed surface. The TUI attaches
+reveal anchors to the first surviving label slice and opens/copies the typed
+target. The protocol snapshot, native-to-query and CLI process tests, TUI
+activation/copy tests, strict targeted lint, and 79 Fixed entry gold cases
+passed for this vertical bridge. It does not by itself close the R05 link
+coverage, full resource or release gates.
+
 Pre-change directed tests on the current source passed: native
 `annotated_links.rs` 15/15, codec `annotated_fixed::tests` 169/169, and
 `mant-ui` reference-filtered tests 33/33 (plus one real Git integration

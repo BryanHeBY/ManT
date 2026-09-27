@@ -122,6 +122,7 @@ pub struct DocumentView {
     navigation: Vec<NavNode>,
     anchors: HashMap<String, usize>,
     references: Vec<references::ReferenceRecord>,
+    fixed_references: Vec<references::FixedReferenceRecord>,
     associated_references: HashMap<String, Vec<usize>>,
     reference_badges: HashMap<String, String>,
     references_limited: bool,
@@ -168,7 +169,8 @@ impl DocumentView {
     }
 
     pub(crate) fn associated_reference_choices(&self, owner: &str) -> Vec<(String, String)> {
-        self.associated_references
+        let mut choices: Vec<(String, String)> = self
+            .associated_references
             .get(owner)
             .into_iter()
             .flatten()
@@ -184,7 +186,23 @@ impl DocumentView {
                     ),
                 )
             })
-            .collect()
+            .collect();
+        choices.extend(
+            self.fixed_references
+                .iter()
+                .filter(|record| record.source_owner == owner)
+                .map(|record| {
+                    (
+                        record.id.to_string(),
+                        format!(
+                            "{} → {}",
+                            record.label,
+                            references::target_text(&record.target)
+                        ),
+                    )
+                }),
+        );
+        choices
     }
 
     pub(crate) const fn references_limited(&self) -> bool {
@@ -202,6 +220,31 @@ impl DocumentView {
             .iter()
             .find(|reference| reference.id.as_ref() == id)
             .map(|reference| &reference.target)
+            .or_else(|| {
+                self.fixed_references
+                    .iter()
+                    .find(|reference| reference.id.as_ref() == id)
+                    .map(|reference| &reference.target)
+            })
+    }
+
+    pub(crate) fn has_reference_location(&self, id: &str) -> bool {
+        self.reference_location(id).is_some()
+            || self
+                .fixed_references
+                .iter()
+                .any(|record| record.id.as_ref() == id)
+    }
+
+    pub(crate) fn reference_identity(&self, id: &str) -> Option<LinkIdentity> {
+        self.reference_occurrence(id)
+            .map(LinkIdentity::Content)
+            .or_else(|| {
+                self.fixed_references
+                    .iter()
+                    .find(|record| record.id.as_ref() == id)
+                    .map(|record| LinkIdentity::NativeFixed(record.occurrence))
+            })
     }
 
     pub(crate) fn reference_occurrence(&self, id: &str) -> Option<LinkOccurrenceKey> {
@@ -218,12 +261,6 @@ impl DocumentView {
     pub(crate) fn reference_uri(&self, id: &str) -> Option<String> {
         self.reference_target(id)
             .and_then(mant_ir::LinkTarget::to_uri)
-    }
-
-    pub(crate) fn activation_target(&self, occurrence: LinkOccurrenceKey) -> Option<LinkTarget> {
-        self.link_targets
-            .get(&LinkIdentity::Content(occurrence))
-            .cloned()
     }
 
     pub(crate) fn activation_target_for_identity(
@@ -290,6 +327,7 @@ impl DocumentView {
             references::ReferenceNavigation::build,
         );
         builder.reference_origins = Arc::new(std::mem::take(&mut references.origins));
+        builder.fixed_reference_origins = std::mem::take(&mut references.fixed_origins);
         let source_label = bundle.document.as_ref().map_or("MANUAL", source_kind_label);
         let top_level_count = bundle
             .document
@@ -406,9 +444,10 @@ impl DocumentView {
             navigation: built.navigation,
             anchors: built.content.anchors,
             references: references.records,
+            fixed_references: references.fixed_records,
             associated_references: references.associated,
             reference_badges,
-            references_limited: references.limited,
+            references_limited: references.limited || references.unlocated,
             link_targets: built.link_targets,
             fixed_search_records: built.fixed_search_records,
             fixed_line_rows: built.fixed_line_rows,

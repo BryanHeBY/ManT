@@ -63,6 +63,7 @@ pub(super) struct DocumentBuilder<'a> {
     pub(super) navigation: Vec<NavNode>,
     pub(super) anchors: HashMap<String, usize>,
     pub(super) reference_origins: Arc<super::references::ReferenceOrigins>,
+    pub(super) fixed_reference_origins: HashMap<NonZeroU32, Arc<str>>,
     pub(super) link_targets: HashMap<super::LinkIdentity, LinkTarget>,
     pub(super) fixed_anchor_columns: HashMap<String, usize>,
     fixed_line_rows: HashMap<FixedLineKey, usize>,
@@ -143,6 +144,7 @@ impl<'a> DocumentBuilder<'a> {
             navigation: Vec::new(),
             anchors: HashMap::new(),
             reference_origins: Arc::default(),
+            fixed_reference_origins: HashMap::new(),
             link_targets: HashMap::new(),
             fixed_anchor_columns: HashMap::new(),
             fixed_line_rows: HashMap::new(),
@@ -356,6 +358,22 @@ impl<'a> DocumentBuilder<'a> {
             );
         }
         for link in &fixed.links {
+            if let (Some(id), Some(first)) = (
+                self.fixed_reference_origins.get(&link.key),
+                link.label.parts.first(),
+            ) {
+                insert_fixed_anchor(
+                    &mut self.anchors,
+                    &mut self.fixed_anchor_columns,
+                    fixed,
+                    first_row,
+                    id,
+                    DisplayPoint::RunBoundary {
+                        run: first.run,
+                        byte: first.start_byte,
+                    },
+                );
+            }
             let Some(target) = link
                 .target
                 .as_ref()

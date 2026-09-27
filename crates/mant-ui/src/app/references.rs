@@ -192,8 +192,12 @@ impl App {
             }
             ReferenceAction::Copy(id) => self.queue_reference_copy(&id),
             ReferenceAction::Open(id) => {
-                if let Some(occurrence) = self.session.document.reference_occurrence(&id) {
-                    if let Some(target) = self.session.document.activation_target(occurrence) {
+                if let Some(identity) = self.session.document.reference_identity(&id) {
+                    if let Some(target) = self
+                        .session
+                        .document
+                        .activation_target_for_identity(identity)
+                    {
                         self.activate_link_target(target);
                     } else {
                         self.report_notice(

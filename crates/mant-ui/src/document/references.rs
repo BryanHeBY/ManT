@@ -1,13 +1,14 @@
 //! Bounded sidebar inventory of real content references, never semantic entries.
 use std::{
     collections::{BTreeMap, HashMap},
+    num::NonZeroU32,
     ops::ControlFlow,
     sync::Arc,
 };
 
 use mant_ir::{
-    ContentLocation, ContentLocationRef, Document, LinkOccurrenceKey, LinkTarget,
-    ReferenceScanLimits,
+    ContentLocation, ContentLocationRef, Document, FixedBody, LinkOccurrenceKey, LinkTarget,
+    ReferenceLinkFilter, ReferenceScanLimits, ReferenceWorkBudget, TextJoin,
 };
 
 use super::{NavKind, NavNode, ROOT_ID};
@@ -31,11 +32,33 @@ pub(super) struct ReferenceRecord {
     attachment: mant_render::ReferenceAttachment,
 }
 
+/// One Fixed occurrence in the same immutable native surface as the TUI rows.
+#[derive(Debug, Clone)]
+pub(super) struct FixedReferenceRecord {
+    pub(super) id: Arc<str>,
+    pub(super) occurrence: NonZeroU32,
+    pub(super) section: Option<NonZeroU32>,
+    pub(super) source_owner: String,
+    pub(super) label: String,
+    pub(super) target: LinkTarget,
+}
+
+#[derive(Debug, Default)]
+enum ReferenceMode {
+    #[default]
+    Flow,
+    Fixed,
+}
+
 #[derive(Debug, Default)]
 pub(super) struct ReferenceNavigation {
     pub(super) records: Vec<ReferenceRecord>,
     pub(super) origins: ReferenceOrigins,
+    pub(super) fixed_records: Vec<FixedReferenceRecord>,
+    pub(super) fixed_origins: HashMap<NonZeroU32, Arc<str>>,
+    mode: ReferenceMode,
     pub(super) limited: bool,
+    pub(super) unlocated: bool,
     pub(super) associated: HashMap<String, Vec<usize>>,
     source_owner_counts: HashMap<String, u8>,
     source_owners_verified: bool,
@@ -44,11 +67,8 @@ pub(super) struct ReferenceNavigation {
 
 impl ReferenceNavigation {
     pub(super) fn build(document: &Document) -> Self {
-        // The structural reference scanner addresses Flow content locations.
-        // Fixed links remain directly clickable through their final surface
-        // marks; they have no Flow-style sidebar location to inventory here.
-        if matches!(document.body(), mant_ir::DocumentBodyRef::Fixed(_)) {
-            return Self::default();
+        if let mant_ir::DocumentBodyRef::Fixed(fixed) = document.body() {
+            return Self::build_fixed(fixed);
         }
         let mut result = Self::default();
         let mut payload = 0usize;
@@ -153,6 +173,68 @@ impl ReferenceNavigation {
         result
     }
 
+    pub(super) fn build_fixed(fixed: &FixedBody) -> Self {
+        let mut result = Self {
+            mode: ReferenceMode::Fixed,
+            ..Self::default()
+        };
+        let mut payload = 0usize;
+        let mut budget = ReferenceWorkBudget::new(ReferenceScanLimits::default());
+        for link in &fixed.links {
+            if budget.consume(0, 1, 0).is_err() {
+                result.limited = true;
+                break;
+            }
+            let Some(target) = link
+                .target
+                .as_ref()
+                .filter(|target| ReferenceLinkFilter::DOCUMENTS.contains(target))
+            else {
+                continue;
+            };
+            if link.label.parts.is_empty() {
+                // The typed occurrence can remain in query results, but a
+                // sidebar reveal needs a surviving native glyph coordinate.
+                result.unlocated = true;
+                continue;
+            }
+            if result.fixed_records.len() == MAX_RECORDS {
+                result.limited = true;
+                break;
+            }
+            let base = target_bytes(target).saturating_mul(4).saturating_add(512);
+            if base > MAX_PAYLOAD.saturating_sub(payload) {
+                result.limited = true;
+                break;
+            }
+            let Some(label) = fixed_label(fixed, link, &mut budget) else {
+                result.limited = true;
+                break;
+            };
+            let cost = base.saturating_add(label.len().saturating_mul(3));
+            if cost > MAX_PAYLOAD.saturating_sub(payload) {
+                result.limited = true;
+                break;
+            }
+            payload += cost;
+            let source_owner = link.section.map_or_else(
+                || ROOT_ID.to_owned(),
+                |key| fixed.headings[(key.get() - 1) as usize].id.to_string(),
+            );
+            let id: Arc<str> = format!("reference:fixed:{}", link.key).into();
+            result.fixed_origins.insert(link.key, Arc::clone(&id));
+            result.fixed_records.push(FixedReferenceRecord {
+                id,
+                occurrence: link.key,
+                section: link.section,
+                source_owner,
+                label,
+                target: target.clone(),
+            });
+        }
+        result
+    }
+
     pub(super) fn check_source_owners(
         &mut self,
         document: &Document,
@@ -213,6 +295,10 @@ impl ReferenceNavigation {
 
     /// Insert orthogonal reference groups after the owner's content children.
     pub(super) fn append_navigation(&mut self, nodes: &mut Vec<NavNode>) {
+        if matches!(self.mode, ReferenceMode::Fixed) {
+            self.append_fixed_navigation(nodes);
+            return;
+        }
         if self.records.is_empty() && !self.limited {
             return;
         }
@@ -298,6 +384,70 @@ impl ReferenceNavigation {
             });
         }
     }
+
+    fn append_fixed_navigation(&self, nodes: &mut Vec<NavNode>) {
+        let mut groups: BTreeMap<Option<NonZeroU32>, Vec<&FixedReferenceRecord>> = BTreeMap::new();
+        for record in &self.fixed_records {
+            groups.entry(record.section).or_default().push(record);
+        }
+        for (section, records) in groups {
+            let id = section.map_or_else(
+                || "references:fixed:overview".to_owned(),
+                |key| format!("references:fixed:section:{key}"),
+            );
+            nodes.push(NavNode {
+                id: id.clone(),
+                target_id: records[0].id.to_string(),
+                title: format!("DOCUMENT REFERENCES · {}", records[0].source_owner),
+                full_title: None,
+                depth: 0,
+                kind: NavKind::ReferenceGroup,
+                has_children: true,
+                is_last: true,
+                parent_id: None,
+            });
+            let count = records.len();
+            for (index, record) in records.into_iter().enumerate() {
+                nodes.push(NavNode {
+                    id: record.id.to_string(),
+                    target_id: record.id.to_string(),
+                    title: format!("↗ {}", record.label),
+                    full_title: None,
+                    depth: 1,
+                    kind: NavKind::Reference,
+                    has_children: false,
+                    is_last: index + 1 == count,
+                    parent_id: Some(id.clone()),
+                });
+            }
+        }
+        if self.limited {
+            nodes.push(NavNode {
+                id: "references-limited".into(),
+                target_id: String::new(),
+                title: "References limited by navigation budget".into(),
+                full_title: None,
+                depth: 0,
+                kind: NavKind::ReferenceNotice,
+                has_children: false,
+                is_last: true,
+                parent_id: None,
+            });
+        }
+        if self.unlocated {
+            nodes.push(NavNode {
+                id: "references-unlocated".into(),
+                target_id: String::new(),
+                title: "References without a visible source location omitted".into(),
+                full_title: None,
+                depth: 0,
+                kind: NavKind::ReferenceNotice,
+                has_children: false,
+                is_last: true,
+                parent_id: None,
+            });
+        }
+    }
 }
 
 fn reference_attachment(
@@ -317,6 +467,63 @@ fn reference_attachment(
             mant_ir::ReferenceFormAssociationState::Limited(_)
         ),
     )
+}
+
+fn fixed_label(
+    fixed: &FixedBody,
+    link: &mant_ir::LinkMark,
+    budget: &mut ReferenceWorkBudget,
+) -> Option<String> {
+    let mut label = String::new();
+    let mut truncated = false;
+    for (index, part) in link.label.parts.iter().enumerate() {
+        if index != 0 {
+            let separator = match &link.label.joins[index - 1] {
+                TextJoin::AuthoredSeparator(value) | TextJoin::GeneratedSeparator(value) => {
+                    value.as_str()
+                }
+                TextJoin::DirectContact | TextJoin::HardBoundary | TextJoin::Unknown => "",
+            };
+            truncated = append_fixed_preview(&mut label, separator, budget)?;
+            if truncated {
+                break;
+            }
+        }
+        let run = fixed.surface.run_text(part.run)?;
+        let start = usize::try_from(part.start_byte).ok()?;
+        let end = usize::try_from(part.end_byte).ok()?;
+        truncated = append_fixed_preview(&mut label, run.get(start..end)?, budget)?;
+        if truncated {
+            break;
+        }
+    }
+    if label.is_empty() && !truncated {
+        label = format!(
+            "{} (unlabelled)",
+            bounded_display_limit(&target_text(link.target.as_ref()?), MAX_LABEL)
+        );
+    }
+    let normalized = label.replace(['\n', '\r', '\t'], " ");
+    let sanitized = crate::text::sanitize_terminal_text(&normalized);
+    Some(if truncated {
+        format!("{sanitized}…")
+    } else {
+        sanitized.into_owned()
+    })
+}
+
+fn append_fixed_preview(
+    result: &mut String,
+    source: &str,
+    budget: &mut ReferenceWorkBudget,
+) -> Option<bool> {
+    let mut end = source.len().min(MAX_LABEL.saturating_sub(result.len()));
+    while !source.is_char_boundary(end) {
+        end -= 1;
+    }
+    budget.consume(0, 1, end).ok()?;
+    result.push_str(&source[..end]);
+    Some(end < source.len())
 }
 
 /// Count physical owners once: index entries do not repeat their native anchor
