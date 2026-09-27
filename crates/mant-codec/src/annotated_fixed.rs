@@ -18,7 +18,8 @@ use mant_ir::{
     FixedBody, FragmentAlias, HeadingMark, LinkMark, LinkTarget, NameCase, NodeId, OutputSlice,
     OwnerHeadComponent, OwnerHeadRole, OwnerMark, OwnerRole, ParameterKind, ParserInfo, RegionKind,
     RegionMark, SourceCoordinates, SourceFormat, SourceIdentity, SourceKey, SourceRecord,
-    SourceSpan, TextJoin, TextSelection, validate_document, validate_document_sources,
+    SourceSpan, TextJoin, TextSelection, group_fixed_name_occurrences, validate_document,
+    validate_document_sources,
 };
 
 /// A native render failure or a relation that cannot be represented honestly
@@ -676,22 +677,16 @@ fn group_bindings(
     found: impl IntoIterator<Item = (String, TextSelection)>,
     evidence: EntryNameEvidence,
 ) -> (Vec<String>, Vec<EntryNameBinding<TextSelection>>) {
-    let mut indices: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
     let mut names = Vec::new();
     let mut bindings: Vec<EntryNameBinding<TextSelection>> = Vec::new();
-    for (name, occurrence) in found {
-        if let Some(&index) = indices.get(&name) {
-            bindings[index].occurrences.push(occurrence);
-        } else {
-            let index = names.len();
-            indices.insert(name.clone(), index);
-            names.push(name);
-            bindings.push(EntryNameBinding {
-                name: index,
-                occurrences: vec![occurrence],
-                evidence,
-            });
-        }
+    for (name, occurrences) in group_fixed_name_occurrences(found) {
+        let index = names.len();
+        names.push(name);
+        bindings.push(EntryNameBinding {
+            name: index,
+            occurrences,
+            evidence,
+        });
     }
     (names, bindings)
 }

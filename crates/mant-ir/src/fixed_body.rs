@@ -397,9 +397,12 @@ fn is_false(value: &bool) -> bool {
 }
 
 mod evidence;
+mod selection_evidence;
 use evidence::component_part_ranges;
 mod literal_boundaries;
-pub use evidence::{FixedEntryPass, FixedNonOptionLimit, FixedNonOptionRecognition};
+pub use evidence::{
+    FixedEntryPass, FixedNonOptionLimit, FixedNonOptionRecognition, group_fixed_name_occurrences,
+};
 
 /// One native link macro instance, independent of its visible slice count.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
