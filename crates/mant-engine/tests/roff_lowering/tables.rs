@@ -16,9 +16,12 @@ fn lowers_tbl_and_eqn_payloads_into_structured_blocks() {
         document.sections[0].blocks[0],
         Block::Table { ref rows, .. } if rows.len() == 1 && rows[0].cells.len() == 2
     ));
+    // The exact source was checked with the pinned -Tutf8/-Thtml/-Tlint
+    // reference. CVS eqn_term.c::eqn_box groups the explicit List around the
+    // fraction; eqn_html.c::eqn_box retains it as an enclosing mrow.
     assert!(matches!(
         document.sections[1].blocks[0],
-        Block::Equation { ref value, .. } if value == "x + width / 2"
+        Block::Equation { ref value, .. } if value == "x + (width / 2)"
     ));
 }
 
