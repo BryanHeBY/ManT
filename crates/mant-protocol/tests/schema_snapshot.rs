@@ -6,7 +6,7 @@ use mant_protocol::{
 };
 use serde_json::Value;
 
-const V0_13_SNAPSHOT: &str = include_str!("../../../tests/contracts/protocol-schemas-v0.12.json");
+const V0_12_SNAPSHOT: &str = include_str!("../../../tests/contracts/protocol-schemas-v0.12.json");
 
 fn remove_non_structural_metadata(value: &mut Value) {
     match value {
@@ -27,10 +27,10 @@ fn remove_non_structural_metadata(value: &mut Value) {
 }
 
 #[test]
-fn v0_13_structural_schemas_change_only_with_an_explicit_protocol_version() {
+fn v0_12_structural_schemas_change_only_with_an_explicit_protocol_version() {
     assert_eq!(NATIVE_API_VERSION, "0.12");
 
-    let mut expected: Value = serde_json::from_str(V0_13_SNAPSHOT).expect("v0.12 schema snapshot");
+    let mut expected: Value = serde_json::from_str(V0_12_SNAPSHOT).expect("v0.12 schema snapshot");
     let mut actual = serde_json::to_value(query_json_schema_catalog()).expect("generated schemas");
     remove_non_structural_metadata(&mut expected);
     remove_non_structural_metadata(&mut actual);
@@ -42,7 +42,7 @@ fn v0_13_structural_schemas_change_only_with_an_explicit_protocol_version() {
 }
 
 #[test]
-fn v0_13_catalog_exposes_only_logical_document_identities() {
+fn v0_12_catalog_exposes_only_logical_document_identities() {
     let catalog = serde_json::to_value(mant_protocol::document_catalog_json_schema())
         .expect("catalog schema");
     let summary = &catalog["$defs"]["DocumentSummary"];

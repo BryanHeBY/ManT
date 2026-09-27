@@ -3,9 +3,9 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use mant_ir::{DocumentMeta, DocumentSource, SourceSpan, content_complete};
+use mant_ir::{DocumentMeta, DocumentSource, SourceSpan};
 
-use crate::OutlineTrail;
+use crate::{OutlineTrail, coverage::validate_coverage_summary};
 
 /// Default maximum number of matching line groups returned in one page.
 pub const DEFAULT_SEARCH_LIMIT: u32 = 100;
@@ -214,11 +214,7 @@ impl TryFrom<QuerySearchUnchecked> for QuerySearch {
     type Error = &'static str;
 
     fn try_from(value: QuerySearchUnchecked) -> Result<Self, Self::Error> {
-        if value.content_complete && !content_complete(&value.diagnostics) {
-            return Err(
-                "search contentComplete contradicts a retained content-coverage diagnostic",
-            );
-        }
+        validate_coverage_summary(value.content_complete, None, &value.diagnostics)?;
         Ok(Self {
             schema: value.schema,
             label: value.label,

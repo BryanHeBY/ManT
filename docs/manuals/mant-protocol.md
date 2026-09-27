@@ -840,6 +840,14 @@ while retaining known source content. `content-coverage` marks known omitted
 source content and conservatively also makes semantic coverage incomplete.
 Neither effect depends on severity or producer-specific codes. Missing or
 unknown impacts are rejected, including for third-party documents.
+For every document-derived outline, excerpt, explanation, or search response,
+the reader rejects `contentComplete=true` (including an omitted true default)
+when retained diagnostics record `content-coverage`. Responses with
+`semanticsComplete` also reject a true value when content is known incomplete
+or retained diagnostics record semantic loss. A false summary remains valid
+after a bounded transport removes diagnostic details. Scope document groups
+use the same rule, and a scope search cannot claim complete content if one of
+its returned document groups reports incomplete content.
 
 ### Sections and Source Locations
 
@@ -1922,9 +1930,6 @@ both structural locations and rendered coordinates.
 `query` always echoes all defaults, even when the request omitted them.
 A no-match search is successful and returns `total = 0` with an empty
 `matches` array.
-Readers reject a search response that reports `contentComplete=true` (including
-the omitted default) while retaining a `content-coverage` diagnostic. A false
-summary remains valid when a bounded transport omits diagnostic details.
 
 ### Coordinate Model
 

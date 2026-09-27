@@ -8,7 +8,7 @@ use mant_ir::{
     EntrySummary, NameCase, NodeId, Section, TldrDocument,
 };
 
-use crate::{ContentSelector, NodePath, Producer};
+use crate::{ContentSelector, NodePath, Producer, coverage::validate_coverage_summary};
 
 /// Exact schema marker for a query outline response.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -94,7 +94,7 @@ impl From<OutlineDetail> for EntryProjection {
 }
 
 /// A block-free tree used to discover selectable query content.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[schemars(extend("$id" = "urn:mant:outline:v0.12"))]
 pub struct QueryOutline {
@@ -135,6 +135,41 @@ pub struct QueryOutline {
     pub content_complete: bool,
     /// Addressable nodes in document order.
     pub nodes: Vec<OutlineNode>,
+}
+
+#[derive(Deserialize)]
+#[serde(remote = "QueryOutline", rename_all = "camelCase", deny_unknown_fields)]
+struct QueryOutlineWire {
+    schema: OutlineSchema,
+    entries: EntryProjection,
+    root: Option<ContentSelector>,
+    references: crate::ReferenceInventory,
+    label: String,
+    #[serde(default)]
+    display_title: Option<String>,
+    address: Option<DocumentAddress>,
+    source: Option<DocumentSource>,
+    meta: Option<DocumentMeta>,
+    #[serde(default)]
+    diagnostics: Vec<Diagnostic>,
+    #[serde(default = "default_true")]
+    semantics_complete: bool,
+    #[serde(default = "default_true")]
+    content_complete: bool,
+    nodes: Vec<OutlineNode>,
+}
+
+impl<'de> Deserialize<'de> for QueryOutline {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = QueryOutlineWire::deserialize(deserializer)?;
+        validate_coverage_summary(
+            value.content_complete,
+            Some(value.semantics_complete),
+            &value.diagnostics,
+        )
+        .map_err(serde::de::Error::custom)?;
+        Ok(value)
+    }
 }
 
 /// One exact cross-document destination declared by a semantic entry term.
@@ -338,7 +373,7 @@ impl ExcerptSchema {
 }
 
 /// One or more independently selected nodes from a complete query.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[schemars(extend("$id" = "urn:mant:excerpt:v0.12"))]
 pub struct QueryExcerpt {
@@ -373,6 +408,39 @@ pub struct QueryExcerpt {
     pub diagnostics: Vec<Diagnostic>,
     /// Selected nodes in canonical source order after duplicate selectors are removed.
     pub selections: Vec<ExcerptSelection>,
+}
+
+#[derive(Deserialize)]
+#[serde(remote = "QueryExcerpt", rename_all = "camelCase", deny_unknown_fields)]
+struct QueryExcerptWire {
+    schema: ExcerptSchema,
+    label: String,
+    #[serde(default)]
+    display_title: Option<String>,
+    address: Option<DocumentAddress>,
+    #[serde(default = "default_true")]
+    semantics_complete: bool,
+    #[serde(default = "default_true")]
+    content_complete: bool,
+    producer: Option<Producer>,
+    source: Option<DocumentSource>,
+    meta: Option<DocumentMeta>,
+    #[serde(default)]
+    diagnostics: Vec<Diagnostic>,
+    selections: Vec<ExcerptSelection>,
+}
+
+impl<'de> Deserialize<'de> for QueryExcerpt {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = QueryExcerptWire::deserialize(deserializer)?;
+        validate_coverage_summary(
+            value.content_complete,
+            Some(value.semantics_complete),
+            &value.diagnostics,
+        )
+        .map_err(serde::de::Error::custom)?;
+        Ok(value)
+    }
 }
 
 /// One selected document node together with its location in the complete outline.

@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     DocumentAddress, SearchCase, SearchHit, SearchQuery, SearchRender, SearchScope, SearchSyntax,
-    default_search_limit,
+    coverage::validate_coverage_summary, default_search_limit,
 };
 
 /// Maximum number of initial documents accepted by the native scope contract.
@@ -356,7 +356,7 @@ pub struct ScopeReferenceLimit {
 }
 
 /// One document's search hits inside a globally paginated scope result.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ScopedSearchDocument {
     /// Stable logical document identity.
@@ -379,8 +379,34 @@ pub struct ScopedSearchDocument {
     pub matches: Vec<SearchHit>,
 }
 
+#[derive(Deserialize)]
+#[serde(
+    remote = "ScopedSearchDocument",
+    rename_all = "camelCase",
+    deny_unknown_fields
+)]
+struct ScopedSearchDocumentWire {
+    address: DocumentAddress,
+    depth: u16,
+    render: SearchRender,
+    #[serde(default)]
+    diagnostics: Vec<mant_ir::Diagnostic>,
+    #[serde(default = "default_content_complete")]
+    content_complete: bool,
+    matches: Vec<SearchHit>,
+}
+
+impl<'de> Deserialize<'de> for ScopedSearchDocument {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = ScopedSearchDocumentWire::deserialize(deserializer)?;
+        validate_coverage_summary(value.content_complete, None, &value.diagnostics)
+            .map_err(serde::de::Error::custom)?;
+        Ok(value)
+    }
+}
+
 /// Globally paginated search over a resolved document scope.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ScopeSearch {
     /// Normalized search configuration.
@@ -407,8 +433,34 @@ pub struct ScopeSearch {
     pub documents: Vec<ScopedSearchDocument>,
 }
 
+#[derive(Deserialize)]
+#[serde(remote = "ScopeSearch", rename_all = "camelCase", deny_unknown_fields)]
+struct ScopeSearchWire {
+    query: SearchQuery,
+    #[serde(default = "default_content_complete")]
+    content_complete: bool,
+    total: u32,
+    returned: u32,
+    offset: u32,
+    truncated: bool,
+    next_offset: Option<u32>,
+    documents: Vec<ScopedSearchDocument>,
+}
+
+impl<'de> Deserialize<'de> for ScopeSearch {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = ScopeSearchWire::deserialize(deserializer)?;
+        if value.content_complete && value.documents.iter().any(|doc| !doc.content_complete) {
+            return Err(serde::de::Error::custom(
+                "scope search contentComplete contradicts an incomplete document",
+            ));
+        }
+        Ok(value)
+    }
+}
+
 /// One readable document's contribution to the evidence result.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ScopedExplanation {
     /// Declaration context pool for evidence with this document index.
@@ -442,6 +494,42 @@ pub struct ScopedExplanation {
     pub counts: crate::EvidenceCounts,
     /// Local collection and copy truncation.
     pub truncation: crate::ExplanationTruncation,
+}
+
+#[derive(Deserialize)]
+#[serde(
+    remote = "ScopedExplanation",
+    rename_all = "camelCase",
+    deny_unknown_fields
+)]
+struct ScopedExplanationWire {
+    supports: Vec<crate::ExplanationSupport>,
+    address: DocumentAddress,
+    depth: u16,
+    label: String,
+    producer: Option<crate::Producer>,
+    diagnostics: Vec<mant_ir::Diagnostic>,
+    semantics_complete: bool,
+    #[serde(default = "default_content_complete")]
+    content_complete: bool,
+    outcome: crate::ExplanationOutcome,
+    total: u32,
+    returned: u32,
+    counts: crate::EvidenceCounts,
+    truncation: crate::ExplanationTruncation,
+}
+
+impl<'de> Deserialize<'de> for ScopedExplanation {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = ScopedExplanationWire::deserialize(deserializer)?;
+        validate_coverage_summary(
+            value.content_complete,
+            Some(value.semantics_complete),
+            &value.diagnostics,
+        )
+        .map_err(serde::de::Error::custom)?;
+        Ok(value)
+    }
 }
 
 /// One global evidence record with an explicit source-report reference.

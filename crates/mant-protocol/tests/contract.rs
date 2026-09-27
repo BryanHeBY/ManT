@@ -169,6 +169,102 @@ fn search_rejects_a_complete_summary_after_known_content_loss() {
     assert!(bounded.diagnostics.is_empty());
 }
 
+fn assert_inbound_coverage_contract<T: serde::de::DeserializeOwned>(
+    mut value: Value,
+    pointer: &str,
+    has_semantics_summary: bool,
+) {
+    let response = value.pointer_mut(pointer).unwrap().as_object_mut().unwrap();
+    response.insert(
+        "diagnostics".into(),
+        serde_json::json!([{
+            "level": "warning",
+            "impact": "content-coverage",
+            "message": "known source content loss"
+        }]),
+    );
+    if has_semantics_summary {
+        response.insert("semanticsComplete".into(), false.into());
+    }
+    response.remove("contentComplete");
+    assert!(serde_json::from_str::<T>(&value.to_string()).is_err());
+    assert!(serde_json::from_value::<T>(value.clone()).is_err());
+
+    value.pointer_mut(pointer).unwrap()["contentComplete"] = true.into();
+    assert!(serde_json::from_str::<T>(&value.to_string()).is_err());
+
+    value.pointer_mut(pointer).unwrap()["contentComplete"] = false.into();
+    let retained = serde_json::from_str::<T>(&value.to_string());
+    assert!(
+        retained.is_ok(),
+        "{} with retained details: {:?}",
+        std::any::type_name::<T>(),
+        retained.err()
+    );
+    // Some envelopes require the diagnostic field even after a bounded
+    // transport removes every detail; an empty list is the common shape.
+    value.pointer_mut(pointer).unwrap()["diagnostics"] = serde_json::json!([]);
+    let bounded = serde_json::from_str::<T>(&value.to_string());
+    assert!(
+        bounded.is_ok(),
+        "{} without details: {:?}",
+        std::any::type_name::<T>(),
+        bounded.err()
+    );
+
+    if has_semantics_summary {
+        value.pointer_mut(pointer).unwrap()["semanticsComplete"] = true.into();
+        assert!(serde_json::from_str::<T>(&value.to_string()).is_err());
+
+        value.pointer_mut(pointer).unwrap()["contentComplete"] = true.into();
+        value.pointer_mut(pointer).unwrap()["diagnostics"] = serde_json::json!([{
+            "level": "warning",
+            "impact": "semantic-coverage",
+            "message": "known semantic evidence loss"
+        }]);
+        assert!(serde_json::from_str::<T>(&value.to_string()).is_err());
+        value.pointer_mut(pointer).unwrap()["semanticsComplete"] = false.into();
+        assert!(serde_json::from_str::<T>(&value.to_string()).is_ok());
+    }
+}
+
+#[test]
+fn all_document_derived_responses_reject_contradictory_coverage_summaries() {
+    let outline: Value = serde_json::from_str(ROOTED_OUTLINE).unwrap();
+    assert_inbound_coverage_contract::<QueryOutline>(outline, "", true);
+
+    let excerpt = serde_json::json!({
+        "schema": "mant.excerpt/v0.12",
+        "label": "review",
+        "selections": []
+    });
+    assert_inbound_coverage_contract::<mant_protocol::QueryExcerpt>(excerpt, "", true);
+
+    let explanation: Value = serde_json::from_str(EXPLANATION).unwrap();
+    assert_inbound_coverage_contract::<mant_protocol::QueryExplanation>(explanation, "", true);
+
+    let mut scope_search: Value = serde_json::from_str(SCOPE_SEARCH).unwrap();
+    scope_search["result"]["search"]["contentComplete"] = false.into();
+    assert_inbound_coverage_contract::<ScopeQueryResponse>(
+        scope_search.clone(),
+        "/result/search/documents/0",
+        false,
+    );
+    let mut inconsistent_aggregate = scope_search;
+    inconsistent_aggregate["result"]["search"]["documents"][0]["contentComplete"] = false.into();
+    inconsistent_aggregate["result"]["search"]["contentComplete"] = true.into();
+    assert!(serde_json::from_value::<ScopeQueryResponse>(inconsistent_aggregate.clone()).is_err());
+    inconsistent_aggregate["result"]["search"]["contentComplete"] = false.into();
+    assert!(serde_json::from_value::<ScopeQueryResponse>(inconsistent_aggregate).is_ok());
+
+    let scope_explanation: Value = serde_json::from_str(SCOPE_EXPLAIN).unwrap();
+    assert_inbound_coverage_contract::<ScopeQueryResponse>(
+        scope_explanation,
+        "/result/explanation/documents/0",
+        true,
+    );
+}
+
 #[test]
 fn v0_12_breaking_projection_shapes_have_cross_language_golden_examples() {
     let outline: QueryOutline = serde_json::from_str(ROOTED_OUTLINE).expect("rooted outline");
@@ -359,7 +455,7 @@ fn native_search_defaults_and_closed_request_fields_are_enforced() {
 }
 
 #[test]
-fn request_v0_13_rejects_the_obsolete_outline_detail_field() {
+fn request_v0_12_rejects_the_obsolete_outline_detail_field() {
     let error = serde_json::from_str::<QueryRequest>(
         r#"{"schema":"mant.request/v0.12","input":{"kind":"document","selector":"tar"},"view":{"kind":"outline","detail":"options"}}"#,
     )
@@ -368,7 +464,7 @@ fn request_v0_13_rejects_the_obsolete_outline_detail_field() {
 }
 
 #[test]
-fn request_v0_13_rejects_unknown_fields_inside_outline_unions() {
+fn request_v0_12_rejects_unknown_fields_inside_outline_unions() {
     for request in [
         r#"{"schema":"mant.request/v0.12","input":{"kind":"document","selector":"tar"},"view":{"kind":"outline","entries":{"kind":"all","future":true}}}"#,
         r#"{"schema":"mant.request/v0.12","input":{"kind":"document","selector":"tar"},"view":{"kind":"outline","entries":{"kind":"kinds","kinds":[{"kind":"parameter","parameterKind":"option","typo":true}]}}}"#,
@@ -416,7 +512,7 @@ fn scope_request_is_closed_bounded_and_keeps_single_document_views_separate() {
 }
 
 #[test]
-fn request_v0_13_selects_one_configured_source_without_accepting_v4() {
+fn request_v0_12_selects_one_configured_source_without_accepting_v4() {
     let selected: QueryRequest = serde_json::from_str(
         r#"{"schema":"mant.request/v0.12","input":{"kind":"document","selector":"printf","source":"team"},"view":{"kind":"full"}}"#,
     )

@@ -3,6 +3,7 @@
 
 mod catalog;
 mod content_selector;
+mod coverage;
 mod doctor;
 mod document;
 mod explanation;

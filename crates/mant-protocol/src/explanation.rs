@@ -402,6 +402,12 @@ struct QueryExplanationWire {
 impl<'de> Deserialize<'de> for QueryExplanation {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let value = QueryExplanationWire::deserialize(deserializer)?;
+        crate::coverage::validate_coverage_summary(
+            value.content_complete,
+            Some(value.semantics_complete),
+            &value.diagnostics,
+        )
+        .map_err(serde::de::Error::custom)?;
         value
             .validate_references()
             .map_err(serde::de::Error::custom)?;
