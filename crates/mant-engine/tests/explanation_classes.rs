@@ -96,7 +96,7 @@ fn late_direct_and_related_evidence_displace_earlier_mentions_at_the_cap() {
 }
 
 #[test]
-fn empty_names_still_have_a_real_owner_and_invalid_bindings_never_match_names() {
+fn invalid_bindings_keep_visible_text_but_form_only_entries_keep_an_owner() {
     use mant_ir::visit::{self, VisitMut};
     struct Invalidate;
     impl VisitMut for Invalidate {
@@ -125,12 +125,15 @@ fn empty_names_still_have_a_real_owner_and_invalid_bindings_never_match_names() 
     Invalidate.visit_document_mut(content.document.as_mut().unwrap());
     let result = explain_query(&content, &query()).unwrap();
     assert!(!result.semantics_complete);
-    assert_eq!(result.evidence[0].class, EvidenceClass::DirectEntry);
-    assert!(
-        matches!(&result.evidence[0].bases[..], [EvidenceBasis::Form { matches }, EvidenceBasis::Literal]
-        if matches.len() == 1 && matches[0].text == "--help")
-    );
-    assert!(result.evidence[0].entry.as_ref().unwrap().names.is_empty());
+    assert_eq!(result.counts.direct_entry.total, 0);
+    assert_eq!(result.counts.context_mention.total, 1);
+    assert_eq!(result.evidence[0].class, EvidenceClass::ContextMention);
+    assert_eq!(result.evidence[0].bases, [EvidenceBasis::Literal]);
+    assert_eq!(result.evidence[0].previews[0].text, "--help: Read --help.");
+    assert!(result.evidence[0].entry.is_none());
+    result.validate_references().unwrap();
+    // CVS man_macro.c::blk_imp and man_term.c::pre_TP keep this physical
+    // head/body readable; removing optional names does not remove the owner.
     let mut content = mant_loader::load_roff_bytes(
         b".TH PROBE 1\n.SH DESCRIPTION\n.TP\n.B A\nRead --help here.\n",
     )
@@ -142,7 +145,7 @@ fn empty_names_still_have_a_real_owner_and_invalid_bindings_never_match_names() 
 }
 
 #[test]
-fn unrecorded_or_invalid_forms_preserve_literal_ownership_and_nested_entries() {
+fn unrecorded_or_invalid_forms_preserve_literal_content_and_nested_entries() {
     use mant_ir::{Block, EntryForms, EntryOwner};
     for invalid in [false, true] {
         let mut content = load_markdown_text(
@@ -178,23 +181,20 @@ fn unrecorded_or_invalid_forms_preserve_literal_ownership_and_nested_entries() {
         }
         let evidence = mant_query::select_explanation(&content, "TOKEN").unwrap();
         assert_eq!(evidence.total, 1);
-        assert_eq!(evidence.evidence[0].outline.node.id(), id.as_str());
-        assert!(
-            evidence.evidence[0]
-                .entry
-                .as_ref()
-                .unwrap()
-                .forms
-                .is_empty()
+        assert!(!evidence.semantics_complete);
+        assert_eq!(evidence.counts.direct_entry.total, 0);
+        assert_eq!(evidence.evidence[0].class, EvidenceClass::ContextMention);
+        assert_eq!(
+            evidence.evidence[0].outline.node.id(),
+            mant_ir::DOCUMENT_ROOT_ID
         );
-        assert!(
-            evidence.evidence[0]
-                .entry
-                .as_ref()
-                .unwrap()
-                .names
-                .is_empty()
+        assert_eq!(evidence.evidence[0].bases, [EvidenceBasis::Literal]);
+        assert_eq!(
+            evidence.evidence[0].previews[0].text,
+            "run: Read TOKEN here."
         );
+        assert!(evidence.evidence[0].entry.is_none());
+        evidence.validate_references().unwrap();
         assert!(
             mant_query::select_excerpt(
                 &content,

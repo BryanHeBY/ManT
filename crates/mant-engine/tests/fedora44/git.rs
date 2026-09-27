@@ -1,6 +1,6 @@
 //! Tests for the Fedora Linux 44 `git(1)` zstd fixture.
 
-use crate::common::{self, count_outline_entries, find_outline_entry, query_for_document};
+use crate::common::{self, find_outline_entry, query_for_document};
 use crate::fixtures::fedora44_manual;
 use mant_ir::{Block, ListKind, SourceFormat};
 use mant_protocol::OutlineDetail;
@@ -18,29 +18,17 @@ fn keeps_complete_sections_and_semantic_option_outlines() {
     let query = query_for_document("git", document);
     let outline = build_outline_with_detail(&query, OutlineDetail::Entries)
         .unwrap_or_else(|error| panic!("build git option outline: {error}"));
-    assert_eq!(count_outline_entries(&outline.nodes), 231);
     assert!(find_outline_entry(&outline.nodes, "--help").is_some());
-    assert!(find_outline_entry(&outline.nodes, "GIT_DIR").is_some());
-    let deprecated =
-        common::nested_definition_items(common::section(document, "ENVIRONMENT VARIABLES"))
-            .into_iter()
-            .find(|item| {
-                item.entry
-                    .as_ref()
-                    .is_some_and(|entry| entry.names == ["GIT_PRINT_SHA1_ELLIPSIS"])
-            })
-            .expect("deprecated variable annotation must not erase its declaration");
-    assert_eq!(
-        deprecated.entry.as_ref().unwrap().kind,
-        mant_ir::EntryKind::EnvironmentVariable
-    );
-    assert_eq!(deprecated.source.unwrap().line, 2165);
-    assert!(deprecated.terms.iter().any(|term| {
-        document
-            .content()
-            .plain_text(term)
-            .is_ok_and(|text| text.contains("deprecated"))
-    }));
+    // The full Fedora source ran pinned CVS -Tutf8 -Owidth=78 first.
+    // man_term.c::pre_PP/pre_B/pre_RS retain these bold environment labels
+    // and their descriptions, but do not prove a direct variable declaration.
+    assert!(find_outline_entry(&outline.nodes, "GIT_DIR").is_none());
+    let rendered = mant_render::render_query_text(&query);
+    assert!(rendered.contains("GIT_PRINT_SHA1_ELLIPSIS"));
+    assert!(rendered.contains("(deprecated)"));
+    let deprecated = mant_query::select_explanation(&query, "GIT_PRINT_SHA1_ELLIPSIS").unwrap();
+    assert_eq!(deprecated.counts.direct_entry.total, 0);
+    assert!(deprecated.counts.context_mention.total > 0);
 
     let commands: Vec<_> = common::semantic_definition_items(document)
         .into_iter()

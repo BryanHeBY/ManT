@@ -314,6 +314,7 @@ fn fixed_body_exports_one_literal_surface_without_flow_projection() {
     let two = NonZeroU32::new(2).unwrap();
     let mut document = manual(Vec::new());
     document.body = DocumentBody::Fixed(FixedBody {
+        root_configuration_hint: false,
         surface: DisplaySurface {
             text: "a`b".to_owned(),
             rows: vec![
@@ -396,6 +397,7 @@ fn invalid_fixed_body_is_a_typed_export_error() {
 
     let mut document = manual(Vec::new());
     document.body = DocumentBody::Fixed(FixedBody {
+        root_configuration_hint: false,
         surface: DisplaySurface {
             text: "orphan".to_owned(),
             rows: Vec::new(),
@@ -456,6 +458,7 @@ fn sparse_fixed_query(column_count: u32) -> ResolvedContent {
     };
     let mut document = manual(Vec::new());
     document.body = DocumentBody::Fixed(FixedBody {
+        root_configuration_hint: false,
         surface: DisplaySurface {
             text: "ab".to_owned(),
             rows: vec![DisplayRow {

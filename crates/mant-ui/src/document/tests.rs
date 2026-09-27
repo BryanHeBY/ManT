@@ -145,6 +145,7 @@ fn document_view_ignores_malformed_public_fixed_body() {
             sources: Vec::new(),
             root_source: SourceKey::FIRST,
             body: DocumentBody::Fixed(mant_ir::FixedBody {
+                root_configuration_hint: false,
                 surface: mant_ir::DisplaySurface {
                     text: String::new(),
                     rows: vec![mant_ir::DisplayRow {
@@ -181,6 +182,7 @@ fn invalid_fixed_mark_preserves_tldr_in_document_view_fallback() {
         joins: Vec::new(),
     };
     let fixed = mant_ir::FixedBody {
+        root_configuration_hint: false,
         surface: mant_ir::DisplaySurface {
             text: String::new(),
             rows: Vec::new(),

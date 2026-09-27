@@ -498,6 +498,8 @@ head_component_role(const struct roff_node *node)
 	case MDOC_Ic:
 	case MDOC_Cm:
 		return MANT_ANNOTATED_MARK_HEAD_LITERAL;
+	case MDOC_Ar:
+		return MANT_ANNOTATED_MARK_HEAD_ARGUMENT;
 	case MAN_B:
 	case MAN_SB:
 		return MANT_ANNOTATED_MARK_HEAD_LEXICAL;

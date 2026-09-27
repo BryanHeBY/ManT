@@ -77,7 +77,7 @@ pub fn scan_environment_declaration_names(
     Ok(Some(names))
 }
 
-fn annotations(value: &str) -> bool {
+pub(super) fn annotations(value: &str) -> bool {
     let mut rest = value.trim();
     let mut count = 0;
     while !rest.is_empty() {

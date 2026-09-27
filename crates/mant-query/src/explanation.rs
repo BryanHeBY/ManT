@@ -164,7 +164,7 @@ fn collection_plan<'a>(
     let mut diagnostics = content
         .document
         .as_ref()
-        .map(|d| d.diagnostics.clone())
+        .map(mant_ir::Document::projection_diagnostics)
         .unwrap_or_default();
     let rejected_aliases = validation
         .as_ref()

@@ -107,6 +107,11 @@ pub(super) fn project_owner(
         256 => Some(OwnerHeadRole::Lexical),
         2048 => Some(OwnerHeadRole::Variable),
         4096 => Some(OwnerHeadRole::DefinedVariable),
+        8192 => {
+            return Err(AnnotatedProjectionError::Relation(
+                "argument cannot be an owner head role",
+            ));
+        }
         _ => {
             return Err(AnnotatedProjectionError::Relation(
                 "invalid native head role",
@@ -126,6 +131,7 @@ pub(super) fn project_owner(
             256 => OwnerHeadRole::Lexical,
             2048 => OwnerHeadRole::Variable,
             4096 => OwnerHeadRole::DefinedVariable,
+            8192 => OwnerHeadRole::Argument,
             _ => {
                 return Err(AnnotatedProjectionError::Relation(
                     "invalid head component role",
@@ -160,7 +166,9 @@ pub(super) fn project_owner(
         first_raw_component,
         head_components.first(),
     ) {
-        (Some(raw), Some((first, true)), Some(visible)) if first == raw && visible.role != raw => {
+        (Some(raw), Some((first, true)), Some(visible))
+            if first == raw && visible.role != raw && visible.role != OwnerHeadRole::Argument =>
+        {
             Some(visible.role)
         }
         _ => native_head_role,

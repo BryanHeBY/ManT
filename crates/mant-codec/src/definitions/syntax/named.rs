@@ -1,25 +1,28 @@
 //! named recognition; complete forms retain their role-specific grammar.
 use crate::definitions::RecognizedName;
+use crate::definitions::context::DefinitionContext;
 use mant_ir::contains_additional_environment_assignment;
 use mant_ir::inline_plain_text as plain_text;
 pub(in crate::definitions) use mant_ir::is_ordinal_marker;
 use mant_ir::{ContentContext, EnvironmentNameLimit, Inline};
 pub(crate) use mant_ir::{environment_variable_alias, environment_variable_body};
 
-/// Strong local configuration spelling, used only on complete declaration
-/// heads. A dotted key needs a configuration/variable context; a mixed-case
-/// assignment label is useful even under topical headings such as PATHS.
-pub(super) fn local_configuration_head(text: &str, variable_context: bool) -> bool {
+/// Strong local configuration spelling for a weak hanging candidate. The
+/// section context must already be configuration-specific, and the whole
+/// visible head must be complete; a dotted or assignment prefix alone cannot
+/// turn an arbitrary nested option value into a configuration key.
+pub(super) fn local_configuration_head(text: &str, context: DefinitionContext) -> bool {
     let text = text.trim();
-    if let Some(key) = text.strip_suffix('=') {
-        return is_configuration_key(key)
-            && key.chars().any(char::is_lowercase)
-            && key.chars().any(char::is_uppercase)
-            && !key.contains('_');
+    match context {
+        DefinitionContext::ConfigurationKeys => {
+            (text.contains('.') || text.contains('='))
+                && mant_ir::configuration_key_declaration_range(text).is_some()
+        }
+        DefinitionContext::RootConfigurationKeys => {
+            mant_ir::root_configuration_assignment_range(text).is_some()
+        }
+        _ => false,
     }
-    variable_context
-        && text.contains('.')
-        && named_occurrences(text, is_configuration_key).is_some()
 }
 
 pub(in crate::definitions) fn is_value_name(value: &str) -> bool {
@@ -188,80 +191,12 @@ pub(in crate::definitions) fn term_occurrences(text: &str) -> Option<Vec<Recogni
     named_occurrences(text, is_variable_term)
         .filter(|names| names.len() == 1)
         .or_else(|| {
-            let name = invocation_name(text.trim())?;
-            let offset = name.as_ptr() as usize - text.as_ptr() as usize;
-            Some(vec![RecognizedName::contiguous(name, offset)])
+            let range = mant_ir::generic_callable_name_range(text)?;
+            Some(vec![RecognizedName::contiguous(
+                &text[range.clone()],
+                range.start,
+            )])
         })
-        .or_else(|| {
-            let name = callable_invocation_name(text.trim())?;
-            let offset = name.as_ptr() as usize - text.as_ptr() as usize;
-            Some(vec![RecognizedName::contiguous(name, offset)])
-        })
-}
-
-pub(in crate::definitions) fn invocation_name(value: &str) -> Option<&str> {
-    let (name, parameters) = value.split_once(char::is_whitespace)?;
-    (is_variable_term(name)
-        && name.chars().any(char::is_lowercase)
-        && parameters.split_whitespace().all(invocation_placeholder))
-    .then_some(name)
-}
-
-fn invocation_placeholder(token: &str) -> bool {
-    !token.is_empty()
-        && token.split(',').all(|part| {
-            !part.is_empty()
-                && !part.starts_with('-')
-                && part.chars().all(|character| {
-                    character.is_ascii_uppercase()
-                        || character.is_ascii_digit()
-                        || matches!(character, '_' | '-')
-                })
-        })
-}
-
-/// A complete call form is a declaration head when its callable spelling is
-/// technical and every argument is an explicitly sigilled variable.  This
-/// covers generated Perl/POSIX-style heads such as `run_filter($cmd,$src)`
-/// without extracting a word from prose or treating arbitrary parenthetical
-/// text as an invocation.  The caller retains the full authored form; only
-/// the callable base becomes the selector.
-pub(in crate::definitions) fn callable_invocation_name(value: &str) -> Option<&str> {
-    let (name, arguments) = value.split_once('(')?;
-    let arguments = arguments.strip_suffix(')')?;
-    if name.is_empty()
-        || name.contains(char::is_whitespace)
-        || !is_variable_term(name)
-        || !name.chars().any(char::is_lowercase)
-    {
-        return None;
-    }
-    let arguments = arguments.trim();
-    if arguments.is_empty() {
-        return Some(name);
-    }
-    let mut count = 0usize;
-    for argument in arguments.split(',') {
-        count += 1;
-        if count > 64 || !sigilled_invocation_argument(argument.trim()) {
-            return None;
-        }
-    }
-    Some(name)
-}
-
-fn sigilled_invocation_argument(value: &str) -> bool {
-    let Some(variable) = value.strip_prefix(['$', '@', '%']) else {
-        return false;
-    };
-    !variable.is_empty()
-        && variable
-            .chars()
-            .next()
-            .is_some_and(|character| character.is_ascii_alphabetic() || character == '_')
-        && variable
-            .chars()
-            .all(|character| character.is_ascii_alphanumeric() || character == '_')
 }
 
 /// A declaration group is atomic: accepting a word after rejected prose does

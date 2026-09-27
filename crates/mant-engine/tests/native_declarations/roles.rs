@@ -59,10 +59,12 @@ fn local_definitions_override_inherited_values_without_inventing_domains() {
             },
             "INNER_BODY",
         ),
-        ("true", EntryKind::Value, "VALUE_BODY"),
-        ("-42", EntryKind::Value, "NEGATIVE_BODY"),
+        // CVS man_term.c::pre_TP/pre_RS prove separate heads and indentation,
+        // not an independent Value role or a value domain.
+        ("true", EntryKind::Term, "VALUE_BODY"),
+        ("-42", EntryKind::Term, "NEGATIVE_BODY"),
         ("PROCESS_HOME", EntryKind::Term, "VARIABLE_BODY"),
-        ("color", EntryKind::ConfigurationKey, "KEY_BODY"),
+        ("color", EntryKind::Term, "KEY_BODY"),
     ] {
         let item = items
             .iter()
@@ -102,50 +104,70 @@ fn local_definitions_override_inherited_values_without_inventing_domains() {
 }
 
 #[test]
-fn environment_command_and_configuration_heads_use_local_family_evidence() {
-    for (heading, head, name, kind) in [
-        (
-            "Environment Commands",
-            ".B show-environment",
-            "show-environment",
-            EntryKind::Command,
-        ),
-        (
-            "Command Descriptions",
-            ".B list-units",
-            "list-units",
-            EntryKind::Command,
-        ),
-        (
-            "Environment",
-            ".B Environment=",
-            "Environment",
-            EntryKind::ConfigurationKey,
-        ),
+fn weak_hanging_heads_need_independent_declaration_evidence() {
+    for (heading, head) in [
+        ("Environment Commands", ".B show-environment"),
+        ("Command Descriptions", ".B list-units"),
+    ] {
+        let source = format!(".TH PROBE 1\n.SH \"{heading}\"\n.PP\n{head}\n.RS 4\nBODY\n.RE\n");
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+        // CVS man_term.c::pre_PP/pre_RS gives layout, not a Command fact.
+        assert!(
+            definitions(query.document.as_ref().unwrap()).is_empty(),
+            "{head}"
+        );
+        assert!(mant_render::render_query_text(&query).contains("BODY"));
+    }
+    for (heading, head, name) in [
         (
             "Environment",
             ".B WorkingDirectory=PATH",
             "WorkingDirectory",
-            EntryKind::ConfigurationKey,
         ),
-        (
-            "Environment",
-            ".B HOME=/path",
-            "HOME",
-            EntryKind::EnvironmentVariable,
-        ),
+        ("Environment", ".B HOME=/path", "HOME"),
     ] {
         let source = format!(".TH PROBE 1\n.SH \"{heading}\"\n.PP\n{head}\n.RS 4\nBODY\n.RE\n");
         let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
         let items = definitions(query.document.as_ref().unwrap());
         assert_eq!(items.len(), 1, "{heading}/{head}");
-        assert_eq!(items[0].entry.as_ref().unwrap().kind, kind);
+        assert_eq!(
+            items[0].entry.as_ref().unwrap().kind,
+            EntryKind::EnvironmentVariable
+        );
         assert_eq!(items[0].entry.as_ref().unwrap().names, [name]);
     }
+    // The exact input ran pinned CVS -Tutf8 -Owidth=78 first:
+    // man_term.c::pre_PP/pre_RS lays out the label and body, but an empty
+    // assignment has no complete weak declaration evidence.
+    let source = b".TH PROBE 1\n.SH Environment\n.PP\n.B Environment=\n.RS 4\nBODY\n.RE\n";
+    let query = mant_loader::load_roff_bytes(source).unwrap();
+    assert!(definitions(query.document.as_ref().unwrap()).is_empty());
+    assert!(mant_render::render_query_text(&query).contains("BODY"));
     let source = b".Dd September 8, 2026\n.Dt PROBE 1\n.Os\n.Sh TOPIC\n.Bl -tag -width Ds\n.It Cm -\nALIGNMENT_BODY\n.El\n";
     let query = mant_loader::load_roff_bytes(source).unwrap();
     let items = definitions(query.document.as_ref().unwrap());
     let entry = items[0].entry.as_ref().unwrap();
     assert_eq!(entry.kind, EntryKind::Term);
     assert_eq!(entry.names, ["-"]);
+}
+
+#[test]
+fn literal_dash_requires_a_visible_authored_macro_instance() {
+    // This exact input ran pinned CVS -Tutf8 -Owidth=78 first. In
+    // mdoc_term.c::termp_it_pre a tag HEAD is distinct from a list bullet;
+    // termp_bold_pre executes Cm, but zero-width Cm contributes no glyph.
+    let source = b".Dd September 8, 2026\n.Dt PROBE 1\n.Os\n.Sh TOPIC\n.Bl -tag -width Ds\n.It Cm \\& Ns -\nBODY\n.It Cm -\nDASH_BODY\n.It Cm \\& Ns --\nBODY2\n.It Cm --\nDOUBLE_BODY\n.El\n";
+    let query = mant_loader::load_roff_bytes(source).unwrap();
+    let document = query.document.as_ref().unwrap();
+    assert!(mant_ir::validate_document(document).is_empty());
+    let items = definitions(document);
+    assert_eq!(items.len(), 4);
+    assert!(items[0].entry.is_none());
+    assert_eq!(items[1].entry.as_ref().unwrap().names, ["-"]);
+    assert!(items[2].entry.is_none());
+    assert_eq!(items[3].entry.as_ref().unwrap().names, ["--"]);
+    let display = mant_render::render_query_text(&query);
+    for body in ["BODY", "DASH_BODY", "BODY2", "DOUBLE_BODY"] {
+        assert!(display.contains(body));
+    }
 }

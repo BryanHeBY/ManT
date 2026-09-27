@@ -74,6 +74,7 @@ pub(super) fn body_only_document(mut page: AnnotatedDocument, reason: &str) -> R
         root_source: key_source(page.root_source)?,
         body: DocumentBody::Fixed(FixedBody {
             surface,
+            root_configuration_hint: false,
             headings: Vec::new(),
             owners: Vec::new(),
             links: Vec::new(),

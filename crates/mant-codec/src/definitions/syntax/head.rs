@@ -7,7 +7,7 @@
 
 use mant_ir::{ContentContext, Inline, InlineView};
 
-use super::{commands, forms, named, options};
+use super::{forms, named, options};
 use crate::definitions::context::DefinitionContext;
 use mant_ir::inline_plain_text as plain_text;
 
@@ -30,43 +30,56 @@ pub(in crate::definitions) fn is_inferred_head(
         return true;
     }
     let text = plain_text(content, inlines);
-    if named::local_configuration_head(
-        &text,
-        matches!(
-            context,
-            DefinitionContext::Variables | DefinitionContext::ConfigurationKeys
-        ),
-    ) {
+    if named::local_configuration_head(&text, context) {
         return true;
     }
     match context {
-        DefinitionContext::EnvironmentVariables => named::environment_occurrences(&text).is_some(),
+        DefinitionContext::EnvironmentVariables => named::environment_occurrences(&text)
+            .is_some_and(|names| {
+                let complete_assignment = text
+                    .split_once('=')
+                    .is_some_and(|(_, value)| !value.trim().is_empty());
+                !names.is_empty() && (names.len() > 1 || text.contains('<') || complete_assignment)
+            }),
         DefinitionContext::Commands => is_command_head(&text),
-        DefinitionContext::ConfigurationKeys => {
-            named::named_occurrences(&text, named::is_configuration_key).is_some()
-                && (commands::leading_styled_command_name(content, inlines).is_some()
-                    || text.contains(['.', '=']))
-        }
         DefinitionContext::Variables => {
-            named::named_occurrences(&text, named::is_variable_term).is_some()
-                && commands::leading_styled_command_name(content, inlines).is_some()
+            mant_ir::variable_assignment_declaration_range(&text).is_some()
         }
-        DefinitionContext::Generic | DefinitionContext::Parameters | DefinitionContext::Values => {
-            false
-        }
+        // The complete dotted key or nonempty assignment above supplies
+        // local syntax evidence. Heading + bold alone is not a declaration;
+        // neither is a bare variable name under a VARIABLES title. CVS
+        // man_term.c::pre_PP/pre_RS only establishes a layout continuation.
+        DefinitionContext::ConfigurationKeys
+        | DefinitionContext::Generic
+        | DefinitionContext::RootConfigurationKeys
+        | DefinitionContext::Parameters
+        | DefinitionContext::Values => false,
     }
 }
 
 fn is_command_head(text: &str) -> bool {
-    let text = text.trim();
     // man_term.c::pre_PP/pre_RS establish only layout and the continuation.
     // A bold word alone is not a command declaration: the complete visible
     // head also needs a manual-call, parameter, or real key-binding syntax.
-    mant_ir::manual_call_name_range(text).is_some()
-        || named::invocation_name(text).is_some()
-        || named::callable_invocation_name(text).is_some()
-        || super::super::context::key_binding_command_form(text)
-            .is_some_and(|(_, binding)| binding.is_some())
+    mant_ir::command_declaration_name_range(text).is_some()
+}
+
+/// Executed italic argument runs supply argument boundaries for a native
+/// definition HEAD. They are not command names. Feed one opaque placeholder
+/// per run to the shared complete-call grammar, then bind the returned prefix
+/// only if its bytes are unchanged in the actual visible HEAD.
+pub(super) fn is_styled_command_head(content: ContentContext<'_>, inlines: &[Inline]) -> bool {
+    let mut syntax = String::new();
+    append_syntax(content, inlines, &mut syntax);
+    if !syntax.contains('\0') {
+        return false;
+    }
+    let syntax = syntax.replace('\0', "<arg>");
+    let Some(range) = mant_ir::command_declaration_name_range(&syntax) else {
+        return false;
+    };
+    let visible = plain_text(content, inlines);
+    visible.get(range.clone()) == syntax.get(range)
 }
 
 fn is_option_head(content: ContentContext<'_>, inlines: &[Inline]) -> bool {

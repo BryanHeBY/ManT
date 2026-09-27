@@ -28,3 +28,7 @@ pub use mandoc::{
     RedirectSyntaxError, lower_mandoc_document, parse_plain_manual as parse_roff_bytes,
     parse_plain_manual_report as parse_roff_bytes_with_report, redirect_target,
 };
+
+#[cfg(feature = "roff")]
+#[doc(hidden)]
+pub use mandoc::roff_source_visible_text_for_audit;

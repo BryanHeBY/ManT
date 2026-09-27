@@ -454,6 +454,8 @@ pub(super) fn definition_item(
             .flatten(),
         native_option_ranges: native_ranges.option_ranges,
         native_operand_ranges: native_ranges.operand_ranges,
+        native_argument_ranges: native_ranges.literal_argument_ranges,
+        native_components: native_ranges.components,
     }
 }
 
@@ -467,6 +469,8 @@ pub(in crate::mandoc::blocks::lists) struct PendingDefinitionItem {
     pub(super) role: Option<crate::definitions::NativeHeadRole>,
     pub(super) native_option_ranges: Vec<Vec<std::ops::Range<usize>>>,
     pub(super) native_operand_ranges: Vec<Vec<std::ops::Range<usize>>>,
+    pub(super) native_argument_ranges: Vec<Vec<std::ops::Range<usize>>>,
+    pub(super) native_components: Vec<Vec<crate::definitions::NativeHeadComponent>>,
 }
 
 impl PendingDefinitionItem {
@@ -539,6 +543,11 @@ impl PendingDefinitionItem {
                 .native_operand_ranges
                 .iter()
                 .any(|term| !term.is_empty())
+            || self
+                .native_argument_ranges
+                .iter()
+                .any(|term| !term.is_empty())
+            || self.native_components.iter().any(|term| !term.is_empty())
         {
             evidence.record_with_term_witness(
                 &item,
@@ -546,6 +555,8 @@ impl PendingDefinitionItem {
                 self.complete_term_witness,
                 self.native_option_ranges,
                 self.native_operand_ranges,
+                self.native_argument_ranges,
+                self.native_components,
             );
         }
         item

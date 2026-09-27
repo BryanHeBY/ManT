@@ -3,7 +3,7 @@ use std::{collections::HashSet, fmt::Write as _, fs, process};
 
 use mant_ir::{
     Block, ContentContext, Inline, InlineView, ListKind, ResolvedContent, SemanticIndex,
-    SourceFormat, ValueDomain,
+    SourceFormat,
     visit::{self, Visit},
 };
 

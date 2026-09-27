@@ -74,7 +74,7 @@ pub fn build_outline_with_references(
     let diagnostics = query
         .document
         .as_ref()
-        .map_or_else(Vec::new, |document| document.diagnostics.clone());
+        .map_or_else(Vec::new, mant_ir::Document::projection_diagnostics);
     let semantics_complete = semantics_complete(&diagnostics);
     let materialized_entries =
         if root.is_some() && !matches!(entries, EntryProjection::None | EntryProjection::Summary) {

@@ -129,7 +129,7 @@ struct DocumentResponseWire {
 
 impl<'de> Deserialize<'de> for DocumentResponse {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let response = DocumentResponseWire::deserialize(deserializer)?;
+        let mut response = DocumentResponseWire::deserialize(deserializer)?;
         let document: IrDocument = response.clone().into();
         match &document.body {
             DocumentBody::Flow(flow) => {
@@ -161,6 +161,11 @@ impl<'de> Deserialize<'de> for DocumentResponse {
             return Err(serde::de::Error::custom(finding.message));
         }
         mant_ir::validate_document_sources(&document).map_err(serde::de::Error::custom)?;
+        // `From<DocumentResponse>` isolates stale optional Fixed entry facts.
+        // Return that same checked body and coverage finding, not the stale
+        // wire fields that were present before validation.
+        response.body = document.body;
+        response.diagnostics = document.diagnostics;
         Ok(response)
     }
 }
@@ -462,17 +467,17 @@ impl From<&IrDocument> for DocumentResponse {
             schema: DocumentSchema::V0Dot12,
             producer: Producer::for_document(document),
             source_context: SourceContext::from(document),
-            body: document.body.clone(),
+            body: document.projection_body(),
             meta: document.meta.clone(),
             fragment_aliases: document.fragment_aliases.clone(),
-            diagnostics: document.diagnostics.clone(),
+            diagnostics: document.projection_diagnostics(),
         }
     }
 }
 
 impl From<DocumentResponse> for IrDocument {
     fn from(document: DocumentResponse) -> Self {
-        Self {
+        let mut result = Self {
             parser: document.producer.engine.map(|engine| ParserInfo {
                 name: engine.name,
                 version: engine.version,
@@ -483,6 +488,8 @@ impl From<DocumentResponse> for IrDocument {
             meta: document.meta,
             fragment_aliases: document.fragment_aliases,
             diagnostics: document.diagnostics,
-        }
+        };
+        result.isolate_stale_root_configuration_hint();
+        result
     }
 }

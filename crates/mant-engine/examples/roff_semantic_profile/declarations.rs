@@ -99,13 +99,47 @@ fn paragraph_boundary(node: &Node) -> bool {
         .any(paragraph_boundary)
 }
 
-fn bracket_head(content: ContentContext<'_>, item: &DefinitionItem) -> bool {
-    // Native text can still contain font escapes before `[`. Inspect the
-    // source-correlated visible head, not raw roff bytes or a derived ID.
-    item.terms.first().is_some_and(|term| {
-        super::inline_text(content, term)
-            .trim_start()
-            .starts_with('[')
+fn single_visible_head(content: ContentContext<'_>, item: &DefinitionItem) -> Option<String> {
+    let [term] = item.terms.as_slice() else {
+        return None;
+    };
+    Some(super::inline_text(content, term))
+}
+
+fn source_parameter_head(node: &Node) -> Option<String> {
+    // Share the production roff source-text projection for escapes; a second
+    // audit decoder would drift on valid glyph, font, motion and spacing
+    // controls. The AST role and owner boundary remain independently native.
+    // Explicit mdoc Fl/Cm/Ic (or a man font macro) may declare a literal
+    // bracketed name, so they must never be reinterpreted as presentation.
+    // The projection must equal one complete final IR term to excuse a group.
+    if !matches!(node.macro_name.as_deref(), Some("IP" | "TP" | "It")) {
+        return None;
+    }
+    let label = source_head_node(node)?;
+    if label.kind != NodeKind::Text || label.flags.no_print || !label.children.is_empty() {
+        return None;
+    }
+    let visible = mant_codec::roff_source_visible_text_for_audit(label.text.as_deref()?);
+    let label = visible.trim_matches([' ', '\t']);
+    (label.starts_with('[')
+        && label.ends_with(']')
+        && label
+            .chars()
+            .any(|character| character.is_ascii_alphabetic()))
+    .then_some(visible)
+}
+
+fn bracket_head(content: ContentContext<'_>, node: &Node, item: &DefinitionItem) -> bool {
+    // CVS man_macro.c::blk_imp retains the actual next-line TP head. A
+    // bracketed IR term alone is not independent source evidence: corrupting
+    // the final head must not turn an unrelated declaration into an allowed
+    // parameter boundary. Compare its *one complete term* with the native
+    // text witness. Joining several IR terms would let a damaged owner fake
+    // one source-proven parameter head.
+    source_parameter_head(node).is_some_and(|source| {
+        single_visible_head(content, item)
+            .is_some_and(|head| source.trim_matches([' ', '\t']) == head.trim_matches([' ', '\t']))
     })
 }
 
@@ -143,11 +177,10 @@ fn literal_numeric_label(text: &str) -> Option<String> {
 }
 
 fn unsigned_numeric_head(content: ContentContext<'_>, node: &Node, item: &DefinitionItem) -> bool {
-    let [term] = item.terms.as_slice() else {
-        return false;
-    };
-    let text = super::inline_text(content, term);
-    native_numeric_label(node).is_some_and(|label| label == text.trim_matches([' ', '\t']))
+    native_numeric_label(node).is_some_and(|label| {
+        single_visible_head(content, item)
+            .is_some_and(|head| label == head.trim_matches([' ', '\t']))
+    })
 }
 
 fn source_presentation_head(node: &Node) -> bool {
@@ -187,15 +220,28 @@ fn native_mdoc_search_template(node: &Node) -> bool {
     let mut text = String::new();
     let mut has_argument = false;
     collect_mdoc_template_text(head, &mut text, &mut has_argument);
-    has_argument && text.trim_start().starts_with('/')
+    has_argument
+        && mant_codec::roff_source_visible_text_for_audit(&text)
+            .trim_start()
+            .starts_with('/')
 }
 
-fn source_head_text(node: &Node) -> Option<&str> {
+fn source_head_node(node: &Node) -> Option<&Node> {
     let head = node
         .children
         .iter()
         .find(|child| child.kind == NodeKind::Head)?;
-    let mut current = head.children.first()?;
+    // CVS man_term.c::pre_TP ignores same-line width operands and renders
+    // the first NODE_LINE child. IP/It retain their first-head contract.
+    if node.macro_name.as_deref() == Some("TP") {
+        head.children.iter().find(|child| child.flags.line_start)
+    } else {
+        head.children.first()
+    }
+}
+
+fn source_head_text(node: &Node) -> Option<&str> {
+    let mut current = source_head_node(node)?;
     loop {
         if current.kind == NodeKind::Text {
             return (!current.flags.no_print && current.children.is_empty())
@@ -431,14 +477,14 @@ impl Audit<'_> {
                     self.classify(&run, "executed-flow-boundary");
                     run.clear();
                 }
-                // A nameless unsigned numeric label is not a declaration head
-                // and can precede a valid named suffix (ffmpeg's 422/high/ss).
-                // Do not generalize to every nameless owner: e.g. -1 has an
-                // option-shaped source witness even when its final kind is Term.
-                // Require an independent native numeric label, not merely a
-                // damaged observed head with its names removed. Never infer
-                // boundaries from the observed group's start/end. Missing owners are NOT
-                // treated as non-declarations: keep their source obligation.
+                // An unsigned numeric or bracketed parameter HEAD can split
+                // a physical run before a separately proven declaration
+                // suffix. EN04 can give such a HEAD a named Term fallback;
+                // final names therefore cannot gate this *source* boundary.
+                // Require the independent native text witness and the same
+                // complete visible HEAD, not a damaged observed label or the
+                // observed group's start/end. A missing owner still carries
+                // its source obligation. A signed -1 is not unsigned numeric.
                 let boundary = self
                     .observed
                     .owners
@@ -447,13 +493,8 @@ impl Audit<'_> {
                             .get(&(std::ptr::from_ref(child) as usize))
                             .unwrap_or(&(0, 0, usize::MAX)),
                     )
-                    .filter(|item| {
-                        item.entry
-                            .as_ref()
-                            .is_none_or(|facts| facts.names.is_empty())
-                    })
                     .and_then(|item| {
-                        if bracket_head(self.observed.content, item) {
+                        if bracket_head(self.observed.content, child, item) {
                             Some("parameter-only-head")
                         } else if unsigned_numeric_head(self.observed.content, child, item) {
                             Some("unsigned-numeric-head")
@@ -617,6 +658,18 @@ pub(super) fn violations(profile: &Value) -> Vec<String> {
 mod tests {
     use super::*;
 
+    fn tp_at_line(node: &Node, line: u32) -> Option<&Node> {
+        (node.kind == NodeKind::Block
+            && node.macro_name.as_deref() == Some("TP")
+            && node.line == line)
+            .then_some(node)
+            .or_else(|| {
+                node.children
+                    .iter()
+                    .find_map(|child| tp_at_line(child, line))
+            })
+    }
+
     #[test]
     fn numeric_boundary_requires_independent_complete_native_evidence() {
         for (input, expected) in [
@@ -634,7 +687,11 @@ mod tests {
             assert_eq!(literal_numeric_label(input).as_deref(), expected, "{input}");
         }
 
-        let source = b".TH PROBE 1\n.SH OPTIONS\n.IP \\fBfoo\\fR 4\n.PD 0\n.IP \\fBhigh\\fR 4\n.IP \\fBss\\fR 4\n.PD\nSpatially Scalable\n";
+        // Fixed CVS man_macro.c::blk_imp retains each IP label; pre_IP in
+        // man_term.c prints its first HEAD argument, while PD changes only
+        // spacing. Independently recognizable options still form a valid
+        // semantic group before we corrupt the final head.
+        let source = b".TH PROBE 1\n.SH OPTIONS\n.IP \\fB--foo\\fR 4\n.PD 0\n.IP \\fB--high\\fR 4\n.IP \\fB--ss\\fR 4\n.PD\nSpatially Scalable\n";
         let native = libmandoc_rs::Parser::default()
             .parse_bytes("probe.1", source)
             .unwrap();
@@ -647,7 +704,7 @@ mod tests {
             .content_store
             .atoms
             .iter_mut()
-            .find(|atom| atom.kind.text() == Some("foo"))
+            .find(|atom| atom.kind.text() == Some("--foo"))
             .expect("source-proven first term");
         let mant_ir::ContentAtomKind::Text { text, .. } = &mut atom.kind else {
             panic!("text term atom");
@@ -673,11 +730,13 @@ mod tests {
     }
 
     #[test]
-    fn unnamed_source_head_does_not_invalidate_or_hide_a_named_suffix_group() {
-        // Reduced from ffmpeg-codecs(1)'s 422/high/ss profile list. A numeric
-        // label has no exact discovered name; high/ss still form a contiguous
-        // named source run ending at the independently authored description.
-        let source = b".TH PROBE 1\n.SH OPTIONS\n.IP \\fB422\\fR 4\n.PD 0\n.IP \\fBhigh\\fR 4\n.IP \\fBss\\fR 4\n.PD\nSpatially Scalable\n";
+    fn numeric_source_head_does_not_hide_an_independently_named_suffix_group() {
+        // Reduced from ffmpeg-codecs(1)'s 422/high/ss profile list. Under
+        // current conservative EN04 rules, generic high/ss terms do not by
+        // themselves prove a shared description. The independently proven
+        // --high/--ss options do. Fixed CVS man_term.c::pre_IP renders all
+        // three physical heads, but does not provide a semantic group fact.
+        let source = b".TH PROBE 1\n.SH OPTIONS\n.IP \\fB422\\fR 4\n.PD 0\n.IP \\fB--high\\fR 4\n.IP \\fB--ss\\fR 4\n.PD\nSpatially Scalable\n";
         let native = libmandoc_rs::Parser::default()
             .parse_bytes("probe.1", source)
             .unwrap();
@@ -690,13 +749,25 @@ mod tests {
             row["reason"] == "unsigned-numeric-head" && row["physicalSources"] == json!([[3, 2, 0]])
         }));
 
+        let mut forged = document.clone();
+        let Block::DefinitionList { items, .. } =
+            &mut forged.flow_mut().unwrap().sections[0].blocks[0]
+        else {
+            panic!("definition list")
+        };
+        // A damaged owner with two terms, even if the second is invisible,
+        // cannot use the native single-label exception to bless a suffix.
+        items[0].terms.push(Vec::new());
+        let split = profile(&native.document.root, &forged);
+        assert_eq!(split["unexpectedGroups"].as_array().unwrap().len(), 1);
+
         for mutation in ["delete-group", "cross-unnamed-owner", "move-source-owner"] {
             let mut changed = document.clone();
             let Block::DefinitionList {
                 items,
                 declaration_groups,
                 ..
-            } = &mut changed.sections[0].blocks[0]
+            } = &mut changed.flow_mut().unwrap().sections[0].blocks[0]
             else {
                 panic!("definition list")
             };
@@ -728,6 +799,10 @@ mod tests {
 
     #[test]
     fn signed_option_shaped_head_remains_in_the_source_run() {
+        // Fixed CVS man_term.c::pre_IP renders the signed -1 head and the
+        // later auto head as independent labels. Without an explicit Fl or
+        // complete option declaration, EN04 keeps these generic Terms
+        // ungrouped; source accounting must not misclassify -1 as unsigned.
         let source = b".TH PROBE 1\n.SH OPTIONS\n.IP \\fBseq_disp_ext\\fR 4\nEncoder configuration.\n.RS 4\n.IP \\fB\\-1\\fR 4\n.PD 0\n.IP \\fBauto\\fR 4\n.PD\nDecide automatically.\n.RE\n";
         let native = libmandoc_rs::Parser::default()
             .parse_bytes("probe.1", source)
@@ -735,17 +810,232 @@ mod tests {
         let document =
             mant_loader::parse_manual_bytes(std::path::Path::new("probe.1"), source).unwrap();
         let valid = profile(&native.document.root, &document);
-        assert_eq!(valid["observedGroups"].as_array().unwrap().len(), 1);
+        assert_eq!(valid["observedGroups"], json!([]));
         assert!(violations(&valid).is_empty(), "{valid}");
+        assert!(valid["sourceRuns"].as_array().unwrap().iter().any(|row| {
+            row["physicalSources"] == json!([[6, 2, 0], [8, 2, 0]])
+                && row["reason"] == "named-source-run-without-group"
+        }));
+        assert!(
+            !valid["sourceRuns"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|row| row["reason"] == "unsigned-numeric-head")
+        );
+    }
+
+    #[test]
+    fn generic_term_adjacency_does_not_prove_a_shared_description() {
+        // Fixed CVS man_term.c::pre_IP renders all three separate labels and
+        // only the final item's body. Neither blk_imp nor the formatter gives
+        // generic foo/high/ss terms a shared semantic-description relation.
+        let source = b".TH PROBE 1\n.SH OPTIONS\n.IP \\fBfoo\\fR 4\n.PD 0\n.IP \\fBhigh\\fR 4\n.IP \\fBss\\fR 4\n.PD\nSpatially Scalable\n";
+        let native = libmandoc_rs::Parser::default()
+            .parse_bytes("probe.1", source)
+            .unwrap();
+        let document =
+            mant_loader::parse_manual_bytes(std::path::Path::new("probe.1"), source).unwrap();
+        let observed = profile(&native.document.root, &document);
+        assert_eq!(observed["observedGroups"], json!([]), "{observed}");
+        assert!(violations(&observed).is_empty(), "{observed}");
+        assert!(
+            observed["sourceRuns"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|row| {
+                    row["physicalSources"] == json!([[3, 2, 0], [5, 2, 0], [6, 2, 0]])
+                        && row["reason"] == "named-source-run-without-group"
+                })
+        );
+    }
+
+    #[test]
+    fn explicit_bracketed_literal_declaration_is_not_a_parameter_boundary() {
+        // Fixed CVS mdoc_macro.c::blk_full and man_macro.c::blk_imp retain
+        // each authored head. A Cm or B wrapper executes visible [foo] as a
+        // literal declaration; unlike plain `[ argument ]`, it is not a
+        // source-proven parameter-only head. In the third input the same-line
+        // `[foo]` is a TP layout operand: pre_TP skips it and prints only the
+        // following NODE_LINE B head.
+        for source in [
+            b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh COMMANDS\n.Bl -tag\n.It Cm [foo]\n.It Cm bar\nBody.\n.El\n"
+                .as_slice(),
+            b".TH PROBE 1\n.SH COMMANDS\n.TP\n.B [foo]\n.TP\n.B bar\nBody.\n",
+            b".TH PROBE 1\n.SH COMMANDS\n.TP [foo]\n.B [foo]\n.TP\n.B bar\nBody.\n",
+        ] {
+            let native = libmandoc_rs::Parser::default()
+                .parse_bytes("probe.1", source)
+                .unwrap();
+            let document =
+                mant_loader::parse_manual_bytes(std::path::Path::new("probe.1"), source).unwrap();
+            let observed = profile(&native.document.root, &document);
+            assert_eq!(observed["observedGroups"].as_array().unwrap().len(), 1);
+            assert!(violations(&observed).is_empty(), "{observed}");
+            assert!(!observed["sourceRuns"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|row| row["reason"] == "parameter-only-head"));
+        }
+    }
+
+    #[test]
+    fn plain_mdoc_parameter_head_preserves_the_independent_suffix_group() {
+        // The exact input ran pinned CVS -Tutf8 before this assertion.
+        // mdoc_macro.c::blk_full retains four authored It heads; mdoc_term.c
+        // prints the bare [argument] as its own label. Unlike `Cm [foo]`, it
+        // carries no semantic macro role and must not swallow the later Cm
+        // declarations' independently proven shared description.
+        let source = b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh COMMANDS\n.Bl -tag\n.It Cm first\n.It [argument]\n.It Cm second\n.It Cm third\nBody.\n.El\n";
+        let native = libmandoc_rs::Parser::default()
+            .parse_bytes("probe.1", source)
+            .unwrap();
+        let document =
+            mant_loader::parse_manual_bytes(std::path::Path::new("probe.1"), source).unwrap();
+        let observed = profile(&native.document.root, &document);
+        assert!(violations(&observed).is_empty(), "{observed}");
+        assert_eq!(observed["observedGroups"].as_array().unwrap().len(), 1);
+        assert!(
+            observed["sourceRuns"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|row| {
+                    row["reason"] == "parameter-only-head"
+                        && row["physicalSources"] == json!([[7, 2, 0]])
+                })
+        );
+    }
+
+    #[test]
+    fn tp_width_operand_does_not_hide_a_later_plain_parameter_head() {
+        // CVS man_term.c::pre_TP treats 4 as an invisible same-line width
+        // and renders the following NODE_LINE text as the actual HEAD.
+        // Audit this source boundary directly; semantic grouping of this
+        // adjacent width form is a separate producer obligation.
+        let source = b".TH PROBE 1\n.SH COMMANDS\n.TP\n.B first\n.TP 4\n\\fB      \\fP[ \\fIargument\\fP ]\n.TP\n.B second\n.TP\n.B third\nBody.\n";
+        let native = libmandoc_rs::Parser::default()
+            .parse_bytes("probe.1", source)
+            .unwrap();
+        let document =
+            mant_loader::parse_manual_bytes(std::path::Path::new("probe.1"), source).unwrap();
+        let Block::DefinitionList { items, .. } = &document.flow().unwrap().sections[0].blocks[0]
+        else {
+            panic!("definition list")
+        };
+        let tp = tp_at_line(&native.document.root, 5).expect("second TP");
+        assert_eq!(
+            source_parameter_head(tp).as_deref(),
+            Some("      [ argument ]")
+        );
+        assert!(bracket_head(document.content(), tp, &items[1]));
+    }
+
+    #[test]
+    fn source_presentation_templates_use_the_executed_head_and_visible_escape_projection() {
+        // Both exact inputs ran pinned CVS -Tutf8 first. In man_term.c,
+        // pre_TP skips the same-line width and prints the next NODE_LINE;
+        // term.c::term_word consumes the mdoc zero-width escape before the
+        // visible slash. Neither control changes the authored source role.
+        let man =
+            b".TH PROBE 1\n.SH OPTIONS\n.TP 4\n\\fB-\\fR\\fImin-len\\fR\n.TP\n.B --long\nBody.\n";
+        let native = libmandoc_rs::Parser::default()
+            .parse_bytes("probe.1", man)
+            .unwrap();
+        let first = tp_at_line(&native.document.root, 3).expect("first TP");
+        assert_eq!(source_head_text(first), Some(r"\fB-\fR\fImin-len\fR"));
+        assert!(source_presentation_head(first));
+
+        let mdoc = b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh COMMANDS\n.Bl -tag\n.It Xo\n.Pf \\&/ Ns Ar RE\n.Xc\n.It Cm second\n.It Cm third\nBody.\n.El\n";
+        let native = libmandoc_rs::Parser::default()
+            .parse_bytes("probe.1", mdoc)
+            .unwrap();
+        let document =
+            mant_loader::parse_manual_bytes(std::path::Path::new("probe.1"), mdoc).unwrap();
+        let observed = profile(&native.document.root, &document);
+        assert!(violations(&observed).is_empty(), "{observed}");
+        assert!(
+            observed["sourceRuns"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|row| {
+                    row["reason"] == "source-run-semantic-subset"
+                        && row["physicalSources"] == json!([[6, 2, 0], [9, 2, 0], [10, 2, 0]])
+                })
+        );
+    }
+
+    #[test]
+    fn bounded_source_controls_preserve_one_native_parameter_boundary() {
+        // Every exact input in this matrix ran pinned CVS -Tutf8 before the
+        // assertions. roff_escape.c::roff_escape classifies fonts, named
+        // glyphs and presentation controls; term.c::term_word executes them
+        // before printing the same bracketed parameter head. The auditor
+        // shares the production source projector, not its semantic decision.
+        for (label, head) in [
+            ("short-bold", r"\fB      \fP[ \fIargument\fP ]"),
+            ("short-roman", r"\fR      \fP[ \fIargument\fP ]"),
+            ("short-previous", r"\fP      \fP[ \fIargument\fP ]"),
+            ("zero-width-then-font", r"\&\fB      \fP[ \fIargument\fP ]"),
+            ("escaped-space", r"\       \fP[ \fIargument\fP ]"),
+            ("named-font", r"\f[BI]      \fP[ \fIargument\fP ]"),
+            ("two-byte-font", r"\f(BI      \fP[ \fIargument\fP ]"),
+            ("nonbreaking-space", r"\~      \fP[ \fIargument\fP ]"),
+            ("discretionary-zero-width", r"\%      \fP[ \fIargument\fP ]"),
+            ("thin-zero-width", r"\fB      \fP[ \fIarg\|ument\fP ]"),
+            ("narrow-zero-width", r"\fB      \fP[ \fIarg\^ument\fP ]"),
+            ("numbered-space", r"\fB      \fP[ \fIarg\0ument\fP ]"),
+            ("named-brackets", r"\[lB] argument \[rB]"),
+            ("unicode-brackets", r"\[u005B] argument \[u005D]"),
+            ("color-control", r"\m[red][ argument ]\m[]"),
+            ("size-control", r"\s+1[ argument ]\s0"),
+        ] {
+            let source = format!(
+                ".TH PROBE 1\n.SH COMMANDS\n.TP\n.B first\n.TP\n{head}\n.TP\n.B second\n.TP\n.B third\nBody.\n"
+            );
+            let native = libmandoc_rs::Parser::default()
+                .parse_bytes("probe.1", source.as_bytes())
+                .unwrap();
+            let document =
+                mant_loader::parse_manual_bytes(std::path::Path::new("probe.1"), source.as_bytes())
+                    .unwrap();
+            let observed = profile(&native.document.root, &document);
+            assert_eq!(
+                observed["observedGroups"].as_array().unwrap().len(),
+                1,
+                "{label}: {observed}"
+            );
+            assert!(violations(&observed).is_empty(), "{label}: {observed}");
+            assert!(
+                source_parameter_head(tp_at_line(&native.document.root, 5).unwrap()).is_some(),
+                "{label}"
+            );
+        }
+        for head in [r"\f[BI      \fP[ \fIargument\fP ]"] {
+            let source = format!(
+                ".TH PROBE 1\n.SH COMMANDS\n.TP\n.B first\n.TP\n{head}\n.TP\n.B second\n.TP\n.B third\nBody.\n"
+            );
+            let native = libmandoc_rs::Parser::default()
+                .parse_bytes("probe.1", source.as_bytes())
+                .unwrap();
+            assert!(
+                source_parameter_head(tp_at_line(&native.document.root, 5).unwrap()).is_none(),
+                "unsupported source escape: {head}"
+            );
+        }
     }
 
     #[test]
     fn semantic_subrun_can_follow_unaddressable_mdoc_templates() {
-        // Reduced from the vi(1) search commands. `/RE` forms use an authored
-        // regular-expression placeholder and deliberately have no exact
-        // selector; `?RE` and `n` are addressable command heads sharing the
-        // same physical mdoc description run.
-        let source = b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh COMMANDS\n.Bl -tag -width Ds\n.It Xo\n.Pf / Ns Ar RE\n.Xc\n.It Xo\n.Pf / Ns Ar RE Ns /\n.Xc\n.It Xo\n.Pf ? Ns Ar RE\n.Xc\n.It Cm n\nSearch.\n.El\n";
+        // Reduced from the vi(1) search commands. The Ar-based /RE forms
+        // are native presentation templates. Two explicit Cm commands then
+        // provide the independent semantic evidence needed for the suffix
+        // group. Fixed CVS mdoc_macro.c::blk_full closes each previous It;
+        // mdoc_term.c::termp_it_pre renders all four distinct tag heads.
+        let source = b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh COMMANDS\n.Bl -tag -width Ds\n.It Xo\n.Pf / Ns Ar RE\n.Xc\n.It Xo\n.Pf / Ns Ar RE Ns /\n.Xc\n.It Cm N\n.It Cm n\nSearch.\n.El\n";
         let native = libmandoc_rs::Parser::default()
             .parse_bytes("probe.1", source)
             .unwrap();
@@ -756,7 +1046,7 @@ mod tests {
         assert!(violations(&profile).is_empty(), "{profile}");
         assert!(profile["sourceRuns"].as_array().unwrap().iter().any(|row| {
             row["reason"] == "source-run-semantic-subset"
-                && row["physicalSources"] == json!([[6, 2, 0], [9, 2, 0], [12, 2, 0], [15, 2, 0]])
+                && row["physicalSources"] == json!([[6, 2, 0], [9, 2, 0], [12, 2, 0], [13, 2, 0]])
                 && row["observedGroup"] == 0
         }));
     }
@@ -782,7 +1072,7 @@ mod tests {
         let mut corrupted = document;
         let Block::DefinitionList {
             declaration_groups, ..
-        } = &mut corrupted.sections[0].blocks[0]
+        } = &mut corrupted.flow_mut().unwrap().sections[0].blocks[0]
         else {
             panic!("definition list")
         };
@@ -964,6 +1254,15 @@ mod tests {
                 .iter()
                 .any(|r| r["reason"] == "parameter-only-head")
         );
+        let mut forged = document.clone();
+        let Block::DefinitionList { items, .. } =
+            &mut forged.flow_mut().unwrap().sections[0].blocks[0]
+        else {
+            panic!("definition list")
+        };
+        items[1].terms.push(Vec::new());
+        let split = profile(&parsed.document.root, &forged);
+        assert_eq!(split["unexpectedGroups"].as_array().unwrap().len(), 1);
         let Block::DefinitionList {
             declaration_groups, ..
         } = &mut document.flow_mut().unwrap().sections[0].blocks[0]

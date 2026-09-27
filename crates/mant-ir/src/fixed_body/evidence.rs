@@ -69,6 +69,7 @@ pub struct FixedNonOptionRecognition {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum FixedNonOptionLimit {
     TooManyNames,
+    TooManyComponents,
 }
 
 impl FixedBody {
@@ -91,47 +92,27 @@ impl FixedBody {
         &self,
         owner: &OwnerMark,
     ) -> Result<Option<FixedNonOptionRecognition>, FixedNonOptionLimit> {
-        if owner.role != OwnerRole::Definition || owner.hanging_candidate {
+        if owner.role != OwnerRole::Definition {
             return Ok(None);
+        }
+        if owner.hanging_candidate {
+            return if self.hanging_structure_ready(owner) {
+                self.lexical_non_option_declaration(owner, true)
+            } else {
+                Ok(None)
+            };
         }
         let Some(head_role) = owner.head_role else {
             return Ok(None);
         };
         match head_role {
-            OwnerHeadRole::Lexical if self.section_is_environment(owner) => {
-                let Some(form) = self.owner_complete_form(owner) else {
-                    return Ok(None);
-                };
-                let names = crate::scan_environment_declaration_names(&form)
-                    .map_err(|_| FixedNonOptionLimit::TooManyNames)?;
-                let Some(names) = names.filter(|names| !names.is_empty()) else {
-                    return Ok(None);
-                };
-                let ranges = names
-                    .iter()
-                    .map(|(_, range)| range.clone())
-                    .collect::<Vec<_>>();
-                let Some(selections) =
-                    self.selection_subranges_from_form(&owner.head, &form, &ranges)
-                else {
-                    return Ok(None);
-                };
-                Ok(Some(FixedNonOptionRecognition {
-                    kind: EntryKind::EnvironmentVariable,
-                    evidence: EntryNameEvidence::Lexical,
-                    occurrences: names
-                        .into_iter()
-                        .zip(selections)
-                        .map(|((name, _), selection)| (name, selection))
-                        .collect(),
-                }))
-            }
+            OwnerHeadRole::Lexical => self.lexical_non_option_declaration(owner, false),
+            OwnerHeadRole::Literal => self.native_literal_declaration(owner),
             OwnerHeadRole::Option
             | OwnerHeadRole::Environment
             | OwnerHeadRole::Variable
-            | OwnerHeadRole::DefinedVariable
-            | OwnerHeadRole::Literal => self.native_non_option_declaration(owner),
-            OwnerHeadRole::Lexical => Ok(None),
+            | OwnerHeadRole::DefinedVariable => self.native_non_option_declaration(owner),
+            OwnerHeadRole::Argument => Ok(None),
         }
     }
 
@@ -153,8 +134,132 @@ impl FixedBody {
             && self.section_is_environment(owner)
     }
 
+    /// A malformed variable-like TP/IP label cannot become a complete-name
+    /// Term through the generic fallback. The physical HEAD/BODY and native
+    /// display remain available without a semantic selector.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn unbound_variable_head(&self, owner: &OwnerMark) -> bool {
+        if owner.role != OwnerRole::Definition
+            || !matches!(owner.head_role, None | Some(OwnerHeadRole::Lexical))
+            || owner.hanging_candidate
+            || self.section_declaration_family(owner)
+                != Some(crate::SectionDeclarationFamily::Variables)
+        {
+            return false;
+        }
+        self.owner_complete_form(owner)
+            .is_some_and(|form| crate::rejected_variable_declaration_head(&form))
+    }
+
     fn section_is_commands(&self, owner: &OwnerMark) -> bool {
         self.section_declaration_family(owner) == Some(crate::SectionDeclarationFamily::Commands)
+    }
+
+    /// Bind a complete lexical declaration to the same surviving HEAD in
+    /// either a real TP/IP definition or a structurally checked PP/RS pair.
+    /// Weak pairs require extra local syntax; `man_term.c::pre_PP/pre_RS` only
+    /// execute paragraph spacing and indentation, while `pre_TP` executes an
+    /// explicit label HEAD. Classification here is `ManT` policy, not upstream.
+    fn lexical_non_option_declaration(
+        &self,
+        owner: &OwnerMark,
+        hanging: bool,
+    ) -> Result<Option<FixedNonOptionRecognition>, FixedNonOptionLimit> {
+        if owner.head_role != Some(OwnerHeadRole::Lexical) {
+            return Ok(None);
+        }
+        let Some(form) = self.owner_complete_form(owner) else {
+            return Ok(None);
+        };
+        let (kind, names) = match self.section_declaration_family(owner) {
+            Some(crate::SectionDeclarationFamily::EnvironmentVariables) => {
+                let names = crate::scan_environment_declaration_names(&form)
+                    .map_err(|_| FixedNonOptionLimit::TooManyNames)?;
+                let Some(names) = names.filter(|names| !names.is_empty()) else {
+                    return Ok(None);
+                };
+                // A weak PP/RS paragraph needs a complete assignment or an
+                // independently delimited name group. Bare GIT_DIR remains
+                // visible prose; an explicit TP/IP label has its own boundary.
+                let complete_assignment = form
+                    .split_once('=')
+                    .is_some_and(|(_, value)| !value.trim().is_empty());
+                if hanging && names.len() < 2 && !complete_assignment && !form.contains('<') {
+                    return Ok(None);
+                }
+                (EntryKind::EnvironmentVariable, names)
+            }
+            Some(crate::SectionDeclarationFamily::Variables) => {
+                let range = if hanging {
+                    crate::variable_assignment_declaration_range(&form)
+                } else {
+                    crate::variable_declaration_name_range(&form)
+                };
+                let Some(range) = range else {
+                    return Ok(None);
+                };
+                let Some(name) = form.get(range.clone()) else {
+                    return Ok(None);
+                };
+                (EntryKind::Variable, vec![(name.to_owned(), range)])
+            }
+            Some(crate::SectionDeclarationFamily::ConfigurationKeys) => {
+                if hanging && !form.contains(['.', '=']) {
+                    return Ok(None);
+                }
+                let Some(range) = crate::configuration_key_declaration_range(&form) else {
+                    return Ok(None);
+                };
+                let Some(name) = form.get(range.clone()) else {
+                    return Ok(None);
+                };
+                (EntryKind::ConfigurationKey, vec![(name.to_owned(), range)])
+            }
+            Some(crate::SectionDeclarationFamily::Commands) => {
+                let Some(range) = crate::command_declaration_name_range(&form) else {
+                    return Ok(None);
+                };
+                let Some(name) = form.get(range.clone()) else {
+                    return Ok(None);
+                };
+                (EntryKind::Command, vec![(name.to_owned(), range)])
+            }
+            _ if self.root_configuration_hint && self.root_configuration_scope(owner) => {
+                let Some(range) = crate::root_configuration_assignment_range(&form) else {
+                    return Ok(None);
+                };
+                let Some(name) = form.get(range.clone()) else {
+                    return Ok(None);
+                };
+                (EntryKind::ConfigurationKey, vec![(name.to_owned(), range)])
+            }
+            _ => return Ok(None),
+        };
+        let ranges = names
+            .iter()
+            .map(|(_, range)| range.clone())
+            .collect::<Vec<_>>();
+        let Some(selections) = self.selection_subranges_from_form(&owner.head, &form, &ranges)
+        else {
+            return Ok(None);
+        };
+        let occurrences = names
+            .into_iter()
+            .zip(selections)
+            .filter_map(|((name, _), selection)| {
+                (self.selection_text(&selection).as_deref() == Some(name.as_str()))
+                    .then_some((name, selection))
+            })
+            .collect::<Vec<_>>();
+        if occurrences.len() != ranges.len() {
+            return Ok(None);
+        }
+        Ok(Some(FixedNonOptionRecognition {
+            kind,
+            evidence: EntryNameEvidence::Lexical,
+            occurrences,
+        }))
     }
 
     fn section_declaration_family(
@@ -177,6 +282,346 @@ impl FixedBody {
         None
     }
 
+    /// Ic and Cm currently share the native Literal role. The nearest
+    /// declaration section and a checked root configuration-manual hint
+    /// select a *weak* type; neither font nor macro spelling does so.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn literal_entry_kind(&self, owner: &OwnerMark) -> EntryKind {
+        if self.nested_under_option(owner) {
+            // A nested literal under a parameter is not a configuration key
+            // merely because the document's root is a configuration manual.
+            // Explicit Value evidence is not yet present, so keep a Term.
+            return EntryKind::Term;
+        }
+        match self.section_declaration_family(owner) {
+            Some(crate::SectionDeclarationFamily::Commands) => EntryKind::Command,
+            Some(crate::SectionDeclarationFamily::ConfigurationKeys) => EntryKind::ConfigurationKey,
+            Some(crate::SectionDeclarationFamily::NonDeclaration) | None
+                if self.root_configuration_hint && self.root_configuration_scope(owner) =>
+            {
+                EntryKind::ConfigurationKey
+            }
+            // Prose/reference scopes block inherited command context, but
+            // cannot erase a call proved within this very definition head.
+            Some(crate::SectionDeclarationFamily::NonDeclaration) | None
+                if self.local_literal_command_call(owner) =>
+            {
+                EntryKind::Command
+            }
+            Some(
+                crate::SectionDeclarationFamily::Parameters
+                | crate::SectionDeclarationFamily::EnvironmentVariables
+                | crate::SectionDeclarationFamily::Variables
+                | crate::SectionDeclarationFamily::NonDeclaration,
+            )
+            | None => EntryKind::Term,
+        }
+    }
+
+    /// A topical mdoc section can contain a command catalogue without a
+    /// heading literally named COMMANDS. Require the *same* complete It HEAD
+    /// to prove a delimited Ic/Cm name and an authored Fl option inside the
+    /// visible call signature. `mdoc_macro.c::blk_full/blk_part_exp` keep the
+    /// Xo/Xc call in one HEAD; `mdoc_term.c::termp_fl_pre` writes the option.
+    /// A prior sibling heading, font alone, or an Op Ar value proves nothing.
+    fn local_literal_command_call(&self, owner: &OwnerMark) -> bool {
+        if owner.head_components.len() > 4096 {
+            return false;
+        }
+        let Some((name, _)) = self.literal_command_component(owner) else {
+            return false;
+        };
+        let Some(form) = self.owner_complete_form(owner) else {
+            return false;
+        };
+        if !form.starts_with(&name) {
+            return false;
+        }
+        let Some(part_ranges) = component_part_ranges(&owner.head, &owner.head_components) else {
+            return false;
+        };
+        let Some(byte_ranges) = self.component_byte_ranges(&owner.head, &part_ranges) else {
+            return false;
+        };
+        owner
+            .head_components
+            .iter()
+            .zip(byte_ranges)
+            .skip(1)
+            .any(|(component, range)| {
+                component.role == OwnerHeadRole::Option
+                    && component.has_source_identity()
+                    && range.start > name.len()
+                    && form
+                        .get(..range.start)
+                        .is_some_and(|prefix| prefix.ends_with(" ["))
+                    && self
+                        .selection_text(&component.selection)
+                        .is_some_and(|text| {
+                            crate::native_option_token(&text)
+                                && form.get(range.clone()) == Some(text.as_str())
+                        })
+            })
+    }
+
+    fn nested_under_option(&self, owner: &OwnerMark) -> bool {
+        let mut parent = owner.parent;
+        // Native owner ancestry is structurally bounded for this semantic
+        // hint. Beyond the cap, withhold the weak key/command classification
+        // instead of spending quadratic work or losing an option barrier.
+        for _ in 0..64 {
+            let Some(key) = parent else {
+                return false;
+            };
+            let Some(ancestor) = self.owners.get((key.get() - 1) as usize) else {
+                return true;
+            };
+            if ancestor.head_role == Some(OwnerHeadRole::Option) {
+                return true;
+            }
+            parent = ancestor.parent;
+        }
+        parent.is_some()
+    }
+
+    /// An Xo HEAD with an unknown later join cannot prove a complete key.
+    /// Preserve the literal name as a Term until its full declaration closes.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn partial_literal_entry_kind(&self, owner: &OwnerMark) -> EntryKind {
+        match self.literal_entry_kind(owner) {
+            EntryKind::ConfigurationKey => EntryKind::Term,
+            kind => kind,
+        }
+    }
+
+    /// A root config manual can declare keys in DESCRIPTION, but a SEE ALSO
+    /// or EXAMPLES section is still a prose barrier. No prior sibling entry
+    /// can make a later owner into a key.
+    fn root_configuration_scope(&self, owner: &OwnerMark) -> bool {
+        let mut section = owner.section;
+        // Follow every native Sh/Ss ancestor, not only the nearest recognized
+        // title. A nested DESCRIPTION cannot reopen an EXAMPLES/SEE ALSO
+        // barrier; mdoc_macro.c::blk_full nests Ss under its Sh, while
+        // mdoc_term.c::termp_sh_pre/termp_ss_pre only format the headings.
+        for _ in 0..self.headings.len() {
+            let Some(key) = section else {
+                return true;
+            };
+            let Some(heading) = self.headings.get((key.get() - 1) as usize) else {
+                return false;
+            };
+            let Some(title) = self.selection_text(&heading.title) else {
+                return false;
+            };
+            if let Some(family) = crate::section_declaration_family(&title)
+                && (family != crate::SectionDeclarationFamily::NonDeclaration
+                    || !title.trim().eq_ignore_ascii_case("DESCRIPTION"))
+            {
+                return false;
+            }
+            section = heading.parent;
+        }
+        // An impossible cycle or overlong ancestry is not a proof. Unknown
+        // headings otherwise inherit the root hint; DESCRIPTION preserves it.
+        section.is_none()
+    }
+
+    /// True only for a key whose classification needs the document-level
+    /// hint. Document indexing can withhold such facts if metadata mutates.
+    pub(crate) fn root_configuration_dependent(&self, owner: &OwnerMark) -> bool {
+        owner
+            .entry
+            .as_ref()
+            .is_some_and(|entry| entry.kind == EntryKind::ConfigurationKey)
+            && self.section_declaration_family(owner)
+                != Some(crate::SectionDeclarationFamily::ConfigurationKeys)
+    }
+
+    fn literal_name_range(text: &str, kind: EntryKind) -> Option<Range<usize>> {
+        match kind {
+            EntryKind::ConfigurationKey => crate::configuration_key_declaration_range(text),
+            EntryKind::Command | EntryKind::Term if crate::native_command_token(text) => {
+                Some(0..text.len())
+            }
+            _ => None,
+        }
+    }
+
+    /// A literal Cm/Ic dash is an authored modifier name, unlike a generated
+    /// list bullet or a plain TP marker. Require one surviving, source-bound
+    /// native instance covering the entire visible HEAD; font alone is not
+    /// sufficient. `mdoc_term.c::termp_it_pre` keeps the tag HEAD distinct from
+    /// bullet/enum items, and `termp_bold_pre` executes Cm/Ic's glyph.
+    fn literal_dash_recognition(
+        &self,
+        owner: &OwnerMark,
+        form: &str,
+    ) -> Option<FixedNonOptionRecognition> {
+        if owner.role != OwnerRole::Definition
+            || owner.head_role != Some(OwnerHeadRole::Literal)
+            || owner.hanging_candidate
+            || !matches!(form, "-" | "--")
+        {
+            return None;
+        }
+        let [component] = owner.head_components.as_slice() else {
+            return None;
+        };
+        if component.role != OwnerHeadRole::Literal
+            || !component.has_source_identity()
+            || component.selection != owner.head
+            || self.selection_text(&component.selection).as_deref() != Some(form)
+        {
+            return None;
+        }
+        Some(FixedNonOptionRecognition {
+            kind: EntryKind::Term,
+            evidence: EntryNameEvidence::NativeMarkup,
+            occurrences: vec![(form.to_owned(), component.selection.clone())],
+        })
+    }
+
+    /// A complete literal HEAD may contain several independently executed
+    /// Ic/Cm instances. Each surviving component supplies its own name; a
+    /// comma/pipe only separates already-proved components and never creates
+    /// an alias or a name from an Ar parameter.
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one bounded native Literal component pass keeps the name and argument state together"
+    )]
+    fn native_literal_declaration(
+        &self,
+        owner: &OwnerMark,
+    ) -> Result<Option<FixedNonOptionRecognition>, FixedNonOptionLimit> {
+        if owner
+            .head_components
+            .iter()
+            .filter(|component| component.role == OwnerHeadRole::Literal)
+            .take(65)
+            .count()
+            > 64
+        {
+            return Err(FixedNonOptionLimit::TooManyNames);
+        }
+        // Budget the evidence itself before attempting to map its rendered
+        // ranges. A malformed or unavailable selection cannot hide the work
+        // required to inspect an overlong sequence of authored Ar instances.
+        if owner
+            .head_components
+            .iter()
+            .filter(|component| component.role == OwnerHeadRole::Argument)
+            .take(65)
+            .count()
+            > 64
+        {
+            return Err(FixedNonOptionLimit::TooManyComponents);
+        }
+        if owner.head_components.len() > 4096 {
+            return Err(FixedNonOptionLimit::TooManyComponents);
+        }
+        let Some(form) = self.owner_complete_form(owner) else {
+            return Ok(None);
+        };
+        if let Some(marker) = self.literal_dash_recognition(owner, &form) {
+            return Ok(Some(marker));
+        }
+        // ENVIRONMENT templates name a family, not one selectable variable
+        // or a fallback Term. Check the single materialized HEAD before its
+        // Literal components: an authored Cm instance cannot instantiate `*`.
+        if self.section_is_environment(owner) && crate::is_environment_template_label(&form) {
+            return Ok(None);
+        }
+        let Some(part_ranges) = component_part_ranges(&owner.head, &owner.head_components) else {
+            return Ok(None);
+        };
+        let Some(byte_ranges) = self.component_byte_ranges(&owner.head, &part_ranges) else {
+            return Ok(None);
+        };
+        let kind = self.literal_entry_kind(owner);
+        let mut names = Vec::with_capacity(byte_ranges.len());
+        let mut previous_end = 0;
+        let mut current_bare_name = false;
+        let mut argument_count = 0usize;
+        for (component, range) in owner.head_components.iter().zip(byte_ranges) {
+            if !component.has_source_identity() || range.start >= range.end {
+                return Ok(None);
+            }
+            let (Some(gap), Some(visible)) =
+                (form.get(previous_end..range.start), form.get(range.clone()))
+            else {
+                return Ok(None);
+            };
+            match component.role {
+                OwnerHeadRole::Literal => {
+                    if (names.is_empty() && !gap.trim().is_empty())
+                        || (!names.is_empty() && !crate::complete_literal_component_gap(gap))
+                    {
+                        return Ok(None);
+                    }
+                    let Some(name_range) = Self::literal_name_range(visible, kind) else {
+                        return Ok(None);
+                    };
+                    let absolute = range.start + name_range.start..range.start + name_range.end;
+                    let Some(name) = form.get(absolute.clone()) else {
+                        return Ok(None);
+                    };
+                    names.push((name.to_owned(), absolute));
+                    current_bare_name = name_range.end == visible.len();
+                    argument_count = 0;
+                }
+                OwnerHeadRole::Argument => {
+                    // Ar and Em render with the same underline font in
+                    // mdoc_term.c. Only this checked native Ar component can
+                    // license a parameter after a complete literal name.
+                    if argument_count == 64 {
+                        return Err(FixedNonOptionLimit::TooManyComponents);
+                    }
+                    if names.is_empty()
+                        || !current_bare_name
+                        || gap.is_empty()
+                        || !gap.chars().all(char::is_whitespace)
+                        || !crate::native_argument_component_token(visible)
+                    {
+                        return Ok(None);
+                    }
+                    argument_count += 1;
+                }
+                _ => return Ok(None),
+            }
+            previous_end = range.end;
+        }
+        if names.is_empty()
+            || !form
+                .get(previous_end..)
+                .is_some_and(|suffix| suffix.trim().is_empty())
+        {
+            return Ok(None);
+        }
+        let ranges = names
+            .iter()
+            .map(|(_, range)| range.clone())
+            .collect::<Vec<_>>();
+        let Some(selections) = self.selection_subranges_from_form(&owner.head, &form, &ranges)
+        else {
+            return Ok(None);
+        };
+        Ok(Some(FixedNonOptionRecognition {
+            kind,
+            evidence: EntryNameEvidence::NativeMarkup,
+            occurrences: names
+                .into_iter()
+                .zip(selections)
+                .map(|((name, _), selection)| (name, selection))
+                .collect(),
+        }))
+    }
+
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one bounded Ev/Va/Dv component pass validates roles, gaps and surviving name ranges"
+    )]
     fn native_non_option_declaration(
         &self,
         owner: &OwnerMark,
@@ -200,7 +645,10 @@ impl FixedBody {
             OwnerHeadRole::Environment => EntryKind::EnvironmentVariable,
             OwnerHeadRole::Variable => EntryKind::Variable,
             OwnerHeadRole::DefinedVariable => EntryKind::Term,
-            OwnerHeadRole::Option | OwnerHeadRole::Lexical | OwnerHeadRole::Literal => {
+            OwnerHeadRole::Option
+            | OwnerHeadRole::Lexical
+            | OwnerHeadRole::Literal
+            | OwnerHeadRole::Argument => {
                 return Ok(None);
             }
         };
@@ -400,6 +848,10 @@ impl FixedBody {
                 &form,
                 |prefix, names| self.selection_ranges_bold(&owner.head, &form, prefix, names),
             ) || self.section_is_commands(owner) && crate::manual_call_name_range(&form).is_some()
+                || matches!(
+                    self.lexical_non_option_declaration(owner, true),
+                    Ok(Some(_)) | Err(_)
+                )
         })
     }
 
@@ -513,7 +965,10 @@ impl FixedBody {
         owner.role == OwnerRole::Definition
             && !matches!(owner.head_role, Some(OwnerHeadRole::Option))
             && self.owner_complete_form(owner).is_some_and(|form| {
-                crate::is_presentation_term(&form) && !self.styled_presentation_label(owner, &form)
+                (crate::is_presentation_term(&form)
+                    || owner.head_role == Some(OwnerHeadRole::Literal) && form.trim() == "--")
+                    && self.literal_dash_recognition(owner, &form).is_none()
+                    && !self.styled_presentation_label(owner, &form)
             })
     }
 
@@ -1132,13 +1587,13 @@ impl FixedBody {
                 });
             return valid.then_some(entry);
         }
-        if let Some(recognition) = self.non_option_declaration(owner) {
-            return Self::validated_non_option_names(owner, entry, recognition).then_some(entry);
-        }
         if let Some(recognition) = self.manual_call_declaration(owner) {
             return Self::validated_non_option_names(owner, entry, recognition).then_some(entry);
         }
-        if self.unbound_environment_head(owner)
+        if let Some(recognition) = self.non_option_declaration(owner) {
+            return Self::validated_non_option_names(owner, entry, recognition).then_some(entry);
+        }
+        if (self.unbound_environment_head(owner) || self.unbound_variable_head(owner))
             && !matches!(
                 entry.kind,
                 EntryKind::Parameter {
@@ -1167,7 +1622,7 @@ impl FixedBody {
             // prove a complete command word; no other entry kind may borrow
             // this partial form or infer the rest of the HEAD.
             return self
-                .validated_partial_literal_command(owner, entry)
+                .validated_partial_literal_name(owner, entry)
                 .then_some(entry);
         };
         let [only_form] = entry.forms.as_slice() else {
@@ -1195,7 +1650,6 @@ impl FixedBody {
         if entry.kind == EntryKind::Term
             && (owner.head_role.is_none()
                 || owner.head_role == Some(OwnerHeadRole::Lexical)
-                    && !owner.lexical_term_witness
                     && self
                         .lexical_names(owner)
                         .is_some_and(|names| names.is_empty()))
@@ -1233,11 +1687,7 @@ impl FixedBody {
             (_, EntryKind::Term, EntryNameEvidence::Lexical) => {
                 only_name == &form
                     && binding.occurrences.as_slice() == std::slice::from_ref(&owner.head)
-                    && (owner.head_role != Some(OwnerHeadRole::Lexical)
-                        || owner.lexical_term_witness
-                            && self
-                                .lexical_names(owner)
-                                .is_some_and(|names| names.is_empty()))
+                    && !matches!(owner.head_role, None | Some(OwnerHeadRole::Lexical))
             }
             (
                 Some(OwnerHeadRole::Lexical),
@@ -1258,15 +1708,17 @@ impl FixedBody {
                 EntryKind::EnvironmentVariable,
                 EntryNameEvidence::NativeMarkup,
             )
-            | (Some(OwnerHeadRole::Literal), EntryKind::Command, EntryNameEvidence::NativeMarkup) => {
-                self.native_markup_name_matches(
-                    owner,
-                    entry.kind,
-                    &form,
-                    only_name,
-                    &binding.occurrences,
-                )
-            }
+            | (
+                Some(OwnerHeadRole::Literal),
+                EntryKind::Command | EntryKind::ConfigurationKey | EntryKind::Term,
+                EntryNameEvidence::NativeMarkup,
+            ) => self.native_markup_name_matches(
+                owner,
+                entry.kind,
+                &form,
+                only_name,
+                &binding.occurrences,
+            ),
             _ => false,
         };
         (entry.id == owner.id
@@ -1322,7 +1774,7 @@ impl FixedBody {
         seen.into_iter().all(|found| found)
     }
 
-    fn validated_partial_literal_command(
+    fn validated_partial_literal_name(
         &self,
         owner: &OwnerMark,
         entry: &EntryFacts<TextSelection>,
@@ -1338,7 +1790,7 @@ impl FixedBody {
             return false;
         };
         entry.id == owner.id
-            && entry.kind == EntryKind::Command
+            && entry.kind == self.partial_literal_entry_kind(owner)
             && entry.case == NameCase::Sensitive
             && entry.alias_groups.is_empty()
             && entry.alias_of.is_none()
@@ -1383,16 +1835,22 @@ impl FixedBody {
         if owner.head_role == Some(OwnerHeadRole::Literal) {
             let (name, selection) = self.literal_command_component(owner)?;
             let end = start.checked_add(name.len())?;
+            let kind = self.literal_entry_kind(owner);
             if form.get(start..end) != Some(name.as_str())
                 || !form.get(end..).is_some_and(|suffix| {
                     suffix.is_empty() || suffix.starts_with(char::is_whitespace)
                 })
                 || self.selection_subrange(&owner.head, start..end).as_ref() != Some(selection)
+                || kind == EntryKind::ConfigurationKey
+                    && (crate::configuration_key_declaration_range(&name) != Some(0..name.len())
+                        || !form
+                            .get(end..)
+                            .is_some_and(|suffix| suffix.trim().is_empty()))
             {
                 return None;
             }
             return Some((
-                EntryKind::Command,
+                kind,
                 EntryNameEvidence::NativeMarkup,
                 name,
                 selection.clone(),
@@ -1417,6 +1875,7 @@ impl FixedBody {
             ),
             OwnerHeadRole::Lexical
             | OwnerHeadRole::Literal
+            | OwnerHeadRole::Argument
             | OwnerHeadRole::Variable
             | OwnerHeadRole::DefinedVariable => return None,
         };

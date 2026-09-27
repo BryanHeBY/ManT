@@ -117,6 +117,7 @@ pub(super) fn response(
     let content_omitted = evidence
         .iter()
         .any(ExplanationEvidence::has_omitted_content);
+    let diagnostics = document.projection_diagnostics();
     Ok((
         QueryExplanation {
             supports: pool.values,
@@ -145,8 +146,8 @@ pub(super) fn response(
                 relations: false,
                 content: content_omitted,
             },
-            semantics_complete: crate::projection::semantics_complete(&document.diagnostics),
-            diagnostics: document.diagnostics.clone(),
+            semantics_complete: crate::projection::semantics_complete(&diagnostics),
+            diagnostics,
             evidence,
         },
         used,

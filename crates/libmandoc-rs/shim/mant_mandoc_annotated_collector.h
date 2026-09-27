@@ -75,13 +75,18 @@ struct mant_annotated_selection_part {
 /* Authored mdoc Va/Dv instances, not their final terminal font. */
 #define MANT_ANNOTATED_MARK_HEAD_VARIABLE (1U << 11)
 #define MANT_ANNOTATED_MARK_HEAD_DEFINED_VARIABLE (1U << 12)
+/* Authored Ar parameter boundary in an It HEAD. It cannot become the owner
+ * declaration role: mdoc_term.c renders Ar/Em alike, so final font is not
+ * enough to authenticate a parameter after an Ic/Cm key. */
+#define MANT_ANNOTATED_MARK_HEAD_ARGUMENT (1U << 13)
 #define MANT_ANNOTATED_MARK_HEAD_ROLE_MASK (\
     MANT_ANNOTATED_MARK_HEAD_OPTION | \
     MANT_ANNOTATED_MARK_HEAD_ENVIRONMENT | \
     MANT_ANNOTATED_MARK_HEAD_LITERAL | \
     MANT_ANNOTATED_MARK_HEAD_LEXICAL | \
     MANT_ANNOTATED_MARK_HEAD_VARIABLE | \
-    MANT_ANNOTATED_MARK_HEAD_DEFINED_VARIABLE)
+    MANT_ANNOTATED_MARK_HEAD_DEFINED_VARIABLE | \
+    MANT_ANNOTATED_MARK_HEAD_ARGUMENT)
 
 enum mant_annotated_point_kind {
 	MANT_ANNOTATED_POINT_NONE = 0,

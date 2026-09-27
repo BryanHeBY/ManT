@@ -8,11 +8,18 @@ use std::ops::Range;
 
 type NameRange = (String, Range<usize>);
 
+mod configuration;
 mod environment_names;
 mod literal_names;
 mod recognition;
 mod section_context;
 mod term_names;
+pub use configuration::{
+    complete_literal_component_gap, configuration_key_declaration_range, configuration_key_token,
+    native_argument_component_token, rejected_variable_declaration_head,
+    root_configuration_assignment_range, variable_assignment_declaration_range,
+    variable_declaration_name_range,
+};
 pub(crate) use environment_names::is_variable_term as native_variable_token;
 pub use environment_names::{
     EnvironmentNameLimit, EnvironmentNameOccurrences, environment_declaration_names,
@@ -28,9 +35,13 @@ pub use recognition::{
     DeclarationContext, DeclarationView, RecognitionParts, RecognitionResult,
     recognize_option_declarations,
 };
-pub use section_context::{SectionDeclarationFamily, section_declaration_family};
+pub use section_context::{
+    SectionDeclarationFamily, document_name_declaration_family, document_root_declaration_family,
+    section_declaration_family,
+};
 pub use term_names::{
-    complete_term_label_range, is_ordinal_marker, is_presentation_term, manual_call_name_range,
+    command_declaration_name_range, complete_term_label_range, generic_callable_name_range,
+    is_ordinal_marker, is_presentation_term, manual_call_name_range,
 };
 
 /// Leading ordinary dash-option spelling within one visible token.

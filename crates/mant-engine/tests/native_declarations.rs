@@ -264,15 +264,39 @@ fn inferred_heads_require_whole_declarations_not_words_inside_prose() {
 }
 
 #[test]
-fn explicit_diagnostic_labels_remain_definitions_without_prose_fragment_names() {
+fn invalid_environment_labels_keep_their_physical_definition_without_fragment_names() {
     let source = b".TH PROBE 1\n.SH ENVIRONMENT\n.TP\nPermission denied, otherwise\nBODY\n";
     let query = mant_loader::load_roff_bytes(source).unwrap();
     let items = definitions(query.document.as_ref().unwrap());
     assert_eq!(items.len(), 1);
-    let entry = items[0].entry.as_ref().unwrap();
-    assert_eq!(entry.kind, mant_ir::EntryKind::Term);
-    assert!(entry.names.is_empty());
+    // CVS man_macro.c::blk_imp/man_term.c::pre_TP retain the complete
+    // HEAD/BODY. The ENVIRONMENT heading does not make its prose a variable.
+    assert!(items[0].entry.is_none());
     assert!(mant_render::render_query_text(&query).contains("Permission denied, otherwise"));
+    let result = mant_query::select_explanation(&query, "Permission denied, otherwise").unwrap();
+    assert_eq!(result.counts.direct_entry.total, 0);
+    assert_eq!(result.counts.context_mention.total, 1);
+}
+
+#[test]
+fn diagnostic_definition_binds_its_complete_term_without_fragment_names() {
+    // This exact TP/B input ran pinned CVS -Tutf8 -Owidth=78 first;
+    // man_macro.c::blk_imp and man_term.c::pre_TP retain the full label.
+    let source = b".TH PROBE 1\n.SH DIAGNOSTICS\n.TP\n.B Permission denied, otherwise\nBODY\n";
+    let query = mant_loader::load_roff_bytes(source).unwrap();
+    let items = definitions(query.document.as_ref().unwrap());
+    assert_eq!(items.len(), 1);
+    let entry = items[0].entry.as_ref().expect("diagnostic subject");
+    assert_eq!(entry.kind, mant_ir::EntryKind::Term);
+    assert_eq!(entry.names, ["Permission denied, otherwise"]);
+    for (name, direct) in [
+        ("Permission denied, otherwise", 1),
+        ("Permission", 0),
+        ("otherwise", 0),
+    ] {
+        let result = mant_query::select_explanation(&query, name).unwrap();
+        assert_eq!(result.counts.direct_entry.total, direct, "{name}");
+    }
 }
 
 #[test]
@@ -352,17 +376,21 @@ fn native_environment_role_and_names_are_independent_of_placeholder_support() {
     let query = mant_loader::load_roff_bytes(source).unwrap();
     let items = definitions(query.document.as_ref().unwrap());
     assert_eq!(items.len(), 2);
-    assert!(
-        items.iter().all(
-            |item| item.entry.as_ref().unwrap().kind == mant_ir::EntryKind::EnvironmentVariable
-        )
-    );
-    assert_eq!(items[0].entry.as_ref().unwrap().names, ["DEMO_HOME"]);
-    assert!(items[1].entry.as_ref().unwrap().names.is_empty());
+    let concrete = items[0].entry.as_ref().expect("concrete environment name");
+    assert_eq!(concrete.kind, mant_ir::EntryKind::EnvironmentVariable);
+    assert_eq!(concrete.names, ["DEMO_HOME"]);
+    // mdoc_macro.c::blk_full preserves the second It's visible head/body;
+    // the bracketed family has no exact name and no semantic entry.
+    assert!(items[1].entry.is_none());
+    assert!(!items[1].terms.is_empty() && !items[1].description.is_empty());
     assert!(mant_ir::validate_document(query.document.as_ref().unwrap()).is_empty());
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one cross-format regression keeps all declaration/form witnesses together"
+)]
 fn named_declarations_keep_placeholders_annotations_and_assignment_values_in_forms() {
     for (section, head, expected, kind) in [
         (
@@ -411,7 +439,7 @@ fn named_declarations_keep_placeholders_annotations_and_assignment_values_in_for
             "CONFIGURATION",
             "Environment=",
             vec!["Environment"],
-            mant_ir::EntryKind::ConfigurationKey,
+            mant_ir::EntryKind::Term,
         ),
         ("TOPIC", "if=FILE", vec!["if"], mant_ir::EntryKind::Term),
         (
@@ -461,6 +489,10 @@ fn named_declarations_keep_placeholders_annotations_and_assignment_values_in_for
         let source = format!(".TH PROBE 1\n.SH ENVIRONMENT\n.TP\n{head}\nBODY\n");
         let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
         let items = definitions(query.document.as_ref().unwrap());
-        assert!(items[0].entry.as_ref().unwrap().names.is_empty(), "{head}");
+        // Invalid ENVIRONMENT names retain TP content without becoming a
+        // no-name semantic entry or splitting a prose fragment into a name.
+        assert!(items[0].entry.is_none(), "{head}");
+        assert!(!items[0].terms.is_empty() && !items[0].description.is_empty());
+        assert!(mant_render::render_query_text(&query).contains("BODY"));
     }
 }

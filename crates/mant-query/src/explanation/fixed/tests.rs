@@ -86,6 +86,7 @@ fn fixture() -> ResolvedContent {
     }
     let hard = || TextJoin::HardBoundary;
     let mut fixed = FixedBody {
+        root_configuration_hint: false,
         surface: DisplaySurface {
             text: arena,
             rows,
@@ -368,6 +369,7 @@ fn hinted_fixed_body(form: &str, names: &[&str], occurrences: &[(&str, u64, u64)
         })
         .collect();
     FixedBody {
+        root_configuration_hint: false,
         surface: DisplaySurface {
             text: form.into(),
             rows: vec![DisplayRow {

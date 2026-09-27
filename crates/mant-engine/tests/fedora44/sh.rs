@@ -1,7 +1,7 @@
 //! Tests for Fedora Linux 44's `sh(1)` alias of the Bash manual.
 use super::semantic_read;
 
-use mant_ir::{EntryKind, ParameterKind, SemanticEntry, SemanticIndex, SourceFormat, ValueDomain};
+use mant_ir::{EntryKind, ParameterKind, SemanticEntry, SemanticIndex, SourceFormat};
 use mant_render::render_excerpt_markdown;
 
 use crate::common::{self, collect_sections, source_path_ends_with};
@@ -71,7 +71,7 @@ fn keeps_the_bash_shell_page_spacing_and_anchors_normalized() {
 }
 
 #[test]
-fn rebuilds_builtin_parameter_hierarchy_from_relative_indentation() {
+fn keeps_builtin_parameter_hierarchy_without_inventing_a_value_domain() {
     let document = fedora44_manual("sh");
     let index = SemanticIndex::build(document);
     let mut sections = Vec::new();
@@ -94,15 +94,20 @@ fn rebuilds_builtin_parameter_hierarchy_from_relative_indentation() {
         .iter()
         .find(|entry| entry.names.iter().any(|alias| alias == "-o"))
         .expect("set -o parameter");
-    assert!(matches!(
-        named_option.value_domain,
-        Some(ValueDomain::Choices { exhaustive: false })
-    ));
+    // CVS man_term.c::pre_TP keeps these nested heads readable, but the
+    // .RS/.TP indentation alone is not independent Value-domain evidence.
+    assert_eq!(named_option.value_domain, None);
     assert!(
         named_option
             .children
             .iter()
-            .all(|entry| entry.kind == EntryKind::Value)
+            .any(|entry| entry.kind == EntryKind::Term && entry.names == ["history"])
+    );
+    assert!(
+        named_option
+            .children
+            .iter()
+            .all(|entry| entry.kind == EntryKind::Term)
     );
     assert!(
         sections
@@ -195,11 +200,17 @@ fn discovers_styled_builtin_names_without_promoting_argument_prose() {
             "missing styled shell builtin {name}"
         );
     }
+    // CVS man_macro.c::blk_imp and man_term.c::pre_TP retain the explicit
+    // "0 arguments" head/body. It is a named Term, not a shell command.
     assert!(
-        entries
-            .iter()
-            .all(|entry| entry.names.iter().all(|alias| alias != "0 arguments")),
-        "descriptive prose below the command section must remain unclassified"
+        entries.iter().any(|entry| entry.kind == EntryKind::Term
+            && entry.names.iter().any(|alias| alias == "0 arguments")),
+        "the explicit argument-count subject remains a named Term"
+    );
+    assert!(
+        entries.iter().all(|entry| entry.kind != EntryKind::Command
+            || entry.names.iter().all(|alias| alias != "0 arguments")),
+        "argument-count prose must not become a command"
     );
 
     let query = common::query_for_document("sh", document);
@@ -325,7 +336,7 @@ fn preserves_compact_invocations_without_borrowing_the_next_description() {
 }
 
 #[test]
-fn explanation_preserves_history_builtin_and_nested_value_as_independent_evidence() {
+fn explanation_preserves_history_builtin_and_nested_term_as_independent_evidence() {
     let query = crate::common::query_for_document("sh", fedora44_manual("sh"));
     let result = mant_query::explain_query(
         &query,
@@ -348,7 +359,8 @@ fn explanation_preserves_history_builtin_and_nested_value_as_independent_evidenc
                 .any(|basis| matches!(basis, mant_protocol::EvidenceBasis::Name { .. }))
         })
         .collect::<Vec<_>>();
-    for role in [mant_ir::EntryKind::Command, mant_ir::EntryKind::Value] {
+    // The nested set -o item has no separately proven Value role (§5.4).
+    for role in [mant_ir::EntryKind::Command, mant_ir::EntryKind::Term] {
         assert!(
             named.iter().any(|evidence| evidence
                 .entry

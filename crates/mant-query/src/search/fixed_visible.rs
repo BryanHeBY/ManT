@@ -205,7 +205,7 @@ fn finish_result(
         .ok_or(SearchError::ResourceLimit)?;
     let truncated = returned != 0 && consumed < total;
     let document = query.document.as_ref().ok_or(SearchError::MissingContent)?;
-    let diagnostics = document.diagnostics.clone();
+    let diagnostics = document.projection_diagnostics();
     if diagnostics.len() > MAX_SEARCH_DIAGNOSTICS {
         return Err(SearchError::ResourceLimit);
     }

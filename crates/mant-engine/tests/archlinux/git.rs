@@ -1,11 +1,9 @@
 //! Tests for the Arch Linux `git(1)` gzip fixture.
-use super::semantic_read;
-
 use crate::common::{self, GIT_SECTIONS};
 use crate::fixtures::{archlinux_manual, archlinux_manual_query};
 use mant_ir::{Block, EntryKind, InlineView};
 use mant_protocol::EntryProjection;
-use mant_protocol::{ExcerptSelection, OutlineDetail};
+use mant_protocol::{EvidenceClass, ExcerptSelection, OutlineDetail};
 use mant_query::{build_outline, build_outline_projection, build_outline_with_detail};
 
 /// Section topology (24 sections), nested children in ENVIRONMENT VARIABLES,
@@ -170,20 +168,23 @@ fn supports_outline_discovery_and_targeted_excerpts() {
 }
 
 #[test]
-fn identifies_git_environment_variables_from_hanging_definitions() {
+fn keeps_weak_git_environment_labels_readable_without_claiming_direct_definitions() {
     let query = archlinux_manual_query("git");
-    let explanation =
-        semantic_read::semantic_excerpt(&query, &["GIT_DIR"]).expect("GIT_DIR environment entry");
-    assert!(matches!(
-        explanation.selections.as_slice(),
-        [ExcerptSelection::DocumentEntry { outline, entry }]
-            if outline.ancestors.iter().any(|ancestor| ancestor.title == "ENVIRONMENT VARIABLES")
-                && entry.entry_owner().and_then(mant_ir::EntryOwner::facts).is_some_and(|identity| {
-                    identity.kind == mant_ir::EntryKind::EnvironmentVariable
-                        && identity.names == ["GIT_DIR"]
-                })
-    ));
-
+    // The full Arch source ran pinned CVS -Tutf8 -Owidth=78 first. Its
+    // man_term.c::pre_PP/pre_B/pre_RS path proves display and indentation,
+    // not an authored Ev role or a variable assignment. A bold bare word
+    // under ENVIRONMENT VARIABLES remains searchable, not a direct fact.
+    let explanation = mant_query::select_explanation(&query, "GIT_DIR").unwrap();
+    assert_eq!(explanation.counts.direct_entry.total, 0);
+    assert!(explanation.evidence.iter().any(|item| {
+        item.class == EvidenceClass::ContextMention
+            && (item.outline.title() == "ENVIRONMENT VARIABLES"
+                || item
+                    .outline
+                    .ancestors
+                    .iter()
+                    .any(|ancestor| ancestor.title == "ENVIRONMENT VARIABLES"))
+    }));
     let outline = build_outline_projection(
         &query,
         EntryProjection::Kinds {
@@ -192,8 +193,8 @@ fn identifies_git_environment_variables_from_hanging_definitions() {
         None,
     )
     .expect("Git environment outline");
-    assert!(common::find_outline_entry(&outline.nodes, "GIT_DIR").is_some());
-    assert!(common::find_outline_entry(&outline.nodes, "HOME").is_some());
+    assert!(common::find_outline_entry(&outline.nodes, "GIT_DIR").is_none());
+    assert!(mant_render::render_query_text(&query).contains("GIT_DIR"));
 }
 
 /// No roff escapes or control characters leak into text values.

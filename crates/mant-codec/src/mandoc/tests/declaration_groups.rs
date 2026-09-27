@@ -498,6 +498,79 @@ fn declaration_witnesses_close_on_unclassified_bodies_and_survive_split_macro_li
 }
 
 #[test]
+fn tp_width_argument_does_not_block_a_proven_suffix_group() {
+    // Both exact inputs ran the pinned CVS -Tutf8 reference first. CVS
+    // man_macro.c::blk_imp keeps the TP head open for the next input line;
+    // man_term.c::pre_TP skips any same-line width child and prints only
+    // NODE_LINE children. Thus `.TP 4` and `.TP` have the same displayed
+    // parameter template and the same later independently styled heads.
+    for (label, tp) in [("implicit-width", ".TP\n"), ("explicit-width", ".TP 4\n")] {
+        let input = format!(
+            ".TH PROBE 1\n.SH COMMANDS\n.TP\n.B first\n{tp}\\fB      \\fP[ \\fIargument\\fP ]\n.TP\n.B second\n.TP\n.B third\nBody.\n"
+        );
+        let document = parse_manual_bytes(
+            std::path::Path::new("tp-width-parameter.1"),
+            input.as_bytes(),
+        )
+        .expect("parse native TP width and later declaration heads");
+        let [
+            Block::DefinitionList {
+                items,
+                declaration_groups,
+                ..
+            },
+        ] = document.flow().expect("Flow fixture").sections[0]
+            .blocks
+            .as_slice()
+        else {
+            panic!("expected one definition list: {label}")
+        };
+        assert_eq!(items.len(), 4, "{label}");
+        assert_eq!(
+            declaration_groups,
+            &[mant_ir::DeclarationGroup {
+                start_item: 2,
+                end_item: 4,
+            }],
+            "{label}: width must not hide the source-proven template boundary"
+        );
+    }
+}
+
+#[test]
+fn tp_same_line_bracketed_width_does_not_reclassify_the_visible_b_head() {
+    // Exact input ran the pinned CVS -Tutf8 reference first. In
+    // man_term.c::pre_TP, same-line `[foo]` is a layout operand and the
+    // following NODE_LINE `.B [foo]` is the visible declaration head.
+    // pre_B retains its authored bold role; the width is not a parameter
+    // template that may split a source-proven reading group.
+    let input = b".TH PROBE 1\n.SH COMMANDS\n.TP [foo]\n.B [foo]\n.TP\n.B bar\nBody.\n";
+    let document = parse_manual_bytes(std::path::Path::new("tp-bracket-width.1"), input)
+        .expect("parse visible B head after hidden TP width");
+    let [
+        Block::DefinitionList {
+            items,
+            declaration_groups,
+            ..
+        },
+    ] = document.flow().expect("Flow fixture").sections[0]
+        .blocks
+        .as_slice()
+    else {
+        panic!("expected one definition list")
+    };
+    assert_eq!(items.len(), 2);
+    assert_eq!(inline_text(document.content(), &items[0].terms[0]), "[foo]");
+    assert_eq!(
+        declaration_groups,
+        &[mant_ir::DeclarationGroup {
+            start_item: 0,
+            end_item: 2,
+        }]
+    );
+}
+
+#[test]
 fn declaration_witnesses_keep_tq_groups_across_repeated_macro_expansions() {
     let repeated_tq = parse_manual_bytes(
         std::path::Path::new("declaration-repeated-tq-macro.1"),

@@ -79,8 +79,7 @@ impl<'a> DocumentPlan<'a> {
                 .document
                 .as_ref()
                 .expect("Fixed plan has a document")
-                .diagnostics
-                .clone(),
+                .projection_diagnostics(),
         }
     }
 

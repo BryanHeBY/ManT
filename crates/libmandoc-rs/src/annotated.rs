@@ -512,6 +512,53 @@ mod tests {
     }
 
     #[test]
+    fn native_ar_component_is_not_an_emphasis_or_owner_role() {
+        // Exact input ran pinned CVS -Tutf8 -Owidth=78 before this assertion.
+        // mdoc_macro.c::in_line retains Ar and Em as different ELEM nodes;
+        // mdoc_term.c::termp_under_pre gives both the same final underline,
+        // so only the authored Ar node can authenticate a parameter boundary.
+        let mut bundle = SourceBundle::new();
+        bundle
+            .insert(
+                "t.1",
+                b".Dd September 26, 2026\n.Dt SSH_CONFIG 5\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width Ds\n.It Cm AddressFamily Ar address_family\nThe address family.\n.It Cm Key No prose\nA prose tail.\n.It Cm Key Em prose\nAn emphasized tail.\n.It Cm color=[yes|no\nAn unclosed value.\n.El\n"
+                    .to_vec(),
+            )
+            .unwrap();
+        let page = AnnotatedRenderer::default()
+            .render_bundle("t.1", &bundle, InputFormat::Mdoc)
+            .unwrap();
+        let roles = page
+            .marks
+            .iter()
+            .filter(|mark| mark.kind == 2)
+            .map(|mark| mark.flags & (32 | 64 | 128 | 256 | 2048 | 4096 | 8192))
+            .collect::<Vec<_>>();
+        assert_eq!(roles, [128, 128, 128, 128]);
+        let components = page
+            .marks
+            .iter()
+            .filter(|mark| mark.kind == 6)
+            .map(|mark| {
+                (
+                    mark.flags & (32 | 64 | 128 | 256 | 2048 | 4096 | 8192),
+                    direct_mark_text(&page, mark),
+                )
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            components,
+            [
+                (128, "AddressFamily".to_owned()),
+                (8192, "address_family".to_owned()),
+                (128, "Key".to_owned()),
+                (128, "Key".to_owned()),
+                (128, "color=[yes|no".to_owned()),
+            ]
+        );
+    }
+
+    #[test]
     fn native_empty_roles_and_generated_va_do_not_reject_readable_body() {
         // Exact input ran pinned CVS -Tutf8 first. term.c::term_word()
         // emits no glyph for \&, while mdoc_validate.c::post_rv() creates

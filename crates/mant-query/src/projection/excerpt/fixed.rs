@@ -74,6 +74,7 @@ pub(super) fn select_fixed_excerpt(
         }
         selections.push(selection);
     }
+    let diagnostics = document.map_or_else(Vec::new, mant_ir::Document::projection_diagnostics);
     Ok(QueryExcerpt {
         display_title: query
             .document
@@ -83,12 +84,11 @@ pub(super) fn select_fixed_excerpt(
         schema: ExcerptSchema::V0Dot12,
         label: query.label.clone(),
         address: query.address.clone(),
-        semantics_complete: document
-            .is_none_or(|document| semantics_complete(&document.diagnostics)),
+        semantics_complete: semantics_complete(&diagnostics),
         producer: document.map(mant_protocol::Producer::for_document),
         source_context: document.map(mant_protocol::SourceContext::from),
         meta: document.map(|document| document.meta.clone()),
-        diagnostics: document.map_or_else(Vec::new, |document| document.diagnostics.clone()),
+        diagnostics,
         content_projection: None,
         selections,
     })
@@ -494,6 +494,7 @@ mod tests {
     fn one_run(text: &str, width: u32) -> FixedBody {
         let key = NonZeroU32::new(1).unwrap();
         FixedBody {
+            root_configuration_hint: false,
             surface: DisplaySurface {
                 text: text.to_owned(),
                 rows: vec![DisplayRow {

@@ -327,6 +327,7 @@ fn fixed_native_body_uses_surviving_surface_not_flow_topology_for_readability() 
     };
     surface.validate().unwrap();
     page.body = DocumentBody::Fixed(FixedBody {
+        root_configuration_hint: false,
         surface,
         headings: Vec::new(),
         owners: Vec::new(),

@@ -45,6 +45,14 @@ use crate::text_safety::mask_terminal_control_bytes;
 
 const MAX_INLINE_EQUATION_NORMALIZATIONS: usize = 256;
 
+/// Pure source-text projection for the development-only native/IR auditor.
+/// This does not classify declarations or make a source head semantic.
+#[doc(hidden)]
+#[must_use]
+pub fn roff_source_visible_text_for_audit(source: &str) -> String {
+    visible_text(source)
+}
+
 /// Parse already prepared bytes; `path` is a source label, never opened.
 /// Includes are disabled and compression must already have been decoded.
 ///
@@ -124,12 +132,27 @@ fn lower_mandoc_document_with_source(
     retained_targets.extend(explicit_targets.iter().cloned());
     navigation::promote_manual_navigation(&context.content, &mut root_blocks, &mut sections);
     let mut content_store = context.content.finish();
+    // Freeze canonical metadata before entry inference. The same title/names
+    // enter the returned document and its weak root syntax-family hint; the
+    // input filename is never a classifier.
+    let meta = DocumentMeta {
+        title: normalize_metadata(parsed.metadata.title.as_deref()),
+        manual_section: normalize_metadata(parsed.metadata.section.as_deref()),
+        date: normalize_metadata(parsed.metadata.date.as_deref()),
+        volume: normalize_metadata(parsed.metadata.volume.as_deref()),
+        os: normalize_metadata(parsed.metadata.os.as_deref()),
+        arch: normalize_metadata(parsed.metadata.arch.as_deref()),
+        names: normalize_metadata(parsed.metadata.name.as_deref())
+            .into_iter()
+            .collect(),
+        alias_target: parsed.metadata.alias_target.clone(),
+    };
     retained_targets.extend(crate::definitions::identify_definitions_with_evidence(
         &mut content_store,
         &mut root_blocks,
         &mut sections,
         explicit_targets,
-        parsed.metadata.name.as_deref(),
+        &meta,
         &context.native_heads.borrow(),
     ));
     diagnostics.extend(crate::producer_identity::outline_identity_diagnostics(
@@ -174,18 +197,7 @@ fn lower_mandoc_document_with_source(
             blocks: root_blocks,
             sections,
         }),
-        meta: DocumentMeta {
-            title: normalize_metadata(parsed.metadata.title.as_deref()),
-            manual_section: normalize_metadata(parsed.metadata.section.as_deref()),
-            date: normalize_metadata(parsed.metadata.date.as_deref()),
-            volume: normalize_metadata(parsed.metadata.volume.as_deref()),
-            os: normalize_metadata(parsed.metadata.os.as_deref()),
-            arch: normalize_metadata(parsed.metadata.arch.as_deref()),
-            names: normalize_metadata(parsed.metadata.name.as_deref())
-                .into_iter()
-                .collect(),
-            alias_target: parsed.metadata.alias_target.clone(),
-        },
+        meta,
         fragment_aliases: Vec::new(),
         diagnostics,
     };

@@ -10,6 +10,7 @@ _Static_assert(MAN_RS == 401, "annotated MAN_RS token changed");
 _Static_assert(MAN_B == 396, "annotated MAN_B token changed");
 _Static_assert(MDOC_Dv == 276, "annotated MDOC_Dv token changed");
 _Static_assert(MDOC_Va == 295, "annotated MDOC_Va token changed");
+_Static_assert(MDOC_Ar == 273, "annotated MDOC_Ar token changed");
 
 static int
 man_reading_family(uint32_t token)
@@ -235,6 +236,8 @@ valid_marks(const struct mant_annotated_result *result)
 		    ((mark->kind != MANT_ANNOTATED_MARK_OWNER &&
 		    mark->kind != MANT_ANNOTATED_MARK_HEAD_COMPONENT) ||
 		    (mark->kind == MANT_ANNOTATED_MARK_OWNER &&
+		    (mark->flags & MANT_ANNOTATED_MARK_HEAD_ARGUMENT) != 0) ||
+		    (mark->kind == MANT_ANNOTATED_MARK_OWNER &&
 		    (mark->flags & MANT_ANNOTATED_MARK_DEFINITION) == 0) ||
 		    ((mark->flags & MANT_ANNOTATED_MARK_HEAD_ROLE_MASK) &
 		    ((mark->flags & MANT_ANNOTATED_MARK_HEAD_ROLE_MASK) - 1)) != 0)) ||
@@ -254,7 +257,8 @@ valid_marks(const struct mant_annotated_result *result)
 		    MANT_ANNOTATED_MARK_HEAD_ENVIRONMENT |
 		    MANT_ANNOTATED_MARK_HEAD_LITERAL |
 		    MANT_ANNOTATED_MARK_HEAD_VARIABLE |
-		    MANT_ANNOTATED_MARK_HEAD_DEFINED_VARIABLE)) != 0))
+		    MANT_ANNOTATED_MARK_HEAD_DEFINED_VARIABLE |
+		    MANT_ANNOTATED_MARK_HEAD_ARGUMENT)) != 0))
 			return 0;
 		if (mark->kind == MANT_ANNOTATED_MARK_REGION &&
 		    mark->region_kind ==
@@ -315,6 +319,8 @@ valid_marks(const struct mant_annotated_result *result)
 		    mark->token != MDOC_Va) ||
 		    ((mark->flags & MANT_ANNOTATED_MARK_HEAD_DEFINED_VARIABLE) != 0 &&
 		    mark->token != MDOC_Dv) ||
+		    ((mark->flags & MANT_ANNOTATED_MARK_HEAD_ARGUMENT) != 0 &&
+		    mark->token != MDOC_Ar) ||
 		    result->marks[mark->parent - 1].kind !=
 		    MANT_ANNOTATED_MARK_REGION ||
 		    result->marks[mark->parent - 1].region_kind !=

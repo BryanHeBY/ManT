@@ -15680,6 +15680,11 @@
                   "$ref": "#/$defs/RegionMark"
                 }
               },
+              "rootConfigurationHint": {
+                "description": "Weak configuration-manual hint derived from the document's normalized\ntitle/names. It never creates an entry without a complete native head;\nthe containing Document rechecks it against current metadata.",
+                "type": "boolean",
+                "default": false
+              },
               "surface": {
                 "description": "Final native display surface; marks contain no visible-body copy.",
                 "$ref": "#/$defs/DisplaySurface"
@@ -15689,6 +15694,7 @@
             "required": [
               "kind",
               "surface",
+              "rootConfigurationHint",
               "headings",
               "owners",
               "links",
@@ -17271,6 +17277,11 @@
             "description": "An mdoc `Ic` or `Cm` literal command head.",
             "type": "string",
             "const": "literal"
+          },
+          {
+            "description": "An authored mdoc `Ar` argument instance within a definition HEAD.\nIt can delimit a preceding key but never names an entry by itself.",
+            "type": "string",
+            "const": "argument"
           },
           {
             "description": "A native declaration head whose authored syntax permits conservative\nwhole-token lexical classification; no name is implied by this hint.",

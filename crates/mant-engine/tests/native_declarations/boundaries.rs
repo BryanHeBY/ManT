@@ -34,13 +34,15 @@ fn native_environment_templates_are_not_exact_prefix_names() {
         );
         let content = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
         let item = definitions(content.document.as_ref().unwrap())[0];
-        let entry = item.entry.as_ref().unwrap();
-        assert_eq!(entry.kind, mant_ir::EntryKind::EnvironmentVariable);
-        assert_eq!(
-            entry.names,
-            expected.into_iter().collect::<Vec<_>>(),
-            "{head}"
-        );
+        if let Some(expected) = expected {
+            let entry = item.entry.as_ref().expect("concrete variable");
+            assert_eq!(entry.kind, mant_ir::EntryKind::EnvironmentVariable);
+            assert_eq!(entry.names, [expected], "{head}");
+        } else {
+            // CVS mdoc_macro.c::blk_full preserves the physical It even when
+            // its Ns/Ar spelling is a family, not one selectable variable.
+            assert!(item.entry.is_none(), "{head}");
+        }
         assert!(!item.terms.is_empty() && !item.description.is_empty());
     }
 }

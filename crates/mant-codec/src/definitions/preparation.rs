@@ -3,7 +3,9 @@
 #![allow(clippy::similar_names)] // ContentContext and DefinitionContext are distinct inputs.
 use std::collections::HashMap;
 
-use mant_ir::{Block, ContentContext, DefinitionItem, Inline, Section, SourceSpan};
+use mant_ir::{
+    Block, ContentContext, DeclarationGroup, DefinitionItem, Inline, Section, SourceSpan,
+};
 
 use super::groups::GroupMatchingPlan;
 use super::{
@@ -121,64 +123,14 @@ impl PreparedDefinitions {
                     items,
                     declaration_groups,
                     ..
-                } => {
-                    let item_context = definition_group_context(content, items, context);
-                    // Resolve native declaration witnesses while their
-                    // parse-local owner markers still exist. Remove those
-                    // markers before calculating public content-slice paths:
-                    // anchors at the front of a term would otherwise shift
-                    // every retained name-binding index.
-                    let heads = items
-                        .iter()
-                        .map(|item| {
-                            identity_plan(
-                                content,
-                                item,
-                                item_context,
-                                evidence.role(item),
-                                evidence.complete_term(item),
-                                evidence.option_ranges(item),
-                                evidence.operand_ranges(item),
-                            )
-                            .group_head
-                        })
-                        .collect::<Vec<_>>();
-                    *declaration_groups =
-                        evidence
-                            .groups
-                            .resolve(content, items, &heads, group_matches);
-                    crate::definitions::remove_native_definition_owner_markers_from_items(items);
-                    for item in items.iter_mut() {
-                        let identity = identity_plan(
-                            content,
-                            item,
-                            item_context,
-                            evidence.role(item),
-                            evidence.complete_term(item),
-                            evidence.option_ranges(item),
-                            evidence.operand_ranges(item),
-                        );
-                        if has_semantic_spelling(content, item, &identity) {
-                            *self
-                                .preferred_counts
-                                .entry(identity.preferred.clone())
-                                .or_default() += 1;
-                        }
-                        let child_context = child_definition_context(identity.kind, item_context);
-                        self.plans.push(PreparedDefinition {
-                            source: item.source,
-                            head: head_content(&item.terms),
-                            identity,
-                        });
-                        self.blocks(
-                            content,
-                            &mut item.description,
-                            child_context,
-                            evidence,
-                            group_matches,
-                        );
-                    }
-                }
+                } => self.definition_list(
+                    content,
+                    items,
+                    declaration_groups,
+                    context,
+                    evidence,
+                    group_matches,
+                ),
                 Block::Table { rows, .. } => {
                     for row in rows {
                         for cell in &mut row.cells {
@@ -200,6 +152,74 @@ impl PreparedDefinitions {
                 | Block::ThematicBreak { .. }
                 | Block::Unsupported { .. } => {}
             }
+        }
+    }
+
+    fn definition_list(
+        &mut self,
+        content: ContentContext<'_>,
+        items: &mut [DefinitionItem],
+        declaration_groups: &mut Vec<DeclarationGroup>,
+        context: DefinitionContext,
+        evidence: &NativeHeadEvidence,
+        group_matches: &mut GroupMatchingPlan,
+    ) {
+        let item_context = definition_group_context(content, items, context);
+        // Resolve native declaration witnesses while their parse-local owner
+        // markers still exist. Remove them before calculating public content
+        // paths: a front-of-term anchor shifts every retained binding index.
+        let heads = items
+            .iter()
+            .map(|item| {
+                identity_plan(
+                    content,
+                    item,
+                    item_context,
+                    evidence.role(item),
+                    evidence.complete_term(item),
+                    evidence.option_ranges(item),
+                    evidence.operand_ranges(item),
+                    evidence.argument_ranges(item),
+                    evidence.components(item),
+                )
+                .group_head
+            })
+            .collect::<Vec<_>>();
+        *declaration_groups = evidence
+            .groups
+            .resolve(content, items, &heads, group_matches);
+        crate::definitions::remove_native_definition_owner_markers_from_items(items);
+        for item in items.iter_mut() {
+            let identity = identity_plan(
+                content,
+                item,
+                item_context,
+                evidence.role(item),
+                evidence.complete_term(item),
+                evidence.option_ranges(item),
+                evidence.operand_ranges(item),
+                evidence.argument_ranges(item),
+                evidence.components(item),
+            );
+            if has_semantic_spelling(content, item, &identity) {
+                *self
+                    .preferred_counts
+                    .entry(identity.preferred.clone())
+                    .or_default() += 1;
+            }
+            let child_context = child_definition_context(identity.kind, item_context);
+            self.plans.push(PreparedDefinition {
+                source: item.source,
+                head: head_content(&item.terms),
+                identity,
+            });
+            self.blocks(
+                content,
+                &mut item.description,
+                child_context,
+                evidence,
+                group_matches,
+            );
         }
     }
 }
@@ -246,6 +266,8 @@ fn normalize_blocks(
                         evidence.complete_term(item),
                         evidence.option_ranges(item),
                         evidence.operand_ranges(item),
+                        evidence.argument_ranges(item),
+                        evidence.components(item),
                     );
                     let child_context = child_definition_context(identity.kind, item_context);
                     normalize_blocks(content, &mut item.description, child_context, evidence);

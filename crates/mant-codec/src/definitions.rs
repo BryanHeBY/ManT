@@ -18,7 +18,7 @@ mod syntax;
 use context::DefinitionContext;
 #[cfg(feature = "roff")]
 pub(crate) use diagnostics::manual_discovery_diagnostics;
-pub(crate) use evidence::{NativeHeadEvidence, NativeHeadRole};
+pub(crate) use evidence::{NativeHeadComponent, NativeHeadEvidence, NativeHeadRole};
 #[cfg(feature = "roff")]
 pub(crate) use groups::mark_native_definition_owner;
 pub(crate) use groups::{
@@ -27,7 +27,7 @@ pub(crate) use groups::{
 };
 pub(crate) use identity::document_id_slug;
 use identity::{document_anchor_ids, identify_item, identify_list_item};
-use mant_ir::{Block, ContentStore, Section};
+use mant_ir::{Block, ContentStore, DocumentMeta, Section};
 pub(crate) use recognized::RecognizedName;
 use std::collections::{HashMap, HashSet};
 pub(crate) use syntax::{
@@ -44,14 +44,16 @@ pub(crate) fn identify_definitions(
     blocks: &mut Vec<Block>,
     sections: &mut [Section],
     reserved_targets: &HashSet<String>,
-    document_name: Option<&str>,
+    _document_name: Option<&str>,
 ) -> HashSet<String> {
+    // Markdown's source path is not native bibliographic metadata. Even a
+    // file named ssh_config must not grant a root configuration hint.
     identify_definitions_with_evidence(
         content_store,
         blocks,
         sections,
         reserved_targets,
-        document_name,
+        &DocumentMeta::default(),
         &NativeHeadEvidence::default(),
     )
 }
@@ -61,17 +63,18 @@ pub(crate) fn identify_definitions_with_evidence(
     blocks: &mut Vec<Block>,
     sections: &mut [Section],
     reserved_targets: &HashSet<String>,
-    document_name: Option<&str>,
+    document_meta: &DocumentMeta,
     evidence: &NativeHeadEvidence,
 ) -> HashSet<String> {
-    let root_context = document_name.map_or(DefinitionContext::Generic, |name| {
-        let name = name.to_ascii_lowercase();
-        if name.ends_with("_config") || name.ends_with("-config") {
-            DefinitionContext::ConfigurationKeys
-        } else {
-            DefinitionContext::Generic
-        }
-    });
+    let root_context = mant_ir::document_root_declaration_family(document_meta).map_or(
+        DefinitionContext::Generic,
+        |family| match family {
+            mant_ir::SectionDeclarationFamily::ConfigurationKeys => {
+                DefinitionContext::RootConfigurationKeys
+            }
+            _ => DefinitionContext::Generic,
+        },
+    );
     let prepared = preparation::prepare(
         content_store.content(),
         blocks,

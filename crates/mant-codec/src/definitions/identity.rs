@@ -51,6 +51,14 @@ pub(super) struct IdentityPlan {
     pub(super) preferred: String,
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "one frozen native HEAD witness is passed intact"
+)]
+#[expect(
+    clippy::too_many_lines,
+    reason = "identity, name bindings and group proof share one resolved HEAD witness"
+)]
 pub(super) fn identity_plan(
     content: ContentContext<'_>,
     item: &DefinitionItem,
@@ -59,6 +67,8 @@ pub(super) fn identity_plan(
     complete_term_witness: bool,
     option_ranges: Option<&[Vec<std::ops::Range<usize>>]>,
     operand_ranges: Option<&[Vec<std::ops::Range<usize>>]>,
+    argument_ranges: Option<&[Vec<std::ops::Range<usize>>]>,
+    components: Option<&[Vec<super::NativeHeadComponent>]>,
 ) -> IdentityPlan {
     let inferred = item.entry.is_none();
     let (kind, case, names, occurrences, value_domain, over_limit) =
@@ -72,6 +82,8 @@ pub(super) fn identity_plan(
                     complete_term_witness,
                     option_ranges,
                     operand_ranges,
+                    argument_ranges,
+                    components,
                 );
                 (
                     inferred.kind,
@@ -116,25 +128,26 @@ pub(super) fn identity_plan(
     // likewise a real physical owner without a semantic entry. Explicit
     // author-provided facts remain authoritative: both guards apply only to
     // inferred native identities.
+    // An authored Ic/Cm instance names the literal dash modifier in a tag
+    // list. The same glyph without that native role remains presentation.
+    // CVS mdoc_term.c::termp_it_pre distinguishes tag from bullet owners;
+    // termp_bold_pre executes the Cm glyph itself.
+    let literal_dash = authored_literal_dash(content, item, hint, components);
     let presentation_marker = inferred
         && !matches!(
             hint,
             Some(super::NativeHeadRole::Option | super::NativeHeadRole::LiteralTerm)
         )
+        && !literal_dash
         && !matches!(kind, EntryKind::Parameter { .. })
         && !item.terms.is_empty()
-        && item
-            .terms
-            .iter()
-            .all(|term| mant_ir::is_presentation_term(&plain_text(content, term)));
-    let environment_template = inferred
-        && context == DefinitionContext::EnvironmentVariables
-        && hint != Some(super::NativeHeadRole::Option)
-        && !item.terms.is_empty()
-        && item
-            .terms
-            .iter()
-            .all(|term| mant_ir::is_environment_template_label(&plain_text(content, term)));
+        && item.terms.iter().all(|term| {
+            let text = plain_text(content, term);
+            mant_ir::is_presentation_term(&text)
+                || hint == Some(super::NativeHeadRole::Literal) && text.trim() == "--"
+        });
+    let environment_template =
+        inferred && is_unbound_environment_template(content, item, context, hint);
     let unbound_environment = inferred
         && (kind == EntryKind::EnvironmentVariable && names.is_empty() || environment_template);
     let semantic = hint != Some(super::NativeHeadRole::Presentation)
@@ -151,15 +164,55 @@ pub(super) fn identity_plan(
     // This is deliberately independent of whether a generic form happens to
     // have an extractable selector name.
     let groupable_role = !matches!(kind, EntryKind::Term | EntryKind::Value)
-        || head_context != DefinitionContext::Generic;
+        || !matches!(
+            head_context,
+            DefinitionContext::Generic | DefinitionContext::RootConfigurationKeys
+        );
+    let complete_declaration = semantic
+        && groupable_role
+        && (names.is_empty() || kind == EntryKind::Term && hint.is_none())
+        && !item.terms.is_empty()
+        && item
+            .terms
+            .iter()
+            .all(|term| super::syntax::is_inferred_head(content, term, head_context));
+    // A TP/TQ supplies a physical owner, not a shared-description claim.
+    // In particular, a complete-label Term fallback for `router_begin note`
+    // must interrupt a COMMANDS transcript instead of borrowing the last
+    // line's body. Keep a down-classified Term in a group when an executed
+    // native role or the complete declaration grammar independently proves
+    // the head; do not use its mere selectable name as that proof. A complete
+    // native TP/TQ head that is itself wholly bold may retain a provider
+    // group after being conservatively classified as Term. An intervening
+    // unstyled transcript head remains a barrier. A native LiteralTerm is
+    // only a styled-IP single-mark witness, not a declaration-group role.
+    // CVS
+    // man_macro.c::blk_imp and man_term.c::pre_TP preserve each owner's head.
+    let styled_native_term = hint.is_none()
+        && complete_term_witness
+        && !names.is_empty()
+        && item.terms.iter().all(|term| {
+            let text = plain_text(content, term);
+            super::syntax::styled_complete_term_occurrences(content, term, &text).is_some()
+        });
+    let authored_group_role = matches!(
+        hint,
+        Some(
+            super::NativeHeadRole::Literal
+                | super::NativeHeadRole::DefinedVariable
+                | super::NativeHeadRole::Variable
+                | super::NativeHeadRole::Option
+                | super::NativeHeadRole::Environment
+        )
+    );
+    let term_group_evidence = !matches!(kind, EntryKind::Term)
+        || authored_group_role
+        || complete_declaration
+        || styled_native_term;
     let group_head = semantic
         && groupable_role
-        && (!names.is_empty()
-            || !item.terms.is_empty()
-                && item
-                    .terms
-                    .iter()
-                    .all(|term| super::syntax::is_inferred_head(content, term, head_context)));
+        && term_group_evidence
+        && (!names.is_empty() || complete_declaration);
     IdentityPlan {
         semantic,
         group_head,
@@ -170,6 +223,40 @@ pub(super) fn identity_plan(
         value_domain,
         preferred,
     }
+}
+
+fn authored_literal_dash(
+    content: ContentContext<'_>,
+    item: &DefinitionItem,
+    hint: Option<super::NativeHeadRole>,
+    components: Option<&[Vec<super::NativeHeadComponent>]>,
+) -> bool {
+    hint == Some(super::NativeHeadRole::Literal)
+        && item.terms.len() == 1
+        && item.terms.first().is_some_and(|term| {
+            let visible = plain_text(content, term);
+            matches!(visible.as_str(), "-" | "--")
+                && components.is_some_and(|terms| {
+                    matches!(terms, [component] if matches!(component.as_slice(), [instance]
+                        if instance.role == super::NativeHeadRole::Literal
+                            && instance.range == (0..visible.len())))
+                })
+        })
+}
+
+fn is_unbound_environment_template(
+    content: ContentContext<'_>,
+    item: &DefinitionItem,
+    context: DefinitionContext,
+    hint: Option<super::NativeHeadRole>,
+) -> bool {
+    context == DefinitionContext::EnvironmentVariables
+        && hint != Some(super::NativeHeadRole::Option)
+        && !item.terms.is_empty()
+        && item
+            .terms
+            .iter()
+            .all(|term| mant_ir::is_environment_template_label(&plain_text(content, term)))
 }
 
 pub(super) fn list_identity_base(item: &ListItem) -> Option<String> {

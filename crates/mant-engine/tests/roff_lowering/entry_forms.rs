@@ -235,6 +235,51 @@ fn variable_subscripts_must_be_complete_authored_forms() {
             "{name}"
         );
     }
+    // The exact TP/IP inputs below ran pinned CVS -Ttree first.
+    // man_macro.c::blk_imp and man_term.c::pre_TP/pre_IP retain their
+    // physical labels, but incomplete assignment/operand syntax supplies no
+    // selectable variable name. Complete RHS and subscript forms stay usable.
+    for (macro_name, label) in [
+        ("TP", "foo="),
+        ("TP", "foo<"),
+        ("TP", "FOO[bar"),
+        ("IP", "foo="),
+        ("IP", "foo<"),
+        ("IP", "FOO[bar"),
+    ] {
+        let head = if macro_name == "TP" {
+            format!(".TP\n.B {label}")
+        } else {
+            format!(".IP \"{label}\" 4")
+        };
+        let source = format!(".TH T 1\n.SH VARIABLES\n{head}\nDescription.\n");
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+        let document = query.document.as_ref().unwrap();
+        let entries = mant_ir::SemanticIndex::build(document);
+        assert!(
+            entries.section(&document.flow().unwrap().sections[0].id)[0]
+                .names
+                .is_empty(),
+            "{macro_name} {label}"
+        );
+        assert!(mant_render::render_query_text(&query).contains(label));
+    }
+    for head in [".TP\n.B foo=bar", ".IP \"foo=bar\" 4", ".IP \"FOO[bar]\" 4"] {
+        let source = format!(".TH T 1\n.SH VARIABLES\n{head}\nDescription.\n");
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+        let document = query.document.as_ref().unwrap();
+        let entries = mant_ir::SemanticIndex::build(document);
+        let expected = if head.contains("FOO[") {
+            "FOO[bar]"
+        } else {
+            "foo"
+        };
+        assert_eq!(
+            entries.section(&document.flow().unwrap().sections[0].id)[0].names,
+            [expected],
+            "{head}"
+        );
+    }
 }
 
 #[test]
@@ -301,7 +346,10 @@ fn environment_assignment_values_are_not_alias_groups() {
         .unwrap();
         assert!(crate::semantic_test_read::semantic_excerpt(&query, &["BAR"]).is_err());
         assert!(crate::semantic_test_read::semantic_excerpt(&query, &["FOO"]).is_err());
-        assert!(query.document.unwrap().diagnostics.iter().any(|d| d.code.as_deref() == Some("manual.semantic-entry.unclassified-definition")));
+        // CVS man_macro.c::blk_imp/man_term.c::pre_TP preserve the complete
+        // visible label. Rejecting the compound assignment as an environment
+        // declaration is conservative classification, not extraction loss.
+        assert!(!query.document.unwrap().diagnostics.iter().any(|d| d.code.as_deref() == Some("manual.semantic-entry.unclassified-definition")));
     }
 }
 

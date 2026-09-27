@@ -1,5 +1,5 @@
 //! Deterministic declaration-role precedence, independent of name availability.
-use super::{named, option_prefix};
+use super::option_prefix;
 use crate::definitions::{NativeHeadRole, context::DefinitionContext};
 use mant_ir::{EntryKind, NameCase, ParameterKind};
 
@@ -8,9 +8,14 @@ pub(super) fn select_kind(
     context: DefinitionContext,
     hint: Option<NativeHeadRole>,
     native_numeric_option: bool,
+    checked_configuration_name: bool,
 ) -> (EntryKind, NameCase) {
     match hint {
-        Some(NativeHeadRole::LiteralTerm | NativeHeadRole::Presentation) => {
+        Some(
+            NativeHeadRole::LiteralTerm
+            | NativeHeadRole::Presentation
+            | NativeHeadRole::DefinedVariable,
+        ) => {
             return (EntryKind::Term, NameCase::Sensitive);
         }
         Some(NativeHeadRole::Option) => {
@@ -24,10 +29,29 @@ pub(super) fn select_kind(
         Some(NativeHeadRole::Environment) => {
             return (EntryKind::EnvironmentVariable, NameCase::Sensitive);
         }
+        Some(NativeHeadRole::Variable) => {
+            return (EntryKind::Variable, NameCase::Sensitive);
+        }
         Some(NativeHeadRole::Literal) if matches!(head, "-" | "--") => {
             return (EntryKind::Term, NameCase::Sensitive);
         }
         Some(NativeHeadRole::Literal) | None => {}
+    }
+    if hint == Some(NativeHeadRole::Literal)
+        && matches!(
+            context,
+            DefinitionContext::ConfigurationKeys | DefinitionContext::RootConfigurationKeys
+        )
+        && checked_configuration_name
+    {
+        return (EntryKind::ConfigurationKey, NameCase::Sensitive);
+    }
+    if matches!(
+        context,
+        DefinitionContext::ConfigurationKeys | DefinitionContext::RootConfigurationKeys
+    ) && checked_configuration_name
+    {
+        return (EntryKind::ConfigurationKey, NameCase::Sensitive);
     }
     if hint == Some(NativeHeadRole::Literal)
         && context == DefinitionContext::Generic
@@ -50,26 +74,6 @@ pub(super) fn select_kind(
             },
             NameCase::Sensitive,
         );
-    }
-    if named::local_configuration_head(
-        head,
-        matches!(
-            context,
-            DefinitionContext::Variables | DefinitionContext::ConfigurationKeys
-        ),
-    ) {
-        return (EntryKind::ConfigurationKey, NameCase::Sensitive);
-    }
-    if let Some((key, _)) = head.split_once('=') {
-        let key = key.trim();
-        let mixed_case_key = key.chars().any(char::is_lowercase)
-            && key.chars().any(char::is_uppercase)
-            && !key.contains('_');
-        if named::is_configuration_key(key)
-            && (context == DefinitionContext::Values || mixed_case_key)
-        {
-            return (EntryKind::ConfigurationKey, NameCase::Sensitive);
-        }
     }
     // A documented all-caps variable-like symbol nested below an option is
     // not thereby an accepted option value. Without Ev/environment context,
@@ -107,15 +111,17 @@ fn inherited_kind(trimmed: &str, context: DefinitionContext) -> (EntryKind, Name
             (EntryKind::EnvironmentVariable, NameCase::Sensitive)
         }
         DefinitionContext::Variables => (EntryKind::Variable, NameCase::Sensitive),
-        DefinitionContext::ConfigurationKeys => {
-            (EntryKind::ConfigurationKey, NameCase::Insensitive)
-        }
-        DefinitionContext::Values => (EntryKind::Value, NameCase::Sensitive),
         DefinitionContext::Parameters => (parameter(), NameCase::Sensitive),
         DefinitionContext::Generic if matches!(trimmed, "-" | "--" | "--%") => {
             (parameter(), NameCase::Sensitive)
         }
-        DefinitionContext::Generic => (EntryKind::Term, NameCase::Sensitive),
+        // A parent option or key only locates a possible value scope. Native
+        // inferred values and weak configuration hints need local declaration
+        // proof; explicit Value facts remain untouched by this inference.
+        DefinitionContext::ConfigurationKeys
+        | DefinitionContext::Values
+        | DefinitionContext::RootConfigurationKeys
+        | DefinitionContext::Generic => (EntryKind::Term, NameCase::Sensitive),
     }
 }
 

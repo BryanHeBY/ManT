@@ -336,8 +336,30 @@ glyphs contributes no name. When such a first authored instance precedes a
 different visible component, projection records the first *visible* role in
 the typed owner while the checked native mark retains the raw execution
 instance. A missing raw owner role is never promoted by a later component.
-Read-time proof requires the persisted owner role and each visible component
-role to agree, so editing JSON cannot reclassify an existing binding.
+Read-time checks require the persisted owner role and every *declaration*
+component's role and surviving selection to agree; editing one role field in
+isolation cannot reclassify an existing binding. A subordinate argument
+component has its own role and is not another declaration name. The typed IR
+does not retain the native token number, so a self-consistent edited JSON
+document is checked for internal agreement, not re-authenticated against the
+original roff macro history.
+
+EN04 additionally retains mdoc `Ar` as a source-qualified Fixed HEAD
+`argument` component. It cannot become an owner role or classify an entry by
+itself. A literal configuration declaration needs a complete visible key and,
+when it has a separate argument tail, checked `Ar` instances separated from
+the key by visible whitespace. An `Em` run or a font change cannot substitute
+for `Ar`; joined `Cm`/`Ar` glyphs do not prove a key/argument split. Separate
+`Ic` and `Cm` macro spellings still share the `literal` role, so type follows
+the checked declaration and structural section context, not typography or an
+invented macro distinction. Root configuration-manual metadata is only a weak
+hint: explicit OPTIONS, EXAMPLES and SEE ALSO sections block it; DESCRIPTION
+and otherwise unknown sections may inherit it when local declaration evidence
+is complete.
+Neither nested list shape nor `Ar` creates a Value or exhaustive value domain.
+Flow consumes its native component ranges only during conversion; after a
+round trip it validates retained facts and locations without claiming to
+replay the discarded native macro history.
 
 In an ENVIRONMENT section, a complete `.IP`/`.TP` HEAD can yield several
 independent environment names (for example `TMPDIR, TEMP, TMP`) with one full

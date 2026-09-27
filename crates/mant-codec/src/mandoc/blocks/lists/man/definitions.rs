@@ -144,6 +144,10 @@ struct ManDefinitionEmission {
     bullet: bool,
 }
 
+#[expect(
+    clippy::large_enum_variant,
+    reason = "boxing every pending list item would add an allocation to the hot conversion path"
+)]
 enum PendingOrCommitted {
     Pending(PendingDefinitionItem),
     Committed(Box<DefinitionItem>),

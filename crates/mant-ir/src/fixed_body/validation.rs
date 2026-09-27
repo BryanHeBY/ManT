@@ -388,6 +388,9 @@ impl FixedBody {
             if owner.head_role.is_some() && owner.role != super::OwnerRole::Definition {
                 return Err(FixedBodyError("non-definition owner has a head role"));
             }
+            if owner.head_role == Some(super::OwnerHeadRole::Argument) {
+                return Err(FixedBodyError("argument cannot be a definition head role"));
+            }
             if owner.lexical_term_witness
                 && (owner.role != super::OwnerRole::Definition
                     || owner.head_role != Some(super::OwnerHeadRole::Lexical)

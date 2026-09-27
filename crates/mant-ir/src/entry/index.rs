@@ -43,7 +43,9 @@ impl SemanticIndex {
     pub fn build(document: &Document) -> Self {
         let flow = match document.body() {
             DocumentBodyRef::Flow(flow) => flow,
-            DocumentBodyRef::Fixed(fixed) => return Self::build_fixed(fixed),
+            DocumentBodyRef::Fixed(fixed) => {
+                return Self::build_fixed(fixed, document.fixed_root_configuration_hint_valid());
+            }
         };
         let content = document.content();
         let mut owner_locations = BTreeMap::new();
@@ -92,7 +94,11 @@ impl SemanticIndex {
         result
     }
 
-    fn build_fixed(fixed: &FixedBody) -> Self {
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one ordered pass assembles checked native owner positions and reading groups"
+    )]
+    fn build_fixed(fixed: &FixedBody, root_hint_valid: bool) -> Self {
         // The final surface is authoritative. Only validated semantic facts
         // attached to its native owner become entries; owner keys and parent
         // edges never invent another Flow tree.
@@ -123,6 +129,10 @@ impl SemanticIndex {
             let parent = owner
                 .parent
                 .and_then(|key| nearest_entry[key.get() as usize]);
+            if !root_hint_valid && fixed.root_configuration_dependent(owner) {
+                nearest_entry[owner.key.get() as usize] = parent;
+                continue;
+            }
             let Some(entry) = EntryOwnerView::fixed(fixed, owner)
                 .and_then(|view| view.semantic_entry().ok().flatten())
             else {
@@ -193,15 +203,18 @@ impl SemanticIndex {
                 result.root = entries;
             }
         }
-        result.build_fixed_reading_groups(fixed);
+        result.build_fixed_reading_groups(fixed, root_hint_valid);
         result
     }
 
-    fn build_fixed_reading_groups(&mut self, fixed: &FixedBody) {
+    fn build_fixed_reading_groups(&mut self, fixed: &FixedBody, root_hint_valid: bool) {
         let (readable, has_body_parts) = fixed_owner_readability(fixed);
         self.fixed_group_by_member = vec![None; fixed.owners.len() + 1];
         for provider in &fixed.owners {
-            if !readable[provider.key.get() as usize] || fixed.validated_entry(provider).is_none() {
+            if !readable[provider.key.get() as usize]
+                || !root_hint_valid && fixed.root_configuration_dependent(provider)
+                || fixed.validated_entry(provider).is_none()
+            {
                 continue;
             }
             let mut members = vec![provider.key];
@@ -214,7 +227,10 @@ impl SemanticIndex {
                 let Some(owner) = fixed.owners.get((key.get() - 1) as usize) else {
                     break;
                 };
-                if has_body_parts[key.get() as usize] || fixed.validated_entry(owner).is_none() {
+                if has_body_parts[key.get() as usize]
+                    || !root_hint_valid && fixed.root_configuration_dependent(owner)
+                    || fixed.validated_entry(owner).is_none()
+                {
                     break;
                 }
                 members.push(key);

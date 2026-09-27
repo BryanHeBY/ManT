@@ -474,4 +474,47 @@ impl InlineBuilder {
             });
         }
     }
+
+    /// An mdoc Ar inside a definition HEAD is a distinct argument instance.
+    /// It must not share the man alternate-font operand marker: Fl option
+    /// recognition consumes the latter, while only a Literal key may use Ar.
+    pub(in crate::mandoc) fn mark_native_argument(
+        &mut self,
+        node: &crate::mandoc::Node,
+        end: bool,
+    ) {
+        if self.native_head_marks == NativeHeadMarks::DefinitionHead {
+            self.nodes.push(Inline::Anchor {
+                id: format!(
+                    "\0mant-native-argument-{}:{:x}",
+                    if end { "end" } else { "start" },
+                    std::ptr::from_ref(node) as usize
+                )
+                .into(),
+                owner_source: None,
+            });
+        }
+    }
+
+    /// Preserve one authored Cm/Ic or Va instance through the visible HEAD.
+    /// Its final glyph range, not the macro's raw operand spelling or font,
+    /// is later checked before binding another name.
+    pub(in crate::mandoc) fn mark_native_component(
+        &mut self,
+        node: &crate::mandoc::Node,
+        family: &str,
+        end: bool,
+    ) {
+        if self.native_head_marks == NativeHeadMarks::DefinitionHead {
+            self.nodes.push(Inline::Anchor {
+                id: format!(
+                    "\0mant-native-component-{family}-{}:{:x}",
+                    if end { "end" } else { "start" },
+                    std::ptr::from_ref(node) as usize
+                )
+                .into(),
+                owner_source: None,
+            });
+        }
+    }
 }

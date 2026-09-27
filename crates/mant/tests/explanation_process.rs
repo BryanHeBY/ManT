@@ -142,6 +142,112 @@ fn annotated_fixed_group_budget_keeps_own_bodies_and_page_local_support() {
 }
 
 #[test]
+#[cfg(feature = "annotated-preview")]
+fn edited_fixed_root_hint_retracts_only_dependent_entry_and_reports_coverage() {
+    // The exact input ran pinned CVS -Tutf8 -Owidth=78 before this assertion.
+    // mdoc_term.c::termp_it_pre prints each It head at its own list position;
+    // ManT's root configuration hint is optional metadata, not display data.
+    let input = b".Dd September 26, 2026\n.Dt SSH_CONFIG 5\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width Ds\n.It Cm Key\n.It Fl a\nOption body.\n.El\n";
+    let mut bundle = libmandoc_rs::SourceBundle::new();
+    bundle.insert("t.5", input.to_vec()).unwrap();
+    let mut document = mant_codec::annotated_fixed::project_annotated_manual(
+        "t.5",
+        &bundle,
+        libmandoc_rs::InputFormat::Mdoc,
+    )
+    .unwrap();
+    let mant_ir::DocumentBody::Fixed(fixed) = &document.body else {
+        panic!("expected Fixed body")
+    };
+    assert!(fixed.root_configuration_hint);
+    assert_eq!(fixed.owners[0].entry.as_ref().unwrap().names, ["Key"]);
+    assert_eq!(fixed.owners[1].entry.as_ref().unwrap().names, ["-a"]);
+
+    // A caller can mutate a public Document in memory without deserializing
+    // it. Query-time coverage and every index must see the same stale hint.
+    document.meta.title = Some("T".into());
+    document.meta.names.clear();
+    let content = mant_ir::ResolvedContent {
+        label: "edited metadata".into(),
+        address: None,
+        document: Some(document),
+        tldr: None,
+    };
+    let explain = |entry: &str| {
+        mant_query::explain_query(
+            &content,
+            &mant_protocol::ExplanationQuery {
+                entry: entry.into(),
+                options: mant_protocol::ExplanationOptions::default(),
+            },
+        )
+        .unwrap()
+    };
+    let option = explain("-a");
+    assert_eq!(option.counts.direct_entry.total, 1);
+    assert!(!option.semantics_complete);
+    assert!(option.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code.as_deref() == Some("ir.invalid-root-configuration-hint")
+            && diagnostic.impact == mant_ir::DiagnosticImpact::SemanticCoverage
+    }));
+    assert_eq!(explain("Key").counts.direct_entry.total, 0);
+
+    let outline = mant_query::build_outline(&content).unwrap();
+    assert!(!outline.semantics_complete);
+    let search = mant_query::search_query(
+        &content,
+        &mant_protocol::SearchQuery {
+            pattern: "Option body.".into(),
+            syntax: mant_protocol::SearchSyntax::Literal,
+            case: mant_protocol::SearchCase::Sensitive,
+            scope: mant_protocol::SearchScope::Visible,
+            word: false,
+            context_lines: 0,
+            limit: 10,
+            offset: 0,
+        },
+    )
+    .unwrap();
+    assert_eq!(search.total, 1);
+    assert!(!search.semantics_complete);
+
+    let bundle = mant_protocol::QueryBundle::from(&content);
+    let response = bundle
+        .document
+        .as_ref()
+        .expect("complete document response");
+    let mant_ir::DocumentBody::Fixed(projected) = &response.body else {
+        panic!("expected Fixed response")
+    };
+    let mant_ir::DocumentBody::Fixed(original) = &content.document.as_ref().unwrap().body else {
+        panic!("expected original Fixed body")
+    };
+    assert_eq!(projected.surface, original.surface);
+    assert!(!projected.root_configuration_hint);
+    assert!(projected.owners[0].entry.is_none());
+    assert_eq!(projected.owners[1].entry.as_ref().unwrap().names, ["-a"]);
+    assert!(response.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code.as_deref() == Some("ir.invalid-root-configuration-hint")
+            && diagnostic.impact == mant_ir::DiagnosticImpact::SemanticCoverage
+    }));
+    let wire: mant_protocol::QueryBundle =
+        serde_json::from_value(serde_json::to_value(&bundle).unwrap()).unwrap();
+    let round_trip: mant_ir::ResolvedContent = wire.into();
+    assert_eq!(round_trip.document.unwrap().body, response.body);
+
+    let mut detached = response.clone();
+    detached.body = content.document.as_ref().unwrap().body.clone();
+    detached.diagnostics = content.document.as_ref().unwrap().diagnostics.clone();
+    let isolated: mant_ir::Document = detached.clone().into();
+    assert_eq!(isolated.body, response.body);
+    assert_eq!(isolated.diagnostics, response.diagnostics);
+    let decoded: mant_protocol::DocumentResponse =
+        serde_json::from_value(serde_json::to_value(detached).unwrap()).unwrap();
+    assert_eq!(decoded.body, response.body);
+    assert_eq!(decoded.diagnostics, response.diagnostics);
+}
+
+#[test]
 #[cfg(feature = "roff")]
 fn cli_file_stdin_and_public_production_api_agree_on_executed_boundaries() {
     use std::{io::Write, process::Stdio};

@@ -271,6 +271,9 @@ pub enum OwnerHeadRole {
     DefinedVariable,
     /// An mdoc `Ic` or `Cm` literal command head.
     Literal,
+    /// An authored mdoc `Ar` argument instance within a definition HEAD.
+    /// It can delimit a preceding key but never names an entry by itself.
+    Argument,
     /// A native declaration head whose authored syntax permits conservative
     /// whole-token lexical classification; no name is implied by this hint.
     Lexical,
@@ -564,6 +567,11 @@ pub struct RegionMark {
 pub struct FixedBody {
     /// Final native display surface; marks contain no visible-body copy.
     pub surface: DisplaySurface,
+    /// Weak configuration-manual hint derived from the document's normalized
+    /// title/names. It never creates an entry without a complete native head;
+    /// the containing Document rechecks it against current metadata.
+    #[serde(default)]
+    pub root_configuration_hint: bool,
     /// Native section marks in source identity order.
     pub headings: Vec<HeadingMark>,
     /// Native owner marks in identity order.
@@ -580,6 +588,8 @@ pub struct FixedBody {
 #[serde(remote = "FixedBody", rename_all = "camelCase", deny_unknown_fields)]
 struct FixedBodyWire {
     surface: DisplaySurface,
+    #[serde(default)]
+    root_configuration_hint: bool,
     headings: Vec<HeadingMark>,
     owners: Vec<OwnerMark>,
     links: Vec<LinkMark>,

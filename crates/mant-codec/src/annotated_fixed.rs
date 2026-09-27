@@ -55,7 +55,7 @@ type Result<T> = std::result::Result<T, AnnotatedProjectionError>;
 
 // Mirrors the checked native one-hot role bits. Keep all mark consumers on
 // this one mask when a new authored macro role is carried across the FFI.
-const NATIVE_HEAD_ROLE_MASK: u32 = 32 | 64 | 128 | 256 | 2048 | 4096;
+const NATIVE_HEAD_ROLE_MASK: u32 = 32 | 64 | 128 | 256 | 2048 | 4096 | 8192;
 
 /// Render one authorized bundle and project its checked final device output.
 ///
@@ -96,6 +96,7 @@ pub fn lower_annotated_document(mut page: AnnotatedDocument) -> Result<Document>
 
 #[allow(clippy::too_many_lines)] // One checked native transfer and typed-document assembly.
 fn lower_annotated_document_inner(page: &mut AnnotatedDocument) -> Result<Document> {
+    let meta = metadata(page);
     let identities = Identities::new(page)?;
     let keys = KeyMap::new(page, &identities)?;
     let sources = sources(page)?;
@@ -243,6 +244,8 @@ fn lower_annotated_document_inner(page: &mut AnnotatedDocument) -> Result<Docume
     };
     let mut fixed = FixedBody {
         surface,
+        root_configuration_hint: mant_ir::document_root_declaration_family(&meta)
+            == Some(mant_ir::SectionDeclarationFamily::ConfigurationKeys),
         headings,
         owners,
         links,
@@ -354,11 +357,33 @@ fn lower_annotated_document_inner(page: &mut AnnotatedDocument) -> Result<Docume
                         value_domain: None,
                     });
                 }
+                if let Some(recognition) = fixed.manual_call_declaration(owner) {
+                    let (names, name_bindings) =
+                        group_bindings(recognition.occurrences, recognition.evidence);
+                    return Some(EntryFacts {
+                        name_bindings,
+                        alias_groups: Vec::new(),
+                        alias_of: None,
+                        forms: vec![owner.head.clone()],
+                        id: owner.id.clone(),
+                        kind: recognition.kind,
+                        case: NameCase::Sensitive,
+                        names,
+                        value_domain: None,
+                    });
+                }
                 let non_option = match fixed.scan_non_option_declaration(owner) {
                     Ok(recognition) => recognition,
                     Err(mant_ir::FixedNonOptionLimit::TooManyNames) => {
                         isolation_diagnostics.push(isolation::rejected_annotation(
                             "native declaration exceeds the semantic name budget",
+                            CoverageScope::Owner { key: owner.key },
+                        ));
+                        return None;
+                    }
+                    Err(mant_ir::FixedNonOptionLimit::TooManyComponents) => {
+                        isolation_diagnostics.push(isolation::rejected_annotation(
+                            "native declaration exceeds the semantic component budget",
                             CoverageScope::Owner { key: owner.key },
                         ));
                         return None;
@@ -379,24 +404,9 @@ fn lower_annotated_document_inner(page: &mut AnnotatedDocument) -> Result<Docume
                         value_domain: None,
                     });
                 }
-                if let Some(recognition) = fixed.manual_call_declaration(owner) {
-                    let (names, name_bindings) =
-                        group_bindings(recognition.occurrences, recognition.evidence);
-                    return Some(EntryFacts {
-                        name_bindings,
-                        alias_groups: Vec::new(),
-                        alias_of: None,
-                        forms: vec![owner.head.clone()],
-                        id: owner.id.clone(),
-                        kind: recognition.kind,
-                        case: NameCase::Sensitive,
-                        names,
-                        value_domain: None,
-                    });
-                }
-                if fixed.unbound_environment_head(owner) {
-                    // ENVIRONMENT templates and invalid lexical labels are
-                    // physical declarations without an exact semantic name.
+                if fixed.unbound_environment_head(owner) || fixed.unbound_variable_head(owner) {
+                    // ENVIRONMENT templates and malformed variable-like
+                    // labels remain physical owners without exact selectors.
                     return None;
                 }
                 if fixed.presentation_only_head(owner) {
@@ -429,28 +439,21 @@ fn lower_annotated_document_inner(page: &mut AnnotatedDocument) -> Result<Docume
                     {
                         return None;
                     }
-                    let form = fixed.owner_complete_form(owner)?;
+                    fixed.owner_complete_form(owner)?;
                     return Some(EntryFacts {
-                        name_bindings: owner
-                            .lexical_term_witness
-                            .then_some(EntryNameBinding {
-                                name: 0,
-                                occurrences: vec![owner.head.clone()],
-                                evidence: EntryNameEvidence::Lexical,
-                            })
-                            .into_iter()
-                            .collect(),
+                        // The only Lexical Term naming proof is
+                        // plain_term_name() above. A bold native HEAD can
+                        // establish a readable owner even when its complete
+                        // label is a marker invocation or regex family, but
+                        // it cannot bypass that exact-name check here.
+                        name_bindings: Vec::new(),
                         alias_groups: Vec::new(),
                         alias_of: None,
                         forms: vec![owner.head.clone()],
                         id: owner.id.clone(),
                         kind: EntryKind::Term,
                         case: NameCase::Sensitive,
-                        names: owner
-                            .lexical_term_witness
-                            .then_some(form)
-                            .into_iter()
-                            .collect(),
+                        names: Vec::new(),
                         value_domain: None,
                     });
                 }
@@ -534,7 +537,7 @@ fn lower_annotated_document_inner(page: &mut AnnotatedDocument) -> Result<Docume
                         alias_of: None,
                         forms: vec![selection],
                         id: owner.id.clone(),
-                        kind: EntryKind::Command,
+                        kind: fixed.partial_literal_entry_kind(owner),
                         case: NameCase::Sensitive,
                         names: vec![name],
                         value_domain: None,
@@ -612,7 +615,7 @@ fn lower_annotated_document_inner(page: &mut AnnotatedDocument) -> Result<Docume
         sources,
         root_source: key_source(page.root_source)?,
         body: DocumentBody::Fixed(fixed),
-        meta: metadata(page),
+        meta,
         fragment_aliases: Vec::new(),
         diagnostics: native_diagnostics,
     };

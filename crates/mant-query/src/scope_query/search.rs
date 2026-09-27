@@ -149,7 +149,7 @@ fn coverage_for(
     let diagnostics = bundle
         .document
         .as_ref()
-        .map_or_else(Vec::new, |document| document.diagnostics.clone());
+        .map_or_else(Vec::new, mant_ir::Document::projection_diagnostics);
     if diagnostics.len() > mant_protocol::MAX_SEARCH_DIAGNOSTICS {
         return Err(ScopeExecutionError::Search(SearchError::ResourceLimit));
     }

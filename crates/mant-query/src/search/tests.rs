@@ -26,6 +26,7 @@ fn scalar_slice(text: &str, start: u64, end: u64) -> String {
 fn fixed_body_uses_fixed_visible_coordinates_even_when_empty() {
     let mut query = crate::query_fixture::markdown("# Demo\n\nneedle\n", None).unwrap();
     query.document.as_mut().unwrap().body = mant_ir::DocumentBody::Fixed(mant_ir::FixedBody {
+        root_configuration_hint: false,
         surface: mant_ir::DisplaySurface {
             text: String::new(),
             rows: Vec::new(),

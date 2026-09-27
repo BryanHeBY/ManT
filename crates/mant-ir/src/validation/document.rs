@@ -201,6 +201,12 @@ fn validate_fixed_document(
     fixed_validation: Option<&crate::validation::FixedBodyValidation<'_>>,
 ) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
+    if !document.fixed_root_configuration_hint_valid() {
+        diagnostics.push(invariant(
+            "ir.invalid-root-configuration-hint",
+            "Fixed root configuration hint disagrees with document metadata".to_owned(),
+        ));
+    }
     let validation = fixed_validation
         .and_then(|proof| proof.result_for(fixed))
         .cloned()
@@ -298,6 +304,7 @@ fn is_semantic_completeness_diagnostic(code: &str) -> bool {
             | "ir.empty-entry-value-domain"
             | "ir.duplicate-entry-value-kind"
             | "ir.invalid-entry-choices"
+            | "ir.invalid-root-configuration-hint"
     )
 }
 
@@ -986,6 +993,7 @@ mod tests {
     fn invalid_fixed_target_is_a_document_invariant_not_trusted_content() {
         let mut document = document(Vec::new(), Vec::new());
         document.body = crate::DocumentBody::Fixed(crate::FixedBody {
+            root_configuration_hint: false,
             surface: crate::DisplaySurface {
                 text: String::new(),
                 rows: Vec::new(),

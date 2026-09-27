@@ -7,6 +7,10 @@ use super::{
     navigation_anchor,
 };
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "one ordered macro dispatcher preserves the native scope and font lifecycle"
+)]
 pub(super) fn append(builder: &mut InlineBuilder, node: &Node, name: Option<&str>) {
     if node.macro_name.as_deref() == Some("Tg") {
         if let Some(anchor) = navigation_anchor(node) {
@@ -81,13 +85,38 @@ pub(super) fn append(builder: &mut InlineBuilder, node: &Node, name: Option<&str
             },
             coalesce_font_runs,
         ),
-        Some("Cm" | "Ic" | "Sy" | "Ms") => builder.with_font_scope(Font::Strong, |builder| {
+        Some("Cm" | "Ic") => {
+            builder.mark_native_component(node, "literal", false);
+            builder.with_font_scope(Font::Strong, |builder| {
+                append_inline_nodes(builder, children, name);
+            });
+            builder.mark_native_component(node, "literal", true);
+        }
+        Some("Sy" | "Ms") => builder.with_font_scope(Font::Strong, |builder| {
             append_inline_nodes(builder, children, name);
         }),
-        Some("Ar" | "Pa" | "Em" | "Va" | "Vt" | "Ft" | "Fa" | "Ad" | "Fr") => builder
-            .with_font_scope(Font::Emphasis, |builder| {
+        Some("Ar") => {
+            // mdoc_macro.c::blk_full retains Ar as a distinct It HEAD
+            // instance. The final underline alone is not proof of an Ar
+            // argument: an inline \fI inside Cm can look identical.
+            builder.mark_native_argument(node, false);
+            builder.with_font_scope(Font::Emphasis, |builder| {
                 append_inline_nodes(builder, children, name);
-            }),
+            });
+            builder.mark_native_argument(node, true);
+        }
+        Some("Va") => {
+            builder.mark_native_component(node, "variable", false);
+            builder.with_font_scope(Font::Emphasis, |builder| {
+                append_inline_nodes(builder, children, name);
+            });
+            builder.mark_native_component(node, "variable", true);
+        }
+        Some("Pa" | "Em" | "Vt" | "Ft" | "Fa" | "Ad" | "Fr") => {
+            builder.with_font_scope(Font::Emphasis, |builder| {
+                append_inline_nodes(builder, children, name);
+            });
+        }
         Some("No" | "Dv") => builder.with_font_scope(Font::Regular, |builder| {
             append_inline_nodes(builder, children, name);
         }),

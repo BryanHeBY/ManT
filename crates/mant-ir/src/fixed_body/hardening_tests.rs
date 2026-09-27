@@ -37,6 +37,7 @@ fn body_with_run(text: &str, width: u32) -> FixedBody {
                 },
             }],
         },
+        root_configuration_hint: false,
         headings: Vec::new(),
         owners: Vec::new(),
         links: Vec::new(),

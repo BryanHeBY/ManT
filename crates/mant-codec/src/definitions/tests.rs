@@ -7,6 +7,279 @@ use mant_ir::{
 use super::{environment_variable_alias, option_prefix};
 use crate::test_content as fixture;
 
+#[cfg(feature = "roff")]
+fn native_flow_entries(input: &[u8], label: &str) -> Vec<(Vec<String>, EntryKind, NameCase)> {
+    use mant_ir::visit::{self, Visit};
+
+    struct Collector(Vec<(Vec<String>, EntryKind, NameCase)>);
+    impl<'ir> Visit<'ir> for Collector {
+        fn visit_definition_item(&mut self, item: &'ir DefinitionItem) {
+            if let Some(entry) = &item.entry {
+                self.0.push((entry.names.clone(), entry.kind, entry.case));
+            }
+            visit::walk_definition_item(self, item);
+        }
+    }
+
+    let document = crate::mandoc::parse_plain_manual(std::path::Path::new(label), input)
+        .expect("pinned-CVS-checked roff parses");
+    let mut collector = Collector(Vec::new());
+    collector.visit_document(&document);
+    collector.0
+}
+
+#[cfg(feature = "roff")]
+#[test]
+fn weak_pp_rs_variable_and_configuration_heads_need_complete_local_syntax() {
+    // This exact SSH_CONFIG page ran pinned CVS -Tutf8 -Owidth=78 first.
+    // man_term.c::pre_PP/pre_RS establish the visible paragraph and direct
+    // indentation, not a semantic variable/configuration category.
+    let input = b".TH SSH_CONFIG 5\n.SH VARIABLES\n.PP\n.B foo=bar\n.RS 4\nFoo assignment.\n.RE\n.PP\n.B foo <S>\n.RS 4\nFoo placeholder.\n.RE\n.PP\n.B foo\n.RS 4\nBare variable prose.\n.RE\n.PP\n.B foo=\n.RS 4\nIncomplete variable prose.\n.RE\n.PP\n.B <K><S>\n.RS 4\nPlaceholder prose.\n.RE\n.SH DESCRIPTION\n.PP\n.B BatchMode=yes\n.RS 4\nRoot undotted configuration assignment.\n.RE\n.PP\n.B BatchMode\n.RS 4\nBare root configuration prose.\n.RE\n.PP\n.B core.editor=vim\n.RS 4\nRoot configuration assignment.\n.RE\n.PP\n.B core.editor\n.RS 4\nBare root configuration prose.\n.RE\n.SH CONFIGURATION\n.PP\n.B local.key\n.RS 4\nLocal configuration key.\n.RE\n";
+    let entries = native_flow_entries(input, "ssh_config.5");
+    assert_eq!(entries.len(), 5, "{entries:?}");
+    assert_eq!(
+        entries
+            .iter()
+            .filter(|(names, kind, _)| names == &["foo"] && *kind == EntryKind::Variable)
+            .count(),
+        2
+    );
+    for name in ["BatchMode", "core.editor", "local.key"] {
+        let (_, kind, case) = native_entry(&entries, name);
+        assert_eq!(*kind, EntryKind::ConfigurationKey);
+        assert_eq!(*case, NameCase::Sensitive);
+    }
+}
+
+#[cfg(feature = "roff")]
+fn native_entry<'a>(
+    entries: &'a [(Vec<String>, EntryKind, NameCase)],
+    name: &str,
+) -> &'a (Vec<String>, EntryKind, NameCase) {
+    entries
+        .iter()
+        .find(|(names, _, _)| names.iter().any(|found| found == name))
+        .unwrap_or_else(|| panic!("missing entry {name}: {entries:?}"))
+}
+
+#[cfg(feature = "roff")]
+#[test]
+fn native_literal_role_follows_local_declaration_context() {
+    // This is exactly EN00 roles.1, rendered with pinned CVS -Tutf8 first.
+    // mdoc_macro.c::blk_full retains each It HEAD; mdoc_term.c::termp_it_pre
+    // prints Ic/Cm in bold but does not assign a ManT Command/Config type.
+    let input = b".Dd September 26, 2026\n.Dt ENTRY-ROLES 1\n.Os\n.Sh NAME\n.Nm entry-roles\n.Nd declaration recognition probe\n.Sh DESCRIPTION\n.Bl -tag -width Ds\n.It Ev DEMO_HOME\nHome directory for the program.\n.It Va counter\nA variable, not an environment variable.\n.It Ic activity-action\nA named setting without an explicit command context.\n.It Dv MODE_FAST\nA symbolic constant.\n.El\n.Sh CONFIGURATION\n.Bl -tag -width Ds\n.It Cm BatchMode\nSet the batch processing behavior.\n.El\n.Sh COMMANDS\n.Bl -tag -width Ds\n.It Ic attach-session Ar target\nAttach to a session.\n.El\n.Sh ENVIRONMENT\n.Bl -tag -width Ds\n.It Ev TMPDIR , Ev TEMP , Ev TMP\nVariables checked in this order.\n.El\n";
+    let entries = native_flow_entries(input, "entry-roles.1");
+    assert_eq!(
+        native_entry(&entries, "DEMO_HOME").1,
+        EntryKind::EnvironmentVariable
+    );
+    assert_eq!(native_entry(&entries, "counter").1, EntryKind::Variable);
+    assert_eq!(native_entry(&entries, "activity-action").1, EntryKind::Term);
+    assert_eq!(native_entry(&entries, "MODE_FAST").1, EntryKind::Term);
+    assert_eq!(
+        native_entry(&entries, "BatchMode").1,
+        EntryKind::ConfigurationKey
+    );
+    assert_eq!(native_entry(&entries, "BatchMode").2, NameCase::Sensitive);
+    assert_eq!(
+        native_entry(&entries, "attach-session").1,
+        EntryKind::Command
+    );
+    assert_eq!(
+        native_entry(&entries, "TMPDIR").0,
+        ["TMPDIR", "TEMP", "TMP"]
+    );
+}
+
+#[cfg(feature = "roff")]
+#[test]
+fn canonical_config_root_survives_description_but_not_reference_sections() {
+    // This exact SSH_CONFIG/It sample ran through pinned CVS -Tutf8 first.
+    // mdoc_term.c::termp_it_pre supplies the physical list ownership;
+    // document-title hints and semantic case policy are ManT-only.
+    let input = b".Dd September 26, 2026\n.Dt SSH_CONFIG 5\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width Ds\n.It Cm BatchMode\nEnable batch behavior.\n.It Cm Verbose\nKeep a second key.\n.El\n.Sh SEE ALSO\n.Bl -tag -width Ds\n.It Ic unrelated-setting\nAn unrelated term.\n.El\n";
+    let entries = native_flow_entries(input, "renamed-input.5");
+    for name in ["BatchMode", "Verbose"] {
+        let (_, kind, case) = native_entry(&entries, name);
+        assert_eq!(*kind, EntryKind::ConfigurationKey, "{name}");
+        assert_eq!(*case, NameCase::Sensitive, "{name}");
+    }
+    assert_eq!(
+        native_entry(&entries, "unrelated-setting").1,
+        EntryKind::Term
+    );
+}
+
+#[cfg(feature = "roff")]
+#[test]
+fn native_ar_argument_ends_a_complete_configuration_key() {
+    // Exact input rendered with pinned CVS -Tutf8 before this assertion.
+    // mdoc_macro.c::blk_full retains distinct Cm/Ar instances in the It
+    // HEAD; mdoc_term.c::termp_bold_pre/termp_under_pre execute their fonts.
+    // Parse-local Ar boundaries, not merely an underline, license the suffix.
+    let input = b".Dd September 26, 2026\n.Dt SSH_CONFIG 5\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width Ds\n.It Cm AddressFamily Ar address_family\nSelect address families.\n.El\n";
+    let entries = native_flow_entries(input, "renamed-input.5");
+    let (names, kind, case) = native_entry(&entries, "AddressFamily");
+    assert_eq!(names, &["AddressFamily"]);
+    assert_eq!(*kind, EntryKind::ConfigurationKey);
+    assert_eq!(*case, NameCase::Sensitive);
+    assert!(
+        !entries
+            .iter()
+            .any(|(names, _, _)| names.iter().any(|name| name == "address_family"))
+    );
+}
+
+#[cfg(feature = "roff")]
+#[test]
+fn native_ar_placeholder_is_not_forced_into_value_name_grammar() {
+    // Exact HostKeyAlgorithms/Ar algorithm[,algorithm...] input ran pinned
+    // CVS -Tutf8 first. mdoc_term.c prints the bracketed Ar operand in the
+    // same It HEAD; it is an argument boundary, not an extra Value entry.
+    let input = b".Dd September 26, 2026\n.Dt SSH_CONFIG 5\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width Ds\n.It Cm HostKeyAlgorithms Ar algorithm[,algorithm...]\nSelect algorithms.\n.El\n";
+    let entries = native_flow_entries(input, "different-name.5");
+    assert_eq!(
+        native_entry(&entries, "HostKeyAlgorithms").1,
+        EntryKind::ConfigurationKey
+    );
+    assert!(
+        entries
+            .iter()
+            .all(|(names, _, _)| { !names.iter().any(|name| name.contains("algorithm")) })
+    );
+}
+
+#[cfg(feature = "roff")]
+#[test]
+fn incomplete_assignment_and_nested_argument_do_not_become_config_keys() {
+    // Each exact input ran through pinned CVS -Tutf8 first. It/Bl preserve
+    // native owner and nesting; neither the malformed bracket nor TP/It
+    // indentation is a configuration language role.
+    let incomplete = b".Dd September 26, 2026\n.Dt T 1\n.Os\n.Sh CONFIGURATION\n.Bl -tag\n.It Cm color=[yes|no\nIncomplete literal.\n.El\n";
+    let entries = native_flow_entries(incomplete, "incomplete.1");
+    assert!(
+        entries
+            .iter()
+            .all(|(_, kind, _)| *kind != EntryKind::ConfigurationKey)
+    );
+
+    let nested = b".Dd September 26, 2026\n.Dt T 1\n.Os\n.Sh OPTIONS\n.Bl -tag\n.It Fl mode\nMode.\n.Bl -tag\n.It fast=1\nNested item.\n.El\n.El\n";
+    let entries = native_flow_entries(nested, "nested.1");
+    assert!(
+        entries
+            .iter()
+            .all(|(_, kind, _)| *kind != EntryKind::ConfigurationKey)
+    );
+    assert!(matches!(
+        native_entry(&entries, "-mode").1,
+        EntryKind::Parameter { .. }
+    ));
+}
+
+#[cfg(feature = "roff")]
+#[test]
+fn native_components_bind_multiple_config_and_variable_names_once() {
+    // This exact combined Cm/Ar/Em/Va page ran pinned CVS -Tutf8 first.
+    // mdoc_macro.c::blk_full keeps each macro instance in one It HEAD;
+    // term_word() executes final glyphs and spacing. The instance markers
+    // supply names, while complete visible gaps prevent punctuation alone
+    // from manufacturing another declaration.
+    let input = b".Dd September 26, 2026\n.Dt SSH_CONFIG 5\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width Ds\n.It Cm Alpha , Cm Beta\nTwo keys.\n.It Cm ProxyCommand Ar command Ar argument\nOne key with two parameters.\n.It Cm Key Em prose\nThis is not a complete key declaration.\n.El\n.Sh VARIABLES\n.Bl -tag -width Ds\n.It Va alpha , Va beta\nTwo variables.\n.El\n";
+    let entries = native_flow_entries(input, "other-input.5");
+    assert_eq!(native_entry(&entries, "Alpha").0, ["Alpha", "Beta"]);
+    assert_eq!(native_entry(&entries, "Beta").0, ["Alpha", "Beta"]);
+    assert_eq!(
+        native_entry(&entries, "Alpha").1,
+        EntryKind::ConfigurationKey
+    );
+    assert_eq!(native_entry(&entries, "ProxyCommand").0, ["ProxyCommand"]);
+    assert_eq!(
+        native_entry(&entries, "ProxyCommand").1,
+        EntryKind::ConfigurationKey
+    );
+    assert!(!entries.iter().any(|(names, _, _)| {
+        names
+            .iter()
+            .any(|name| name == "command" || name == "argument")
+    }));
+    assert!(entries.iter().all(|(names, kind, _)| {
+        !names.iter().any(|name| name == "Key") || *kind != EntryKind::ConfigurationKey
+    }));
+    assert_eq!(native_entry(&entries, "alpha").0, ["alpha", "beta"]);
+    assert_eq!(native_entry(&entries, "beta").1, EntryKind::Variable);
+}
+
+#[cfg(feature = "roff")]
+#[test]
+fn joined_native_instances_do_not_create_two_names_or_an_argument() {
+    // Both exact Ns inputs ran pinned CVS -Tutf8 first. mdoc_term.c prints
+    // AlphaBeta and BatchMode as joined glyphs; distinct AST macro instances
+    // are not independently addressable names without a visible boundary.
+    let joined_names = b".Dd September 26, 2026\n.Dt SSH_CONFIG 5\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width Ds\n.It Cm Alpha Ns Cm Beta\nOne joined token.\n.El\n";
+    let entries = native_flow_entries(joined_names, "joined.5");
+    assert!(entries.iter().all(|(names, kind, _)| {
+        !names.iter().any(|name| name == "Alpha" || name == "Beta")
+            || *kind != EntryKind::ConfigurationKey
+    }));
+    let joined_argument = b".Dd September 26, 2026\n.Dt SSH_CONFIG 5\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width Ds\n.It Cm Batch Ns Ar Mode\nJoined token.\n.El\n";
+    let entries = native_flow_entries(joined_argument, "joined.5");
+    assert!(entries.iter().all(|(names, kind, _)| {
+        !names.iter().any(|name| name == "Batch") || *kind != EntryKind::ConfigurationKey
+    }));
+}
+
+#[cfg(feature = "roff")]
+#[test]
+fn native_ar_argument_does_not_feed_option_operand_recognition() {
+    // Exact Fl/Ar input ran pinned CVS -Tutf8 first; mdoc_term.c::termp_fl_pre
+    // emits -foo, then Ar prints --fake as a distinct underlined argument.
+    let input = b".Dd September 26, 2026\n.Dt T 1\n.Os\n.Sh OPTIONS\n.Bl -tag\n.It Fl foo Ar --fake\nDescription.\n.El\n";
+    let entries = native_flow_entries(input, "option-argument.1");
+    assert!(matches!(
+        native_entry(&entries, "-foo").1,
+        EntryKind::Parameter { .. }
+    ));
+    assert!(
+        entries
+            .iter()
+            .all(|(names, _, _)| !names.iter().any(|name| name == "--fake"))
+    );
+}
+
+#[cfg(feature = "roff")]
+#[test]
+fn two_native_literal_command_components_bind_two_names() {
+    // Exact COMMANDS/It Cm Alpha , Cm Beta input ran pinned CVS -Tutf8 first.
+    // mdoc_macro.c::blk_full retains one It HEAD with two Cm instances; their
+    // names are independently bound, not an alias relation inferred from ','.
+    let input = b".Dd September 26, 2026\n.Dt T 1\n.Os\n.Sh COMMANDS\n.Bl -tag -width Ds\n.It Cm Alpha , Cm Beta\nTwo commands.\n.El\n";
+    let entries = native_flow_entries(input, "commands.1");
+    assert_eq!(native_entry(&entries, "Alpha").0, ["Alpha", "Beta"]);
+    assert_eq!(native_entry(&entries, "Beta").1, EntryKind::Command);
+}
+
+#[cfg(feature = "roff")]
+#[test]
+fn unknown_section_inherits_root_config_but_explicit_barriers_stop_it() {
+    // Exact SETTINGS/OPTIONS/EXAMPLES/SEE ALSO page ran pinned CVS -Tutf8
+    // first. mdoc_term.c::termp_sh_pre preserves each section boundary; only
+    // the finite title-family inheritance is ManT policy.
+    let input = b".Dd September 26, 2026\n.Dt SSH_CONFIG 5\n.Os\n.Sh SETTINGS\n.Bl -tag\n.It Cm Accept\nAccepted key.\n.El\n.Sh OPTIONS\n.Bl -tag\n.It Cm NotAKey\nOption section.\n.El\n.Sh EXAMPLES\n.Bl -tag\n.It Cm ExampleWord\nExample text.\n.El\n.Sh SEE ALSO\n.Bl -tag\n.It Cm ReferenceWord\nReference text.\n.El\n";
+    let entries = native_flow_entries(input, "unrelated-input.5");
+    assert_eq!(
+        native_entry(&entries, "Accept").1,
+        EntryKind::ConfigurationKey
+    );
+    for name in ["NotAKey", "ExampleWord", "ReferenceWord"] {
+        assert_ne!(
+            native_entry(&entries, name).1,
+            EntryKind::ConfigurationKey,
+            "{name}"
+        );
+    }
+}
+
 fn heading(value: &str) -> Heading {
     Heading {
         content: vec![fixture::text(value)],
@@ -520,7 +793,7 @@ fn normalizes_hanging_option_layout_before_assigning_identity() {
 }
 
 #[test]
-fn normalizes_cross_platform_hanging_environment_definitions() {
+fn normalizes_complete_cross_platform_hanging_environment_assignments() {
     let paragraph = |value: &str, indent_columns| Block::Paragraph {
         children: vec![fixture::text(value)],
         layout: LayoutHint {
@@ -548,10 +821,15 @@ fn normalizes_cross_platform_hanging_environment_definitions() {
     }];
 
     identify_definitions(&mut Vec::new(), &mut sections, &HashSet::new(), None);
-
+    // A bare HOME paragraph plus indentation is not independent declaration
+    // evidence. Complete provider assignments retain their own owners.
+    assert_eq!(sections[0].blocks.len(), 4);
+    assert!(matches!(sections[0].blocks[0], Block::Paragraph { .. }));
+    assert!(matches!(sections[0].blocks[1], Block::Paragraph { .. }));
     let identities = sections[0]
         .blocks
         .iter()
+        .skip(2)
         .map(|block| {
             let Block::DefinitionList { items, .. } = block else {
                 panic!("hanging environment entry should become a definition list");
@@ -559,17 +837,16 @@ fn normalizes_cross_platform_hanging_environment_definitions() {
             items[0].entry.as_ref().expect("environment identity")
         })
         .collect::<Vec<_>>();
-    assert_eq!(identities.len(), 3);
+    assert_eq!(identities.len(), 2);
     assert!(
         identities
             .iter()
             .all(|identity| identity.kind == EntryKind::EnvironmentVariable)
     );
-    assert_eq!(identities[0].names, ["HOME"]);
-    assert_eq!(identities[1].names, ["$Env:Path"]);
-    assert_eq!(identities[2].names, ["%ProgramFiles(x86)%"]);
-    assert_eq!(identities[1].id.as_str(), "environment-path");
-    assert_eq!(identities[2].id.as_str(), "environment-programfiles-x86");
+    assert_eq!(identities[0].names, ["$Env:Path"]);
+    assert_eq!(identities[1].names, ["%ProgramFiles(x86)%"]);
+    assert_eq!(identities[0].id.as_str(), "environment-path");
+    assert_eq!(identities[1].id.as_str(), "environment-programfiles-x86");
 }
 
 #[test]
@@ -823,11 +1100,15 @@ fn classifies_environment_configuration_and_nested_parameter_semantics() {
     let Block::DefinitionList { items: values, .. } = &items[2].description[0] else {
         panic!("expected nested values");
     };
+    // The exact nested `--mode`/`fast`/`--other` shape in EN00 terms.1 was
+    // run through pinned CVS -Tutf8 first. man_term.c::pre_TP and pre_RS
+    // establish indentation and owner boundaries, not a Value role. Without
+    // additional local value-declaration evidence, nested names remain Term.
     assert!(values.iter().all(|value| {
         value
             .entry
             .as_ref()
-            .is_some_and(|identity| identity.kind == EntryKind::Value)
+            .is_some_and(|identity| identity.kind == EntryKind::Term)
     }));
 }
 

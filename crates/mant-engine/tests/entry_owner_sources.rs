@@ -24,7 +24,10 @@ fn owner_sources(document: &Document) -> Vec<Option<SourceSpan>> {
 fn transformed_native_owners_keep_the_first_head_for_explain_and_search() {
     for (source, names, line) in [
         (
-            ".TH PROBE 1\n.SH ENVIRONMENT\n.PP\n.B FOO\n.RS\nPAYLOAD\n.RE\n",
+            // This exact input ran pinned CVS -Tutf8 -Owidth=78 first:
+            // man_term.c::pre_PP/pre_RS retain the head and continuation;
+            // the complete assignment, not bold alone, proves a weak entry.
+            ".TH PROBE 1\n.SH ENVIRONMENT\n.PP\n.B FOO=/path\n.RS\nPAYLOAD\n.RE\n",
             vec!["FOO"],
             4,
         ),

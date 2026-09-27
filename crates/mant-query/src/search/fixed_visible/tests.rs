@@ -86,6 +86,7 @@ fn fixture() -> ResolvedContent {
         }],
         root_source: SourceKey::FIRST,
         body: DocumentBody::Fixed(FixedBody {
+            root_configuration_hint: false,
             surface,
             headings: Vec::new(),
             owners: Vec::new(),

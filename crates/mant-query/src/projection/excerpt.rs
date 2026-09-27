@@ -136,6 +136,7 @@ pub fn select_excerpt(
         Some(_) | None => None,
     };
 
+    let diagnostics = document.map_or_else(Vec::new, mant_ir::Document::projection_diagnostics);
     Ok(QueryExcerpt {
         display_title: query
             .document
@@ -145,14 +146,11 @@ pub fn select_excerpt(
         schema: ExcerptSchema::V0Dot12,
         label: query.label.clone(),
         address: query.address.clone(),
-        semantics_complete: document
-            .is_none_or(|document| semantics_complete(&document.diagnostics)),
+        semantics_complete: semantics_complete(&diagnostics),
         producer: document.map(mant_protocol::Producer::for_document),
         source_context: document.map(mant_protocol::SourceContext::from),
         meta: document.map(|document| document.meta.clone()),
-        diagnostics: document
-            .map(|document| document.diagnostics.clone())
-            .unwrap_or_default(),
+        diagnostics,
         content_projection,
         selections,
     })

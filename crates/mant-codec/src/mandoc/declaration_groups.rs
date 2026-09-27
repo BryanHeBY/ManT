@@ -50,12 +50,22 @@ fn source_presentation_head(node: &Node) -> bool {
         || native_title_head(node)
 }
 
-fn source_head_text(node: &Node) -> Option<&str> {
+fn source_head_node(node: &Node) -> Option<&Node> {
     let head = node
         .children
         .iter()
         .find(|child| child.kind == NodeKind::Head)?;
-    let mut current = head.children.first()?;
+    // CVS man_term.c::pre_TP skips same-line width operands and prints only
+    // NODE_LINE children. IP and It use their existing first-head contract.
+    if node.macro_name.as_deref() == Some("TP") {
+        head.children.iter().find(|child| child.flags.line_start)
+    } else {
+        head.children.first()
+    }
+}
+
+fn source_head_text(node: &Node) -> Option<&str> {
+    let mut current = source_head_node(node)?;
     loop {
         if current.kind == NodeKind::Text {
             return (!current.flags.no_print && current.children.is_empty())
@@ -188,7 +198,17 @@ fn native_man_search_template(node: &Node) -> bool {
 
 fn native_parameter_template(node: &Node) -> bool {
     matches!(node.macro_name.as_deref(), Some("IP" | "TP" | "It"))
-        && source_head_text(node).is_some_and(|text| {
+        && source_head_node(node).is_some_and(|head| {
+            // A bare text HEAD can be a presentation-only `[ argument ]`.
+            // The initial B/Cm/Ic/Fl macro is authored declaration evidence,
+            // even when it happens to print bracketed glyphs. Do not let a
+            // template exception override that independent native role.
+            if head.kind != NodeKind::Text || head.flags.no_print || !head.children.is_empty() {
+                return false;
+            }
+            let Some(text) = head.text.as_deref() else {
+                return false;
+            };
             let text = visible_text(text);
             let text = text.trim_matches([' ', '\t']);
             text.starts_with('[')
@@ -244,4 +264,72 @@ fn native_title_head(node: &Node) -> bool {
     characters.all(|character| {
         character.is_ascii_alphabetic() || character.is_ascii_whitespace() || character == '-'
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn source_block<'a>(node: &'a Node, macro_name: &str, line: u32) -> Option<&'a Node> {
+        (node.kind == NodeKind::Block
+            && node.macro_name.as_deref() == Some(macro_name)
+            && node.line == line)
+            .then_some(node)
+            .or_else(|| {
+                node.children
+                    .iter()
+                    .find_map(|child| source_block(child, macro_name, line))
+            })
+    }
+
+    #[test]
+    fn tp_source_templates_use_the_executed_head_and_not_an_authored_macro_role() {
+        // All exact inputs ran the pinned CVS -Tutf8 reference first. CVS
+        // man_term.c::pre_TP skips same-line width operands; pre_B and
+        // mdoc_term.c::termp_bold_pre execute explicit B/Cm instances as
+        // visible heads, not as an unstyled parameter-only template.
+        for (source, macro_name, line, visible, parameter) in [
+            (
+                b".TH PROBE 1\n.SH OPTIONS\n.TP [hidden]\n.B --actual\nActual description.\n"
+                    .as_slice(),
+                "TP",
+                3,
+                Some("--actual"),
+                false,
+            ),
+            (
+                b".TH PROBE 1\n.SH COMMANDS\n.TP [foo]\n.B [foo]\n.TP\n.B bar\nBody.\n",
+                "TP",
+                3,
+                Some("[foo]"),
+                false,
+            ),
+            (
+                b".TH PROBE 1\n.SH COMMANDS\n.TP\n.B first\n.TP 4\n\\fB      \\fP[ \\fIargument\\fP ]\n.TP\n.B second\n.TP\n.B third\nBody.\n",
+                "TP",
+                5,
+                Some("\\fB      \\fP[ \\fIargument\\fP ]"),
+                true,
+            ),
+            (
+                b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh COMMANDS\n.Bl -tag\n.It Cm [foo]\n.It Cm bar\nBody.\n.El\n",
+                "It",
+                6,
+                Some("[foo]"),
+                false,
+            ),
+        ] {
+            let parsed = libmandoc_rs::Parser::default()
+                .parse_bytes("probe.1", source)
+                .expect("parse exact pinned-CVS input");
+            let block = source_block(&parsed.document.root, macro_name, line)
+                .expect("native source block");
+            assert_eq!(source_head_text(block), visible, "{macro_name} line {line}");
+            assert_eq!(
+                native_parameter_template(block),
+                parameter,
+                "{macro_name} line {line}"
+            );
+        }
+    }
 }

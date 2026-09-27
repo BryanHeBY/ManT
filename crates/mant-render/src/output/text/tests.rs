@@ -81,6 +81,7 @@ fn malformed_public_fixed_surface_does_not_panic_plain_renderers() {
                 sources: sources(SourceFormat::Man),
                 root_source: SourceKey::FIRST,
                 body: DocumentBody::Fixed(FixedBody {
+                    root_configuration_hint: false,
                     surface,
                     headings: Vec::new(),
                     owners: Vec::new(),
@@ -110,6 +111,7 @@ fn fixed_body_reads_exact_native_rows_without_reflow_or_duplicate_title() {
     // term.c::term_flushln/term_field emits the column gap; a matching no-fill
     // `a   b` reference was checked before asserting the consumer layout.
     let fixed = FixedBody {
+        root_configuration_hint: false,
         surface: DisplaySurface {
             text: "alpha  beta中".to_owned(),
             rows: vec![

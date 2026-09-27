@@ -12,6 +12,7 @@ mod declaration;
 mod forms;
 mod head;
 mod named;
+mod native_components;
 mod options;
 pub(super) use head::is_inferred_head;
 pub(crate) use mant_ir::option_prefix;
@@ -38,6 +39,7 @@ pub(super) struct InferredIdentity {
 /// Recheck a final Flow owner for a budget omission after native role hints
 /// have been discarded. Either complete visible or native-prefix grammar may
 /// prove the same over-limit owner; neither publishes a partial name group.
+#[cfg_attr(not(feature = "roff"), allow(dead_code))]
 pub(super) fn environment_owner_over_limit(
     content: ContentContext<'_>,
     item: &DefinitionItem,
@@ -50,6 +52,10 @@ pub(super) fn environment_owner_over_limit(
     clippy::too_many_lines,
     reason = "keep declaration role precedence and its one shared recognition result together"
 )]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the frozen native HEAD witness is passed intact"
+)]
 pub(super) fn infer_identity(
     content: ContentContext<'_>,
     item: &DefinitionItem,
@@ -58,6 +64,8 @@ pub(super) fn infer_identity(
     complete_term_witness: bool,
     option_ranges: Option<&[Vec<std::ops::Range<usize>>]>,
     operand_ranges: Option<&[Vec<std::ops::Range<usize>>]>,
+    argument_ranges: Option<&[Vec<std::ops::Range<usize>>]>,
+    components: Option<&[Vec<super::NativeHeadComponent>]>,
 ) -> InferredIdentity {
     let first = item
         .terms
@@ -89,9 +97,84 @@ pub(super) fn infer_identity(
             })
         })
     });
-    let (mut kind, mut case) =
-        decision::select_kind(trimmed, context, hint, native_numeric_occurrences.is_some());
-    let mut over_limit = false;
+    let configuration_scan = matches!(
+        context,
+        DefinitionContext::ConfigurationKeys | DefinitionContext::RootConfigurationKeys
+    )
+    .then(|| {
+        item.terms
+            .iter()
+            .enumerate()
+            .map(|(index, term)| {
+                let text = plain_text(content, term);
+                if context == DefinitionContext::RootConfigurationKeys && hint.is_none() {
+                    mant_ir::root_configuration_assignment_range(&text).and_then(|range| {
+                        text.get(range.clone())
+                            .map(|name| vec![RecognizedName::contiguous(name, range.start)])
+                    })
+                } else {
+                    native_components::configuration_names(
+                        &text,
+                        components.and_then(|ranges| ranges.get(index).map(Vec::as_slice)),
+                        argument_ranges.and_then(|ranges| ranges.get(index).map(Vec::as_slice)),
+                    )
+                }
+            })
+            .collect::<Vec<_>>()
+    });
+    let first_configuration_name = configuration_scan
+        .as_ref()
+        .and_then(|terms| terms.first())
+        .is_some_and(|names| names.as_ref().is_some_and(|names| !names.is_empty()));
+    let (mut kind, mut case) = decision::select_kind(
+        trimmed,
+        context,
+        hint,
+        native_numeric_occurrences.is_some(),
+        first_configuration_name,
+    );
+    let mut proven_command_occurrences = None;
+    if kind == EntryKind::Command
+        && context == DefinitionContext::Commands
+        && hint.is_none()
+        && complete_term_witness
+    {
+        let candidates = name_occurrences(content, item, EntryKind::Command, operand_ranges);
+        let complete = item.terms.iter().enumerate().all(|(index, term)| {
+            let visible = plain_text(content, term);
+            mant_ir::command_declaration_name_range(&visible).is_some()
+                || head::is_styled_command_head(content, term)
+                || components
+                    .and_then(|terms| terms.get(index))
+                    .is_some_and(|members| {
+                        members
+                            .iter()
+                            .any(|member| member.role == super::NativeHeadRole::Literal)
+                            && candidates.get(index).is_some_and(|names| !names.is_empty())
+                    })
+                || forms::declaration_groups(content, term).len() > 1
+                    && candidates.get(index).is_some_and(|names| names.len() > 1)
+        });
+        // CVS man_macro.c::blk_imp/man_term.c::pre_TP establish a physical
+        // owner and man_term.c::pre_B only changes font. Neither turns a bare
+        // bold subject into a command. A complete call or a bounded group of
+        // separately recognized declaration forms can do so; otherwise keep
+        // the TP label as a named Term. Authored Ic/Cm and explicit IR facts
+        // take other paths.
+        // A failed Command role does not erase a checked styled name prefix
+        // such as `start` in `start option|other`; it remains a named Term.
+        proven_command_occurrences = Some(candidates);
+        if !complete {
+            kind = EntryKind::Term;
+            case = NameCase::Sensitive;
+        }
+    }
+    let mut over_limit = matches!(
+        hint,
+        Some(super::NativeHeadRole::Literal | super::NativeHeadRole::Variable)
+    ) && (components
+        .is_some_and(|terms| terms.iter().any(|members| members.len() > 64))
+        || argument_ranges.is_some_and(|terms| terms.iter().any(|members| members.len() > 64)));
     let mut occurrences = if hint == Some(super::NativeHeadRole::LiteralTerm) {
         item.terms
             .iter()
@@ -114,6 +197,52 @@ pub(super) fn infer_identity(
         }
     } else if let Some(occurrences) = native_numeric_occurrences {
         occurrences
+    } else if let Some(occurrences) = proven_command_occurrences {
+        occurrences
+    } else if kind == EntryKind::ConfigurationKey {
+        configuration_scan
+            .unwrap_or_default()
+            .into_iter()
+            .map(Option::unwrap_or_default)
+            .collect()
+    } else if hint == Some(super::NativeHeadRole::Variable) && components.is_some() {
+        item.terms
+            .iter()
+            .enumerate()
+            .map(|(index, term)| {
+                let text = plain_text(content, term);
+                components
+                    .and_then(|ranges| ranges.get(index))
+                    .and_then(|members| native_components::variable_names(&text, members))
+                    .unwrap_or_default()
+            })
+            .collect()
+    } else if context == DefinitionContext::Variables && hint.is_none() && !complete_term_witness {
+        item.terms
+            .iter()
+            .map(|term| {
+                let text = plain_text(content, term);
+                mant_ir::variable_assignment_declaration_range(&text)
+                    .and_then(|range| {
+                        text.get(range.clone())
+                            .map(|name| vec![RecognizedName::contiguous(name, range.start)])
+                    })
+                    .unwrap_or_default()
+            })
+            .collect()
+    } else if kind == EntryKind::Variable && hint.is_none() {
+        item.terms
+            .iter()
+            .map(|term| {
+                let text = plain_text(content, term);
+                mant_ir::variable_declaration_name_range(&text)
+                    .and_then(|range| {
+                        text.get(range.clone())
+                            .map(|name| vec![RecognizedName::contiguous(name, range.start)])
+                    })
+                    .unwrap_or_default()
+            })
+            .collect()
     } else if kind == EntryKind::EnvironmentVariable {
         if let Ok(occurrences) = named::environment_owner_occurrences(content, &item.terms, false) {
             occurrences
@@ -124,6 +253,36 @@ pub(super) fn infer_identity(
     } else {
         name_occurrences(content, item, kind, operand_ranges)
     };
+    if kind == EntryKind::Term
+        && context == DefinitionContext::Values
+        && hint.is_none()
+        && occurrences.iter().all(Vec::is_empty)
+        && item.terms.len() <= 64
+    {
+        // CVS man_macro.c::blk_imp/man_term.c::pre_IP retain an isolated
+        // unsigned numeric HEAD as its own definition below an option. It is
+        // an exact Term selector, not proof of a Value kind or a valueDomain.
+        // Numbered sequences are converted to List before this pass.
+        occurrences = item
+            .terms
+            .iter()
+            .map(|term| {
+                let text = plain_text(content, term);
+                let name = text.trim();
+                if name.len() <= 128
+                    && !name.is_empty()
+                    && name.bytes().all(|byte| byte.is_ascii_digit())
+                {
+                    vec![RecognizedName::contiguous(
+                        name,
+                        text.len() - text.trim_start().len(),
+                    )]
+                } else {
+                    Vec::new()
+                }
+            })
+            .collect();
+    }
     if hint == Some(super::NativeHeadRole::Literal) && occurrences.iter().all(Vec::is_empty) {
         occurrences = name_occurrences(content, item, EntryKind::Command, operand_ranges);
         if occurrences.iter().all(Vec::is_empty) {
@@ -147,7 +306,21 @@ pub(super) fn infer_identity(
         kind = EntryKind::Term;
         case = NameCase::Sensitive;
     }
+    // An unrecognized variable label is still a real native TP/It owner, but
+    // the full-label Term fallback cannot turn a malformed variable syntax
+    // into a selectable name. A plain label like `real-name` can still be a
+    // conservative named Term when the native role is not proven;
+    // an explicit Va component takes the native-role path above instead.
+    let rejected_variable_head = context == DefinitionContext::Variables
+        && hint.is_none()
+        && kind == EntryKind::Variable
+        && occurrences.iter().all(Vec::is_empty)
+        && item.terms.iter().any(|term| {
+            let text = plain_text(content, term);
+            mant_ir::rejected_variable_declaration_head(&text)
+        });
     if !over_limit
+        && !rejected_variable_head
         && occurrences.iter().all(Vec::is_empty)
         && kind != EntryKind::EnvironmentVariable
         && !matches!(
@@ -159,7 +332,7 @@ pub(super) fn infer_identity(
         kind = EntryKind::Term;
         case = NameCase::Sensitive;
     }
-    if complete_term_witness && kind == EntryKind::Term {
+    if complete_term_witness && kind == EntryKind::Term && !rejected_variable_head {
         // man_term.c::pre_TP and mdoc_term.c::termp_it_pre establish the
         // physical owner independently. Only then can punctuation-bearing
         // full labels fall back to one Term rather than delimiter-made aliases.
@@ -246,13 +419,6 @@ pub(super) fn name_occurrences(
         .iter()
         .map(|term| {
             let text = plain_text(content, term);
-            let locate = |part: &str, name: &str| {
-                super::RecognizedName::contiguous(
-                    name,
-                    part.as_ptr() as usize - text.as_ptr() as usize
-                        + part.find(name).expect("grammar returns a visible name"),
-                )
-            };
             match kind {
                 EntryKind::EnvironmentVariable => {
                     named::environment_occurrences(&text).unwrap_or_default()
@@ -266,14 +432,11 @@ pub(super) fn name_occurrences(
                     named::named_occurrences(&text, validate).unwrap_or_default()
                 }
                 EntryKind::Command => {
-                    if let Some(range) = mant_ir::manual_call_name_range(&text) {
+                    if let Some(range) = mant_ir::command_declaration_name_range(&text) {
                         return vec![super::RecognizedName::contiguous(
                             &text[range.clone()],
                             range.start,
                         )];
-                    }
-                    if let Some((name, _)) = super::context::key_binding_command_form(&text) {
-                        return vec![locate(&text, name)];
                     }
                     let mut offset = 0;
                     forms::declaration_groups(content, term)
@@ -302,7 +465,7 @@ pub(super) fn name_occurrences(
         .collect()
 }
 
-fn styled_complete_term_occurrences(
+pub(super) fn styled_complete_term_occurrences(
     content: ContentContext<'_>,
     term: &[Inline],
     text: &str,

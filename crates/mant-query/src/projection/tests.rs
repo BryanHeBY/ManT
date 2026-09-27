@@ -170,6 +170,7 @@ fn tldr() -> TldrDocument {
 fn empty_fixed_body_uses_fixed_outline_and_rejects_absent_root_excerpt() {
     let mut query = query();
     query.document.as_mut().unwrap().body = mant_ir::DocumentBody::Fixed(mant_ir::FixedBody {
+        root_configuration_hint: false,
         surface: mant_ir::DisplaySurface {
             text: String::new(),
             rows: Vec::new(),

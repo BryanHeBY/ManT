@@ -95,6 +95,7 @@ impl DocumentIndex {
                 let all_entries_valid = fixed_validation
                     .and_then(|proof| proof.result_for(fixed))
                     .is_some_and(Result::is_ok);
+                let root_hint_valid = document.fixed_root_configuration_hint_valid();
                 // The codec assigned normalized identities independently of
                 // native mark keys. Keep raw declarations as provenance and
                 // register only the fragments actually emitted by native HTML.
@@ -116,6 +117,9 @@ impl DocumentIndex {
                 }
                 builder.section_stack.clear();
                 for owner in &fixed.owners {
+                    if !root_hint_valid && fixed.root_configuration_dependent(owner) {
+                        continue;
+                    }
                     if !(all_entries_valid && owner.entry.is_some())
                         && fixed.validated_entry(owner).is_none()
                     {
@@ -452,6 +456,7 @@ mod tests {
             }],
             root_source: SourceKey::FIRST,
             body: crate::DocumentBody::Fixed(crate::FixedBody {
+                root_configuration_hint: false,
                 surface: crate::DisplaySurface {
                     text: String::new(),
                     rows: Vec::new(),

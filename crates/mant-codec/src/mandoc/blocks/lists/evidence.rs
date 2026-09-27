@@ -1,6 +1,6 @@
 //! Capture declaration-head macros before their literal/argument styling loses
 //! the native role. This is only called for an existing definition owner.
-use crate::definitions::NativeHeadRole;
+use crate::definitions::{NativeHeadComponent, NativeHeadRole};
 use libmandoc_rs::Node;
 use std::{collections::HashMap, ops::Range};
 
@@ -8,10 +8,66 @@ const OPTION_START: &str = "\0mant-native-option-start:";
 const OPTION_END: &str = "\0mant-native-option-end:";
 const OPERAND_START: &str = "\0mant-native-operand-start:";
 const OPERAND_END: &str = "\0mant-native-operand-end:";
+const ARGUMENT_START: &str = "\0mant-native-argument-start:";
+const ARGUMENT_END: &str = "\0mant-native-argument-end:";
+const LITERAL_START: &str = "\0mant-native-component-literal-start:";
+const LITERAL_END: &str = "\0mant-native-component-literal-end:";
+const VARIABLE_START: &str = "\0mant-native-component-variable-start:";
+const VARIABLE_END: &str = "\0mant-native-component-variable-end:";
 
 pub(super) struct HeadRanges {
     pub(super) option_ranges: Vec<Vec<Range<usize>>>,
     pub(super) operand_ranges: Vec<Vec<Range<usize>>>,
+    pub(super) literal_argument_ranges: Vec<Vec<Range<usize>>>,
+    pub(super) components: Vec<Vec<NativeHeadComponent>>,
+}
+
+#[derive(Clone, Copy, Hash, PartialEq, Eq)]
+enum MarkKind {
+    Option,
+    Operand,
+    Argument,
+    Literal,
+    Variable,
+}
+
+#[derive(Default)]
+struct TermRanges {
+    open: HashMap<(MarkKind, usize), usize>,
+    closed: Vec<(MarkKind, Range<usize>)>,
+}
+
+impl TermRanges {
+    fn marker(&mut self, id: &str, offset: usize) -> bool {
+        let marks = [
+            (MarkKind::Option, OPTION_START, OPTION_END),
+            (MarkKind::Operand, OPERAND_START, OPERAND_END),
+            (MarkKind::Argument, ARGUMENT_START, ARGUMENT_END),
+            (MarkKind::Literal, LITERAL_START, LITERAL_END),
+            (MarkKind::Variable, VARIABLE_START, VARIABLE_END),
+        ];
+        for (kind, start, end) in marks {
+            if let Some(key) = id
+                .strip_prefix(start)
+                .and_then(|hex| usize::from_str_radix(hex, 16).ok())
+            {
+                self.open.insert((kind, key), offset);
+                return true;
+            }
+            if let Some(key) = id
+                .strip_prefix(end)
+                .and_then(|hex| usize::from_str_radix(hex, 16).ok())
+            {
+                if let Some(start) = self.open.remove(&(kind, key))
+                    && start < offset
+                {
+                    self.closed.push((kind, start..offset));
+                }
+                return true;
+            }
+        }
+        false
+    }
 }
 
 /// Consume definition-head-only zero-width witnesses before committing draft
@@ -24,43 +80,11 @@ pub(super) fn take_head_ranges(
     fn strip(
         nodes: &mut Vec<crate::mandoc::inline::DraftInline>,
         offset: &mut usize,
-        option_open: &mut HashMap<usize, usize>,
-        operand_open: &mut HashMap<usize, usize>,
-        option_ranges: &mut Vec<Range<usize>>,
-        operand_ranges: &mut Vec<Range<usize>>,
+        ranges: &mut TermRanges,
     ) {
         use crate::mandoc::inline::DraftInline;
         nodes.retain_mut(|node| match node {
-            DraftInline::Anchor { id, .. } => {
-                let parse = |prefix: &str| {
-                    id.as_str()
-                        .strip_prefix(prefix)
-                        .and_then(|hex| usize::from_str_radix(hex, 16).ok())
-                };
-                if let Some(key) = parse(OPTION_START) {
-                    option_open.insert(key, *offset);
-                    false
-                } else if let Some(key) = parse(OPTION_END) {
-                    if let Some(start) = option_open.remove(&key)
-                        && start < *offset
-                    {
-                        option_ranges.push(start..*offset);
-                    }
-                    false
-                } else if let Some(key) = parse(OPERAND_START) {
-                    operand_open.insert(key, *offset);
-                    false
-                } else if let Some(key) = parse(OPERAND_END) {
-                    if let Some(start) = operand_open.remove(&key)
-                        && start < *offset
-                    {
-                        operand_ranges.push(start..*offset);
-                    }
-                    false
-                } else {
-                    true
-                }
-            }
+            DraftInline::Anchor { id, .. } => !ranges.marker(id.as_str(), *offset),
             DraftInline::Text { value } | DraftInline::Code { value } => {
                 *offset += value.len();
                 true
@@ -68,14 +92,7 @@ pub(super) fn take_head_ranges(
             DraftInline::Strong { children }
             | DraftInline::Emphasis { children }
             | DraftInline::Link { children, .. } => {
-                strip(
-                    children,
-                    offset,
-                    option_open,
-                    operand_open,
-                    option_ranges,
-                    operand_ranges,
-                );
+                strip(children, offset, ranges);
                 true
             }
             DraftInline::LineBreak => {
@@ -85,31 +102,42 @@ pub(super) fn take_head_ranges(
         });
     }
 
-    let (option_ranges, operand_ranges) = terms
-        .iter_mut()
-        .map(|term| {
-            let mut offset = 0;
-            let mut option_open = HashMap::new();
-            let mut operand_open = HashMap::new();
-            let mut option_ranges = Vec::new();
-            let mut operand_ranges = Vec::new();
-            strip(
-                term,
-                &mut offset,
-                &mut option_open,
-                &mut operand_open,
-                &mut option_ranges,
-                &mut operand_ranges,
-            );
-            option_ranges.sort_by_key(|range| range.start);
-            operand_ranges.sort_by_key(|range| range.start);
-            (option_ranges, operand_ranges)
-        })
-        .unzip();
-    HeadRanges {
-        option_ranges,
-        operand_ranges,
+    let mut result = HeadRanges {
+        option_ranges: Vec::with_capacity(terms.len()),
+        operand_ranges: Vec::with_capacity(terms.len()),
+        literal_argument_ranges: Vec::with_capacity(terms.len()),
+        components: Vec::with_capacity(terms.len()),
+    };
+    for term in terms {
+        let mut offset = 0;
+        let mut ranges = TermRanges::default();
+        strip(term, &mut offset, &mut ranges);
+        ranges.closed.sort_by_key(|(_, range)| range.start);
+        let mut option = Vec::new();
+        let mut operand = Vec::new();
+        let mut argument = Vec::new();
+        let mut components = Vec::new();
+        for (kind, range) in ranges.closed {
+            match kind {
+                MarkKind::Option => option.push(range),
+                MarkKind::Operand => operand.push(range),
+                MarkKind::Argument => argument.push(range),
+                MarkKind::Literal => components.push(NativeHeadComponent {
+                    role: NativeHeadRole::Literal,
+                    range,
+                }),
+                MarkKind::Variable => components.push(NativeHeadComponent {
+                    role: NativeHeadRole::Variable,
+                    range,
+                }),
+            }
+        }
+        result.option_ranges.push(option);
+        result.operand_ranges.push(operand);
+        result.literal_argument_ranges.push(argument);
+        result.components.push(components);
     }
+    result
 }
 
 pub(super) fn leading_role(nodes: &[Node]) -> Option<NativeHeadRole> {
@@ -121,6 +149,11 @@ pub(super) fn leading_role(nodes: &[Node]) -> Option<NativeHeadRole> {
         match node.macro_name.as_deref() {
             Some("Fl") => return Some(HeadStart::Typed(NativeHeadRole::Option)),
             Some("Ev") => return Some(HeadStart::Typed(NativeHeadRole::Environment)),
+            // mdoc_term.c::termp_under_pre/termp_li_pre choose initial fonts,
+            // but term_word() may override them. Preserve the native role;
+            // font alone cannot distinguish Va/Dv/Ar/No.
+            Some("Va") => return Some(HeadStart::Typed(NativeHeadRole::Variable)),
+            Some("Dv") => return Some(HeadStart::Typed(NativeHeadRole::DefinedVariable)),
             Some("Ic" | "Cm") => return Some(HeadStart::Typed(NativeHeadRole::Literal)),
             Some("Ar" | "Em" | "Sy") => return Some(HeadStart::Other),
             Some("Tg" | "Ns" | "Sm") => return None,

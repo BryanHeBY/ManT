@@ -117,6 +117,86 @@ pub struct Document {
 }
 
 impl Document {
+    fn root_configuration_mismatch_diagnostic() -> Diagnostic {
+        Diagnostic {
+            level: DiagnosticLevel::Unsupported,
+            impact: DiagnosticImpact::SemanticCoverage,
+            code: Some("ir.invalid-root-configuration-hint".to_owned()),
+            message: "Fixed root configuration hint disagrees with document metadata; dependent entry facts are withheld".to_owned(),
+            source: None,
+            source_key: None,
+            coverage_scope: Some(CoverageScope::Document),
+        }
+    }
+
+    /// Diagnostics for a current projection, including a metadata edit that
+    /// invalidated a persisted Fixed root classifier after deserialization.
+    /// This is a narrow O(1) semantic guard, not a replay of full IR checks.
+    #[must_use]
+    pub fn projection_diagnostics(&self) -> Vec<Diagnostic> {
+        let mut diagnostics = self.diagnostics.clone();
+        if !self.fixed_root_configuration_hint_valid()
+            && !diagnostics.iter().any(|diagnostic| {
+                diagnostic.code.as_deref() == Some("ir.invalid-root-configuration-hint")
+                    && diagnostic.impact == DiagnosticImpact::SemanticCoverage
+            })
+        {
+            diagnostics.push(Self::root_configuration_mismatch_diagnostic());
+        }
+        diagnostics
+    }
+
+    /// Clone the primary body for a public projection. If a metadata edit
+    /// invalidated a Fixed root hint, retract currently invalid optional entry
+    /// facts while keeping the sole native display surface unchanged.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn projection_body(&self) -> DocumentBody {
+        let mut body = self.body.clone();
+        if !self.fixed_root_configuration_hint_valid() {
+            Self::retract_stale_root_configuration_hint(&mut body);
+        }
+        body
+    }
+
+    /// Isolate a stale optional Fixed classifier after a detached response is
+    /// converted back to IR. Content and sources remain; valid independent
+    /// entries are retained.
+    #[doc(hidden)]
+    pub fn isolate_stale_root_configuration_hint(&mut self) {
+        if !self.fixed_root_configuration_hint_valid() {
+            Self::retract_stale_root_configuration_hint(&mut self.body);
+            if !self.diagnostics.iter().any(|diagnostic| {
+                diagnostic.code.as_deref() == Some("ir.invalid-root-configuration-hint")
+                    && diagnostic.impact == DiagnosticImpact::SemanticCoverage
+            }) {
+                self.diagnostics
+                    .push(Self::root_configuration_mismatch_diagnostic());
+            }
+        }
+    }
+
+    fn retract_stale_root_configuration_hint(body: &mut DocumentBody) {
+        if let DocumentBody::Fixed(fixed) = body {
+            fixed.root_configuration_hint = false;
+            for key in fixed.invalid_entry_keys() {
+                fixed.owners[(key.get() - 1) as usize].entry = None;
+            }
+        }
+    }
+
+    /// A persisted Fixed root hint is usable only while the enclosing native
+    /// bibliographic metadata still proves the same weak family. This check
+    /// also protects indexes built after an in-memory metadata mutation.
+    pub(crate) fn fixed_root_configuration_hint_valid(&self) -> bool {
+        let DocumentBody::Fixed(fixed) = &self.body else {
+            return true;
+        };
+        !fixed.root_configuration_hint
+            || crate::document_root_declaration_family(&self.meta)
+                == Some(crate::SectionDeclarationFamily::ConfigurationKeys)
+    }
+
     /// Access the owned Flow body only when this document is Flow.
     #[must_use]
     pub const fn flow(&self) -> Option<&FlowBody> {
@@ -211,7 +291,7 @@ impl<'de> Deserialize<'de> for Document {
         D: Deserializer<'de>,
     {
         let wire = DocumentWire::deserialize(deserializer)?;
-        let document = Self {
+        let mut document = Self {
             parser: wire.parser,
             sources: wire.sources,
             root_source: wire.root_source,
@@ -220,6 +300,7 @@ impl<'de> Deserialize<'de> for Document {
             fragment_aliases: wire.fragment_aliases,
             diagnostics: wire.diagnostics,
         };
+        document.isolate_stale_root_configuration_hint();
         match &document.body {
             DocumentBody::Flow(flow) => crate::validate_content_store(&flow.content_store)
                 .map_err(serde::de::Error::custom)?,
@@ -336,6 +417,7 @@ mod body_tests {
             sections: Vec::new(),
         }));
         let fixed = document(DocumentBody::Fixed(crate::FixedBody {
+            root_configuration_hint: false,
             surface: DisplaySurface {
                 text: String::new(),
                 rows: Vec::new(),

@@ -17,18 +17,6 @@ fn complete_hanging_heads_share_spacing_and_owner_rules_across_roles() {
             EntryKind::ConfigurationKey,
         ),
         (
-            "CONFIGURATION",
-            ".B Environment=",
-            "Environment",
-            EntryKind::ConfigurationKey,
-        ),
-        (
-            "VARIABLES",
-            ".B my-variable",
-            "my-variable",
-            EntryKind::Variable,
-        ),
-        (
             "ENVIRONMENT",
             ".B CACHE_HOME <directory>",
             "CACHE_HOME",
@@ -73,6 +61,21 @@ fn complete_hanging_heads_share_spacing_and_owner_rules_across_roles() {
             assert_eq!(direct.len(), 1);
             assert_eq!(direct[0].source, items[0].source);
         }
+    }
+    for (section, head) in [
+        ("CONFIGURATION", ".B Environment="),
+        ("VARIABLES", ".B my-variable"),
+    ] {
+        let source =
+            format!(".TH PROBE 1\n.SH {section}\n.na\n.PP\n{head}\n.RS 4n\nOWNER_BODY\n.RE\n.ad\n");
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+        // CVS man_term.c::pre_PP/pre_RS only establishes layout. An empty
+        // assignment or title-plus-bold word cannot establish an entry.
+        assert!(
+            definitions(query.document.as_ref().unwrap()).is_empty(),
+            "{source}"
+        );
+        assert!(mant_render::render_query_text(&query).contains("OWNER_BODY"));
     }
 }
 
@@ -156,39 +159,32 @@ fn finite_short_long_pairs_bind_names_without_rescanning_argument_tokens() {
 fn unstyled_dotted_keys_italic_settings_and_repeated_arguments_keep_owners() {
     let source = b".TH LOCAL 1\n.SH VARIABLES\n.PP\ncore.editor\n.RS 4\nThe chosen editor.\n.RE\n.PP\nuser.name, user.email\n.RS 4\nIdentity settings.\n.RE\n.SH PATHS\n.PP\n.I WorkingDirectory=\n.RS 4\nSet the working directory.\n.RE\n.SH OPTIONS\n.PP\n.B -O, --test-opts\n.I option\n...\n.RS 4\nTest the supplied options.\n.RE\n";
     let content = mant_loader::load_roff_bytes(source).unwrap();
-    for (name, kind, body) in [
-        (
-            "core.editor",
-            mant_ir::EntryKind::ConfigurationKey,
-            "The chosen editor",
-        ),
-        (
-            "user.email",
-            mant_ir::EntryKind::ConfigurationKey,
-            "Identity settings",
-        ),
-        (
-            "WorkingDirectory",
-            mant_ir::EntryKind::ConfigurationKey,
-            "Set the working directory",
-        ),
-        (
-            "--test-opts",
-            mant_ir::EntryKind::Parameter {
-                parameter_kind: mant_ir::ParameterKind::Option,
-            },
-            "Test the supplied options",
-        ),
-    ] {
-        let result = mant_query::select_explanation(&content, name).unwrap();
-        let direct: Vec<_> = result
-            .evidence
-            .iter()
-            .filter(|e| e.class == mant_protocol::EvidenceClass::DirectEntry)
-            .collect();
-        assert_eq!(direct.len(), 1, "{name}: {result:?}");
-        assert_eq!(direct[0].entry.as_ref().unwrap().kind, kind);
-        assert!(mant_render::render_explanation_text(&result).contains(body));
+    let result = mant_query::select_explanation(&content, "--test-opts").unwrap();
+    let direct: Vec<_> = result
+        .evidence
+        .iter()
+        .filter(|e| e.class == mant_protocol::EvidenceClass::DirectEntry)
+        .collect();
+    assert_eq!(direct.len(), 1, "{result:?}");
+    assert_eq!(
+        direct[0].entry.as_ref().unwrap().kind,
+        mant_ir::EntryKind::Parameter {
+            parameter_kind: mant_ir::ParameterKind::Option,
+        }
+    );
+    assert!(mant_render::render_explanation_text(&result).contains("Test the supplied options"));
+    // The other PP/RS paragraphs remain native text, but VARIABLES is not
+    // a configuration scope and italic `WorkingDirectory=` has no value.
+    for name in ["core.editor", "user.email", "WorkingDirectory"] {
+        assert_eq!(
+            mant_query::select_explanation(&content, name)
+                .unwrap()
+                .counts
+                .direct_entry
+                .total,
+            0,
+            "{name}"
+        );
     }
     let negative = mant_loader::load_roff_bytes(b".TH NO 1\n.SH NOTES\n.PP\nfile.md\n.RS 4\nA file example, not a configuration declaration.\n.RE\n").unwrap();
     assert_eq!(

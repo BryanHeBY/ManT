@@ -81,26 +81,17 @@ pub(super) fn key_binding_command_form(value: &str) -> Option<(&str, Option<&str
         return Some((name, None));
     }
     let binding = suffix.strip_prefix('(')?.strip_suffix(')')?.trim();
-    (!binding.is_empty() && looks_like_key_binding(binding)).then_some((name, Some(binding)))
-}
-
-fn looks_like_key_binding(value: &str) -> bool {
-    value
-        .split([',', ' '])
-        .filter(|part| !part.is_empty() && *part != "usually" && *part != "...")
-        .any(|part| {
-            part.starts_with("C-")
-                || part.starts_with("M-")
-                || matches!(
-                    part,
-                    "TAB" | "Return" | "Newline" | "Rubout" | "ESC" | "<space>"
-                )
-        })
+    mant_ir::command_declaration_name_range(value)
+        .is_some_and(|range| range == (0..name.len()))
+        .then_some((name, Some(binding)))
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum DefinitionContext {
     Generic,
+    /// Canonical document metadata hints at configuration syntax, but does
+    /// not itself prove that any individual definition is a key.
+    RootConfigurationKeys,
     Parameters,
     Commands,
     EnvironmentVariables,
@@ -114,6 +105,7 @@ impl DefinitionContext {
     pub(super) const fn label(self) -> &'static str {
         match self {
             Self::Generic => "generic",
+            Self::RootConfigurationKeys => "root-configuration-key",
             Self::Parameters => "parameter",
             Self::Commands => "command",
             Self::EnvironmentVariables => "environment-variable",
@@ -131,6 +123,15 @@ impl DefinitionContext {
             Some(Family::EnvironmentVariables) => Self::EnvironmentVariables,
             Some(Family::Variables) => Self::Variables,
             Some(Family::ConfigurationKeys) => Self::ConfigurationKeys,
+            // DESCRIPTION in a configuration manual commonly contains the
+            // key declarations themselves. EXAMPLES and SEE ALSO, in
+            // contrast, are prose/reference barriers even for that manual.
+            Some(Family::NonDeclaration)
+                if inherited == Self::RootConfigurationKeys
+                    && title.trim().eq_ignore_ascii_case("DESCRIPTION") =>
+            {
+                inherited
+            }
             Some(Family::NonDeclaration) => Self::Generic,
             None => inherited,
         }
@@ -199,6 +200,16 @@ mod tests {
                 Context::for_section(title, Context::Commands),
                 Context::Generic,
                 "{title}"
+            );
+        }
+        assert_eq!(
+            Context::for_section("DESCRIPTION", Context::RootConfigurationKeys),
+            Context::RootConfigurationKeys
+        );
+        for title in ["EXAMPLES", "SEE ALSO"] {
+            assert_eq!(
+                Context::for_section(title, Context::RootConfigurationKeys),
+                Context::Generic
             );
         }
     }

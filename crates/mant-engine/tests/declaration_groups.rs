@@ -936,29 +936,31 @@ fn prose_bullets_and_independent_markdown_items_do_not_gain_context() {
 }
 
 #[test]
-fn template_heads_keep_group_context_without_a_prefix_name() {
+fn template_heads_remain_readable_mentions_without_semantic_names() {
+    // The exact input ran pinned CVS -Tutf8 -Owidth=78 first.
+    // mdoc_macro.c::blk_full retains both It owners; mdoc_term.c::termp_ns_pre
+    // joins Ev DEMO_ and Ar NAME visibly without making a concrete variable.
     let source = ".Dd September 8, 2026\n.Dt PROBE 1\n.Os\n.Sh ENVIRONMENT\n.Bl -tag -width Ds\n.It Ev DEMO_ Ns Ar NAME\n.It Ev DEMO_HOME\nEnvironment family explanation.\n.El\n";
-    let response = explained(source, "DEMO_NAME");
-    assert_eq!(response.supports.len(), 1);
+    let template = explained(source, "DEMO_NAME");
+    assert_eq!(template.counts.direct_entry.total, 0);
+    assert_eq!(template.counts.context_mention.total, 1);
+    assert!(template.supports.is_empty());
+    assert_eq!(template.evidence.len(), 1);
+    assert_eq!(template.evidence[0].class, EvidenceClass::ContextMention);
+    assert!(template.evidence[0].entry.is_none());
+    assert!(template.evidence[0].bases.iter().all(|basis| !matches!(
+        basis,
+        mant_protocol::EvidenceBasis::Name { .. } | mant_protocol::EvidenceBasis::Form { .. }
+    )));
+
+    let concrete = explained(source, "DEMO_HOME");
+    assert_eq!(concrete.counts.direct_entry.total, 1);
+    assert_eq!(concrete.evidence[0].class, EvidenceClass::DirectEntry);
+    let entry = concrete.evidence[0].entry.as_ref().unwrap();
+    assert_eq!(entry.kind, mant_ir::EntryKind::EnvironmentVariable);
+    assert_eq!(entry.names, ["DEMO_HOME"]);
     assert!(
-        response.evidence[0]
-            .entry
-            .as_ref()
-            .unwrap()
-            .names
-            .is_empty()
-    );
-    assert!(
-        response.evidence[0]
-            .bases
-            .iter()
-            .any(|b| matches!(b, mant_protocol::EvidenceBasis::Form { .. }))
-    );
-    assert!(
-        !response.evidence[0]
-            .bases
-            .iter()
-            .any(|b| matches!(b, mant_protocol::EvidenceBasis::Name { .. }))
+        mant_render::render_explanation_text(&concrete).contains("Environment family explanation.")
     );
 }
 

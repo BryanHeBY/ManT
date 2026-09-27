@@ -25,11 +25,52 @@ fn composite_environment_options_do_not_promote_shell_labels() {
         items[0].entry.as_ref().expect("term").kind,
         mant_ir::EntryKind::Term
     );
+    assert_eq!(
+        items[0].entry.as_ref().expect("named term").names,
+        ["Unix Bourne shell:"]
+    );
     assert_eq!(items[1].entry.as_ref().expect("option").names, ["-q"]);
-    assert!(document.diagnostics.iter().any(|diagnostic| {
+    // CVS man_macro.c::blk_imp and man_term.c::pre_TP keep the complete
+    // physical label; a conservative named Term is not a coverage failure.
+    assert!(!document.diagnostics.iter().any(|diagnostic| {
         diagnostic.code.as_deref() == Some("manual.semantic-entry.unclassified-definition")
             && diagnostic.message.contains("Unix Bourne shell:")
     }));
+}
+
+#[test]
+fn weak_environment_hanging_head_needs_a_complete_assignment() {
+    // All three exact inputs ran pinned CVS -Ttree first. man_macro.c::blk_imp
+    // gives TP a physical HEAD/BODY; man_term.c::pre_PP/pre_RS give the other
+    // two only layout, so HOME= without a value is not an inferred declaration.
+    let weak = parse_manual_bytes(
+        std::path::Path::new("weak-environment.1"),
+        b".TH WEAK-ENV 1\n.SH ENVIRONMENT\n.PP\n.B HOME=\n.RS 4\nDescription.\n.RE\n",
+    )
+    .expect("lower incomplete hanging assignment");
+    assert!(
+        SemanticIndex::build(&weak)
+            .section("environment")
+            .is_empty()
+    );
+    let complete = parse_manual_bytes(
+        std::path::Path::new("complete-environment.1"),
+        b".TH WEAK-ENV 1\n.SH ENVIRONMENT\n.PP\n.B HOME=one\n.RS 4\nDescription.\n.RE\n",
+    )
+    .expect("lower complete hanging assignment");
+    assert_eq!(
+        SemanticIndex::build(&complete).section("environment")[0].names,
+        ["HOME"]
+    );
+    let tagged = parse_manual_bytes(
+        std::path::Path::new("tagged-environment.1"),
+        b".TH WEAK-ENV 1\n.SH ENVIRONMENT\n.TP\n.B HOME=\nDescription.\n",
+    )
+    .expect("lower explicit TP label");
+    assert!(tagged.flow().unwrap().sections[0]
+        .blocks
+        .iter()
+        .any(|block| matches!(block, Block::DefinitionList { items, .. } if items.iter().any(|item| item.terms.iter().any(|term| inline_text(tagged.content(), term) == "HOME=")))));
 }
 
 #[test]
@@ -666,9 +707,14 @@ fn distinguishes_man_ip_enumeration_from_numeric_option_values() {
             .iter()
             .all(|entry| entry.children.is_empty() && entry.value_domain.is_none())
     );
-    assert_eq!(
-        entries[2].value_domain,
-        Some(ValueDomain::Choices { exhaustive: false })
+    // CVS man_term.c::pre_IP renders each numbered head with its own width;
+    // neither that layout nor the containing RS asserts an option value set.
+    assert_eq!(entries[2].value_domain, None);
+    assert!(
+        entries[2]
+            .children
+            .iter()
+            .all(|entry| entry.kind == mant_ir::EntryKind::Term)
     );
     assert_eq!(
         entries[2]
@@ -985,6 +1031,128 @@ Will accept only note events.\n",
             .any(|item| inline_text(document.content(), &item.terms[0]) == "router_chan 0 7 0 15")
     );
     assert!(declaration_groups.is_empty(), "{declaration_groups:?}");
+}
+
+#[test]
+fn native_defined_terms_keep_a_proven_shared_description_group() {
+    // The exact source ran pinned CVS -Ttree first: mdoc_macro.c::blk_full
+    // keeps two Dv-bearing It HEADs, and the final It BODY owns the prose.
+    let document = parse_manual_bytes(
+        std::path::Path::new("literal-term-group.1"),
+        b".Dd September 27, 2026\n.Dt GROUP-TERMS 1\n.Os\n.Sh VARIABLES\n\
+.Bl -tag\n.It Dv MODE_ONE\n.It Dv MODE_TWO\nShared description.\n.El\n",
+    )
+    .expect("lower native defined-term group");
+    let [
+        Block::DefinitionList {
+            items,
+            declaration_groups,
+            ..
+        },
+    ] = document.flow().unwrap().sections[0].blocks.as_slice()
+    else {
+        panic!("expected a native tag definition list");
+    };
+    assert_eq!(items.len(), 2);
+    for (item, name) in items.iter().zip(["MODE_ONE", "MODE_TWO"]) {
+        let entry = item.entry.as_ref().expect("defined term");
+        assert_eq!(entry.kind, mant_ir::EntryKind::Term);
+        assert_eq!(entry.names, [name]);
+    }
+    assert_eq!(
+        declaration_groups,
+        &[mant_ir::DeclarationGroup {
+            start_item: 0,
+            end_item: 2
+        }]
+    );
+}
+
+#[test]
+fn styled_single_mark_ip_labels_do_not_borrow_a_shared_description() {
+    // This exact IP input ran pinned CVS -Ttree first. man_macro.c::blk_imp
+    // creates two separate HEAD/BODY owners; font-only single marks do not
+    // establish a declaration group when the first BODY is empty.
+    let document = parse_manual_bytes(
+        std::path::Path::new("styled-single-mark-ip.1"),
+        b".TH T 1\n.SH COMMANDS\n.IP \"\\fB#\\fR\"\n.IP \"\\fB=\\fR\"\nBody.\n",
+    )
+    .expect("lower independent styled IP marks");
+    let [
+        Block::DefinitionList {
+            items,
+            declaration_groups,
+            ..
+        },
+    ] = document.flow().unwrap().sections[0].blocks.as_slice()
+    else {
+        panic!("expected native IP owners");
+    };
+    assert_eq!(items.len(), 2);
+    assert!(declaration_groups.is_empty());
+    assert_eq!(
+        items[0].entry.as_ref().unwrap().kind,
+        mant_ir::EntryKind::Term
+    );
+    assert_eq!(items[0].entry.as_ref().unwrap().names, ["#"]);
+}
+
+#[test]
+fn weak_command_layout_rejects_uppercase_placeholder_and_partial_key_binding() {
+    // Every exact PP/B/RS label below ran pinned CVS -Ttree first. In
+    // man_term.c::pre_PP/pre_RS/pre_B, neither layout nor font proves a
+    // command; a complete local call or key binding is required.
+    for head in [
+        "Note PLEASE",
+        "name (C-b prose)",
+        "name (usually C-b nonsense)",
+    ] {
+        let source = format!(".TH T 1\n.SH COMMANDS\n.PP\n.B {head}\n.RS 4\nBody.\n.RE\n");
+        let document = parse_manual_bytes(
+            std::path::Path::new("weak-command-evidence.1"),
+            source.as_bytes(),
+        )
+        .expect("lower non-declaration heading");
+        assert!(
+            SemanticIndex::build(&document)
+                .section("commands")
+                .is_empty(),
+            "{head}"
+        );
+    }
+}
+
+#[test]
+fn commands_tp_requires_a_complete_call_or_authored_literal_role() {
+    // These exact inputs ran pinned CVS -Ttree first. man_macro.c::blk_imp
+    // retains each TP HEAD/BODY, but man_term.c::pre_B only changes font;
+    // mdoc_macro.c::blk_full retains the Ic/Ar instances in its It HEAD.
+    let man = parse_manual_bytes(
+        std::path::Path::new("command-tp-evidence.1"),
+        b".TH T 1\n.SH COMMANDS\n.TP\n.B Note\nDescription.\n\
+.TP\n.B \"run FILE\"\nRun a file.\n\
+.TP\n.B \"git-add(1)\"\nRead the referenced command.\n",
+    )
+    .expect("lower complete and incomplete man command labels");
+    let entries = SemanticIndex::build(&man).section("commands").to_vec();
+    assert_eq!(entries.len(), 3);
+    assert_eq!(entries[0].kind, mant_ir::EntryKind::Term);
+    assert_eq!(entries[0].names, ["Note"]);
+    assert_eq!(entries[1].kind, mant_ir::EntryKind::Command);
+    assert_eq!(entries[1].names, ["run"]);
+    assert_eq!(entries[2].kind, mant_ir::EntryKind::Command);
+    assert_eq!(entries[2].names, ["git-add"]);
+
+    let mdoc = parse_manual_bytes(
+        std::path::Path::new("command-ic-evidence.1"),
+        b".Dd September 27, 2026\n.Dt T 1\n.Os\n.Sh COMMANDS\n.Bl -tag\n\
+.It Ic attach-session Ar target\nAttach to a target.\n.El\n",
+    )
+    .expect("lower authored Ic command label");
+    let entries = SemanticIndex::build(&mdoc).section("commands").to_vec();
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].kind, mant_ir::EntryKind::Command);
+    assert_eq!(entries[0].names, ["attach-session"]);
 }
 
 #[test]

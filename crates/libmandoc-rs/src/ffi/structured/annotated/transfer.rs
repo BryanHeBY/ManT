@@ -15,10 +15,13 @@ use super::{
 // the font of every surviving glyph.
 const HEAD_VARIABLE: u32 = 1 << 11;
 const HEAD_DEFINED_VARIABLE: u32 = 1 << 12;
+const HEAD_ARGUMENT: u32 = 1 << 13;
 // Pinned against roff.h by the matching native _Static_asserts.
 const MDOC_DV_TOKEN: u32 = 276;
 const MDOC_VA_TOKEN: u32 = 295;
-const HEAD_ROLE_MASK: u32 = 32 | 64 | 128 | 256 | HEAD_VARIABLE | HEAD_DEFINED_VARIABLE;
+const MDOC_AR_TOKEN: u32 = 273;
+const HEAD_ROLE_MASK: u32 =
+    32 | 64 | 128 | 256 | HEAD_VARIABLE | HEAD_DEFINED_VARIABLE | HEAD_ARGUMENT;
 const ALLOWED_MARK_FLAGS: u32 = 1 | 4 | 8 | 16 | 512 | 1024 | HEAD_ROLE_MASK;
 
 #[allow(clippy::too_many_lines)] // Mirrors the checked one-copy wire transfer.
@@ -318,8 +321,8 @@ pub(super) fn transfer(
                     )
                     || mark.flags & (16 | 256) != (16 | 256)))
             || (mark.flags & HEAD_ROLE_MASK != 0
-                && ((mark.kind != 2 && mark.kind != 6)
-                    || mark.kind == 2 && mark.flags & 16 == 0
+                && (!matches!(mark.kind, 2 | 6)
+                    || mark.kind == 2 && mark.flags & (16 | HEAD_ARGUMENT) != 16
                     || (mark.flags & HEAD_ROLE_MASK).count_ones() != 1))
         {
             return Err(invalid_result());
@@ -500,6 +503,7 @@ pub(super) fn transfer(
                 || mark.flags & HEAD_ROLE_MASK == 0
                 || mark.flags & HEAD_VARIABLE != 0 && mark.token != MDOC_VA_TOKEN
                 || mark.flags & HEAD_DEFINED_VARIABLE != 0 && mark.token != MDOC_DV_TOKEN
+                || mark.flags & HEAD_ARGUMENT != 0 && mark.token != MDOC_AR_TOKEN
                 || mark.flags & !(1 | HEAD_ROLE_MASK) != 0
                 || mark.title_region != 0
                 || mark.body_region != 0

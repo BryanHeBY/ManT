@@ -198,6 +198,114 @@ fn native_option_component_ceiling_counts_occurrences_not_distinct_spellings() {
 }
 
 #[test]
+fn native_argument_component_ceiling_is_an_observable_semantic_limit() {
+    // Synthetic post-device evidence: pinned CVS mdoc_macro.c::in_line hits
+    // its input-stack limit before 65 Ar calls on one source line. As with
+    // the Fl ceiling above, the IR still needs a deterministic bound if a
+    // complete native result ever supplies this many authored components.
+    for count in [64usize, 65] {
+        let mut body = scaled_styled_argument_body(0).0;
+        let mut text = "Key".to_owned();
+        let mut runs = vec![DisplayRun {
+            key: key(1),
+            row: key(1),
+            column: 0,
+            width: 3,
+            byte_start: 0,
+            byte_count: 3,
+            label: DisplayLabel {
+                owner: Some(key(1)),
+                link: None,
+                source: Some(SourceKey::FIRST),
+                style: DisplayStyle {
+                    bold: true,
+                    underline: false,
+                },
+                role: DisplayRole::Body,
+            },
+        }];
+        let mut parts = vec![OutputSlice {
+            run: key(1),
+            start_byte: 0,
+            end_byte: 3,
+        }];
+        let mut components = vec![OwnerHeadComponent {
+            role: OwnerHeadRole::Literal,
+            selection: TextSelection {
+                parts: parts.clone(),
+                joins: Vec::new(),
+            },
+            source: None,
+            source_key: Some(SourceKey::FIRST),
+        }];
+        for index in 0..count {
+            let run = key(u32::try_from(index + 2).unwrap());
+            let start = u64::try_from(text.len()).unwrap();
+            let column = u32::try_from(text.len()).unwrap();
+            text.push_str(" a");
+            runs.push(DisplayRun {
+                key: run,
+                row: key(1),
+                column,
+                width: 2,
+                byte_start: start,
+                byte_count: 2,
+                label: DisplayLabel {
+                    owner: Some(key(1)),
+                    link: None,
+                    source: Some(SourceKey::FIRST),
+                    style: DisplayStyle {
+                        bold: false,
+                        underline: true,
+                    },
+                    role: DisplayRole::Body,
+                },
+            });
+            parts.push(OutputSlice {
+                run,
+                start_byte: 0,
+                end_byte: 1,
+            });
+            let argument_part = OutputSlice {
+                run,
+                start_byte: 1,
+                end_byte: 2,
+            };
+            parts.push(argument_part);
+            components.push(OwnerHeadComponent {
+                role: OwnerHeadRole::Argument,
+                selection: TextSelection {
+                    parts: vec![argument_part],
+                    joins: Vec::new(),
+                },
+                source: None,
+                source_key: Some(SourceKey::FIRST),
+            });
+        }
+        body.surface.text = text;
+        body.surface.runs = runs;
+        body.surface.rows[0].run_count = u32::try_from(count + 1).unwrap();
+        body.surface.rows[0].column_count = u32::try_from(body.surface.text.len()).unwrap();
+        body.owners[0].head_role = Some(OwnerHeadRole::Literal);
+        body.owners[0].head = TextSelection {
+            parts,
+            joins: vec![TextJoin::DirectContact; count * 2],
+        };
+        body.owners[0].head_components = components;
+        body.validate().expect("complete synthetic display");
+        let result = body.scan_non_option_declaration(&body.owners[0]);
+        if count == 64 {
+            assert_eq!(result.unwrap().unwrap().occurrences.len(), 1);
+        } else {
+            assert!(matches!(
+                result,
+                Err(FixedNonOptionLimit::TooManyComponents)
+            ));
+        }
+    }
+}
+
+#[test]
 fn native_styled_delimiter_restarts_only_at_an_independent_bold_operand() {
     // All exact TP/BI inputs first ran pinned CVS -Tutf8. man_term.c::
     // pre_alternate concatenates operands without a separator while applying
@@ -560,6 +668,7 @@ fn scaled_styled_argument_body(fragments: usize) -> (FixedBody, String) {
         });
     }
     let body = FixedBody {
+        root_configuration_hint: false,
         surface: DisplaySurface {
             text: form.clone(),
             rows: vec![DisplayRow {
@@ -756,6 +865,7 @@ fn document_snapshot_reuses_only_a_current_complete_fixed_proof() {
 #[allow(clippy::too_many_lines)]
 fn sample_body() -> FixedBody {
     FixedBody {
+        root_configuration_hint: false,
         surface: DisplaySurface {
             text: "a界".to_owned(),
             rows: vec![DisplayRow {

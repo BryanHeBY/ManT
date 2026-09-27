@@ -132,7 +132,7 @@ fn finish_flow_search(
     let diagnostics = query
         .document
         .as_ref()
-        .map_or_else(Vec::new, |document| document.diagnostics.clone());
+        .map_or_else(Vec::new, mant_ir::Document::projection_diagnostics);
     // Document-level diagnostics are already bounded by the normalized input
     // budget. Do not silently lose evidence of incomplete semantic coverage.
     if diagnostics.len() > mant_protocol::MAX_SEARCH_DIAGNOSTICS {

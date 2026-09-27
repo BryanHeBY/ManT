@@ -27,11 +27,16 @@ pub(crate) use syntax::native_variable_token;
 pub use syntax::{
     DeclarationContext, DeclarationScan, DeclarationView, EnvironmentNameLimit,
     EnvironmentNameOccurrences, RecognitionParts, RecognitionResult, SectionDeclarationFamily,
-    complete_term_label_range, environment_declaration_names, is_environment_template_label,
-    is_ordinal_marker, is_presentation_term, manual_call_name_range, recognize_option_declarations,
+    command_declaration_name_range, complete_literal_component_gap, complete_term_label_range,
+    configuration_key_declaration_range, configuration_key_token, document_name_declaration_family,
+    document_root_declaration_family, environment_declaration_names, generic_callable_name_range,
+    is_environment_template_label, is_ordinal_marker, is_presentation_term, manual_call_name_range,
+    native_argument_component_token, recognize_option_declarations,
+    rejected_variable_declaration_head, root_configuration_assignment_range,
     scan_environment_declaration_names, scan_option_declarations,
     scan_option_declarations_with_numeric, scan_option_declarations_with_style,
     scan_option_declarations_with_style_ranges, section_declaration_family,
+    variable_assignment_declaration_range, variable_declaration_name_range,
 };
 pub use syntax::{
     contains_additional_environment_assignment, environment_variable_alias,

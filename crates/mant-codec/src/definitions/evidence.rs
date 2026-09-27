@@ -8,11 +8,23 @@ use mant_ir::{DefinitionItem, Inline, SourceSpan};
 pub(crate) enum NativeHeadRole {
     Option,
     Environment,
+    /// Authored mdoc Va instance, regardless of its executed font.
+    Variable,
+    /// Authored mdoc Dv instance: a named symbolic Term, not an exported Va.
+    #[cfg_attr(not(feature = "roff"), allow(dead_code))]
+    DefinedVariable,
     Literal,
     /// An explicitly styled, otherwise ambiguous man IP operator/key tag.
     LiteralTerm,
     /// An unstyled man IP mark supplies layout, not declaration evidence.
     Presentation,
+}
+
+/// One non-option native macro instance bound to its surviving visible HEAD.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct NativeHeadComponent {
+    pub(crate) role: NativeHeadRole,
+    pub(crate) range: Range<usize>,
 }
 
 struct HeadWitness {
@@ -22,6 +34,8 @@ struct HeadWitness {
     complete_term: bool,
     option_ranges: Vec<Vec<Range<usize>>>,
     operand_ranges: Vec<Vec<Range<usize>>>,
+    argument_ranges: Vec<Vec<Range<usize>>>,
+    components: Vec<Vec<NativeHeadComponent>>,
 }
 
 /// Locations only select a bucket. Evidence is reusable only when the entire
@@ -40,10 +54,22 @@ pub(crate) struct NativeHeadEvidence {
 impl NativeHeadEvidence {
     #[cfg(test)]
     pub(crate) fn record(&mut self, item: &DefinitionItem, role: NativeHeadRole) {
-        self.record_with_term_witness(item, Some(role), false, Vec::new(), Vec::new());
+        self.record_with_term_witness(
+            item,
+            Some(role),
+            false,
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+        );
     }
 
     #[cfg(any(feature = "roff", test))]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "one conversion-local HEAD witness is recorded atomically"
+    )]
     pub(crate) fn record_with_term_witness(
         &mut self,
         item: &DefinitionItem,
@@ -51,6 +77,8 @@ impl NativeHeadEvidence {
         complete_term: bool,
         option_ranges: Vec<Vec<Range<usize>>>,
         operand_ranges: Vec<Vec<Range<usize>>>,
+        argument_ranges: Vec<Vec<Range<usize>>>,
+        components: Vec<Vec<NativeHeadComponent>>,
     ) {
         let Some(source) = item.source else { return };
         self.witnesses
@@ -63,6 +91,8 @@ impl NativeHeadEvidence {
                 complete_term,
                 option_ranges,
                 operand_ranges,
+                argument_ranges,
+                components,
             });
     }
 
@@ -89,6 +119,24 @@ impl NativeHeadEvidence {
             .then_some(witness.operand_ranges.as_slice())
     }
 
+    pub(super) fn argument_ranges(&self, item: &DefinitionItem) -> Option<&[Vec<Range<usize>>]> {
+        let witness = self.witness(item)?;
+        witness
+            .argument_ranges
+            .iter()
+            .any(|term| !term.is_empty())
+            .then_some(witness.argument_ranges.as_slice())
+    }
+
+    pub(super) fn components(&self, item: &DefinitionItem) -> Option<&[Vec<NativeHeadComponent>]> {
+        let witness = self.witness(item)?;
+        witness
+            .components
+            .iter()
+            .any(|term| !term.is_empty())
+            .then_some(witness.components.as_slice())
+    }
+
     fn witness(&self, item: &DefinitionItem) -> Option<&HeadWitness> {
         let source = item.source?;
         let candidates = self.witnesses.get(&(source.line, source.column))?;
@@ -103,6 +151,8 @@ impl NativeHeadEvidence {
                     && witness.complete_term == first.complete_term
                     && witness.option_ranges == first.option_ranges
                     && witness.operand_ranges == first.operand_ranges
+                    && witness.argument_ranges == first.argument_ranges
+                    && witness.components == first.components
             })
             .then_some(first)
     }
@@ -192,7 +242,15 @@ mod tests {
     fn complete_term_witness_is_bound_to_the_native_head_not_plain_text() {
         let original = item();
         let mut evidence = NativeHeadEvidence::default();
-        evidence.record_with_term_witness(&original, None, true, Vec::new(), Vec::new());
+        evidence.record_with_term_witness(
+            &original,
+            None,
+            true,
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+        );
         assert!(evidence.complete_term(&original));
         let mut edited = original;
         edited.terms[0] = vec![fixture::text("PATH")];

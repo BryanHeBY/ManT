@@ -196,7 +196,8 @@ fn native_owner_role_distinguishes_definition_from_bullet_item() {
 fn native_head_roles_promote_only_complete_visible_names() {
     // Exact input first ran pinned CVS -Tutf8 -O width=78. mdoc_macro.c::
     // blk_full constructs each It HEAD; mdoc_term.c::termp_fl_pre adds the
-    // visible dash. The collector freezes Fl/Ev/Ic before the AST dies.
+    // visible dash. The collector freezes Fl/Ev/Ic before the AST dies; Ic
+    // alone in OPTIONS is a named Term, not independent Command evidence.
     let input = b".Dd September 24, 2026\n.Dt T 1\n.Os\n.Sh OPTIONS\n.Bl -tag\n.It Fl a\nbody\n.It Ev DEMO_HOME\nenv body\n.It Ic run\ncommand body\n.El\n";
     let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Mdoc).unwrap();
     let DocumentBody::Fixed(fixed) = &document.body else {
@@ -220,7 +221,7 @@ fn native_head_roles_promote_only_complete_visible_names() {
     assert_eq!(fixed.owners[1].entry.as_ref().unwrap().names, ["DEMO_HOME"]);
     assert_eq!(
         fixed.owners[2].entry.as_ref().unwrap().kind,
-        EntryKind::Command
+        EntryKind::Term
     );
     assert!(validate_document(&document).is_empty());
 }

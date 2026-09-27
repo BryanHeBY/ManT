@@ -693,6 +693,7 @@ mod tests {
         // repeated visible title, and a structurally empty trailing section.
         let text = "preSbodyCchildtailS";
         FixedBody {
+            root_configuration_hint: false,
             surface: DisplaySurface {
                 text: text.to_owned(),
                 rows: vec![DisplayRow {
