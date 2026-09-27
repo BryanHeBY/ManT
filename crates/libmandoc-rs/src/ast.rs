@@ -112,6 +112,8 @@ pub struct ScopeEnd {
 pub enum NormalizedListKind {
     /// An unordered list whose items carry bullets.
     Bullet,
+    /// An unordered list whose items carry dash markers.
+    Dash,
     /// An ordered list whose items carry ordinal markers.
     Ordered,
     /// A term-and-description list.

@@ -164,6 +164,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
     ) -> Self {
         let mut formatter = formatter;
         let mut state = BlockState::with_output(indent_columns, spacing_enabled, output);
+        state.inherit_scope_posts(context.scope_posts.clone());
         state.inherit_vertical_space_debt(formatter.vertical_space_debt);
         state.inherit_zero_advance_armed(std::mem::take(&mut formatter.zero_advance_armed));
         state.inherit_author_execution(

@@ -651,6 +651,28 @@ fn parser_preserves_each_mdoc_definition_list_style() {
 }
 
 #[test]
+fn parser_distinguishes_bullet_dash_and_marker_free_mdoc_lists() {
+    // Exact one-item inputs checked with pinned CVS -Ttree/-Thtml/-Tutf8.
+    // mdoc_term.c::termp_it_pre emits `\\[bu]` for bullet, `-` for
+    // dash/hyphen, and no marker for item.
+    for (style, expected) in [
+        ("bullet", NormalizedListKind::Bullet),
+        ("dash", NormalizedListKind::Dash),
+        ("hyphen", NormalizedListKind::Dash),
+        ("item", NormalizedListKind::Plain),
+    ] {
+        let source = format!(
+            ".Dd September 27, 2026\n.Dt LISTSTYLE 1\n.Os\n.Sh DESCRIPTION\n.Bl -{style}\n.It\nentry\n.El\nafter\n"
+        );
+        let report = Parser::default()
+            .parse_bytes("list-style.1", source.as_bytes())
+            .expect("parse list marker style");
+        let list = find_macro(&report.document.root, "Bl").expect("mdoc list node");
+        assert_eq!(list.list_kind, Some(expected), "-{style}");
+    }
+}
+
+#[test]
 fn parser_copies_normalized_font_and_author_modes() {
     let report = Parser::default()
         .parse_bytes(

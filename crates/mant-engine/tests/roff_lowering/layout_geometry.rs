@@ -13,7 +13,12 @@ fn mdoc(body: &str) -> String {
 
 fn column(text: &str, token: &str) -> usize {
     text.lines()
-        .find_map(|line| line.find(token))
+        // The marker can be multibyte (`Bl -bullet` renders `•`), while this
+        // contract measures visual cells rather than UTF-8 byte offsets.
+        .find_map(|line| {
+            line.find(token)
+                .map(|byte| mant_ir::geometry::text_width(&line[..byte]))
+        })
         .unwrap_or_else(|| panic!("missing {token}:\n{text}"))
 }
 

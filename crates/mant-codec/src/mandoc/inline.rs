@@ -8,6 +8,7 @@ pub(crate) use mant_ir::{inline_plain_text as plain_text, terms_fit_inline};
 mod flow;
 mod font;
 mod generated;
+pub(in crate::mandoc) use generated::function_argument;
 mod links;
 pub(super) use links::lower_man_link;
 mod scopes;
@@ -172,6 +173,15 @@ pub(super) fn append_inline_node_with_next(
     // scope, otherwise the scope's private builder has no knowledge of the
     // surrounding word boundary and may overprint/drop the glyph.
     let final_word_join_before = builder.final_word_join_state();
+    if node.scope_end.is_some()
+        && node.macro_name.as_deref() == Some("Eo")
+        && !node.children.is_empty()
+    {
+        // mdoc_html.c::mdoc_eo_pre() applies NOSPACE before the marker's
+        // child word executes. In an inline Bk scope, PREKEEP otherwise
+        // commits an ordinary blank before the container callback can run.
+        builder.tighten_next_boundary();
+    }
     builder.begin_executed_node(node);
     builder.begin_word_projection(node_emits_visible_output(node, default_name));
     if node.flags.delimiter_close {

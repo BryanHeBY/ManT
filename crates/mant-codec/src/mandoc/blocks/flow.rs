@@ -55,7 +55,7 @@ impl BlockState {
             self.flush_paragraph();
         }
     }
-    pub(super) const fn with_output(
+    pub(super) fn with_output(
         indent_columns: crate::mandoc::layout::SourceIndent,
         spacing_enabled: bool,
         output: Vec<Block>,
@@ -69,6 +69,10 @@ impl BlockState {
             hanging_origin: None,
             spacing_enabled,
         }
+    }
+
+    pub(super) fn inherit_scope_posts(&mut self, posts: crate::mandoc::containers::ScopePostState) {
+        self.paragraph.inherit_scope_posts(posts);
     }
 
     pub(super) const fn spacing_enabled(&self) -> bool {

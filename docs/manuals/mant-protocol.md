@@ -880,7 +880,7 @@ Every block is tagged by `type`:
 | --- | --- | --- |
 | `paragraph` | `children` | Filled prose |
 | `preformatted` | `children`, optional `language` | Literal/code display |
-| `list` | structured `kind`, `items`, `compact` | Bullet, ordered, or plain list |
+| `list` | structured `kind`, `items`, `compact` | Bullet, dash, ordered, or plain list |
 | `definition-list` | `items`, `compact` | Terms with block-capable descriptions |
 | `table` | `rows` | Block-capable cells, spans, and alignment |
 | `equation` | `value`, optional `expression`, `display` | Readable text projected from parsed equation structure when available |
@@ -913,11 +913,11 @@ Renderers should consume these normalized hints rather than reconstruct roff
 spacing.
 
 List item `blocks` can contain nested lists and displays. List `kind` is
-`{"kind":"bullet"}`, `{"kind":"plain"}`, or `{"kind":"ordered","start":3}`.
+`{"kind":"bullet"}`, `{"kind":"dash"}`, `{"kind":"plain"}`, or `{"kind":"ordered","start":3}`.
 Only the ordered variant accepts optional u64 `start`. Missing/null means
 unknown, is omitted canonically, and displays from one. Zero and u64::MAX are
 valid; excerpt numbering saturates rather than wrapping. Old string kinds,
-block-level `start`, and bullet/plain `start:null` are rejected.
+block-level `start`, and bullet/dash/plain `start:null` are rejected.
 Table cells contain `blocks`;
 `columnSpan` and `rowSpan` default to `1`, and `alignment` can be `left`,
 `center`, or `right`.

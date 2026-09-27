@@ -2,6 +2,60 @@
 use super::*;
 
 #[test]
+fn crossed_function_target_and_dash_list_survive_wire_markdown_and_terminal_buffer() {
+    use ratatui::{
+        buffer::Buffer,
+        layout::Rect,
+        widgets::{Paragraph, Widget},
+    };
+
+    // Exact source checked with pinned CVS -Ttree/-Thtml/-Tutf8. The Fo HEAD
+    // owns Explicit.Call; mdoc_html.c::print_mdoc_node posts Fo at the body
+    // end inside It, and mdoc_term.c emits a dash marker for Bl -dash.
+    let source = b".Dd September 28, 2026\n.Dt FOTARGET 1\n.Os\n.Sh DESCRIPTION\n.Tg Explicit.Call\n.Fo call\n.Bl -dash\n.It\n.Fa arg\n.Fc\n.El\nnext\n";
+    let loaded = mant_loader::load_roff_bytes(source).expect("lower crossed function and list");
+    let wire = serde_json::to_string(&mant_protocol::QueryBundle::from(&loaded))
+        .expect("serialize function query");
+    let value: serde_json::Value = serde_json::from_str(&wire).expect("inspect wire");
+    let blocks = &value["document"]["sections"][0]["blocks"];
+    assert_eq!(blocks[0]["children"][0]["id"], "explicit-call");
+    assert_eq!(
+        blocks[0]["children"][0]["fragmentAliases"][0],
+        "Explicit.Call"
+    );
+    assert_eq!(blocks[1]["kind"]["kind"], "dash");
+    assert!(blocks[1]["items"][0].get("entry").is_none());
+    let decoded: mant_protocol::QueryBundle = serde_json::from_str(&wire).expect("decode query");
+    let query: ResolvedContent = decoded.into();
+    let markdown = mant_codec::encode::render_markdown(&query);
+    assert!(markdown.contains("**call**("), "{markdown}");
+    assert!(markdown.contains("- *arg*)"), "{markdown}");
+
+    for width in [24, 80, 160] {
+        let rendered = DocumentView::new(&query).render(width);
+        let anchor_row = rendered
+            .anchor_row("explicit-call")
+            .expect("Fo HEAD anchor");
+        assert!(
+            rendered.text.lines[anchor_row]
+                .to_string()
+                .contains("call(")
+        );
+        let arg = &rendered.search("arg")[0];
+        assert!(rendered.text.lines[arg.row].to_string().contains("- "));
+        assert!(rendered.text.lines[arg.row].to_string().contains("arg)"));
+        let area = Rect::new(0, 0, width, rendered.row_count.try_into().unwrap());
+        let mut buffer = Buffer::empty(area);
+        Paragraph::new(rendered.text).render(area, &mut buffer);
+        let row = u16::try_from(arg.row).expect("bounded sample row");
+        let visible = (0..width)
+            .map(|column| buffer[(column, row)].symbol())
+            .collect::<String>();
+        assert!(visible.contains("arg)"), "width={width}: {visible:?}");
+    }
+}
+
+#[test]
 fn roff_manual_name_link_excludes_surrounding_prose_after_wrapping() {
     // Keep packaged unit tests self-contained. The engine's repository-level
     // self_manual_authoring test separately checks the actual shipped labels.

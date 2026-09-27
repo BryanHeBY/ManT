@@ -118,6 +118,7 @@ fn uniform_ascii_markers_remain_authored_definition_tags() {
                 Block::DefinitionList { .. } => "DefinitionList",
                 Block::List { kind, .. } => match kind {
                     mant_ir::ListKind::Bullet => "BulletList",
+                    mant_ir::ListKind::Dash => "DashList",
                     mant_ir::ListKind::Ordered { .. } => "OrderedList",
                     mant_ir::ListKind::Plain => "PlainList",
                 },

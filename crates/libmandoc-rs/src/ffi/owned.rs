@@ -284,6 +284,7 @@ fn list_kind(value: i32) -> Result<Option<NormalizedListKind>, String> {
     match value {
         0 => Ok(None),
         1 => Ok(Some(NormalizedListKind::Bullet)),
+        6 => Ok(Some(NormalizedListKind::Dash)),
         2 => Ok(Some(NormalizedListKind::Ordered)),
         3 => Ok(Some(NormalizedListKind::Definition)),
         4 => Ok(Some(NormalizedListKind::Column)),

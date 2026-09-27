@@ -86,7 +86,7 @@ fn walk(blocks: &[Block], gap: &mut GapPlan, depth: usize, origin: i32) -> bool 
                     let mut blocks = item.blocks.as_slice();
                     let marker_width = match kind {
                         ListKind::Plain => 0,
-                        ListKind::Bullet => 2,
+                        ListKind::Bullet | ListKind::Dash => 2,
                         ListKind::Ordered { .. } => kind
                             .ordinal(index)
                             .map_or(0, |ordinal| ordinal.to_string().len() + 2),

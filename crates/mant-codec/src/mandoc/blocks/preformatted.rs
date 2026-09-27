@@ -27,9 +27,11 @@ pub(super) fn preformatted_blocks(
         indent_columns,
         paragraph_predecessor,
         literal: true,
+        honor_node_fill: node.macro_name.as_deref() == Some("Bd"),
         formatter: *formatter,
     };
     flow.line.font = formatter.font;
+    flow.line.scope_posts = context.scope_posts.clone();
     flow.line
         .inherit_vertical_space_debt(formatter.vertical_space_debt);
     flow.line
@@ -70,6 +72,9 @@ struct DisplayFlow<'a, 'source> {
     indent_columns: crate::mandoc::layout::SourceIndent,
     paragraph_predecessor: bool,
     literal: bool,
+    /// Bd uses roff fill mode. D1/Dl are single-line display constructs whose
+    /// ordinary operands have no `NODE_NOFILL` flag but retain one display row.
+    honor_node_fill: bool,
     formatter: crate::mandoc::formatter::FormatterState,
 }
 
@@ -77,7 +82,7 @@ impl DisplayFlow<'_, '_> {
     fn append_container(&mut self, node: &Node) -> bool {
         let mut saved_font = None;
         let mut started = false;
-        crate::mandoc::containers::walk(node, |event| {
+        crate::mandoc::containers::walk(node, &self.context.scope_posts, |event| {
             use crate::mandoc::containers::Event;
             if !started {
                 self.line.begin_executed_node(node);
@@ -88,7 +93,16 @@ impl DisplayFlow<'_, '_> {
                 started = true;
             }
             match event {
-                Event::BeginNode(node) => self.line.begin_executed_node(node),
+                Event::BeginNode(part) => {
+                    self.line.begin_executed_node(part);
+                    if part.kind == NodeKind::Head
+                        && part.macro_name.as_deref() == Some("Fo")
+                        && let Some(target) = super::targets::raw_target(part)
+                    {
+                        self.line
+                            .append(vec![Inline::anchor_at(target, source_span(part))]);
+                    }
+                }
                 Event::Break => {
                     self.flush();
                     self.line.reset_source_cursor();
@@ -118,6 +132,20 @@ impl DisplayFlow<'_, '_> {
                 Event::EnterKeep => self.line.enter_keep_words(),
                 Event::ExitKeep => self.line.exit_keep_words(),
                 Event::EnterFont(font) => saved_font = Some(self.line.font.push_scope(font)),
+                Event::FunctionArgument(argument, comma_after) => {
+                    // This direct Fo BODY child bypasses append_nodes(); it
+                    // still executes its own NODE_NOFILL mode after a crossed
+                    // `.Ed`, just like print_mdoc_node() does before Fa pre.
+                    if self.honor_node_fill && self.literal != argument.flags.no_fill {
+                        self.set_literal_mode(argument.flags.no_fill);
+                    }
+                    crate::mandoc::inline::function_argument(
+                        &mut self.line,
+                        argument,
+                        comma_after,
+                        self.context.default_name,
+                    );
+                }
                 Event::ExitFont => {
                     if let Some(saved) = saved_font.take() {
                         self.line.font.pop_scope(saved);
@@ -138,6 +166,7 @@ impl DisplayFlow<'_, '_> {
     fn flush_with(&mut self, vertical_request: bool) {
         let mut next = InlineBuilder::with_spacing(self.line.spacing_enabled());
         next.font = self.line.font;
+        next.scope_posts = self.line.scope_posts.clone();
         self.line.transfer_source_cursor(&mut next);
         if vertical_request {
             self.line.transfer_vertical_request_execution(&mut next);
@@ -175,6 +204,7 @@ impl DisplayFlow<'_, '_> {
         self.literal = literal;
         let mut next = InlineBuilder::with_spacing(self.line.spacing_enabled());
         next.font = self.line.font;
+        next.scope_posts = self.line.scope_posts.clone();
         self.line.transfer_container_execution(&mut next);
         if literal {
             next.track_executed_lines();
@@ -250,6 +280,16 @@ impl DisplayFlow<'_, '_> {
     fn append_nodes(&mut self, nodes: &[Node]) {
         let plan = TableEmbeddingPlan::new(nodes, self.context);
         for (index, node) in nodes.iter().enumerate() {
+            // mdoc_html.c::print_mdoc_node switches fill mode before every
+            // node, including a Bl/table following a crossed `.Ed` inside
+            // an open inline scope. The BODY end marker itself still carries
+            // NOFILL, so switching unconditionally at `.Ed` would be early.
+            if self.honor_node_fill
+                && !matches!(node.macro_name.as_deref(), Some("fi" | "nf"))
+                && self.literal != node.flags.no_fill
+            {
+                self.set_literal_mode(node.flags.no_fill);
+            }
             if self.append_container(node) {
                 self.paragraph_predecessor |= super::super::adjacency::is_logical_sibling(node);
                 continue;

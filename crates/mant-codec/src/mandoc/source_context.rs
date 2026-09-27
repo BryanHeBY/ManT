@@ -44,6 +44,8 @@ pub(super) struct LoweringContext<'a> {
     pub(super) authored_section_targets: HashMap<String, Option<String>>,
     pub(super) explicit_targets: HashSet<String>,
     pub(super) diagnostics: RefCell<Vec<Diagnostic>>,
+    /// Private pre/children/post execution shared by detached output buffers.
+    pub(super) scope_posts: super::containers::ScopePostState,
     active_mdoc_section: std::cell::Cell<MdocSectionContext>,
 }
 
@@ -136,6 +138,7 @@ impl<'a> LoweringContext<'a> {
             authored_section_targets: HashMap::new(),
             explicit_targets: HashSet::new(),
             diagnostics: RefCell::new(Vec::new()),
+            scope_posts: super::containers::ScopePostState::default(),
             active_mdoc_section: std::cell::Cell::new(MdocSectionContext::Other),
         }
     }
@@ -175,6 +178,7 @@ impl<'a> LoweringContext<'a> {
             self.active_mdoc_section() == MdocSectionContext::Authors,
             author_break_effect,
         );
+        builder.scope_posts = self.scope_posts.clone();
         inline::append_inline_nodes(&mut builder, nodes, self.default_name);
         let finished = formatter.finish_inline_line(builder);
         (
@@ -202,6 +206,7 @@ impl<'a> LoweringContext<'a> {
             self.active_mdoc_section() == MdocSectionContext::Authors,
             inline::AuthorBreakEffect::Line,
         );
+        builder.scope_posts = self.scope_posts.clone();
         let saved_font = strong_scope.then(|| {
             builder
                 .font
@@ -233,6 +238,7 @@ impl<'a> LoweringContext<'a> {
             authors_section,
             inline::AuthorBreakEffect::Line,
         );
+        builder.scope_posts = self.scope_posts.clone();
         match self.macro_set {
             MacroSet::Man | MacroSet::None => {
                 builder.font.begin_man_heading();

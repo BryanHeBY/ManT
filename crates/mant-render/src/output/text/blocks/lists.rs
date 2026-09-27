@@ -23,7 +23,8 @@ impl BlockRenderer<'_> {
                 ListKind::Ordered { .. } => {
                     format!("{}. ", kind.ordinal(index).expect("ordered list ordinal"))
                 }
-                ListKind::Bullet => "- ".to_owned(),
+                ListKind::Bullet => "• ".to_owned(),
+                ListKind::Dash => "- ".to_owned(),
                 ListKind::Plain => String::new(),
             };
             let body_origin = compose_origin(base_indent, coordinate(text_width(&marker)));

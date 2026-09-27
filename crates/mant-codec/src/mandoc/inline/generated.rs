@@ -6,6 +6,17 @@ use super::{
 
 pub(super) fn function(builder: &mut InlineBuilder, node: &Node, name: Option<&str>) {
     let block = node.macro_name.as_deref() == Some("Fo");
+    if block && let Some(end) = node.scope_end {
+        // CVS mdoc_html.c::print_mdoc_node() visits a BODY-end marker's
+        // children, then mdoc_fo_post(), before the enclosing body unwinds.
+        append_inline_nodes(builder, &node.children, name);
+        if let Some(synopsis) = builder.scope_posts.function_suffix(end.body_id) {
+            builder.tighten_next_boundary();
+            builder.append_text(if synopsis { ");" } else { ")" });
+            builder.scope_posts.finish(end.body_id);
+        }
+        return;
+    }
     let (head, body) = if block {
         (
             first_part_children(node, NodeKind::Head),
@@ -15,18 +26,36 @@ pub(super) fn function(builder: &mut InlineBuilder, node: &Node, name: Option<&s
         let children = inline_children(node);
         children.split_at(usize::from(!children.is_empty()))
     };
-    if head.is_empty() {
+    if head.is_empty() && !block {
         append_inline_nodes(builder, body, name);
         return;
+    }
+    let synopsis = node.flags.synopsis_pretty
+        || node
+            .children
+            .iter()
+            .any(|child| child.kind == NodeKind::Body && child.flags.synopsis_pretty);
+    let body_id = block
+        .then(|| {
+            node.children
+                .iter()
+                .find(|child| child.kind == NodeKind::Body && child.scope_end.is_none())
+                .map(|body| body.id)
+        })
+        .flatten();
+    if let Some(body_id) = body_id {
+        builder.scope_posts.register_function(body_id, synopsis);
     }
     if block
         && let Some(target) = super::super::targets::part_target_with_source(node, NodeKind::Head)
     {
         builder.append(vec![target.into_inline()]);
     }
-    builder.with_font_scope(Font::Strong, |builder| {
-        append_inline_nodes(builder, head, name);
-    });
+    if !head.is_empty() {
+        builder.with_font_scope(Font::Strong, |builder| {
+            append_inline_nodes(builder, head, name);
+        });
+    }
     builder.tighten_next_boundary();
     builder.append_text("(");
     builder.tighten_next_boundary();
@@ -75,13 +104,41 @@ pub(super) fn function(builder: &mut InlineBuilder, node: &Node, name: Option<&s
             append_inline_node_with_next(builder, argument, body.get(index + 1), name);
         }
     }
-    let synopsis = node.flags.synopsis_pretty
-        || node
-            .children
-            .iter()
-            .any(|child| child.kind == NodeKind::Body && child.flags.synopsis_pretty);
-    builder.tighten_next_boundary();
-    builder.append_text(if synopsis { ");" } else { ")" });
+    if body_id.is_none_or(|id| !builder.scope_posts.ended(id)) {
+        builder.tighten_next_boundary();
+        builder.append_text(if synopsis { ");" } else { ")" });
+    }
+}
+
+pub(in crate::mandoc) fn function_argument(
+    builder: &mut InlineBuilder,
+    argument: &Node,
+    comma_after: bool,
+    name: Option<&str>,
+) {
+    // CVS mdoc_html.c::mdoc_fa_pre() iterates each direct Fo argument and
+    // inserts commas between its operands and before a following Fa sibling.
+    builder.begin_executed_node(argument);
+    if let Some(anchor) = navigation_anchor(argument) {
+        builder.append(vec![anchor]);
+    }
+    let operands = inline_children(argument);
+    for (index, operand) in operands.iter().enumerate() {
+        if operand.flags.delimiter_close {
+            append_inline_node(builder, operand, name);
+            continue;
+        }
+        builder.with_font_scope(Font::Emphasis, |builder| {
+            append_inline_node(builder, operand, name);
+        });
+        let comma = crate::mandoc::adjacency::next(&operands[index + 1..])
+            .is_some_and(|next| !next.flags.delimiter_close)
+            || (index + 1 == operands.len() && comma_after);
+        if comma {
+            builder.tighten_next_boundary();
+            builder.append_text(",");
+        }
+    }
 }
 
 pub(super) fn manual_reference(builder: &mut InlineBuilder, node: &Node, name: Option<&str>) {

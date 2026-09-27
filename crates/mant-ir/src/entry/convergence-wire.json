@@ -9,7 +9,7 @@
   "semanticEntry": {"rejectFields": ["aliases", "role", "unknown"]},
   "layout": {"accept": [{}, {"spacingBeforeLines":null}, {"spacingBeforeLines":0}, {"inlineTerm":true}], "reject": [null, {"unknown":true}]},
   "listKind": {
-    "accept": [{"kind":"bullet"},{"kind":"plain"},{"kind":"ordered"},{"kind":"ordered","start":null},{"kind":"ordered","start":0},{"kind":"ordered","start":7},{"kind":"ordered","start":18446744073709551615}],
+    "accept": [{"kind":"bullet"},{"kind":"dash"},{"kind":"plain"},{"kind":"ordered"},{"kind":"ordered","start":null},{"kind":"ordered","start":0},{"kind":"ordered","start":7},{"kind":"ordered","start":18446744073709551615}],
     "reject": ["ordered",{"kind":"bullet","start":null},{"kind":"plain","start":1},{"kind":"ordered","start":-1},{"kind":"ordered","start":1.5},{"kind":"ordered","unknown":0}],
     "rejectRaw": ["{\"kind\":\"ordered\",\"start\":18446744073709551616}","{\"kind\":\"ordered\",\"start\":1,\"start\":2}","{\"kind\":\"plain\",\"kind\":\"bullet\"}"]
   }

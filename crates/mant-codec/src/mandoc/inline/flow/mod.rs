@@ -48,6 +48,7 @@ pub(in crate::mandoc) struct InlineBuilder {
     definition_outcome: DefinitionOutcome,
     no_break_field: Option<NoBreakField>,
     last_executed_source_line: Option<u32>,
+    pub(in crate::mandoc) scope_posts: crate::mandoc::containers::ScopePostState,
 }
 #[derive(Clone, Copy)]
 struct AuthorExecution {
@@ -449,7 +450,7 @@ pub(in crate::mandoc) enum FilledBoundary {
 
 impl InlineBuilder {
     #[cfg(test)]
-    pub(in crate::mandoc) const fn new() -> Self {
+    pub(in crate::mandoc) fn new() -> Self {
         Self {
             nodes: Vec::new(),
             boundary: PendingBoundary::Ordinary,
@@ -477,10 +478,11 @@ impl InlineBuilder {
             definition_outcome: DefinitionOutcome(0),
             no_break_field: None,
             last_executed_source_line: None,
+            scope_posts: crate::mandoc::containers::ScopePostState::default(),
         }
     }
 
-    pub(in crate::mandoc) const fn with_spacing(spacing_enabled: bool) -> Self {
+    pub(in crate::mandoc) fn with_spacing(spacing_enabled: bool) -> Self {
         Self {
             nodes: Vec::new(),
             boundary: PendingBoundary::Ordinary,
@@ -508,6 +510,7 @@ impl InlineBuilder {
             definition_outcome: DefinitionOutcome(0),
             no_break_field: None,
             last_executed_source_line: None,
+            scope_posts: crate::mandoc::containers::ScopePostState::default(),
         }
     }
 }

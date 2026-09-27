@@ -27,32 +27,8 @@ pub(super) fn append(builder: &mut InlineBuilder, node: &Node, name: Option<&str
         builder.append(vec![anchor]);
     }
     let mut saved_font = None;
-    if crate::mandoc::containers::walk(node, |event| {
-        use crate::mandoc::containers::Event;
-        match event {
-            Event::BeginNode(node) => builder.begin_executed_node(node),
-            Event::Break => {
-                builder.hard_break();
-                builder.reset_source_cursor();
-            }
-            Event::FlushLine => {
-                builder.append(vec![Inline::LineBreak]);
-                builder.reset_source_cursor();
-            }
-            Event::Children(nodes) => append_inline_nodes(builder, nodes, name),
-            Event::Glyph(value) => builder.append_text(&value),
-            Event::Tight => builder.tighten_next_boundary(),
-            Event::Release => builder.release_next_boundary(),
-            Event::EmptyWord => builder.execute_empty_word(),
-            Event::EnterKeep => builder.enter_keep_words(),
-            Event::ExitKeep => builder.exit_keep_words(),
-            Event::EnterFont(font) => saved_font = Some(builder.font.push_scope(font)),
-            Event::ExitFont => {
-                if let Some(saved) = saved_font.take() {
-                    builder.font.pop_scope(saved);
-                }
-            }
-        }
+    if crate::mandoc::containers::walk(node, &builder.scope_posts.clone(), |event| {
+        append_container_event(builder, event, name, &mut saved_font);
     }) {
         return;
     }
@@ -109,6 +85,42 @@ pub(super) fn append(builder: &mut InlineBuilder, node: &Node, name: Option<&str
         }
         Some("%T") if node.reference_quotes_title => append_quoted_title(builder, children, name),
         _ => append_inline_nodes(builder, children, name),
+    }
+}
+
+fn append_container_event(
+    builder: &mut InlineBuilder,
+    event: crate::mandoc::containers::Event<'_>,
+    name: Option<&str>,
+    saved_font: &mut Option<super::flow::FontScope>,
+) {
+    use crate::mandoc::containers::Event;
+    match event {
+        Event::BeginNode(node) => builder.begin_executed_node(node),
+        Event::Break => {
+            builder.hard_break();
+            builder.reset_source_cursor();
+        }
+        Event::FlushLine => {
+            builder.append(vec![Inline::LineBreak]);
+            builder.reset_source_cursor();
+        }
+        Event::Children(nodes) => append_inline_nodes(builder, nodes, name),
+        Event::Glyph(value) => builder.append_text(&value),
+        Event::Tight => builder.tighten_next_boundary(),
+        Event::Release => builder.release_next_boundary(),
+        Event::EmptyWord => builder.execute_empty_word(),
+        Event::EnterKeep => builder.enter_keep_words(),
+        Event::ExitKeep => builder.exit_keep_words(),
+        Event::EnterFont(font) => *saved_font = Some(builder.font.push_scope(font)),
+        Event::FunctionArgument(argument, comma_after) => {
+            super::generated::function_argument(builder, argument, comma_after, name);
+        }
+        Event::ExitFont => {
+            if let Some(saved) = saved_font.take() {
+                builder.font.pop_scope(saved);
+            }
+        }
     }
 }
 

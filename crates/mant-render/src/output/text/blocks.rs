@@ -616,7 +616,7 @@ mod tests {
             }
             assert_eq!(
                 renderer.render_blocks(&[list], 0),
-                format!("{}- BODY\n  NEXT", "\n".repeat(usize::from(rows)))
+                format!("{}• BODY\n  NEXT", "\n".repeat(usize::from(rows)))
             );
         }
         let mut container = plain_list(
@@ -740,7 +740,9 @@ mod tests {
             unreachable!()
         };
         *kind = ListKind::Bullet;
-        assert_eq!(renderer.render_blocks(&[block], 0), "-\n BODY");
+        // Pinned mdoc_term.c::termp_it_pre uses a bullet glyph for Bl -bullet;
+        // its UTF-8 spelling was checked with the one-item list probe.
+        assert_eq!(renderer.render_blocks(&[block], 0), "•\n BODY");
         let block = Block::DefinitionList {
             declaration_groups: vec![],
             compact: true,

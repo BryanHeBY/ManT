@@ -158,6 +158,8 @@ pub enum Block {
 pub enum ListKind {
     /// Unordered list with bullets.
     Bullet,
+    /// Unordered list with dash markers.
+    Dash,
     /// Ordered list with ordinal markers.
     Ordered {
         /// First ordinal, or unknown. Renderers use one for an unknown start
@@ -175,6 +177,7 @@ pub enum ListKind {
 #[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
 enum ClosedListKind {
     Bullet {},
+    Dash {},
     Ordered {
         #[serde(default)]
         start: Option<u64>,
@@ -186,6 +189,7 @@ impl<'de> Deserialize<'de> for ListKind {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         Ok(match ClosedListKind::deserialize(deserializer)? {
             ClosedListKind::Bullet {} => Self::Bullet,
+            ClosedListKind::Dash {} => Self::Dash,
             ClosedListKind::Ordered { start } => Self::Ordered { start },
             ClosedListKind::Plain {} => Self::Plain,
         })
@@ -203,7 +207,7 @@ impl ListKind {
                     .unwrap_or(1)
                     .saturating_add(u64::try_from(index).unwrap_or(u64::MAX)),
             ),
-            Self::Bullet | Self::Plain => None,
+            Self::Bullet | Self::Dash | Self::Plain => None,
         }
     }
 

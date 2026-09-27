@@ -19,6 +19,7 @@ impl DocumentBuilder<'_> {
             let item_start = self.lines.len();
             let marker = match kind {
                 ListKind::Bullet => "• ".to_owned(),
+                ListKind::Dash => "- ".to_owned(),
                 ListKind::Ordered { .. } => {
                     format!("{}. ", kind.ordinal(index).expect("ordered list ordinal"))
                 }

@@ -6,14 +6,15 @@ impl super::BlockLowerer<'_, '_> {
         if !crate::mandoc::containers::is_container(node) {
             return false;
         }
-        if !matches!(node.macro_name.as_deref(), Some("Bf" | "Bk"))
-            && !crate::mandoc::containers::has_structural_payload(node)
+        if node.scope_end.is_none()
+            && !matches!(node.macro_name.as_deref(), Some("Bf" | "Bk"))
+            && !self.context.scope_posts.has_structural_payload(node)
         {
             return false;
         }
         let mut saved_font = None;
         let mut started = false;
-        let handled = crate::mandoc::containers::walk(node, |event| {
+        let handled = crate::mandoc::containers::walk(node, &self.context.scope_posts, |event| {
             use crate::mandoc::containers::Event;
             if !started {
                 self.state
@@ -23,7 +24,20 @@ impl super::BlockLowerer<'_, '_> {
             match event {
                 // In filled structural flow input-line wrappers alone are
                 // not paragraph breaks. Literal DisplayFlow consumes them.
-                Event::BeginNode(_) => {}
+                Event::BeginNode(part) => {
+                    if part.kind == libmandoc_rs::NodeKind::Head
+                        && part.macro_name.as_deref() == Some("Fo")
+                        && let Some(target) = targets::raw_target(part)
+                    {
+                        self.state
+                            .push_inline_with(source_span(part), false, false, |builder| {
+                                builder.append(vec![mant_ir::Inline::anchor_at(
+                                    target,
+                                    source_span(part),
+                                )]);
+                            });
+                    }
+                }
                 Event::Break => {
                     self.state.flush_preformatted();
                     self.state.flush_paragraph();
@@ -48,6 +62,24 @@ impl super::BlockLowerer<'_, '_> {
                         .push_inline_with(source_span(node), false, false, |builder| {
                             builder.exit_keep_words();
                         });
+                }
+                Event::FunctionArgument(argument, comma_after) => {
+                    self.state.push_source_inline_with(
+                        source_span(argument),
+                        false,
+                        false,
+                        false,
+                        |builder| {
+                            builder.font = self.formatter.font;
+                            crate::mandoc::inline::function_argument(
+                                builder,
+                                argument,
+                                comma_after,
+                                self.context.default_name,
+                            );
+                            self.formatter.font = builder.font;
+                        },
+                    );
                 }
                 event => self
                     .state

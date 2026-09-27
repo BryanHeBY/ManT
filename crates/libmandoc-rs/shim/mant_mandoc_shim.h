@@ -134,7 +134,8 @@ enum mant_mandoc_list_kind {
 	MANT_MANDOC_LIST_ORDERED = 2,
 	MANT_MANDOC_LIST_DEFINITION = 3,
 	MANT_MANDOC_LIST_COLUMN = 4,
-	MANT_MANDOC_LIST_PLAIN = 5
+	MANT_MANDOC_LIST_PLAIN = 5,
+	MANT_MANDOC_LIST_DASH = 6
 };
 
 enum mant_mandoc_definition_list_style {

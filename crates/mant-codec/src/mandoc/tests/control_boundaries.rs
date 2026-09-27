@@ -1,6 +1,277 @@
 use super::*;
 
 #[test]
+fn mdoc_explicit_body_end_executes_post_once_at_the_marker() {
+    // Exact sources checked with the pinned CVS -Ttree, -Thtml, and -Tutf8.
+    // mdoc.c::mdoc_endbody_alloc links the marker to the original BODY;
+    // mdoc_html.c::print_mdoc_node executes marker children before its post
+    // and sets NODE_ENDED so the original BODY cannot post a second time.
+    for (label, source, expected) in [
+        (
+            "angle",
+            ".Dd September 27, 2026\n.Dt CLOSE 1\n.Os\n.Sh DESCRIPTION\n.Ao\n.Bo\ninside\n.Ac\nafter-angle\n.Bc\ntail\n",
+            "<[inside> after-angle] tail",
+        ),
+        (
+            "authored",
+            ".Dd September 27, 2026\n.Dt EC 1\n.Os\n.Sh DESCRIPTION\n.Eo opening\n.Bo\ninside\n.Ec closing\nafter-ec\n.Bc\n",
+            "opening[insideclosing after-ec]",
+        ),
+        (
+            "function",
+            ".Dd September 28, 2026\n.Dt CLOSE 1\n.Os\n.Sh DESCRIPTION\n.Fo call\n.Bo\n.Fa arg\n.Fc\nafter-fc\n.Bc\nnext\n",
+            "call([arg) after-fc] next",
+        ),
+        (
+            "authored-nospace",
+            ".Dd September 27, 2026\n.Dt EONS 1\n.Os\n.Sh DESCRIPTION\n.Eo opening\n.Bk -words\ninside\n.Ec closing\n.No pre Ns\n.Ek\n.No NEXT\n",
+            "openinginsideclosing preNEXT",
+        ),
+    ] {
+        let document = parse_manual_bytes(std::path::Path::new(label), source.as_bytes())
+            .expect("lower explicit mdoc BODY close");
+        let text = projected_document_text(&document);
+        assert_eq!(
+            text.trim(),
+            format!("DESCRIPTION{expected}"),
+            "{label}: {text:?}"
+        );
+    }
+}
+
+#[test]
+fn mdoc_empty_function_head_still_emits_body_punctuation() {
+    // Exact input checked against fixed CVS tree, HTML and UTF-8 output.
+    // mdoc_html.c::mdoc_fo_pre/post emit parentheses for the BODY even when
+    // the HEAD has no child; terminal omits the HTML-only prose semicolon.
+    let source =
+        b".Dd September 28, 2026\n.Dt EMPTYFO 1\n.Os\n.Sh DESCRIPTION\n.Fo\n.Fa x\n.Fc\nnext\n";
+    let document = parse_manual_bytes(std::path::Path::new("empty-fo.1"), source)
+        .expect("lower empty-head function");
+    assert_eq!(projected_document_text(&document), "DESCRIPTION(x) next");
+}
+
+#[test]
+fn function_body_reenters_structural_list_and_display_before_its_close() {
+    // Exact sources checked against pinned CVS -Ttree, -Thtml and -Tutf8.
+    // mdoc_html.c::mdoc_fo_pre/post process the Fo BODY's structural children;
+    // print_mdoc_node runs a nested Fo body-end marker at its source position.
+    for (label, middle, expected_structure) in [
+        ("list", ".Bl -bullet\n.It\n.Fa arg\n.Fc\n.El", "list"),
+        ("display", ".Bd -literal\n.Fa arg\n.Fc\n.Ed", "display"),
+    ] {
+        let source = format!(
+            ".Dd September 28, 2026\n.Dt FO{} 1\n.Os\n.Sh DESCRIPTION\n.Fo call\n{middle}\nnext\n",
+            label.to_uppercase()
+        );
+        let document = parse_manual_bytes(
+            std::path::Path::new(&format!("fo-{label}-close.1")),
+            source.as_bytes(),
+        )
+        .expect("lower function with structural body");
+        let blocks = &document.sections[0].blocks;
+        let Some(Block::Paragraph { children: head, .. }) = blocks.first() else {
+            panic!("{label}: {blocks:#?}");
+        };
+        assert_eq!(inline_text(head), "call(", "{label}");
+        assert!(
+            head.iter()
+                .any(|inline| matches!(inline, Inline::Anchor { id, .. } if id == "call")),
+            "{label}: {head:#?}"
+        );
+        match (expected_structure, blocks.get(1)) {
+            ("list", Some(Block::List { .. })) | ("display", Some(Block::Preformatted { .. })) => {}
+            _ => panic!("{label}: {blocks:#?}"),
+        }
+        let text = projected_document_text(&document);
+        assert_eq!(text.matches(')').count(), 1, "{label}: {text:?}");
+        assert!(text.contains("arg"), "{label}: {text:?}");
+    }
+}
+
+#[test]
+fn structural_function_retains_commas_between_direct_arguments() {
+    // Exact input checked against fixed CVS tree, HTML and UTF-8 output.
+    // mdoc_html.c::mdoc_fa_pre inserts a comma when the next logical sibling
+    // is Fa, even when a later structural child splits the Fo output flow.
+    let source = b".Dd September 28, 2026\n.Dt FOCOMMA 1\n.Os\n.Sh DESCRIPTION\n.Fo call\n.Fa first\n.Fa second\n.Bl -bullet\n.It\nbody\n.El\n.Fc\n";
+    let document = parse_manual_bytes(std::path::Path::new("fo-comma-list.1"), source)
+        .expect("lower function arguments before a list");
+    let blocks = &document.sections[0].blocks;
+    let Some(Block::Paragraph { children, .. }) = blocks.first() else {
+        panic!("{blocks:#?}");
+    };
+    assert_eq!(inline_text(children), "call(first, second");
+    assert!(
+        blocks
+            .iter()
+            .any(|block| matches!(block, Block::List { .. })),
+        "{blocks:#?}"
+    );
+}
+
+#[test]
+fn direct_function_argument_after_display_end_uses_restored_fill_mode() {
+    // Exact source checked against fixed CVS tree, HTML and UTF-8 output.
+    // mdoc_macro.c::blk_exp_close restores fill at `.Ed`; mdoc_html.c's
+    // print_mdoc_node checks NODE_NOFILL on the following direct Fa child.
+    let source = b".Dd September 28, 2026\n.Dt FOSWITCH 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal\n.Fo call\n.Bl -bullet\n.It\nitem\n.El\n.Ed\n.Fa later\n.Fc\nnext\n";
+    let document = parse_manual_bytes(std::path::Path::new("fo-display-switch.1"), source)
+        .expect("lower function after display end");
+    let blocks = &document.sections[0].blocks;
+    assert!(
+        matches!(blocks.first(), Some(Block::Preformatted { .. })),
+        "{blocks:#?}"
+    );
+    assert!(
+        matches!(blocks.get(1), Some(Block::List { .. })),
+        "{blocks:#?}"
+    );
+    let Some(Block::Paragraph { children, .. }) = blocks.get(2) else {
+        panic!("function argument did not return to filled flow: {blocks:#?}");
+    };
+    assert_eq!(inline_text(children), "later)");
+}
+
+#[test]
+fn dl_single_line_display_does_not_require_native_no_fill_flags() {
+    // Exact source checked against fixed CVS tree, HTML and UTF-8 output.
+    // mdoc_html.c::mdoc_d1_pre creates a display/code container for Dl;
+    // mdoc_term.c::termp_d1_pre starts its display row. Its text children do
+    // not have NODE_NOFILL, unlike Bd -literal content.
+    let source = b".Dd September 28, 2026\n.Dt DLFLAG 1\n.Os\n.Sh Redirections\n.Dl [n] Va redir-op Ar file\n";
+    let document = parse_manual_bytes(std::path::Path::new("dl-flag.1"), source)
+        .expect("lower one-line literal display");
+    let [Block::Preformatted { children, .. }] = document.sections[0].blocks.as_slice() else {
+        panic!(
+            "Dl lost its display row: {:#?}",
+            document.sections[0].blocks
+        );
+    };
+    assert_eq!(inline_text(children), "[n] redir-op file");
+}
+
+#[test]
+fn explicit_display_end_restores_fill_inside_an_open_inline_scope() {
+    // Exact input checked against fixed CVS tree, HTML and UTF-8 output.
+    // mdoc_html.c::print_mdoc_node switches fill mode using NODE_NOFILL for
+    // each node; a Bd BODY end marker can precede its ancestor Bo's close.
+    let source = b".Dd September 27, 2026\n.Dt BDCLOSE 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal\n.Bo\ninside\n.Ed\nafter-ed\n.Bc\nnext\n";
+    let document = parse_manual_bytes(std::path::Path::new("bd-close.1"), source)
+        .expect("lower explicit display close");
+    let blocks = &document.sections[0].blocks;
+    let [
+        Block::Preformatted {
+            children: literal, ..
+        },
+        Block::Paragraph {
+            children: filled, ..
+        },
+        Block::Paragraph {
+            children: after, ..
+        },
+    ] = blocks.as_slice()
+    else {
+        panic!("unexpected display close blocks: {blocks:#?}");
+    };
+    assert_eq!(inline_text(literal), "[\ninside");
+    assert_eq!(inline_text(filled), "after-ed]");
+    assert_eq!(inline_text(after), "next");
+}
+
+#[test]
+fn enclosure_post_crosses_detached_definition_list_without_duplication() {
+    // Exact input checked against fixed CVS tree, HTML and UTF-8 output.
+    // mdoc.c::mdoc_endbody_alloc puts the Ao BODY end in the It BODY;
+    // mdoc_html.c::print_mdoc_node posts there and marks the Ao body ended.
+    let source = b".Dd September 27, 2026\n.Dt LISTCLOSE 1\n.Os\n.Sh DESCRIPTION\n.Ao\n.Bl -tag -width key\n.It key\ninside\n.Ac\nafter-ac\n.El\ntail\n";
+    let document = parse_manual_bytes(std::path::Path::new("list-close.1"), source)
+        .expect("lower cross-list explicit close");
+    let text = projected_document_text(&document);
+    assert_eq!(text.matches('>').count(), 1, "{text:?}");
+    assert!(text.contains("inside> after-ac"), "{text:?}");
+    assert!(text.ends_with("tail"), "{text:?}");
+}
+
+#[test]
+fn crossed_enclosure_and_ordinary_enclosure_post_in_detached_list() {
+    // Exact source checked against pinned CVS tree, HTML and UTF-8 output.
+    // mdoc_html.c::print_mdoc_node ends only Ao's linked BODY at `.Ac`;
+    // the still-open Bo BODY executes its ordinary post when it unwinds.
+    let source = b".Dd September 27, 2026\n.Dt NESTCLOSE 1\n.Os\n.Sh DESCRIPTION\n.Ao\n.Bl -tag -width key\n.It key\n.Bo\ninside\n.Ac\nafter-angle\n.Bc\n.El\ntail\n";
+    let document = parse_manual_bytes(std::path::Path::new("nested-list-close.1"), source)
+        .expect("lower crossed and normal nested posts");
+    let text = projected_document_text(&document);
+    assert!(text.contains("[inside> after-angle]"), "{text:?}");
+    assert_eq!(text.matches('>').count(), 1, "{text:?}");
+    assert_eq!(text.matches(']').count(), 1, "{text:?}");
+}
+
+#[test]
+fn display_end_before_nested_list_keeps_following_enclosure_post_filled() {
+    // Exact input checked against fixed CVS tree, HTML and UTF-8 output.
+    // mdoc_macro.c::blk_exp_close restores fill mode at `.Ed`; HTML checks
+    // NODE_NOFILL before dispatching the following Bl, then Bo's later post.
+    let source = b".Dd September 27, 2026\n.Dt BDLIST 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal\n.Bo\ninside\n.Ed\n.Bl -bullet\n.It\nitem\n.El\n.Bc\nnext\n";
+    let document = parse_manual_bytes(std::path::Path::new("bd-list-close.1"), source)
+        .expect("lower display close before nested list");
+    let blocks = &document.sections[0].blocks;
+    assert!(
+        matches!(blocks.first(), Some(Block::Preformatted { .. })),
+        "{blocks:#?}"
+    );
+    assert!(
+        blocks
+            .iter()
+            .any(|block| matches!(block, Block::List { .. })),
+        "{blocks:#?}"
+    );
+    assert!(blocks.iter().any(|block| matches!(block, Block::Paragraph { children, .. } if inline_text(children) == "]")), "{blocks:#?}");
+    let text = projected_document_text(&document);
+    assert_eq!(text.matches(']').count(), 1, "{text:?}");
+    assert!(text.contains("item"), "{text:?}");
+}
+
+#[test]
+fn mdoc_unordered_list_markers_retain_their_native_style() {
+    // Exact inputs checked with fixed CVS tree, HTML and UTF-8 output.
+    // mdoc_html.c::mdoc_bl_pre differentiates Bl-bullet and Bl-dash;
+    // mdoc_term.c::termp_it_pre uses a bullet, dash, or no marker.
+    for (style, expected) in [
+        ("bullet", mant_ir::ListKind::Bullet),
+        ("dash", mant_ir::ListKind::Dash),
+        ("hyphen", mant_ir::ListKind::Dash),
+        ("item", mant_ir::ListKind::Plain),
+    ] {
+        let source = format!(
+            ".Dd September 27, 2026\n.Dt LISTSTYLE 1\n.Os\n.Sh DESCRIPTION\n.Bl -{style}\n.It\nentry\n.El\nafter\n"
+        );
+        let document = parse_manual_bytes(std::path::Path::new("list-style.1"), source.as_bytes())
+            .expect("lower list marker style");
+        let [Block::List { kind, .. }, Block::Paragraph { .. }] =
+            document.sections[0].blocks.as_slice()
+        else {
+            panic!("-{style}: {:#?}", document.sections[0].blocks);
+        };
+        assert_eq!(*kind, expected, "-{style}");
+    }
+}
+
+#[test]
+fn an_empty_word_keeps_its_executed_gap_before_ns() {
+    // Exact input checked against fixed CVS tree, HTML and UTF-8 output.
+    // term.c::term_word() has committed the empty operand's separator before
+    // mdoc Ns tightens only the following boundary.
+    let source = b".Dd September 27, 2026\n.Dt EMPTYJOIN 1\n.Os\n.Sh DESCRIPTION\n.No before No \"\" Ns No after\n";
+    let document = parse_manual_bytes(std::path::Path::new("empty-join.1"), source)
+        .expect("lower empty word before Ns");
+    assert_eq!(
+        projected_document_text(&document),
+        "DESCRIPTIONbefore after"
+    );
+}
+
+#[test]
 fn normalized_reference_title_quote_reaches_document_text() {
     // The exact source was run through the fixed oracle before the assertion.
     // CVS mdoc_validate.c::post_rs sets quote_T when %J is present;

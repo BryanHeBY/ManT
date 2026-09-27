@@ -196,7 +196,7 @@ fn only_ordered_lists_accept_start_in_actual_decoders() {
             assert_eq!(kind, ListKind::Ordered { start });
         }
     }
-    for kind in [ListKind::Bullet, ListKind::Plain] {
+    for kind in [ListKind::Bullet, ListKind::Dash, ListKind::Plain] {
         assert_eq!(kind.ordinal(0), None);
         assert_eq!(kind.for_excerpt(8), kind);
     }

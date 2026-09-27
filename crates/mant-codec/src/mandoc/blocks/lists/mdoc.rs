@@ -99,6 +99,7 @@ fn lower_mdoc_plain_list(
     use crate::mandoc::layout::Distance;
     let kind = match node.list_kind {
         Some(NormalizedListKind::Ordered) => ListKind::Ordered { start: Some(1) },
+        Some(NormalizedListKind::Dash) => ListKind::Dash,
         Some(NormalizedListKind::Plain) => ListKind::Plain,
         _ => ListKind::Bullet,
     };
@@ -120,7 +121,7 @@ fn lower_mdoc_plain_list(
             .map(|(index, item)| {
                 let marker_width = match kind {
                     ListKind::Plain => 0,
-                    ListKind::Bullet => 2,
+                    ListKind::Bullet | ListKind::Dash => 2,
                     ListKind::Ordered { .. } => {
                         mant_ir::geometry::coordinate(mant_ir::geometry::text_width(&format!(
                             "{}. ",

@@ -154,7 +154,7 @@ fn render_list(
                 ListKind::Ordered { .. } => {
                     format!("{}. ", kind.ordinal(index).expect("ordered list ordinal"))
                 }
-                ListKind::Bullet | ListKind::Plain => "- ".to_owned(),
+                ListKind::Bullet | ListKind::Dash | ListKind::Plain => "- ".to_owned(),
             };
             let mut blocks = item
                 .blocks

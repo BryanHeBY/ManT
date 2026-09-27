@@ -133,7 +133,7 @@ fn nonparagraph_body_keeps_item_gap_before_the_whole_marker() {
     document.sections.clear();
     document.blocks = blocks;
     let text = mant_render::render_query_text(&query);
-    assert_eq!(text, "demo\n\nBEFORE\n\n\n\n-\n  CODE");
+    assert_eq!(text, "demo\n\nBEFORE\n\n\n\n•\n  CODE");
 }
 
 #[test]

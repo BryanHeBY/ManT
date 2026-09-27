@@ -1159,9 +1159,11 @@ snapshot_normalized_data(struct mant_mandoc_node_view *view,
 		view->width = source->norm->Bl.width;
 		switch (source->norm->Bl.type) {
 		case LIST_bullet:
+			view->list_kind = MANT_MANDOC_LIST_BULLET;
+			break;
 		case LIST_dash:
 		case LIST_hyphen:
-			view->list_kind = MANT_MANDOC_LIST_BULLET;
+			view->list_kind = MANT_MANDOC_LIST_DASH;
 			break;
 		case LIST_enum:
 			view->list_kind = MANT_MANDOC_LIST_ORDERED;

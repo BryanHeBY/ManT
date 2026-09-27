@@ -3,6 +3,11 @@
 //! Container transparency means that payloads remain reachable. It does not
 //! mean that the entire container may be skipped by logical sibling lookup.
 use libmandoc_rs::{Node, NodeKind};
+use std::{
+    cell::RefCell,
+    collections::{HashMap, HashSet},
+    rc::Rc,
+};
 
 use super::{first_part_children, inline::enclosure_marks, roff_escape::RoffFont};
 
@@ -22,11 +27,78 @@ pub(super) enum Event<'a> {
     ExitKeep,
     EnterFont(RoffFont),
     ExitFont,
+    /// A direct Fa child of a structural Fo body; the sibling relation is
+    /// needed for mandoc's generated comma after an argument.
+    FunctionArgument(&'a Node, bool),
+}
+
+/// Private execution record for mdoc BODY posts. Clones share one source-order
+/// walk even when a list or display temporarily owns a separate output buffer.
+#[derive(Clone, Default)]
+pub(super) struct ScopePostState(Rc<RefCell<ScopePosts>>);
+
+#[derive(Default)]
+struct ScopePosts {
+    ended: HashSet<u32>,
+    function_suffix: HashMap<u32, bool>,
+    structural_payload: HashSet<u32>,
+    indexed: bool,
+}
+
+impl ScopePostState {
+    pub(super) fn index_structural_payload(&self, root: &Node) {
+        fn visit(node: &Node, index: &mut HashSet<u32>) -> bool {
+            let mut has = is_structural_payload(node);
+            for child in &node.children {
+                has |= visit(child, index);
+            }
+            if has {
+                index.insert(node.id);
+            }
+            has
+        }
+        let mut posts = self.0.borrow_mut();
+        posts.structural_payload.clear();
+        visit(root, &mut posts.structural_payload);
+        posts.indexed = true;
+    }
+
+    pub(super) fn has_structural_payload(&self, node: &Node) -> bool {
+        let posts = self.0.borrow();
+        if posts.indexed {
+            posts.structural_payload.contains(&node.id)
+        } else {
+            // Standalone inline builders in focused tests do not have a
+            // document context; their small borrowed subtree is scanned.
+            has_structural_payload(node)
+        }
+    }
+
+    pub(super) fn ended(&self, body_id: u32) -> bool {
+        self.0.borrow().ended.contains(&body_id)
+    }
+
+    pub(super) fn finish(&self, body_id: u32) {
+        self.0.borrow_mut().ended.insert(body_id);
+    }
+
+    pub(super) fn register_function(&self, body_id: u32, synopsis: bool) {
+        self.0
+            .borrow_mut()
+            .function_suffix
+            .insert(body_id, synopsis);
+    }
+
+    pub(super) fn function_suffix(&self, body_id: u32) -> Option<bool> {
+        self.0.borrow().function_suffix.get(&body_id).copied()
+    }
 }
 
 pub(super) fn is_container(node: &Node) -> bool {
-    matches!(node.macro_name.as_deref(), Some("Bf" | "Bk" | "ce" | "rj"))
-        || super::inline::is_enclosure_macro(node.macro_name.as_deref())
+    matches!(
+        node.macro_name.as_deref(),
+        Some("Bf" | "Bk" | "Fo" | "ce" | "rj")
+    ) || super::inline::is_enclosure_macro(node.macro_name.as_deref())
         || (node.macro_name.is_none()
             && matches!(
                 node.kind,
@@ -36,7 +108,36 @@ pub(super) fn is_container(node: &Node) -> bool {
 
 /// Emit a bounded sequence of boundaries and borrowed child slices. Children
 /// are consumed immediately; there is no document-sized intermediate stream.
-pub(super) fn walk(node: &Node, mut emit: impl FnMut(Event<'_>)) -> bool {
+pub(super) fn walk(node: &Node, posts: &ScopePostState, mut emit: impl FnMut(Event<'_>)) -> bool {
+    // CVS mdoc_html.c::print_mdoc_node() executes an ENDBODY marker's post
+    // handler at its source position and marks the original BODY ended, so
+    // the original post is skipped when traversal later unwinds to it.
+    // `mdoc.c::mdoc_endbody_alloc()` retains that BODY relation on the marker.
+    if let Some(end) = node.scope_end {
+        if node.macro_name.as_deref() == Some("Fo") {
+            emit(Event::Children(&node.children));
+            if let Some(synopsis) = posts.function_suffix(end.body_id) {
+                emit(Event::Tight);
+                emit(Event::Glyph(if synopsis { ");" } else { ")" }.to_owned()));
+                posts.finish(end.body_id);
+            }
+            return true;
+        }
+        if node.macro_name.as_deref() == Some("Eo") {
+            emit_eo_endbody(node, &mut emit);
+            posts.finish(end.body_id);
+            return true;
+        }
+        if let Some((_, close)) = resolved_enclosure_marks(node) {
+            if !node.children.is_empty() {
+                emit(Event::BeginNode(node));
+            }
+            emit(Event::Children(&node.children));
+            emit_enclosure_post(close.as_deref(), &mut emit);
+            posts.finish(end.body_id);
+            return true;
+        }
+    }
     let body = first_part_children(node, NodeKind::Body);
     match node.macro_name.as_deref() {
         Some("Bf") => {
@@ -53,28 +154,13 @@ pub(super) fn walk(node: &Node, mut emit: impl FnMut(Event<'_>)) -> bool {
             emit(Event::Children(body));
             emit(Event::ExitKeep);
         }
+        Some("Fo") if posts.has_structural_payload(node) => {
+            emit_structural_function(node, posts, &mut emit);
+        }
         Some("ce" | "rj") => aligned_line_payload(node, &mut emit),
-        Some("Eo") => authored_enclosure(node, &mut emit),
+        Some("Eo") => authored_enclosure(node, posts, &mut emit),
         name if super::inline::is_enclosure_macro(name) => {
-            let marks = node.enclosure.as_ref().map_or_else(
-                || {
-                    if name == Some("En") {
-                        Some((None, None))
-                    } else {
-                        enclosure_marks(name.unwrap_or_default())
-                            .map(|(a, b)| (Some(a.to_owned()), Some(b.to_owned())))
-                    }
-                },
-                |enclosure| {
-                    Some((
-                        Some(super::roff_escape::visible_text(&enclosure.opening)),
-                        enclosure
-                            .closing
-                            .as_deref()
-                            .map(super::roff_escape::visible_text),
-                    ))
-                },
-            );
+            let marks = resolved_enclosure_marks(node);
             let Some((open, close)) = marks else {
                 return false;
             };
@@ -92,17 +178,13 @@ pub(super) fn walk(node: &Node, mut emit: impl FnMut(Event<'_>)) -> bool {
                 .find(|child| child.kind == NodeKind::Body)
                 .map_or(node.children.as_slice(), |body| body.children.as_slice());
             emit(Event::Children(children));
-            if let Some(close) = close {
-                emit(Event::Tight);
-                if close.is_empty() {
-                    emit(Event::EmptyWord);
-                } else {
-                    emit(Event::Glyph(close));
-                }
-            } else {
-                // An absent obsolete `.Es` closing delimiter emits no word,
-                // but mdoc_term.c still releases TERMP_NOSPACE after `.En`.
-                emit(Event::Release);
+            let body_id = node
+                .children
+                .iter()
+                .find(|part| part.kind == NodeKind::Body && part.scope_end.is_none())
+                .map(|body| body.id);
+            if body_id.is_none_or(|id| !posts.ended(id)) {
+                emit_enclosure_post(close.as_deref(), &mut emit);
             }
             if node
                 .children
@@ -128,6 +210,117 @@ pub(super) fn walk(node: &Node, mut emit: impl FnMut(Event<'_>)) -> bool {
         _ => return false,
     }
     true
+}
+
+fn emit_eo_endbody<'a>(node: &'a Node, emit: &mut impl FnMut(Event<'a>)) {
+    if !node.children.is_empty() {
+        emit(Event::BeginNode(node));
+        // mdoc_html.c::mdoc_eo_pre() sets HTML_NOSPACE before a nonempty
+        // body-end marker; mdoc_eo_post() releases it.
+        emit(Event::Tight);
+    }
+    emit(Event::Children(&node.children));
+    emit(Event::Release);
+}
+
+/// Keep the native Fo HEAD/BODY order when a structural child re-enters the
+/// block lowerer. An explicit BODY end may have emitted the suffix already.
+fn emit_structural_function<'a>(
+    node: &'a Node,
+    posts: &ScopePostState,
+    emit: &mut impl FnMut(Event<'a>),
+) {
+    // CVS mdoc_html.c::mdoc_fo_pre/post render HEAD, opening BODY mark,
+    // children, and closing BODY mark in that order.
+    let head_part = node
+        .children
+        .iter()
+        .find(|child| child.kind == NodeKind::Head);
+    let body_part = node
+        .children
+        .iter()
+        .find(|child| child.kind == NodeKind::Body && child.scope_end.is_none());
+    let synopsis =
+        node.flags.synopsis_pretty || body_part.is_some_and(|part| part.flags.synopsis_pretty);
+    if let Some(part) = body_part {
+        posts.register_function(part.id, synopsis);
+    }
+    if let Some(part) = head_part {
+        emit(Event::BeginNode(part));
+        emit(Event::EnterFont(RoffFont::Strong));
+        emit(Event::Children(&part.children));
+        emit(Event::ExitFont);
+    }
+    emit(Event::Tight);
+    emit(Event::Glyph("(".to_owned()));
+    emit(Event::Tight);
+    if let Some(part) = body_part {
+        emit_function_body(&part.children, emit);
+    }
+    if body_part.is_none_or(|part| !posts.ended(part.id)) {
+        emit(Event::Tight);
+        emit(Event::Glyph(if synopsis { ");" } else { ")" }.to_owned()));
+    }
+}
+
+/// CVS `mdoc_html.c::mdoc_fa_pre()` emits a comma after each operand and when
+/// the next logical sibling is another Fa. Preserve the direct Fo body
+/// relation even while structural children enter a separate output buffer.
+fn emit_function_body<'a>(body: &'a [Node], emit: &mut impl FnMut(Event<'a>)) {
+    let mut pending = 0;
+    for (index, node) in body.iter().enumerate() {
+        if node.macro_name.as_deref() != Some("Fa") {
+            continue;
+        }
+        if pending < index {
+            emit(Event::Children(&body[pending..index]));
+        }
+        let comma_after = !node.children.is_empty()
+            && super::adjacency::next(&body[index + 1..])
+                .is_some_and(|next| next.macro_name.as_deref() == Some("Fa"));
+        emit(Event::FunctionArgument(node, comma_after));
+        pending = index + 1;
+    }
+    if pending < body.len() {
+        emit(Event::Children(&body[pending..]));
+    }
+}
+
+fn resolved_enclosure_marks(node: &Node) -> Option<(Option<String>, Option<String>)> {
+    node.enclosure.as_ref().map_or_else(
+        || {
+            let name = node.macro_name.as_deref()?;
+            if name == "En" {
+                Some((None, None))
+            } else {
+                enclosure_marks(name)
+                    .map(|(opening, closing)| (Some(opening.to_owned()), Some(closing.to_owned())))
+            }
+        },
+        |enclosure| {
+            Some((
+                Some(super::roff_escape::visible_text(&enclosure.opening)),
+                enclosure
+                    .closing
+                    .as_deref()
+                    .map(super::roff_escape::visible_text),
+            ))
+        },
+    )
+}
+
+fn emit_enclosure_post(close: Option<&str>, emit: &mut impl FnMut(Event<'_>)) {
+    if let Some(close) = close {
+        emit(Event::Tight);
+        if close.is_empty() {
+            emit(Event::EmptyWord);
+        } else {
+            emit(Event::Glyph(close.to_owned()));
+        }
+    } else {
+        // mdoc_term.c releases NOSPACE after an absent `.En` closing mark.
+        emit(Event::Release);
+    }
 }
 
 /// Native `ce`/`rj` own a control count followed by actual input lines and
@@ -170,7 +363,11 @@ fn aligned_line_payload<'a>(node: &'a Node, emit: &mut impl FnMut(Event<'a>)) {
 
 /// Authored delimiters can be siblings of the body wrappers. Keep wrapper
 /// execution events in that same stream even when an Ec tail has no text.
-fn authored_enclosure<'a>(node: &'a Node, emit: &mut impl FnMut(Event<'a>)) {
+fn authored_enclosure<'a>(
+    node: &'a Node,
+    posts: &ScopePostState,
+    emit: &mut impl FnMut(Event<'a>),
+) {
     let head = first_part_children(node, NodeKind::Head);
     let body = first_part_children(node, NodeKind::Body);
     let tail = first_part_children(node, NodeKind::Tail);
@@ -189,7 +386,7 @@ fn authored_enclosure<'a>(node: &'a Node, emit: &mut impl FnMut(Event<'a>)) {
                 emit(Event::Children(&child.children));
                 if head.is_empty() && body.is_empty() && tail.is_empty() {
                     emit(Event::EmptyWord);
-                } else if tail.is_empty() {
+                } else if tail.is_empty() && !posts.ended(child.id) {
                     emit(Event::Release);
                 }
             }
@@ -206,6 +403,10 @@ fn authored_enclosure<'a>(node: &'a Node, emit: &mut impl FnMut(Event<'a>)) {
 
 /// A payload consumer must never flatten these nodes through inline children.
 pub(super) fn has_structural_payload(node: &Node) -> bool {
+    is_structural_payload(node) || node.children.iter().any(has_structural_payload)
+}
+
+fn is_structural_payload(node: &Node) -> bool {
     node.kind == NodeKind::Table
         || matches!(node.macro_name.as_deref(), Some("ce" | "rj"))
         || (node.kind == NodeKind::Block
@@ -213,5 +414,4 @@ pub(super) fn has_structural_payload(node: &Node) -> bool {
                 node.macro_name.as_deref(),
                 Some("Bl" | "Rs" | "Bd" | "D1" | "Dl")
             ))
-        || node.children.iter().any(has_structural_payload)
 }

@@ -46,7 +46,7 @@ pub fn table_requires_origin_preserving_stack(rows: &[TableRow], origin: i32) ->
                 for (index, item) in items.iter().enumerate() {
                     let marker = match kind {
                         ListKind::Plain => 0,
-                        ListKind::Bullet => 2,
+                        ListKind::Bullet | ListKind::Dash => 2,
                         ListKind::Ordered { .. } => {
                             kind.ordinal(index).map_or(0, |n| n.to_string().len() + 2)
                         }

@@ -9,12 +9,16 @@ pub(super) struct ParagraphFlow {
 }
 
 impl ParagraphFlow {
-    pub(super) const fn new(spacing: bool) -> Self {
+    pub(super) fn new(spacing: bool) -> Self {
         Self {
             builder: InlineBuilder::with_spacing(spacing),
             source: None,
             last_line: None,
         }
+    }
+
+    pub(super) fn inherit_scope_posts(&mut self, posts: crate::mandoc::containers::ScopePostState) {
+        self.builder.scope_posts = posts;
     }
 
     pub(super) fn is_empty(&self) -> bool {
@@ -162,6 +166,7 @@ impl ParagraphFlow {
         vertical_request: bool,
     ) -> (Option<Block>, bool) {
         let mut next = Self::new(spacing);
+        next.builder.scope_posts = self.builder.scope_posts.clone();
         let invisible_formatter_cell = self.builder.has_invisible_formatter_cell();
         if vertical_request {
             self.builder

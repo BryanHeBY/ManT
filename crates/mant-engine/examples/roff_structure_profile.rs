@@ -647,7 +647,10 @@ fn mdoc_list_topology_kind(node: &Node) -> Option<MdocContainerKind> {
             MdocContainerKind::Definition
         }
         Some(
-            NormalizedListKind::Bullet | NormalizedListKind::Ordered | NormalizedListKind::Plain,
+            NormalizedListKind::Bullet
+            | NormalizedListKind::Dash
+            | NormalizedListKind::Ordered
+            | NormalizedListKind::Plain,
         )
         | None => MdocContainerKind::Generic,
     })

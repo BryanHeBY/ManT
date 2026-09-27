@@ -255,6 +255,7 @@ const fn node_kind_name(value: NodeKind) -> &'static str {
 const fn list_kind_name(value: NormalizedListKind) -> &'static str {
     match value {
         NormalizedListKind::Bullet => "bullet",
+        NormalizedListKind::Dash => "dash",
         NormalizedListKind::Ordered => "ordered",
         NormalizedListKind::Definition => "definition",
         NormalizedListKind::Column => "column",
