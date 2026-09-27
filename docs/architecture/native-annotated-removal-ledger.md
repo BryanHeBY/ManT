@@ -48,7 +48,7 @@ The old public `libmandoc-rs` structured facade and its own tests are not
 part of this deletion; their removal remains the later R09 unit. This table
 records input families, not a claim of one-for-one assertion equivalence.
 
-## Current 40-patch series
+## Current 43-patch series
 
 | Patch | Target | Required consumer or condition |
 | --- | --- | --- |
@@ -92,6 +92,9 @@ records input families, not a claim of one-for-one assertion equivalence.
 | 0038 footer body-drain boundary | A | distinguish delayed body flush from footer decoration without forcing a flush |
 | 0039 tag/item display points | A | retain native boundary point even when no glyph survives; replace old inferred placement |
 | 0040 post-pre region points | A | retain native region location after pre hooks without borrowing a later glyph |
+| 0041 diagnostic coordinate origin | K/A | distinguish expanded diagnostic coordinates from authored source positions |
+| 0042 elided paragraph boundary | K/A | retain native PP/RS presentation evidence without inventing an AST entry |
+| 0043 executed word input ranges | A | synchronous consumed-byte evidence for R05 compatible links; `pos/end` remain terminal buffer units, and no word pointer crosses the callback lifetime |
 
 Module ownership after migration: session is sole native invocation owner;
 source owns authorization and source table; buffer owns active tokens, pending,

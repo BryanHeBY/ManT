@@ -39,6 +39,49 @@ fn links(page: &AnnotatedDocument) -> Vec<u32> {
 }
 
 #[test]
+fn executed_word_byte_ranges_do_not_change_native_visible_text() {
+    // Each exact input was first run with the pinned CVS -Ttree and
+    // -Tutf8 -O width=78. term.c::term_word() consumes escapes before
+    // encode()/encode1() emit glyphs; the collector checks that plain
+    // TERM_COLLECT_TEXT events name the exact consumed input byte.
+    // preconv.c turns the UTF-8 sample into a Unicode escape before the
+    // native word executes; the final display still contains its glyph.
+    for (input, visible) in [
+        (
+            ".TH LINKS 1\n.SH DESCRIPTION\na(1) \\%<> and a(1) \\%<>\n",
+            "a(1) <> and a(1) <>",
+        ),
+        (
+            ".TH LINKS 1\n.SH DESCRIPTION\na\\-b(1) \\%<>\n",
+            "a-b(1) <>",
+        ),
+        (
+            ".TH LINKS 1\n.SH DESCRIPTION\na\\fBb\\fP(1) \\%<>\n",
+            "ab(1) <>",
+        ),
+        (
+            ".TH LINKS 1\n.SH DESCRIPTION\na界b(1) \\%<>\n",
+            "a界b(1) <>",
+        ),
+        (
+            ".TH LINKS 1\n.SH DESCRIPTION\n.BR a (1)\n.br\n\\%<>\n",
+            "a(1)",
+        ),
+        (
+            ".TH LINKS 1\n.SH DESCRIPTION\n.nf\na(1) \\%<>\n.fi\n",
+            "a(1) <>",
+        ),
+        (
+            ".TH LINKS 1\n.SH DESCRIPTION\n.de REF\na(1) \\%<>\n..\n.REF\n",
+            "a(1) <>",
+        ),
+    ] {
+        let page = render(input.as_bytes(), InputFormat::Man);
+        assert!(page.text.contains(visible), "visible={visible:?}");
+    }
+}
+
+#[test]
 fn mr_label_excludes_its_real_suffix_but_keeps_generated_parentheses() {
     // Exact inputs were first run with pinned CVS -Tutf8 and -Thtml.
     // man_term.c::pre_MR prints name(section) before its optional third

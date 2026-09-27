@@ -113,6 +113,9 @@ struct mant_annotated_collector {
 	uint32_t active_head_component;
 	uint32_t active_link;
 	const struct roff_node *active_link_node;
+	/* Borrowed only between synchronous WORD ENTER and LEAVE callbacks. */
+	const char *active_word;
+	size_t active_word_length;
 	uint64_t active_link_epoch;
 	uint64_t phrase_epoch;
 	uint32_t active_heading;

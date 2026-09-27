@@ -71,6 +71,9 @@ collect_emit(struct termp *p, enum term_collector_op op,
 	ev.phase = phase;
 	ev.reason = reason;
 	ev.node = p->collector_node;
+	ev.word = p->collector_word;
+	ev.word_start = p->collector_word_start;
+	ev.word_end = p->collector_word_end;
 	ev.column = p->tcol == NULL ? 0 : (size_t)(p->tcol - p->tcols);
 	ev.pos = pos;
 	ev.end = end;
@@ -788,15 +791,32 @@ term_word(struct termp *p, const char *word)
 {
 	struct roffsu	 su;
 	const char	 nbrsp[2] = { ASCII_NBRSP, 0 };
+	const char	*input = word;
+	const char	*saved_word = p->collector_word;
+	const char	*escape_start;
 	const char	*seq;		/* Escape sequence argument. */
 	const char	*cp;		/* String to be printed. */
 	size_t		 csz;		/* String length in basic units. */
 	size_t		 lsz;		/* Line width in basic units. */
 	size_t		 ssz = 0;	/* Substring length in bytes. */
+	size_t		 saved_word_start = p->collector_word_start;
+	size_t		 saved_word_end = p->collector_word_end;
 	int		 sz;		/* Argument length in bytes. */
 	int		 uc;		/* Unicode codepoint number. */
 	int		 bu;		/* Width in basic units. */
 	enum mandoc_esc	 esc;
+
+	/* A word invocation is the source-instance boundary.  Its pointer is
+	 * borrowed only for synchronous collector callbacks; buffer positions
+	 * in the older events are never reinterpreted as source offsets. */
+	if (p->collector != NULL) {
+		p->collector_word = input;
+		p->collector_word_start = 0;
+		p->collector_word_end = strlen(input);
+		collect_emit(p, TERM_COLLECT_WORD, TERM_COLLECT_ENTER,
+		    TERM_COLLECT_NONE, 0, 0, 0, 0, 0, TERMFONT_NONE);
+		p->collector_word_end = 0;
+	}
 
 	if ((p->flags & TERMP_NOBUF) == 0) {
 		if ((p->flags & TERMP_NOSPACE) == 0) {
@@ -821,6 +841,11 @@ term_word(struct termp *p, const char *word)
 		if ('\\' != *word) {
 			if (TERMP_NBRWORD & p->flags) {
 				if (' ' == *word) {
+					if (p->collector != NULL) {
+						p->collector_word_start = word - input;
+						p->collector_word_end =
+						    p->collector_word_start + 1;
+					}
 					encode(p, nbrsp, 1, TERM_COLLECT_KEEP_SPACE);
 					word++;
 					continue;
@@ -828,13 +853,21 @@ term_word(struct termp *p, const char *word)
 				ssz = strcspn(word, "\\ ");
 			} else
 				ssz = strcspn(word, "\\");
+			if (p->collector != NULL) {
+				p->collector_word_start = word - input;
+				p->collector_word_end = p->collector_word_start + ssz;
+			}
 			encode(p, word, ssz, TERM_COLLECT_TEXT);
 			word += (int)ssz;
 			continue;
 		}
 
-		word++;
+		escape_start = word++;
 		esc = mandoc_escape(&word, &seq, &sz);
+		if (p->collector != NULL) {
+			p->collector_word_start = escape_start - input;
+			p->collector_word_end = word - input;
+		}
 		switch (esc) {
 		case ESCAPE_UNICODE:
 			uc = mchars_num2uc(seq + 1, sz - 1);
@@ -1079,6 +1112,12 @@ term_word(struct termp *p, const char *word)
 		}
 	}
 	p->flags &= ~TERMP_NBRWORD;
+	if (p->collector != NULL)
+		collect_emit(p, TERM_COLLECT_WORD, TERM_COLLECT_LEAVE,
+		    TERM_COLLECT_NONE, 0, 0, 0, 0, 0, TERMFONT_NONE);
+	p->collector_word = saved_word;
+	p->collector_word_start = saved_word_start;
+	p->collector_word_end = saved_word_end;
 }
 
 void
@@ -1249,11 +1288,16 @@ static void
 encode(struct termp *p, const char *word, size_t sz,
 		enum term_collector_reason reason)
 {
-	size_t		  i;
+	size_t		  i, word_start = p->collector_word_start;
 
 	if (p->flags & TERMP_NOBUF) {
-		for (i = 0; i < sz; i++)
+		for (i = 0; i < sz; i++) {
+			if (reason == TERM_COLLECT_TEXT && p->collector != NULL) {
+				p->collector_word_start = word_start + i;
+				p->collector_word_end = word_start + i + 1;
+			}
 			directc(p, word[i], reason);
+		}
 		return;
 	}
 
@@ -1261,6 +1305,10 @@ encode(struct termp *p, const char *word, size_t sz,
 		adjbuf(p, p->col + 2 + (sz * 5));
 
 	for (i = 0; i < sz; i++) {
+		if (reason == TERM_COLLECT_TEXT && p->collector != NULL) {
+			p->collector_word_start = word_start + i;
+			p->collector_word_end = word_start + i + 1;
+		}
 		if (ASCII_HYPH == word[i] ||
 		    isgraph((unsigned char)word[i]))
 			encode1(p, word[i], reason);

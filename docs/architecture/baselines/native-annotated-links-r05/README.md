@@ -173,6 +173,15 @@ proved. Existing coverage supports link `rejected`, `unverified` and
 `ambiguous-survival` reasons; a single native rejected-link boolean alone is
 insufficient for R05's per-reason failure matrix.
 
+The first R05 infrastructure unit adds replayable patch 0043 to report the
+synchronous word interval, and the collector checks plain `TEXT` byte/event
+identity before any compatible candidate uses it. Inconsistent optional word
+evidence revokes link evidence without rejecting the checked display. This
+unit does **not** recognize Sphinx or styled references. Its candidate
+measurement, binary hashes, alternating-run timing and exact text hashes are
+retained in `target/r05-word-hook-measurements.md`; those target artifacts are
+not packaged or treated as a completed R05d performance result.
+
 Mapping is monotone per executed input and bounded by actual input, active
 candidates and emitted glyphs. UTF-8 boundaries, execution identity,
 ordering and final selection containment are checked. A completely

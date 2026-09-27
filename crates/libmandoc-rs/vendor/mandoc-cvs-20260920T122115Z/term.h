@@ -53,6 +53,7 @@ typedef void	(*term_margin)(struct termp *, const struct roff_meta *);
  */
 enum term_collector_op {
 	TERM_COLLECT_NODE,
+	TERM_COLLECT_WORD,
 	TERM_COLLECT_TAG_POINT,
 	TERM_COLLECT_OWNER_POINT,
 	TERM_COLLECT_REGION_POINT,
@@ -110,6 +111,11 @@ struct term_collector_event {
 	enum term_collector_phase phase;
 	enum term_collector_reason reason;
 	const struct roff_node	*node;     /* Exact authored origin, if any. */
+	const char		*word;     /* Only valid during this callback. */
+	/* WORD ENTER reports [0, full input length); LOGICAL reports the
+	 * consumed half-open input-byte interval, not buffer coordinates. */
+	size_t			 word_start;
+	size_t			 word_end;
 	const struct tbl_dat	*cell;     /* Active tbl data cell, if any. */
 	size_t			 column;   /* Index in termp.tcols. */
 	size_t			 pos;      /* Start/old position or allocation. */
@@ -205,6 +211,9 @@ struct	termp {
 	term_collector	  collector;	/* Optional terminal observer. */
 	void		 *collector_arg;
 	const struct roff_node *collector_node; /* Exact word origin. */
+	const char	 *collector_word; /* Synchronous term_word() input. */
+	size_t		  collector_word_start;
+	size_t		  collector_word_end;
 };
 
 

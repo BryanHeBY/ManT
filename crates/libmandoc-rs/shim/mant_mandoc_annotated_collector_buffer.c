@@ -601,6 +601,17 @@ record_field_skip(struct mant_annotated_collector *collector,
 		collector->skipped[collector->skipped_cells++] = label;
 }
 
+/* Word provenance is optional annotation evidence, not display safety.
+ * An inconsistent observer interval cannot be used for compatible links,
+ * but must not revoke already checked native body bytes. */
+static void
+reject_word_evidence(struct mant_annotated_collector *collector)
+{
+	collector->link_annotation_rejected = 1;
+	collector->active_word = NULL;
+	collector->active_word_length = 0;
+}
+
 void
 mant_annotated_collector_observe(struct termp *p, void *argument,
     const struct term_collector_event *event)
@@ -611,10 +622,41 @@ mant_annotated_collector_observe(struct termp *p, void *argument,
 	size_t index, end;
 
 	(void)p;
-	if (collector == NULL || event == NULL ||
-	    collector->session->status != MANT_STRUCTURED_OK ||
+	if (collector == NULL || event == NULL)
+		return;
+	/* A failure can stop ordinary observation mid-word.  The formatter
+	 * still closes term_word(); do not retain its borrowed input pointer
+	 * through the collector's later cleanup path. */
+	if (event->op == TERM_COLLECT_WORD &&
+	    event->phase == TERM_COLLECT_LEAVE &&
+	    (collector->session->status != MANT_STRUCTURED_OK ||
+	    mant_mandoc_output_active_failed())) {
+		collector->active_word = NULL;
+		collector->active_word_length = 0;
+		return;
+	}
+	if (collector->session->status != MANT_STRUCTURED_OK ||
 	    mant_mandoc_output_active_failed())
 		return;
+	if (event->op == TERM_COLLECT_WORD) {
+		/* term.c::term_word() owns the borrowed input for precisely this
+		 * synchronous interval.  Older pos/end fields remain buffer units;
+		 * no pointer or source byte range is retained after LEAVE. */
+		if (event->phase == TERM_COLLECT_ENTER &&
+		    collector->active_word == NULL && event->word != NULL &&
+		    event->word_start == 0) {
+			collector->active_word = event->word;
+			collector->active_word_length = event->word_end;
+		} else if (event->phase == TERM_COLLECT_LEAVE &&
+		    collector->active_word == event->word &&
+		    event->word_start <= event->word_end &&
+		    event->word_end <= collector->active_word_length) {
+			collector->active_word = NULL;
+			collector->active_word_length = 0;
+		} else
+			reject_word_evidence(collector);
+		return;
+	}
 	if (!mant_annotated_charge_work(collector, 1))
 		return;
 	switch (event->op) {
@@ -668,6 +710,22 @@ mant_annotated_collector_observe(struct termp *p, void *argument,
 			join_hard(collector->columns + event->column);
 		return;
 	case TERM_COLLECT_LOGICAL:
+		if (event->word != collector->active_word ||
+		    (event->word != NULL &&
+		    (event->word_start > event->word_end ||
+		    event->word_end > collector->active_word_length))) {
+			reject_word_evidence(collector);
+		} else {
+			/* In pinned term.c, TEXT reaches logical_emit() one input byte
+			 * at a time through encode().  Escapes and generated spaces
+			 * have different reasons and are not guessed here. */
+			if (event->reason == TERM_COLLECT_TEXT &&
+			    event->word != NULL &&
+			    (event->word_end != event->word_start + 1 ||
+			    (unsigned char)event->value != (unsigned char)
+			    event->word[event->word_start]))
+				reject_word_evidence(collector);
+		}
 		if (!mant_annotated_marks_select_component(collector, event->node))
 			return;
 		/* term.c::endline() writes .mc independently of the field.  Even
