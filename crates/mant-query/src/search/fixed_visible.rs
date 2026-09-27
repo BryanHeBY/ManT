@@ -11,7 +11,7 @@ use grep_matcher::Matcher;
 use mant_codec::encode::EncodeError;
 use mant_ir::{
     DisplayRole, DocumentBodyRef, FixedBody, FixedSectionReader, OutputSlice, SourceSpan, TextJoin,
-    TextSelection,
+    TextSelection, ValidatedFixedBody,
 };
 use mant_protocol::{
     MAX_SEARCH_DIAGNOSTICS, MAX_SEARCH_PRESENTATION_BYTES, OutlineNodeReference, OutlineTrail,
@@ -53,23 +53,28 @@ pub(super) fn search_with_matcher(
     let DocumentBodyRef::Fixed(fixed) = document.body() else {
         return Err(SearchError::MissingContent);
     };
-    fixed
-        .validate()
+    let validated = ValidatedFixedBody::new(fixed)
         .map_err(|error| SearchError::InvalidFixed(EncodeError::InvalidFixed(error)))?;
     mant_ir::validate_document_sources(document)
         .map_err(|error| SearchError::InvalidFixed(EncodeError::InvalidFixedSource(error)))?;
+    // Keep the historical Fixed -> sources -> TLDR (if any) -> section
+    // check order. The immutable proof removes only the repeated Fixed check.
     match request.scope {
         SearchScope::Visible if query.tldr.is_some() => {
-            search_mixed_visible(query, fixed, request, matcher)
+            search_mixed_visible(query, &validated, request, matcher)
         }
-        SearchScope::Visible => search_visible(query, fixed, request, matcher),
+        SearchScope::Visible => {
+            let reader = FixedSectionReader::new_validated(&validated)
+                .map_err(|_| SearchError::ContentProjection)?;
+            search_visible(query, reader.fixed(), &reader, request, matcher)
+        }
         SearchScope::Markdown => search_markdown(query, request, matcher),
     }
 }
 
 fn search_mixed_visible(
     query: &ResolvedContent,
-    fixed: &FixedBody,
+    validated: &ValidatedFixedBody<'_>,
     request: &SearchQuery,
     matcher: &grep_regex::RegexMatcher,
 ) -> Result<QuerySearch, SearchError> {
@@ -96,7 +101,10 @@ fn search_mixed_visible(
         limit: remaining.max(1),
         ..request.clone()
     };
-    let mut manual = search_visible(query, fixed, &fixed_request, matcher)?;
+    let reader =
+        FixedSectionReader::new_validated(validated).map_err(|_| SearchError::ContentProjection)?;
+    let fixed = reader.fixed();
+    let mut manual = search_visible(query, fixed, &reader, &fixed_request, matcher)?;
     let total = quick
         .total
         .checked_add(manual.total)

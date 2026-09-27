@@ -15,10 +15,10 @@ use super::{
 pub(super) fn search_visible(
     query: &ResolvedContent,
     fixed: &FixedBody,
+    reader: &FixedSectionReader<'_>,
     request: &SearchQuery,
     matcher: &grep_regex::RegexMatcher,
 ) -> Result<QuerySearch, SearchError> {
-    let reader = FixedSectionReader::new(fixed).map_err(|_| SearchError::ContentProjection)?;
     let units = FixedVisibleUnits::new(fixed)?;
     let mut projection = SearchContentProjection {
         fragments: Vec::new(),
@@ -31,7 +31,7 @@ pub(super) fn search_visible(
     for unit in units.iter() {
         search_unit(
             fixed,
-            &reader,
+            reader,
             unit,
             request,
             matcher,

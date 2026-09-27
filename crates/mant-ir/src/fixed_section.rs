@@ -74,6 +74,27 @@ pub struct FixedSectionPart<'a> {
     pub run_column: u32,
 }
 
+/// An immutable Fixed body after its full structural validation.
+///
+/// This borrowed proof cannot outlive or be mutated independently of the
+/// body. It lets an operation check source relations between body validation
+/// and section-index construction without repeating the body check.
+#[doc(hidden)]
+pub struct ValidatedFixedBody<'a> {
+    fixed: &'a FixedBody,
+}
+
+impl<'a> ValidatedFixedBody<'a> {
+    /// Validate once and borrow the unchanged body for this operation.
+    ///
+    /// # Errors
+    /// Returns any malformed display or mark relationship.
+    pub fn new(fixed: &'a FixedBody) -> Result<Self, FixedBodyError> {
+        fixed.validate()?;
+        Ok(Self { fixed })
+    }
+}
+
 /// A checked borrowed view of a Fixed section hierarchy.
 ///
 /// Its sidecar is linear in native marks. It keeps neither a body string nor
@@ -98,9 +119,20 @@ impl<'a> FixedSectionReader<'a> {
     /// # Errors
     /// Returns malformed body references or overlapping section bytes.
     pub fn new(fixed: &'a FixedBody) -> Result<Self, FixedSectionReadError> {
-        fixed
-            .validate()
-            .map_err(FixedSectionReadError::InvalidBody)?;
+        let validated =
+            ValidatedFixedBody::new(fixed).map_err(FixedSectionReadError::InvalidBody)?;
+        Self::new_validated(&validated)
+    }
+
+    /// Build the section index from a body validated in this immutable operation.
+    ///
+    /// # Errors
+    /// Returns overlapping sections or ambiguous native boundaries.
+    #[doc(hidden)]
+    pub fn new_validated(
+        validated: &ValidatedFixedBody<'a>,
+    ) -> Result<Self, FixedSectionReadError> {
+        let fixed = validated.fixed;
         let mut children = vec![Vec::new(); fixed.headings.len() + 1];
         let mut sibling_ordinals = Vec::with_capacity(fixed.headings.len());
         for heading in &fixed.headings {

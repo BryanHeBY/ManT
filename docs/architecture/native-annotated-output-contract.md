@@ -590,7 +590,12 @@ keeps raw ABI declarations, a handle-bound checked view, coverage transfer,
 and owned transfer separate; `mant-codec/annotated_fixed` separates identity
 allocation, typed mark projection, and diagnostics under one assembly entry;
 `mant-ir/fixed_body` separates the public model, read-time owner/head evidence
-closure, and surface/mark validation.
+closure, checked selection mapping, and surface/mark validation. The R04
+closeout shares first-occurrence name grouping between Fixed projection and
+read-time validation. Fixed visible search carries an immutable validation
+proof through source checking into the section reader, avoiding a second full
+Fixed-body check while preserving the Fixed → source → TLDR → section error
+order. This is operation-local; no mutable document stores a validated flag.
 These are internal moves, not new response models or another render path.
 The native collector remained one state writer through R04. Its pre-R05
 internal split keeps one per-render session and one event order:
