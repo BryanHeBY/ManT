@@ -704,10 +704,22 @@ impl FixedBody {
         owner: &OwnerMark,
         nested: bool,
     ) -> Result<Option<FixedNonOptionRecognition>, FixedNonOptionLimit> {
-        self.native_literal_declaration_for_kind(
-            owner,
-            self.literal_entry_kind_with_context(owner, nested),
-        )
+        // Configuration keys can carry a value suffix in the same Cm
+        // instance. Bind their visible name with the section's base syntax
+        // before parent context weakens the category; Term syntax would
+        // otherwise reinterpret `child=value` as one different name.
+        let base = self.base_literal_entry_kind(owner);
+        let mut recognition = self.native_literal_declaration_for_kind(owner, base)?;
+        if nested
+            && let Some(recognition) = &mut recognition
+            && matches!(
+                recognition.kind,
+                EntryKind::Command | EntryKind::ConfigurationKey
+            )
+        {
+            recognition.kind = EntryKind::Term;
+        }
+        Ok(recognition)
     }
 
     #[expect(
@@ -2135,13 +2147,18 @@ impl FixedBody {
         if owner.head_role == Some(OwnerHeadRole::Literal) {
             let (name, selection) = self.literal_command_component(owner)?;
             let end = start.checked_add(name.len())?;
-            let kind = self.literal_entry_kind_with_context(owner, nested);
+            // This conservative fallback must obey the same base syntax as
+            // the complete Literal scan. Parent context may weaken the
+            // category only after the prefix has passed that syntax; it
+            // cannot turn an unbound key/value spelling into a Term name.
+            let base_kind = self.base_literal_entry_kind(owner);
+            let kind = if nested { EntryKind::Term } else { base_kind };
             if form.get(start..end) != Some(name.as_str())
                 || !form.get(end..).is_some_and(|suffix| {
                     suffix.is_empty() || suffix.starts_with(char::is_whitespace)
                 })
                 || self.selection_subrange(&owner.head, start..end).as_ref() != Some(selection)
-                || kind == EntryKind::ConfigurationKey
+                || base_kind == EntryKind::ConfigurationKey
                     && (crate::configuration_key_declaration_range(&name) != Some(0..name.len())
                         || !form
                             .get(end..)

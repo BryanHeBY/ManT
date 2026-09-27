@@ -1195,6 +1195,112 @@ fn nested_literal_names_keep_bindings_but_not_parent_key_or_command_type() {
 }
 
 #[test]
+fn nested_literal_keys_keep_base_name_ranges_when_only_the_category_downgrades() {
+    // Each exact top-level and nested input ran pinned CVS -Tutf8 -Owidth=78
+    // before these assertions. mdoc_macro.c::blk_full keeps the nested It
+    // HEAD; mdoc_term.c::termp_it_pre/termp_bold_pre render the same Cm
+    // spelling. Parent context changes ManT's category, not the authored
+    // component's visible key/value boundary or its display selection.
+    for (head, expected) in [
+        ("child=value", &["child"][..]),
+        ("child[=value]", &["child"][..]),
+        ("child=[yes|no]", &["child"][..]),
+        ("child=value , Cm other=no", &["child", "other"][..]),
+    ] {
+        for nested in [false, true] {
+            let prefix = if nested {
+                ".Dd September 27, 2026\n.Dt T 5\n.Os\n.Sh CONFIGURATION\n.Bl -tag -width Ds\n.It Cm parent\nParent.\n.Bl -tag -width Ds\n"
+            } else {
+                ".Dd September 27, 2026\n.Dt T 5\n.Os\n.Sh CONFIGURATION\n.Bl -tag -width Ds\n"
+            };
+            let suffix = if nested { ".El\n.El\n" } else { ".El\n" };
+            let input = format!("{prefix}.It Cm {head}\nChild description.\n{suffix}");
+            let document =
+                project_annotated_manual("t.1", &bundle(input.as_bytes()), InputFormat::Mdoc)
+                    .unwrap();
+            assert!(
+                validate_document(&document).is_empty(),
+                "{head}, nested={nested}"
+            );
+            let DocumentBody::Fixed(fixed) = &document.body else {
+                panic!("not Fixed")
+            };
+            let owner = &fixed.owners[usize::from(nested)];
+            assert_group(
+                fixed,
+                owner,
+                if nested {
+                    EntryKind::Term
+                } else {
+                    EntryKind::ConfigurationKey
+                },
+                expected,
+                mant_ir::EntryNameEvidence::NativeMarkup,
+            );
+            for name in expected {
+                assert_direct_explain(&document, name, "Child description.");
+            }
+            let decoded: mant_ir::Document =
+                serde_json::from_value(serde_json::to_value(&document).unwrap()).unwrap();
+            assert!(validate_document(&decoded).is_empty());
+            for name in expected {
+                assert_direct_explain(&decoded, name, "Child description.");
+            }
+        }
+    }
+}
+
+#[test]
+fn nested_literal_fallback_cannot_rebind_a_rejected_key_value_component() {
+    // Both exact inputs ran pinned CVS -Tutf8 -Owidth=78 first. The nested
+    // It HEAD and Cm/Ar glyphs survive mdoc_macro.c::blk_full and
+    // mdoc_term.c::termp_it_pre/termp_bold_pre. An extra Ar makes the
+    // complete key declaration unproved; ancestry cannot then license a
+    // different name through the conservative native-prefix fallback.
+    let mut names = Vec::new();
+    for nested in [false, true] {
+        let prefix = if nested {
+            ".Dd September 27, 2026\n.Dt T 5\n.Os\n.Sh CONFIGURATION\n.Bl -tag -width Ds\n.It Cm parent\nParent.\n.Bl -tag -width Ds\n"
+        } else {
+            ".Dd September 27, 2026\n.Dt T 5\n.Os\n.Sh CONFIGURATION\n.Bl -tag -width Ds\n"
+        };
+        let suffix = if nested { ".El\n.El\n" } else { ".El\n" };
+        let input = format!("{prefix}.It Cm child=value Ar foo\nChild description.\n{suffix}");
+        let document =
+            project_annotated_manual("t.1", &bundle(input.as_bytes()), InputFormat::Mdoc).unwrap();
+        assert!(validate_document(&document).is_empty());
+        let DocumentBody::Fixed(fixed) = &document.body else {
+            panic!("not Fixed")
+        };
+        let owner = &fixed.owners[usize::from(nested)];
+        assert_eq!(
+            fixed.selection_text(&owner.head).as_deref(),
+            Some("child=value foo")
+        );
+        assert!(fixed.surface.text.contains("Child description."));
+        names.push(owner.entry.as_ref().map(|entry| entry.names.clone()));
+        let resolved = mant_ir::ResolvedContent {
+            address: None,
+            label: "T(5)".to_owned(),
+            document: Some(document),
+            tldr: None,
+        };
+        for requested in ["child", "child=value"] {
+            let response = mant_query::explain_query(
+                &resolved,
+                &ExplanationQuery {
+                    entry: requested.to_owned(),
+                    options: ExplanationOptions::default(),
+                },
+            )
+            .unwrap();
+            assert_eq!(response.counts.direct_entry.total, 0, "{requested}");
+        }
+    }
+    assert_eq!(names[0], names[1]);
+}
+
+#[test]
 fn nested_manual_calls_keep_their_checked_names_when_category_downgrades() {
     // This exact input ran pinned CVS -Tutf8 -Owidth=78 before assertion.
     // mdoc_macro.c::blk_full retains the nested It HEADs; mdoc_term.c::
