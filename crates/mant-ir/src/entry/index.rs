@@ -5,7 +5,7 @@ use super::{
 };
 use crate::{
     Block, ContentContext, ContentReadError, DisplayRole, Document, DocumentBodyRef, EntryOwner,
-    EntryOwnerView, FixedBody, NodeId, RegionKind, TextSelection,
+    EntryOwnerView, FixedBody, FixedEntryPass, NodeId, RegionKind, TextSelection,
 };
 use std::{collections::BTreeMap, num::NonZeroU32};
 
@@ -123,6 +123,7 @@ impl SemanticIndex {
         }
 
         let mut candidates = Vec::<FixedCandidate>::new();
+        let entry_pass = fixed.entry_pass();
         let mut nearest_entry: Vec<Option<usize>> = vec![None; fixed.owners.len() + 1];
         let mut root_counts = BTreeMap::<Option<NonZeroU32>, usize>::new();
         for owner in &fixed.owners {
@@ -133,7 +134,7 @@ impl SemanticIndex {
                 nearest_entry[owner.key.get() as usize] = parent;
                 continue;
             }
-            let Some(entry) = EntryOwnerView::fixed(fixed, owner)
+            let Some(entry) = EntryOwnerView::fixed_with_pass(&entry_pass, owner)
                 .and_then(|view| view.semantic_entry().ok().flatten())
             else {
                 nearest_entry[owner.key.get() as usize] = parent;
@@ -203,17 +204,18 @@ impl SemanticIndex {
                 result.root = entries;
             }
         }
-        result.build_fixed_reading_groups(fixed, root_hint_valid);
+        result.build_fixed_reading_groups(&entry_pass, root_hint_valid);
         result
     }
 
-    fn build_fixed_reading_groups(&mut self, fixed: &FixedBody, root_hint_valid: bool) {
+    fn build_fixed_reading_groups(&mut self, pass: &FixedEntryPass<'_>, root_hint_valid: bool) {
+        let fixed = pass.body();
         let (readable, has_body_parts) = fixed_owner_readability(fixed);
         self.fixed_group_by_member = vec![None; fixed.owners.len() + 1];
         for provider in &fixed.owners {
             if !readable[provider.key.get() as usize]
                 || !root_hint_valid && fixed.root_configuration_dependent(provider)
-                || fixed.validated_entry(provider).is_none()
+                || pass.validated_entry(provider).is_none()
             {
                 continue;
             }
@@ -229,7 +231,7 @@ impl SemanticIndex {
                 };
                 if has_body_parts[key.get() as usize]
                     || !root_hint_valid && fixed.root_configuration_dependent(owner)
-                    || fixed.validated_entry(owner).is_none()
+                    || pass.validated_entry(owner).is_none()
                 {
                     break;
                 }

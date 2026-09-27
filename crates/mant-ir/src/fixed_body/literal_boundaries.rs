@@ -14,6 +14,7 @@ struct VisibleScope {
     quote: Option<char>,
     closers: Vec<char>,
     uncertain: bool,
+    odd_backslashes: bool,
 }
 
 impl VisibleScope {
@@ -22,9 +23,29 @@ impl VisibleScope {
     }
 
     fn advance(&mut self, character: char, previous: Option<char>) {
+        // roff_escape.c::roff_escape_impl treats \e as a visible backslash;
+        // term.c::term_word emits it before the following special quote.
+        // An odd visible run escapes that quote, an even run does not. Keep
+        // the parity across Cm/Ar instance boundaries in this one HEAD pass.
+        let escaped = self.odd_backslashes;
+        self.odd_backslashes = character == '\\' && !escaped;
         if let Some(close) = self.quote {
-            if character == close {
+            if character == close && !escaped {
                 self.quote = None;
+            }
+            return;
+        }
+        if escaped
+            && matches!(
+                character,
+                '"' | '\'' | '“' | '”' | '‘' | '’' | '[' | ']' | '(' | ')' | '{' | '}' | '<' | '>'
+            )
+        {
+            // A visible backslash escapes a scope delimiter. Within an
+            // already open enclosure, keep that enclosure; outside one,
+            // conservatively reject any later name restart.
+            if self.closers.is_empty() {
+                self.uncertain = true;
             }
             return;
         }

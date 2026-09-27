@@ -5,8 +5,9 @@
 //! selection and native role pass `FixedBody::validated_entry`.
 
 use crate::{
-    ContentContext, ContentReadError, EntryFacts, EntryOwner, FixedBody, Inline, InlineView,
-    OwnerMark, SemanticDocumentTarget, SemanticEntry, SourceSpan, TextSelection, ValueDomain,
+    ContentContext, ContentReadError, EntryFacts, EntryOwner, FixedBody, FixedEntryPass, Inline,
+    InlineView, OwnerMark, SemanticDocumentTarget, SemanticEntry, SourceSpan, TextSelection,
+    ValueDomain,
 };
 
 /// One borrowed owner; semantic projection checks body-specific references.
@@ -48,6 +49,12 @@ impl<'a> EntryOwnerView<'a> {
             return None;
         }
         let facts = body.validated_entry(owner)?;
+        Some(Self(OwnerBackend::Fixed { owner, body, facts }))
+    }
+
+    pub(crate) fn fixed_with_pass(pass: &FixedEntryPass<'a>, owner: &'a OwnerMark) -> Option<Self> {
+        let body = pass.body();
+        let facts = pass.validated_entry(owner)?;
         Some(Self(OwnerBackend::Fixed { owner, body, facts }))
     }
 

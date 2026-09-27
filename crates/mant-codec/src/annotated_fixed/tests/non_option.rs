@@ -1195,6 +1195,118 @@ fn nested_literal_names_keep_bindings_but_not_parent_key_or_command_type() {
 }
 
 #[test]
+fn nested_manual_calls_keep_their_checked_names_when_category_downgrades() {
+    // This exact input ran pinned CVS -Tutf8 -Owidth=78 before assertion.
+    // mdoc_macro.c::blk_full retains the nested It HEADs; mdoc_term.c::
+    // termp_xr_pre renders Xr as name(section), and termp_it_pre only lays
+    // out each label. Parent context changes the ManT category, not the
+    // independently visible manual-call name or its source-bound selection.
+    let input = b".Dd September 27, 2026\n.Dt T 1\n.Os\n.Sh COMMANDS\n.Bl -tag -width Ds\n.It Cm run\nOuter.\n.Bl -tag -width Ds\n.It Cm child(1)\nCm child.\n.It Xr other 1\nXr child.\n.It Sy third(1)\nSy child.\n.It fourth(1)\nPlain child.\n.El\n.El\n";
+    let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Mdoc).unwrap();
+    assert!(validate_document(&document).is_empty());
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        panic!("not Fixed")
+    };
+    assert_eq!(fixed.owners.len(), 5);
+    for (owner, (name, body)) in fixed.owners[1..].iter().zip([
+        ("child", "Cm child."),
+        ("other", "Xr child."),
+        ("third", "Sy child."),
+        ("fourth", "Plain child."),
+    ]) {
+        assert_eq!(owner.entry.as_ref().unwrap().kind, EntryKind::Term);
+        assert_eq!(owner.entry.as_ref().unwrap().names, [name]);
+        assert_direct_explain(&document, name, body);
+    }
+    let decoded: mant_ir::Document =
+        serde_json::from_value(serde_json::to_value(&document).unwrap()).unwrap();
+    assert!(validate_document(&decoded).is_empty());
+}
+
+#[test]
+fn escaped_visible_quote_cannot_close_a_literal_argument() {
+    // This exact input ran pinned CVS -Tutf8 -Owidth=78 before assertion.
+    // roff_escape.c::roff_escape_impl decodes \e as a visible backslash;
+    // term.c::term_word emits it before the special quote. The first quote
+    // after one backslash remains inside the argument until the later quote.
+    let input = b".Dd September 27, 2026\n.Dt T 1\n.Os\n.Sh COMMANDS\n.Bl -tag -width Ds\n.It Cm run Ar \\(dqfirst\\e\\(dq , Cm fake Ar \\e\\(dqlast\\(dq , Cm next\nBODY.\n.El\n";
+    let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Mdoc).unwrap();
+    assert!(validate_document(&document).is_empty());
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        panic!("not Fixed")
+    };
+    assert_group(
+        fixed,
+        &fixed.owners[0],
+        EntryKind::Command,
+        &["run", "next"],
+        mant_ir::EntryNameEvidence::NativeMarkup,
+    );
+    assert_direct_explain(&document, "next", "BODY.");
+    let resolved = mant_ir::ResolvedContent {
+        address: None,
+        label: "T(1)".to_owned(),
+        document: Some(document),
+        tldr: None,
+    };
+    let fake = mant_query::explain_query(
+        &resolved,
+        &ExplanationQuery {
+            entry: "fake".to_owned(),
+            options: ExplanationOptions::default(),
+        },
+    )
+    .unwrap();
+    assert_eq!(fake.counts.direct_entry.total, 0);
+}
+
+#[test]
+fn visible_backslash_parity_crosses_native_argument_components() {
+    // This exact two-item input ran pinned CVS -Tutf8 -Owidth=78 first.
+    // term.c::term_word emits each \e before \(dq; two visible backslashes
+    // leave the following quote unescaped, while three keep it within the
+    // same Ar parameter across a later Cm component.
+    let input = b".Dd September 27, 2026\n.Dt T 1\n.Os\n.Sh COMMANDS\n.Bl -tag -width Ds\n.It Cm run Ar \\(dqfirst\\e\\e\\(dq , Cm next\nEven slashes.\n.It Cm run Ar \\(dqfirst\\e\\e\\e\\(dq , Cm fake Ar \\e\\(dqlast\\(dq , Cm next\nOdd slashes.\n.El\n";
+    let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Mdoc).unwrap();
+    assert!(validate_document(&document).is_empty());
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        panic!("not Fixed")
+    };
+    assert_eq!(fixed.owners.len(), 2);
+    for owner in &fixed.owners {
+        assert_group(
+            fixed,
+            owner,
+            EntryKind::Command,
+            &["run", "next"],
+            mant_ir::EntryNameEvidence::NativeMarkup,
+        );
+    }
+}
+
+#[test]
+fn escaped_visible_bracket_keeps_the_argument_open_across_components() {
+    // This exact input ran pinned CVS -Tutf8 -Owidth=78 first. The visible
+    // backslash comes from roff_escape.c::roff_escape_impl and is emitted by
+    // term.c::term_word before the bracket; only the later unescaped `]`
+    // closes the Ar parameter across the intervening Cm instance.
+    let input = b".Dd September 27, 2026\n.Dt T 1\n.Os\n.Sh COMMANDS\n.Bl -tag -width Ds\n.It Cm run Ar \"[first\\e]\" , Cm fake Ar \"last]\" , Cm next\nBODY.\n.El\n";
+    let document = project_annotated_manual("t.1", &bundle(input), InputFormat::Mdoc).unwrap();
+    assert!(validate_document(&document).is_empty());
+    let DocumentBody::Fixed(fixed) = &document.body else {
+        panic!("not Fixed")
+    };
+    assert_group(
+        fixed,
+        &fixed.owners[0],
+        EntryKind::Command,
+        &["run", "next"],
+        mant_ir::EntryNameEvidence::NativeMarkup,
+    );
+    assert_direct_explain(&document, "next", "BODY.");
+}
+
+#[test]
 fn expanded_va_dv_keep_source_key_only_role_and_display_binding() {
     // Exact macro-expanded input ran pinned CVS -Tutf8 before assertion.
     // mdoc_macro.c::in_line executes Va/Dv even when the expansion does not

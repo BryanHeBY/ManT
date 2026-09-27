@@ -95,6 +95,7 @@ impl DocumentIndex {
                 let all_entries_valid = fixed_validation
                     .and_then(|proof| proof.result_for(fixed))
                     .is_some_and(Result::is_ok);
+                let entry_pass = (!all_entries_valid).then(|| fixed.entry_pass());
                 let root_hint_valid = document.fixed_root_configuration_hint_valid();
                 // The codec assigned normalized identities independently of
                 // native mark keys. Keep raw declarations as provenance and
@@ -121,7 +122,9 @@ impl DocumentIndex {
                         continue;
                     }
                     if !(all_entries_valid && owner.entry.is_some())
-                        && fixed.validated_entry(owner).is_none()
+                        && entry_pass
+                            .as_ref()
+                            .is_none_or(|pass| pass.validated_entry(owner).is_none())
                     {
                         continue;
                     }

@@ -312,6 +312,7 @@ fn lower_annotated_document_inner(page: &mut AnnotatedDocument) -> Result<Docume
         // The checked native head is a borrowed display selection, not a
         // reconstructed Flow term. Keep its initial conservative identity in the
         // document so serialization and index rebuilding cannot diverge.
+        let entry_pass = fixed.entry_pass();
         let entries = fixed
             .owners
             .iter()
@@ -357,7 +358,7 @@ fn lower_annotated_document_inner(page: &mut AnnotatedDocument) -> Result<Docume
                         value_domain: None,
                     });
                 }
-                if let Some(recognition) = fixed.manual_call_declaration(owner) {
+                if let Some(recognition) = entry_pass.manual_call_declaration(owner) {
                     let (names, name_bindings) =
                         group_bindings(recognition.occurrences, recognition.evidence);
                     return Some(EntryFacts {
@@ -372,7 +373,7 @@ fn lower_annotated_document_inner(page: &mut AnnotatedDocument) -> Result<Docume
                         value_domain: None,
                     });
                 }
-                let non_option = match fixed.scan_non_option_declaration(owner) {
+                let non_option = match entry_pass.scan_non_option_declaration(owner) {
                     Ok(recognition) => recognition,
                     Err(mant_ir::FixedNonOptionLimit::TooManyNames) => {
                         isolation_diagnostics.push(isolation::rejected_annotation(
@@ -537,13 +538,13 @@ fn lower_annotated_document_inner(page: &mut AnnotatedDocument) -> Result<Docume
                         alias_of: None,
                         forms: vec![selection],
                         id: owner.id.clone(),
-                        kind: fixed.partial_literal_entry_kind(owner),
+                        kind: entry_pass.partial_literal_entry_kind(owner),
                         case: NameCase::Sensitive,
                         names: vec![name],
                         value_domain: None,
                     });
                 };
-                let identity = fixed.native_head_identity(owner, &form);
+                let identity = entry_pass.native_head_identity(owner, &form);
                 let (kind, evidence, name, occurrence) = identity.unwrap_or_else(|| {
                     (
                         EntryKind::Term,
@@ -573,6 +574,7 @@ fn lower_annotated_document_inner(page: &mut AnnotatedDocument) -> Result<Docume
                 })
             })
             .collect::<Vec<_>>();
+        drop(entry_pass);
         for (owner, entry) in fixed.owners.iter_mut().zip(entries) {
             owner.entry = entry;
         }

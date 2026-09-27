@@ -444,9 +444,6 @@ impl FixedBody {
             if super::component_part_ranges(&owner.head, &owner.head_components).is_none() {
                 return Err(FixedBodyError("head component escapes owner head"));
             }
-            if owner.entry.is_some() && self.validated_entry(owner).is_none() {
-                return Err(FixedBodyError("invalid fixed entry facts"));
-            }
             if selections_overlap(&owner.head, &owner.direct_body) {
                 return Err(FixedBodyError("owner head and direct body overlap"));
             }
@@ -579,6 +576,14 @@ impl FixedBody {
             reference(run.label.link, self.links.len())?;
             if run.label.link.is_some() && link_covered_bytes[index] != run.byte_count {
                 return Err(FixedBodyError("link label does not cover its labeled run"));
+            }
+        }
+        // Semantic proof may read ancestor selections. Build it only after
+        // every surface, owner, region, and label reference has been checked.
+        let entry_pass = self.entry_pass();
+        for owner in &self.owners {
+            if owner.entry.is_some() && entry_pass.validated_entry(owner).is_none() {
+                return Err(FixedBodyError("invalid fixed entry facts"));
             }
         }
         Ok(())

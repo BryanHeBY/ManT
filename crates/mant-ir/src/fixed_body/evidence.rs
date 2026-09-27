@@ -73,7 +73,123 @@ pub enum FixedNonOptionLimit {
     TooManyComponents,
 }
 
+/// One immutable owner pass. Parent proofs are evaluated once, before their
+/// children, and are never stored in the document or trusted after mutation.
+#[doc(hidden)]
+pub struct FixedEntryPass<'a> {
+    body: &'a FixedBody,
+    nested: Vec<bool>,
+}
+
+impl<'a> FixedEntryPass<'a> {
+    fn new(body: &'a FixedBody) -> Self {
+        let count = body.owners.len();
+        let mut has_child = vec![false; count];
+        for owner in &body.owners {
+            if let Some(parent) = owner.parent
+                && let Some(slot) = has_child.get_mut((parent.get() - 1) as usize)
+            {
+                *slot = true;
+            }
+        }
+        let mut nested = vec![false; count];
+        let mut establishes = vec![false; count];
+        let mut depth = vec![0_u8; count];
+        for (index, owner) in body.owners.iter().enumerate() {
+            if let Some(parent) = owner.parent {
+                let parent = (parent.get() - 1) as usize;
+                if parent >= index {
+                    nested[index] = true;
+                    depth[index] = 65;
+                } else {
+                    depth[index] = depth[parent].saturating_add(1);
+                    nested[index] = nested[parent] || establishes[parent] || depth[index] > 64;
+                }
+            }
+            if has_child[index] {
+                establishes[index] = body.owner_establishes_semantic_context(owner);
+            }
+        }
+        Self { body, nested }
+    }
+
+    fn nested_for(&self, owner: &OwnerMark) -> bool {
+        let index = (owner.key.get() - 1) as usize;
+        self.body
+            .owners
+            .get(index)
+            .is_none_or(|stored| !std::ptr::eq(stored, owner))
+            || self.nested.get(index).copied().unwrap_or(true)
+    }
+
+    /// Reuse this pass's checked ancestry for one native manual-call name.
+    #[must_use]
+    pub fn manual_call_declaration(&self, owner: &OwnerMark) -> Option<FixedNonOptionRecognition> {
+        self.body
+            .manual_call_declaration_with_context(owner, self.nested_for(owner))
+    }
+
+    /// Reuse checked ancestry for one complete non-option HEAD.
+    ///
+    /// # Errors
+    /// Returns a semantic budget limit without hiding the native text.
+    pub fn scan_non_option_declaration(
+        &self,
+        owner: &OwnerMark,
+    ) -> Result<Option<FixedNonOptionRecognition>, FixedNonOptionLimit> {
+        self.body
+            .scan_non_option_declaration_with_context(owner, self.nested_for(owner))
+    }
+
+    /// Keep a partial native name while using the current parent category.
+    #[must_use]
+    pub fn partial_literal_entry_kind(&self, owner: &OwnerMark) -> EntryKind {
+        self.body
+            .partial_literal_entry_kind_with_context(owner, self.nested_for(owner))
+    }
+
+    /// Bind one visible native prefix to its checked category.
+    #[must_use]
+    pub fn native_head_identity(
+        &self,
+        owner: &OwnerMark,
+        form: &str,
+    ) -> Option<(EntryKind, EntryNameEvidence, String, TextSelection)> {
+        self.body
+            .native_head_identity_with_context(owner, form, self.nested_for(owner))
+    }
+
+    /// Validate one owner's facts against this immutable operation snapshot.
+    #[must_use]
+    pub(crate) fn validated_entry<'b>(
+        &self,
+        owner: &'b OwnerMark,
+    ) -> Option<&'b EntryFacts<TextSelection>> {
+        let index = (owner.key.get() - 1) as usize;
+        if !self
+            .body
+            .owners
+            .get(index)
+            .is_some_and(|stored| std::ptr::eq(stored, owner))
+        {
+            return None;
+        }
+        self.body
+            .validated_entry_with_context(owner, self.nested_for(owner))
+    }
+
+    pub(crate) const fn body(&self) -> &'a FixedBody {
+        self.body
+    }
+}
+
 impl FixedBody {
+    /// Build a transient parent-first semantic proof for one immutable pass.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn entry_pass(&self) -> FixedEntryPass<'_> {
+        FixedEntryPass::new(self)
+    }
     /// Prove a non-option declaration once over the full native HEAD. Explicit
     /// Ev/Va/Dv components have stronger evidence than a lexical ENVIRONMENT
     /// head; neither font appearance nor raw roff spelling supplies a name.
@@ -93,12 +209,23 @@ impl FixedBody {
         &self,
         owner: &OwnerMark,
     ) -> Result<Option<FixedNonOptionRecognition>, FixedNonOptionLimit> {
+        self.scan_non_option_declaration_with_context(
+            owner,
+            self.nested_under_semantic_parent(owner),
+        )
+    }
+
+    fn scan_non_option_declaration_with_context(
+        &self,
+        owner: &OwnerMark,
+        nested: bool,
+    ) -> Result<Option<FixedNonOptionRecognition>, FixedNonOptionLimit> {
         if owner.role != OwnerRole::Definition {
             return Ok(None);
         }
         if owner.hanging_candidate {
             return if self.hanging_structure_ready(owner) {
-                self.contextual_lexical_non_option_declaration(owner, true)
+                self.contextual_lexical_non_option_declaration(owner, true, nested)
             } else {
                 Ok(None)
             };
@@ -107,8 +234,10 @@ impl FixedBody {
             return Ok(None);
         };
         match head_role {
-            OwnerHeadRole::Lexical => self.contextual_lexical_non_option_declaration(owner, false),
-            OwnerHeadRole::Literal => self.native_literal_declaration(owner),
+            OwnerHeadRole::Lexical => {
+                self.contextual_lexical_non_option_declaration(owner, false, nested)
+            }
+            OwnerHeadRole::Literal => self.native_literal_declaration_with_context(owner, nested),
             OwnerHeadRole::Option
             | OwnerHeadRole::Environment
             | OwnerHeadRole::Variable
@@ -267,14 +396,21 @@ impl FixedBody {
         &self,
         owner: &OwnerMark,
         hanging: bool,
+        nested: bool,
     ) -> Result<Option<FixedNonOptionRecognition>, FixedNonOptionLimit> {
-        // A real nested definition inherits its semantic parent context, not
-        // the section title alone. Keep the base lexical proof separate so
-        // ancestor checks never consult mutable EntryFacts or recurse.
-        if self.nested_under_semantic_parent(owner) {
-            return Ok(None);
+        // A semantic parent changes the weak section-derived category, not
+        // the independently checked name or its surviving display range.
+        let mut recognition = self.lexical_non_option_declaration(owner, hanging)?;
+        if nested
+            && let Some(recognition) = &mut recognition
+            && matches!(
+                recognition.kind,
+                EntryKind::Command | EntryKind::ConfigurationKey
+            )
+        {
+            recognition.kind = EntryKind::Term;
         }
-        self.lexical_non_option_declaration(owner, hanging)
+        Ok(recognition)
     }
 
     fn section_declaration_family(
@@ -303,7 +439,11 @@ impl FixedBody {
     #[doc(hidden)]
     #[must_use]
     pub fn literal_entry_kind(&self, owner: &OwnerMark) -> EntryKind {
-        if self.nested_under_semantic_parent(owner) {
+        self.literal_entry_kind_with_context(owner, self.nested_under_semantic_parent(owner))
+    }
+
+    fn literal_entry_kind_with_context(&self, owner: &OwnerMark, nested: bool) -> EntryKind {
+        if nested {
             // Options, keys and commands put their child definitions in value
             // or parameter context. No checked Value subtype exists here, so
             // keep independently bound native names as Terms.
@@ -386,11 +526,8 @@ impl FixedBody {
 
     fn nested_under_semantic_parent(&self, owner: &OwnerMark) -> bool {
         let mut parent = owner.parent;
-        // Validation requires every parent key to precede its child. This
-        // bounded walk recomputes the parent proof from immutable native HEAD
-        // evidence: production has not yet filled owner.entry, while a
-        // detached IR may carry stale or forged EntryFacts. No recursive
-        // validated_entry() calls or whole-document context cache are needed.
+        // Single-owner callers use this bounded proof; whole-owner passes
+        // use FixedEntryPass to prove each relevant parent only once.
         for _ in 0..64 {
             let Some(key) = parent else {
                 return false;
@@ -398,54 +535,55 @@ impl FixedBody {
             let Some(ancestor) = self.owners.get((key.get() - 1) as usize) else {
                 return true;
             };
-            if ancestor.head_role == Some(OwnerHeadRole::Option) {
+            if self.owner_establishes_semantic_context(ancestor) {
                 return true;
-            }
-            if ancestor.role == OwnerRole::Definition {
-                let hanging_ready =
-                    !ancestor.hanging_candidate || self.hanging_structure_ready(ancestor);
-                if ancestor.head_role == Some(OwnerHeadRole::Lexical)
-                    && hanging_ready
-                    && self
-                        .lexical_names(ancestor)
-                        .is_some_and(|names| !names.is_empty())
-                {
-                    return true;
-                }
-                if ancestor.head_role == Some(OwnerHeadRole::Literal) {
-                    let base = self.base_literal_entry_kind(ancestor);
-                    if matches!(base, EntryKind::Command | EntryKind::ConfigurationKey)
-                        && self
-                            .native_literal_declaration_for_kind(ancestor, base)
-                            .ok()
-                            .flatten()
-                            .is_some_and(|recognition| recognition.kind == base)
-                    {
-                        return true;
-                    }
-                }
-                if self.manual_call_declaration_base(ancestor).is_some() {
-                    return true;
-                }
-                if ancestor.head_role == Some(OwnerHeadRole::Lexical)
-                    && hanging_ready
-                    && self
-                        .lexical_non_option_declaration(ancestor, ancestor.hanging_candidate)
-                        .ok()
-                        .flatten()
-                        .is_some_and(|recognition| {
-                            matches!(
-                                recognition.kind,
-                                EntryKind::Command | EntryKind::ConfigurationKey
-                            )
-                        })
-                {
-                    return true;
-                }
             }
             parent = ancestor.parent;
         }
         parent.is_some()
+    }
+
+    fn owner_establishes_semantic_context(&self, owner: &OwnerMark) -> bool {
+        if owner.head_role == Some(OwnerHeadRole::Option) {
+            return true;
+        }
+        if owner.role != OwnerRole::Definition {
+            return false;
+        }
+        let hanging_ready = !owner.hanging_candidate || self.hanging_structure_ready(owner);
+        if owner.head_role == Some(OwnerHeadRole::Lexical)
+            && hanging_ready
+            && self
+                .lexical_names(owner)
+                .is_some_and(|names| !names.is_empty())
+        {
+            return true;
+        }
+        if owner.head_role == Some(OwnerHeadRole::Literal) {
+            let base = self.base_literal_entry_kind(owner);
+            if matches!(base, EntryKind::Command | EntryKind::ConfigurationKey)
+                && self
+                    .native_literal_declaration_for_kind(owner, base)
+                    .ok()
+                    .flatten()
+                    .is_some_and(|recognition| recognition.kind == base)
+            {
+                return true;
+            }
+        }
+        self.manual_call_declaration_base(owner).is_some()
+            || owner.head_role == Some(OwnerHeadRole::Lexical)
+                && hanging_ready
+                && self
+                    .lexical_non_option_declaration(owner, owner.hanging_candidate)
+                    .ok()
+                    .flatten()
+                    .is_some_and(|recognition| {
+                        matches!(
+                            recognition.kind,
+                            EntryKind::Command | EntryKind::ConfigurationKey
+                        )
+                    })
     }
 
     /// An Xo HEAD with an unknown later join cannot prove a complete key.
@@ -453,7 +591,18 @@ impl FixedBody {
     #[doc(hidden)]
     #[must_use]
     pub fn partial_literal_entry_kind(&self, owner: &OwnerMark) -> EntryKind {
-        match self.literal_entry_kind(owner) {
+        self.partial_literal_entry_kind_with_context(
+            owner,
+            self.nested_under_semantic_parent(owner),
+        )
+    }
+
+    fn partial_literal_entry_kind_with_context(
+        &self,
+        owner: &OwnerMark,
+        nested: bool,
+    ) -> EntryKind {
+        match self.literal_entry_kind_with_context(owner, nested) {
             EntryKind::ConfigurationKey => EntryKind::Term,
             kind => kind,
         }
@@ -550,11 +699,15 @@ impl FixedBody {
     /// Ic/Cm instances. Only parameter-external separators can restart a
     /// declaration; instances inside one Ar enclosure remain visible but
     /// cannot become independent names.
-    fn native_literal_declaration(
+    fn native_literal_declaration_with_context(
         &self,
         owner: &OwnerMark,
+        nested: bool,
     ) -> Result<Option<FixedNonOptionRecognition>, FixedNonOptionLimit> {
-        self.native_literal_declaration_for_kind(owner, self.literal_entry_kind(owner))
+        self.native_literal_declaration_for_kind(
+            owner,
+            self.literal_entry_kind_with_context(owner, nested),
+        )
     }
 
     #[expect(
@@ -640,10 +793,7 @@ impl FixedBody {
                         // bracket is still an argument. Retain its display
                         // and scan the rest of the HEAD for a later, real
                         // separator rather than rejecting all earlier names.
-                        if names.is_empty()
-                            || !current_bare_name
-                            || !gap.chars().all(char::is_whitespace)
-                        {
+                        if names.is_empty() || !current_bare_name {
                             return Ok(None);
                         }
                         previous_end = range.end;
@@ -967,9 +1117,19 @@ impl FixedBody {
     /// executes the visible HEAD, and `pre_RS` only establishes indentation.
     #[must_use]
     pub fn manual_call_declaration(&self, owner: &OwnerMark) -> Option<FixedNonOptionRecognition> {
-        (!self.nested_under_semantic_parent(owner))
-            .then(|| self.manual_call_declaration_base(owner))
-            .flatten()
+        self.manual_call_declaration_with_context(owner, self.nested_under_semantic_parent(owner))
+    }
+
+    fn manual_call_declaration_with_context(
+        &self,
+        owner: &OwnerMark,
+        nested: bool,
+    ) -> Option<FixedNonOptionRecognition> {
+        let mut recognition = self.manual_call_declaration_base(owner)?;
+        if nested {
+            recognition.kind = EntryKind::Term;
+        }
+        Some(recognition)
     }
 
     fn manual_call_declaration_base(&self, owner: &OwnerMark) -> Option<FixedNonOptionRecognition> {
@@ -1627,9 +1787,10 @@ impl FixedBody {
     /// document, without discarding the native body or valid sibling entries.
     #[must_use]
     pub fn invalid_entry_keys(&self) -> Vec<NonZeroU32> {
+        let pass = self.entry_pass();
         self.owners
             .iter()
-            .filter(|owner| owner.entry.is_some() && self.validated_entry(owner).is_none())
+            .filter(|owner| owner.entry.is_some() && pass.validated_entry(owner).is_none())
             .map(|owner| owner.key)
             .collect()
     }
@@ -1657,6 +1818,15 @@ impl FixedBody {
     pub(crate) fn validated_entry<'a>(
         &self,
         owner: &'a OwnerMark,
+    ) -> Option<&'a EntryFacts<TextSelection>> {
+        self.validated_entry_with_context(owner, self.nested_under_semantic_parent(owner))
+    }
+
+    #[allow(clippy::too_many_lines)] // One read-time closure of all entry fact variants.
+    fn validated_entry_with_context<'a>(
+        &self,
+        owner: &'a OwnerMark,
+        nested: bool,
     ) -> Option<&'a EntryFacts<TextSelection>> {
         let entry = owner.entry.as_ref()?;
         // A bullet/ordinal owner is a readable list item, not a definition.
@@ -1698,10 +1868,14 @@ impl FixedBody {
                 });
             return valid.then_some(entry);
         }
-        if let Some(recognition) = self.manual_call_declaration(owner) {
+        if let Some(recognition) = self.manual_call_declaration_with_context(owner, nested) {
             return Self::validated_non_option_names(owner, entry, recognition).then_some(entry);
         }
-        if let Some(recognition) = self.non_option_declaration(owner) {
+        if let Some(recognition) = self
+            .scan_non_option_declaration_with_context(owner, nested)
+            .ok()
+            .flatten()
+        {
             return Self::validated_non_option_names(owner, entry, recognition).then_some(entry);
         }
         if (self.unbound_environment_head(owner) || self.unbound_variable_head(owner))
@@ -1733,7 +1907,7 @@ impl FixedBody {
             // prove a complete command word; no other entry kind may borrow
             // this partial form or infer the rest of the HEAD.
             return self
-                .validated_partial_literal_name(owner, entry)
+                .validated_partial_literal_name(owner, entry, nested)
                 .then_some(entry);
         };
         let [only_form] = entry.forms.as_slice() else {
@@ -1829,6 +2003,7 @@ impl FixedBody {
                 &form,
                 only_name,
                 &binding.occurrences,
+                nested,
             ),
             _ => false,
         };
@@ -1889,6 +2064,7 @@ impl FixedBody {
         &self,
         owner: &OwnerMark,
         entry: &EntryFacts<TextSelection>,
+        nested: bool,
     ) -> bool {
         let Some((name, component)) = self.literal_command_component(owner) else {
             return false;
@@ -1901,7 +2077,7 @@ impl FixedBody {
             return false;
         };
         entry.id == owner.id
-            && entry.kind == self.partial_literal_entry_kind(owner)
+            && entry.kind == self.partial_literal_entry_kind_with_context(owner, nested)
             && entry.case == NameCase::Sensitive
             && entry.alias_groups.is_empty()
             && entry.alias_of.is_none()
@@ -1920,15 +2096,15 @@ impl FixedBody {
         form: &str,
         name: &str,
         occurrences: &[TextSelection],
+        nested: bool,
     ) -> bool {
-        self.native_head_identity(owner, form).is_some_and(
-            |(proved_kind, evidence, proved_name, selection)| {
+        self.native_head_identity_with_context(owner, form, nested)
+            .is_some_and(|(proved_kind, evidence, proved_name, selection)| {
                 proved_kind == kind
                     && evidence == EntryNameEvidence::NativeMarkup
                     && proved_name == name
                     && occurrences == std::slice::from_ref(&selection)
-            },
-        )
+            })
     }
 
     /// The same complete, surviving native prefix proof used by the Fixed
@@ -1941,12 +2117,25 @@ impl FixedBody {
         owner: &OwnerMark,
         form: &str,
     ) -> Option<(EntryKind, EntryNameEvidence, String, TextSelection)> {
+        self.native_head_identity_with_context(
+            owner,
+            form,
+            self.nested_under_semantic_parent(owner),
+        )
+    }
+
+    fn native_head_identity_with_context(
+        &self,
+        owner: &OwnerMark,
+        form: &str,
+        nested: bool,
+    ) -> Option<(EntryKind, EntryNameEvidence, String, TextSelection)> {
         let leading = form.trim_start();
         let start = form.len() - leading.len();
         if owner.head_role == Some(OwnerHeadRole::Literal) {
             let (name, selection) = self.literal_command_component(owner)?;
             let end = start.checked_add(name.len())?;
-            let kind = self.literal_entry_kind(owner);
+            let kind = self.literal_entry_kind_with_context(owner, nested);
             if form.get(start..end) != Some(name.as_str())
                 || !form.get(end..).is_some_and(|suffix| {
                     suffix.is_empty() || suffix.starts_with(char::is_whitespace)

@@ -399,7 +399,7 @@ fn is_false(value: &bool) -> bool {
 mod evidence;
 use evidence::component_part_ranges;
 mod literal_boundaries;
-pub use evidence::{FixedNonOptionLimit, FixedNonOptionRecognition};
+pub use evidence::{FixedEntryPass, FixedNonOptionLimit, FixedNonOptionRecognition};
 
 /// One native link macro instance, independent of its visible slice count.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
