@@ -95,6 +95,7 @@ version = "0.12.0"
 dependencies = [
  "schemars",
  "serde",
+ "unicode-segmentation",
  "unicode-width",
 ]
 
@@ -105,6 +106,8 @@ dependencies = [
  "mant-ir",
  "schemars",
  "serde",
+ "serde_json",
+ "unicode-width",
 ]
 
 [[package]]

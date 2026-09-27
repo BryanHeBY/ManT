@@ -1,14 +1,52 @@
 //! Embed the reader around authored IR without any loader or process lifecycle.
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use mant_ir::{
-    Block, Document, DocumentMeta, Inline, LayoutHint, ResolvedContent, Section, SourceCoordinates,
-    SourceFormat, SourceIdentity, SourceKey, SourceRecord,
+    Block, ContentOwnerKind, ContentRootKind, ContentStoreBuilder, ContentStyle, Document,
+    DocumentBody, DocumentMeta, FlowBody, Heading, Inline, LayoutHint, Provenance, ResolvedContent,
+    Section, SourceCoordinates, SourceFormat, SourceIdentity, SourceKey, SourceRecord,
 };
 use mant_ui::{App, ReaderOptions, ReaderServices};
 use ratatui::{Terminal, backend::TestBackend};
 use std::sync::Arc;
 
 fn content() -> ResolvedContent {
+    let mut builder = ContentStoreBuilder::new();
+    let document_owner = builder.push_owner(ContentOwnerKind::Document, Provenance::Unknown);
+    let document_heading_root = builder.push_root(
+        document_owner,
+        ContentRootKind::Heading,
+        Provenance::Unknown,
+    );
+    let document_heading = builder.push_text(
+        document_heading_root,
+        "Independent reader".into(),
+        None,
+        ContentStyle::default(),
+        None,
+        None,
+        Provenance::Unknown,
+    );
+    let owner = builder.push_owner(ContentOwnerKind::Section, Provenance::Unknown);
+    let heading_root = builder.push_root(owner, ContentRootKind::Heading, Provenance::Unknown);
+    let heading = builder.push_text(
+        heading_root,
+        "Overview".into(),
+        None,
+        ContentStyle::default(),
+        None,
+        None,
+        Provenance::Unknown,
+    );
+    let body_root = builder.push_root(owner, ContentRootKind::Body, Provenance::Unknown);
+    let body = builder.push_text(
+        body_root,
+        "Embedded Cafe\u{301} 👩‍💻".into(),
+        None,
+        ContentStyle::default(),
+        None,
+        None,
+        Provenance::Unknown,
+    );
     ResolvedContent {
         address: None,
         label: "Independent reader".into(),
@@ -27,25 +65,34 @@ fn content() -> ResolvedContent {
             }],
             root_source: SourceKey::FIRST,
             meta: DocumentMeta::default(),
-            heading: Some("Independent reader".into()),
             fragment_aliases: vec![],
             diagnostics: vec![],
-            blocks: vec![],
-            sections: vec![Section {
-                id: "overview".into(),
-                fragment_aliases: vec![],
-                heading: "Overview".into(),
-                spacing_before_lines: 0,
-                children: vec![],
-                source: None,
-                blocks: vec![Block::Paragraph {
-                    children: vec![Inline::Text {
-                        value: "Embedded Cafe\u{301} 👩‍💻".into(),
+            body: DocumentBody::Flow(FlowBody {
+                content_store: builder.finish(),
+                heading: Some(Heading {
+                    content: vec![Inline::Text {
+                        content: document_heading,
                     }],
-                    layout: LayoutHint::default(),
                     source: None,
+                }),
+                blocks: vec![],
+                sections: vec![Section {
+                    id: "overview".into(),
+                    fragment_aliases: vec![],
+                    heading: Heading {
+                        content: vec![Inline::Text { content: heading }],
+                        source: None,
+                    },
+                    spacing_before_lines: 0,
+                    children: vec![],
+                    source: None,
+                    blocks: vec![Block::Paragraph {
+                        children: vec![Inline::Text { content: body }],
+                        layout: LayoutHint::default(),
+                        source: None,
+                    }],
                 }],
-            }],
+            }),
         }),
     }
 }
@@ -87,8 +134,10 @@ fn check_reader() -> Result<(), Box<dyn std::error::Error>> {
     )));
     assert!(app.should_quit());
     assert_eq!(
-        source.document.as_ref().unwrap().sections[0].heading,
-        "Overview".into()
+        source.document.as_ref().unwrap().flow().unwrap().sections[0]
+            .heading
+            .plain_text(source.document.as_ref().unwrap().content()),
+        "Overview"
     );
     Ok(())
 }

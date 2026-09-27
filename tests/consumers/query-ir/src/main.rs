@@ -1,16 +1,17 @@
 //! Standalone queries over authored IR, with no parser, loader, or report renderer.
 
 use mant_ir::{
-    Block, DefinitionItem, DefinitionLayout, Document, DocumentAddress, DocumentMeta, EntryFacts,
-    EntryForm, EntryKind, EntryNameBinding, EntryNameEvidence, Inline, LayoutHint, LinkTarget,
-    MarkdownOrigin, NameCase, ReferenceScope, ResolvedContent, SourceCoordinates, SourceFormat,
-    SourceIdentity, SourceKey, SourceRecord,
+    Block, ContentOwnerKind, ContentRootKind, ContentStoreBuilder, ContentStyle, DefinitionItem,
+    DefinitionLayout, Document, DocumentAddress, DocumentBody, DocumentMeta, EntryFacts, EntryForm,
+    EntryKind, EntryNameBinding, EntryNameEvidence, FlowBody, Heading, Inline, LayoutHint,
+    LinkTarget, MarkdownOrigin, NameCase, Provenance, ReferenceScope, ResolvedContent,
+    SourceCoordinates, SourceFormat, SourceIdentity, SourceKey, SourceRecord,
 };
 use mant_protocol::{
     ContentSelector, DocumentEdge, DocumentEdgeKind, DocumentScope, DocumentSelector,
     DocumentTraversal, EntryProjection, ExcerptSelection, ExplanationOptions, ExplanationQuery,
     OutlineNode, ReferenceCount, ReferenceProjection, ReferenceProjectionMode,
-    ResolvedDocumentScope, ScopedDocument, SearchCase, SearchQuery, SearchSyntax,
+    ResolvedDocumentScope, ScopedDocument, SearchCase, SearchQuery, SearchScope, SearchSyntax,
 };
 use mant_query::{
     QueryScopeView, build_outline_projection, explain_query, explain_scope, project_references,
@@ -25,21 +26,81 @@ fn address(name: &str) -> DocumentAddress {
 }
 
 fn content(name: &str, links: bool) -> ResolvedContent {
-    let mut body = vec![Inline::Text {
-        value: format!("needle in {name}."),
-    }];
+    let mut store = ContentStoreBuilder::new();
+    let document_owner = store.push_owner(ContentOwnerKind::Document, Provenance::Unknown);
+    let heading_root = store.push_root(
+        document_owner,
+        ContentRootKind::Heading,
+        Provenance::Unknown,
+    );
+    let heading = store.push_text(
+        heading_root,
+        name.into(),
+        None,
+        ContentStyle::default(),
+        None,
+        None,
+        Provenance::Unknown,
+    );
+    let entry_owner = store.push_owner(ContentOwnerKind::DefinitionItem, Provenance::Unknown);
+    let term_root = store.push_root(entry_owner, ContentRootKind::Term, Provenance::Unknown);
+    let term = store.push_text(
+        term_root,
+        "run".into(),
+        None,
+        ContentStyle {
+            literal: true,
+            ..ContentStyle::default()
+        },
+        None,
+        None,
+        Provenance::Unknown,
+    );
+    let body_root = store.push_root(entry_owner, ContentRootKind::Body, Provenance::Unknown);
+    let first = store.push_text(
+        body_root,
+        format!("needle in {name}."),
+        None,
+        ContentStyle::default(),
+        None,
+        None,
+        Provenance::Unknown,
+    );
+    let mut body = vec![Inline::Text { content: first }];
     if links {
         for label in ["First reference", "Second reference"] {
-            body.push(Inline::Text { value: " ".into() });
-            body.push(Inline::Link {
-                title: None,
-                children: vec![Inline::Text {
-                    value: label.into(),
-                }],
-                target: LinkTarget::Document {
+            let space = store.push_whitespace(
+                body_root,
+                " ".into(),
+                None,
+                true,
+                ContentStyle::default(),
+                None,
+                None,
+                Provenance::Unknown,
+            );
+            body.push(Inline::Text { content: space });
+            let occurrence = store.push_link(
+                entry_owner,
+                LinkTarget::Document {
                     name: "b".into(),
                     fragment: Some("command-run".into()),
                 },
+                None,
+                Provenance::Unknown,
+            );
+            let linked = store.push_text(
+                body_root,
+                label.into(),
+                None,
+                ContentStyle::default(),
+                None,
+                Some(occurrence),
+                Provenance::Unknown,
+            );
+            body.push(Inline::Link {
+                occurrence,
+                children: vec![Inline::Text { content: linked }],
             });
         }
     }
@@ -61,44 +122,48 @@ fn content(name: &str, links: bool) -> ResolvedContent {
                 coordinates: SourceCoordinates::DecodedUtf8Bytes,
             }],
             root_source: SourceKey::FIRST,
+            body: DocumentBody::Flow(FlowBody {
+                content_store: store.finish(),
+                heading: Some(Heading {
+                    content: vec![Inline::Text { content: heading }],
+                    source: None,
+                }),
+                sections: vec![],
+                blocks: vec![Block::DefinitionList {
+                    declaration_groups: vec![],
+                    compact: true,
+                    layout: LayoutHint::default(),
+                    source: None,
+                    items: vec![DefinitionItem {
+                        terms: vec![vec![Inline::Code { content: term }]],
+                        description: vec![Block::Paragraph {
+                            children: body,
+                            layout: LayoutHint::default(),
+                            source: None,
+                        }],
+                        layout: DefinitionLayout::default(),
+                        source: None,
+                        entry: Some(EntryFacts {
+                            id: "command-run".into(),
+                            kind: EntryKind::Command,
+                            case: NameCase::Sensitive,
+                            names: vec!["run".into()],
+                            name_bindings: vec![EntryNameBinding {
+                                name: 0,
+                                evidence: EntryNameEvidence::Declared,
+                                occurrences: vec![EntryForm::term(0)],
+                            }],
+                            forms: vec![EntryForm::term(0)],
+                            alias_groups: vec![],
+                            alias_of: None,
+                            value_domain: None,
+                        }),
+                    }],
+                }],
+            }),
             meta: DocumentMeta::default(),
-            heading: Some(name.into()),
             fragment_aliases: vec![],
             diagnostics: vec![],
-            sections: vec![],
-            blocks: vec![Block::DefinitionList {
-                declaration_groups: vec![],
-                compact: true,
-                layout: LayoutHint::default(),
-                source: None,
-                items: vec![DefinitionItem {
-                    terms: vec![vec![Inline::Code {
-                        value: "run".into(),
-                    }]],
-                    description: vec![Block::Paragraph {
-                        children: body,
-                        layout: LayoutHint::default(),
-                        source: None,
-                    }],
-                    layout: DefinitionLayout::default(),
-                    source: None,
-                    entry: Some(EntryFacts {
-                        id: "command-run".into(),
-                        kind: EntryKind::Command,
-                        case: NameCase::Sensitive,
-                        names: vec!["run".into()],
-                        name_bindings: vec![EntryNameBinding {
-                            name: 0,
-                            evidence: EntryNameEvidence::Declared,
-                            occurrences: vec![EntryForm::term(0)],
-                        }],
-                        forms: vec![EntryForm::term(0)],
-                        alias_groups: vec![],
-                        alias_of: None,
-                        value_domain: None,
-                    }),
-                }],
-            }],
         }),
     }
 }
@@ -159,6 +224,7 @@ fn exercise_queries() -> Result<(), Box<dyn std::error::Error>> {
         pattern: "needle".into(),
         syntax: SearchSyntax::Literal,
         case: SearchCase::Sensitive,
+        scope: SearchScope::Visible,
         word: false,
         context_lines: 0,
         limit: 1,

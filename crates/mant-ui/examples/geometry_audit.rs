@@ -272,11 +272,87 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mant_ir::{Block, Inline, LayoutHint, ListItem, ListKind};
+    use mant_ir::{
+        Block, ContentOwnerKind, ContentRootKey, ContentRootKind, ContentStoreBuilder,
+        ContentStyle, Heading, Inline, LayoutHint, ListItem, ListKind, PointBoundary, Provenance,
+    };
 
-    fn text(value: &str) -> Inline {
-        Inline::Text {
-            value: value.into(),
+    struct Fixture {
+        content: ContentStoreBuilder,
+        body_root: ContentRootKey,
+        heading: Heading,
+    }
+
+    impl Fixture {
+        fn new() -> Self {
+            let mut content = ContentStoreBuilder::new();
+            let owner = content.push_owner(ContentOwnerKind::Document, Provenance::Unknown);
+            let heading_root =
+                content.push_root(owner, ContentRootKind::Heading, Provenance::Unknown);
+            let heading_content = content.push_text(
+                heading_root,
+                "Probe".into(),
+                None,
+                ContentStyle::default(),
+                None,
+                None,
+                Provenance::Unknown,
+            );
+            let body_root = content.push_root(owner, ContentRootKind::Body, Provenance::Unknown);
+            Self {
+                content,
+                body_root,
+                heading: Heading {
+                    content: vec![Inline::Text {
+                        content: heading_content,
+                    }],
+                    source: None,
+                },
+            }
+        }
+
+        fn text(&mut self, value: &str) -> Inline {
+            Inline::Text {
+                content: self.content.push_text(
+                    self.body_root,
+                    value.into(),
+                    None,
+                    ContentStyle::default(),
+                    None,
+                    None,
+                    Provenance::Unknown,
+                ),
+            }
+        }
+
+        fn line_break(&mut self) -> Inline {
+            Inline::LineBreak {
+                atom: self
+                    .content
+                    .push_hard_break(self.body_root, None, Provenance::Unknown),
+            }
+        }
+
+        fn anchor(&mut self, id: &str) -> Inline {
+            let atom_boundary = self
+                .content
+                .content_store()
+                .root(self.body_root)
+                .and_then(|root| u32::try_from(root.atoms.len()).ok())
+                .expect("fixture root has a bounded number of atoms");
+            let scalar_boundary = self
+                .content
+                .content_store()
+                .root_logical_text(self.body_root)
+                .and_then(|text| u32::try_from(text.chars().count()).ok())
+                .expect("fixture root has a bounded number of scalars");
+            let point = self.content.push_point(
+                self.body_root,
+                PointBoundary::BetweenAtoms { atom_boundary },
+                scalar_boundary,
+                Provenance::Unknown,
+            );
+            Inline::anchor(point, id)
         }
     }
     fn paragraph(children: Vec<Inline>, indent: i32, gap: u16) -> Block {
@@ -290,11 +366,18 @@ mod tests {
             source: None,
         }
     }
-    fn bundle(blocks: Vec<Block>) -> ResolvedContent {
+    fn bundle(blocks: impl FnOnce(&mut Fixture) -> Vec<Block>) -> ResolvedContent {
         let mut bundle = mant_loader::load_markdown_text("# Probe\n\nseed", None).unwrap();
         let document = bundle.document.as_mut().unwrap();
-        document.sections.clear();
-        document.blocks = blocks;
+        let mut fixture = Fixture::new();
+        let blocks = blocks(&mut fixture);
+        let flow = document
+            .flow_mut()
+            .expect("Markdown fixture has a Flow body");
+        flow.sections.clear();
+        flow.blocks = blocks;
+        flow.heading = Some(fixture.heading);
+        flow.content_store = fixture.content.finish();
         bundle
     }
     fn row<'a>(render: &'a Value, token: &str) -> &'a Value {
@@ -308,20 +391,22 @@ mod tests {
 
     #[test]
     fn hard_rows_gaps_and_coincident_targets_survive_all_widths() {
-        let bundle = bundle(vec![
-            paragraph(
-                vec![
-                    Inline::anchor("a"),
-                    Inline::anchor("b"),
-                    text("FIRST"),
-                    Inline::LineBreak,
-                    text("SECOND"),
-                ],
-                0,
-                0,
-            ),
-            paragraph(vec![text("THIRD")], 0, 2),
-        ]);
+        let bundle = bundle(|fixture| {
+            vec![
+                paragraph(
+                    vec![
+                        fixture.anchor("a"),
+                        fixture.anchor("b"),
+                        fixture.text("FIRST"),
+                        fixture.line_break(),
+                        fixture.text("SECOND"),
+                    ],
+                    0,
+                    0,
+                ),
+                paragraph(vec![fixture.text("THIRD")], 0, 2),
+            ]
+        });
         let report = audit(&bundle, &[20, 40, 80, 120]);
         assert_eq!(report["complete"], true);
         assert_eq!(
@@ -353,21 +438,23 @@ mod tests {
 
     #[test]
     fn signed_child_indent_composes_with_actual_parent_once() {
-        let bundle = bundle(vec![Block::List {
-            kind: ListKind::Plain,
-            compact: true,
-            items: vec![ListItem {
-                blocks: vec![paragraph(vec![text("CHILD")], -3, 0)],
-                entry: None,
+        let bundle = bundle(|fixture| {
+            vec![Block::List {
+                kind: ListKind::Plain,
+                compact: true,
+                items: vec![ListItem {
+                    blocks: vec![paragraph(vec![fixture.text("CHILD")], -3, 0)],
+                    entry: None,
+                    source: None,
+                    layout: Default::default(),
+                }],
+                layout: LayoutHint {
+                    indent_columns: 8,
+                    ..Default::default()
+                },
                 source: None,
-                layout: Default::default(),
-            }],
-            layout: LayoutHint {
-                indent_columns: 8,
-                ..Default::default()
-            },
-            source: None,
-        }]);
+            }]
+        });
         let report = audit(&bundle, &[20, 40, 80, 120]);
         for render in report["renders"].as_array().unwrap() {
             assert_eq!(row(render, "CHILD")["text"], "     CHILD");
@@ -390,12 +477,14 @@ mod tests {
         assert_eq!(wide["cells"][4]["symbol"], "Z");
         let narrow = buffer_row(&line, 3);
         assert_eq!(narrow["cells"][2]["symbol"], " ");
-        let bundle = bundle(vec![Block::Preformatted {
-            children: vec![text("界👩‍💻Z")],
-            language: None,
-            layout: LayoutHint::default(),
-            source: None,
-        }]);
+        let bundle = bundle(|fixture| {
+            vec![Block::Preformatted {
+                children: vec![fixture.text("界👩‍💻Z")],
+                language: None,
+                layout: LayoutHint::default(),
+                source: None,
+            }]
+        });
         let report = audit(&bundle, &[20]);
         let render = &report["renders"][0];
         let literal = row(render, "界");
@@ -407,7 +496,8 @@ mod tests {
 
     #[test]
     fn evidence_limits_never_claim_complete_or_truncate_body() {
-        let bundle = bundle(vec![paragraph(vec![text("UNTRUNCATED_BODY")], 0, 0)]);
+        let bundle =
+            bundle(|fixture| vec![paragraph(vec![fixture.text("UNTRUNCATED_BODY")], 0, 0)]);
         let report = audit_with_limits(&bundle, &[20, 40], 1, 0, 0);
         assert_eq!(report["complete"], false);
         assert_eq!(report["body"]["complete"], true);

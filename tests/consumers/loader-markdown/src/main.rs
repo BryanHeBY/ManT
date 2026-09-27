@@ -20,16 +20,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     assert!(content.tldr.is_none());
     let document = content.document.as_ref().ok_or("missing loaded document")?;
     assert_eq!(document.root_path(), Some(path.as_str()));
+    let flow = document.flow().ok_or("Markdown is not a Flow document")?;
     assert_eq!(
-        document
-            .heading
+        flow.heading
             .as_ref()
-            .map(|heading| heading.plain_text()),
+            .map(|heading| heading.plain_text(document.content())),
         Some(expected_heading)
     );
     assert!(document.diagnostics.is_empty());
-    assert!(!document.blocks.is_empty());
-    assert_eq!(document.sections.len(), 1);
-    assert_eq!(document.sections[0].heading.plain_text(), "Options");
+    assert!(!flow.blocks.is_empty());
+    assert_eq!(flow.sections.len(), 1);
+    assert_eq!(
+        flow.sections[0].heading.plain_text(document.content()),
+        "Options"
+    );
     Ok(())
 }

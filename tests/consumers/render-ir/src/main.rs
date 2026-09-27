@@ -3,8 +3,10 @@
 use std::cell::RefCell;
 
 use mant_ir::{
-    Block, Document, DocumentMeta, Inline, LayoutHint, LinkTarget, ResolvedContent, Section,
-    SourceCoordinates, SourceFormat, SourceIdentity, SourceKey, SourceRecord,
+    Block, ContentOwnerKind, ContentProjection, ContentRootKind, ContentStoreBuilder, ContentStyle,
+    Document, DocumentBody, DocumentMeta, FlowBody, Heading, Inline, LayoutHint, LinkTarget,
+    Provenance, ResolvedContent, Section, SourceCoordinates, SourceFormat, SourceIdentity,
+    SourceKey, SourceRecord,
 };
 use mant_protocol::{
     EntryProjection, ExcerptSchema, ExcerptSelection, OutlineNode, OutlineNodeReference,
@@ -36,11 +38,93 @@ fn source_context() -> SourceContext {
     }
 }
 
-fn section() -> Section {
-    Section {
+fn authored_flow() -> FlowBody {
+    let mut builder = ContentStoreBuilder::new();
+    let document_owner = builder.push_owner(ContentOwnerKind::Document, Provenance::Unknown);
+    let document_root = builder.push_root(
+        document_owner,
+        ContentRootKind::Heading,
+        Provenance::Unknown,
+    );
+    let document_title = builder.push_text(
+        document_root,
+        "Render specimen".into(),
+        None,
+        ContentStyle::default(),
+        None,
+        None,
+        Provenance::Unknown,
+    );
+    let section_owner = builder.push_owner(ContentOwnerKind::Section, Provenance::Unknown);
+    let heading_root =
+        builder.push_root(section_owner, ContentRootKind::Heading, Provenance::Unknown);
+    let heading = builder.push_text(
+        heading_root,
+        "Overview".into(),
+        None,
+        ContentStyle::default(),
+        None,
+        None,
+        Provenance::Unknown,
+    );
+    let paragraph_root =
+        builder.push_root(section_owner, ContentRootKind::Body, Provenance::Unknown);
+    let cafe = builder.push_text(
+        paragraph_root,
+        "Cafe\u{301} 👩‍💻".into(),
+        None,
+        ContentStyle {
+            strong: true,
+            ..ContentStyle::default()
+        },
+        None,
+        None,
+        Provenance::Unknown,
+    );
+    let arrow = builder.push_text(
+        paragraph_root,
+        " → ".into(),
+        None,
+        ContentStyle::default(),
+        None,
+        None,
+        Provenance::Unknown,
+    );
+    let link = builder.push_link(
+        section_owner,
+        LinkTarget::Document {
+            name: "target".into(),
+            fragment: Some("details".into()),
+        },
+        None,
+        Provenance::Unknown,
+    );
+    let details = builder.push_text(
+        paragraph_root,
+        "details".into(),
+        None,
+        ContentStyle::default(),
+        None,
+        Some(link),
+        Provenance::Unknown,
+    );
+    let code_root = builder.push_root(section_owner, ContentRootKind::Body, Provenance::Unknown);
+    let code = builder.push_text(
+        code_root,
+        "α\n\nβ".into(),
+        None,
+        ContentStyle::default(),
+        None,
+        None,
+        Provenance::Unknown,
+    );
+    let section = Section {
         id: "overview".into(),
         fragment_aliases: vec![],
-        heading: "Overview".into(),
+        heading: Heading {
+            content: vec![Inline::Text { content: heading }],
+            source: None,
+        },
         spacing_before_lines: 0,
         children: vec![],
         source: None,
@@ -48,22 +132,12 @@ fn section() -> Section {
             Block::Paragraph {
                 children: vec![
                     Inline::Strong {
-                        children: vec![Inline::Text {
-                            value: "Cafe\u{301} 👩‍💻".into(),
-                        }],
+                        children: vec![Inline::Text { content: cafe }],
                     },
-                    Inline::Text {
-                        value: " → ".into(),
-                    },
+                    Inline::Text { content: arrow },
                     Inline::Link {
-                        children: vec![Inline::Text {
-                            value: "details".into(),
-                        }],
-                        target: LinkTarget::Document {
-                            name: "target".into(),
-                            fragment: Some("details".into()),
-                        },
-                        title: None,
+                        children: vec![Inline::Text { content: details }],
+                        occurrence: link,
                     },
                 ],
                 layout: LayoutHint {
@@ -74,9 +148,7 @@ fn section() -> Section {
                 source: None,
             },
             Block::Preformatted {
-                children: vec![Inline::Text {
-                    value: "α\n\nβ".into(),
-                }],
+                children: vec![Inline::Text { content: code }],
                 language: None,
                 layout: LayoutHint {
                     indent_columns: 4,
@@ -86,6 +158,17 @@ fn section() -> Section {
                 source: None,
             },
         ],
+    };
+    FlowBody {
+        content_store: builder.finish(),
+        heading: Some(Heading {
+            content: vec![Inline::Text {
+                content: document_title,
+            }],
+            source: None,
+        }),
+        blocks: vec![],
+        sections: vec![section],
     }
 }
 
@@ -98,12 +181,10 @@ fn content() -> ResolvedContent {
             parser: None,
             sources: vec![source()],
             root_source: SourceKey::FIRST,
+            body: DocumentBody::Flow(authored_flow()),
             meta: DocumentMeta::default(),
-            heading: Some("Render specimen".into()),
             fragment_aliases: vec![],
             diagnostics: vec![],
-            blocks: vec![],
-            sections: vec![section()],
         }),
     }
 }
@@ -132,6 +213,7 @@ fn outline() -> QueryOutline {
 }
 
 fn excerpt() -> QueryExcerpt {
+    let flow = authored_flow();
     QueryExcerpt {
         schema: ExcerptSchema::V0Dot12,
         label: "specimen".into(),
@@ -142,6 +224,9 @@ fn excerpt() -> QueryExcerpt {
         source_context: Some(source_context()),
         meta: None,
         diagnostics: vec![],
+        content_projection: Some(ContentProjection {
+            content_store: flow.content_store,
+        }),
         selections: vec![ExcerptSelection::DocumentSection {
             outline: OutlineTrail {
                 ancestors: vec![],
@@ -151,7 +236,7 @@ fn excerpt() -> QueryExcerpt {
                     title: "Overview".into(),
                 },
             },
-            section: section(),
+            section: flow.sections[0].clone(),
         }],
     }
 }
@@ -159,9 +244,10 @@ fn excerpt() -> QueryExcerpt {
 fn check_source_rendering() -> Result<(), Box<dyn std::error::Error>> {
     let content = content();
     let document = content.document.as_ref().unwrap();
-    assert!(mant_ir::validate_document(document).is_empty());
+    let diagnostics = mant_ir::validate_document(document);
+    assert!(diagnostics.is_empty(), "{diagnostics:#?}");
     let original = serde_json::to_value(document)?;
-    let source_blocks = document.sections[0].blocks.as_ptr();
+    let source_blocks = document.flow().unwrap().sections[0].blocks.as_ptr();
     let plain = render_query_text(&content);
     assert!(
         plain.starts_with("Render specimen\n\nOverview\n"),
@@ -210,11 +296,11 @@ fn check_source_rendering() -> Result<(), Box<dyn std::error::Error>> {
 
     // Neither body painting nor JSON transport may rewrite source facts/layout.
     assert_eq!(serde_json::to_value(document)?, original);
-    assert_eq!(document.sections[0].blocks.as_ptr(), source_blocks);
     assert_eq!(
-        document.root_path(),
-        Some("not-opened/独立 source.md")
+        document.flow().unwrap().sections[0].blocks.as_ptr(),
+        source_blocks
     );
+    assert_eq!(document.root_path(), Some("not-opened/独立 source.md"));
     for pretty in [false, true] {
         assert_eq!(
             serde_json::from_str::<serde_json::Value>(&render_query_json(&content, pretty)?)?,

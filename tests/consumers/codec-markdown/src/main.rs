@@ -30,10 +30,11 @@ fn exercise_public_codec() -> Result<(), Box<dyn std::error::Error>> {
         document: Some(parsed.document),
         tldr: Some(tldr),
     };
-    let artifact = render_addressable_markdown(&content);
+    let document = content.document.as_ref().unwrap();
+    let artifact = render_addressable_markdown(&content)?;
     assert_eq!(
         artifact.text(),
-        render_markdown_with_options(&content, MarkdownOptions::ADDRESSABLE)
+        render_markdown_with_options(&content, MarkdownOptions::ADDRESSABLE)?
     );
     assert!(artifact.text().contains("Root café text."));
     assert!(artifact.text().contains("## TLDR"));
@@ -64,16 +65,25 @@ fn exercise_public_codec() -> Result<(), Box<dyn std::error::Error>> {
             let section = artifact.section(section.expect("entry section")).unwrap();
             assert_eq!(section.path().to_string(), "1");
             assert_eq!(section.parent(), None);
-            assert_eq!(section.section().heading.plain_text(), "Options");
+            assert_eq!(
+                section.section().heading.plain_text(document.content()),
+                "Options"
+            );
         }
     }
     assert_eq!(entry_count, 1);
-    let document = content.document.as_ref().unwrap();
+    let flow = document.flow().expect("Markdown is a Flow document");
     let options = MarkdownFragmentOptions {
         preserve_anchors: true,
     };
-    let mut fragments = render_blocks_fragment(&document.blocks, options);
-    render_sections_fragment(&mut fragments, &document.sections, 2, options);
+    let mut fragments = render_blocks_fragment(document.content(), &flow.blocks, options);
+    render_sections_fragment(
+        document.content(),
+        &mut fragments,
+        &flow.sections,
+        2,
+        options,
+    );
     let fragments = fragments.join("\n\n");
     assert!(fragments.contains("Root café text."));
     assert!(fragments.contains("--help"));
