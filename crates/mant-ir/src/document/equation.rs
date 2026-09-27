@@ -259,6 +259,9 @@ impl EquationExpression {
     }
 
     fn append_matrix(&self, output: &mut String) {
+        const MAX_MATRIX_RECTANGULAR_SLOTS: usize = 16 * 1024;
+        const MAX_MATRIX_RECTANGULAR_SEPARATOR_BYTES: usize = 32 * 1024;
+
         // CVS eqn_html.c::eqn_box enters its row/column branch only for a
         // non-singleton List operand. Other operands remain ordinary boxes.
         // Check every level before interpreting it as columns and rows;
@@ -294,6 +297,47 @@ impl EquationExpression {
             .map(|column| column.children.len())
             .max()
             .unwrap_or(0);
+        // CVS eqn_html.c::eqn_box prints every row/column slot, including
+        // empty cells. That rectangle can be quadratic in the parsed boxes
+        // for unequal columns. Bound both visits and the bytes introduced by
+        // its ", "/"; " separators; actual cell text is visited only once.
+        let actual_cells = columns.iter().try_fold(0usize, |count, column| {
+            count.checked_add(column.children.len())
+        });
+        let rectangular = rows
+            .checked_mul(columns.len())
+            .zip(actual_cells)
+            .is_some_and(|(slots, actual_cells)| {
+                slots <= MAX_MATRIX_RECTANGULAR_SLOTS
+                    && actual_cells
+                        .checked_mul(8)
+                        .is_some_and(|relative_limit| slots <= relative_limit)
+                    && slots
+                        .saturating_sub(1)
+                        .checked_mul(2)
+                        .is_some_and(|bytes| bytes <= MAX_MATRIX_RECTANGULAR_SEPARATOR_BYTES)
+            });
+        if !rectangular {
+            // Preserve every parsed column and row without synthesizing
+            // missing cells. Explicit col(...) wrappers retain the matrix
+            // axes when row-major expansion would exceed the budget.
+            output.push_str("matrix(");
+            for (column_index, column) in columns.iter().enumerate() {
+                if column_index > 0 {
+                    output.push_str(", ");
+                }
+                output.push_str("col(");
+                for (row_index, row) in column.children.iter().enumerate() {
+                    if row_index > 0 {
+                        output.push_str("; ");
+                    }
+                    row.append_readable(output);
+                }
+                output.push(')');
+            }
+            output.push(')');
+            return;
+        }
         output.push_str("matrix(");
         for row in 0..rows {
             if row > 0 {

@@ -314,3 +314,53 @@ fn externally_supplied_excessive_equation_json_still_hits_recursion_guard() {
     let error = serde_json::from_str::<QueryBundle>(&hostile).unwrap_err();
     assert!(error.to_string().contains("recursion limit exceeded"));
 }
+
+#[test]
+fn unequal_matrix_columns_have_linear_projection_and_wire_reprojection() {
+    // Both exact 512- and 1024-column sources were run with fixed CVS
+    // -Tutf8/-Tlint before these assertions (5,525 and 10,855 output bytes,
+    // no diagnostics). eqn.c builds Matrix -> List -> Pile -> List in column
+    // order; eqn_html.c::eqn_box emits empty slots for short columns, while
+    // eqn_term.c::eqn_box still renders every actual later-column operand.
+    // The source-neutral compact form labels columns without allocating the
+    // potentially quadratic empty rectangle.
+    let mut previous_projection_bytes = 0;
+    for columns in [512, 1024] {
+        let mut column_source = vec!["ccol { a }".to_owned(); columns - 1];
+        column_source.push(format!("ccol {{ {} }}", vec!["b"; columns].join(" above ")));
+        let source = format!(
+            ".TH REVIEW 7 \"September 28, 2026\"\n.SH DESCRIPTION\n.EQ\nmatrix {{ {} }}\n.EN\n",
+            column_source.join(" ")
+        );
+        let expected = format!(
+            "matrix({}col({}))",
+            "col(a), ".repeat(columns - 1),
+            vec!["b"; columns].join("; ")
+        );
+        let native = native_equation_text(&source);
+        assert_eq!(native, expected, "native columns={columns}");
+
+        let content = load_roff_bytes(source.as_bytes()).expect("lower unequal matrix");
+        let document = content.document.as_ref().expect("document");
+        assert_eq!(equation_value(document), expected, "IR columns={columns}");
+        let Block::Equation {
+            expression: Some(expression),
+            ..
+        } = &document.sections[0].blocks[0]
+        else {
+            panic!("structured matrix equation");
+        };
+        assert_eq!(expression.readable_text(), expected);
+        assert!(expected.len() < source.len());
+        if previous_projection_bytes > 0 {
+            assert!(expected.len() < previous_projection_bytes * 3);
+        }
+        previous_projection_bytes = expected.len();
+
+        let bundle = QueryBundle::from(&content);
+        let encoded = serde_json::to_string(&bundle).expect("serialize query");
+        let decoded: QueryBundle =
+            serde_json::from_str(&encoded).expect("validate incoming projection");
+        assert_eq!(decoded, bundle);
+    }
+}
