@@ -14,8 +14,13 @@ that crate was not published for that change.
 
 ### libmandoc-rs 0.12.0
 
-- Refresh the official CVS baseline to the tree pinned at
-  2026-09-20 12:21:15 UTC. `LIBMANDOC_VERSION` is
+- Refresh the pinned mandoc CVS source again at 2026-09-27 13:09:54 UTC.
+  `LIBMANDOC_VERSION` is now `cvs-20260927T130954Z`. The 27 local patches
+  replay unchanged; upstream changed only `Makefile`, `NEWS`, and the table
+  width calculation in `out.c`. This source refresh does not change the crate
+  or document schema version.
+- The preceding CVS refresh pinned the tree at
+  2026-09-20 12:21:15 UTC. At that point `LIBMANDOC_VERSION` was
   `cvs-20260920T122115Z`; the source inventory records every upstream revision
   and SHA-256. Builds remain offline.
 - Preserve the owned Rust AST shape, memory-only input, strict include roots,

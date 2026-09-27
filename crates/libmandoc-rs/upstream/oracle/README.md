@@ -31,7 +31,7 @@ archive. Verify one without running an audit:
 ```sh
 scripts/mandoc-oracle-preflight \
   --attestation crates/libmandoc-rs/upstream/oracle/attestations/<identity>.json \
-  --binary target/mandoc-migration/oracle-<snapshot>-<platform>/mandoc \
+  --binary target/mandoc-migration/reference/mandoc \
   --archive target/mandoc-migration/<snapshot>/upstream-<snapshot>.tar.gz \
   --identity <identity> \
   --profile utf8
@@ -41,3 +41,8 @@ The preflight rejects an unregistered or moved attestation, another snapshot,
 source/recipe/config drift, a swapped binary, a wrong archive, an unsupported
 profile, and a platform mismatch. Audits repeat it after execution so drift
 cannot produce a clean result.
+
+`target/mandoc-migration/reference/mandoc` is the required active reference
+entry point. Copy the newly registered pristine binary there and preflight
+that exact path after each source refresh. Keep older binaries under their
+separate build directories; their registry entries remain historical.

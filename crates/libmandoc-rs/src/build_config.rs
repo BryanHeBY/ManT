@@ -196,13 +196,13 @@ mod tests {
 
         // CVS replaced the old register-expansion sign state. Keep runtime
         // register regressions, not an assertion for a removed implementation.
-        let escapes = include_str!("../vendor/mandoc-cvs-20260920T122115Z/roff_escape.c");
+        let escapes = include_str!("../vendor/mandoc-cvs-20260927T130954Z/roff_escape.c");
         assert!(escapes.contains("#include \"config.h\""));
 
-        let man_html = include_str!("../vendor/mandoc-cvs-20260920T122115Z/man_html.c");
+        let man_html = include_str!("../vendor/mandoc-cvs-20260927T130954Z/man_html.c");
         assert!(man_html.contains("struct tag\t*t = NULL;"));
 
-        let term = include_str!("../vendor/mandoc-cvs-20260920T122115Z/term.c");
+        let term = include_str!("../vendor/mandoc-cvs-20260927T130954Z/term.c");
         assert!(term.contains("size_t\t\t ssz = 0;"));
         let rhs = term.find("rhs = NULL;").expect("escape result reset");
         let uc = term[rhs..]

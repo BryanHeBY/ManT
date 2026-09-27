@@ -24,7 +24,7 @@ fn incomplete_root_font_scopes_report_diagnostics_and_reset() {
 
 #[test]
 fn upstream_version_is_pinned() {
-    assert_eq!(crate::LIBMANDOC_VERSION, "cvs-20260920T122115Z");
+    assert_eq!(crate::LIBMANDOC_VERSION, "cvs-20260927T130954Z");
 }
 
 #[test]

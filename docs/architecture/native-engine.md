@@ -400,8 +400,8 @@ through a per-call output sink. These are library capabilities, not a second
 ManT rendering path: `mant-codec` consumes the owned parser tree, while
 `mant-render` reports and the UI render the resulting shared source-neutral IR.
 
-The active libmandoc baseline is the fixed mandoc `cvs-20260920T122115Z` snapshot,
-checked out at 2026-09-20 12:21:15 UTC and recorded by a checksummed per-file
+The active libmandoc baseline is the fixed mandoc `cvs-20260927T130954Z` snapshot,
+checked out at 2026-09-27 13:09:54 UTC and recorded by a checksummed per-file
 CVS revision manifest. Remaining mutable character, diagnostic, tag,
 roff-request, formatter-tab, and HTML-ID globals are made thread-local by
 local patches; equation substitution counters are already parser-owned

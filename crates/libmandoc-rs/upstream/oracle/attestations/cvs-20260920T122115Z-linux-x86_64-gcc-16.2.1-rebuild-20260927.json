@@ -1,0 +1,75 @@
+{
+  "artifact": {
+    "sha256": "5cf77c586477bae7b73efd8b7d8f07970dc057d3076e52464e289644a1445830"
+  },
+  "buildEvidence": {
+    "buildRecord": {
+      "path": "target/mandoc-migration/oracle-build-old-rebuild-20260927/BUILD.json",
+      "sha256": "518c0f4b85c7363dfa6b071cb8de4674b648ba2739ba4b8a80e368c697697da5"
+    },
+    "configHeader": {
+      "path": "target/mandoc-migration/oracle-build-old-rebuild-20260927/source/config.h",
+      "sha256": "395b7efbddea298440f5d59074800d55b03f9742e36f749551d9e778f6227921"
+    },
+    "configLog": {
+      "path": "target/mandoc-migration/oracle-build-old-rebuild-20260927/source/config.log",
+      "sha256": "1bb3541a4b4c10728f45f6802dd3485a11575fc4719673527dc2cb58f203c9c7"
+    },
+    "configsed": {
+      "path": "target/mandoc-migration/oracle-build-old-rebuild-20260927/source/config.sed",
+      "sha256": "3e8166ad3e81d4a65bede389699794f8123aecfc1d8dafbc3718cafe2be91cf7"
+    },
+    "makefileLocal": {
+      "path": "target/mandoc-migration/oracle-build-old-rebuild-20260927/source/Makefile.local",
+      "sha256": "949afe35556456f7e36942b107fdf532f3eecaf3430be67b383413afc4db8c84"
+    }
+  },
+  "identity": "cvs-20260920T122115Z-linux-x86_64-gcc-16.2.1-rebuild-20260927",
+  "platform": {
+    "machine": "x86_64",
+    "system": "Linux"
+  },
+  "profiles": [
+    "ascii",
+    "html",
+    "utf8"
+  ],
+  "recipe": {
+    "buildCommand": [
+      "make",
+      "-j4",
+      "mandoc"
+    ],
+    "configureCommand": [
+      "./configure"
+    ],
+    "file": {
+      "path": "crates/libmandoc-rs/upstream/oracle/recipe.json",
+      "sha256": "57f34a87fa0793299a27bb4dde4b6032cbe81c206bdde71683bbb289fb37ddfb"
+    }
+  },
+  "schema": "mant.mandoc-oracle-attestation/v1",
+  "source": {
+    "archive": {
+      "path": "target/mandoc-migration/freeze-cvs-20260920T122115Z/upstream-cvs-20260920T122115Z.tar.gz",
+      "sha256": "6ccee6e73346b3e2c9701ba70dc5ac0525f2dd160cfe98ffc00ad56371d28c7d"
+    },
+    "inventory": {
+      "path": "crates/libmandoc-rs/upstream/CVS_INVENTORY.json",
+      "sha256": "80d92edb87e5a422f7ea695a2150fe442d8a2fefbbe6342d609b8a120fdeae81"
+    },
+    "lock": {
+      "path": "crates/libmandoc-rs/upstream/SOURCE",
+      "sha256": "7c65308e4df4e574f2875dcda34f8dbd194fc9c6f4b421e2530a8a7908fe0e1a"
+    },
+    "manifest": {
+      "path": "crates/libmandoc-rs/upstream/FILES",
+      "sha256": "fd6ff088c152e57194a945d6a4deb95876fb62304008d368da35d12904afe966"
+    },
+    "pristine": true
+  },
+  "toolchain": {
+    "compilerCommand": "/usr/bin/gcc",
+    "compilerVersion": "cc (GCC) 16.2.1 20260810\nCopyright (C) 2026 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE."
+  }
+}

@@ -1,8 +1,8 @@
 # License inventory
 
 - `Apache-2.0.txt` covers the Rust wrapper and the ManT-authored C shim.
-- `mandoc-cvs-20260920T122115Z.txt` is the verbatim upstream license inventory
-  for the vendored mandoc CVS snapshot pinned to 2026-09-20 12:21:15 UTC.
+- `mandoc-cvs-20260927T130954Z.txt` is the verbatim upstream license inventory
+  for the vendored mandoc CVS snapshot pinned to 2026-09-27 13:09:54 UTC.
 - `BSD-3-Clause-Regents.txt` reproduces the terms used by the University of
   California compatibility files. The Windows build compiles `compat_err.c`.
 - `BSD-2-Clause-NetBSD.txt` reproduces the terms used by

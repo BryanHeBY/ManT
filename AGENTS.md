@@ -2,7 +2,7 @@
 
 ## Roff and mandoc compatibility
 
-- Treat `crates/libmandoc-rs/vendor/mandoc-cvs-20260920T122115Z` as the pinned primary
+- Treat `crates/libmandoc-rs/vendor/mandoc-cvs-20260927T130954Z` as the pinned primary
   behavioral and implementation reference. Groff is a secondary comparison;
   do not replace the selected CVS contract with guessed behavior.
 - Whenever a regression, behavioral discrepancy, or review finding involves

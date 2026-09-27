@@ -8,6 +8,16 @@
     "cvs-20260920T122115Z-linux-x86_64-gcc-16.2.1": {
       "path": "crates/libmandoc-rs/upstream/oracle/attestations/cvs-20260920T122115Z-linux-x86_64-gcc-16.2.1.json",
       "sha256": "72aca4b181b0463d41ae24138d1f62fdf19cebb9e543af260fbbc70f75d4bde6",
+      "status": "historical"
+    },
+    "cvs-20260920T122115Z-linux-x86_64-gcc-16.2.1-rebuild-20260927": {
+      "path": "crates/libmandoc-rs/upstream/oracle/attestations/cvs-20260920T122115Z-linux-x86_64-gcc-16.2.1-rebuild-20260927.json",
+      "sha256": "9691a01732c904b0c5d834321d7da403b4c2b462367c400b44c4974b7b255b13",
+      "status": "historical"
+    },
+    "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1": {
+      "path": "crates/libmandoc-rs/upstream/oracle/attestations/cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1.json",
+      "sha256": "7f949c5a3298f1f97c99deba7b25e7f3d25ff1d6132b73bf8966ab997a36bc06",
       "status": "active"
     }
   },
