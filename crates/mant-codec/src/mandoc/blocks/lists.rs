@@ -12,7 +12,9 @@ use super::super::{
     layout::{block_indent, layout, layout_with_spacing, paragraph_distance_lines},
     part_child_groups, source_span, targets,
 };
-use super::{is_inline_equation, is_inline_equation_quote_artifact, lower_blocks_with_predecessor};
+use super::{
+    is_inline_equation, is_inline_equation_quote_artifact, lower_blocks_with_body_post_row_end,
+};
 
 mod definition;
 mod evidence;

@@ -13,10 +13,9 @@ use super::{
     controls::FormatterBoundary,
     first_part_children,
     inline::{
-        FilledBoundary, FontState, InlineBuilder, NoFillInlineState, append_inline_node_with_next,
-        is_enclosure_macro, lower_inline_nodes, lower_inline_nodes_with_font_state,
-        lower_inline_nodes_with_spacing, lower_man_link, lower_no_fill_line_with_font_state,
-        plain_text,
+        FilledBoundary, FontState, InlineBuilder, append_inline_node_with_next, is_enclosure_macro,
+        lower_inline_nodes, lower_inline_nodes_with_font_state, lower_inline_nodes_with_spacing,
+        lower_man_link, lower_no_fill_line_with_font_state, plain_text,
     },
     layout::{
         add_leading_spacing, layout, layout_with_spacing, section_spacing, set_block_spacing,
@@ -81,6 +80,29 @@ fn lower_blocks_with_spacing(
     )
 }
 
+/// A document or section body has a real terminal row boundary at its end.
+/// Nested output owners return their active formatter row to the caller.
+fn lower_blocks_through_row_end(
+    nodes: &[Node],
+    context: &LoweringContext<'_>,
+    indent_columns: crate::mandoc::layout::SourceIndent,
+    paragraph_distance: &mut u16,
+    spacing_enabled: bool,
+    formatter: &mut crate::mandoc::formatter::FormatterState,
+) -> Vec<Block> {
+    lower_blocks_with_predecessor_and_run_in(
+        nodes,
+        context,
+        indent_columns,
+        paragraph_distance,
+        spacing_enabled,
+        false,
+        formatter,
+        None,
+        FormatterRowBoundary::Settle,
+    )
+}
+
 /// Lower a detached structural body without discarding its predecessor.
 /// Native display spacing walks through first-child containers to find an
 /// earlier source sibling. An empty child output buffer is not evidence that
@@ -103,6 +125,31 @@ fn lower_blocks_with_predecessor(
         paragraph_predecessor,
         formatter,
         None,
+        FormatterRowBoundary::Preserve,
+    )
+}
+
+/// The owning macro's BODY post calls `term_newln()` (or `term_flushln()`).
+/// Keep this distinct from an IR output-owner return without such a post.
+fn lower_blocks_with_body_post_row_end(
+    nodes: &[Node],
+    context: &LoweringContext<'_>,
+    indent_columns: crate::mandoc::layout::SourceIndent,
+    paragraph_distance: &mut u16,
+    spacing_enabled: bool,
+    paragraph_predecessor: bool,
+    formatter: &mut crate::mandoc::formatter::FormatterState,
+) -> Vec<Block> {
+    lower_blocks_with_predecessor_and_run_in(
+        nodes,
+        context,
+        indent_columns,
+        paragraph_distance,
+        spacing_enabled,
+        paragraph_predecessor,
+        formatter,
+        None,
+        FormatterRowBoundary::Settle,
     )
 }
 
@@ -116,6 +163,7 @@ fn lower_blocks_with_predecessor_and_run_in(
     paragraph_predecessor: bool,
     formatter: &mut crate::mandoc::formatter::FormatterState,
     run_in: Option<(crate::mandoc::inline::PreservedInlineState, usize)>,
+    row_boundary: FormatterRowBoundary,
 ) -> Vec<Block> {
     let mut lowerer = BlockLowerer::new(
         context,
@@ -132,10 +180,17 @@ fn lower_blocks_with_predecessor_and_run_in(
     }
     lowerer.paragraph_predecessor = paragraph_predecessor;
     lowerer.push_nodes(nodes);
-    lowerer.finish_into(formatter)
+    lowerer.finish_into(formatter, row_boundary)
 }
 
 const DEFAULT_MAN_TAG_WIDTH: i32 = 7;
+
+/// A Rust output-owner return does not by itself end a CVS formatter row.
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum FormatterRowBoundary {
+    Preserve,
+    Settle,
+}
 
 struct BlockLowerer<'a, 'source> {
     context: &'a LoweringContext<'source>,
@@ -143,7 +198,6 @@ struct BlockLowerer<'a, 'source> {
     paragraph_distance: &'a mut u16,
     state: BlockState,
     formatter: crate::mandoc::formatter::FormatterState,
-    no_fill_inline: NoFillInlineState,
     // man(7) starts each section or relative-indent scope with a seven-column
     // hanging margin. Explicit `.TP`/`.IP` widths update it for following
     // tagged paragraphs, exactly as mandoc's terminal renderer does.
@@ -187,7 +241,6 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             paragraph_distance,
             state,
             formatter,
-            no_fill_inline: NoFillInlineState::new(),
             definition_hanging_width: crate::mandoc::layout::Distance::cells(DEFAULT_MAN_TAG_WIDTH),
             man_list_state: ManListState::new(),
             paragraph_predecessor: false,
@@ -376,9 +429,9 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             }
             FormatterBoundary::NoBreak => {
                 if self.state.has_formatter_cell()
-                    || self.no_fill_inline.has_pending_formatter_cell()
+                    || self.formatter.no_fill_inline.has_pending_formatter_cell()
                 {
-                    let nodes = self.no_fill_inline.take_no_break_cell();
+                    let nodes = self.formatter.no_fill_inline.take_no_break_cell();
                     self.state.no_break_formatter_flush(nodes);
                 }
             }
@@ -392,20 +445,24 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
     }
 
     fn settle_no_fill_inline(&mut self) {
-        let nodes = self.no_fill_inline.take_settled_row();
+        let nodes = self.formatter.no_fill_inline.take_settled_row();
         if !nodes.is_empty() {
             self.state
                 .push_preformatted(nodes, None, false, false, true);
         }
-        self.state
-            .inherit_zero_advance_armed(self.no_fill_inline.take_bare_zero_advance_armed());
+        self.state.inherit_zero_advance_armed(
+            self.formatter.no_fill_inline.take_bare_zero_advance_armed(),
+        );
     }
 
     fn finish_into(
         mut self,
         formatter: &mut crate::mandoc::formatter::FormatterState,
+        row_boundary: FormatterRowBoundary,
     ) -> Vec<Block> {
-        self.settle_no_fill_inline();
+        if row_boundary == FormatterRowBoundary::Settle {
+            self.settle_no_fill_inline();
+        }
         let blocks = self.state.finish_with_formatter(&mut self.formatter);
         *formatter = self.formatter;
         self.context.check_gap_bounds(&blocks);

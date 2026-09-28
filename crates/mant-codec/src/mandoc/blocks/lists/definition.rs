@@ -5,8 +5,8 @@ use super::super::synopsis::{
 };
 use super::{
     Block, DefinitionItem, Inline, InlineBuilder, LoweringContext, Node, NodeKind,
-    first_part_children, is_inline_equation, is_inline_equation_quote_artifact,
-    lower_blocks_with_predecessor, source_span, targets,
+    first_part_children, is_inline_equation, is_inline_equation_quote_artifact, source_span,
+    targets,
 };
 
 #[derive(Clone, Copy)]
@@ -410,9 +410,10 @@ pub(super) fn definition_item(
                 execution,
                 usize::from(flow.head.generated_cells().unwrap_or_default()),
             )),
+            super::super::FormatterRowBoundary::Settle,
         )
     } else {
-        lower_blocks_with_predecessor(
+        super::super::lower_blocks_with_body_post_row_end(
             body,
             context,
             body_origin,

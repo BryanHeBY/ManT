@@ -3,9 +3,9 @@ use super::{
     Block, DEFAULT_MAN_TAG_WIDTH, DisplayKind, Inline, LoweringContext, ManDefinitionState,
     ManListState, Node, NodeKind, TableEmbedding, add_leading_spacing,
     append_relative_continuation, append_table_row, first_part_children, layout,
-    layout_with_spacing, lower_blocks_with_predecessor, lower_blocks_with_spacing,
-    lower_inline_nodes, lower_man_definition_block, lower_mdoc_list, lower_synopsis_head,
-    part_child_groups, plain_text, preformatted_blocks, set_block_spacing, source_span,
+    layout_with_spacing, lower_blocks_with_spacing, lower_inline_nodes, lower_man_definition_block,
+    lower_mdoc_list, lower_synopsis_head, part_child_groups, plain_text, preformatted_blocks,
+    set_block_spacing, source_span,
 };
 
 pub(super) struct StructuralLowerer<'a, 'source, 'state> {
@@ -207,7 +207,16 @@ impl StructuralLowerer<'_, '_, '_> {
             ));
         }
         lowerer.push_nodes(children);
-        let nested = lowerer.finish_into(self.formatter);
+        // man_term.c::post_HP() closes its BODY row; PP/P/LP have no
+        // equivalent post and return their active row to the caller.
+        let nested = lowerer.finish_into(
+            self.formatter,
+            if hanging {
+                super::FormatterRowBoundary::Settle
+            } else {
+                super::FormatterRowBoundary::Preserve
+            },
+        );
         extend_blocks_with_spacing(self.output, nested, spacing, node);
     }
 
@@ -217,7 +226,7 @@ impl StructuralLowerer<'_, '_, '_> {
             Some("Bd") if node.display_kind == Some(DisplayKind::Filled) => {
                 let has_predecessor = self.has_paragraph_predecessor();
                 let spacing_before = u16::from(has_predecessor && !node.compact);
-                let nested = lower_blocks_with_predecessor(
+                let nested = super::lower_blocks_with_body_post_row_end(
                     first_part_children(node, NodeKind::Body),
                     self.context,
                     self.context.offset_indent(
@@ -258,7 +267,8 @@ impl StructuralLowerer<'_, '_, '_> {
                 );
                 lowerer.paragraph_predecessor = paragraph_predecessor;
                 lowerer.push_nodes(first_part_children(node, NodeKind::Body));
-                let mut nested = lowerer.finish_into(self.formatter);
+                let mut nested =
+                    lowerer.finish_into(self.formatter, super::FormatterRowBoundary::Settle);
                 if continues_item {
                     if append_relative_continuation(
                         self.output,

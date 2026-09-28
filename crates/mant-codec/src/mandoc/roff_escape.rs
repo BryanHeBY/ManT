@@ -101,6 +101,7 @@ pub(super) enum RoffInlineEvent {
 /// Styled terminal output and plain semantic text both use this state so a
 /// target/name projection cannot disagree with the visible document about
 /// which complete glyph survives `\z`.
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct ZeroAdvanceMachine<T> {
     armed: bool,
     pending: Option<T>,

@@ -45,7 +45,7 @@ fn lower_no_fill_lines(
     node: &Node,
     default_name: Option<&str>,
     font: &mut FontState,
-    inline_state: &mut super::NoFillInlineState,
+    inline_state: &mut crate::mandoc::inline::NoFillInlineState,
     scope_posts: &crate::mandoc::containers::ScopePostState,
 ) -> Option<Vec<LoweredNoFillLine>> {
     if is_no_fill_payload(node) {
@@ -131,19 +131,20 @@ impl super::BlockLowerer<'_, '_> {
             return false;
         }
         self.resume_no_fill_row();
-        if node.flags.line_start && !self.no_fill_inline.continues_source_line() {
+        if node.flags.line_start && !self.formatter.no_fill_inline.continues_source_line() {
             self.settle_no_fill_inline();
         }
         // `nf`/`fi` split presentation buffers, not the native formatter.
         // Move a surviving bare BACKAFTER request into the no-fill executor;
         // an occupied cell was already settled by the mode boundary.
-        self.no_fill_inline
+        self.formatter
+            .no_fill_inline
             .inherit_zero_advance_armed(self.state.take_zero_advance_armed());
         let Some(lines) = lower_no_fill_lines(
             node,
             self.context.default_name,
             &mut self.formatter.font,
-            &mut self.no_fill_inline,
+            &mut self.formatter.no_fill_inline,
             &self.context.scope_posts,
         ) else {
             unreachable!("a no-fill payload must lower as a no-fill row");
@@ -198,6 +199,9 @@ impl super::BlockLowerer<'_, '_> {
         // Execute each child through normal block dispatch so fi/nf, spacing
         // and structural children cannot become flattened pseudo-text.
         self.push_nodes(body);
+        // man_term.c::post_SY() calls term_newln() for the BODY at .YS.
+        // Settle its active no-fill row inside the synopsis output owner.
+        self.settle_no_fill_inline();
         self.state.flush_paragraph();
         self.state.flush_preformatted();
         self.formatter.font = FontState::new();

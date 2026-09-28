@@ -8,6 +8,7 @@ use crate::mandoc::roff_escape::ZeroAdvanceMachine;
 /// The terminal formatter carries that state across `term_word()` calls.  A
 /// pending glyph therefore belongs to the surrounding inline stream rather
 /// than to the one text node that happened to contain the escape.
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub(in crate::mandoc) struct ZeroAdvanceState {
     machine: ZeroAdvanceMachine<Inline>,
     fragment_started_pending: bool,

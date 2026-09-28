@@ -1,7 +1,9 @@
 //! Explicit persistent state, separate from source services and local joins.
 use libmandoc_rs::AuthorMode;
 
-use super::inline::{AuthorBreakEffect, FontState, InlineBuilder, PreservedInlineState};
+use super::inline::{
+    AuthorBreakEffect, FontState, InlineBuilder, NoFillInlineState, PreservedInlineState,
+};
 
 pub(super) struct FinishedInlineLine {
     pub(super) output: Vec<mant_ir::Inline>,
@@ -31,6 +33,10 @@ pub(super) struct FormatterState {
     /// Source-order roff fill channel. List bodies return this state to their
     /// parent; a literal Bd restores its inbound channel at its own post.
     pub(super) no_fill: bool,
+    /// The active no-fill formatter row survives nested block output owners.
+    /// CVS term.c keeps the row and backtracking flags in one `termp`; a
+    /// `BlockLowerer` is only a destination for IR, not a new formatter.
+    pub(super) no_fill_inline: NoFillInlineState,
     /// A crossed display can return while its last literal row is still the
     /// formatter's active row. The parent output sink adopts that row before
     /// writing the next source or generated word.
@@ -54,6 +60,7 @@ impl Default for FormatterState {
             font: FontState::new(),
             spacing: true,
             no_fill: false,
+            no_fill_inline: NoFillInlineState::new(),
             row_handoff: RowHandoff::None,
             vertical_space_debt: 0,
             zero_advance_armed: false,

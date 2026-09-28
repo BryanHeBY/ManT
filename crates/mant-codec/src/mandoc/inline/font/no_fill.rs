@@ -11,6 +11,7 @@ use crate::mandoc::containers::ScopePostState;
 /// physical input-row boundary, not emitted as a second inline break.  Any
 /// completed `\z` glyph still belongs to the row and must be committed before
 /// the outer literal flow appends that boundary.
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub(in crate::mandoc) struct NoFillInlineState {
     zero_advance: ZeroAdvanceState,
     pending_word_end_break: bool,
@@ -19,7 +20,7 @@ pub(in crate::mandoc) struct NoFillInlineState {
     boundary: PendingBoundary,
 }
 
-#[derive(Clone, Copy, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum NoFillFormatterCell {
     Origin,
     Invisible,

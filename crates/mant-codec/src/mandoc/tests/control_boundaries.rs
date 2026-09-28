@@ -1593,6 +1593,159 @@ fn no_fill_exit_and_document_end_settle_continued_zero_advance_state() {
 }
 
 #[test]
+fn native_body_posts_settle_no_fill_rows_in_their_output_owner() {
+    for (label, operand, expected) in [
+        ("zero", "\\zX", "X"),
+        ("continued-zero", "\\zX\\c", "X"),
+        ("continued-word-end", "\\p\\c", ""),
+    ] {
+        // Exact inputs checked against the pinned CVS terminal and lint.
+        // mdoc_term.c::termp_it_post() calls term_newln() at It BODY exit;
+        // man_term.c::post_RS() does the same at RS BODY exit.  Both settle
+        // the active row before the following outer `Y` formatter word.
+        let mdoc = format!(
+            ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd state probe\n.Sh DESCRIPTION\n.nf\n.Bl -item -compact\n.It\n{operand}\n.El\nY\n.fi\n"
+        );
+        let document = parse_manual_bytes(
+            std::path::Path::new(&format!("mdoc-item-post-{label}.1")),
+            mdoc.as_bytes(),
+        )
+        .expect("parse mdoc list row fixture");
+        let [
+            Block::List { items, .. },
+            Block::Preformatted {
+                children: outer, ..
+            },
+        ] = document.sections[1].blocks.as_slice()
+        else {
+            panic!("{label}: unexpected mdoc blocks: {:#?}", document.sections);
+        };
+        let [
+            Block::Preformatted {
+                children: inner,
+                source: Some(inner_source),
+                ..
+            },
+        ] = items[0].blocks.as_slice()
+        else {
+            panic!("{label}: row left its It BODY: {:#?}", items[0].blocks);
+        };
+        assert_eq!(inline_text(inner), expected, "{label}: {inner:?}");
+        assert_eq!(inner_source.line, 11, "{label}: {inner_source:?}");
+        assert_eq!(inline_text(outer), "Y", "{label}: {outer:?}");
+
+        let man = format!(
+            ".TH TEST 1 \"September 28, 2026\"\n.SH DESCRIPTION\n.nf\n.RS\n{operand}\n.RE\nY\n.fi\n"
+        );
+        let document = parse_manual_bytes(
+            std::path::Path::new(&format!("man-rs-post-{label}.1")),
+            man.as_bytes(),
+        )
+        .expect("parse man relative-indent row fixture");
+        let [
+            Block::Preformatted {
+                children: inner,
+                layout: inner_layout,
+                source: Some(inner_source),
+                ..
+            },
+            Block::Preformatted {
+                children: outer, ..
+            },
+        ] = document.sections[0].blocks.as_slice()
+        else {
+            panic!("{label}: unexpected man blocks: {:#?}", document.sections);
+        };
+        assert_eq!(inline_text(inner), expected, "{label}: {inner:?}");
+        assert_eq!(inner_source.line, 5, "{label}: {inner_source:?}");
+        assert_eq!(inner_layout.indent_columns, 7, "{label}: {inner_layout:?}");
+        assert_eq!(inline_text(outer), "Y", "{label}: {outer:?}");
+    }
+}
+
+#[test]
+fn mdoc_column_body_posts_keep_pending_glyphs_in_their_cells() {
+    for (label, row, first, second) in [
+        ("first", ".It \\zX\\c Ta Z", "X", "Z"),
+        ("last", ".It Q Ta \\zX\\c", "Q", "X"),
+    ] {
+        // Exact inputs checked with fixed CVS -Tascii and -Tlint.  For
+        // LIST_column, mdoc_term.c::termp_it_post() flushes each BODY's
+        // active formatter cell before the next one owns the row.
+        let manual = format!(
+            ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd state probe\n.Sh DESCRIPTION\n.nf\n.Bl -column A B -compact\n{row}\n.El\nY\n.fi\n"
+        );
+        let document = parse_manual_bytes(
+            std::path::Path::new(&format!("mdoc-column-post-{label}.1")),
+            manual.as_bytes(),
+        )
+        .expect("parse mdoc column row fixture");
+        let [
+            Block::Table { rows, .. },
+            Block::Preformatted {
+                children: outer, ..
+            },
+        ] = document.sections[1].blocks.as_slice()
+        else {
+            panic!("{label}: unexpected blocks: {:#?}", document.sections);
+        };
+        let cells = &rows[0].cells;
+        assert_eq!(cells.len(), 2, "{label}: {cells:?}");
+        for (cell, expected) in cells.iter().zip([first, second]) {
+            let [Block::Preformatted { children, .. }] = cell.blocks.as_slice() else {
+                panic!("{label}: pending glyph left its cell: {cell:?}");
+            };
+            assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+        }
+        assert_eq!(inline_text(outer), "Y", "{label}: {outer:?}");
+    }
+}
+
+#[test]
+fn man_synopsis_and_hanging_body_posts_settle_their_own_no_fill_rows() {
+    // Exact inputs checked with fixed CVS -Tascii and -Tlint.  man_term.c
+    // post_SY() ends the synopsis BODY row at .YS; post_HP() ends the hanging
+    // BODY row before the following PP spacing request executes.
+    let synopsis = b".TH TEST 1 \"September 28, 2026\"\n.SH DESCRIPTION\n.nf\n.SY call\n\\zX\\c\n.YS\nY\n.fi\n";
+    let document = parse_manual_bytes(std::path::Path::new("man-sy-post.1"), synopsis)
+        .expect("parse man synopsis post fixture");
+    let [
+        Block::Preformatted {
+            children: synopsis, ..
+        },
+        Block::Preformatted {
+            children: outer, ..
+        },
+    ] = document.sections[0].blocks.as_slice()
+    else {
+        panic!("unexpected synopsis output: {:#?}", document.sections);
+    };
+    assert_eq!(inline_text(synopsis), "call\nX", "{synopsis:?}");
+    assert_eq!(inline_text(outer), "Y", "{outer:?}");
+
+    let hanging =
+        b".TH TEST 1 \"September 28, 2026\"\n.SH DESCRIPTION\n.nf\n.HP 7\n\\zX\\c\n.PP\nY\n.fi\n";
+    let document = parse_manual_bytes(std::path::Path::new("man-hp-post.1"), hanging)
+        .expect("parse man hanging post fixture");
+    let [
+        Block::Preformatted {
+            children: inner,
+            source: Some(source),
+            ..
+        },
+        Block::Preformatted {
+            children: outer, ..
+        },
+    ] = document.sections[0].blocks.as_slice()
+    else {
+        panic!("unexpected hanging output: {:#?}", document.sections);
+    };
+    assert_eq!(inline_text(inner), "X", "{inner:?}");
+    assert_eq!(source.line, 5, "{source:?}");
+    assert_eq!(inline_text(outer), "Y", "{outer:?}");
+}
+
+#[test]
 fn semantic_link_identity_executes_zero_advance_controls_without_guessing_display_text() {
     for (label, macro_name, source, expected) in [
         (

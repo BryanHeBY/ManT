@@ -4,7 +4,7 @@ use super::{
     AstTableAlignment, AstTableCell, Block, DefinitionFlow, DefinitionHeadFlow, DefinitionItem,
     DefinitionListStyle, Inline, ListItem, ListKind, LoweringContext, Node, NodeKind,
     NormalizedListKind, RunInHeadStyle, TableRow, definition_item, first_part_children, layout,
-    lower_blocks_with_predecessor, ordinal_sequence, part_child_groups, source_span, targets,
+    lower_blocks_with_body_post_row_end, ordinal_sequence, part_child_groups, source_span, targets,
 };
 
 pub(in crate::mandoc::blocks) fn lower_mdoc_list(
@@ -154,7 +154,7 @@ fn lower_mdoc_plain_list(
                     formatter.spacing,
                     formatter,
                 );
-                let mut blocks = lower_blocks_with_predecessor(
+                let mut blocks = lower_blocks_with_body_post_row_end(
                     first_part_children(item.node, NodeKind::Body),
                     context,
                     body_origin,
@@ -484,7 +484,7 @@ fn lower_mdoc_column_list(
             let mut cells = part_child_groups(item.node, NodeKind::Body)
                 .map(|body| AstTableCell {
                     kind: mant_ir::TableCellKind::Text,
-                    blocks: lower_blocks_with_predecessor(
+                    blocks: lower_blocks_with_body_post_row_end(
                         body,
                         context,
                         cell_indent.content_origin(),

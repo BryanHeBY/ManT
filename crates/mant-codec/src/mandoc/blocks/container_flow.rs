@@ -24,12 +24,13 @@ impl super::BlockLowerer<'_, '_> {
         append: impl FnOnce(&mut InlineBuilder),
     ) {
         self.resume_no_fill_row();
-        self.no_fill_inline
+        self.formatter
+            .no_fill_inline
             .inherit_zero_advance_armed(self.state.take_zero_advance_armed());
         let (nodes, continues_line) = crate::mandoc::inline::lower_no_fill_fragment_with_font_state(
             self.state.spacing_enabled(),
             &mut self.formatter.font,
-            &mut self.no_fill_inline,
+            &mut self.formatter.no_fill_inline,
             &self.context.scope_posts,
             super::ends_with_line_continuation(source),
             finishes_row,
@@ -150,7 +151,11 @@ impl<'node> ContainerSink<'node> for BlockContainerSink<'node, '_, '_> {
         if starts_line
             && source.flags.line_start
             && self.lowerer.formatter.no_fill
-            && !self.lowerer.no_fill_inline.continues_source_line()
+            && !self
+                .lowerer
+                .formatter
+                .no_fill_inline
+                .continues_source_line()
         {
             self.lowerer.settle_no_fill_inline();
             self.lowerer.state.begin_no_fill_source_line();

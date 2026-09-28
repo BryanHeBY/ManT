@@ -1,7 +1,7 @@
 //! Section/root ownership and source-ordered heading reconstruction.
 use super::{
     Block, LoweringContext, Node, NodeKind, Section, first_part_children,
-    lower_blocks_with_spacing, section_spacing, source_span, update_paragraph_distance,
+    lower_blocks_through_row_end, section_spacing, source_span, update_paragraph_distance,
 };
 use crate::mandoc::inline::authored_section_phrase;
 
@@ -25,7 +25,7 @@ pub(in crate::mandoc) fn lower_document_structure(
         if !is_section(node, true) && !is_section(node, false) {
             continue;
         }
-        root_blocks.extend(lower_blocks_with_spacing(
+        root_blocks.extend(lower_blocks_through_row_end(
             &root.children[root_start..index],
             context,
             crate::mandoc::layout::SourceIndent::default(),
@@ -50,7 +50,7 @@ pub(in crate::mandoc) fn lower_document_structure(
             true,
         ));
     }
-    root_blocks.extend(lower_blocks_with_spacing(
+    root_blocks.extend(lower_blocks_through_row_end(
         &root.children[root_start..],
         context,
         crate::mandoc::layout::SourceIndent::default(),
@@ -93,7 +93,7 @@ fn lower_section(
     if top_level && section_context == crate::mandoc::source_context::MdocSectionContext::Authors {
         formatter.enter_authors_section();
     }
-    let blocks = lower_blocks_with_spacing(
+    let blocks = lower_blocks_through_row_end(
         &body[..first_subsection],
         context,
         crate::mandoc::layout::SourceIndent::default(),
