@@ -96,6 +96,14 @@ pub(super) fn definition_item(
         formatter.note_definition_visible();
     }
     let head = visible_definition_head(node);
+    // CVS mdoc_macro.c::blk_exp_close() breaks an intermediate It block when
+    // an explicit block inside its HEAD closes. In no-fill mode that HEAD's
+    // physical row is already represented before BODY's first invisible
+    // cell executes. This follows AST topology, including Fo/Fc and Bo/Bc;
+    // a literal "Xo" term in -diag is only TEXT and does not qualify.
+    let closed_explicit_head_scope = head
+        .iter()
+        .any(|child| child.kind == NodeKind::Block && child.flags.no_fill);
     let body = first_part_children(node, NodeKind::Body);
     let (displaced_equations, body) = displaced_definition_equations(head, body);
     let man_node = context.macro_set == libmandoc_rs::MacroSet::Man;
@@ -160,7 +168,11 @@ pub(super) fn definition_item(
         .iter()
         .any(|term| mant_ir::has_printable_character(term));
     formatter.begin_definition_body(
-        flow.shares_pending_term_row && rendered_head_row && !closed_head_row,
+        flow.shares_pending_term_row
+            && rendered_head_row
+            && !closed_head_row
+            && !definition_field_exited
+            && !closed_explicit_head_scope,
     );
     let mut description = if let Some(run_in) = run_in_execution {
         lower_blocks_with_predecessor_and_run_in(

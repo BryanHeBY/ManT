@@ -1,8 +1,8 @@
 use super::{
     AuthorBreakEffect, AuthorExecution, FormatterColumn, Inline, InlineBuilder,
-    InlineExecutionState, KeepPhase, PendingBoundary, PreservedInlineState, SourceFragmentState,
-    SourceLineObservation, SpacingMode, TrailingOutput, WordEndBreak, last_visible_character,
-    trim_trailing_breakable_spaces, updated_spacing,
+    InlineExecutionState, KeepPhase, PendingBoundary, PendingFieldGapOrigin, PreservedInlineState,
+    SourceFragmentState, SourceLineObservation, SpacingMode, TrailingOutput, WordEndBreak,
+    last_visible_character, trim_trailing_breakable_spaces, updated_spacing,
 };
 
 impl InlineBuilder {
@@ -36,11 +36,20 @@ impl InlineBuilder {
     }
 
     pub(in crate::mandoc) fn execute_author(&mut self, mode: Option<libmandoc_rs::AuthorMode>) {
-        if mode.is_some() && !self.has_formatter_cell() && self.execution.pending_field_spaces > 0 {
-            // A mode-only `.An -split/-nosplit` executes no formatter word,
-            // but the later author pre-handler calls `term_newln()` before
-            // its word.  With no buffered cell that call retains NOSPACE and
-            // discards an unrealized HANG field separator.
+        if mode.is_some()
+            && !self.has_formatter_cell()
+            && self.execution.pending_field_spaces > 0
+            && !self
+                .execution
+                .definition
+                .as_ref()
+                .is_some_and(|definition| {
+                    definition.pending_gap_origin == PendingFieldGapOrigin::SourceLine
+                })
+        {
+            // A mode-only An emits no word. Only a preceding NODE_LINE
+            // term_newln() has committed native trailspace for the next
+            // word; an unrealized author field separator is abandoned.
             self.execution.pending_field_spaces = 0;
             self.execution.boundary = PendingBoundary::Tight;
         }

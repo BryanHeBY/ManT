@@ -23,7 +23,7 @@ pub(super) fn append_link(builder: &mut InlineBuilder, node: &Node, default_name
         .max(1);
     let label = &children[1..label_end];
     if label.is_empty() {
-        append_link_target_or_text(builder, first, address, default_name);
+        append_link_target_or_text(builder, first, &address, default_name);
     } else {
         // A descriptive Lk label replaces the rendered URI, but remains in
         // the same output stream as its surrounding source siblings. CVS
@@ -36,7 +36,7 @@ pub(super) fn append_link(builder: &mut InlineBuilder, node: &Node, default_name
         });
         let label_is_visible = builder.output_since_has_non_whitespace_glyph(&checkpoint);
         if label_is_visible && !address.is_empty() {
-            wrap_external_link_output(builder, &checkpoint, address.clone());
+            wrap_external_link_output(builder, &checkpoint, &address);
         } else if !label_is_visible {
             // Controls in an empty or fully overstruck label still execute,
             // including source-line continuation.  Remove only its rendered
@@ -59,7 +59,7 @@ pub(super) fn append_link(builder: &mut InlineBuilder, node: &Node, default_name
             // A syntactically present label can disappear after zero-width
             // projection. Fall back to the URI exactly once; an empty target
             // is still represented by its ordinary source text.
-            append_link_target_or_text(builder, first, address, default_name);
+            append_link_target_or_text(builder, first, &address, default_name);
         }
     }
     append_inline_nodes(builder, &children[label_end..], default_name);
@@ -85,7 +85,7 @@ pub(super) fn append_mail_addresses(
             // and sibling nodes.
             execute_hidden_node(builder, child, default_name);
         } else {
-            append_external_link(builder, address, true, |builder| {
+            append_external_link(builder, &address, true, |builder| {
                 append_inline_node(builder, child, default_name);
             });
         }
@@ -123,7 +123,7 @@ fn execute_hidden_generated_text(builder: &mut InlineBuilder, value: &str) {
 fn append_link_target_or_text(
     builder: &mut InlineBuilder,
     node: &Node,
-    address: String,
+    address: &str,
     default_name: Option<&str>,
 ) {
     if address.is_empty() {
@@ -144,7 +144,7 @@ fn append_link_target_or_text(
 /// observe the same builder state.
 fn append_external_link(
     builder: &mut InlineBuilder,
-    address: String,
+    address: &str,
     email: bool,
     append: impl FnOnce(&mut InlineBuilder),
 ) {
@@ -152,7 +152,7 @@ fn append_external_link(
         let (prefix, children) = split_boundary_prefix(children);
         let mut output = prefix;
         output.push(Inline::Link {
-            target: external_link_target(address, email),
+            target: external_link_target(address.to_owned(), email),
             title: None,
             children,
         });
@@ -166,13 +166,13 @@ fn append_external_link(
 fn wrap_external_link_output(
     builder: &mut InlineBuilder,
     checkpoint: &super::flow::OutputTransaction,
-    address: String,
+    address: &str,
 ) {
     builder.wrap_output_since(checkpoint, |children| {
         let (prefix, children) = split_boundary_prefix(children);
         let mut output = prefix;
         output.push(Inline::Link {
-            target: external_link_target(address, false),
+            target: external_link_target(address.to_owned(), false),
             title: None,
             children,
         });
@@ -411,7 +411,7 @@ pub(in crate::mandoc) fn append_man_link(
                 let (prefix, children) = split_boundary_prefix(children);
                 let mut output = prefix;
                 output.push(Inline::Link {
-                    target: link_target,
+                    target: link_target.clone(),
                     title: None,
                     children,
                 });
@@ -433,7 +433,7 @@ pub(in crate::mandoc) fn append_man_link(
                 |builder| append_inline_nodes(builder, head, default_name),
                 |children| {
                     vec![Inline::Link {
-                        target: link_target,
+                        target: link_target.clone(),
                         title: None,
                         children,
                     }]

@@ -142,6 +142,14 @@ struct DefinitionFieldState {
     // pre-handler can then start its field at the BODY margin.
     vertical_started_row: bool,
     hang_row: HangNativeRow,
+    pending_gap_origin: PendingFieldGapOrigin,
+}
+
+#[derive(Clone, Copy, Default, Eq, PartialEq)]
+enum PendingFieldGapOrigin {
+    #[default]
+    Other,
+    SourceLine,
 }
 
 /// The two persistent columns in `term.c::term_flushln()`, plus its unflushed

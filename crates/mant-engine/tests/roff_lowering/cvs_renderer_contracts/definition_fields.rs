@@ -1,6 +1,310 @@
 use super::*;
 
 #[test]
+fn one_authored_link_keeps_one_identity_across_committed_and_rejected_fields() {
+    // These exact inputs passed fixed CVS -Tascii/-Tutf8/-Tlint. Its
+    // mdoc_html.c::mdoc_lk_pre() opens one anchor per Lk; term.c::term_flushln()
+    // may accept X before a later field returns nbr=0, but cannot create a
+    // second source link or revoke the accepted prefix.
+    let prefix =
+        ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n";
+    for style in ["tag", "hang"] {
+        for (label, expected) in [(r"X\p Y", "X\nY"), (r#"X\p "\p Y""#, "X\n")] {
+            let source = format!(
+                "{prefix}.Bl -{style} -width 4n\n.It Xo\n.Lk https://example.com {label}\n.Xc\n.No BODY\n.El\n"
+            );
+            let native = without_line_indentation(&native_terminal(&source));
+            assert!(native.contains("BODY"), "CVS {style} {label}: {native:?}");
+            let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+            let item = first_definition_item(query.document.as_ref().unwrap());
+            let links = item
+                .terms
+                .iter()
+                .flatten()
+                .filter_map(|inline| match inline {
+                    Inline::Link { children, .. } => Some(children),
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(links.len(), 1, "{style} {label}: {item:?}");
+            assert_eq!(inline_text(links[0]), expected, "{style} {label}: {item:?}");
+        }
+    }
+
+    let prose = format!("{prefix}.Lk https://example.com X\\p Y\n");
+    let query = mant_loader::load_roff_bytes(prose.as_bytes()).unwrap();
+    let paragraph_links = query.document.as_ref().unwrap().sections[1]
+        .blocks
+        .iter()
+        .filter_map(|block| match block {
+            Block::Paragraph { children, .. } => Some(
+                children
+                    .iter()
+                    .filter(|inline| matches!(inline, Inline::Link { .. }))
+                    .count(),
+            ),
+            _ => None,
+        })
+        .sum::<usize>();
+    assert_eq!(paragraph_links, 1, "single CVS mdoc_html.c anchor");
+
+    // Two distinct Lk source nodes with the same target remain two links.
+    // Fixed CVS mdoc_html.c opens two anchors for this exact lint-clean input.
+    let distinct =
+        format!("{prefix}.Lk https://example.com first\n.Lk https://example.com second\n");
+    let query = mant_loader::load_roff_bytes(distinct.as_bytes()).unwrap();
+    let distinct_links = query.document.as_ref().unwrap().sections[1]
+        .blocks
+        .iter()
+        .filter_map(|block| match block {
+            Block::Paragraph { children, .. } => Some(
+                children
+                    .iter()
+                    .filter(|inline| matches!(inline, Inline::Link { .. }))
+                    .count(),
+            ),
+            _ => None,
+        })
+        .sum::<usize>();
+    assert_eq!(distinct_links, 2);
+}
+
+#[test]
+fn leading_word_end_break_rejects_a_link_label_field_without_graph() {
+    // Both exact TAG/HANG inputs passed fixed CVS -Tascii/-Tutf8/-Tlint.
+    // term.c::term_word() writes the separator after the empty \p word;
+    // term_fill() then returns nbr=0 before it reaches QAXAQ's graph.
+    let prefix =
+        ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n";
+    for style in ["tag", "hang"] {
+        let source = format!(
+            "{prefix}.Bl -{style} -width 4n\n.It Xo\n.Lk https://example.com \\p QAXAQ\n.Xc\n.No BODY\n.El\n"
+        );
+        let native = without_line_indentation(&native_terminal(&source));
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+        let item = first_definition_item(query.document.as_ref().unwrap());
+        let term = item
+            .terms
+            .iter()
+            .map(|part| inline_text(part))
+            .collect::<String>();
+        assert!(
+            native.contains("BODY") && !native.contains("QAXAQ"),
+            "CVS {style}: {native:?}"
+        );
+        assert!(!term.contains("QAXAQ"), "{style}: {item:?}");
+        assert!(
+            lowered_terminal(&source).contains("BODY"),
+            "{style}: {item:?}"
+        );
+    }
+}
+
+#[test]
+fn pending_zero_advance_graph_is_not_discarded_with_its_hang_field() {
+    // Exact TAG/HANG inputs passed fixed CVS -Tascii/-Tutf8/-Tlint.
+    // term.c::encode1() writes the graph before BACKBEFORE delays its IR
+    // glyph; term_fill() therefore sees X before the later empty word.
+    let prefix =
+        ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n";
+    for style in ["hang", "tag"] {
+        for (word, expected_term) in [(r"\zX\p", "X\nZ"), (r"\zX", "X Z"), (r"\z", "Z")] {
+            let source = format!(
+                "{prefix}.Bl -{style} -width 4n\n.It Xo\n.No {word}\n.No \"\"\n.No Z\n.Xc\n.No BODY\n.El\n"
+            );
+            let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+            let item = first_definition_item(query.document.as_ref().unwrap());
+            let term = item
+                .terms
+                .iter()
+                .map(|part| inline_text(part))
+                .collect::<Vec<_>>()
+                .join(" ");
+            assert!(
+                term.contains('Z') && (word != r"\zX\p" || term.contains('X')),
+                "{style} {word}: {item:?}"
+            );
+            let native = without_line_indentation(&native_terminal(&source));
+            assert!(
+                native.contains(expected_term),
+                "CVS {style} {word}: {native:?}"
+            );
+            let lowered = lowered_terminal(&source);
+            assert!(lowered.contains('Z'), "{style} {word}: {lowered:?}");
+        }
+        for middle in [".No \"\"", r".No \fB", r".No \&", r".No \~", r".No \0"] {
+            let source = format!(
+                "{prefix}.Bl -{style} -width 4n\n.It Xo\n.No \\zX\\p\n{middle}\n.No Z\n.Xc\n.No BODY\n.El\n"
+            );
+            let native = without_line_indentation(&native_terminal(&source));
+            let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+            let item = first_definition_item(query.document.as_ref().unwrap());
+            let term = item
+                .terms
+                .iter()
+                .map(|part| inline_text(part))
+                .collect::<Vec<_>>()
+                .join(" ");
+            let normalized = native
+                .replace('\u{a0}', " ")
+                .lines()
+                .map(str::trim)
+                .collect::<Vec<_>>()
+                .join("\n");
+            assert!(
+                normalized.contains("X\n") && normalized.contains('Z'),
+                "CVS {style} {middle}: {native:?}"
+            );
+            assert!(
+                term.contains('X') && term.contains('Z'),
+                "{style} {middle}: {item:?}"
+            );
+        }
+        let source = format!(
+            "{prefix}.Bl -{style} -width 4n\n.It Xo\n.No \\z\\p\n.No \"\"\n.No Z\n.Xc\n.No BODY\n.El\n"
+        );
+        let native = without_line_indentation(&native_terminal(&source));
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+        let item = first_definition_item(query.document.as_ref().unwrap());
+        let term = item
+            .terms
+            .iter()
+            .map(|part| inline_text(part))
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert!(!native.contains('Z'), "CVS {style}: {native:?}");
+        assert!(!term.contains('Z'), "{style}: {item:?}");
+    }
+}
+
+#[test]
+fn discarded_field_cannot_revoke_a_committed_styled_or_linked_prefix() {
+    // All exact variants passed fixed CVS -Tutf8/-Tlint. term_flushln()
+    // emits the accepted X slice before the next field's leading \p makes
+    // term_fill() return nbr=0; wrappers do not change this commit order.
+    let prefix = ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo\n";
+    for first in ["No", "Em", "Sy", "Li"] {
+        for second in ["No", "Em", "Sy", "Li", "Lk https://example.com"] {
+            let second = format!(".{second} \"\\p Y\"");
+            let source = format!("{prefix}.{first} X\\p\n{second}\n.Xc\n.No BODY\n.El\n");
+            let native = native_terminal(&source);
+            let lowered = lowered_terminal(&source);
+            let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+            let item = first_definition_item(query.document.as_ref().unwrap());
+            let term = item
+                .terms
+                .iter()
+                .map(|part| inline_text(part))
+                .collect::<Vec<_>>()
+                .join(" ");
+            assert!(
+                native.contains('X') && !native.contains("Y BODY"),
+                "CVS {first} {second}: {native:?}"
+            );
+            assert!(
+                term.contains('X') && !term.contains('Y'),
+                "{first} {second}: {item:?}"
+            );
+            assert!(lowered.contains('X'), "{first} {second}: {lowered:?}");
+        }
+    }
+}
+
+#[test]
+fn tag_head_post_and_inset_body_own_distinct_physical_rows() {
+    // Both exact inputs passed fixed CVS -Tascii/-Tutf8/-Tlint.
+    // mdoc_term.c::termp_it_post() closes TAG HEAD after its inner .br;
+    // a later BODY \& and .br close a new row, never the old HEAD row.
+    let prefix =
+        ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n";
+    let tag =
+        format!("{prefix}.Bl -tag -width 4n\n.It Xo X\n.br\n.Xc\n.No \\&\n.br\n.No BODY\n.El\n");
+    let native = without_line_indentation(&native_terminal(&tag));
+    let lowered = lowered_terminal(&tag)
+        .lines()
+        .map(str::trim)
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(native.contains("X\n\nBODY"), "CVS: {native:?}");
+    assert!(lowered.contains("X\n\nBODY"), "IR: {lowered:?}");
+
+    let inset = format!(
+        "{prefix}.nf\n.Bl -inset\n.It Xo first\nsecond\n.Xc\n.No \\&\n.br\n.No BODY\n.El\n.fi\n"
+    );
+    let native = without_line_indentation(&native_terminal(&inset));
+    let lowered = lowered_terminal(&inset)
+        .lines()
+        .map(str::trim)
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(
+        native.contains("first\nsecond\n\n\nBODY"),
+        "CVS: {native:?}"
+    );
+    assert!(
+        lowered.contains("first\nsecond\n\n\nBODY"),
+        "IR: {lowered:?}"
+    );
+
+    for (body, blank_rows) in [
+        (".No \\& No \"\"\n.br\n.No BODY\n", 2),
+        (".No \\&\n.sp 1\n.No BODY\n", 3),
+        (".No \"\"\n.br\n.No BODY\n", 1),
+    ] {
+        let source =
+            format!("{prefix}.nf\n.Bl -inset\n.It Xo first\nsecond\n.Xc\n{body}.El\n.fi\n");
+        let rows = |text: String| text.lines().map(str::trim).collect::<Vec<_>>().join("\n");
+        let native = rows(without_line_indentation(&native_terminal(&source)));
+        let lowered = rows(lowered_terminal(&source));
+        let boundary = format!("second{}BODY", "\n".repeat(blank_rows + 1));
+        assert!(native.contains(&boundary), "CVS {body}: {native:?}");
+        assert!(lowered.contains(&boundary), "IR {body}: {lowered:?}");
+    }
+
+    // CVS mdoc_macro.c::blk_exp_close() breaks the intermediate It HEAD
+    // when Fo/Fc or Bo/Bc closes there; these are the same ownership event
+    // as Xo/Xc, independent of the visible spelling of the HEAD.
+    for head in [".It Fo call\n.Fa arg\n.Fc\n", ".It Bo X\n.Bc\n"] {
+        let source = format!("{prefix}.nf\n.Bl -inset\n{head}.No \\&\n.br\n.No BODY\n.El\n.fi\n");
+        let rows = |text: String| text.lines().map(str::trim).collect::<Vec<_>>().join("\n");
+        let native = rows(without_line_indentation(&native_terminal(&source)));
+        let lowered = rows(lowered_terminal(&source));
+        assert!(native.contains("\n\n\nBODY"), "CVS {head}: {native:?}");
+        assert!(lowered.contains("\n\n\nBODY"), "IR {head}: {lowered:?}");
+    }
+}
+
+#[test]
+fn no_fill_hang_source_line_and_explicit_br_keep_distinct_field_gaps() {
+    // All exact inputs passed fixed CVS -Tutf8/-Tlint. mdoc_term.c gives
+    // HANG HEAD trailspace=1; NODE_LINE calls term_newln() before the next
+    // word. An explicit .br then invokes roff_term_pre_br() and clears BRIND.
+    let prefix = ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -hang -width 4n\n.It Xo X\n";
+    for (middle, expected) in [
+        (".No Bob\n", "X Bob"),
+        (".br\n.No Bob\n", "XBob"),
+        (".Sm off\n.No Bob\n", "X Bob"),
+        (".An -split\n.No Bob\n", "X Bob"),
+        (".No \"\"\n.No Bob\n", "X Bob"),
+        (".No \\&\n.No Bob\n", "X Bob"),
+        (".No X\\c\n.No Bob\n", "X XBob"),
+    ] {
+        let source = format!("{prefix}{middle}.Xc\n.No BODY\n.El\n");
+        let native = without_line_indentation(&native_terminal(&source));
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+        let item = first_definition_item(query.document.as_ref().unwrap());
+        let term = item
+            .terms
+            .iter()
+            .map(|part| inline_text(part))
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert!(native.contains(expected), "CVS {middle}: {native:?}");
+        assert_eq!(term, expected, "{middle}: {item:?}");
+    }
+}
+
+#[test]
 fn run_in_fixed_cells_keep_completed_head_glyph_in_its_term() {
     // Fixed CVS mdoc_term.c::termp_it_pre() sends inset/diag cells through
     // term_word("\\ ") / term_word("\\ \\ "). term.c::encode1() retains a

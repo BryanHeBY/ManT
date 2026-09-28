@@ -77,7 +77,7 @@ impl super::BlockLowerer<'_, '_> {
                     |builder| append_inline_nodes(builder, head, self.context.default_name),
                     |children| {
                         vec![Inline::Link {
-                            target,
+                            target: target.clone(),
                             title: None,
                             children,
                         }]

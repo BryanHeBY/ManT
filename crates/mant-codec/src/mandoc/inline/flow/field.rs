@@ -1,7 +1,7 @@
 use super::{
     AuthorBreakEffect, DefinitionFieldStyle, FormatterColumn, HangRowTransition, Inline,
-    InlineBuilder, NoBreakField, PendingBoundary, TrailingOutput, WordEndBreak,
-    has_printable_character, last_visible_character, trim_trailing_breakable_spaces,
+    InlineBuilder, NoBreakField, PendingBoundary, PendingFieldGapOrigin, TrailingOutput,
+    WordEndBreak, has_printable_character, last_visible_character, trim_trailing_breakable_spaces,
 };
 
 impl InlineBuilder {
@@ -27,7 +27,10 @@ impl InlineBuilder {
                 AuthorBreakEffect::Line => None,
             });
         if let Some((start, gap, body, wraps)) = field {
-            self.flush_definition_field(start, if wraps { gap } else { 0 }, body, wraps, false);
+            self.flush_definition_field(start, gap, body, wraps, false);
+            if self.execution.pending_field_spaces > 0 {
+                self.definition_state_mut().pending_gap_origin = PendingFieldGapOrigin::SourceLine;
+            }
         } else {
             self.hard_break();
         }
@@ -78,6 +81,7 @@ impl InlineBuilder {
         wraps: bool,
         exit_field: bool,
     ) -> bool {
+        let pending_native_gap = self.execution.pending_field_spaces > 0;
         let native_field_discarded = self
             .execution
             .definition
@@ -99,7 +103,13 @@ impl InlineBuilder {
             // survives, so a hang head and its body remain on that same row;
             // a tag head instead finishes as an ordinary line field.
             if exit_field {
-                self.definition_state_mut().pending_indent = Some(usize::from(body_width_columns));
+                // A source-line term_newln() may have already flushed this
+                // field and left its trailspace for the next word. An
+                // explicit .br consumes that pending gap while BRIND moves
+                // the offset; it does not print another field's padding.
+                self.definition_state_mut().pending_indent =
+                    (!pending_native_gap).then_some(usize::from(body_width_columns));
+                self.execution.pending_field_spaces = 0;
                 // `roff_term_pre_br()` changes the device offset even for
                 // an empty field. It does not advance `p->viscol`; the
                 // offset was recorded in `hang_row.field_offset` above.
@@ -166,6 +176,7 @@ impl InlineBuilder {
             && wraps
             && field_width.saturating_add(usize::from(gap_cells)) > body_width;
 
+        let mut deferred_field_cells = 0;
         if overruns {
             self.hard_break();
             if exit_field {
@@ -181,7 +192,15 @@ impl InlineBuilder {
             } else {
                 usize::from(gap_cells)
             };
-            self.append_fixed_cells(cells);
+            if !exit_field && !wraps {
+                // term_flushln() retains trailspace as minbl. A following
+                // formatter word materializes it, while roff_term_pre_br()
+                // can clear it before that word. IR must make the same
+                // decision at the consuming event, not at field flush.
+                deferred_field_cells = cells;
+            } else {
+                self.append_fixed_cells(cells);
+            }
         } else if exit_field {
             // An explicit empty word and `\&` still execute the NOBREAK
             // field.  There is no row to close, but `roff_term_pre_br()`
@@ -200,7 +219,8 @@ impl InlineBuilder {
         self.execution.boundary = PendingBoundary::Tight;
         self.execution.empty_word = false;
         self.execution.pending_breakable_spaces = 0;
-        self.execution.pending_field_spaces = 0;
+        self.execution.pending_field_spaces = deferred_field_cells;
+        self.definition_state_mut().pending_gap_origin = PendingFieldGapOrigin::Other;
         self.execution.word_end_break = WordEndBreak::Clear;
         self.execution.formatter_column = FormatterColumn::Origin;
         if let Some(execution) = &mut self.execution.author_execution {
@@ -364,6 +384,10 @@ impl InlineBuilder {
         let mut field = self.nodes.split_off(start.min(self.nodes.len()));
         retain_unprinted_field_targets(&mut field);
         self.nodes.extend(field);
+        // term.c::term_flushln() clears both BACKAFTER and BACKBEFORE even
+        // when term_fill() returns nbr=0. The rejected field can still own a
+        // completed \z glyph that has not entered the IR suffix yet.
+        self.execution.zero_advance.discard_at_row_end();
         self.execution.last_visible_character = last_visible_character(&self.nodes);
         if exited_field {
             // A TAG .br may have already ended NOBREAK, but subsequent words

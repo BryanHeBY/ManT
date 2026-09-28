@@ -184,6 +184,17 @@ if an ordinary separator follows `\p` before any native graph,
 remain available to queries. A literal tab is a native graph, so it does not
 qualify as that separator. TAG may leave NOBREAK before HEAD returns, but the
 same buffered-word rule still applies to its remaining HEAD text.
+The native field graph includes a completed `\zX` cell before its delayed IR
+glyph appears; a bare `\z` supplies no graph. Each `term_flushln()` commits
+only its accepted prefix, so a later field discarded by `term_fill()` cannot
+remove already printed text, including styled text or a link label. A semantic
+wrapper may span that boundary: its accepted and pending slices stay separate
+during field execution, then return as one semantic link in the IR. HANG
+source-line flushes retain `trailspace` until the
+next formatter word; an intervening `br` clears it with BRIND instead of
+printing an extra separator. In no-fill extended definition HEADs, closing
+an explicit nested block also ends the old `It` ownership before BODY begins;
+a subsequent invisible BODY row is therefore new output.
 An inset item with no HEAD child generates no separator word at all, so that
 case does not consume formatter word state.
 

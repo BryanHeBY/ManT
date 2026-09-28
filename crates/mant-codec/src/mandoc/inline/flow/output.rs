@@ -5,6 +5,10 @@ use super::{
     needs_boundary_space, push_text,
 };
 
+// A private boundary carried only while one authored Link spans two native
+// term_flushln() fields. It is removed before any IR owner is returned.
+const INTERNAL_LINK_SPLIT: &str = "\0mant:field-link-split";
+
 impl InlineBuilder {
     pub(in crate::mandoc) fn node_count(&self) -> usize {
         self.nodes.len()
@@ -57,6 +61,9 @@ impl InlineBuilder {
 
     fn rollback_compacted_output(&mut self, rollback: &OutputRollback) {
         self.nodes.truncate(rollback.node_count);
+        if let Some(author) = &mut self.execution.author_execution {
+            author.field_output_start = author.field_output_start.min(self.nodes.len());
+        }
         self.execution.last_visible_character = rollback.last_visible_character;
         self.execution.has_printable_content = rollback.has_printable_content;
         self.execution.trailing_output = rollback.trailing_output;
@@ -89,10 +96,9 @@ impl InlineBuilder {
     pub(in crate::mandoc) fn wrap_output_since(
         &mut self,
         transaction: &OutputTransaction,
-        wrap: impl FnOnce(Vec<Inline>) -> Vec<Inline>,
+        wrap: impl FnMut(Vec<Inline>) -> Vec<Inline>,
     ) {
-        let output = self.nodes.split_off(transaction.rollback.node_count);
-        self.nodes.extend(wrap(output));
+        self.wrap_output_from(transaction.rollback.node_count, wrap);
     }
 
     /// Replace the visible glyphs emitted since `checkpoint` without
@@ -262,12 +268,10 @@ impl InlineBuilder {
             // leaves stale viscol for a later discarded buffer.
             definition.hang_row.endline();
         }
-        if exited_definition_row || exited_discarded_buffer {
-            self.execution
-                .author_execution
-                .as_mut()
-                .unwrap()
-                .field_output_start = self.nodes.len();
+        if let Some(author) = &mut self.execution.author_execution {
+            // term_flushln() commits its accepted prefix before it starts
+            // another field. A later nbr=0 may discard only the new suffix.
+            author.field_output_start = self.nodes.len();
         }
         // term_newln() does not clear TERMP_NONEWLINE; the next word does.
     }
@@ -550,14 +554,63 @@ impl InlineBuilder {
     pub(in crate::mandoc) fn append_scope(
         &mut self,
         append: impl FnOnce(&mut Self),
-        style: impl FnOnce(Vec<Inline>) -> Vec<Inline>,
+        style: impl FnMut(Vec<Inline>) -> Vec<Inline>,
     ) {
         // Appending must still see the prefix, especially a preceding hard
         // break used for deduplication. Style only the new suffix afterwards.
         let start = self.nodes.len();
         append(self);
-        let inner = self.nodes.split_off(start);
-        self.nodes.extend(style(inner));
+        self.wrap_output_from(start, style);
+    }
+
+    /// Wrap one IR suffix without moving the native field's commit boundary.
+    /// A wrapper can replace many children by one Link/Emphasis node; when a
+    /// real `term_flushln()` fell inside it, keep accepted and pending slices
+    /// separate so a later nbr=0 only rejects the pending slice.
+    fn wrap_output_from(&mut self, start: usize, mut wrap: impl FnMut(Vec<Inline>) -> Vec<Inline>) {
+        let end = self.nodes.len();
+        let mut inner = self.nodes.split_off(start);
+        let field_start = self
+            .execution
+            .author_execution
+            .as_ref()
+            .map(|author| author.field_output_start);
+        if let Some(field_start) = field_start.filter(|&field_start| {
+            self.execution.definition.is_some() && start < field_start && field_start < end
+        }) {
+            // Keep the committed prefix and the current native field in
+            // distinct wrappers. A later term_fill() rejection must never
+            // erase or retain part of the wrong wrapped output owner.
+            let pending = inner.split_off(field_start - start);
+            let accepted = wrap(inner);
+            let pending = wrap(pending);
+            let split_link = matches!((accepted.last(), pending.last()),
+                (Some(Inline::Link { target: left, title: left_title, .. }),
+                 Some(Inline::Link { target: right, title: right_title, .. }))
+                    if left == right && left_title == right_title);
+            self.nodes.extend(accepted);
+            if split_link {
+                // This is one authored link across two native fields. Keep
+                // its parts separate until the pending field is accepted or
+                // rejected, then join the presentation owner at IR drain.
+                self.nodes.push(Inline::anchor(INTERNAL_LINK_SPLIT));
+            }
+            let new_field_start = self.nodes.len();
+            self.nodes.extend(pending);
+            self.execution
+                .author_execution
+                .as_mut()
+                .unwrap()
+                .field_output_start = new_field_start;
+        } else {
+            self.nodes.extend(wrap(inner));
+            if let Some(author) = &mut self.execution.author_execution
+                && author.field_output_start >= end
+                && end > start
+            {
+                author.field_output_start = self.nodes.len();
+            }
+        }
     }
 
     /// Append content using the formatter-level boundary selected by the
@@ -690,7 +743,7 @@ impl InlineBuilder {
         };
         // term_word() buffers its separator and glyph in the native field.
         // Generated IR padding is excluded from that field.
-        let native_word_space = add_space
+        let native_word_space = (add_space || self.execution.empty_word)
             && (self.execution.spacing.enabled()
                 || matches!(
                     boundary,
@@ -814,7 +867,7 @@ impl InlineBuilder {
     /// Only a paragraph terminator may discard a trailing `LineBreak`.
     pub(in crate::mandoc) fn finish_preserving_rows(mut self) -> Vec<Inline> {
         self.flush_zero_advance();
-        std::mem::take(&mut self.nodes)
+        self.drain_ir_nodes()
     }
 
     /// Drain one IR paragraph without ending the formatter's execution
@@ -944,7 +997,7 @@ impl InlineBuilder {
         self.flush_zero_advance();
         let output = if preserve_rows {
             self.execution.word_end_break = WordEndBreak::Clear;
-            std::mem::take(&mut self.nodes)
+            self.drain_ir_nodes()
         } else {
             self.finish_nodes()
         };
@@ -977,7 +1030,7 @@ impl InlineBuilder {
         // br/sp at the end of an inset HEAD closed its last physical row;
         // keep that break in the detached term so the BODY cannot run in.
         self.execution.word_end_break = WordEndBreak::Clear;
-        let output = std::mem::take(&mut self.nodes);
+        let output = self.drain_ir_nodes();
         // The output owner ended, but CVS term_word() still sees the same
         // physical row and word separator after an inset/diag HEAD. Keep its
         // registers, retiring only offsets into the drained node vector.
@@ -990,7 +1043,13 @@ impl InlineBuilder {
         while matches!(self.nodes.last(), Some(Inline::LineBreak)) {
             self.nodes.pop();
         }
-        std::mem::take(&mut self.nodes)
+        self.drain_ir_nodes()
+    }
+
+    fn drain_ir_nodes(&mut self) -> Vec<Inline> {
+        let mut nodes = std::mem::take(&mut self.nodes);
+        join_authored_links(&mut nodes);
+        nodes
     }
 
     pub(super) fn flush_zero_advance(&mut self) {
@@ -1103,6 +1162,66 @@ pub(in crate::mandoc::inline) fn trailing_ascii_spaces(nodes: &[Inline]) -> usiz
 
 /// Apply CVS `term_field()` trailing-blank trimming without touching fixed
 /// run-in cells that were generated by the formatter rather than by a word.
+fn join_authored_links(nodes: &mut Vec<Inline>) {
+    for node in nodes.iter_mut() {
+        match node {
+            Inline::Strong { children }
+            | Inline::Emphasis { children }
+            | Inline::Link { children, .. } => join_authored_links(children),
+            Inline::Text { .. }
+            | Inline::Code { .. }
+            | Inline::Equation { .. }
+            | Inline::Anchor { .. }
+            | Inline::LineBreak => {}
+        }
+    }
+
+    let mut index = 0;
+    while index < nodes.len() {
+        let marker = matches!(&nodes[index], Inline::Anchor { id, .. } if id.as_str() == INTERNAL_LINK_SPLIT);
+        if !marker {
+            index += 1;
+            continue;
+        }
+        let next = index + 1;
+        let prefix = matches!(nodes.get(next), Some(Inline::Text { value }) if value.chars().all(char::is_whitespace));
+        let right = next + usize::from(prefix);
+        let merge = match (
+            index.checked_sub(1).and_then(|left| nodes.get(left)),
+            nodes.get(right),
+        ) {
+            (
+                Some(Inline::Link {
+                    target: left,
+                    title: left_title,
+                    ..
+                }),
+                Some(Inline::Link {
+                    target: right,
+                    title: right_title,
+                    ..
+                }),
+            ) => left == right && left_title == right_title,
+            _ => false,
+        };
+        if merge {
+            let Inline::Link { mut children, .. } = nodes.remove(right) else {
+                unreachable!("checked matching link")
+            };
+            if prefix {
+                children.insert(0, nodes.remove(next));
+            }
+            if let Inline::Link {
+                children: accepted, ..
+            } = &mut nodes[index - 1]
+            {
+                accepted.append(&mut children);
+            }
+        }
+        nodes.remove(index);
+    }
+}
+
 pub(super) fn trim_trailing_breakable_spaces(nodes: &mut Vec<Inline>, count: usize) {
     fn trim(nodes: &mut Vec<Inline>, remaining: &mut usize) -> bool {
         let mut index = nodes.len();

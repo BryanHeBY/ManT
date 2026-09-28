@@ -174,8 +174,8 @@ pub(super) fn manual_reference(builder: &mut InlineBuilder, node: &Node, name: O
             }
             vec![Inline::Link {
                 target: mant_ir::LinkTarget::Manual {
-                    name: target_name,
-                    manual_section: section,
+                    name: target_name.clone(),
+                    manual_section: section.clone(),
                 },
                 title: None,
                 children,

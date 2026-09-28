@@ -79,7 +79,7 @@ pub(super) fn append(builder: &mut InlineBuilder, node: &Node, name: Option<&str
                         append_inline_nodes(builder, children, name);
                     });
                 },
-                |children| section_reference(authored_target, children),
+                |children| section_reference(authored_target.clone(), children),
             );
         }
         Some("Nd") => {

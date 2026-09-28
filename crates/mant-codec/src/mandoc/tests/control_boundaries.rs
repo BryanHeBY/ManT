@@ -1,5 +1,38 @@
 use super::*;
 
+#[test]
+fn diagnostic_xo_spelling_is_not_an_explicit_definition_head_scope() {
+    // Exact -diag and -inset inputs passed fixed CVS -Ttree/-Tascii/-Tutf8/
+    // -Tlint. mdoc_macro.c::blk_exp_close() breaks an intermediate It only
+    // for an actual explicit block; -diag parses this Xo as literal TEXT.
+    fn first_it_head(node: &libmandoc_rs::Node) -> Option<&libmandoc_rs::Node> {
+        if node.kind == libmandoc_rs::NodeKind::Block && node.macro_name.as_deref() == Some("It") {
+            return node
+                .children
+                .iter()
+                .find(|child| child.kind == libmandoc_rs::NodeKind::Head);
+        }
+        node.children.iter().find_map(first_it_head)
+    }
+    let prefix =
+        ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n";
+    for (list, head, expected_kind) in [
+        ("diag", ".It Xo\n", libmandoc_rs::NodeKind::Text),
+        (
+            "inset",
+            ".It Xo first\n.Xc\n",
+            libmandoc_rs::NodeKind::Block,
+        ),
+    ] {
+        let source = format!("{prefix}.Bl -{list}\n{head}.No BODY\n.El\n");
+        let report = Parser::default()
+            .parse_bytes("definition-head.1", source.as_bytes())
+            .unwrap();
+        let head = first_it_head(&report.document.root).expect("It HEAD");
+        assert_eq!(head.children[0].kind, expected_kind, "{list}: {head:#?}");
+    }
+}
+
 fn emphasized_document_text(document: &mant_ir::Document) -> String {
     struct Collector(String);
     impl<'ir> Visit<'ir> for Collector {

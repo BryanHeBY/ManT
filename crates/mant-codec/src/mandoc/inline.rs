@@ -445,6 +445,12 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
         || events
             .iter()
             .any(|event| matches!(event, RoffInlineEvent::ZeroWidthGlyph));
+    if builder.zero_advance.has_printable_pending_glyph() {
+        // term.c::encode1() has already written this graph to the native
+        // field, even though its zero-advance IR glyph is still pending.
+        // A later empty word must not turn that field into nbr=0.
+        builder.note_hang_native_graph();
+    }
     if execution.joins_preceding_node {
         builder.tighten_next_boundary();
         builder.note_zero_advance_join();
