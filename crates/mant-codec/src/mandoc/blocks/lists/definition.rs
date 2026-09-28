@@ -1,8 +1,9 @@
 //! Shared definition content, source ownership, and head construction.
 use super::super::lower_blocks_with_predecessor_and_run_in;
 use super::{
-    DefinitionItem, Inline, InlineBuilder, LoweringContext, Node, NodeKind, first_part_children,
-    is_inline_equation, is_inline_equation_quote_artifact, source_span, targets,
+    Block, DefinitionItem, Inline, InlineBuilder, LoweringContext, Node, NodeKind,
+    first_part_children, is_inline_equation, is_inline_equation_quote_artifact, source_span,
+    targets,
 };
 
 #[derive(Clone, Copy)]
@@ -123,6 +124,12 @@ pub(super) fn definition_item(
         }
         terms[0].insert(0, Inline::anchor_at(id, source_span(node)));
     }
+    let closed_head_row = take_closed_head_row(&mut terms);
+    if closed_head_row {
+        // The last explicit HEAD break becomes the term/BODY separation.
+        // Earlier breaks, including extra sp rows, remain inside the term.
+        geometry.placement = crate::mandoc::layout::TermPlacement::Stacked;
+    }
     if flow.head.generated_cells().is_some() {
         // The native generated cells execute inside the shared stream below.
         // Their surviving projection is carried by the description itself;
@@ -136,13 +143,11 @@ pub(super) fn definition_item(
     // A native HEAD may occupy a formatter cell without giving IR any term
     // that represents its row (for example, `.It \\&`). Only a rendered HEAD
     // can own the first invisible BODY row when term_newln() closes it.
-    let rendered_head_row = terms.iter().any(|term| {
-        mant_ir::inline_plain_text(term)
-            .chars()
-            .any(|character| !character.is_whitespace())
-    });
+    let rendered_head_row = terms
+        .iter()
+        .any(|term| mant_ir::has_printable_character(term));
     formatter.begin_definition_body(flow.shares_pending_term_row && rendered_head_row);
-    let description = if let Some(run_in) = run_in_execution {
+    let mut description = if let Some(run_in) = run_in_execution {
         lower_blocks_with_predecessor_and_run_in(
             body,
             context,
@@ -165,6 +170,7 @@ pub(super) fn definition_item(
             formatter,
         )
     };
+    carry_invisible_head_row(node, &terms, closed_head_row, &mut description);
     let observed = formatter.finish_definition_body();
     if man_node {
         formatter.font.man_text_boundary(); // BODY post
@@ -196,6 +202,53 @@ pub(super) fn definition_item(
         context.native_heads.borrow_mut().record(&item, role);
     }
     item
+}
+
+fn take_closed_head_row(terms: &mut [Vec<Inline>]) -> bool {
+    let Some(term) = terms.last_mut() else {
+        return false;
+    };
+    let Some(last_content) = term
+        .iter()
+        .rposition(|inline| !matches!(inline, Inline::Anchor { .. }))
+    else {
+        return false;
+    };
+    if !matches!(term[last_content], Inline::LineBreak) {
+        return false;
+    }
+    term.remove(last_content);
+    true
+}
+
+fn invisible_closed_head_row(terms: &[Vec<Inline>]) -> bool {
+    terms.last().is_some_and(|term| {
+        term.iter()
+            .any(|inline| matches!(inline, Inline::Text { value } if value.is_empty()))
+            && !term.iter().any(|inline| {
+                matches!(inline, Inline::LineBreak)
+                    || mant_ir::has_printable_character(std::slice::from_ref(inline))
+            })
+    })
+}
+
+fn carry_invisible_head_row(
+    node: &Node,
+    terms: &[Vec<Inline>],
+    closed_head_row: bool,
+    description: &mut Vec<Block>,
+) {
+    if closed_head_row && invisible_closed_head_row(terms) {
+        // term_newln() flushed a HEAD cell, but an invisible term has no IR
+        // renderer. Transfer its completed physical row to the BODY owner.
+        description.insert(
+            0,
+            Block::VerticalSpace {
+                lines: 1,
+                source: source_span(node),
+            },
+        );
+    }
 }
 
 fn lower_definition_head(

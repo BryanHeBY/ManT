@@ -80,6 +80,18 @@ impl InlineBuilder {
                 body_width_columns,
                 wraps,
             } => {
+                if !wraps
+                    && let Some(definition) = &mut self.execution.definition
+                    && definition.vertical_started_row
+                {
+                    // termp_an_pre() enters the body margin after a positive
+                    // term_vspace() ended the former HANG device row.
+                    definition.hang_row.viscol = definition
+                        .hang_row
+                        .viscol
+                        .max(usize::from(body_width_columns));
+                    definition.vertical_started_row = false;
+                }
                 self.flush_definition_field(
                     field_output_start,
                     gap_cells,
@@ -87,6 +99,12 @@ impl InlineBuilder {
                     wraps,
                     false,
                 );
+                if !wraps && let Some(definition) = &mut self.execution.definition {
+                    // termp_an_pre() called term_newln(): its NOSPACE flag
+                    // suppresses term_word()'s automatic blank before the
+                    // next author glyph. minbl from the flushed field stays.
+                    definition.hang_row.suppress_next_auto_space = true;
+                }
             }
         }
         if let Some(execution) = &mut self.execution.author_execution {

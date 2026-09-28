@@ -1049,3 +1049,97 @@ fn control_only_author_handoffs_settle_buffer_and_device_rows_separately() {
         );
     }
 }
+
+#[test]
+fn invisible_run_in_head_row_has_one_output_owner() {
+    // Each exact input was run with the pinned CVS -Tascii/-Tlint. In
+    // term.c::term_word(), the second empty word writes a separator cell;
+    // \& writes an invisible cell, while one empty word or Ns writes none.
+    // term_newln() closes only an occupied cell, and term_vspace() adds its
+    // own row. IR term visibility cannot decide whether the row existed.
+    let cases = [
+        ("pair-br", ".No \"\" No \"\"\n.br", 2),
+        ("ignore-br", ".No \\&\n.br", 2),
+        ("single-br", ".No \"\"\n.br", 1),
+        ("joined-br", ".No \"\" Ns No \"\"\n.br", 1),
+        ("pair-sp1", ".No \"\" No \"\"\n.sp 1", 3),
+        ("ignore-twice", ".No \\&\n.br\n.No \\&\n.br", 3),
+    ];
+    for (label, head, expected_newlines) in cases {
+        let source = format!(
+            ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset\n.It Xo\n{head}\n.Xc\n.No BODY\n.El\n"
+        );
+        let native = without_line_indentation(&native_terminal(&source));
+        let lowered = lowered_terminal(&source);
+        for (kind, output) in [("native", native), ("lowered", lowered)] {
+            let (_, tail) = output.split_once("DESCRIPTION").unwrap();
+            let (before_body, _) = tail.split_once("BODY").unwrap();
+            assert_eq!(
+                before_body.matches('\n').count(),
+                expected_newlines,
+                "{label} {kind}: {output:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn final_hang_field_decides_body_gap_from_executed_columns() {
+    // Exact cases checked with pinned CVS -Tutf8/-Tascii/-Tlint. Unlike an
+    // ordinary blank, \~ occupies a fixed field cell in the UTF-8 device.
+    // mdoc_term.c::
+    // termp_it_post() flushes the final HANG field; term.c::term_flushln()
+    // retains minbl from a previous field, counts a pending \z glyph, but
+    // term_vspace() ends its row.
+    let cases = [
+        ("short after br", ".No X\n.br\n.No Y", true),
+        ("long after br", ".No LONGTEXT\n.br\n.No Y", false),
+        (
+            "four plus author",
+            ".No XXXX\n.br\n.An -split\n.An Bob",
+            true,
+        ),
+        (
+            "five plus author",
+            ".No XXXXX\n.br\n.An -split\n.An Bob",
+            false,
+        ),
+        ("minbl after br", ".No XXXXXX\n.br\n.No Y", false),
+        ("pending zero glyph", ".No XXXXXX\n.br\n.No \\zY", false),
+        ("positive sp", ".No LONGTEXT\n.sp 1\n.No Y", true),
+        (
+            "positive sp then author",
+            ".No LONGTEXT\n.sp 1\n.No A\n.An -split\n.An Bob",
+            false,
+        ),
+        ("no field flush", ".No XXXX No Bob", true),
+        (
+            "breakable blank field",
+            ".No X\n.br\n.No \" \"\n.br\n.No Y",
+            true,
+        ),
+        (
+            "fixed blank field",
+            ".No X\n.br\n.No \\~\n.br\n.No Y",
+            false,
+        ),
+        ("invisible field", ".No X\n.br\n.No \\&\n.br\n.No Y", true),
+        ("empty field", ".No X\n.br\n.No \"\"\n.br\n.No Y", true),
+    ];
+    for (label, head, expected_gap) in cases {
+        let source = format!(
+            ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 6n\n.It Xo\n{head}\n.Xc\n.No BODY\n.El\n"
+        );
+        let native = without_line_indentation(&native_terminal(&source));
+        let lowered = lowered_terminal(&source);
+        for (kind, output) in [("native", native), ("lowered", lowered)] {
+            let (_, tail) = output.split_once("DESCRIPTION").unwrap();
+            let (before_body, _) = tail.split_once("BODY").unwrap();
+            assert_eq!(
+                before_body.trim_end().len() != before_body.len(),
+                expected_gap,
+                "{label} {kind}: {output:?}"
+            );
+        }
+    }
+}

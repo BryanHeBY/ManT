@@ -136,6 +136,10 @@ terminator when filled output is split. It adds to a later `PP` distance and
 survives `fi`/`nf`. A later whitespace-only formatter word can occupy one
 additional physical row when the next request closes it; a direct empty `BR`
 operand does not assert an empty TEXT row.
+Successive empty mdoc formatter words can still write an automatic separator
+cell on the second `term_word()` call. It occupies one native row when a later
+source line or control request closes it; a single empty word or an `Ns` join
+does not create that cell.
 Once a completed row and its invisible cell have moved to block spacing, that
 cell is not projected again by the paragraph's empty-word fallback.
 Native `term_newln()` and `term_flushln()` can close a physical row without
@@ -154,9 +158,16 @@ Draining the HEAD's IR term does not reset the native word separator or its
 current row. If the generated separator has no cell left, an empty BODY word
 can still consume the no-space setting before the following visible word.
 An occupied native HEAD row is distinct from a HEAD row actually represented
-by a visible term. Only the latter can consume an invisible BODY row on an
-explicit break. In no-fill, an empty or font-only BODY word also cannot
+by an IR term. A whitespace term, including `\~` and `\0`, represents its row;
+`\&` alone does not. Only a represented row can consume an invisible BODY row
+on an explicit break. In no-fill, an empty or font-only BODY word also cannot
 reproject the HEAD's cell; a new `\&` cell can occupy its own BODY row.
+An explicit final HEAD `br` or `sp` closes the run-in row once; additional
+vertical rows stay in the term. If that HEAD row held an invisible formatter
+cell, its completed line belongs to the description when no visible term can
+represent it. A hang field's BODY gap is decided from the last device row:
+earlier field padding alone cannot settle it, and a row already reaching the
+BODY origin must not receive another gap.
 An inset item with no HEAD child generates no separator word at all, so that
 case does not consume formatter word state.
 

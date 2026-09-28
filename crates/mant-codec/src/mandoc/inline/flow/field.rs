@@ -1,7 +1,7 @@
 use super::{
-    AuthorBreakEffect, DefinitionFieldStyle, FormatterColumn, Inline, InlineBuilder, NoBreakField,
-    PendingBoundary, TrailingOutput, WordEndBreak, has_printable_character, last_visible_character,
-    trim_trailing_breakable_spaces,
+    AuthorBreakEffect, DefinitionFieldStyle, FormatterColumn, HangRowTransition, Inline,
+    InlineBuilder, NoBreakField, PendingBoundary, TrailingOutput, WordEndBreak,
+    has_printable_character, last_visible_character, trim_trailing_breakable_spaces,
 };
 
 impl InlineBuilder {
@@ -76,6 +76,9 @@ impl InlineBuilder {
         wraps: bool,
         exit_field: bool,
     ) -> bool {
+        if !wraps {
+            self.flush_native_hang_field(gap_cells, body_width_columns, exit_field);
+        }
         if !self.has_formatter_cell() {
             // `roff_term_pre_br()` applies BRIND even when `term_newln()` had
             // no tcol bytes or device row to flush.  It moves the next word
@@ -84,6 +87,9 @@ impl InlineBuilder {
             // a tag head instead finishes as an ordinary line field.
             if exit_field {
                 self.definition_state_mut().pending_indent = Some(usize::from(body_width_columns));
+                // `roff_term_pre_br()` changes the device offset even for
+                // an empty field. It does not advance `p->viscol`; the
+                // offset was recorded in `hang_row.field_offset` above.
                 self.execution.boundary = PendingBoundary::Tight;
                 if let Some(execution) = &mut self.execution.author_execution {
                     execution.field_output_start = self.nodes.len();
@@ -187,6 +193,35 @@ impl InlineBuilder {
         overruns
     }
 
+    fn flush_native_hang_field(&mut self, gap: u8, body_width: u16, exit_field: bool) {
+        let had_cell = self.has_formatter_cell();
+        let pending_glyph_width = self.pending_hang_glyph_width();
+        if let Some(definition) = &mut self.execution.definition {
+            if let Some(width) = pending_glyph_width {
+                definition.hang_row.word(0, width, 0, true);
+            }
+            if had_cell || pending_glyph_width.is_some() || definition.hang_row.viscol > 0 {
+                definition.hang_row.flush(usize::from(gap));
+            }
+            if exit_field {
+                definition.hang_row.field_offset = usize::from(body_width);
+            }
+        }
+    }
+
+    /// `term.c::encode1()` buffers the character following `\\z` in the
+    /// current field. It has not reached an IR node yet, but `term_fill()` and
+    /// `term_field()` still count its printed width at a field boundary.
+    fn pending_hang_glyph_width(&self) -> Option<usize> {
+        let mut zero_advance = self.execution.zero_advance.clone();
+        let mut pending = Vec::new();
+        zero_advance.finish_into(&mut pending);
+        let text = super::super::plain_text(&pending);
+        text.chars()
+            .any(|ch| !ch.is_whitespace() || ch == '\u{a0}')
+            .then(|| mant_ir::geometry::text_width(&text))
+    }
+
     pub(in crate::mandoc) fn definition_field_exited(&self) -> bool {
         self.execution
             .definition
@@ -195,10 +230,32 @@ impl InlineBuilder {
     }
 
     pub(in crate::mandoc) fn definition_body_gap_consumed(&self) -> bool {
-        self.execution
-            .definition
-            .as_ref()
-            .is_some_and(|state| state.outcome.body_gap_consumed())
+        let Some(state) = &self.execution.definition else {
+            return false;
+        };
+        if !state.hang_row.margin_flush_seen
+            && state.hang_row.transition == HangRowTransition::WordAfterFlush
+            && let Some(AuthorBreakEffect::Field {
+                body_width_columns,
+                gap_cells,
+                wraps: false,
+            }) = self
+                .execution
+                .author_execution
+                .as_ref()
+                .map(|author| author.break_effect)
+        {
+            // At HEAD post, term_newln() flushes the final HANG field. Only
+            // a row that has reached BODY's origin and has no trailing field
+            // space has consumed its separator. An active trailspace remains
+            // `minbl` for the BODY even when the HEAD overran its margin.
+            let mut final_row = state.hang_row.clone();
+            if let Some(width) = self.pending_hang_glyph_width() {
+                final_row.word(0, width, 0, true);
+            }
+            return gap_cells == 0 && final_row.final_column() >= usize::from(body_width_columns);
+        }
+        state.outcome.body_gap_consumed()
     }
 
     pub(super) fn append_fixed_cells(&mut self, count: usize) {
@@ -405,6 +462,15 @@ impl InlineBuilder {
     pub(in crate::mandoc) fn vertical_space(&mut self, rows: usize) {
         if let Some(field) = self.take_no_break_field() {
             self.vertical_space_in_definition_field(field, rows);
+            self.finish_native_vertical_row(rows);
+            return;
+        }
+        if rows == 0 {
+            // roff_term_pre_sp() calls no term_vspace() for zero rows. Its
+            // remaining pre_br() follows the active HANG/TAG field rules.
+            self.control_line_break();
+            self.execution.final_word_join = Some(false);
+            self.execution.final_source_continuation = Some(false);
             return;
         }
         let field = self
@@ -442,6 +508,7 @@ impl InlineBuilder {
                 }
                 self.execution.final_word_join = Some(false);
                 self.execution.final_source_continuation = Some(false);
+                self.finish_native_vertical_row(rows);
                 return;
             }
             // `roff_term_pre_sp()` executes term_vspace() before the final
@@ -500,11 +567,33 @@ impl InlineBuilder {
             self.hard_break();
             self.retain_line_breaks(rows);
         }
+        self.finish_native_vertical_row(rows);
         self.execution.final_word_join = Some(false);
         self.execution.final_source_continuation = Some(false);
     }
 
+    fn finish_native_vertical_row(&mut self, rows: usize) {
+        if rows == 0 {
+            return;
+        }
+        if let Some(definition) = &mut self.execution.definition {
+            // term_vspace() emits an endline after the current field. Unlike
+            // a HANG term_newln(), the next word starts a new device row.
+            definition.hang_row.endline();
+            definition.vertical_started_row = true;
+        }
+    }
+
     fn vertical_space_in_definition_field(&mut self, field: NoBreakField, rows: usize) {
+        if rows == 0 {
+            // roff_term_pre_sp() skips term_vspace() for zero rows, then runs
+            // roff_term_pre_br(). HANG's term_flushln() retains the same
+            // physical row; only a positive vertical request ends it.
+            self.settle_no_break_field_line(field);
+            self.execution.final_word_join = Some(false);
+            self.execution.final_source_continuation = Some(false);
+            return;
+        }
         self.restore_no_break_field_projection(field);
         self.force_output_line_break();
         if field.style == DefinitionFieldStyle::Tag {
@@ -594,6 +683,12 @@ impl InlineBuilder {
     /// `AuthorBreakEffect` changed after the first flush.
     fn continue_no_break_definition_field(&mut self, mut field: NoBreakField) {
         let resumed_has_cell = self.restore_no_break_field_projection(field);
+        if field.style == DefinitionFieldStyle::Hang {
+            self.definition_state_mut()
+                .hang_row
+                .flush(field.trailspace_cells);
+            self.definition_state_mut().hang_row.margin_flush_seen = true;
+        }
         if !resumed_has_cell {
             // Whitespace-only and zero-width formatter words make
             // `term_flushln()` run, but `term_fill()` commits no field.
@@ -694,6 +789,10 @@ impl InlineBuilder {
         self.flush_zero_advance();
         let field = self.nodes.get(start..).unwrap_or_default();
         let width = mant_ir::geometry::text_width(&super::super::plain_text(field));
+        if !wraps {
+            self.definition_state_mut().hang_row.flush(usize::from(gap));
+            self.definition_state_mut().hang_row.margin_flush_seen = true;
+        }
         let overrun = width.saturating_add(usize::from(gap)) > usize::from(body);
         let output_end_before_separator = self.nodes.len();
         if wraps {
@@ -836,6 +935,14 @@ impl InlineBuilder {
         hang_gap_cells: u8,
         consume_body_gap: bool,
     ) {
+        if field.style == DefinitionFieldStyle::Hang {
+            let had_cell = self.has_formatter_cell();
+            let definition = self.definition_state_mut();
+            if had_cell || definition.hang_row.viscol > 0 {
+                definition.hang_row.flush(usize::from(hang_gap_cells));
+            }
+            definition.hang_row.field_offset = field.body_width;
+        }
         if consume_body_gap {
             self.execution
                 .definition

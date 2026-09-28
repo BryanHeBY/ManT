@@ -1,8 +1,8 @@
 use super::{
-    FilledBoundary, Font, FormatterColumn, InboundExecution, Inline, InlineBuilder, KeepPhase,
-    OutputRollback, OutputTransaction, PendingBoundary, PreservedInlineState, TrailingOutput,
-    WordEndBreak, first_visible_character, has_printable_character, last_visible_character,
-    needs_boundary_space, push_text,
+    AuthorBreakEffect, FilledBoundary, Font, FormatterColumn, InboundExecution, Inline,
+    InlineBuilder, KeepPhase, OutputRollback, OutputTransaction, PendingBoundary,
+    PreservedInlineState, TrailingOutput, WordEndBreak, first_visible_character,
+    has_printable_character, last_visible_character, needs_boundary_space, push_text,
 };
 
 impl InlineBuilder {
@@ -585,9 +585,13 @@ impl InlineBuilder {
         {
             self.execution.has_printable_content
                 || self.execution.trailing_output != TrailingOutput::None
+                || (empty_word && self.execution.empty_word)
         } else {
             needs_boundary_space(self.execution.last_visible_character, incoming_first)
         };
+        if word {
+            self.record_hang_word(incoming, add_space, boundary);
+        }
         self.append_boundary_spacing(boundary, add_space, word, empty_word);
         self.nodes.append(incoming);
         if incoming_last.is_some() {
@@ -617,6 +621,54 @@ impl InlineBuilder {
             self.execution.formatter_column = FormatterColumn::Advanced;
         }
         self.execution.empty_word = empty_word;
+    }
+
+    fn record_hang_word(
+        &mut self,
+        incoming: &[Inline],
+        add_space: bool,
+        boundary: PendingBoundary,
+    ) {
+        if !matches!(
+            self.execution
+                .author_execution
+                .map(|author| author.break_effect),
+            Some(AuthorBreakEffect::Field { wraps: false, .. })
+        ) {
+            return;
+        }
+        let Some(definition) = &mut self.execution.definition else {
+            return;
+        };
+        // term_word() buffers its separator and glyph in the native field.
+        // Generated IR padding is excluded from that field.
+        let native_word_space = add_space
+            && (self.execution.spacing.enabled()
+                || matches!(
+                    boundary,
+                    PendingBoundary::Preserved | PendingBoundary::Continued | PendingBoundary::Kept
+                ))
+            && !boundary.is_tight()
+            && self.execution.pending_field_spaces == 0;
+        let separator = if self.execution.pending_field_spaces > 0 {
+            self.execution
+                .pending_field_spaces
+                .saturating_sub(definition.hang_row.minbl)
+        } else {
+            usize::from(native_word_space && !definition.hang_row.suppress_next_auto_space)
+        };
+        let projected = super::super::plain_text(incoming);
+        let trimmed = projected.trim_end_matches(' ');
+        let trailing_spaces = projected.len().saturating_sub(trimmed.len());
+        let width = mant_ir::geometry::text_width(trimmed);
+        // term_fill() discards a field containing only ordinary breakable
+        // blanks. A nonbreaking blank from \~ or \0 is a printable cell.
+        let printable = trimmed
+            .chars()
+            .any(|ch| !ch.is_whitespace() || ch == '\u{a0}');
+        definition
+            .hang_row
+            .word(separator, width, trailing_spaces, printable);
     }
 
     fn append_boundary_spacing(
@@ -663,10 +715,14 @@ impl InlineBuilder {
         }
         if empty_word {
             // A word boundary is real, but trailing formatter padding is not
-            // authored term content. Materialize it at the next glyph.
+            // authored term content. Materialize it at the next glyph. CVS
+            // term_word() has already buffered this cell, so a line request
+            // must still close the otherwise invisible physical row.
             if self.execution.last_visible_character != Some('\n') {
                 self.execution.pending_breakable_spaces =
                     self.execution.pending_breakable_spaces.saturating_add(1);
+                self.execution.formatter_column = FormatterColumn::Advanced;
+                self.note_produced_formatter_cell(true);
             }
         } else {
             push_text(&mut self.nodes, " ".to_owned());
@@ -796,7 +852,11 @@ impl InlineBuilder {
             pending_definition_indent: self.pending_definition_indent(),
             last_executed_source_line: self.execution.last_executed_source_line,
         };
-        let output = self.finish_nodes();
+        // A scope return is not term_newln(). In particular, an authored
+        // br/sp at the end of an inset HEAD closed its last physical row;
+        // keep that break in the detached term so the BODY cannot run in.
+        self.execution.word_end_break = WordEndBreak::Clear;
+        let output = std::mem::take(&mut self.nodes);
         // The output owner ended, but CVS term_word() still sees the same
         // physical row and word separator after an inset/diag HEAD. Keep its
         // registers, retiring only offsets into the drained node vector.

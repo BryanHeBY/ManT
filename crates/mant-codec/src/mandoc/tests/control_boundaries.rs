@@ -319,6 +319,168 @@ fn no_fill_body_does_not_replay_detached_head_cell() {
 }
 
 #[test]
+fn whitespace_definition_terms_own_their_rendered_head_row() {
+    // Exact inset/diag and whitespace spellings checked with fixed CVS
+    // -Tascii/-Tlint. term.c::term_field() can print a row occupied only by
+    // spaces; mdoc_term.c::termp_it_pre() then closes that existing HEAD row.
+    // The invisible \& counterexample is covered by the preceding test.
+    for style in ["inset", "diag"] {
+        for head in ["\" \"", "\\~", "\\0"] {
+            let source = format!(
+                ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -{style}\n.It {head}\n.br\n.No BODY\n.El\n"
+            );
+            let document = parse_manual_bytes(
+                std::path::Path::new("whitespace-head-owner.1"),
+                source.as_bytes(),
+            )
+            .unwrap();
+            let Block::DefinitionList { items, .. } = &document.sections[1].blocks[0] else {
+                panic!("{style}, {head}: {document:#?}");
+            };
+            assert!(mant_ir::has_printable_character(&items[0].terms[0]));
+            assert!(
+                matches!(&items[0].description[0], Block::Paragraph { children, .. } if inline_text(children) == "BODY"),
+                "{style}, {head}: {items:#?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn final_definition_head_break_moves_once_into_stacked_layout() {
+    // Exact br, sp 0, and sp 1 forms checked with fixed CVS -Tascii/-Tlint.
+    // roff_term.c::roff_term_pre_br() closes the HEAD row; termp_it_pre()
+    // cannot turn that completed row back into a run-in BODY field.
+    for (request, expected_term) in [(".br", "X"), (".sp 0", "X"), (".sp 1", "X\n")] {
+        let source = format!(
+            ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset\n.It Xo X\n{request}\n.Xc\n.No BODY\n.El\n"
+        );
+        let document = parse_manual_bytes(
+            std::path::Path::new("closed-definition-head.1"),
+            source.as_bytes(),
+        )
+        .unwrap();
+        let Block::DefinitionList { items, .. } = &document.sections[1].blocks[0] else {
+            panic!("{request}: {document:#?}");
+        };
+        let item = &items[0];
+        assert_eq!(inline_text(&item.terms[0]), expected_term, "{item:#?}");
+        assert!(!item.layout.inline_term, "{request}: {item:#?}");
+        assert!(
+            matches!(&item.description[0], Block::Paragraph { children, .. } if inline_text(children) == " BODY"),
+            "{request}: {item:#?}"
+        );
+    }
+}
+
+#[test]
+fn consecutive_empty_formatter_words_occupy_one_native_row() {
+    // Exact no-fill pairs and single/Ns counters checked with fixed CVS
+    // -Tascii/-Tlint. term.c::term_word() writes the automatic separator
+    // before decoding the second empty word; Ns suppresses that write.
+    for words in [
+        ".No \"\" No \"\"",
+        ".No \\fB No \\fI",
+        ".No \"\" Em \"\"",
+        ".An \"\" An \"\"",
+    ] {
+        let source = format!(
+            ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n{words}\n.No AFTER\n"
+        );
+        let document =
+            parse_manual_bytes(std::path::Path::new("empty-word-cell.1"), source.as_bytes())
+                .unwrap();
+        assert!(
+            matches!(document.sections[1].blocks.as_slice(), [Block::Preformatted { children, .. }] if inline_text(children) == "\nAFTER"),
+            "{words}: {document:#?}"
+        );
+    }
+    for words in [".No \"\"", ".No \"\" Ns No \"\""] {
+        let source = format!(
+            ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n{words}\n.No AFTER\n"
+        );
+        let document = parse_manual_bytes(
+            std::path::Path::new("empty-word-counter.1"),
+            source.as_bytes(),
+        )
+        .unwrap();
+        assert!(
+            matches!(document.sections[1].blocks.as_slice(), [Block::Preformatted { children, .. }] if inline_text(children) == "AFTER"),
+            "{words}: {document:#?}"
+        );
+    }
+}
+
+#[test]
+fn empty_word_cell_survives_filled_control_boundaries() {
+    // Exact br/sp/Pp forms checked with fixed CVS -Tascii/-Tlint. A native
+    // separator cell is completed before the following line/space request.
+    for (request, expected_rows) in [(".br", 1), (".sp 0", 1), (".sp 1", 2), (".Pp", 2)] {
+        let source = format!(
+            ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\" No \"\"\n{request}\n.No AFTER\n"
+        );
+        let document = parse_manual_bytes(
+            std::path::Path::new("empty-word-filled-boundary.1"),
+            source.as_bytes(),
+        )
+        .unwrap();
+        let blocks = &document.sections[1].blocks;
+        let vertical_rows: u16 = blocks
+            .iter()
+            .filter_map(|block| match block {
+                Block::VerticalSpace { lines, .. } => Some(*lines),
+                _ => None,
+            })
+            .sum();
+        let hard_rows = blocks
+            .iter()
+            .filter_map(|block| match block {
+                Block::Paragraph { children, .. } => Some(
+                    children
+                        .iter()
+                        .filter(|inline| matches!(inline, Inline::LineBreak))
+                        .count(),
+                ),
+                _ => None,
+            })
+            .sum::<usize>();
+        assert_eq!(
+            vertical_rows + u16::try_from(hard_rows).unwrap(),
+            expected_rows,
+            "{request}: {blocks:#?}"
+        );
+    }
+}
+
+#[test]
+fn final_hang_field_reestablishes_body_word_gap() {
+    // Exact br/sp 0/sp 1 forms checked with fixed CVS -Tascii/-Tlint.
+    // term_flushln() settles each HANG field independently; an earlier
+    // completed field cannot consume the final Y/BODY word separator.
+    for request in [".br", ".sp 0", ".sp 1"] {
+        let source = format!(
+            ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width Ds\n.It Xo X\n{request}\n.No Y\n.Xc\n.No BODY\n.El\n"
+        );
+        let document = parse_manual_bytes(
+            std::path::Path::new("hang-final-field-gap.1"),
+            source.as_bytes(),
+        )
+        .unwrap();
+        let Block::DefinitionList { items, .. } = &document.sections[1].blocks[0] else {
+            panic!("{request}: {document:#?}");
+        };
+        let item = &items[0];
+        assert!(inline_text(&item.terms[0]).ends_with('Y'), "{item:#?}");
+        assert!(item.layout.inline_term, "{request}: {item:#?}");
+        assert_eq!(item.layout.min_term_gap_columns, 1, "{item:#?}");
+        assert!(
+            matches!(&item.description[0], Block::Paragraph { children, .. } if inline_text(children) == "BODY"),
+            "{request}: {item:#?}"
+        );
+    }
+}
+
+#[test]
 fn crossed_body_close_pops_font_stack_without_restoring_an_old_value() {
     // Exact input checked with fixed CVS -Tascii/-Tlint. term.c's
     // term_fontrepl() changes the active fontq slot, while mdoc_term.c's

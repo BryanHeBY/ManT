@@ -138,6 +138,90 @@ struct DefinitionFieldState {
     pending_indent: Option<usize>,
     outcome: DefinitionOutcome,
     no_break: Option<NoBreakField>,
+    // A positive term_vspace() ends the HANG device row. The next author
+    // pre-handler can then start its field at the BODY margin.
+    vertical_started_row: bool,
+    hang_row: HangNativeRow,
+}
+
+/// The two persistent columns in `term.c::term_flushln()`, plus its unflushed
+/// input field. Generated IR padding never enters this ledger.
+#[derive(Clone, Default)]
+struct HangNativeRow {
+    viscol: usize,
+    minbl: usize,
+    // BRIND changes the offset while nested HEAD children execute. The
+    // enclosing HEAD restores its old offset before its final post flush.
+    field_offset: usize,
+    field_width: usize,
+    trailing_breakable: usize,
+    field_printable: bool,
+    transition: HangRowTransition,
+    suppress_next_auto_space: bool,
+    margin_flush_seen: bool,
+}
+
+#[derive(Clone, Copy, Default, Eq, PartialEq)]
+enum HangRowTransition {
+    #[default]
+    Initial,
+    Flushed,
+    WordAfterFlush,
+}
+
+impl HangNativeRow {
+    fn word(&mut self, separator: usize, width: usize, trailing_spaces: usize, printable: bool) {
+        self.trailing_breakable = self.trailing_breakable.saturating_add(separator);
+        if printable {
+            self.field_width = self
+                .field_width
+                .saturating_add(self.trailing_breakable)
+                .saturating_add(width);
+            self.trailing_breakable = 0;
+            self.field_printable = true;
+        }
+        self.trailing_breakable = self.trailing_breakable.saturating_add(trailing_spaces);
+        if self.transition == HangRowTransition::Flushed {
+            self.transition = HangRowTransition::WordAfterFlush;
+        }
+        self.suppress_next_auto_space = false;
+    }
+
+    fn flush(&mut self, trailspace: usize) {
+        // term_fill() drops trailing ordinary spaces. term_field() advances
+        // vbl only when there is a printable cell, including a fixed blank.
+        if self.field_printable {
+            self.viscol = self
+                .viscol
+                .saturating_add(self.minbl)
+                .max(self.field_offset)
+                .saturating_add(self.field_width);
+        }
+        self.field_width = 0;
+        self.trailing_breakable = 0;
+        self.field_printable = false;
+        self.minbl = trailspace;
+        self.transition = HangRowTransition::Flushed;
+    }
+
+    fn endline(&mut self) {
+        self.viscol = 0;
+        self.minbl = 0;
+        self.field_width = 0;
+        self.trailing_breakable = 0;
+        self.field_printable = false;
+        self.transition = HangRowTransition::Flushed;
+    }
+
+    fn final_column(&self) -> usize {
+        if self.field_printable {
+            self.viscol
+                .saturating_add(self.minbl)
+                .saturating_add(self.field_width)
+        } else {
+            self.viscol
+        }
+    }
 }
 
 impl InlineBuilder {
