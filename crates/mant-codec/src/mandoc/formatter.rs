@@ -21,6 +21,9 @@ pub(in crate::mandoc) enum AuthorFlow {
 pub(super) struct FormatterState {
     pub(super) font: FontState,
     pub(super) spacing: bool,
+    /// Source-order roff fill channel. List bodies return this state to their
+    /// parent; a literal Bd restores its inbound channel at its own post.
+    pub(super) no_fill: bool,
     /// CVS `termp.skipvsp` is formatter-global: structural and presentation
     /// scopes do not clear it, while the next real formatter word does.
     pub(super) vertical_space_debt: u16,
@@ -39,6 +42,7 @@ impl Default for FormatterState {
         Self {
             font: FontState::new(),
             spacing: true,
+            no_fill: false,
             vertical_space_debt: 0,
             zero_advance_armed: false,
             author_flow: AuthorFlow::default(),

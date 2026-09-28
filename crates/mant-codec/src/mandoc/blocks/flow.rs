@@ -54,6 +54,14 @@ impl BlockState {
             self.flush_paragraph();
         }
     }
+
+    /// A mdoc container's `NODE_LINE` is executed before its HEAD children.
+    /// Those children can lack `NODE_LINE` themselves (notably Eo operands).
+    pub(super) fn begin_no_fill_source_line(&mut self) {
+        if self.literal.starts_new_row(true) {
+            self.literal.end_line();
+        }
+    }
     pub(super) fn with_output(
         indent_columns: crate::mandoc::layout::SourceIndent,
         spacing_enabled: bool,

@@ -19,6 +19,7 @@ pub(super) fn preformatted_blocks(
     paragraph_predecessor: bool,
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> Vec<Block> {
+    let inbound_no_fill = formatter.no_fill;
     let mut flow = DisplayFlow {
         output: Vec::new(),
         line: InlineBuilder::with_spacing(spacing_enabled),
@@ -60,6 +61,10 @@ pub(super) fn preformatted_blocks(
     flow.flush();
     flow.commit_line_execution();
     *formatter = flow.formatter;
+    // CVS mdoc_macro.c::blk_exp_close() restores the fill mode saved before
+    // Bd at `.Ed`, so requests inside the display cannot leak a literal
+    // channel to the containing enclosure's generated post.
+    formatter.no_fill = inbound_no_fill;
     flow.output
 }
 
@@ -124,6 +129,7 @@ impl DisplayFlow<'_, '_> {
                 started = true;
             }
             match event {
+                Event::At(_, _) => {}
                 Event::BeginNode(part) => {
                     self.line.begin_executed_node(part);
                     if part.kind == NodeKind::Head
@@ -162,7 +168,14 @@ impl DisplayFlow<'_, '_> {
                 Event::EmptyWord => self.line.execute_empty_word(),
                 Event::EnterKeep => self.line.enter_keep_words(),
                 Event::ExitKeep => self.line.exit_keep_words(),
-                Event::EnterFont(font) => saved_font = Some(self.line.font.push_scope(font)),
+                Event::EnterFont(font, body_id) => {
+                    let saved = self.line.font.push_scope(font);
+                    if let Some(body_id) = body_id {
+                        self.context.scope_posts.enter_font(body_id, saved);
+                    } else {
+                        saved_font = Some(saved);
+                    }
+                }
                 Event::FunctionArgument(argument, comma_after) => {
                     // This direct Fo BODY child bypasses append_nodes(); it
                     // still executes its own NODE_NOFILL mode after a crossed
@@ -177,8 +190,11 @@ impl DisplayFlow<'_, '_> {
                         self.context.default_name,
                     );
                 }
-                Event::ExitFont => {
-                    if let Some(saved) = saved_font.take() {
+                Event::ExitFont(body_id) => {
+                    let saved = body_id
+                        .and_then(|body_id| self.context.scope_posts.exit_font(body_id))
+                        .or_else(|| body_id.is_none().then(|| saved_font.take()).flatten());
+                    if let Some(saved) = saved {
                         self.line.font.pop_scope(saved);
                     }
                 }

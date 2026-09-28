@@ -217,6 +217,18 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         }
     }
 
+    fn observe_source_fill_mode(&mut self, node: &Node) {
+        match node.macro_name.as_deref() {
+            Some("nf") => self.formatter.no_fill = true,
+            Some("fi") => self.formatter.no_fill = false,
+            _ if node.flags.no_fill => self.formatter.no_fill = true,
+            _ if node.scope_end.is_none() && participates_in_inline_flow(node) => {
+                self.formatter.no_fill = false;
+            }
+            _ => {}
+        }
+    }
+
     fn push(
         &mut self,
         node: &Node,
@@ -226,6 +238,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         ip_run: Option<lists::man::IpRun>,
     ) {
         self.prepare_node_execution(node);
+        self.observe_source_fill_mode(node);
         if node.macro_name.as_deref() == Some("ft") {
             lower_inline_nodes_with_font_state(
                 std::slice::from_ref(node),

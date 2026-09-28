@@ -15,7 +15,7 @@ mod scopes;
 mod source_cursor;
 mod source_fragment;
 pub(in crate::mandoc) use flow::{AuthorBreakEffect, PreservedInlineState};
-pub(super) use flow::{FilledBoundary, FontState, InlineBuilder};
+pub(super) use flow::{FilledBoundary, FontScope, FontState, InlineBuilder};
 mod source;
 
 use font::lower_man_font_scope;
@@ -26,8 +26,8 @@ pub(super) use font::{
     parse_roff_text_with_state, parse_roff_text_with_zero_advance,
 };
 pub(super) use font::{
-    NoFillInlineState, lower_inline_nodes_with_font_state, lower_no_fill_line_with_font_state,
-    parse_roff_text,
+    NoFillInlineState, lower_inline_nodes_with_font_state, lower_no_fill_fragment_with_font_state,
+    lower_no_fill_line_with_font_state, parse_roff_text,
 };
 pub(in crate::mandoc) use source_fragment::lower_source_fragment_with_formatter_state;
 

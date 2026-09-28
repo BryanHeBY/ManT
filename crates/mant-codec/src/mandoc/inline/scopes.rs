@@ -96,6 +96,7 @@ fn append_container_event(
 ) {
     use crate::mandoc::containers::Event;
     match event {
+        Event::At(_, _) => {}
         Event::BeginNode(node) => builder.begin_executed_node(node),
         Event::Break => {
             builder.hard_break();
@@ -112,12 +113,22 @@ fn append_container_event(
         Event::EmptyWord => builder.execute_empty_word(),
         Event::EnterKeep => builder.enter_keep_words(),
         Event::ExitKeep => builder.exit_keep_words(),
-        Event::EnterFont(font) => *saved_font = Some(builder.font.push_scope(font)),
+        Event::EnterFont(font, body_id) => {
+            let saved = builder.font.push_scope(font);
+            if let Some(body_id) = body_id {
+                builder.scope_posts.enter_font(body_id, saved);
+            } else {
+                *saved_font = Some(saved);
+            }
+        }
         Event::FunctionArgument(argument, comma_after) => {
             super::generated::function_argument(builder, argument, comma_after, name);
         }
-        Event::ExitFont => {
-            if let Some(saved) = saved_font.take() {
+        Event::ExitFont(body_id) => {
+            let saved = body_id
+                .and_then(|body_id| builder.scope_posts.exit_font(body_id))
+                .or_else(|| body_id.is_none().then(|| saved_font.take()).flatten());
+            if let Some(saved) = saved {
                 builder.font.pop_scope(saved);
             }
         }

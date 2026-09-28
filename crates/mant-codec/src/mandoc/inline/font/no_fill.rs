@@ -1,6 +1,8 @@
 use super::{
-    FontState, Inline, Node, ZeroAdvanceState, append_inline_nodes, builder_with_zero_advance,
+    FontState, Inline, InlineBuilder, Node, ZeroAdvanceState, append_inline_nodes,
+    builder_with_zero_advance,
 };
+use crate::mandoc::containers::ScopePostState;
 
 /// Lower one executed no-fill input row.
 ///
@@ -122,9 +124,34 @@ pub(in crate::mandoc) fn lower_no_fill_line_with_font_state(
     spacing: bool,
     state: &mut FontState,
     inline_state: &mut NoFillInlineState,
+    scope_posts: &ScopePostState,
     source_continuation_fallback: bool,
 ) -> (Vec<Inline>, bool) {
+    lower_no_fill_fragment_with_font_state(
+        spacing,
+        state,
+        inline_state,
+        scope_posts,
+        source_continuation_fallback,
+        true,
+        |builder| append_inline_nodes(builder, nodes, default_name),
+    )
+}
+
+/// Execute generated container content in the same no-fill formatter state
+/// as ordinary source nodes. Generated punctuation does not itself finish an
+/// authored input row; source operands do.
+pub(in crate::mandoc) fn lower_no_fill_fragment_with_font_state(
+    spacing: bool,
+    state: &mut FontState,
+    inline_state: &mut NoFillInlineState,
+    scope_posts: &ScopePostState,
+    source_continuation_fallback: bool,
+    finishes_row: bool,
+    append: impl FnOnce(&mut InlineBuilder),
+) -> (Vec<Inline>, bool) {
     let mut builder = builder_with_zero_advance(spacing, *state, &mut inline_state.zero_advance);
+    builder.scope_posts = scope_posts.clone();
     if inline_state.continued {
         builder.continue_source_line(true);
         builder.tighten_next_boundary();
@@ -132,7 +159,7 @@ pub(in crate::mandoc) fn lower_no_fill_line_with_font_state(
     if inline_state.pending_word_end_break {
         builder.request_word_end_break();
     }
-    append_inline_nodes(&mut builder, nodes, default_name);
+    append(&mut builder);
     *state = builder.font;
     let (mut output, execution) = builder.finish_preserving_execution();
     let continues_line = execution
@@ -148,7 +175,7 @@ pub(in crate::mandoc) fn lower_no_fill_line_with_font_state(
     {
         inline_state.formatter_cell = NoFillFormatterCell::Invisible;
     }
-    if !continues_line {
+    if finishes_row && !continues_line {
         inline_state.finish_row(&mut output);
     }
     (output, continues_line)

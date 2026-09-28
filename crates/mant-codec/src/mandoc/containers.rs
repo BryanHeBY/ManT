@@ -9,9 +9,13 @@ use std::{
     rc::Rc,
 };
 
+use super::inline::FontScope;
 use super::{first_part_children, inline::enclosure_marks, roff_escape::RoffFont};
 
 pub(super) enum Event<'a> {
+    /// Source owner of subsequent generated output. True executes this
+    /// node's `NODE_LINE`; false only changes ownership for a later post.
+    At(&'a Node, bool),
     /// An executed wrapper boundary whose children are emitted separately.
     BeginNode(&'a Node),
     /// A formatter flush boundary, distinct from an extra blank row.
@@ -25,8 +29,8 @@ pub(super) enum Event<'a> {
     EmptyWord,
     EnterKeep,
     ExitKeep,
-    EnterFont(RoffFont),
-    ExitFont,
+    EnterFont(RoffFont, Option<u32>),
+    ExitFont(Option<u32>),
     /// A direct Fa child of a structural Fo body; the sibling relation is
     /// needed for mandoc's generated comma after an argument.
     FunctionArgument(&'a Node, bool),
@@ -42,6 +46,7 @@ struct ScopePosts {
     ended: HashSet<u32>,
     function_suffix: HashMap<u32, bool>,
     structural_payload: HashSet<u32>,
+    font_scopes: Vec<(u32, FontScope)>,
     indexed: bool,
 }
 
@@ -92,6 +97,23 @@ impl ScopePostState {
     pub(super) fn function_suffix(&self, body_id: u32) -> Option<bool> {
         self.0.borrow().function_suffix.get(&body_id).copied()
     }
+
+    pub(super) fn enter_font(&self, body_id: u32, saved: FontScope) {
+        self.0.borrow_mut().font_scopes.push((body_id, saved));
+    }
+
+    pub(super) fn exit_font(&self, body_id: u32) -> Option<FontScope> {
+        let mut posts = self.0.borrow_mut();
+        let index = posts
+            .font_scopes
+            .iter()
+            .rposition(|(id, _)| *id == body_id)?;
+        let saved = posts.font_scopes[index].1;
+        // mdoc_term.c::print_mdoc_node() pops to the original BODY's
+        // prev_font, including any crossed scopes above that BODY.
+        posts.font_scopes.truncate(index);
+        Some(saved)
+    }
 }
 
 pub(super) fn is_container(node: &Node) -> bool {
@@ -108,45 +130,41 @@ pub(super) fn is_container(node: &Node) -> bool {
 
 /// Emit a bounded sequence of boundaries and borrowed child slices. Children
 /// are consumed immediately; there is no document-sized intermediate stream.
-pub(super) fn walk(node: &Node, posts: &ScopePostState, mut emit: impl FnMut(Event<'_>)) -> bool {
-    // CVS mdoc_html.c::print_mdoc_node() executes an ENDBODY marker's post
-    // handler at its source position and marks the original BODY ended, so
-    // the original post is skipped when traversal later unwinds to it.
-    // `mdoc.c::mdoc_endbody_alloc()` retains that BODY relation on the marker.
-    if let Some(end) = node.scope_end {
-        if node.macro_name.as_deref() == Some("Fo") {
-            emit(Event::Children(&node.children));
-            if let Some(synopsis) = posts.function_suffix(end.body_id) {
-                emit(Event::Tight);
-                emit(Event::Glyph(if synopsis { ");" } else { ")" }.to_owned()));
-                posts.finish(end.body_id);
-            }
-            return true;
-        }
-        if node.macro_name.as_deref() == Some("Eo") {
-            emit_eo_endbody(node, &mut emit);
-            posts.finish(end.body_id);
-            return true;
-        }
-        if let Some((_, close)) = resolved_enclosure_marks(node) {
-            if !node.children.is_empty() {
-                emit(Event::BeginNode(node));
-            }
-            emit(Event::Children(&node.children));
-            emit_enclosure_post(close.as_deref(), &mut emit);
-            posts.finish(end.body_id);
-            return true;
-        }
+pub(super) fn walk<'a>(
+    node: &'a Node,
+    posts: &ScopePostState,
+    mut emit: impl FnMut(Event<'a>),
+) -> bool {
+    // DisplayFlow probes every node before structural dispatch. A rejected
+    // node must emit nothing: even an ownership-only At event would make the
+    // display callback attach its target before Bd is lowered for real.
+    if !is_container(node) {
+        return false;
+    }
+    if node.scope_end.is_none()
+        && node.macro_name.as_deref() == Some("Fo")
+        && !posts.has_structural_payload(node)
+    {
+        return false;
+    }
+    emit(Event::At(node, true));
+    if walk_scope_end(node, posts, &mut emit) {
+        return true;
     }
     let body = first_part_children(node, NodeKind::Body);
     match node.macro_name.as_deref() {
         Some("Bf") => {
+            let body_id = node
+                .children
+                .iter()
+                .find(|part| part.kind == NodeKind::Body)
+                .map(|part| part.id);
             if let Some(font) = node.font {
-                emit(Event::EnterFont(font.into()));
+                emit(Event::EnterFont(font.into(), body_id));
             }
             emit(Event::Children(body));
             if node.font.is_some() {
-                emit(Event::ExitFont);
+                emit(Event::ExitFont(body_id));
             }
         }
         Some("Bk") => {
@@ -184,6 +202,13 @@ pub(super) fn walk(node: &Node, posts: &ScopePostState, mut emit: impl FnMut(Eve
                 .find(|part| part.kind == NodeKind::Body && part.scope_end.is_none())
                 .map(|body| body.id);
             if body_id.is_none_or(|id| !posts.ended(id)) {
+                if let Some(body) = node
+                    .children
+                    .iter()
+                    .find(|part| part.kind == NodeKind::Body && part.scope_end.is_none())
+                {
+                    emit(Event::At(body, false));
+                }
                 emit_enclosure_post(close.as_deref(), &mut emit);
             }
             if node
@@ -210,6 +235,49 @@ pub(super) fn walk(node: &Node, posts: &ScopePostState, mut emit: impl FnMut(Eve
         _ => return false,
     }
     true
+}
+
+fn walk_scope_end<'a>(
+    node: &'a Node,
+    posts: &ScopePostState,
+    emit: &mut impl FnMut(Event<'a>),
+) -> bool {
+    // CVS mdoc_html.c::print_mdoc_node() executes an ENDBODY marker's post
+    // at its source position and marks the original BODY ended. CVS
+    // mdoc.c::mdoc_endbody_alloc() retains that BODY relation on the marker.
+    let Some(end) = node.scope_end else {
+        return false;
+    };
+    if node.macro_name.as_deref() == Some("Bf") {
+        emit(Event::Children(&node.children));
+        emit(Event::ExitFont(Some(end.body_id)));
+        posts.finish(end.body_id);
+        return true;
+    }
+    if node.macro_name.as_deref() == Some("Fo") {
+        emit(Event::Children(&node.children));
+        if let Some(synopsis) = posts.function_suffix(end.body_id) {
+            emit(Event::Tight);
+            emit(Event::Glyph(if synopsis { ");" } else { ")" }.to_owned()));
+            posts.finish(end.body_id);
+        }
+        return true;
+    }
+    if node.macro_name.as_deref() == Some("Eo") {
+        emit_eo_endbody(node, emit);
+        posts.finish(end.body_id);
+        return true;
+    }
+    if let Some((_, close)) = resolved_enclosure_marks(node) {
+        if !node.children.is_empty() {
+            emit(Event::BeginNode(node));
+        }
+        emit(Event::Children(&node.children));
+        emit_enclosure_post(close.as_deref(), emit);
+        posts.finish(end.body_id);
+        return true;
+    }
+    false
 }
 
 fn emit_eo_endbody<'a>(node: &'a Node, emit: &mut impl FnMut(Event<'a>)) {
@@ -247,9 +315,12 @@ fn emit_structural_function<'a>(
     }
     if let Some(part) = head_part {
         emit(Event::BeginNode(part));
-        emit(Event::EnterFont(RoffFont::Strong));
+        emit(Event::EnterFont(RoffFont::Strong, None));
         emit(Event::Children(&part.children));
-        emit(Event::ExitFont);
+        emit(Event::ExitFont(None));
+    }
+    if let Some(part) = body_part {
+        emit(Event::At(part, false));
     }
     emit(Event::Tight);
     emit(Event::Glyph("(".to_owned()));
@@ -258,6 +329,9 @@ fn emit_structural_function<'a>(
         emit_function_body(&part.children, emit);
     }
     if body_part.is_none_or(|part| !posts.ended(part.id)) {
+        if let Some(part) = body_part {
+            emit(Event::At(part, false));
+        }
         emit(Event::Tight);
         emit(Event::Glyph(if synopsis { ");" } else { ")" }.to_owned()));
     }
@@ -309,7 +383,7 @@ fn resolved_enclosure_marks(node: &Node) -> Option<(Option<String>, Option<Strin
     )
 }
 
-fn emit_enclosure_post(close: Option<&str>, emit: &mut impl FnMut(Event<'_>)) {
+fn emit_enclosure_post<'a>(close: Option<&str>, emit: &mut impl FnMut(Event<'a>)) {
     if let Some(close) = close {
         emit(Event::Tight);
         if close.is_empty() {
@@ -408,7 +482,10 @@ pub(super) fn has_structural_payload(node: &Node) -> bool {
 
 fn is_structural_payload(node: &Node) -> bool {
     node.kind == NodeKind::Table
-        || matches!(node.macro_name.as_deref(), Some("ce" | "rj"))
+        || matches!(
+            node.macro_name.as_deref(),
+            Some("ce" | "rj" | "nf" | "fi" | "EX" | "EE")
+        )
         || (node.kind == NodeKind::Block
             && matches!(
                 node.macro_name.as_deref(),

@@ -46,6 +46,7 @@ fn lower_no_fill_lines(
     default_name: Option<&str>,
     font: &mut FontState,
     inline_state: &mut super::NoFillInlineState,
+    scope_posts: &crate::mandoc::containers::ScopePostState,
 ) -> Option<Vec<LoweredNoFillLine>> {
     if is_no_fill_payload(node) {
         let (mut nodes, continues_line) = lower_no_fill_line_with_font_state(
@@ -54,6 +55,7 @@ fn lower_no_fill_lines(
             true,
             font,
             inline_state,
+            scope_posts,
             ends_with_line_continuation(node),
         );
         let mut occupies_row = !nodes.is_empty();
@@ -132,6 +134,7 @@ impl super::BlockLowerer<'_, '_> {
             self.context.default_name,
             &mut self.formatter.font,
             &mut self.no_fill_inline,
+            &self.context.scope_posts,
         ) else {
             unreachable!("a no-fill payload must lower as a no-fill row");
         };
