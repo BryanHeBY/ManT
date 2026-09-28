@@ -16,6 +16,9 @@ pub(super) struct BlockState {
     paragraph: ParagraphFlow,
     literal: LiteralFlow,
     pending_targets: targets::PendingTargets,
+    // A paragraph pre request can finish its BODY with a live text row. Its
+    // leading distance belongs to the next emitted block, not a Rust return.
+    pending_spacing: Option<(u16, Option<mant_ir::SourceSpan>)>,
     indent_columns: crate::mandoc::layout::SourceIndent,
     hanging_origin: Option<crate::mandoc::layout::SourceIndent>,
 }
@@ -123,6 +126,7 @@ impl BlockState {
             paragraph: ParagraphFlow::new(),
             literal: LiteralFlow::new(),
             pending_targets: targets::PendingTargets::new(),
+            pending_spacing: None,
             indent_columns,
             hanging_origin: None,
         }
@@ -238,13 +242,18 @@ impl BlockState {
     }
 
     pub(super) fn attach_pending_to_new_output(&mut self, output_start: usize) {
-        if self.pending_targets.is_empty() || self.output.len() == output_start {
+        if self.output.len() == output_start {
             return;
         }
         self.attach_pending_to_structural_output(output_start);
     }
 
     pub(super) fn attach_pending_to_structural_output(&mut self, output_start: usize) {
+        if let Some(block) = self.output.get_mut(output_start)
+            && let Some((lines, _)) = self.pending_spacing.take()
+        {
+            crate::mandoc::layout::set_block_spacing(block, lines);
+        }
         if self.pending_targets.is_empty() {
             return;
         }
@@ -252,6 +261,40 @@ impl BlockState {
         self.pending_targets
             .attach_leading(&mut lowered, layout(self.indent_columns));
         self.output.append(&mut lowered);
+    }
+
+    pub(super) fn request_leading_spacing(
+        &mut self,
+        lines: u16,
+        source: Option<mant_ir::SourceSpan>,
+    ) {
+        if lines == 0 {
+            return;
+        }
+        self.pending_spacing = Some(
+            self.pending_spacing
+                .take()
+                .map_or((lines, source), |(previous, origin)| {
+                    (previous.saturating_add(lines), origin.or(source))
+                }),
+        );
+    }
+
+    /// An empty paragraph BODY still executed native `print_bvspace()`.
+    pub(super) fn materialize_idle_spacing(&mut self) {
+        if !self.paragraph.is_empty()
+            || !self.literal.is_empty()
+            || self.formatter.execution.has_formatter_cell()
+            || self
+                .formatter
+                .no_fill_inline
+                .has_pending_formatter_cell(&self.formatter.execution)
+        {
+            return;
+        }
+        if let Some((lines, source)) = self.pending_spacing.take() {
+            self.output.push(Block::VerticalSpace { lines, source });
+        }
     }
 
     pub(super) fn push_preformatted(
@@ -494,6 +537,9 @@ impl BlockState {
     fn settle(&mut self) {
         self.flush_preformatted();
         self.flush_paragraph();
+        if let Some((lines, source)) = self.pending_spacing.take() {
+            self.output.push(Block::VerticalSpace { lines, source });
+        }
         let output_end = self.output.len();
         self.attach_pending_to_structural_output(output_end);
     }

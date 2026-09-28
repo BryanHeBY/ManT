@@ -299,6 +299,280 @@ fn man_link_entry_observes_no_fill_source_rows_without_ending_a_continuation() {
 }
 
 #[test]
+fn generated_man_link_post_keeps_a_no_fill_word_end_break() {
+    // Each exact source was checked with fixed CVS -Tascii/-Tlint. term.c's
+    // term_fill() records \p until the next generated term_word() boundary;
+    // returning a Rust fragment cannot consume its emitted hard break.
+    for (open, close, target) in [("UR", "UE", "x"), ("MT", "ME", "user@example.com")] {
+        for (label, expected_break) in [
+            ("label\\p\n", true),
+            ("label\\p\\p\n", true),
+            ("label\\p\\c\n", false),
+            ("label\\p\n.ft B\n", true),
+        ] {
+            let source = format!(
+                ".TH TEST 1 \"2026-09-28\"\n.SH DESCRIPTION\n.nf\n.{open} {target}\n{label}.{close}\nafter\n"
+            );
+            let document = parse_manual_bytes(
+                std::path::Path::new("no-fill-link-word-end.1"),
+                source.as_bytes(),
+            )
+            .unwrap();
+            let rows = document.sections[0]
+                .blocks
+                .iter()
+                .filter_map(|block| match block {
+                    Block::Preformatted { children, .. } => Some(inline_text(children)),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+            let boundary = if expected_break {
+                "label\n⟨"
+            } else {
+                "label⟨"
+            };
+            assert!(rows.contains(boundary), "{open} {label}: {document:#?}");
+            assert!(
+                rows.contains(&format!("⟨{target}⟩\nafter")),
+                "{document:#?}"
+            );
+        }
+    }
+
+    // This bold BODY variant was also checked with fixed CVS -Tascii/-Tlint.
+    let source =
+        b".TH TEST 1 \"2026-09-28\"\n.SH DESCRIPTION\n.nf\n.UR x\n.B \"label\\p\"\n.UE\nafter\n";
+    let document =
+        parse_manual_bytes(std::path::Path::new("bold-link-word-end.1"), source).unwrap();
+    let [Block::Preformatted { children, .. }] = document.sections[0].blocks.as_slice() else {
+        panic!("unexpected bold no-fill blocks: {document:#?}");
+    };
+    assert_eq!(inline_text(children), "label\n⟨x⟩\nafter");
+}
+
+#[test]
+fn man_paragraph_body_returns_its_live_word_to_the_enclosing_link_post() {
+    // Exact UR/MT x PP/P/LP x filled/no-fill inputs were checked with fixed
+    // CVS -Tascii/-Tlint. man_term.c::pre_PP() closes the previous row, but
+    // its action table gives PP/P/LP no post; only post_UR() next writes <HEAD>.
+    // term.c::term_word() lets a tight \c keep \zX for that generated word.
+    for (open, close, target) in [("UR", "UE", "x"), ("MT", "ME", "user@example.com")] {
+        for paragraph in ["PP", "P", "LP"] {
+            for no_fill in [false, true] {
+                let mode = if no_fill { ".nf\n" } else { "" };
+                let source = format!(
+                    ".TH TEST 1 \"2026-09-28\"\n.SH DESCRIPTION\n{mode}.{open} {target}\nfirst\n.{paragraph}\nsecond\\zX\\c\n.{close}\nafter\n"
+                );
+                let document = parse_manual_bytes(
+                    std::path::Path::new("link-live-paragraph-body.1"),
+                    source.as_bytes(),
+                )
+                .unwrap();
+                let trailing = document.sections[0]
+                    .blocks
+                    .iter()
+                    .filter_map(|block| match block {
+                        Block::Paragraph { children, .. }
+                        | Block::Preformatted { children, .. } => Some(inline_text(children)),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                let expected = if no_fill {
+                    format!("second⟨{target}⟩\nafter")
+                } else {
+                    format!("second⟨{target}⟩ after")
+                };
+                assert!(
+                    trailing.contains(&expected),
+                    "{open} {paragraph}: {document:#?}"
+                );
+                assert!(!trailing.contains("secondX"), "{document:#?}");
+            }
+        }
+    }
+}
+
+#[test]
+fn man_paragraph_spacing_uses_source_siblings_through_rs_only() {
+    // All nine exact outer/inner combinations were checked with fixed CVS
+    // -Tascii/-Tlint. man_term.c::print_bvspace() climbs a first-child RS,
+    // then stops at the enclosing PP/P/LP BODY: outer output does not count
+    // as an extra predecessor for that inner paragraph.
+    for outer in ["PP", "P", "LP"] {
+        for inner in ["PP", "P", "LP"] {
+            let source = format!(
+                ".TH TEST 1 \"2026-09-28\"\n.SH DESCRIPTION\nBEFORE\n.{outer}\n.RS\n.{inner}\ncontent\n.RE\n"
+            );
+            let document = parse_manual_bytes(
+                std::path::Path::new("rs-first-paragraph.1"),
+                source.as_bytes(),
+            )
+            .unwrap();
+            let spacing = document.sections[0]
+                .blocks
+                .iter()
+                .find_map(|block| match block {
+                    Block::Paragraph {
+                        children, layout, ..
+                    } if inline_text(children) == "content" => Some(layout.spacing_before_lines),
+                    _ => None,
+                })
+                .expect("nested paragraph");
+            assert_eq!(spacing, 1, "{outer}/{inner}: {document:#?}");
+        }
+    }
+
+    // These exact controls were also checked with fixed CVS -Tascii/-Tlint:
+    // a sibling before RS adds a gap, nested first-child RS wrappers do not,
+    // and a UR BODY stops the source-predecessor climb.
+    for (name, body, expected_spacing) in [
+        ("rs-after-sibling", ".PP\nmiddle\n.RS\n.PP\ncontent\n.RE", 1),
+        ("rs-chain-first", ".PP\n.RS\n.RS\n.PP\ncontent\n.RE\n.RE", 1),
+        (
+            "rs-link-body-first",
+            ".RS\nmiddle\n.UR x\n.PP\ncontent\n.UE\n.RE",
+            0,
+        ),
+        (
+            "rs-first-transparent-ft",
+            ".PP\n.RS\n.ft B\n.PP\ncontent\n.RE",
+            1,
+        ),
+        (
+            "rs-first-transparent-pd",
+            ".PP\n.RS\n.PD 2\n.PP\ncontent\n.RE",
+            1,
+        ),
+        (
+            "rs-after-real-sibling",
+            ".PP\n.RS\nfirst\n.ft B\n.PP\ncontent\n.RE",
+            1,
+        ),
+    ] {
+        let source = format!(".TH TEST 1 \"2026-09-28\"\n.SH DESCRIPTION\nBEFORE\n{body}\n");
+        let document = parse_manual_bytes(
+            std::path::Path::new("rs-paragraph-source-sibling.1"),
+            source.as_bytes(),
+        )
+        .unwrap();
+        let spacing = document.sections[0]
+            .blocks
+            .iter()
+            .find_map(|block| match block {
+                Block::Paragraph {
+                    children, layout, ..
+                } if inline_text(children).contains("content") => Some(layout.spacing_before_lines),
+                _ => None,
+            })
+            .expect("content paragraph");
+        assert_eq!(spacing, expected_spacing, "{name}: {document:#?}");
+    }
+}
+
+#[test]
+fn man_structural_paragraphs_share_the_cvs_source_predecessor_rule() {
+    // Exact HP/IP/TP variants were checked with fixed CVS -Tascii/-Tlint.
+    // man_term.c::pre_HP/pre_IP/pre_TP all call print_bvspace() at BLOCK
+    // entry. Only an actual source sibling (possibly reached through RS)
+    // adds the current PD distance; output before a PP or UR BODY does not.
+    for (scope, prefix, suffix, expected) in [
+        ("first-rs", ".PP\n.RS\n", ".RE\n", 1),
+        ("link-rs", ".UR x\n.RS\n", ".RE\n.UE\n", 0),
+        ("sibling-rs", ".PP\n.RS\nfirst\n", ".RE\n", 1),
+    ] {
+        for (macro_name, head) in [("HP", ""), ("IP", " tag 4"), ("TP", "\ntag")] {
+            let source = format!(
+                ".TH TEST 1 \"2026-09-28\"\n.SH DESCRIPTION\nBEFORE\n{prefix}.{macro_name}{head}\ncontent\n{suffix}"
+            );
+            let document = parse_manual_bytes(
+                std::path::Path::new("man-structural-source-sibling.1"),
+                source.as_bytes(),
+            )
+            .unwrap();
+            let blocks = &document.sections[0].blocks;
+            let spacing = blocks.iter().find_map(|block| match block {
+                Block::Paragraph {
+                    children, layout, ..
+                } if macro_name == "HP" && inline_text(children).contains("content") => {
+                    Some(layout.spacing_before_lines)
+                }
+                Block::DefinitionList { layout, .. } if macro_name != "HP" => {
+                    Some(layout.spacing_before_lines)
+                }
+                _ => None,
+            });
+            assert_eq!(
+                spacing,
+                Some(expected),
+                "{scope}/{macro_name}: {document:#?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn man_synopsis_spacing_obeys_native_previous_sibling_and_pd() {
+    // Each exact source was checked with fixed CVS -Tascii/-Tlint. The
+    // BLOCK path of man_term.c::pre_SY() calls print_bvspace() unless the
+    // direct previous nontransparent sibling is another SY; YS separates
+    // two declarations, and PD changes the requested number of rows.
+    for (name, body, label, expected) in [
+        ("after-text", "BEFORE\n.SY call\narg\n.YS\n", "call arg", 1),
+        (
+            "after-pd",
+            "BEFORE\n.PD 2\n.SY call\narg\n.YS\n",
+            "call arg",
+            2,
+        ),
+        (
+            "after-ys",
+            ".SY first\narg\n.YS\n.SY second\narg\n.YS\n",
+            "second arg",
+            1,
+        ),
+        (
+            "direct-sy",
+            ".SY first\narg\n.SY second\narg\n.YS\n",
+            "second arg",
+            0,
+        ),
+        (
+            "no-fill",
+            ".nf\nBEFORE\n.SY call\narg\n.YS\n.fi\n",
+            "call\narg",
+            1,
+        ),
+    ] {
+        let heading = if name == "after-ys" || name == "direct-sy" {
+            "SYNOPSIS"
+        } else {
+            "DESCRIPTION"
+        };
+        let source = format!(".TH TEST 1 \"2026-09-28\"\n.SH {heading}\n{body}");
+        let document = parse_manual_bytes(
+            std::path::Path::new("man-synopsis-source-spacing.1"),
+            source.as_bytes(),
+        )
+        .unwrap();
+        let spacing = document.sections[0]
+            .blocks
+            .iter()
+            .find_map(|block| match block {
+                Block::Paragraph {
+                    children, layout, ..
+                }
+                | Block::Preformatted {
+                    children, layout, ..
+                } if inline_text(children).contains(label) => Some(layout.spacing_before_lines),
+                _ => None,
+            });
+        assert_eq!(spacing, Some(expected), "{name}: {document:#?}");
+    }
+}
+
+#[test]
 fn man_link_empty_target_still_executes_terminal_block_post() {
     // Exact source checked with fixed CVS -Tascii/-Thtml/-Tlint. The HTML
     // fallback loses the first glyph of after; terminal post_UR() always

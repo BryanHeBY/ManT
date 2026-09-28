@@ -199,6 +199,13 @@ enum DisplayFillMode {
     SingleLine,
 }
 
+#[derive(Clone, Copy)]
+struct NodeSourceContext {
+    line_entered: bool,
+    predecessor: bool,
+    previous_is_sy: bool,
+}
+
 struct BlockLowerer<'a, 'source> {
     context: &'a LoweringContext<'source>,
     indent_columns: crate::mandoc::layout::SourceIndent,
@@ -214,6 +221,10 @@ struct BlockLowerer<'a, 'source> {
     // Transparent `.RS` scopes retain their native predecessor even when
     // their IR is collected separately for attachment to an ordered item.
     paragraph_predecessor: bool,
+    // man_term.c::print_bvspace() examines source siblings, climbing only
+    // through first-child RS wrappers. IR output from an outer scope does
+    // not make the first child of an unrelated BODY a source successor.
+    man_source_predecessor: bool,
     display_fill: Option<DisplayFillMode>,
 }
 
@@ -247,6 +258,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             definition_hanging_width: crate::mandoc::layout::Distance::cells(DEFAULT_MAN_TAG_WIDTH),
             man_list_state: ManListState::new(),
             paragraph_predecessor: false,
+            man_source_predecessor: false,
             display_fill: None,
         }
     }
@@ -261,7 +273,15 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
     fn push_nodes_with_reference_posts(&mut self, nodes: &[Node], reference_body: bool) {
         let table_plan = TableEmbeddingPlan::new(nodes, self.context);
         let mut synopsis_previous = None;
+        let mut has_native_sibling = false;
+        let mut previous_native_is_sy = false;
         for (index, node) in nodes.iter().enumerate() {
+            let source_predecessor = has_native_sibling || self.man_source_predecessor;
+            let previous_is_sy = previous_native_is_sy;
+            if !is_native_transparent_sibling(node) {
+                has_native_sibling = true;
+                previous_native_is_sy = node.macro_name.as_deref() == Some("SY");
+            }
             if is_inline_equation_quote_artifact(nodes, index) {
                 continue;
             }
@@ -286,7 +306,11 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
                 table_plan.embedding(index),
                 synopsis_previous,
                 adjacent_ip_run(nodes, index),
-                author_pre && self.state.formatter.no_fill,
+                NodeSourceContext {
+                    line_entered: author_pre && self.state.formatter.no_fill,
+                    predecessor: source_predecessor,
+                    previous_is_sy,
+                },
             );
             if reference_body && let Some(punctuation) = reference_field_post(nodes, index) {
                 self.push_generated_container_event(node, crate::mandoc::containers::Event::Tight);
@@ -339,6 +363,44 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         }
     }
 
+    fn push_man_paragraph(&mut self, node: &Node, source_predecessor: bool) {
+        // man_term.c::pre_PP() closes the preceding row and enters BODY, but
+        // PP/P/LP have no post handler. Keep BODY in this same output and
+        // execution owner so a following UR/MT post can finish its last word.
+        self.state.flush_preformatted();
+        self.state.flush_paragraph();
+        self.state
+            .set_source_indent(self.indent_columns.macro_origin());
+        self.man_list_state.reset();
+        self.definition_hanging_width =
+            crate::mandoc::layout::Distance::cells(DEFAULT_MAN_TAG_WIDTH);
+        let spacing =
+            super::layout::man_paragraph_spacing(*self.paragraph_distance, source_predecessor);
+        self.state
+            .request_leading_spacing(spacing, source_span(node));
+        let inherited = std::mem::take(&mut self.man_source_predecessor);
+        self.push_nodes(first_part_children(node, NodeKind::Body));
+        self.man_source_predecessor = inherited;
+        self.state.materialize_idle_spacing();
+    }
+
+    fn prepare_man_synopsis_spacing(&mut self, node: &Node, source: NodeSourceContext) {
+        if node.macro_name.as_deref() != Some("SY") {
+            return;
+        }
+        self.state.flush_preformatted();
+        self.state.flush_paragraph();
+        if source.previous_is_sy {
+            return;
+        }
+        // man_term.c::pre_SY() calls print_bvspace() unless the direct
+        // previous native sibling is another SY. The first SY in an RS
+        // chain uses the same source-predecessor rule.
+        let lines =
+            super::layout::man_paragraph_spacing(*self.paragraph_distance, source.predecessor);
+        self.state.request_leading_spacing(lines, source_span(node));
+    }
+
     fn consume_font_request(&mut self, node: &Node) -> bool {
         if node.macro_name.as_deref() != Some("ft") {
             return false;
@@ -379,11 +441,12 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         table_embedding: Option<&TableEmbedding>,
         synopsis_previous: Option<&Node>,
         ip_run: Option<lists::man::IpRun>,
-        source_line_entered: bool,
+        source: NodeSourceContext,
     ) {
         if self.consume_font_request(node) {
             return;
         }
+        self.prepare_man_synopsis_spacing(node, source);
         // The container callback returns child execution to this same driver.
         if self.push_container(node) || self.consume_control_or_empty_block(node) {
             return;
@@ -421,7 +484,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         }
         let single_line_literal =
             self.display_fill == Some(DisplayFillMode::SingleLine) && self.state.formatter.no_fill;
-        if self.push_no_fill_lines(node, next, source_line_entered, single_line_literal) {
+        if self.push_no_fill_lines(node, next, source.line_entered, single_line_literal) {
             self.state
                 .queue_targets(structural_targets, source_span(node));
             return;
@@ -436,6 +499,10 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             // Keep the active literal sink and pending \c/\z for BODY text.
             self.enter_no_fill_source_line(node);
             self.push_man_link(node);
+            return;
+        }
+        if matches!(node.macro_name.as_deref(), Some("PP" | "P" | "LP")) {
+            self.push_man_paragraph(node, source.predecessor);
             return;
         }
         self.state.flush_preformatted();
@@ -469,6 +536,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
                 paragraph_distance: self.paragraph_distance,
                 output: &mut self.state.output,
                 paragraph_predecessor: self.paragraph_predecessor,
+                man_source_predecessor: source.predecessor,
                 definition_hanging_width: &mut self.definition_hanging_width,
                 man_list_state: &mut self.man_list_state,
                 ip_run,
@@ -578,6 +646,31 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         self.context.check_gap_bounds(&blocks);
         blocks
     }
+}
+
+/// `roff_node_prev()` skips comments, `NODE_NOPRT`, and roff tokens without
+/// rendered structure. Keep paragraph predecessor facts tied to that source
+/// traversal rather than to IR blocks or raw child indices.
+fn is_native_transparent_sibling(node: &Node) -> bool {
+    node.kind == NodeKind::Comment
+        || node.flags.no_print
+        || matches!(
+            node.macro_name.as_deref(),
+            Some(
+                "ft" | "ll"
+                    | "mc"
+                    | "po"
+                    | "ta"
+                    | "Db"
+                    | "Es"
+                    | "Sm"
+                    | "Tg"
+                    | "DT"
+                    | "UC"
+                    | "PD"
+                    | "AT"
+            )
+        )
 }
 
 fn is_reference_field(node: &Node) -> bool {

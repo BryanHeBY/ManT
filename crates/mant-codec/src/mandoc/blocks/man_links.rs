@@ -38,7 +38,11 @@ impl super::BlockLowerer<'_, '_> {
         self.state.formatter.font.select(Font::Regular); // HEAD pre
         self.state.formatter.font.select(Font::Regular); // HEAD post
         self.state.formatter.font.select(Font::Regular); // BODY pre
+        // A link BODY is a new non-RS sibling list. print_bvspace() cannot
+        // climb through UR/MT to an earlier paragraph outside this BODY.
+        let inherited = std::mem::take(&mut self.man_source_predecessor);
         self.push_nodes(body);
+        self.man_source_predecessor = inherited;
         self.state.formatter.font.select(Font::Regular); // BODY post
 
         // man_term.c::post_UR() always executes its first generated word,

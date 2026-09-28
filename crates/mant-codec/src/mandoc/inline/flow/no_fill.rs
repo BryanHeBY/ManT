@@ -168,11 +168,9 @@ pub(in crate::mandoc) fn lower_no_fill_fragment_with_formatter(
                 builder.has_formatter_cell(),
             )
         });
-    // The former temporary builder removed trailing projected breaks when
-    // returning a fragment. Keep that output rule separate from row state.
-    while matches!(output.last(), Some(Inline::LineBreak)) {
-        output.pop();
-    }
+    // A generated word can realize a pending \p inside this fragment. The
+    // fragment return is not term_newln(): the projected break belongs to the
+    // active literal sink even when it is the last node produced here.
     let row = &mut formatter.no_fill_inline;
     row.active = true;
     row.continued = continues_line;

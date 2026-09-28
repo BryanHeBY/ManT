@@ -1,8 +1,8 @@
 //! Structural payload dispatch; state and output remain caller-owned.
 use super::{
-    Block, DEFAULT_MAN_TAG_WIDTH, DisplayKind, LoweringContext, ManDefinitionState, ManListState,
-    Node, NodeKind, TableEmbedding, add_leading_spacing, append_relative_continuation,
-    append_table_row, first_part_children, layout, lower_blocks_with_spacing, lower_inline_nodes,
+    Block, DisplayKind, LoweringContext, ManDefinitionState, ManListState, Node, NodeKind,
+    TableEmbedding, add_leading_spacing, append_relative_continuation, append_table_row,
+    first_part_children, layout, lower_blocks_with_spacing, lower_inline_nodes,
     lower_man_definition_block, lower_mdoc_list, lower_synopsis_head, part_child_groups,
     plain_text, preformatted_blocks, set_block_spacing, source_span,
 };
@@ -13,6 +13,7 @@ pub(super) struct StructuralLowerer<'a, 'source, 'state> {
     pub(super) paragraph_distance: &'state mut u16,
     pub(super) output: &'state mut Vec<Block>,
     pub(super) paragraph_predecessor: bool,
+    pub(super) man_source_predecessor: bool,
     pub(super) definition_hanging_width: &'state mut crate::mandoc::layout::Distance,
     pub(super) man_list_state: &'state mut ManListState,
     pub(super) ip_run: Option<super::lists::man::IpRun>,
@@ -26,7 +27,10 @@ impl StructuralLowerer<'_, '_, '_> {
     }
 
     fn lower_man_definition(&mut self, node: &Node) {
-        let has_predecessor = self.has_paragraph_predecessor();
+        // man_term.c::pre_IP/pre_TP use print_bvspace() at BLOCK entry;
+        // TQ has zero leading distance. Neither uses emitted IR as evidence
+        // of a preceding source sibling inside a first-child RS chain.
+        let has_predecessor = self.man_source_predecessor;
         lower_man_definition_block(
             node,
             self.context,
@@ -155,13 +159,9 @@ impl StructuralLowerer<'_, '_, '_> {
         }
     }
 
-    fn lower_man_paragraph(&mut self, node: &Node) {
+    fn lower_man_hanging_paragraph(&mut self, node: &Node) {
         let children = first_part_children(node, NodeKind::Body);
-        let hanging = node.macro_name.as_deref() == Some("HP");
-        if !hanging {
-            *self.definition_hanging_width =
-                crate::mandoc::layout::Distance::cells(DEFAULT_MAN_TAG_WIDTH);
-        } else if !children.is_empty()
+        if !children.is_empty()
             && let Some(argument) = crate::mandoc::layout::first_part_argument(node)
         {
             *self.definition_hanging_width =
@@ -170,7 +170,7 @@ impl StructuralLowerer<'_, '_, '_> {
         }
         let spacing = crate::mandoc::layout::man_paragraph_spacing(
             *self.paragraph_distance,
-            self.has_paragraph_predecessor(),
+            self.man_source_predecessor,
         );
         let mut lowerer = super::BlockLowerer::new(
             self.context,
@@ -180,7 +180,7 @@ impl StructuralLowerer<'_, '_, '_> {
             Vec::new(),
             std::mem::take(self.formatter),
         );
-        if hanging && !children.is_empty() {
+        if !children.is_empty() {
             lowerer.state.start_hanging(self.context.offset_indent(
                 node,
                 self.indent_columns,
@@ -188,22 +188,15 @@ impl StructuralLowerer<'_, '_, '_> {
             ));
         }
         lowerer.push_nodes(children);
-        // man_term.c::post_HP() closes its BODY row; PP/P/LP have no
-        // equivalent post and return their active row to the caller.
-        let nested = lowerer.finish_into(
-            self.formatter,
-            if hanging {
-                super::FormatterRowBoundary::Settle
-            } else {
-                super::FormatterRowBoundary::Preserve
-            },
-        );
+        // man_term.c::post_HP() closes its BODY row. PP/P/LP have no post
+        // handler and execute in the caller's live BlockState instead.
+        let nested = lowerer.finish_into(self.formatter, super::FormatterRowBoundary::Settle);
         extend_blocks_with_spacing(self.output, nested, spacing, node);
     }
 
     fn lower_transparent_container(&mut self, node: &Node) -> bool {
         match node.macro_name.as_deref() {
-            Some("PP" | "P" | "LP" | "HP") => self.lower_man_paragraph(node),
+            Some("HP") => self.lower_man_hanging_paragraph(node),
             Some("Bd") if node.display_kind == Some(DisplayKind::Filled) => {
                 let has_predecessor = self.has_paragraph_predecessor();
                 let spacing_before = u16::from(has_predecessor && !node.compact);
@@ -247,6 +240,7 @@ impl StructuralLowerer<'_, '_, '_> {
                     std::mem::take(self.formatter),
                 );
                 lowerer.paragraph_predecessor = paragraph_predecessor;
+                lowerer.man_source_predecessor = self.man_source_predecessor;
                 lowerer.push_nodes(first_part_children(node, NodeKind::Body));
                 let mut nested =
                     lowerer.finish_into(self.formatter, super::FormatterRowBoundary::Settle);
