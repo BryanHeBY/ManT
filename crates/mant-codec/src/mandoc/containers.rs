@@ -18,6 +18,8 @@ pub(super) enum Event<'a> {
     At(&'a Node, bool),
     /// An executed wrapper boundary whose children are emitted separately.
     BeginNode(&'a Node),
+    /// A validated native target attached to the current text destination.
+    Anchor(String, Option<mant_ir::SourceSpan>),
     /// A formatter flush boundary, distinct from an extra blank row.
     Break,
     /// Emit the current output row even if preceding requests emptied it.
@@ -31,6 +33,10 @@ pub(super) enum Event<'a> {
     ExitKeep,
     EnterFont(RoffFont, Option<u32>),
     ExitFont(Option<u32>),
+    /// Restore the font depth saved on the original BODY before its post.
+    RestoreBody(u32),
+    /// `.Ed` restores the parser's saved fill mode at its source marker.
+    RestoreFill(u32),
     /// A direct Fa child of a structural Fo body; the sibling relation is
     /// needed for mandoc's generated comma after an argument.
     FunctionArgument(&'a Node, bool),
@@ -47,6 +53,9 @@ struct ScopePosts {
     function_suffix: HashMap<u32, bool>,
     structural_payload: HashSet<u32>,
     font_scopes: Vec<(u32, FontScope)>,
+    body_fonts: Vec<(u32, FontScope)>,
+    active_bodies: HashSet<u32>,
+    display_fill: HashMap<u32, bool>,
     indexed: bool,
 }
 
@@ -114,13 +123,109 @@ impl ScopePostState {
         posts.font_scopes.truncate(index);
         Some(saved)
     }
+
+    pub(super) fn enter_body(&self, body_id: u32, saved: FontScope) {
+        let mut posts = self.0.borrow_mut();
+        if posts.active_bodies.insert(body_id) {
+            posts.body_fonts.push((body_id, saved));
+        }
+    }
+
+    pub(super) fn exit_body(&self, body_id: u32) -> Option<FontScope> {
+        let mut posts = self.0.borrow_mut();
+        let index = if posts
+            .body_fonts
+            .last()
+            .is_some_and(|(id, _)| *id == body_id)
+        {
+            posts.body_fonts.len() - 1
+        } else {
+            posts
+                .body_fonts
+                .iter()
+                .rposition(|(id, _)| *id == body_id)?
+        };
+        // An explicit end may close an outer BODY while another BODY remains
+        // open in the parser tree.  CVS retains each BODY's prev_font and
+        // later closes that inner BODY against its own checkpoint.
+        let (_, saved) = posts.body_fonts.remove(index);
+        posts.active_bodies.remove(&body_id);
+        Some(saved)
+    }
+
+    pub(super) fn enter_display_fill(&self, body_id: u32, inbound: bool) {
+        self.0.borrow_mut().display_fill.insert(body_id, inbound);
+    }
+
+    pub(super) fn exit_display_fill(&self, body_id: u32) -> Option<bool> {
+        self.0.borrow_mut().display_fill.remove(&body_id)
+    }
+}
+
+/// The native renderer has one node dispatch and one font stack regardless
+/// of whether the current IR destination is a paragraph, a list head, or a
+/// literal display.  Sinks choose only where executed output is written.
+pub(super) trait ContainerSink<'a> {
+    fn font(&mut self) -> &mut super::inline::FontState;
+    fn source_node(&mut self, node: &'a Node, starts_line: bool);
+    fn event(&mut self, event: Event<'a>);
+    fn restore_fill(&mut self, _fill: bool) {}
+}
+
+pub(super) fn drive<'a>(
+    node: &'a Node,
+    posts: &ScopePostState,
+    sink: &mut impl ContainerSink<'a>,
+) -> bool {
+    let mut local_font = None;
+    walk(node, posts, |event| match event {
+        Event::At(source, starts_line) => {
+            if source.kind == NodeKind::Body {
+                posts.enter_body(source.id, sink.font().checkpoint());
+            }
+            sink.source_node(source, starts_line);
+        }
+        Event::RestoreBody(body_id) => {
+            if let Some(saved) = posts.exit_body(body_id) {
+                sink.font().pop_scope(saved);
+            }
+        }
+        Event::RestoreFill(body_id) => {
+            if let Some(fill) = posts.exit_display_fill(body_id) {
+                sink.restore_fill(fill);
+            }
+        }
+        Event::EnterFont(font, body_id) => {
+            let saved = sink.font().push_scope(font);
+            if let Some(body_id) = body_id {
+                posts.enter_font(body_id, saved);
+            } else {
+                local_font = Some(saved);
+            }
+        }
+        Event::ExitFont(body_id) => {
+            let saved = body_id
+                .and_then(|id| posts.exit_font(id))
+                .or_else(|| body_id.is_none().then(|| local_font.take()).flatten());
+            if let Some(saved) = saved {
+                sink.font().pop_scope(saved);
+            }
+        }
+        Event::FunctionArgument(argument, comma_after) => {
+            sink.source_node(argument, true);
+            sink.event(Event::FunctionArgument(argument, comma_after));
+        }
+        event => sink.event(event),
+    })
 }
 
 pub(super) fn is_container(node: &Node) -> bool {
-    matches!(
-        node.macro_name.as_deref(),
-        Some("Bf" | "Bk" | "Fo" | "ce" | "rj")
-    ) || super::inline::is_enclosure_macro(node.macro_name.as_deref())
+    node.scope_end.is_some()
+        || matches!(
+            node.macro_name.as_deref(),
+            Some("Bf" | "Bk" | "Fo" | "ce" | "rj")
+        )
+        || super::inline::is_enclosure_macro(node.macro_name.as_deref())
         || (node.macro_name.is_none()
             && matches!(
                 node.kind,
@@ -141,88 +246,20 @@ pub(super) fn walk<'a>(
     if !is_container(node) {
         return false;
     }
-    if node.scope_end.is_none()
-        && node.macro_name.as_deref() == Some("Fo")
-        && !posts.has_structural_payload(node)
-    {
-        return false;
-    }
     emit(Event::At(node, true));
     if walk_scope_end(node, posts, &mut emit) {
         return true;
     }
-    let body = first_part_children(node, NodeKind::Body);
     match node.macro_name.as_deref() {
-        Some("Bf") => {
-            let body_id = node
-                .children
-                .iter()
-                .find(|part| part.kind == NodeKind::Body)
-                .map(|part| part.id);
-            if let Some(font) = node.font {
-                emit(Event::EnterFont(font.into(), body_id));
-            }
-            emit(Event::Children(body));
-            if node.font.is_some() {
-                emit(Event::ExitFont(body_id));
-            }
-        }
-        Some("Bk") => {
-            emit(Event::EnterKeep);
-            emit(Event::Children(body));
-            emit(Event::ExitKeep);
-        }
-        Some("Fo") if posts.has_structural_payload(node) => {
+        Some("Bf" | "Bk") => emit_font_or_keep(node, &mut emit),
+        Some("Fo") => {
             emit_structural_function(node, posts, &mut emit);
         }
         Some("ce" | "rj") => aligned_line_payload(node, &mut emit),
         Some("Eo") => authored_enclosure(node, posts, &mut emit),
         name if super::inline::is_enclosure_macro(name) => {
-            let marks = resolved_enclosure_marks(node);
-            let Some((open, close)) = marks else {
+            if !emit_enclosure(node, posts, &mut emit) {
                 return false;
-            };
-            if let Some(open) = open {
-                if open.is_empty() {
-                    emit(Event::EmptyWord);
-                } else {
-                    emit(Event::Glyph(open));
-                }
-                emit(Event::Tight);
-            }
-            let children = node
-                .children
-                .iter()
-                .find(|child| child.kind == NodeKind::Body)
-                .map_or(node.children.as_slice(), |body| body.children.as_slice());
-            emit(Event::Children(children));
-            let body_id = node
-                .children
-                .iter()
-                .find(|part| part.kind == NodeKind::Body && part.scope_end.is_none())
-                .map(|body| body.id);
-            if body_id.is_none_or(|id| !posts.ended(id)) {
-                if let Some(body) = node
-                    .children
-                    .iter()
-                    .find(|part| part.kind == NodeKind::Body && part.scope_end.is_none())
-                {
-                    emit(Event::At(body, false));
-                }
-                emit_enclosure_post(close.as_deref(), &mut emit);
-            }
-            if node
-                .children
-                .iter()
-                .any(|child| child.kind == NodeKind::Body)
-            {
-                for child in node
-                    .children
-                    .iter()
-                    .filter(|child| child.flags.delimiter_close)
-                {
-                    emit(Event::Children(std::slice::from_ref(child)));
-                }
             }
         }
         None if matches!(
@@ -231,8 +268,78 @@ pub(super) fn walk<'a>(
         ) =>
         {
             emit(Event::Children(&node.children));
+            if node.kind == NodeKind::Body {
+                emit(Event::RestoreBody(node.id));
+            }
         }
         _ => return false,
+    }
+    true
+}
+
+fn emit_font_or_keep<'a>(node: &'a Node, emit: &mut impl FnMut(Event<'a>)) {
+    let body = node
+        .children
+        .iter()
+        .find(|part| part.kind == NodeKind::Body);
+    let body_id = body.map(|part| part.id);
+    if node.macro_name.as_deref() == Some("Bk") {
+        emit(Event::EnterKeep);
+    } else if let Some(font) = node.font {
+        emit(Event::EnterFont(font.into(), body_id));
+    }
+    if let Some(body) = body {
+        emit(Event::At(body, false));
+        emit(Event::Children(&body.children));
+        emit(Event::RestoreBody(body.id));
+    }
+    if node.macro_name.as_deref() == Some("Bk") {
+        emit(Event::ExitKeep);
+    } else if node.font.is_some() {
+        emit(Event::ExitFont(body_id));
+    }
+}
+
+fn emit_enclosure<'a>(
+    node: &'a Node,
+    posts: &ScopePostState,
+    emit: &mut impl FnMut(Event<'a>),
+) -> bool {
+    let Some((open, close)) = resolved_enclosure_marks(node) else {
+        return false;
+    };
+    if let Some(open) = open {
+        if open.is_empty() {
+            emit(Event::EmptyWord);
+        } else {
+            emit(Event::Glyph(open));
+        }
+        emit(Event::Tight);
+    }
+    let body = node
+        .children
+        .iter()
+        .find(|child| child.kind == NodeKind::Body);
+    if let Some(body) = body {
+        emit(Event::At(body, false));
+        emit(Event::Children(&body.children));
+        let original_body_id = body.scope_end.is_none().then_some(body.id);
+        if original_body_id.is_none_or(|id| !posts.ended(id)) {
+            if let Some(body_id) = original_body_id {
+                emit(Event::RestoreBody(body_id));
+            }
+            emit_enclosure_post(close.as_deref(), emit);
+        }
+        for child in node
+            .children
+            .iter()
+            .filter(|child| child.flags.delimiter_close)
+        {
+            emit(Event::Children(std::slice::from_ref(child)));
+        }
+    } else {
+        emit(Event::Children(&node.children));
+        emit_enclosure_post(close.as_deref(), emit);
     }
     true
 }
@@ -250,12 +357,14 @@ fn walk_scope_end<'a>(
     };
     if node.macro_name.as_deref() == Some("Bf") {
         emit(Event::Children(&node.children));
+        emit(Event::RestoreBody(end.body_id));
         emit(Event::ExitFont(Some(end.body_id)));
         posts.finish(end.body_id);
         return true;
     }
     if node.macro_name.as_deref() == Some("Fo") {
         emit(Event::Children(&node.children));
+        emit(Event::RestoreBody(end.body_id));
         if let Some(synopsis) = posts.function_suffix(end.body_id) {
             emit(Event::Tight);
             emit(Event::Glyph(if synopsis { ");" } else { ")" }.to_owned()));
@@ -264,7 +373,13 @@ fn walk_scope_end<'a>(
         return true;
     }
     if node.macro_name.as_deref() == Some("Eo") {
-        emit_eo_endbody(node, emit);
+        if !node.children.is_empty() {
+            emit(Event::BeginNode(node));
+            emit(Event::Tight);
+        }
+        emit(Event::Children(&node.children));
+        emit(Event::RestoreBody(end.body_id));
+        emit(Event::Release);
         posts.finish(end.body_id);
         return true;
     }
@@ -273,22 +388,18 @@ fn walk_scope_end<'a>(
             emit(Event::BeginNode(node));
         }
         emit(Event::Children(&node.children));
+        emit(Event::RestoreBody(end.body_id));
         emit_enclosure_post(close.as_deref(), emit);
         posts.finish(end.body_id);
         return true;
     }
-    false
-}
-
-fn emit_eo_endbody<'a>(node: &'a Node, emit: &mut impl FnMut(Event<'a>)) {
-    if !node.children.is_empty() {
-        emit(Event::BeginNode(node));
-        // mdoc_html.c::mdoc_eo_pre() sets HTML_NOSPACE before a nonempty
-        // body-end marker; mdoc_eo_post() releases it.
-        emit(Event::Tight);
-    }
     emit(Event::Children(&node.children));
-    emit(Event::Release);
+    emit(Event::RestoreBody(end.body_id));
+    if node.macro_name.as_deref() == Some("Bd") {
+        emit(Event::RestoreFill(end.body_id));
+    }
+    posts.finish(end.body_id);
+    true
 }
 
 /// Keep the native Fo HEAD/BODY order when a structural child re-enters the
@@ -315,6 +426,9 @@ fn emit_structural_function<'a>(
     }
     if let Some(part) = head_part {
         emit(Event::BeginNode(part));
+        if let Some(target) = super::targets::raw_target(part) {
+            emit(Event::Anchor(target, super::source_span(part)));
+        }
         emit(Event::EnterFont(RoffFont::Strong, None));
         emit(Event::Children(&part.children));
         emit(Event::ExitFont(None));
@@ -330,7 +444,7 @@ fn emit_structural_function<'a>(
     }
     if body_part.is_none_or(|part| !posts.ended(part.id)) {
         if let Some(part) = body_part {
-            emit(Event::At(part, false));
+            emit(Event::RestoreBody(part.id));
         }
         emit(Event::Tight);
         emit(Event::Glyph(if synopsis { ");" } else { ")" }.to_owned()));
@@ -447,7 +561,7 @@ fn authored_enclosure<'a>(
     let tail = first_part_children(node, NodeKind::Tail);
     for (index, child) in node.children.iter().enumerate() {
         if matches!(child.kind, NodeKind::Head | NodeKind::Body | NodeKind::Tail) {
-            emit(Event::BeginNode(child));
+            emit(Event::At(child, true));
         }
         match child.kind {
             NodeKind::Head => {
@@ -458,6 +572,9 @@ fn authored_enclosure<'a>(
             }
             NodeKind::Body => {
                 emit(Event::Children(&child.children));
+                if !posts.ended(child.id) {
+                    emit(Event::RestoreBody(child.id));
+                }
                 if head.is_empty() && body.is_empty() && tail.is_empty() {
                     emit(Event::EmptyWord);
                 } else if tail.is_empty() && !posts.ended(child.id) {

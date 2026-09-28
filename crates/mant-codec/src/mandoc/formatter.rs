@@ -10,6 +10,13 @@ pub(super) struct FinishedInlineLine {
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+enum RowHandoff {
+    #[default]
+    None,
+    AdoptTrailingLiteral,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(in crate::mandoc) enum AuthorFlow {
     #[default]
     Automatic,
@@ -24,6 +31,10 @@ pub(super) struct FormatterState {
     /// Source-order roff fill channel. List bodies return this state to their
     /// parent; a literal Bd restores its inbound channel at its own post.
     pub(super) no_fill: bool,
+    /// A crossed display can return while its last literal row is still the
+    /// formatter's active row. The parent output sink adopts that row before
+    /// writing the next source or generated word.
+    row_handoff: RowHandoff,
     /// CVS `termp.skipvsp` is formatter-global: structural and presentation
     /// scopes do not clear it, while the next real formatter word does.
     pub(super) vertical_space_debt: u16,
@@ -43,6 +54,7 @@ impl Default for FormatterState {
             font: FontState::new(),
             spacing: true,
             no_fill: false,
+            row_handoff: RowHandoff::None,
             vertical_space_debt: 0,
             zero_advance_armed: false,
             author_flow: AuthorFlow::default(),
@@ -51,6 +63,20 @@ impl Default for FormatterState {
 }
 
 impl FormatterState {
+    pub(super) fn mark_trailing_literal_row(&mut self) {
+        self.row_handoff = RowHandoff::AdoptTrailingLiteral;
+    }
+
+    pub(super) fn take_trailing_literal_row(&mut self) -> bool {
+        matches!(
+            std::mem::take(&mut self.row_handoff),
+            RowHandoff::AdoptTrailingLiteral
+        )
+    }
+
+    pub(super) fn clear_trailing_literal_row(&mut self) {
+        self.row_handoff = RowHandoff::None;
+    }
     /// Execute one source-order node in an already live paragraph builder.
     /// The builder owns joins and buffered IR; this carrier owns the font
     /// register between nodes. There is no independently writable font copy

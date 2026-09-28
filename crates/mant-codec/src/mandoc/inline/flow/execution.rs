@@ -403,6 +403,14 @@ impl InlineBuilder {
         self.boundary.is_tight()
     }
 
+    pub(in crate::mandoc) const fn boundary_state(&self) -> PendingBoundary {
+        self.boundary
+    }
+
+    pub(in crate::mandoc) fn inherit_boundary_state(&mut self, boundary: PendingBoundary) {
+        self.boundary = boundary;
+    }
+
     pub(in crate::mandoc) const fn spacing_enabled(&self) -> bool {
         self.spacing.enabled()
     }

@@ -46,6 +46,30 @@ impl StructuralLowerer<'_, '_, '_> {
     }
 
     pub(super) fn push(&mut self, node: &Node, table_embedding: Option<&TableEmbedding>) {
+        let scoped_body = if matches!(node.macro_name.as_deref(), Some("Bl" | "Rs"))
+            || (node.macro_name.as_deref() == Some("Bd")
+                && node.display_kind == Some(DisplayKind::Filled))
+        {
+            node.children
+                .iter()
+                .find(|part| part.kind == NodeKind::Body)
+        } else {
+            None
+        };
+        if let Some(body) = scoped_body {
+            self.context
+                .scope_posts
+                .enter_body(body.id, self.formatter.font.checkpoint());
+        }
+        self.push_scoped(node, table_embedding);
+        if let Some(body) = scoped_body
+            && let Some(saved) = self.context.scope_posts.exit_body(body.id)
+        {
+            self.formatter.font.pop_scope(saved);
+        }
+    }
+
+    fn push_scoped(&mut self, node: &Node, table_embedding: Option<&TableEmbedding>) {
         let continues_ip_item =
             node.macro_name.as_deref() == Some("RS") && self.man_list_state.is_active();
         if !matches!(node.macro_name.as_deref(), Some("IP" | "TP")) && !continues_ip_item {

@@ -214,6 +214,10 @@ pub(in crate::mandoc) struct FontState {
     /// HTML pair separate from both persistent register pairs.
     table_presentation: Option<TablePresentationFont>,
     heading_bold_italic: bool,
+    /// CVS term.c keeps mdoc fonts in a stack.  An ordinary `.ft` changes
+    /// the current slot without pushing it, so BODY unwinding must restore
+    /// only scopes pushed after that BODY was entered.
+    scope_depth: usize,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -227,6 +231,7 @@ pub(in crate::mandoc) struct FontScope {
     current: Font,
     display_current: Font,
     table_presentation_current: Option<Font>,
+    depth: usize,
 }
 
 impl FontState {
@@ -238,6 +243,7 @@ impl FontState {
             display_previous: Font::Regular,
             table_presentation: None,
             heading_bold_italic: false,
+            scope_depth: 0,
         }
     }
 
@@ -285,16 +291,28 @@ impl FontState {
     /// mdoc font scopes push a selection. Popping restores the saved current
     /// font, not the previous-selection register used by `\\fP` and `.ft P`.
     pub(in crate::mandoc) fn push_scope(&mut self, font: Font) -> FontScope {
-        let saved = FontScope {
-            current: self.current,
-            display_current: self.display_current,
-            table_presentation_current: self.table_presentation.map(|font| font.current),
-        };
+        let saved = self.checkpoint();
+        self.scope_depth += 1;
         self.select(font);
         saved
     }
 
+    pub(in crate::mandoc) fn checkpoint(&self) -> FontScope {
+        FontScope {
+            current: self.current,
+            display_current: self.display_current,
+            table_presentation_current: self.table_presentation.map(|font| font.current),
+            depth: self.scope_depth,
+        }
+    }
+
     pub(in crate::mandoc) fn pop_scope(&mut self, saved: FontScope) {
+        // term.c::term_fontpopq() is a no-op if a crossed BODY has already
+        // unwound this font depth.  A later return must not revive it.
+        if self.scope_depth <= saved.depth {
+            return;
+        }
+        self.scope_depth = saved.depth;
         self.current = saved.current;
         self.display_current = saved.display_current;
         if let (Some(presentation), Some(current)) = (
@@ -360,7 +378,7 @@ impl FontState {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum PendingBoundary {
+pub(in crate::mandoc) enum PendingBoundary {
     Ordinary,
     Tight,
     PrefixJoin,

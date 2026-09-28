@@ -101,6 +101,16 @@ fn every_executed_empty_row_survives_at_internal_and_trailing_positions() {
 }
 
 #[test]
+fn empty_man_text_settles_a_pending_word_end_before_the_next_row() {
+    // Exact input checked with pinned CVS -Tutf8. man_term.c's empty TEXT
+    // path calls term_vspace(), so the prior \p row and authored blank row
+    // are each represented once before B.
+    let text = rendered("nf", "A\\p\n\nB");
+    assert!(text.contains("A\n\nB"), "{text:?}");
+    assert!(!text.contains("A\n\n\nB"), "{text:?}");
+}
+
+#[test]
 fn macro_expansion_rows_do_not_use_call_site_line_numbers_as_identity() {
     for mode in ["nf", "EX", "SY", "literal", "unfilled"] {
         let text = rendered(mode, ".de ZZ\nALPHA\n\n\nBETA\n..\n.ZZ\n.ZZ");

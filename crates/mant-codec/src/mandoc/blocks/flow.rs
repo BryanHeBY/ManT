@@ -204,6 +204,26 @@ impl BlockState {
             .append(nodes, source, continues_line, starts_line, occupies_row);
     }
 
+    pub(super) fn adopt_trailing_preformatted(&mut self) -> bool {
+        if !self.literal.is_empty() {
+            return false;
+        }
+        if !matches!(self.output.last(), Some(Block::Preformatted { .. })) {
+            return false;
+        }
+        let Some(Block::Preformatted {
+            children,
+            layout,
+            source,
+            ..
+        }) = self.output.pop()
+        else {
+            unreachable!("the last block was checked above")
+        };
+        self.literal.adopt(children, source, layout);
+        true
+    }
+
     pub(super) fn no_break_formatter_flush(&mut self, nodes: Vec<Inline>) {
         self.paragraph.no_break_flush();
         self.literal.no_break_flush(nodes);

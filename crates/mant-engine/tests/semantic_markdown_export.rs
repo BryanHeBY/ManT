@@ -4,7 +4,57 @@ use mant_ir::{
     Document, EntryFacts, ListItem,
     visit::{self, Visit},
 };
-use mant_loader::load_markdown_text;
+use mant_loader::{load_markdown_text, load_roff_bytes};
+
+#[test]
+fn no_fill_function_target_survives_addressable_markdown_export() {
+    // Exact source checked with pinned CVS -Ttree/-Thtml: post_tg attaches
+    // the target to Fo HEAD, and mdoc_html.c puts id=call on its visible Fn.
+    let source = b".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\n.nf\n.Tg call\n.Fo call\n.Fa first\n.Fa second\n.Fc\n.fi\n";
+    let query = load_roff_bytes(source).unwrap();
+    let markdown = render_markdown_with_options(
+        &query,
+        MarkdownOptions {
+            preserve_anchors: true,
+            preserve_semantics: false,
+        },
+    );
+    assert_eq!(
+        markdown.matches("<a id=\"call\"></a>").count(),
+        1,
+        "{markdown}"
+    );
+    assert!(
+        markdown.contains("<a id=\"call\"></a>\n\n```"),
+        "{markdown}"
+    );
+    assert!(markdown.contains("call(\nfirst,\nsecond)"), "{markdown}");
+}
+
+#[test]
+fn literal_display_target_survives_addressable_markdown_export() {
+    // Exact input checked with pinned CVS -Thtml. mdoc_html.c renders the
+    // attached Tg destination on the visible No inside the literal pre.
+    let source = b".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal\n.Tg inner\n.No inner\n.Ed\n";
+    let query = load_roff_bytes(source).unwrap();
+    let markdown = render_markdown_with_options(
+        &query,
+        MarkdownOptions {
+            preserve_anchors: true,
+            preserve_semantics: false,
+        },
+    );
+    assert_eq!(
+        markdown.matches("<a id=\"inner\"></a>").count(),
+        1,
+        "{markdown}"
+    );
+    assert!(
+        markdown.contains("<a id=\"inner\"></a>\n\n```"),
+        "{markdown}"
+    );
+    assert!(markdown.contains("```\ninner\n```"), "{markdown}");
+}
 
 fn facts(doc: &Document) -> Vec<EntryFacts> {
     struct Entries(Vec<EntryFacts>);

@@ -1,3 +1,4 @@
+use super::super::flow::PendingBoundary;
 use super::{
     FontState, Inline, InlineBuilder, Node, ZeroAdvanceState, append_inline_nodes,
     builder_with_zero_advance,
@@ -15,6 +16,7 @@ pub(in crate::mandoc) struct NoFillInlineState {
     pending_word_end_break: bool,
     continued: bool,
     formatter_cell: NoFillFormatterCell,
+    boundary: PendingBoundary,
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -31,6 +33,7 @@ impl NoFillInlineState {
             pending_word_end_break: false,
             continued: false,
             formatter_cell: NoFillFormatterCell::Origin,
+            boundary: PendingBoundary::Ordinary,
         }
     }
 
@@ -68,6 +71,7 @@ impl NoFillInlineState {
         self.pending_word_end_break = false;
         self.continued = false;
         self.formatter_cell = NoFillFormatterCell::Origin;
+        self.boundary = PendingBoundary::Ordinary;
     }
 
     pub(in crate::mandoc) fn take_settled_row(&mut self) -> Vec<Inline> {
@@ -116,6 +120,10 @@ impl NoFillInlineState {
             self.zero_advance.take_armed()
         }
     }
+
+    pub(in crate::mandoc) const fn continues_source_line(&self) -> bool {
+        self.continued
+    }
 }
 
 pub(in crate::mandoc) fn lower_no_fill_line_with_font_state(
@@ -133,7 +141,7 @@ pub(in crate::mandoc) fn lower_no_fill_line_with_font_state(
         inline_state,
         scope_posts,
         source_continuation_fallback,
-        true,
+        false,
         |builder| append_inline_nodes(builder, nodes, default_name),
     )
 }
@@ -152,6 +160,7 @@ pub(in crate::mandoc) fn lower_no_fill_fragment_with_font_state(
 ) -> (Vec<Inline>, bool) {
     let mut builder = builder_with_zero_advance(spacing, *state, &mut inline_state.zero_advance);
     builder.scope_posts = scope_posts.clone();
+    builder.inherit_boundary_state(inline_state.boundary);
     if inline_state.continued {
         builder.continue_source_line(true);
         builder.tighten_next_boundary();
@@ -160,6 +169,7 @@ pub(in crate::mandoc) fn lower_no_fill_fragment_with_font_state(
         builder.request_word_end_break();
     }
     append(&mut builder);
+    inline_state.boundary = builder.boundary_state();
     *state = builder.font;
     let (mut output, execution) = builder.finish_preserving_execution();
     let continues_line = execution

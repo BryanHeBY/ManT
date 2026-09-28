@@ -30,6 +30,7 @@ pub(super) fn preformatted_blocks(
         literal: true,
         honor_node_fill: node.macro_name.as_deref() == Some("Bd"),
         formatter: std::mem::take(formatter),
+        close: DisplayClose::NormalReturn,
     };
     flow.line.font = flow.formatter.font;
     flow.line.scope_posts = context.scope_posts.clone();
@@ -46,6 +47,17 @@ pub(super) fn preformatted_blocks(
         .children
         .iter()
         .position(|child| child.kind == NodeKind::Body);
+    if let Some(body_index) = body_index {
+        let body = &node.children[body_index];
+        context
+            .scope_posts
+            .enter_body(body.id, flow.line.font.checkpoint());
+        if node.macro_name.as_deref() == Some("Bd") {
+            context
+                .scope_posts
+                .enter_display_fill(body.id, inbound_no_fill);
+        }
+    }
     let children = body_index.map_or(node.children.as_slice(), |index| {
         node.children[index].children.as_slice()
     });
@@ -60,11 +72,31 @@ pub(super) fn preformatted_blocks(
     }
     flow.flush();
     flow.commit_line_execution();
+    if let Some(body_index) = body_index {
+        let body_id = node.children[body_index].id;
+        if let Some(saved) = context.scope_posts.exit_body(body_id) {
+            flow.formatter.font.pop_scope(saved);
+        }
+    }
+    if flow.close == DisplayClose::AtSourceMarker
+        && flow.formatter.no_fill
+        && flow.output.last().is_some_and(|block| {
+            matches!(block, Block::Preformatted { children, .. } if !matches!(children.last(), Some(Inline::LineBreak)))
+        })
+    {
+        flow.formatter.mark_trailing_literal_row();
+    }
     *formatter = flow.formatter;
-    // CVS mdoc_macro.c::blk_exp_close() restores the fill mode saved before
-    // Bd at `.Ed`, so requests inside the display cannot leak a literal
-    // channel to the containing enclosure's generated post.
-    formatter.no_fill = inbound_no_fill;
+    // When no BODY-end marker was needed, normal return is the source-order
+    // `.Ed` boundary. A crossed marker consumed the checkpoint earlier, so
+    // a later `.nf` must remain live after this function returns.
+    if let Some(body_index) = body_index
+        && let Some(fill) = context
+            .scope_posts
+            .exit_display_fill(node.children[body_index].id)
+    {
+        formatter.no_fill = fill;
+    }
     flow.output
 }
 
@@ -83,6 +115,13 @@ struct DisplayFlow<'a, 'source> {
     /// ordinary operands have no `NODE_NOFILL` flag but retain one display row.
     honor_node_fill: bool,
     formatter: crate::mandoc::formatter::FormatterState,
+    close: DisplayClose,
+}
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum DisplayClose {
+    NormalReturn,
+    AtSourceMarker,
 }
 
 impl DisplayFlow<'_, '_> {
@@ -116,90 +155,13 @@ impl DisplayFlow<'_, '_> {
     }
 
     fn append_container(&mut self, node: &Node) -> bool {
-        let mut saved_font = None;
-        let mut started = false;
-        crate::mandoc::containers::walk(node, &self.context.scope_posts, |event| {
-            use crate::mandoc::containers::Event;
-            if !started {
-                self.line.begin_executed_node(node);
-                for target in super::targets::structural_targets(node) {
-                    self.line
-                        .append(vec![Inline::anchor_at(target, source_span(node))]);
-                }
-                started = true;
-            }
-            match event {
-                Event::At(_, _) => {}
-                Event::BeginNode(part) => {
-                    self.line.begin_executed_node(part);
-                    if part.kind == NodeKind::Head
-                        && part.macro_name.as_deref() == Some("Fo")
-                        && let Some(target) = super::targets::raw_target(part)
-                    {
-                        self.line
-                            .append(vec![Inline::anchor_at(target, source_span(part))]);
-                    }
-                }
-                Event::Break => {
-                    self.flush();
-                    self.line.reset_source_cursor();
-                }
-                Event::FlushLine => {
-                    let start = self.output.len();
-                    self.flush();
-                    if !super::flow::has_flushed_row(&self.output[start..]) {
-                        self.output.push(Block::Preformatted {
-                            children: vec![Inline::Text {
-                                value: String::new(),
-                            }],
-                            language: None,
-                            layout: layout(self.indent_columns),
-                            source: source_span(node),
-                        });
-                    }
-                    self.line.reset_source_cursor();
-                }
-                Event::Children(nodes) => self.append_nodes(nodes),
-                Event::Glyph(value) => {
-                    self.line.append_text(&value);
-                }
-                Event::Tight => self.line.tighten_next_boundary(),
-                Event::Release => self.line.release_next_boundary(),
-                Event::EmptyWord => self.line.execute_empty_word(),
-                Event::EnterKeep => self.line.enter_keep_words(),
-                Event::ExitKeep => self.line.exit_keep_words(),
-                Event::EnterFont(font, body_id) => {
-                    let saved = self.line.font.push_scope(font);
-                    if let Some(body_id) = body_id {
-                        self.context.scope_posts.enter_font(body_id, saved);
-                    } else {
-                        saved_font = Some(saved);
-                    }
-                }
-                Event::FunctionArgument(argument, comma_after) => {
-                    // This direct Fo BODY child bypasses append_nodes(); it
-                    // still executes its own NODE_NOFILL mode after a crossed
-                    // `.Ed`, just like print_mdoc_node() does before Fa pre.
-                    if self.honor_node_fill && self.literal != argument.flags.no_fill {
-                        self.set_literal_mode(argument.flags.no_fill);
-                    }
-                    crate::mandoc::inline::function_argument(
-                        &mut self.line,
-                        argument,
-                        comma_after,
-                        self.context.default_name,
-                    );
-                }
-                Event::ExitFont(body_id) => {
-                    let saved = body_id
-                        .and_then(|body_id| self.context.scope_posts.exit_font(body_id))
-                        .or_else(|| body_id.is_none().then(|| saved_font.take()).flatten());
-                    if let Some(saved) = saved {
-                        self.line.font.pop_scope(saved);
-                    }
-                }
-            }
-        })
+        let posts = self.context.scope_posts.clone();
+        let mut sink = DisplayContainerSink {
+            flow: self,
+            root: node,
+            started: false,
+        };
+        crate::mandoc::containers::drive(node, &posts, &mut sink)
     }
 
     fn flush(&mut self) {
@@ -249,6 +211,7 @@ impl DisplayFlow<'_, '_> {
     fn set_literal_mode(&mut self, literal: bool) {
         self.flush();
         self.literal = literal;
+        self.formatter.no_fill = literal;
         let mut next = InlineBuilder::with_spacing(self.line.spacing_enabled());
         next.font = self.line.font;
         next.scope_posts = self.line.scope_posts.clone();
@@ -259,7 +222,6 @@ impl DisplayFlow<'_, '_> {
         self.line = next;
         self.source = None;
     }
-
     fn append_inline(&mut self, node: &Node, next: Option<&Node>) {
         if self.source.is_none() {
             self.source = source_span(node);
@@ -398,6 +360,96 @@ impl DisplayFlow<'_, '_> {
             }
             self.paragraph_predecessor |= super::super::adjacency::is_logical_sibling(node);
         }
+    }
+}
+
+struct DisplayContainerSink<'flow, 'node, 'context, 'source> {
+    flow: &'flow mut DisplayFlow<'context, 'source>,
+    root: &'node Node,
+    started: bool,
+}
+
+impl<'node> crate::mandoc::containers::ContainerSink<'node>
+    for DisplayContainerSink<'_, 'node, '_, '_>
+{
+    fn font(&mut self) -> &mut crate::mandoc::inline::FontState {
+        &mut self.flow.line.font
+    }
+
+    fn source_node(&mut self, node: &'node Node, starts_line: bool) {
+        if !self.started {
+            for target in super::targets::structural_targets(self.root) {
+                self.flow
+                    .line
+                    .append(vec![Inline::anchor_at(target, source_span(self.root))]);
+            }
+            self.started = true;
+        }
+        if self.flow.honor_node_fill
+            && !matches!(node.macro_name.as_deref(), Some("fi" | "nf"))
+            && self.flow.literal != node.flags.no_fill
+        {
+            self.flow.set_literal_mode(node.flags.no_fill);
+        }
+        if starts_line && node.macro_name.as_deref() != Some("Fa") {
+            self.flow.line.begin_executed_node(node);
+        }
+    }
+
+    fn event(&mut self, event: crate::mandoc::containers::Event<'node>) {
+        use crate::mandoc::containers::Event;
+        match event {
+            Event::BeginNode(part) => {
+                self.flow.line.begin_executed_node(part);
+            }
+            Event::Anchor(target, source) => self
+                .flow
+                .line
+                .append(vec![Inline::anchor_at(target, source)]),
+            Event::Break => {
+                self.flow.flush();
+                self.flow.line.reset_source_cursor();
+            }
+            Event::FlushLine => {
+                let start = self.flow.output.len();
+                self.flow.flush();
+                if !super::flow::has_flushed_row(&self.flow.output[start..]) {
+                    self.flow.output.push(Block::Preformatted {
+                        children: vec![Inline::Text {
+                            value: String::new(),
+                        }],
+                        language: None,
+                        layout: layout(self.flow.indent_columns),
+                        source: source_span(self.root),
+                    });
+                }
+                self.flow.line.reset_source_cursor();
+            }
+            Event::Children(nodes) => self.flow.append_nodes(nodes),
+            Event::Glyph(value) => self.flow.line.append_text(&value),
+            Event::Tight => self.flow.line.tighten_next_boundary(),
+            Event::Release => self.flow.line.release_next_boundary(),
+            Event::EmptyWord => self.flow.line.execute_empty_word(),
+            Event::EnterKeep => self.flow.line.enter_keep_words(),
+            Event::ExitKeep => self.flow.line.exit_keep_words(),
+            Event::FunctionArgument(argument, comma_after) => {
+                crate::mandoc::inline::function_argument(
+                    &mut self.flow.line,
+                    argument,
+                    comma_after,
+                    self.flow.context.default_name,
+                );
+            }
+            _ => unreachable!("the shared container driver owns source and font events"),
+        }
+    }
+
+    fn restore_fill(&mut self, fill: bool) {
+        self.flow.close = DisplayClose::AtSourceMarker;
+        if self.flow.literal != fill {
+            self.flow.set_literal_mode(fill);
+        }
+        self.flow.formatter.no_fill = fill;
     }
 }
 

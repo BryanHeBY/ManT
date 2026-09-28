@@ -16,6 +16,22 @@ fn emphasized_document_text(document: &mant_ir::Document) -> String {
     collector.0
 }
 
+fn strong_document_text(document: &mant_ir::Document) -> String {
+    struct Collector(String);
+    impl<'ir> Visit<'ir> for Collector {
+        fn visit_inline(&mut self, inline: &'ir Inline) {
+            if let Inline::Strong { children } = inline {
+                self.0.push_str(&inline_text(children));
+            } else {
+                visit::walk_inline(self, inline);
+            }
+        }
+    }
+    let mut collector = Collector(String::new());
+    collector.visit_document(document);
+    collector.0
+}
+
 #[test]
 fn generated_function_events_follow_no_fill_source_order_and_rows() {
     // Both exact inputs were run through the fixed CVS -Ttree, -Thtml,
@@ -41,6 +57,75 @@ fn generated_function_events_follow_no_fill_source_order_and_rows() {
 }
 
 #[test]
+fn function_head_target_stays_with_the_active_output_channel() {
+    struct Anchors(Vec<(String, Option<u32>)>);
+    impl<'ir> Visit<'ir> for Anchors {
+        fn visit_inline(&mut self, inline: &'ir Inline) {
+            if let Inline::Anchor {
+                id, owner_source, ..
+            } = inline
+            {
+                self.0
+                    .push((id.as_str().to_owned(), owner_source.map(|span| span.line)));
+            }
+            visit::walk_inline(self, inline);
+        }
+    }
+    // Each exact input was checked with pinned CVS -Ttree/-Thtml. The
+    // mdoc_validate.c::post_tg() target belongs to Fo HEAD; mdoc_html.c
+    // writes its id on the visible Fn in filled and no-fill output, even
+    // when a structural child interrupts the BODY.
+    for (name, source, preformatted, head_line) in [
+        (
+            "filled",
+            ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\n.Tg call\n.Fo call\n.Fa first\n.Fa second\n.Fc\n",
+            false,
+            6,
+        ),
+        (
+            "nofill",
+            ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\n.nf\n.Tg call\n.Fo call\n.Fa first\n.Fa second\n.Fc\n.fi\n",
+            true,
+            7,
+        ),
+        (
+            "structural",
+            ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\n.Tg call\n.Fo call\n.Fa first\n.Bl -bullet\n.It\nitem\n.El\n.Fa second\n.Fc\n",
+            false,
+            6,
+        ),
+    ] {
+        let document = parse_manual_bytes(std::path::Path::new(name), source.as_bytes()).unwrap();
+        let blocks = &document.sections[0].blocks;
+        let paired = blocks.iter().any(|block| {
+            let children = match block {
+                Block::Paragraph { children, .. } if !preformatted => children,
+                Block::Preformatted { children, .. } if preformatted => children,
+                _ => return false,
+            };
+            children
+                .iter()
+                .any(|child| matches!(child, Inline::Anchor { id, .. } if id.as_str() == "call"))
+                && inline_text(children).contains("call(")
+        });
+        assert!(paired, "{name}: {blocks:#?}");
+        let mut anchors = Anchors(Vec::new());
+        anchors.visit_document(&document);
+        assert_eq!(
+            anchors.0.iter().filter(|(id, _)| id == "call").count(),
+            1,
+            "{name}: {:#?}",
+            anchors.0
+        );
+        assert!(
+            anchors.0.contains(&(String::from("call"), Some(head_line))),
+            "{name}: {:#?}",
+            anchors.0
+        );
+    }
+}
+
+#[test]
 fn no_fill_end_marker_shares_scope_post_state() {
     // Exact input checked against fixed CVS tree, HTML, terminal, and lint.
     // mdoc.c::mdoc_endbody_alloc links Ac to Ao's BODY, and
@@ -50,7 +135,7 @@ fn no_fill_end_marker_shares_scope_post_state() {
     let text = projected_document_text(&document);
     assert_eq!(text.matches('>').count(), 1, "{text:?}");
     assert_eq!(text.matches(']').count(), 1, "{text:?}");
-    assert!(text.contains("inside>"), "{text:?}");
+    assert!(text.contains("inside\n>"), "{text:?}");
 
     // Exact crossed Fo/Fc input also checked with the same fixed oracle.
     // The temporary no-fill builder must mark the original Fo BODY ended
@@ -60,7 +145,188 @@ fn no_fill_end_marker_shares_scope_post_state() {
         parse_manual_bytes(std::path::Path::new("nofill-function-post.1"), source).unwrap();
     let text = projected_document_text(&document);
     assert_eq!(text.matches(')').count(), 1, "{text:?}");
-    assert!(text.contains("inside)"), "{text:?}");
+    assert!(text.contains("inside\n)"), "{text:?}");
+}
+
+#[test]
+fn ordinary_no_fill_scopes_execute_each_authored_line() {
+    // Exact input checked with pinned CVS -Ttree/-Tutf8. In
+    // mdoc_term.c::print_mdoc_node(), NODE_LINE runs on each Fa before its
+    // generated argument; Fo's post shares the second argument's row.
+    let source = b".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\n.nf\n.Fo call\n.Fa first\n.Fa second\n.Fc\n.fi\n";
+    let document =
+        parse_manual_bytes(std::path::Path::new("ordinary-nofill-fo.1"), source).unwrap();
+    let blocks = &document.sections[0].blocks;
+    assert!(blocks.iter().any(|block| matches!(block, Block::Preformatted { children, .. } if inline_text(children).contains("call(\nfirst,\nsecond)"))), "{blocks:#?}");
+
+    // Both exact inputs checked with the same CVS terminal oracle. Ao's
+    // generated open and Eo's authored head each enter their own NODE_LINE;
+    // ordinary text lines remain distinct before their respective posts.
+    for (name, source, expected) in [
+        ("Ao", b".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\n.nf\n.Ao\nfirst\nsecond\n.Ac\n.fi\n".as_slice(), "<\nfirst\nsecond>"),
+        ("Eo", b".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\n.nf\n.Eo OPEN\nfirst\nsecond\n.Ec CLOSE\n.fi\n".as_slice(), "OPEN\nfirst\nsecond\nCLOSE"),
+    ] {
+        let document = parse_manual_bytes(std::path::Path::new(name), source).unwrap();
+        let text = projected_document_text(&document);
+        assert!(text.contains(expected), "{name}: {text:?}");
+    }
+}
+
+#[test]
+fn generated_post_consumes_the_current_zero_advance_cell() {
+    // Exact input checked with pinned CVS -Tutf8. term.c::term_word() keeps
+    // BACKBEFORE until the following generated Ao post word overstrikes X.
+    let source = b".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\n.nf\n.Ao\n.Dl marker\n\\zX\n.Ac\n.fi\n";
+    let document = parse_manual_bytes(std::path::Path::new("nofill-post-zero.1"), source).unwrap();
+    let text = projected_document_text(&document);
+    assert!(!text.contains("X>"), "{text:?}");
+    assert!(text.contains('>'), "{text:?}");
+
+    // Exact reverse input checked with CVS -Tutf8. Eo's authored Ec tail is
+    // a separate NODE_LINE, so X must be committed on its own row instead
+    // of being consumed by CLOSE.
+    let source = b".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\n.nf\n.Eo OPEN\n\\zX\n.Ec CLOSE\n.fi\n";
+    let document = parse_manual_bytes(std::path::Path::new("nofill-eo-zero.1"), source).unwrap();
+    let text = projected_document_text(&document);
+    assert!(text.contains("OPEN\nX\nCLOSE"), "{text:?}");
+}
+
+#[test]
+fn crossed_body_end_restores_enclosing_font_before_post() {
+    // Exact input checked with pinned CVS -Ttree/-Tutf8. The Ac BODY-end
+    // marker invokes mdoc_term.c::print_mdoc_node()'s term_fontpopq() for
+    // Ao's original BODY before it writes the closing delimiter.
+    let source = b".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\n.Ao\n.Bf -emphasis\ninside\n.Ac\nafter\n.Ef\ntail\n";
+    let document =
+        parse_manual_bytes(std::path::Path::new("body-font-checkpoint.1"), source).unwrap();
+    let emphasis = emphasized_document_text(&document);
+    assert!(
+        emphasis.contains("inside"),
+        "{:#?}",
+        document.sections[0].blocks
+    );
+    assert!(
+        !emphasis.contains('>'),
+        "{:#?}",
+        document.sections[0].blocks
+    );
+    assert!(
+        !emphasis.contains("after"),
+        "{:#?}",
+        document.sections[0].blocks
+    );
+
+    // Each exact source was also checked with pinned CVS -Tutf8. Its
+    // mdoc_term.c::print_mdoc_node() BODY checkpoint applies to the original
+    // BODY whatever macro owns it; Eo's Ec tail executes before that pop.
+    for (name, body, close_stays_emphasized) in [
+        (
+            "Bo",
+            ".Bo\n.Bf -emphasis\ninside\n.Bc\nafter\n.Ef\ntail\n",
+            false,
+        ),
+        (
+            "Eo",
+            ".Eo OPEN\n.Bf -emphasis\ninside\n.Ec CLOSE\nafter\n.Ef\ntail\n",
+            true,
+        ),
+        (
+            "Fo",
+            ".Fo call\n.Bf -emphasis\ninside\n.Fc\nafter\n.Ef\ntail\n",
+            false,
+        ),
+        (
+            "Bk",
+            ".Bk -words\n.Bf -emphasis\ninside\n.Ek\nafter\n.Ef\ntail\n",
+            false,
+        ),
+        (
+            "Bd",
+            ".Bd -literal\n.Bf -emphasis\ninside\n.Ed\nafter\n.Ef\ntail\n",
+            false,
+        ),
+        (
+            "Bl",
+            ".Bl -bullet\n.It\n.Bf -emphasis\ninside\n.El\nafter\n.Ef\ntail\n",
+            false,
+        ),
+    ] {
+        let source = format!(".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\n{body}");
+        let document = parse_manual_bytes(std::path::Path::new(name), source.as_bytes()).unwrap();
+        let emphasis = emphasized_document_text(&document);
+        assert!(
+            emphasis.contains("inside"),
+            "{name}: {:#?}",
+            document.sections[0].blocks
+        );
+        assert!(
+            !emphasis.contains("after"),
+            "{name}: {:#?}",
+            document.sections[0].blocks
+        );
+        assert_eq!(
+            emphasis.contains("CLOSE"),
+            close_stays_emphasized,
+            "{name}: {:#?}",
+            document.sections[0].blocks
+        );
+    }
+}
+
+#[test]
+fn body_font_checkpoint_only_pops_pushed_scopes() {
+    // Exact input checked with fixed CVS -Tutf8. term.c::term_fontpopq()
+    // leaves `.ft B` in the current stack slot; only a pushed mdoc font is
+    // unwound at Ao BODY exit. The later \fP selects the previous slot.
+    let source = b".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\n.Ao\n.ft B\ninside\n.Ac\nafter\n\\fPprevious\n";
+    let document = parse_manual_bytes(std::path::Path::new("body-ft-slot.1"), source).unwrap();
+    let strong = strong_document_text(&document);
+    assert!(
+        strong.contains("inside"),
+        "{:#?}",
+        document.sections[0].blocks
+    );
+    assert!(
+        strong.contains("after"),
+        "{:#?}",
+        document.sections[0].blocks
+    );
+    assert!(
+        !strong.contains("previous"),
+        "{:#?}",
+        document.sections[0].blocks
+    );
+}
+
+#[test]
+fn crossed_outer_close_keeps_inner_body_font_checkpoint() {
+    // Exact input checked with pinned CVS -Ttree/-Tutf8. Ac closes Ao inside
+    // Bo, but mdoc_term.c::print_mdoc_node() later uses Bo's own prev_font at
+    // Bc. A Bf scope opened between Ac and Bc must then be unwound.
+    let source = b".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\n.Ao\n.Bo\n.Ac\n.Bf -emphasis\ninside\n.Bc\nafter\n.Ef\ntail\n";
+    let document =
+        parse_manual_bytes(std::path::Path::new("crossed-font-bodies.1"), source).unwrap();
+    let emphasis = emphasized_document_text(&document);
+    assert!(
+        emphasis.contains("inside"),
+        "{:#?}",
+        document.sections[0].blocks
+    );
+    assert!(
+        !emphasis.contains("after"),
+        "{:#?}",
+        document.sections[0].blocks
+    );
+}
+
+#[test]
+fn crossed_display_end_does_not_undo_later_no_fill_request() {
+    // Exact input checked with pinned CVS -Ttree/-Tutf8. mdoc_macro.c's
+    // blk_exp_close restores Bd fill at Ed's source position, before nf.
+    let source = b".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\n.Ao\n.Bd -literal\n.Bo\ninside\n.Ed\n.nf\nafter\n.Bc\n.Ac\n.fi\ntail\n";
+    let document = parse_manual_bytes(std::path::Path::new("crossed-ed-nf.1"), source).unwrap();
+    let blocks = &document.sections[0].blocks;
+    assert!(blocks.iter().any(|block| matches!(block, Block::Preformatted { children, .. } if inline_text(children).contains("after]>"))), "{blocks:#?}");
 }
 
 #[test]

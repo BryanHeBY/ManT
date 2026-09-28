@@ -26,10 +26,13 @@ pub(super) fn append(builder: &mut InlineBuilder, node: &Node, name: Option<&str
     if let Some(anchor) = navigation_anchor(node) {
         builder.append(vec![anchor]);
     }
-    let mut saved_font = None;
-    if crate::mandoc::containers::walk(node, &builder.scope_posts.clone(), |event| {
-        append_container_event(builder, event, name, &mut saved_font);
-    }) {
+    let posts = builder.scope_posts.clone();
+    let mut sink = InlineContainerSink {
+        builder,
+        name,
+        root_id: node.id,
+    };
+    if crate::mandoc::containers::drive(node, &posts, &mut sink) {
         return;
     }
     let children = inline_children(node);
@@ -88,49 +91,52 @@ pub(super) fn append(builder: &mut InlineBuilder, node: &Node, name: Option<&str
     }
 }
 
-fn append_container_event(
-    builder: &mut InlineBuilder,
-    event: crate::mandoc::containers::Event<'_>,
-    name: Option<&str>,
-    saved_font: &mut Option<super::flow::FontScope>,
-) {
-    use crate::mandoc::containers::Event;
-    match event {
-        Event::At(_, _) => {}
-        Event::BeginNode(node) => builder.begin_executed_node(node),
-        Event::Break => {
-            builder.hard_break();
-            builder.reset_source_cursor();
+struct InlineContainerSink<'a> {
+    builder: &'a mut InlineBuilder,
+    name: Option<&'a str>,
+    root_id: u32,
+}
+
+impl<'node> crate::mandoc::containers::ContainerSink<'node> for InlineContainerSink<'_> {
+    fn font(&mut self) -> &mut super::FontState {
+        &mut self.builder.font
+    }
+
+    fn source_node(&mut self, node: &'node Node, starts_line: bool) {
+        // The caller entered the root before scope dispatch.  Direct Fo Fa
+        // operands enter in function_argument(); all other nested source
+        // wrappers use the same cursor as ordinary text nodes.
+        if starts_line && node.id != self.root_id && node.macro_name.as_deref() != Some("Fa") {
+            self.builder.begin_executed_node(node);
         }
-        Event::FlushLine => {
-            builder.append(vec![Inline::LineBreak]);
-            builder.reset_source_cursor();
-        }
-        Event::Children(nodes) => append_inline_nodes(builder, nodes, name),
-        Event::Glyph(value) => builder.append_text(&value),
-        Event::Tight => builder.tighten_next_boundary(),
-        Event::Release => builder.release_next_boundary(),
-        Event::EmptyWord => builder.execute_empty_word(),
-        Event::EnterKeep => builder.enter_keep_words(),
-        Event::ExitKeep => builder.exit_keep_words(),
-        Event::EnterFont(font, body_id) => {
-            let saved = builder.font.push_scope(font);
-            if let Some(body_id) = body_id {
-                builder.scope_posts.enter_font(body_id, saved);
-            } else {
-                *saved_font = Some(saved);
+    }
+
+    fn event(&mut self, event: crate::mandoc::containers::Event<'node>) {
+        use crate::mandoc::containers::Event;
+        match event {
+            Event::BeginNode(node) => self.builder.begin_executed_node(node),
+            Event::Anchor(target, source) => {
+                self.builder.append(vec![Inline::anchor_at(target, source)]);
             }
-        }
-        Event::FunctionArgument(argument, comma_after) => {
-            super::generated::function_argument(builder, argument, comma_after, name);
-        }
-        Event::ExitFont(body_id) => {
-            let saved = body_id
-                .and_then(|body_id| builder.scope_posts.exit_font(body_id))
-                .or_else(|| body_id.is_none().then(|| saved_font.take()).flatten());
-            if let Some(saved) = saved {
-                builder.font.pop_scope(saved);
+            Event::Break => {
+                self.builder.hard_break();
+                self.builder.reset_source_cursor();
             }
+            Event::FlushLine => {
+                self.builder.append(vec![Inline::LineBreak]);
+                self.builder.reset_source_cursor();
+            }
+            Event::Children(nodes) => append_inline_nodes(self.builder, nodes, self.name),
+            Event::Glyph(value) => self.builder.append_text(&value),
+            Event::Tight => self.builder.tighten_next_boundary(),
+            Event::Release => self.builder.release_next_boundary(),
+            Event::EmptyWord => self.builder.execute_empty_word(),
+            Event::EnterKeep => self.builder.enter_keep_words(),
+            Event::ExitKeep => self.builder.exit_keep_words(),
+            Event::FunctionArgument(argument, comma_after) => {
+                super::generated::function_argument(self.builder, argument, comma_after, self.name);
+            }
+            _ => unreachable!("the shared container driver owns source and font events"),
         }
     }
 }

@@ -1,6 +1,9 @@
 //! Converts renderer-neutral inline nodes to safe `CommonMark` phrasing.
 
-use std::{borrow::Cow, collections::VecDeque};
+use std::{
+    borrow::Cow,
+    collections::{HashSet, VecDeque},
+};
 
 use mant_ir::{Inline, LinkTarget};
 
@@ -60,6 +63,37 @@ pub(super) fn flatten_inline(children: &[Inline]) -> String {
         }
     }
     output
+}
+
+/// Fenced code cannot contain active HTML anchors. Project its zero-width
+/// destinations immediately before the fence, preserving their source order
+/// and aliases while the code text remains one preformatted block.
+pub(super) fn preformatted_anchor_markers(children: &[Inline]) -> String {
+    let mut markers = Vec::new();
+    let mut seen = HashSet::new();
+    let mut stack: Vec<_> = children.iter().rev().collect();
+    while let Some(child) = stack.pop() {
+        match child {
+            Inline::Anchor {
+                id,
+                fragment_aliases,
+                ..
+            } => {
+                for target in std::iter::once(id.as_str())
+                    .chain(fragment_aliases.iter().map(mant_ir::FragmentAlias::as_str))
+                {
+                    if seen.insert(target) {
+                        markers.push(html_anchor(target));
+                    }
+                }
+            }
+            Inline::Strong { children }
+            | Inline::Emphasis { children }
+            | Inline::Link { children, .. } => stack.extend(children.iter().rev()),
+            _ => {}
+        }
+    }
+    markers.join("\n")
 }
 
 pub(crate) fn escape_text(value: &str) -> String {

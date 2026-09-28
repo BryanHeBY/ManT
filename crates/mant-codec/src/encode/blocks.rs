@@ -6,7 +6,7 @@ use mant_ir::{
 
 use super::inline::{
     block_prefix_escape_position, code_span, escape_text, fenced_code, flatten_inline, html_anchor,
-    protect_block_prefix, render_inline,
+    preformatted_anchor_markers, protect_block_prefix, render_inline,
 };
 use super::mapped::MappedText;
 use super::{MarkdownInlineProjection, MarkdownOptions};
@@ -97,7 +97,16 @@ fn render_block(
         Block::Paragraph { children, .. } => nonempty(inline(children, options, locations)),
         Block::Preformatted {
             children, language, ..
-        } => Some(fenced_code(&flatten_inline(children), language.as_deref()).into()),
+        } => {
+            let code = fenced_code(&flatten_inline(children), language.as_deref());
+            if options.preserve_anchors {
+                let markers = preformatted_anchor_markers(children);
+                if !markers.is_empty() {
+                    return Some(format!("{markers}\n\n{code}").into());
+                }
+            }
+            Some(code.into())
+        }
         Block::List {
             kind,
             compact,

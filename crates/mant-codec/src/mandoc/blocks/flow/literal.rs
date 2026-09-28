@@ -9,6 +9,7 @@ pub(super) struct LiteralFlow {
     ordinary_continuation: bool,
     row_occupied: bool,
     formatter_column: FormatterColumn,
+    adopted_layout: Option<mant_ir::LayoutHint>,
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -26,6 +27,7 @@ impl LiteralFlow {
             ordinary_continuation: false,
             row_occupied: false,
             formatter_column: FormatterColumn::Origin,
+            adopted_layout: None,
         }
     }
 
@@ -121,6 +123,32 @@ impl LiteralFlow {
         matches!(self.formatter_column, FormatterColumn::Advanced)
     }
 
+    pub(super) fn is_empty(&self) -> bool {
+        self.nodes.is_empty()
+    }
+
+    pub(super) fn adopt(
+        &mut self,
+        nodes: Vec<Inline>,
+        source: Option<SourceSpan>,
+        layout: mant_ir::LayoutHint,
+    ) {
+        debug_assert!(self.nodes.is_empty());
+        let last_line = nodes
+            .iter()
+            .rposition(|node| matches!(node, Inline::LineBreak))
+            .map_or(nodes.as_slice(), |index| &nodes[index + 1..]);
+        self.row_occupied = mant_ir::has_printable_character(last_line);
+        self.formatter_column = if self.row_occupied {
+            FormatterColumn::Advanced
+        } else {
+            FormatterColumn::Origin
+        };
+        self.nodes = nodes;
+        self.source = source;
+        self.adopted_layout = Some(layout);
+    }
+
     pub(super) fn take(&mut self, indent: crate::mandoc::layout::SourceIndent) -> Option<Block> {
         let mut previous = std::mem::replace(self, Self::new());
         // A formatter-only word closes a row without occupying the next one.
@@ -131,7 +159,7 @@ impl LiteralFlow {
         (!previous.nodes.is_empty()).then(|| Block::Preformatted {
             children: previous.nodes,
             language: None,
-            layout: layout(indent),
+            layout: previous.adopted_layout.unwrap_or_else(|| layout(indent)),
             source: previous.source,
         })
     }

@@ -62,7 +62,13 @@ fn lower_no_fill_lines(
         if nodes.is_empty() {
             let blank_rows = empty_word_rows(node);
             occupies_row = blank_rows > 0;
-            for index in 0..blank_rows {
+            // An empty native TEXT calls term_vspace() at this source node.
+            // Settle its formatter cell now; otherwise the next request
+            // would count the same authored blank row a second time.
+            if node.kind == NodeKind::Text && node.decoder_text().unwrap_or_default().is_empty() {
+                nodes.extend(inline_state.take_settled_row());
+            }
+            for index in usize::from(!nodes.is_empty())..blank_rows {
                 if index > 0 {
                     nodes.push(Inline::LineBreak);
                 }
@@ -123,6 +129,10 @@ impl super::BlockLowerer<'_, '_> {
     pub(super) fn push_no_fill_lines(&mut self, node: &Node) -> bool {
         if !is_no_fill_payload(node) {
             return false;
+        }
+        self.resume_no_fill_row();
+        if node.flags.line_start && !self.no_fill_inline.continues_source_line() {
+            self.settle_no_fill_inline();
         }
         // `nf`/`fi` split presentation buffers, not the native formatter.
         // Move a surviving bare BACKAFTER request into the no-fill executor;

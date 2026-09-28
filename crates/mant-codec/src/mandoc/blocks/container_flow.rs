@@ -1,10 +1,13 @@
 //! Container events re-enter the single driver and preserve font/flush lifetimes.
 use super::{InlineBuilder, Node, source_span, targets};
-use crate::mandoc::containers::Event;
+use crate::mandoc::containers::{ContainerSink, Event};
 
 fn append_generated_event(builder: &mut InlineBuilder, event: Event<'_>) {
     match event {
         Event::Glyph(value) => builder.append_text(&value),
+        Event::Anchor(target, source) => {
+            builder.append(vec![mant_ir::Inline::anchor_at(target, source)]);
+        }
         Event::Tight => builder.tighten_next_boundary(),
         Event::Release => builder.release_next_boundary(),
         Event::EmptyWord => builder.execute_empty_word(),
@@ -20,6 +23,7 @@ impl super::BlockLowerer<'_, '_> {
         starts_line: bool,
         append: impl FnOnce(&mut InlineBuilder),
     ) {
+        self.resume_no_fill_row();
         self.no_fill_inline
             .inherit_zero_advance_armed(self.state.take_zero_advance_armed());
         let (nodes, continues_line) = crate::mandoc::inline::lower_no_fill_fragment_with_font_state(
@@ -45,11 +49,8 @@ impl super::BlockLowerer<'_, '_> {
     }
 
     fn push_function_argument(&mut self, argument: &Node, comma_after: bool) {
-        // Fa bypasses push_nodes(), so observe its source mode here just as
-        // mdoc_term.c::print_mdoc_node() does on node entry.
-        self.formatter.no_fill = argument.flags.no_fill;
         if self.formatter.no_fill {
-            self.push_no_fill_generated(argument, true, argument.flags.line_start, |builder| {
+            self.push_no_fill_generated(argument, false, argument.flags.line_start, |builder| {
                 crate::mandoc::inline::function_argument(
                     builder,
                     argument,
@@ -102,88 +103,105 @@ impl super::BlockLowerer<'_, '_> {
         }
         if node.scope_end.is_none()
             && !matches!(node.macro_name.as_deref(), Some("Bf" | "Bk"))
+            && !self.formatter.no_fill
             && !self.context.scope_posts.has_structural_payload(node)
         {
             return false;
         }
-        let mut saved_font = None;
-        let mut started = false;
-        let mut emission_source = node;
-        let handled = crate::mandoc::containers::walk(node, &self.context.scope_posts, |event| {
-            if !started {
-                self.state
-                    .queue_targets(targets::structural_targets(node), source_span(node));
-                started = true;
-            }
-            match event {
-                Event::At(source, starts_line) => {
-                    emission_source = source;
-                    // mdoc_term.c::print_mdoc_node() applies NODE_LINE at
-                    // node entry, even when pre/children/post emit no word.
-                    if starts_line && source.flags.line_start && self.formatter.no_fill {
-                        self.state.begin_no_fill_source_line();
-                    }
-                }
-                // In filled structural flow input-line wrappers alone are
-                // not paragraph breaks. Literal DisplayFlow consumes them.
-                Event::BeginNode(part) => {
-                    if part.kind == libmandoc_rs::NodeKind::Head
-                        && part.macro_name.as_deref() == Some("Fo")
-                        && let Some(target) = targets::raw_target(part)
-                    {
-                        self.state
-                            .push_inline_with(source_span(part), false, false, |builder| {
-                                builder.append(vec![mant_ir::Inline::anchor_at(
-                                    target,
-                                    source_span(part),
-                                )]);
-                            });
-                    }
-                }
-                Event::Break => {
-                    self.state.flush_preformatted();
-                    self.state.flush_paragraph();
-                    self.state.consume_hanging_first_line();
-                }
-                Event::FlushLine => self.state.flush_requested_line(source_span(node)),
-                Event::Children(nodes) => self.push_nodes(nodes),
-                Event::EnterFont(font, body_id) => {
-                    let saved = self.formatter.font.push_scope(font);
-                    if let Some(body_id) = body_id {
-                        self.context.scope_posts.enter_font(body_id, saved);
-                    } else {
-                        saved_font = Some(saved);
-                    }
-                }
-                Event::ExitFont(body_id) => {
-                    let saved = body_id
-                        .and_then(|body_id| self.context.scope_posts.exit_font(body_id))
-                        .or_else(|| body_id.is_none().then(|| saved_font.take()).flatten());
-                    if let Some(saved) = saved {
-                        self.formatter.font.pop_scope(saved);
-                    }
-                }
-                Event::EnterKeep => {
-                    self.state
-                        .push_inline_with(source_span(node), false, false, |builder| {
-                            builder.enter_keep_words();
-                        });
-                }
-                Event::ExitKeep => {
-                    self.state
-                        .push_inline_with(source_span(node), false, false, |builder| {
-                            builder.exit_keep_words();
-                        });
-                }
-                Event::FunctionArgument(argument, comma_after) => {
-                    self.push_function_argument(argument, comma_after);
-                }
-                event => self.push_generated_container_event(emission_source, event),
-            }
-        });
-        if !handled {
-            return false;
+        let posts = self.context.scope_posts.clone();
+        let mut sink = BlockContainerSink {
+            lowerer: self,
+            root: node,
+            emission_source: node,
+            started: false,
+        };
+        crate::mandoc::containers::drive(node, &posts, &mut sink)
+    }
+}
+
+struct BlockContainerSink<'l, 'a, 'source> {
+    lowerer: &'l mut super::BlockLowerer<'a, 'source>,
+    root: &'l Node,
+    emission_source: &'l Node,
+    started: bool,
+}
+
+impl<'node> ContainerSink<'node> for BlockContainerSink<'node, '_, '_> {
+    fn font(&mut self) -> &mut crate::mandoc::inline::FontState {
+        &mut self.lowerer.formatter.font
+    }
+
+    fn source_node(&mut self, source: &'node Node, starts_line: bool) {
+        if !self.started {
+            self.lowerer.state.queue_targets(
+                targets::structural_targets(self.root),
+                source_span(self.root),
+            );
+            self.started = true;
         }
-        true
+        self.emission_source = source;
+        self.lowerer.observe_source_fill_mode(source);
+        if self.lowerer.formatter.no_fill {
+            self.lowerer.resume_no_fill_row();
+        }
+        // CVS mdoc_term.c::print_mdoc_node() settles a physical no-fill row
+        // only on the next NODE_LINE (unless \c continues it).  Generated
+        // posts and a preceding \z glyph therefore share the same row.
+        if starts_line
+            && source.flags.line_start
+            && self.lowerer.formatter.no_fill
+            && !self.lowerer.no_fill_inline.continues_source_line()
+        {
+            self.lowerer.settle_no_fill_inline();
+            self.lowerer.state.begin_no_fill_source_line();
+        }
+    }
+
+    fn event(&mut self, event: Event<'node>) {
+        match event {
+            // In filled structural flow input-line wrappers alone are
+            // not paragraph breaks. Literal DisplayFlow consumes them.
+            Event::BeginNode(_) => {}
+            Event::Break => {
+                self.lowerer.state.flush_preformatted();
+                self.lowerer.state.flush_paragraph();
+                self.lowerer.state.consume_hanging_first_line();
+            }
+            Event::FlushLine => self
+                .lowerer
+                .state
+                .flush_requested_line(source_span(self.root)),
+            Event::Children(nodes) => self.lowerer.push_nodes(nodes),
+            Event::EnterKeep => {
+                self.lowerer.state.push_inline_with(
+                    source_span(self.root),
+                    false,
+                    false,
+                    |builder| {
+                        builder.enter_keep_words();
+                    },
+                );
+            }
+            Event::ExitKeep => {
+                self.lowerer.state.push_inline_with(
+                    source_span(self.root),
+                    false,
+                    false,
+                    |builder| {
+                        builder.exit_keep_words();
+                    },
+                );
+            }
+            Event::FunctionArgument(argument, comma_after) => {
+                self.lowerer.push_function_argument(argument, comma_after);
+            }
+            event => self
+                .lowerer
+                .push_generated_container_event(self.emission_source, event),
+        }
+    }
+
+    fn restore_fill(&mut self, fill: bool) {
+        self.lowerer.formatter.no_fill = fill;
     }
 }

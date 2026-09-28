@@ -157,6 +157,12 @@ struct BlockLowerer<'a, 'source> {
 }
 
 impl<'a, 'source> BlockLowerer<'a, 'source> {
+    fn resume_no_fill_row(&mut self) {
+        if self.formatter.take_trailing_literal_row() {
+            self.state.adopt_trailing_preformatted();
+        }
+    }
+
     fn new(
         context: &'a LoweringContext<'source>,
         indent_columns: crate::mandoc::layout::SourceIndent,
@@ -218,6 +224,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
     }
 
     fn observe_source_fill_mode(&mut self, node: &Node) {
+        let was_no_fill = self.formatter.no_fill;
         match node.macro_name.as_deref() {
             Some("nf") => self.formatter.no_fill = true,
             Some("fi") => self.formatter.no_fill = false,
@@ -226,6 +233,9 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
                 self.formatter.no_fill = false;
             }
             _ => {}
+        }
+        if was_no_fill && !self.formatter.no_fill {
+            self.formatter.clear_trailing_literal_row();
         }
     }
 
@@ -358,6 +368,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         match no_fill_boundary(node) {
             FormatterBoundary::None => {}
             FormatterBoundary::Line => {
+                self.formatter.clear_trailing_literal_row();
                 self.settle_no_fill_inline();
                 if formatter_control.is_some_and(|control| !control.specialized) {
                     self.state.hard_break();
