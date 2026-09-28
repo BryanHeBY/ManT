@@ -10,6 +10,24 @@ pub(super) struct ParagraphFlow {
 }
 
 impl ParagraphFlow {
+    pub(super) fn node_count(&self) -> usize {
+        self.nodes.len()
+    }
+
+    pub(super) fn wrap_first_link(
+        &mut self,
+        target: &mant_ir::LinkTarget,
+        start: usize,
+        skip_visible: &mut usize,
+    ) -> bool {
+        super::super::man_links::wrap_first_visible_inline(
+            &mut self.nodes,
+            target,
+            start,
+            skip_visible,
+        )
+    }
+
     pub(super) fn new() -> Self {
         Self {
             nodes: Vec::new(),

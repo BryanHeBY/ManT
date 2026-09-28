@@ -356,20 +356,20 @@ fn external_link_target(address: String, email: bool) -> mant_ir::LinkTarget {
     }
 }
 
-/// Lower GNU man-ext `.UR` and `.MT` blocks as one inline phrase.
+/// Lower GNU man-ext `.UR` and `.MT` inside a recovered table-cell fragment.
 ///
-/// The macros are structural in libmandoc's tree because their label occupies
-/// a body, but they do not start a paragraph in man(7). A descriptive label
-/// keeps the target visible after the link so text search and citation views
-/// retain both pieces of source information.
+/// `source_fragment::inline_request()` admits only a closed inline language
+/// here. Ordinary document links use the block driver, which can execute IP,
+/// PP, nested links, and fill-mode changes in BODY.
 pub(in crate::mandoc) fn append_man_link(
     builder: &mut InlineBuilder,
     node: &Node,
     default_name: Option<&str>,
     no_fill: bool,
 ) {
-    // man_term.c::print_man_node() resets the current font at each man macro
-    // boundary; BODY text still executes in the caller's termp stream.
+    // man_term.c::print_man_node() enters BLOCK, HEAD, and BODY separately.
+    // Each entry replaces the current font even when it is already Roman:
+    // term_fontrepl() also updates the independent previous-font register.
     builder.font.select(Font::Regular);
     let head = first_part_children(node, NodeKind::Head);
     let target = plain_text(&lower_inline_nodes_with_spacing(
@@ -378,6 +378,9 @@ pub(in crate::mandoc) fn append_man_link(
         builder.spacing_enabled(),
     ));
     let body = first_part_children(node, NodeKind::Body);
+    builder.font.select(Font::Regular); // HEAD pre
+    builder.font.select(Font::Regular); // HEAD post
+    builder.font.select(Font::Regular); // BODY pre
     let link_target = if node.macro_name.as_deref() == Some("MT") {
         mant_ir::LinkTarget::Email {
             address: target.clone(),
@@ -397,7 +400,13 @@ pub(in crate::mandoc) fn append_man_link(
         // brackets and HEAD target. The final BLOCK reset below updates the
         // independent previous-font register a second time.
         builder.font.select(Font::Regular);
-        if builder.output_since_has_non_whitespace_glyph(&checkpoint) {
+        let has_label = builder.output_since_has_non_whitespace_glyph(&checkpoint)
+            || builder.zero_advance.has_printable_pending_glyph();
+        if has_label {
+            // Enter the BLOCK post's first term_word() now. Its implicit
+            // boundary can settle a BODY-final \z glyph into the label;
+            // a tight \c join still lets the bracket overwrite that glyph.
+            builder.prepare_generated_word();
             builder.wrap_output_since(&checkpoint, |children| {
                 let (prefix, children) = split_boundary_prefix(children);
                 let mut output = prefix;
@@ -410,15 +419,15 @@ pub(in crate::mandoc) fn append_man_link(
             });
             // man_term.c::post_UR() prints the HEAD after BODY, enclosed by
             // generated angle brackets. Its escapes execute at that point.
-            builder.append_text("⟨");
+            builder.append_prepared_text("⟨");
             builder.tighten_next_boundary();
             append_inline_nodes(builder, head, default_name);
             builder.tighten_next_boundary();
             builder.append_text("⟩");
         } else {
-            // man_html.c::man_UR_pre() falls back to HEAD when BODY has no
-            // printable child. Execute invisible BODY controls once, then
-            // choose the visible target without reviving their output.
+            // A text-only IR label needs a visible target when executed BODY
+            // controls leave no printable glyph. CVS man_html.c instead
+            // chooses HEAD only when BODY has no syntax children at all.
             builder.discard_output_preserving_execution(&checkpoint);
             builder.append_scope(
                 |builder| append_inline_nodes(builder, head, default_name),

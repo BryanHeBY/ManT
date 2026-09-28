@@ -32,6 +32,21 @@ fn strong_document_text(document: &mant_ir::Document) -> String {
     collector.0
 }
 
+fn document_link_targets(document: &mant_ir::Document) -> Vec<mant_ir::LinkTarget> {
+    struct Collector(Vec<mant_ir::LinkTarget>);
+    impl<'ir> Visit<'ir> for Collector {
+        fn visit_inline(&mut self, inline: &'ir Inline) {
+            if let Inline::Link { target, .. } = inline {
+                self.0.push(target.clone());
+            }
+            visit::walk_inline(self, inline);
+        }
+    }
+    let mut collector = Collector(Vec::new());
+    collector.visit_document(document);
+    collector.0
+}
+
 #[test]
 fn crossed_body_close_pops_font_stack_without_restoring_an_old_value() {
     // Exact input checked with fixed CVS -Tascii/-Tlint. term.c's
@@ -158,10 +173,11 @@ fn man_links_execute_labels_in_the_surrounding_text_stream() {
 }
 
 #[test]
-fn man_links_use_head_text_when_body_has_no_printable_label() {
-    // A nonprinting BODY is still executed, but CVS man_html.c::man_UR_pre()
-    // chooses HEAD text when there is no printable label. Both exact inputs
-    // were checked with fixed CVS -Tascii/-Tlint before these assertions.
+fn man_links_preserve_empty_body_identity_and_terminal_target() {
+    // Both exact inputs checked with fixed CVS -Tascii/-Thtml/-Tlint.
+    // man_html.c::man_UR_pre() chooses HEAD only if BODY has no syntax
+    // children. man_term.c::post_UR() still writes the bracketed HEAD after
+    // executing a nonprinting BODY child.
     let source = b".TH TEST 1\n.SH DESCRIPTION\n.UR https://example.com\n\\&\n.UE\nafter\n";
     let document =
         parse_manual_bytes(std::path::Path::new("man-link-invisible-label.1"), source).unwrap();
@@ -173,7 +189,10 @@ fn man_links_use_head_text_when_body_has_no_printable_label() {
             _ => None,
         })
         .collect::<String>();
-    assert!(text.contains("https://example.com after"), "{document:#?}");
+    assert!(
+        text.contains("⟨https://example.com⟩ after"),
+        "{document:#?}"
+    );
     assert_eq!(
         text.matches("https://example.com").count(),
         1,
@@ -190,11 +209,358 @@ fn man_links_use_head_text_when_body_has_no_printable_label() {
             _ => None,
         })
         .collect::<String>();
-    assert!(text.contains("https://example.com after"), "{document:#?}");
+    assert!(
+        text.contains("⟨https://example.com⟩ after"),
+        "{document:#?}"
+    );
     assert!(
         !strong_document_text(&document).contains("after"),
         "{document:#?}"
     );
+}
+
+#[test]
+fn man_link_body_previous_font_uses_all_macro_boundaries() {
+    // Exact input checked with fixed CVS -Tascii/-Thtml/-Tlint.
+    // man_term.c::print_man_node() calls term_fontrepl() on BLOCK, HEAD,
+    // and BODY entry; each call updates fontlast even for Roman -> Roman.
+    let source =
+        b".TH TEST 1\n.SH DESCRIPTION\n.ft B\n.UR https://example.com\n\\fPlabel\n.UE\nafter\n";
+    let document = parse_manual_bytes(std::path::Path::new("man-link-fontlast.1"), source).unwrap();
+    let strong = strong_document_text(&document);
+    assert!(!strong.contains("label"), "{document:#?}");
+    assert!(!strong.contains("after"), "{document:#?}");
+}
+
+#[test]
+fn pending_zero_advance_label_glyph_keeps_link_ownership() {
+    // All exact inputs checked with fixed CVS -Tascii/-Thtml/-Tlint.
+    // term.c::term_word() settles BACKBEFORE at the generated BLOCK-post
+    // bracket's word boundary, while a trailing \c permits an overstrike.
+    for (name, body, expected_label) in [
+        ("suffix", "label\\zX", "labelX"),
+        ("only", "\\zX", "X"),
+        ("continued", "label\\zX\\c", "label"),
+    ] {
+        let source = format!(".TH TEST 1\n.SH DESCRIPTION\n.UR x\n{body}\n.UE\nafter\n");
+        let document = parse_manual_bytes(std::path::Path::new(name), source.as_bytes()).unwrap();
+        let link = document.sections[0]
+            .blocks
+            .iter()
+            .find_map(|block| match block {
+                Block::Paragraph { children, .. } => {
+                    children.iter().find_map(|inline| match inline {
+                        Inline::Link {
+                            children, target, ..
+                        } => Some((children, target)),
+                        _ => None,
+                    })
+                }
+                _ => None,
+            })
+            .expect("semantic link");
+        assert_eq!(inline_text(link.0), expected_label, "{name}: {document:#?}");
+        assert!(matches!(link.1, mant_ir::LinkTarget::External { uri } if uri == "x"));
+        let text = document.sections[0]
+            .blocks
+            .iter()
+            .filter_map(|block| match block {
+                Block::Paragraph { children, .. } => Some(inline_text(children)),
+                _ => None,
+            })
+            .collect::<String>();
+        assert!(text.contains("⟨x⟩ after"), "{name}: {document:#?}");
+    }
+}
+
+#[test]
+fn pending_glyph_before_man_link_stays_outside_its_label() {
+    struct Labels<'a>(&'a mut Vec<String>);
+    impl<'ir> Visit<'ir> for Labels<'_> {
+        fn visit_inline(&mut self, inline: &'ir Inline) {
+            if let Inline::Link { children, .. } = inline {
+                self.0.push(inline_text(children));
+            }
+            visit::walk_inline(self, inline);
+        }
+    }
+
+    // Exact empty, visible BODY, and tight-join UR/MT inputs checked against
+    // fixed CVS -Tascii/-Tlint. man_term.c::print_man_node() keeps one termp;
+    // term.c::term_word() may emit the prior BACKBEFORE glyph only after the
+    // link BODY or the generated post_UR() target starts executing.
+    for (open, close, prefix, body, expected_label) in [
+        ("UR", "UE", "\\zX", "", ""),
+        ("UR", "UE", "\\zX", "label\n", "label"),
+        ("UR", "UE", "\\zX\\c", "label\n", "label"),
+        ("MT", "ME", "\\zX", "label\n", "label"),
+    ] {
+        let source = format!(
+            ".TH TEST 1\n.SH DESCRIPTION\n{prefix}\n.{open} https://example.com\n{body}.{close}\nafter\n"
+        );
+        let document = parse_manual_bytes(
+            std::path::Path::new("pending-before-man-link.1"),
+            source.as_bytes(),
+        )
+        .unwrap();
+        let mut labels = Vec::new();
+        for block in &document.sections[0].blocks {
+            if let Block::Paragraph { children, .. } = block {
+                for inline in children {
+                    if let Inline::Link { children, .. } = inline {
+                        labels.push(inline_text(children));
+                    }
+                }
+            }
+        }
+        assert_eq!(labels, [expected_label], "{open}: {document:#?}");
+        assert!(
+            !labels.iter().any(|label| label.contains('X')),
+            "{open}: {document:#?}"
+        );
+    }
+
+    // Exact nested source also checked with fixed CVS -Tascii/-Tlint: the
+    // incoming X precedes both link labels, while both targets survive.
+    let source = b".TH TEST 1\n.SH DESCRIPTION\n\\zX\n.UR https://example.com\n.UR inner\ninnerlabel\n.UE\nouterlabel\n.UE\nafter\n";
+    let document =
+        parse_manual_bytes(std::path::Path::new("pending-nested-link.1"), source).unwrap();
+    let targets = document_link_targets(&document);
+    assert_eq!(targets.len(), 2, "{document:#?}");
+    let mut labels = Vec::new();
+    Labels(&mut labels).visit_document(&document);
+    assert!(
+        labels.iter().all(|label| !label.contains('X')),
+        "{document:#?}"
+    );
+
+    // These exact BODY controls were checked with fixed CVS -Tascii/-Tlint.
+    // They flush or switch IR destinations while the incoming BACKBEFORE
+    // glyph is still outside UR's semantic label.
+    for (name, body, retained) in [
+        ("paragraph", ".PP\nlabel", "label"),
+        ("definition", ".IP item 4\nbody", "item"),
+        ("no-fill", ".nf\nlabel\n.fi", "label"),
+    ] {
+        let source = format!(".TH TEST 1\n.SH DESCRIPTION\n\\zX\n.UR outer\n{body}\n.UE\nafter\n");
+        let document = parse_manual_bytes(
+            std::path::Path::new("pending-before-link-segment.1"),
+            source.as_bytes(),
+        )
+        .unwrap();
+        let mut labels = Vec::new();
+        Labels(&mut labels).visit_document(&document);
+        assert_eq!(labels.len(), 1, "{name}: {document:#?}");
+        assert!(labels[0].contains(retained), "{name}: {document:#?}");
+        assert!(!labels[0].contains('X'), "{name}: {document:#?}");
+        assert!(
+            projected_document_text(&document).contains('X'),
+            "{name}: {document:#?}"
+        );
+    }
+}
+
+#[test]
+fn man_link_bodies_execute_structural_children_and_nested_targets() {
+    // Exact IP, PP, and nested UR/MT inputs checked with fixed CVS
+    // -Tascii/-Tlint; HTML also confirms IP and nesting (its PP case crashes).
+    // man_term.c::print_man_node() visits BODY recursively, then post_UR()
+    // prints the HEAD target after it.
+    for (open, close, target) in [("UR", "UE", "outer"), ("MT", "ME", "outer@example.com")] {
+        let source = format!(
+            ".TH TEST 1\n.SH DESCRIPTION\n.{open} {target}\nfirst\n.IP item 4\nbody\n.{close}\nafter\n"
+        );
+        let document =
+            parse_manual_bytes(std::path::Path::new("link-ip.1"), source.as_bytes()).unwrap();
+        let text = projected_document_text(&document);
+        for word in ["first", "item", "body", target, "after"] {
+            assert!(text.contains(word), "{open} {word}: {document:#?}");
+        }
+        assert!(document.sections[0].blocks.iter().any(|block| {
+            matches!(block, Block::DefinitionList { items, .. } if items.iter().any(|item| item.terms.iter().any(|term| inline_text(term).contains("item")) && item.description.iter().any(|part| matches!(part, Block::Paragraph { children, .. } if inline_text(children).contains("body")))))
+        }), "{open}: {document:#?}");
+        assert_eq!(document_link_targets(&document).len(), 1, "{document:#?}");
+
+        let source = format!(
+            ".TH TEST 1\n.SH DESCRIPTION\n.{open} {target}\nfirst\n.PP\nsecond\n.{close}\nafter\n"
+        );
+        let document =
+            parse_manual_bytes(std::path::Path::new("link-pp.1"), source.as_bytes()).unwrap();
+        let paragraphs = document.sections[0]
+            .blocks
+            .iter()
+            .filter_map(|block| match block {
+                Block::Paragraph { children, .. } => Some(inline_text(children)),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert!(paragraphs.iter().any(|part| part.contains("first")));
+        assert!(paragraphs.iter().any(|part| part.contains("second")));
+        assert!(paragraphs.len() >= 2, "{open}: {document:#?}");
+    }
+
+    let source = b".TH TEST 1\n.SH DESCRIPTION\n.UR outer\nfirst\n.UR inner\ninnerlabel\n.UE\nlast\n.UE\nafter\n";
+    let document = parse_manual_bytes(std::path::Path::new("nested-ur.1"), source).unwrap();
+    let targets = document_link_targets(&document);
+    assert!(
+        targets.iter().any(
+            |target| matches!(target, mant_ir::LinkTarget::External { uri } if uri == "outer")
+        ),
+        "{document:#?}"
+    );
+    assert!(
+        targets.iter().any(
+            |target| matches!(target, mant_ir::LinkTarget::External { uri } if uri == "inner")
+        ),
+        "{document:#?}"
+    );
+    let text = projected_document_text(&document);
+    for word in ["first", "innerlabel", "inner", "last", "outer", "after"] {
+        assert!(text.contains(word), "{word}: {document:#?}");
+    }
+}
+
+#[test]
+fn man_link_body_fill_controls_switch_the_active_output_channel() {
+    // Both exact inputs checked with fixed CVS -Tascii/-Thtml/-Tlint.
+    // man_term.c::print_man_node() applies NODE_NOFILL at each BODY child,
+    // so a mode request inside UR changes the following source row.
+    for (name, source, literal_text, filled_text) in [
+        (
+            "link-enter-no-fill.1",
+            ".TH TEST 1\n.SH DESCRIPTION\n.UR outer\n.nf\nfirst\nsecond\n.fi\nthird\n.UE\nafter\n",
+            "first\nsecond",
+            "third",
+        ),
+        (
+            "link-leave-no-fill.1",
+            ".TH TEST 1\n.SH DESCRIPTION\n.nf\n.UR outer\nfirst\n.fi\nsecond\n.UE\nafter\n",
+            "first",
+            "second",
+        ),
+        (
+            "mail-enter-no-fill.1",
+            ".TH TEST 1\n.SH DESCRIPTION\n.MT outer@example.com\n.nf\nfirst\nsecond\n.fi\nthird\n.ME\nafter\n",
+            "first\nsecond",
+            "third",
+        ),
+        (
+            "mail-leave-no-fill.1",
+            ".TH TEST 1\n.SH DESCRIPTION\n.nf\n.MT outer@example.com\nfirst\n.fi\nsecond\n.ME\nafter\n",
+            "first",
+            "second",
+        ),
+    ] {
+        let document = parse_manual_bytes(std::path::Path::new(name), source.as_bytes()).unwrap();
+        assert!(document.sections[0].blocks.iter().any(|block| matches!(block, Block::Preformatted { children, .. } if inline_text(children) == literal_text)), "{name}: {document:#?}");
+        assert!(document.sections[0].blocks.iter().any(|block| matches!(block, Block::Paragraph { children, .. } if inline_text(children).contains(filled_text))), "{name}: {document:#?}");
+        let text = projected_document_text(&document);
+        assert!(text.contains("outer"), "{name}: {document:#?}");
+        assert!(text.contains("after"), "{name}: {document:#?}");
+    }
+}
+
+#[test]
+fn man_link_annotation_preserves_surrounding_paragraph() {
+    // Exact input checked with fixed CVS -Tascii/-Thtml/-Tlint. A UR BLOCK
+    // does not itself end the formatter paragraph; only its BODY is linked.
+    let source =
+        b".TH TEST 1\n.SH DESCRIPTION\nprefix\n.UR https://example.com\nlabel\n.UE\nsuffix\n";
+    let document = parse_manual_bytes(std::path::Path::new("link-surrounding.1"), source).unwrap();
+    let paragraphs = document.sections[0]
+        .blocks
+        .iter()
+        .filter_map(|block| match block {
+            Block::Paragraph { children, .. } => Some(children),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(paragraphs.len(), 1, "{document:#?}");
+    assert!(
+        inline_text(paragraphs[0]).contains("prefix label ⟨https://example.com⟩ suffix"),
+        "{document:#?}"
+    );
+    let labels = paragraphs[0]
+        .iter()
+        .filter_map(|inline| match inline {
+            Inline::Link { children, .. } => Some(inline_text(children)),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(labels, ["label"], "{document:#?}");
+}
+
+#[test]
+fn structural_link_start_keeps_only_its_body_inside_the_annotation() {
+    // Exact input checked with fixed CVS -Tascii/-Thtml/-Tlint. The IP node
+    // flushes the shared paragraph, but the preceding prefix is outside UR.
+    let source =
+        b".TH TEST 1\n.SH DESCRIPTION\nprefix\n.UR outer\nfirst\n.IP item 4\nbody\n.UE\nafter\n";
+    let document = parse_manual_bytes(std::path::Path::new("link-prefix-ip.1"), source).unwrap();
+    let first = document.sections[0]
+        .blocks
+        .iter()
+        .find_map(|block| match block {
+            Block::Paragraph { children, .. } if inline_text(children).contains("prefix") => {
+                Some(children)
+            }
+            _ => None,
+        })
+        .expect("leading paragraph");
+    assert!(inline_text(first).contains("prefix first"), "{document:#?}");
+    let labels = first
+        .iter()
+        .filter_map(|inline| match inline {
+            Inline::Link { children, .. } => Some(inline_text(children)),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(labels, ["first"], "{document:#?}");
+}
+
+#[test]
+fn no_fill_link_label_owns_pending_zero_advance_glyph() {
+    // Both exact inputs checked with fixed CVS -Tascii/-Thtml/-Tlint.
+    // man_term.c enters the UR BLOCK post on the active no-fill row; term.c
+    // settles BACKBEFORE on its first generated word unless \c joins it.
+    for (name, body, label) in [
+        ("no-fill-zero.1", "label\\zX", "labelX"),
+        ("no-fill-zero-continued.1", "label\\zX\\c", "label"),
+    ] {
+        let source = format!(".TH TEST 1\n.SH DESCRIPTION\n.nf\n.UR x\n{body}\n.UE\n.fi\nafter\n");
+        let document = parse_manual_bytes(std::path::Path::new(name), source.as_bytes()).unwrap();
+        let link_label = document.sections[0]
+            .blocks
+            .iter()
+            .find_map(|block| match block {
+                Block::Preformatted { children, .. } => {
+                    children.iter().find_map(|inline| match inline {
+                        Inline::Link { children, .. } => Some(inline_text(children)),
+                        _ => None,
+                    })
+                }
+                _ => None,
+            })
+            .expect("literal link label");
+        assert_eq!(link_label, label, "{name}: {document:#?}");
+        assert!(
+            projected_document_text(&document).contains("⟨x⟩"),
+            "{name}: {document:#?}"
+        );
+    }
+}
+
+#[test]
+fn man_synopsis_body_post_restores_font_for_following_text() {
+    // Exact input checked with fixed CVS -Tascii/-Thtml/-Tlint.
+    // man_term.c::post_SY(BODY) ends the row and print_man_node() then
+    // replaces the active font at BODY and BLOCK exits.
+    let source = b".TH TEST 1\n.SH SYNOPSIS\n.SY call\n.ft I\narg\n.YS\nafter\n";
+    let document =
+        parse_manual_bytes(std::path::Path::new("man-synopsis-post-font.1"), source).unwrap();
+    let emphasized = emphasized_document_text(&document);
+    assert!(emphasized.contains("arg"), "{document:#?}");
+    assert!(!emphasized.contains("after"), "{document:#?}");
 }
 
 #[test]

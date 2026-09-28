@@ -1,7 +1,7 @@
 //! Filled inline routing and source-boundary recognition, not structural ownership.
 use super::{
-    Block, BlockState, Inline, Node, NodeKind, append_inline_node_with_next, append_man_link,
-    is_enclosure_macro, source_span, visible_text,
+    Block, Inline, Node, NodeKind, append_inline_node_with_next, is_enclosure_macro, source_span,
+    visible_text,
 };
 
 impl super::BlockLowerer<'_, '_> {
@@ -15,17 +15,6 @@ impl super::BlockLowerer<'_, '_> {
             |builder| append_inline_node_with_next(builder, node, next, self.context.default_name),
         );
     }
-}
-
-/// Keep man-ext links inside the surrounding filled flow.
-pub(super) fn push_man_link(state: &mut BlockState, node: &Node, default_name: Option<&str>) {
-    state.push_source_inline_with(
-        source_span(node),
-        starts_indented_filled_line(node),
-        ends_with_line_continuation(node),
-        false,
-        |builder| append_man_link(builder, node, default_name, false),
-    );
 }
 
 pub(super) fn is_inline_equation(node: &Node) -> bool {

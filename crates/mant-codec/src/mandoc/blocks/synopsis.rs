@@ -151,6 +151,13 @@ pub(super) fn lower_synopsis_head(
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) {
     let head = execute_synopsis_head(node, context, spacing_enabled, formatter);
+    if node.macro_name.as_deref() == Some("SY") {
+        // The HEAD post already selected Roman; BODY entry is another
+        // print_man_node() pre transition, even if its font is Roman too.
+        formatter
+            .font
+            .select(crate::mandoc::roff_escape::RoffFont::Regular);
+    }
     let mut nested = lower_blocks_with_spacing(
         first_part_children(node, NodeKind::Body),
         context,
@@ -159,6 +166,16 @@ pub(super) fn lower_synopsis_head(
         spacing_enabled,
         formatter,
     );
+    if node.macro_name.as_deref() == Some("SY") {
+        // BODY post and BLOCK post both execute the man(7) font reset.
+        // Replacing Roman twice matters to a following \fP.
+        formatter
+            .font
+            .select(crate::mandoc::roff_escape::RoffFont::Regular);
+        formatter
+            .font
+            .select(crate::mandoc::roff_escape::RoffFont::Regular);
+    }
     if head.is_empty() {
         output.extend(nested);
         return;

@@ -654,8 +654,7 @@ impl InlineExecutionState {
         self.pending_line_indent = 0;
         self.word_end_break = WordEndBreak::Clear;
         self.leading_line_boundary = LeadingLineBoundary::None;
-        self.zero_advance = ZeroAdvanceState::new();
-        self.zero_advance.inherit_armed(armed_zero_advance);
+        self.zero_advance.reset_projection(armed_zero_advance);
         self.zero_advance_joined = false;
         self.final_word_join = None;
         self.final_source_continuation = None;

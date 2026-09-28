@@ -13,8 +13,8 @@ use super::{
     controls::FormatterBoundary,
     first_part_children,
     inline::{
-        FilledBoundary, FontState, InlineBuilder, append_inline_node_with_next, append_man_link,
-        is_enclosure_macro, lower_inline_nodes, lower_inline_nodes_with_font_state, plain_text,
+        FilledBoundary, FontState, InlineBuilder, append_inline_node_with_next, is_enclosure_macro,
+        lower_inline_nodes, lower_inline_nodes_with_font_state, plain_text,
     },
     layout::{
         add_leading_spacing, layout, section_spacing, set_block_spacing, update_paragraph_distance,
@@ -31,7 +31,7 @@ mod inline_flow;
 pub(super) use inline_flow::ends_with_line_continuation;
 use inline_flow::{
     append_to_last_inline_block, follows_inline_equation_punctuation, is_inline_equation,
-    is_inline_equation_quote_artifact, participates_in_inline_flow, push_man_link,
+    is_inline_equation_quote_artifact, participates_in_inline_flow,
 };
 
 mod sections;
@@ -42,6 +42,7 @@ use structural::StructuralLowerer;
 mod synopsis;
 use synopsis::lower_synopsis_head;
 mod flow;
+mod man_links;
 mod man_nofill;
 use flow::BlockState;
 use man_nofill::no_fill_boundary;
@@ -445,7 +446,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         if node.macro_name.as_deref() == Some("br") {
             self.state.hard_break();
         } else if matches!(node.macro_name.as_deref(), Some("UR" | "MT")) {
-            push_man_link(&mut self.state, node, self.context.default_name);
+            self.push_man_link(node);
         } else if participates_in_inline_flow(node) {
             self.push_inline_node(node, next);
         } else {
@@ -521,9 +522,16 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
                 }
             }
         }
-        if matches!(
+        if node.macro_name.as_deref() == Some("SY") {
+            // man_term.c::print_man_node() replaces the active slot when SY
+            // BLOCK enters; it does not clear the font stack or fontlast.
+            self.state
+                .formatter
+                .font
+                .select(super::roff_escape::RoffFont::Regular);
+        } else if matches!(
             node.macro_name.as_deref(),
-            Some("PP" | "P" | "LP" | "HP" | "IP" | "TP" | "TQ" | "RS" | "SY")
+            Some("PP" | "P" | "LP" | "HP" | "IP" | "TP" | "TQ" | "RS")
         ) {
             self.state.formatter.font = FontState::new();
         }

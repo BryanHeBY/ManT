@@ -308,6 +308,19 @@ impl InlineBuilder {
     /// are not reparsed as roff source (names can contain literal escapes).
     pub(in crate::mandoc) fn append_text(&mut self, value: &str) {
         self.begin_word_projection(!value.is_empty());
+        self.append_prepared_text(value);
+    }
+
+    /// Enter the next generated formatter word before closing a semantic
+    /// output owner. A pending `\z` glyph may become visible at this word's
+    /// implicit boundary and still belongs to the preceding authored owner.
+    pub(in crate::mandoc) fn prepare_generated_word(&mut self) {
+        self.begin_word_projection(true);
+    }
+
+    /// Complete a generated word whose native pre-boundary was entered by
+    /// `prepare_generated_word()` before an IR wrapper was attached.
+    pub(in crate::mandoc) fn append_prepared_text(&mut self, value: &str) {
         let kept_zero_boundary = self.execution.boundary == PendingBoundary::Kept
             && value
                 .chars()

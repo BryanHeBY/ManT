@@ -1,8 +1,7 @@
 //! Man no-fill words retain executed empty rows, not formatter operands.
 use super::{
-    FontState, Inline, Node, NodeKind, append_inline_node_with_next, append_man_link,
-    ends_with_line_continuation, first_part_children, participates_in_inline_flow, source_span,
-    targets,
+    Inline, Node, NodeKind, append_inline_node_with_next, ends_with_line_continuation,
+    first_part_children, participates_in_inline_flow, source_span, targets,
 };
 use crate::mandoc::controls::{FormatterBoundary, formatter_control};
 use crate::mandoc::inline::lower_no_fill_fragment_with_formatter;
@@ -27,8 +26,7 @@ struct NoFillSource<'a> {
 
 pub(super) fn is_no_fill_payload(node: &Node, single_line_literal: bool) -> bool {
     (node.flags.no_fill || single_line_literal)
-        && (participates_in_inline_flow(node)
-            || matches!(node.macro_name.as_deref(), Some("UR" | "MT")))
+        && participates_in_inline_flow(node)
         && !matches!(
             node.macro_name.as_deref(),
             Some("PD" | "nf" | "fi" | "EX" | "EE" | "An" | "Sm" | "ft" | "in" | "sp" | "br" | "Pp")
@@ -73,11 +71,7 @@ fn lower_no_fill_lines(
             ends_with_line_continuation(node),
             false,
             |builder| {
-                if matches!(node.macro_name.as_deref(), Some("UR" | "MT")) {
-                    append_man_link(builder, node, default_name, true);
-                } else {
-                    append_inline_node_with_next(builder, node, next, default_name);
-                }
+                append_inline_node_with_next(builder, node, next, default_name);
             },
         );
         let mut occupies_row = !nodes.is_empty();
@@ -233,6 +227,10 @@ impl super::BlockLowerer<'_, '_> {
                 true,
             );
         }
+        self.state
+            .formatter
+            .font
+            .select(crate::mandoc::roff_escape::RoffFont::Regular); // BODY pre
         // SY is a scope, not a promise that its whole body is no-fill.
         // Execute each child through normal block dispatch so fi/nf, spacing
         // and structural children cannot become flattened pseudo-text.
@@ -242,7 +240,14 @@ impl super::BlockLowerer<'_, '_> {
         self.settle_no_fill_inline();
         self.state.flush_paragraph();
         self.state.flush_preformatted();
-        self.state.formatter.font = FontState::new();
+        self.state
+            .formatter
+            .font
+            .select(crate::mandoc::roff_escape::RoffFont::Regular); // BODY post
+        self.state
+            .formatter
+            .font
+            .select(crate::mandoc::roff_escape::RoffFont::Regular); // BLOCK post
         true
     }
 }

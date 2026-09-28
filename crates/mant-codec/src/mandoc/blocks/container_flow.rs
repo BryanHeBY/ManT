@@ -16,7 +16,7 @@ fn append_generated_event(builder: &mut InlineBuilder, event: Event<'_>) {
 }
 
 impl super::BlockLowerer<'_, '_> {
-    fn push_no_fill_generated(
+    pub(super) fn push_no_fill_generated(
         &mut self,
         source: &Node,
         source_continuation_fallback: bool,

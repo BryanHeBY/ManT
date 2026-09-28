@@ -20,7 +20,50 @@ pub(super) struct BlockState {
     hanging_origin: Option<crate::mandoc::layout::SourceIndent>,
 }
 
+#[derive(Clone, Copy)]
+pub(super) struct LinkOutputCursor {
+    output: usize,
+    paragraph: usize,
+    literal: usize,
+}
+
 impl BlockState {
+    pub(super) fn link_output_cursor(&self) -> LinkOutputCursor {
+        LinkOutputCursor {
+            output: self.output.len(),
+            paragraph: self.paragraph.node_count(),
+            literal: self.literal.node_count(),
+        }
+    }
+
+    pub(super) fn wrap_first_link_since(
+        &mut self,
+        cursor: LinkOutputCursor,
+        target: &mant_ir::LinkTarget,
+        skip_prior_glyph: bool,
+    ) -> bool {
+        let mut skip_visible = usize::from(skip_prior_glyph);
+        let mut paragraph_offset = Some(cursor.paragraph);
+        let mut literal_offset = Some(cursor.literal);
+        let output_start = cursor.output.min(self.output.len());
+        for block in &mut self.output[output_start..] {
+            let offset = match block {
+                Block::Paragraph { .. } => paragraph_offset.take().unwrap_or(0),
+                Block::Preformatted { .. } => literal_offset.take().unwrap_or(0),
+                _ => 0,
+            };
+            if super::man_links::wrap_first_visible_block(block, target, offset, &mut skip_visible)
+            {
+                return true;
+            }
+        }
+        self.paragraph
+            .wrap_first_link(target, paragraph_offset.unwrap_or(0), &mut skip_visible)
+            || self
+                .literal
+                .wrap_first_link(target, literal_offset.unwrap_or(0), &mut skip_visible)
+    }
+
     pub(super) const fn source_indent(&self) -> crate::mandoc::layout::SourceIndent {
         self.indent_columns
     }

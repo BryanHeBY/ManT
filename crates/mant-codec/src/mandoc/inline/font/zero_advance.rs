@@ -13,6 +13,13 @@ pub(in crate::mandoc) struct ZeroAdvanceState {
     machine: ZeroAdvanceMachine<Inline>,
     fragment_started_pending: bool,
     resolved_preexisting: bool,
+    output_owners: Vec<PendingOutputOwner>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct PendingOutputOwner {
+    pending_at_entry: bool,
+    emitted_before_owner: bool,
 }
 
 impl ZeroAdvanceState {
@@ -21,7 +28,72 @@ impl ZeroAdvanceState {
             machine: ZeroAdvanceMachine::new(),
             fragment_started_pending: false,
             resolved_preexisting: false,
+            output_owners: Vec::new(),
         }
+    }
+
+    /// A semantic wrapper can begin while BACKBEFORE still owns a glyph from
+    /// preceding source. Track that glyph through the shared formatter until
+    /// it is emitted or overstruck, including across nested wrappers.
+    pub(in crate::mandoc) fn begin_output_owner(&mut self) {
+        self.output_owners.push(PendingOutputOwner {
+            pending_at_entry: self.machine.has_pending(),
+            emitted_before_owner: false,
+        });
+    }
+
+    pub(in crate::mandoc) fn end_output_owner(&mut self) -> bool {
+        self.output_owners
+            .pop()
+            .is_some_and(|owner| owner.emitted_before_owner)
+    }
+
+    /// A paragraph drain or physical row closes zero-advance projection but
+    /// does not end a semantic owner spanning that output boundary.  Keep
+    /// the ownership ledger until the enclosing macro reaches its post.
+    pub(in crate::mandoc) fn reset_projection(&mut self, bare_armed: bool) {
+        self.note_pending_replaced();
+        self.machine.clear();
+        self.fragment_started_pending = false;
+        self.resolved_preexisting = false;
+        self.inherit_armed(bare_armed);
+    }
+
+    fn note_pending_emitted(&mut self) {
+        for owner in &mut self.output_owners {
+            if owner.pending_at_entry {
+                owner.emitted_before_owner = true;
+                owner.pending_at_entry = false;
+            }
+        }
+    }
+
+    fn note_pending_replaced(&mut self) {
+        for owner in &mut self.output_owners {
+            owner.pending_at_entry = false;
+        }
+    }
+
+    fn project_glyph(&mut self, glyph: Inline) -> Option<(Inline, bool)> {
+        if self.machine.has_pending() {
+            self.note_pending_replaced();
+        }
+        self.machine.project_glyph(glyph)
+    }
+
+    fn project_fallback(&mut self, glyph: Inline) -> Option<(Inline, bool)> {
+        if self.machine.has_pending() && !self.machine.is_armed() {
+            self.note_pending_replaced();
+        }
+        self.machine.project_fallback(glyph)
+    }
+
+    fn take_pending(&mut self) -> Option<Inline> {
+        let glyph = self.machine.take_pending();
+        if glyph.is_some() {
+            self.note_pending_emitted();
+        }
+        glyph
     }
 
     pub(super) fn begin_fragment(&mut self) {
@@ -53,7 +125,11 @@ impl ZeroAdvanceState {
     pub(in crate::mandoc) fn resolve_at_word_boundary(&mut self) -> Option<Inline> {
         self.fragment_started_pending = false;
         self.resolved_preexisting = false;
-        self.machine.resolve_word_boundary()
+        if self.machine.is_armed() {
+            None
+        } else {
+            self.take_pending()
+        }
     }
 
     /// A pending zero-advance glyph is visible formatter state even before a
@@ -82,6 +158,7 @@ impl ZeroAdvanceState {
     /// `term_flushln()` clears both backtracking flags when the native tag row
     /// ends. A bare `\z` or buffered blank cannot act on the next BODY row.
     pub(in crate::mandoc) fn discard_at_row_end(&mut self) {
+        self.note_pending_replaced();
         self.machine.clear();
         self.fragment_started_pending = false;
         self.resolved_preexisting = false;
@@ -100,10 +177,7 @@ impl ZeroAdvanceState {
         font: Font,
     ) {
         for _ in 0..count {
-            if let Some((cell, _)) = self
-                .machine
-                .project_glyph(styled_segment(" ".to_owned(), font))
-            {
+            if let Some((cell, _)) = self.project_glyph(styled_segment(" ".to_owned(), font)) {
                 output.push(cell);
             }
         }
@@ -114,6 +188,7 @@ impl ZeroAdvanceState {
     /// into the next formatter word, whereas `\\zX` has already produced the
     /// hidden glyph `X` and must not lend it to a later visible operand.
     pub(in crate::mandoc) fn discard_hidden_pending_glyph(&mut self) {
+        self.note_pending_replaced();
         self.machine.discard_pending();
         self.fragment_started_pending = false;
         self.resolved_preexisting = false;
@@ -145,29 +220,26 @@ impl ZeroAdvanceState {
         for character in value.chars() {
             if matches!(character, '\n' | '\r') {
                 flush_segment(output, &mut buffer, font, None);
-                if let Some(glyph) = self.machine.take_pending() {
+                if let Some(glyph) = self.take_pending() {
                     output.push(glyph);
                 }
                 buffer.push(character);
                 continue;
             }
             if self.machine.is_armed() {
-                let _ = self
-                    .machine
-                    .project_glyph(styled_segment(character.to_string(), font));
+                let _ = self.project_glyph(styled_segment(character.to_string(), font));
                 continue;
             }
             if self.machine.has_pending() {
                 if is_formatter_word_blank(character) {
                     flush_segment(output, &mut buffer, font, None);
-                    if let Some(glyph) = self.machine.take_pending() {
+                    if let Some(glyph) = self.take_pending() {
                         output.push(glyph);
                     }
                     continue;
                 }
-                let Some((_, replaced)) = self
-                    .machine
-                    .project_glyph(styled_segment(character.to_string(), font))
+                let Some((_, replaced)) =
+                    self.project_glyph(styled_segment(character.to_string(), font))
                 else {
                     continue;
                 };
@@ -195,9 +267,7 @@ impl ZeroAdvanceState {
                 continue;
             }
             if self.machine.is_armed() {
-                let _ = self
-                    .machine
-                    .project_glyph(styled_link(character.to_string(), font, link));
+                let _ = self.project_glyph(styled_link(character.to_string(), font, link));
                 continue;
             }
             if self.machine.has_pending() {
@@ -210,8 +280,7 @@ impl ZeroAdvanceState {
                     continue;
                 }
                 let Some((_, replaced)) =
-                    self.machine
-                        .project_glyph(styled_link(character.to_string(), font, link))
+                    self.project_glyph(styled_link(character.to_string(), font, link))
                 else {
                     continue;
                 };
@@ -230,9 +299,7 @@ impl ZeroAdvanceState {
         font: Font,
         link: Option<&str>,
     ) {
-        let Some((_, replaced)) =
-            self.machine
-                .project_glyph(styled_link(value.to_owned(), font, link))
+        let Some((_, replaced)) = self.project_glyph(styled_link(value.to_owned(), font, link))
         else {
             return;
         };
@@ -252,9 +319,7 @@ impl ZeroAdvanceState {
         font: Font,
         link: Option<&str>,
     ) -> bool {
-        let Some((_, replaced)) =
-            self.machine
-                .project_fallback(styled_link(value.to_owned(), font, link))
+        let Some((_, replaced)) = self.project_fallback(styled_link(value.to_owned(), font, link))
         else {
             return false;
         };
@@ -275,7 +340,7 @@ impl ZeroAdvanceState {
         link: Option<&str>,
     ) {
         flush_segment(output, buffer, font, link);
-        if let Some(glyph) = self.machine.take_pending() {
+        if let Some(glyph) = self.take_pending() {
             if self.fragment_started_pending {
                 self.resolved_preexisting = true;
             }
@@ -284,7 +349,7 @@ impl ZeroAdvanceState {
     }
 
     pub(in crate::mandoc) fn finish_into(&mut self, output: &mut Vec<Inline>) {
-        if let Some(glyph) = self.machine.take_pending() {
+        if let Some(glyph) = self.take_pending() {
             output.push(glyph);
         }
         self.machine.clear();
