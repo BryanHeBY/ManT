@@ -153,9 +153,6 @@ pub(super) fn append_inline_node_with_next(
     next: Option<&Node>,
     default_name: Option<&str>,
 ) {
-    if node.macro_name.as_deref() == Some("An") {
-        builder.execute_author(node.author_mode);
-    }
     if node.flags.no_print || node.kind == NodeKind::Comment {
         // Tg can recover an authored target even when native output is hidden.
         if node.macro_name.as_deref() == Some("Tg") {
@@ -182,6 +179,9 @@ pub(super) fn append_inline_node_with_next(
         builder.tighten_next_boundary();
     }
     builder.begin_executed_node(node);
+    if execute_author_pre(builder, node) {
+        return;
+    }
     builder.begin_word_projection(node_emits_visible_output(node, default_name));
     if node.flags.delimiter_close {
         builder.tighten_next_boundary();
@@ -279,6 +279,16 @@ pub(super) fn append_inline_node_with_next(
         _ => scopes::append(builder, node, default_name),
     }
     finish_inline_node_execution(builder, node, next, final_word_join_before);
+}
+
+fn execute_author_pre(builder: &mut InlineBuilder, node: &Node) -> bool {
+    if node.macro_name.as_deref() != Some("An") {
+        return false;
+    }
+    builder.execute_author(node.author_mode);
+    // mdoc_term.c::termp_an_pre() returns 0 for -split/-nosplit, suppressing
+    // children even when malformed input supplied excess operands.
+    node.author_mode.is_some()
 }
 
 fn finish_inline_node_execution(

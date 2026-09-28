@@ -136,6 +136,8 @@ terminator when filled output is split. It adds to a later `PP` distance and
 survives `fi`/`nf`. A later whitespace-only formatter word can occupy one
 additional physical row when the next request closes it; a direct empty `BR`
 operand does not assert an empty TEXT row.
+Once a completed row and its invisible cell have moved to block spacing, that
+cell is not projected again by the paragraph's empty-word fallback.
 Native `term_newln()` and `term_flushln()` can close a physical row without
 consuming `TERMP_NONEWLINE`. Accordingly, `\c` survives source empty TEXT,
 line requests, and IR paragraph/literal drains until a formatter word executes.
@@ -151,6 +153,10 @@ position; the BODY receives only the remaining separator cells. This follows
 Draining the HEAD's IR term does not reset the native word separator or its
 current row. If the generated separator has no cell left, an empty BODY word
 can still consume the no-space setting before the following visible word.
+An occupied native HEAD row is distinct from a HEAD row actually represented
+by a visible term. Only the latter can consume an invisible BODY row on an
+explicit break. In no-fill, an empty or font-only BODY word also cannot
+reproject the HEAD's cell; a new `\&` cell can occupy its own BODY row.
 An inset item with no HEAD child generates no separator word at all, so that
 case does not consume formatter word state.
 
@@ -346,6 +352,10 @@ Displays lower as follows:
 Closing macros such as `Ed`, `Ef`, and `El` terminate libmandoc scopes and do not produce independent visible nodes.
 
 Literal and unfilled flows preserve physical line boundaries without resetting inline font or spacing state. `br` ends a line once; `sp N` adds vertical blank rows rather than printing its argument; `Sm` changes spacing without adding a row. A trailing `\c` joins the following source line unless an explicit break intervenes.
+Visible `An` words follow the same no-fill source-row entry rule as other text;
+`An -split` and `An -nosplit` change author mode without adding a word.
+State-only author requests retain a preceding `\c` continuation. A generated
+closing delimiter buffered by bare `\z` remains attached to its physical row.
 
 The line cursor follows executed descendant words, not just the outer macro. Thus a multiline `Fo`/`Fa` function keeps each argument's source line, and `Eo` delimiters retain their source positions around nested font scopes. Font and enclosure wrappers do not hide structural payloads: nested lists and tables remain blocks, with opening and closing content surrounding them.
 

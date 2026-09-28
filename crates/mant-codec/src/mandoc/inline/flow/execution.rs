@@ -95,6 +95,10 @@ impl InlineBuilder {
     }
 
     pub(in crate::mandoc) fn request_word_end_break(&mut self) {
+        // CVS ESCAPE_BREAK buffers a newline cell even when the decoded word
+        // has no glyph. This cell belongs to the current source fragment,
+        // unlike an occupied formatter row inherited from a detached HEAD.
+        self.note_produced_formatter_cell(true);
         // A NOBREAK field separator is ordered before the next formatter
         // word, but it is still trailing field geometry until that word
         // emits a cell.  CVS `term_field()` therefore drops it when a
@@ -309,6 +313,7 @@ impl InlineBuilder {
         if !generated_word {
             return;
         }
+        self.note_produced_formatter_cell(count > 0);
         self.tighten_next_boundary();
         self.begin_word_projection(true);
         if count > 0 {

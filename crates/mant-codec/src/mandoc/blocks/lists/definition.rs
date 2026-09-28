@@ -133,7 +133,15 @@ pub(super) fn definition_item(
     // The BODY is executed once. Its active formatter records whether a real
     // boundary preceded the first visible word and whether the detached head
     // already accounts for an invisible first row.
-    formatter.begin_definition_body(flow.shares_pending_term_row);
+    // A native HEAD may occupy a formatter cell without giving IR any term
+    // that represents its row (for example, `.It \\&`). Only a rendered HEAD
+    // can own the first invisible BODY row when term_newln() closes it.
+    let rendered_head_row = terms.iter().any(|term| {
+        mant_ir::inline_plain_text(term)
+            .chars()
+            .any(|character| !character.is_whitespace())
+    });
+    formatter.begin_definition_body(flow.shares_pending_term_row && rendered_head_row);
     let description = if let Some(run_in) = run_in_execution {
         lower_blocks_with_predecessor_and_run_in(
             body,

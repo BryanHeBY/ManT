@@ -128,6 +128,197 @@ fn completed_empty_text_rows_survive_filled_output_drains() {
 }
 
 #[test]
+fn completed_vertical_rows_do_not_replay_their_invisible_cell() {
+    // Exact inputs checked with fixed CVS -Tascii/-Tlint. term.c::term_vspace()
+    // completes the empty TEXT row; a subsequent \& occupies just one more
+    // row, which term_newln() closes at the next mode or paragraph request.
+    for (before, empty_words, request, expected_lines) in [
+        ("", ".B \"\"\n", ".nf", 2),
+        ("BEFORE\n", ".B \"\"\n", ".nf", 2),
+        ("", ".B \"\"\n", ".PP", 2),
+        ("BEFORE\n", ".B \"\"\n", ".PP", 2),
+        ("", ".B \"\"\n", ".sp 0", 2),
+        ("BEFORE\n", ".B \"\"\n", ".sp 0", 2),
+        ("", ".B \"\"\n", ".fi", 2),
+        ("", ".B \"\"\n.B \"\"\n", ".nf", 3),
+    ] {
+        let source = format!(
+            ".TH TEST 1 \"2026-09-28\"\n.SH DESCRIPTION\n{before}{empty_words}\\&\n{request}\nAFTER\n"
+        );
+        let document = parse_manual_bytes(
+            std::path::Path::new("completed-invisible-cell.1"),
+            source.as_bytes(),
+        )
+        .unwrap();
+        let blocks = &document.sections[0].blocks;
+        let rows = blocks
+            .iter()
+            .filter_map(|block| match block {
+                Block::VerticalSpace { lines, .. } => Some(*lines),
+                _ => None,
+            })
+            .sum::<u16>();
+        assert_eq!(rows, expected_lines, "{request}: {blocks:#?}");
+        assert_eq!(
+            blocks
+                .iter()
+                .filter(|block| matches!(block, Block::VerticalSpace { lines, .. } if *lines == expected_lines))
+                .count(),
+            1,
+            "{request}: {blocks:#?}"
+        );
+    }
+}
+
+#[test]
+fn authored_an_words_use_no_fill_source_rows() {
+    // Exact forms checked with fixed CVS -Tascii/-Tlint. In
+    // mdoc_term.c::print_mdoc_node(), NODE_NOFILL/NODE_LINE executes before
+    // termp_an_pre(); mode-only An changes SPLIT without emitting a word.
+    for mode in ["", ".An -split\n", ".An -nosplit\n"] {
+        let source = format!(
+            ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n{mode}.An Alice\n.An Bob\n.fi\n"
+        );
+        let document =
+            parse_manual_bytes(std::path::Path::new("no-fill-authors.1"), source.as_bytes())
+                .unwrap();
+        assert!(
+            matches!(document.sections[1].blocks.as_slice(), [Block::Preformatted { children, .. }] if inline_text(children) == "Alice\nBob"),
+            "{mode}: {document:#?}"
+        );
+    }
+}
+
+#[test]
+fn author_mode_request_does_not_render_rejected_operands() {
+    // Exact input checked with fixed CVS -Tascii/-Tlint. The parser reports
+    // excess An operands; mdoc_term.c::termp_an_pre() returns 0 for both
+    // author modes, so neither operand is visited as a formatter word.
+    for mode in ["split", "nosplit"] {
+        let source = format!(
+            ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.An -{mode} Alice\n.An Bob\n.fi\n"
+        );
+        let document = parse_manual_bytes(
+            std::path::Path::new("author-mode-extra-operand.1"),
+            source.as_bytes(),
+        )
+        .unwrap();
+        assert!(
+            matches!(document.sections[1].blocks.as_slice(), [Block::Preformatted { children, .. }] if inline_text(children) == "Bob"),
+            "{mode}: {document:#?}"
+        );
+    }
+}
+
+#[test]
+fn author_mode_request_respects_no_fill_source_continuation() {
+    // Exact split/nosplit forms checked with fixed CVS -Tascii/-Tlint.
+    // mdoc_term.c::print_mdoc_node() skips NODE_LINE's term_newln() under
+    // TERMP_NONEWLINE; termp_an_pre() changes only the author mode.
+    for mode in ["split", "nosplit"] {
+        let source = format!(
+            ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\nALPHA\\c\n.An -{mode}\nBETA\n.fi\n"
+        );
+        let document = parse_manual_bytes(
+            std::path::Path::new("author-mode-no-fill-continuation.1"),
+            source.as_bytes(),
+        )
+        .unwrap();
+        assert!(
+            matches!(document.sections[1].blocks.as_slice(), [Block::Preformatted { children, .. }] if inline_text(children) == "ALPHABETA"),
+            "{mode}: {document:#?}"
+        );
+    }
+}
+
+#[test]
+fn bare_zero_advance_keeps_generated_closing_glyph_in_its_row() {
+    // Exact enclosure and function forms checked with fixed CVS -Tascii/
+    // -Tlint. term.c::term_word() buffers a generated glyph after bare \z;
+    // mdoc_term.c's post emits it before the next NODE_LINE term_newln().
+    for (scope, expected) in [
+        (".Ao\n\\z\n.Ac", "<\n>\nNEXT"),
+        (".Bo\n\\z\n.Bc", "[\n]\nNEXT"),
+        (".Fo call\n\\z\n.Fc", "call(\n)\nNEXT"),
+    ] {
+        let source = format!(
+            ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n{scope}\nNEXT\n.fi\n"
+        );
+        let document = parse_manual_bytes(
+            std::path::Path::new("bare-zero-generated-post.1"),
+            source.as_bytes(),
+        )
+        .unwrap();
+        assert!(
+            matches!(document.sections[1].blocks.as_slice(), [Block::Preformatted { children, .. }] if inline_text(children) == expected),
+            "{scope}: {document:#?}"
+        );
+    }
+}
+
+#[test]
+fn unrendered_definition_head_does_not_consume_body_row() {
+    // Exact inset and diagnostic forms checked with fixed CVS -Tascii/-Tlint.
+    // mdoc_term.c::termp_it_pre() executes the BODY separator through
+    // term_word(); roff_term_pre_br() then closes its occupied row. A \& HEAD
+    // has no rendered term to own that completed blank line.
+    for style in ["inset", "diag"] {
+        let source = format!(
+            ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -{style}\n.It \\&\n.br\n.No BODY\n.El\n"
+        );
+        let document = parse_manual_bytes(
+            std::path::Path::new("invisible-definition-head.1"),
+            source.as_bytes(),
+        )
+        .unwrap();
+        let Block::DefinitionList { items, .. } = &document.sections[1].blocks[0] else {
+            panic!("{style}: {document:#?}");
+        };
+        assert!(items[0].terms.is_empty(), "{style}: {items:#?}");
+        assert!(
+            matches!(&items[0].description[0], Block::Paragraph { children, .. } if inline_text(children).ends_with("\nBODY")),
+            "{style}: {items:#?}"
+        );
+    }
+}
+
+#[test]
+fn no_fill_body_does_not_replay_detached_head_cell() {
+    // Exact forms checked with fixed CVS -Tascii/-Tlint. A completed \zX
+    // belongs to the HEAD row. An empty or font-only BODY word adds no new
+    // cell, while \& adds a genuine invisible BODY cell and its own row.
+    for (body_word, body_breaks) in [(".No \"\"", 0), (".No \\fB", 0), (".No \\&", 1)] {
+        let source = format!(
+            ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -inset\n.It \\zX\n{body_word}\n.No BODY\n.El\n"
+        );
+        let document = parse_manual_bytes(
+            std::path::Path::new("no-fill-head-cell-owner.1"),
+            source.as_bytes(),
+        )
+        .unwrap();
+        let Block::DefinitionList { items, .. } = &document.sections[1].blocks[0] else {
+            panic!("{body_word}: {document:#?}");
+        };
+        assert_eq!(inline_text(&items[0].terms[0]), "X", "{items:#?}");
+        let Block::Preformatted { children, .. } = &items[0].description[0] else {
+            panic!("{body_word}: {items:#?}");
+        };
+        assert_eq!(
+            children
+                .iter()
+                .filter(|inline| matches!(inline, Inline::LineBreak))
+                .count(),
+            body_breaks,
+            "{body_word}: {children:#?}"
+        );
+        assert!(
+            inline_text(children).ends_with("BODY"),
+            "{body_word}: {children:#?}"
+        );
+    }
+}
+
+#[test]
 fn crossed_body_close_pops_font_stack_without_restoring_an_old_value() {
     // Exact input checked with fixed CVS -Tascii/-Tlint. term.c's
     // term_fontrepl() changes the active fontq slot, while mdoc_term.c's

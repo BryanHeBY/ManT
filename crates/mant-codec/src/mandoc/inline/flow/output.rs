@@ -276,6 +276,7 @@ impl InlineBuilder {
         occupies_row: bool,
         trailing_output: TrailingOutput,
     ) {
+        self.note_produced_formatter_cell(occupies_row);
         self.append_at_boundary(
             &mut incoming,
             true,
@@ -337,6 +338,9 @@ impl InlineBuilder {
     /// Complete a generated word whose native pre-boundary was entered by
     /// `prepare_generated_word()` before an IR wrapper was attached.
     pub(in crate::mandoc) fn append_prepared_text(&mut self, value: &str) {
+        // term_word() wrote these cells even when bare BACKAFTER buffers its
+        // sole glyph. The next physical row boundary must still flush it.
+        self.note_produced_formatter_cell(!value.is_empty());
         let kept_zero_boundary = self.execution.boundary == PendingBoundary::Kept
             && value
                 .chars()
@@ -375,6 +379,7 @@ impl InlineBuilder {
     /// `\p` handling, and closes physical source continuation before the next
     /// source node. CVS uses this path for the generated `BSD` child of `.Bx`.
     pub(in crate::mandoc) fn append_generated_word(&mut self, value: &str) {
+        self.note_produced_formatter_cell(!value.is_empty());
         self.begin_word_projection(!value.is_empty());
         let mut projected = Vec::new();
         self.execution.zero_advance.append_generated_text(
@@ -687,7 +692,7 @@ impl InlineBuilder {
     /// source formatter's keep, author, spacing, and vertical-space registers
     /// remain in this same execution state.
     pub(in crate::mandoc) fn take_paragraph_segment(&mut self) -> (Vec<Inline>, bool, u16) {
-        let invisible_formatter_cell = self.has_invisible_formatter_cell();
+        let mut invisible_formatter_cell = self.has_invisible_formatter_cell();
         // finish_nodes() trims a trailing break because it normally ends an
         // IR paragraph. If another invisible cell is already active after
         // that break, the break closed a real earlier row (term_newln()) and
@@ -716,6 +721,9 @@ impl InlineBuilder {
                     .any(|node| has_non_whitespace_glyph(std::slice::from_ref(node)));
             completed_vertical_rows =
                 completed_vertical_rows.saturating_add(u16::from(active_invisible_cell));
+            // The completed-row owner now accounts for this cell. The old
+            // invisible-word fallback must not manufacture it a second time.
+            invisible_formatter_cell &= !active_invisible_cell;
             let mut anchors = Vec::new();
             while self.nodes.last().is_some_and(|node| {
                 matches!(node, Inline::LineBreak)

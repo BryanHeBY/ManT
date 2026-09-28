@@ -159,8 +159,8 @@ pub(in crate::mandoc) fn lower_no_fill_fragment_with_formatter(
 ) -> (Vec<Inline>, bool, bool) {
     let continued = formatter.no_fill_inline.continued;
     let mut output = Vec::new();
-    let (continues_line, formatter_cell_occupied, asserted_vertical_row) = formatter
-        .with_output_builder(&mut output, |builder| {
+    let (continues_line, formatter_cell_occupied, produced_formatter_cell, asserted_vertical_row) =
+        formatter.with_output_builder(&mut output, |builder| {
             if continued {
                 builder.continue_source_line(true);
             }
@@ -168,6 +168,7 @@ pub(in crate::mandoc) fn lower_no_fill_fragment_with_formatter(
             (
                 builder.final_source_continuation_or(source_continuation_fallback),
                 builder.has_formatter_cell(),
+                builder.produced_formatter_cell(),
                 builder.asserted_vertical_row(),
             )
         });
@@ -182,7 +183,10 @@ pub(in crate::mandoc) fn lower_no_fill_fragment_with_formatter(
     row.continued = continues_line;
     if mant_ir::has_printable_character(&output) {
         row.formatter_cell = NoFillFormatterCell::Visible;
-    } else if formatter_cell_occupied && row.formatter_cell == NoFillFormatterCell::Origin {
+    } else if formatter_cell_occupied
+        && produced_formatter_cell
+        && row.formatter_cell == NoFillFormatterCell::Origin
+    {
         row.formatter_cell = NoFillFormatterCell::Invisible;
     }
     if finishes_row && !continues_line {

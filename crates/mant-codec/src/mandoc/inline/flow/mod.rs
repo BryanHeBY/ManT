@@ -22,6 +22,9 @@ pub(in crate::mandoc) struct InlineBuilder {
     // An actual term_vspace() from empty TEXT asserted an empty output row.
     // The literal owner must distinguish it from a trailing term_newln().
     asserted_vertical_row: bool,
+    // A cell executed by this builder, separate from an occupied formatter
+    // row inherited from a detached HEAD or a prior output owner.
+    produced_formatter_cell: CellProduction,
     definition_term_breaks: Vec<usize>,
     pub(in crate::mandoc) execution: InlineExecutionState,
     /// A detached definition HEAD occupies the native formatter row even
@@ -39,6 +42,12 @@ enum LeadingLineBoundary {
 enum SourceLineObservation {
     Disabled,
     NoFill,
+}
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum CellProduction {
+    None,
+    Produced,
 }
 
 /// Text execution registers have a different lifetime from an IR segment.
@@ -597,6 +606,7 @@ impl InlineBuilder {
             nodes: Vec::new(),
             direct_word_operands: false,
             asserted_vertical_row: false,
+            produced_formatter_cell: CellProduction::None,
             definition_term_breaks: Vec::new(),
             execution: InlineExecutionState::with_spacing(spacing_enabled),
             external_head_row_pending: false,
@@ -611,6 +621,7 @@ impl InlineBuilder {
             nodes,
             direct_word_operands: false,
             asserted_vertical_row: false,
+            produced_formatter_cell: CellProduction::None,
             definition_term_breaks: Vec::new(),
             execution,
             external_head_row_pending: false,
@@ -633,6 +644,16 @@ impl InlineBuilder {
 
     pub(in crate::mandoc) const fn asserted_vertical_row(&self) -> bool {
         self.asserted_vertical_row
+    }
+
+    pub(in crate::mandoc) const fn produced_formatter_cell(&self) -> bool {
+        matches!(self.produced_formatter_cell, CellProduction::Produced)
+    }
+
+    fn note_produced_formatter_cell(&mut self, produced: bool) {
+        if produced {
+            self.produced_formatter_cell = CellProduction::Produced;
+        }
     }
 
     pub(in crate::mandoc) fn visits_empty_text_as_space(&self, node: &libmandoc_rs::Node) -> bool {

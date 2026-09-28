@@ -35,7 +35,7 @@ pub(super) fn is_no_fill_payload(node: &Node, single_line_literal: bool) -> bool
         && participates_in_inline_flow(node)
         && !matches!(
             node.macro_name.as_deref(),
-            Some("PD" | "nf" | "fi" | "EX" | "EE" | "An" | "Sm" | "ft" | "in" | "sp" | "br" | "Pp")
+            Some("PD" | "nf" | "fi" | "EX" | "EE" | "Sm" | "ft" | "in" | "sp" | "br" | "Pp")
         )
 }
 
@@ -54,7 +54,10 @@ pub(super) fn no_fill_boundary(node: &Node, single_line_literal: bool) -> Format
     // NODE_NOFILL/NODE_LINE rule decides whether the source row ends; a
     // preceding \c can carry it into their BODY or generated post text.
     // See man_term.c::pre_UR() and mdoc_term.c::termp_rs_pre().
-    if is_no_fill_payload(node, single_line_literal)
+    // Payload ownership is separate from row execution. A state-only inline
+    // macro such as `An -split` emits no word, but its entry still follows
+    // NODE_LINE and a preceding \c continuation.
+    if ((node.flags.no_fill || single_line_literal) && participates_in_inline_flow(node))
         || matches!(node.macro_name.as_deref(), Some("Rs" | "UR" | "MT"))
     {
         FormatterBoundary::None
