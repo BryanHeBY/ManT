@@ -28,6 +28,12 @@ enum LeadingLineBoundary {
     BeforeVisibleWord,
 }
 
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum SourceLineObservation {
+    Disabled,
+    NoFill,
+}
+
 /// Text execution registers have a different lifetime from an IR segment.
 /// A paragraph, literal row, or nested output owner may drain `nodes` while
 /// the formatter continues to execute the same source stream.
@@ -71,9 +77,9 @@ pub(in crate::mandoc) struct InlineExecutionState {
     /// Ordinary paragraphs keep word and row events without field widths.
     definition: Option<DefinitionFieldState>,
     last_executed_source_line: Option<u32>,
-    /// Detached definition HEADs use the same NODE_LINE entry rule as the
+    /// Detached definition HEADs use the same `NODE_LINE` entry rule as the
     /// block driver while their output is collected in a term field.
-    observe_no_fill_source_lines: bool,
+    observe_no_fill_source_lines: SourceLineObservation,
     pub(in crate::mandoc) scope_posts: crate::mandoc::containers::ScopePostState,
 }
 
@@ -631,7 +637,7 @@ impl InlineExecutionState {
             author_execution: None,
             definition: None,
             last_executed_source_line: None,
-            observe_no_fill_source_lines: false,
+            observe_no_fill_source_lines: SourceLineObservation::Disabled,
             scope_posts: crate::mandoc::containers::ScopePostState::default(),
         }
     }

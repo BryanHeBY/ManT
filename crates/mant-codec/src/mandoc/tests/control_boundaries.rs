@@ -155,8 +155,13 @@ fn man_links_execute_labels_in_the_surrounding_text_stream() {
         assert!(!strong.contains(target), "{open}: {document:#?}");
         assert!(!strong.contains("after"), "{open}: {document:#?}");
     }
+}
+
+#[test]
+fn man_links_use_head_text_when_body_has_no_printable_label() {
     // A nonprinting BODY is still executed, but CVS man_html.c::man_UR_pre()
-    // chooses HEAD text when there is no printable label.
+    // chooses HEAD text when there is no printable label. Both exact inputs
+    // were checked with fixed CVS -Tascii/-Tlint before these assertions.
     let source = b".TH TEST 1\n.SH DESCRIPTION\n.UR https://example.com\n\\&\n.UE\nafter\n";
     let document =
         parse_manual_bytes(std::path::Path::new("man-link-invisible-label.1"), source).unwrap();

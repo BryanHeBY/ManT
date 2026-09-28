@@ -1,7 +1,8 @@
 use super::{
     AuthorBreakEffect, AuthorExecution, FormatterColumn, Inline, InlineBuilder, KeepPhase,
-    PendingBoundary, PreservedInlineState, SourceFragmentState, SpacingMode, TrailingOutput,
-    WordEndBreak, last_visible_character, trim_trailing_breakable_spaces, updated_spacing,
+    PendingBoundary, PreservedInlineState, SourceFragmentState, SourceLineObservation, SpacingMode,
+    TrailingOutput, WordEndBreak, last_visible_character, trim_trailing_breakable_spaces,
+    updated_spacing,
 };
 
 impl InlineBuilder {
@@ -130,7 +131,7 @@ impl InlineBuilder {
     }
 
     pub(in crate::mandoc) fn begin_executed_node(&mut self, node: &libmandoc_rs::Node) {
-        if self.execution.observe_no_fill_source_lines
+        if self.execution.observe_no_fill_source_lines == SourceLineObservation::NoFill
             && node.flags.no_fill
             && node.flags.line_start
             && node.line != 0
@@ -156,7 +157,11 @@ impl InlineBuilder {
     }
 
     pub(in crate::mandoc) fn observe_no_fill_source_lines(&mut self, enabled: bool) {
-        self.execution.observe_no_fill_source_lines = enabled;
+        self.execution.observe_no_fill_source_lines = if enabled {
+            SourceLineObservation::NoFill
+        } else {
+            SourceLineObservation::Disabled
+        };
     }
 
     pub(in crate::mandoc) fn final_word_join_or(&self, fallback: bool) -> bool {
