@@ -331,6 +331,9 @@ pub struct NodeFlags {
     pub no_print: bool,
     /// The node belongs to a no-fill region that preserves source lines.
     pub no_fill: bool,
+    /// Native `NODE_BROKEN`: a later explicit close ended this pending block's
+    /// formatting scope while the parser retained its original tree owner.
+    pub broken: bool,
     /// libmandoc selected this node as a same-document destination.
     pub deep_link_target: bool,
     /// libmandoc renders a self-link for this destination.

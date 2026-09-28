@@ -1123,6 +1123,8 @@ snapshot_node_flags(const struct roff_node *source)
 		flags |= MANT_MANDOC_NODE_NO_PRINT;
 	if (source->flags & NODE_NOFILL)
 		flags |= MANT_MANDOC_NODE_NO_FILL;
+	if (source->flags & NODE_BROKEN)
+		flags |= MANT_MANDOC_NODE_BROKEN;
 	if (source->flags & NODE_ID)
 		flags |= MANT_MANDOC_NODE_DEEP_LINK_TARGET;
 	if (source->flags & NODE_HREF)

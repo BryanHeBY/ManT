@@ -5,6 +5,13 @@ use super::{
 };
 
 impl InlineBuilder {
+    /// Every definition HEAD eventually reaches `term_fill()`, including
+    /// inset/diag/ohang heads without a NOBREAK field. Track accepted and
+    /// rejected word-end slices in their shared native input buffer.
+    pub(in crate::mandoc) fn begin_definition_head_consumption(&mut self) {
+        self.definition_state_mut();
+    }
+
     /// CVS `mdoc_term.c` enters `NODE_LINE` before each no-fill child, but
     /// `term_newln()` flushes an active `NOBREAK` definition field. `BRIND` may
     /// start a new row when a tag overruns its width; HANG keeps that row.
@@ -31,6 +38,14 @@ impl InlineBuilder {
             if self.execution.pending_field_spaces > 0 {
                 self.definition_state_mut().pending_gap_origin = PendingFieldGapOrigin::SourceLine;
             }
+            // print_mdoc_node() runs term_newln() at each no-fill NODE_LINE.
+            // Even if that flush has no buffered glyph, term_newln() sets
+            // NOSPACE for the next term_word(). The retained trailspace is
+            // separate and can still position the next HANG field.
+            self.execution.boundary = PendingBoundary::Tight;
+            self.definition_state_mut()
+                .hang_row
+                .suppress_next_auto_space = true;
         } else {
             self.hard_break();
         }
@@ -213,6 +228,19 @@ impl InlineBuilder {
                 .outcome
                 .mark_body_gap_consumed();
         } else {
+            // term_flushln() restores minbl from trailspace even when
+            // term_fill() accepted no graph. Only a later formatter word or
+            // roff_term_pre_br() decides whether those device cells print.
+            if !wraps
+                && self.execution.word_end_break == WordEndBreak::Pending
+                && self
+                    .execution
+                    .definition
+                    .as_ref()
+                    .is_some_and(|state| state.hang_row.viscol > 0)
+            {
+                deferred_field_cells = usize::from(gap_cells);
+            }
             self.execution.trailing_output = TrailingOutput::None;
         }
 
@@ -341,7 +369,9 @@ impl InlineBuilder {
     }
 
     pub(in crate::mandoc) fn note_hang_native_graph(&mut self) {
-        if let Some(definition) = &mut self.execution.definition {
+        if let Some(definition) = &mut self.execution.definition
+            && !definition.hang_row.field_discarded
+        {
             definition.hang_row.field_native_graph = true;
         }
     }
@@ -350,10 +380,11 @@ impl InlineBuilder {
     /// field has not supplied a graph yet, even later words in that field are
     /// never printed. The text decoder reports this event inside one word;
     /// `HangNativeRow::word()` handles the same event across words.
-    pub(in crate::mandoc) fn note_hang_break_before_graph(&mut self) {
+    pub(in crate::mandoc) fn note_hang_break_before_graph(&mut self, accepted_prefix: usize) {
         if let Some(definition) = &mut self.execution.definition {
             let row = &mut definition.hang_row;
-            row.field_discarded |= !row.field_native_graph;
+            row.field_discarded = true;
+            row.field_break_before_graph_prefix = Some(accepted_prefix);
             row.field_unproven_break = true;
         }
     }
@@ -384,6 +415,17 @@ impl InlineBuilder {
         let mut field = self.nodes.split_off(start.min(self.nodes.len()));
         retain_unprinted_field_targets(&mut field);
         self.nodes.extend(field);
+        if self
+            .execution
+            .definition
+            .as_ref()
+            .is_some_and(|state| state.hang_row.accepted_prefix_before_rejection)
+            && !matches!(self.nodes.last(), Some(Inline::LineBreak))
+        {
+            // A prior term_fill() pass printed its accepted prefix; a later
+            // nbr=0 discards only the suffix and ends that device line.
+            self.nodes.push(Inline::LineBreak);
+        }
         // term.c::term_flushln() clears both BACKAFTER and BACKBEFORE even
         // when term_fill() returns nbr=0. The rejected field can still own a
         // completed \z glyph that has not entered the IR suffix yet.
@@ -430,6 +472,37 @@ impl InlineBuilder {
 
     pub(in crate::mandoc) fn in_definition_field(&self) -> bool {
         self.execution.definition.is_some() && self.execution.author_execution.is_some()
+    }
+
+    pub(in crate::mandoc) fn consumed_pending_hang_word_end_break(&self) -> bool {
+        self.execution
+            .definition
+            .as_ref()
+            .is_some_and(|state| state.hang_row.consumed_pending_word_end_break)
+    }
+
+    pub(in crate::mandoc) fn note_provisional_definition_break(&mut self) {
+        if let Some(definition) = &mut self.execution.definition
+            && matches!(self.nodes.last(), Some(Inline::LineBreak))
+        {
+            definition.hang_row.provisional_trailing_break = Some(self.nodes.len() - 1);
+        }
+    }
+
+    pub(in crate::mandoc) fn settle_provisional_definition_break(&mut self) {
+        let Some(definition) = &mut self.execution.definition else {
+            return;
+        };
+        if definition.hang_row.provisional_trailing_break == self.nodes.len().checked_sub(1)
+            && !definition.hang_row.field_discarded
+            && self.execution.word_end_break == WordEndBreak::Pending
+        {
+            // An earlier \p made this possible break, but the final \p had
+            // no following graph to complete another term_fill() slice.
+            // HEAD post consumes the buffer without closing the device row.
+            self.nodes.pop();
+        }
+        definition.hang_row.provisional_trailing_break = None;
     }
 
     pub(super) fn append_fixed_cells(&mut self, count: usize) {
@@ -659,9 +732,10 @@ impl InlineBuilder {
         if rows == 0 {
             // roff_term_pre_sp() calls no term_vspace() for zero rows. Its
             // remaining pre_br() follows the active HANG/TAG field rules.
+            // term_newln() does not clear TERMP_NONEWLINE: a preceding \c
+            // still suppresses the next no-fill NODE_LINE after this request.
             self.control_line_break();
             self.execution.final_word_join = Some(false);
-            self.execution.final_source_continuation = Some(false);
             return;
         }
         // term_vspace() first runs term_newln(). Settle an unprintable HANG
@@ -798,7 +872,6 @@ impl InlineBuilder {
             // physical row; only a positive vertical request ends it.
             self.settle_no_break_field_line(field);
             self.execution.final_word_join = Some(false);
-            self.execution.final_source_continuation = Some(false);
             return;
         }
         self.restore_no_break_field_projection(field);
@@ -851,6 +924,9 @@ impl InlineBuilder {
             self.continue_no_break_definition_field(field);
             return;
         }
+        // The first .mc flush is not yet a NoBreakField, but it still runs
+        // term_fill() before changing NOBREAK/NOSPACE.
+        self.discard_unprinted_definition_field_output();
         if self.no_break_definition_field() {
             return;
         }
@@ -927,15 +1003,20 @@ impl InlineBuilder {
         let separator_cells = if field.style == DefinitionFieldStyle::Tag && overrun {
             self.hard_break();
             // `roff_term_pre_mc()` clears NOSPACE after the NOBREAK flush,
-            // so the first word on the new device row still owns one normal
-            // formatter boundary at the list origin.
+            // so the first word on the new device row owns one ordinary
+            // boundary. No word has written that cell yet: HEAD post may
+            // close the empty buffer without printing another row.
             1
         } else if overrun {
             1
         } else {
             field.trailspace_cells.saturating_add(1)
         };
-        self.append_field_separator(separator_cells);
+        if field.style == DefinitionFieldStyle::Tag && overrun {
+            self.execution.pending_field_spaces = separator_cells;
+        } else {
+            self.append_field_separator(separator_cells);
+        }
         self.execution.boundary = PendingBoundary::Tight;
 
         field.output_end_before_separator = output_end_before_separator;
@@ -945,6 +1026,12 @@ impl InlineBuilder {
         field.separator_cells = separator_cells;
         self.definition_state_mut().no_break = Some(field);
         self.reset_after_no_break_field();
+        if field.style == DefinitionFieldStyle::Tag && overrun {
+            // reset_after_no_break_field() clears the previous field's
+            // buffered geometry. The new row's separator belongs to its
+            // *next* term_word(), so carry only that new pending cell on.
+            self.execution.pending_field_spaces = separator_cells;
+        }
     }
 
     fn reset_after_no_break_field(&mut self) {
@@ -1005,9 +1092,9 @@ impl InlineBuilder {
         if wraps {
             if overrun {
                 self.hard_break();
-                // Clearing NOSPACE after `.mc` leaves one ordinary boundary
-                // at the list origin; BRIND is not executed by this request.
-                self.append_field_separator(1);
+                // Clearing NOSPACE leaves a pending boundary for the next
+                // term_word(), not an occupied row before HEAD post.
+                self.execution.pending_field_spaces = 1;
                 self.execution.boundary = PendingBoundary::Tight;
             } else {
                 self.append_field_separator(usize::from(gap).saturating_add(1));
@@ -1064,6 +1151,18 @@ impl InlineBuilder {
     }
 
     fn take_no_break_field(&mut self) -> Option<NoBreakField> {
+        if self
+            .execution
+            .definition
+            .as_ref()
+            .is_some_and(|state| state.no_break.is_some())
+        {
+            // Every request that flushes the field after .mc uses this
+            // entrypoint. Consume term_fill()'s accepted prefix and reject
+            // its pending suffix before .br/.sp/.ce or another .mc can move
+            // the output owner or reset field flags.
+            self.discard_unprinted_definition_field_output();
+        }
         self.execution
             .definition
             .as_mut()

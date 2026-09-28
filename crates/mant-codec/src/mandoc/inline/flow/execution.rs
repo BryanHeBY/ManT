@@ -123,6 +123,19 @@ impl InlineBuilder {
 
     pub(in crate::mandoc) fn request_word_end_break(&mut self) {
         if let Some(definition) = &mut self.execution.definition {
+            if definition.hang_row.last_word_started_with_separator
+                && !definition.hang_row.last_word_supplied_graph
+                && definition.hang_row.field_native_graph
+            {
+                // term_fill() already recorded the graph before this empty
+                // formatter word's separator. A subsequent \p belongs to
+                // the new, graphless consumption pass.
+                definition.hang_row.accepted_prefix_before_rejection = true;
+                definition.hang_row.field_native_graph = false;
+                if let Some(author) = &mut self.execution.author_execution {
+                    author.field_output_start = self.nodes.len();
+                }
+            }
             definition.hang_row.field_pending_word_end_break = true;
         }
         // CVS ESCAPE_BREAK buffers a newline cell even when the decoded word

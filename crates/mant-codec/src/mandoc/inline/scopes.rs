@@ -126,7 +126,10 @@ impl<'node> crate::mandoc::containers::ContainerSink<'node> for InlineContainerS
                 self.builder.append(vec![Inline::anchor_at(target, source)]);
             }
             Event::Break => {
-                self.builder.hard_break();
+                // roff_term_pre_ce()/pre_br() request term_newln(). A HANG
+                // field can flush under TERMP_NOBREAK without ending the
+                // device row, so execute the field transition first.
+                self.builder.control_line_break();
             }
             Event::FlushLine => {
                 self.builder.append(vec![Inline::LineBreak]);

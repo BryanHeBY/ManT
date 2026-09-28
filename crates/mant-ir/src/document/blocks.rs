@@ -353,13 +353,14 @@ impl DefinitionItem {
     /// resolved field rather than applying this default a second time.
     pub const DESCRIPTION_INDENT_COLUMNS: u16 = 4;
 
-    /// The first paragraph that can share the term's displayed line.
+    /// The first content row that can share the term's displayed line.
     ///
-    /// Only this paragraph's wrapped lines hang from its first-line text.
+    /// Only this block's wrapped lines hang from its first-line text.
     /// Every later block uses [`DefinitionLayout::body_indent_columns`] from the
     /// definition container, independently of label width and inline mode.
-    /// Explicit leading spacing or a non-paragraph first block prevents the
-    /// inline presentation; it must not be consumed by joining the term.
+    /// The producer sets `inline_term` for a literal first block only when
+    /// source execution kept the physical HEAD row open. Explicit leading
+    /// spacing prevents the inline presentation.
     #[must_use]
     pub fn inline_description(&self) -> Option<(&[Inline], &LayoutHint)> {
         if !self.layout.inline_term {
@@ -367,6 +368,9 @@ impl DefinitionItem {
         }
         match self.description.first()? {
             Block::Paragraph {
+                children, layout, ..
+            } if layout.spacing_before_lines == 0 => Some((children, layout)),
+            Block::Preformatted {
                 children, layout, ..
             } if layout.spacing_before_lines == 0 => Some((children, layout)),
             _ => None,

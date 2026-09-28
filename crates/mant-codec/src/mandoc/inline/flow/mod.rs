@@ -12,7 +12,7 @@ mod output;
 pub(in crate::mandoc) use no_fill::{NoFillInlineState, lower_no_fill_fragment_with_formatter};
 
 pub(super) use output::trailing_ascii_spaces;
-use output::trim_trailing_breakable_spaces;
+pub(in crate::mandoc) use output::trim_trailing_breakable_spaces;
 
 pub(in crate::mandoc) struct InlineBuilder {
     nodes: Vec<Inline>,
@@ -175,6 +175,14 @@ struct HangNativeRow {
     // term_fill() returns nbr=0 if \p precedes the field's first graph and
     // the next formatter word adds a separator. No part of that field prints.
     field_native_graph: bool,
+    // A \p followed by a blank before this word supplied a graph. The
+    // pending field must retain only the prefix accepted by term_fill().
+    field_break_before_graph_prefix: Option<usize>,
+    accepted_prefix_before_rejection: bool,
+    last_word_started_with_separator: bool,
+    last_word_supplied_graph: bool,
+    consumed_pending_word_end_break: bool,
+    provisional_trailing_break: Option<usize>,
     field_discarded: bool,
     field_last_unbreakable_width: usize,
     transition: HangRowTransition,
@@ -192,9 +200,15 @@ enum HangRowTransition {
 
 impl HangNativeRow {
     fn word(&mut self, separator: usize, width: usize, trailing_spaces: usize, printable: bool) {
+        self.last_word_started_with_separator = separator > 0;
+        self.last_word_supplied_graph = printable;
+        self.consumed_pending_word_end_break = separator > 0 && self.field_pending_word_end_break;
         if separator > 0 && self.field_pending_word_end_break {
             self.field_unproven_break = true;
             self.field_discarded |= !self.field_native_graph;
+            // term_fill() starts again after its accepted prefix; a graph
+            // from that prefix cannot make the following field printable.
+            self.field_native_graph = false;
         }
         if separator > 0 {
             self.field_pending_word_end_break = false;
@@ -209,7 +223,9 @@ impl HangNativeRow {
                 .saturating_add(width);
             self.trailing_breakable = 0;
             self.field_printable = true;
-            self.field_native_graph = true;
+            // A term_fill() pass that already returned nbr=0 cannot make
+            // later bytes in that rejected field into an accepted prefix.
+            self.field_native_graph = !self.field_discarded;
             // Callers with a pending glyph have one indivisible formatter
             // word. Source words refine this to their final component.
             self.field_last_unbreakable_width = width;
@@ -248,6 +264,12 @@ impl HangNativeRow {
         self.field_unproven_break = false;
         self.field_pending_word_end_break = false;
         self.field_native_graph = false;
+        self.field_break_before_graph_prefix = None;
+        self.accepted_prefix_before_rejection = false;
+        self.last_word_started_with_separator = false;
+        self.last_word_supplied_graph = false;
+        self.consumed_pending_word_end_break = false;
+        self.provisional_trailing_break = None;
         self.field_discarded = false;
         self.field_last_unbreakable_width = 0;
         self.minbl = trailspace;
@@ -265,6 +287,12 @@ impl HangNativeRow {
         self.field_unproven_break = false;
         self.field_pending_word_end_break = false;
         self.field_native_graph = false;
+        self.field_break_before_graph_prefix = None;
+        self.accepted_prefix_before_rejection = false;
+        self.last_word_started_with_separator = false;
+        self.last_word_supplied_graph = false;
+        self.consumed_pending_word_end_break = false;
+        self.provisional_trailing_break = None;
         self.field_discarded = false;
         self.field_last_unbreakable_width = 0;
         self.transition = HangRowTransition::Flushed;
@@ -831,6 +859,10 @@ impl InlineBuilder {
 }
 
 impl InlineExecutionState {
+    pub(in crate::mandoc) fn source_row_continues(&self) -> bool {
+        self.final_source_continuation.unwrap_or(false)
+    }
+
     pub(in crate::mandoc) fn with_spacing(spacing_enabled: bool) -> Self {
         Self {
             boundary: PendingBoundary::Ordinary,

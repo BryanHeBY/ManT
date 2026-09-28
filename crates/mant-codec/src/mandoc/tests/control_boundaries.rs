@@ -1,5 +1,268 @@
 use super::*;
 
+fn review_definition_item(body: &str) -> mant_ir::DefinitionItem {
+    let source = format!(
+        ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n{body}"
+    );
+    let document = parse_manual_bytes(
+        std::path::Path::new("definition-physical-row-review.1"),
+        source.as_bytes(),
+    )
+    .expect("lower reviewed definition source");
+    let Block::DefinitionList { items, .. } = &document.sections[1].blocks[0] else {
+        panic!("expected definition list: {document:#?}");
+    };
+    items[0].clone()
+}
+
+#[test]
+fn definition_head_handoff_uses_native_close_and_executed_continuation() {
+    // Each exact source passed fixed CVS -Tascii/-Tutf8/-Tlint. The entry
+    // rule in mdoc_term.c::print_mdoc_node() runs NODE_LINE before dispatch;
+    // mdoc_macro.c::blk_exp_close() marks explicit closes NODE_BROKEN. Bq is
+    // an ordinary block and cannot stand in for that close event.
+    for (label, source, term, body_blank_rows) in [
+        (
+            "ordinary-bq",
+            ".nf\n.Bl -inset\n.It Bq X\n.br\n.No BODY\n.El\n",
+            "[X]",
+            0,
+        ),
+        (
+            "closed-xo",
+            ".nf\n.Bl -inset\n.It Xo X\n.Xc\n.br\n.No BODY\n.El\n",
+            "X",
+            1,
+        ),
+        (
+            "continued-xo",
+            ".nf\n.Bl -inset\n.It Xo\n.No X\\c\n.Xc\n.br\n.No BODY\n.El\n",
+            "X",
+            0,
+        ),
+        (
+            "closed-bo",
+            ".nf\n.Bl -inset\n.It Bo X\n.Bc\n.br\n.No BODY\n.El\n",
+            "[X]",
+            1,
+        ),
+        (
+            "fill-changes-in-head",
+            ".Bl -inset\n.It Xo X\n.nf\n.No Y\n.Xc\n.br\n.No BODY\n.El\n",
+            "X\nY",
+            1,
+        ),
+    ] {
+        let item = review_definition_item(source);
+        assert_eq!(inline_text(&item.terms[0]), term, "{label}: {item:#?}");
+        let rows: u16 = item
+            .description
+            .iter()
+            .filter_map(|block| match block {
+                Block::VerticalSpace { lines, .. } => Some(*lines),
+                _ => None,
+            })
+            .sum();
+        assert_eq!(rows, body_blank_rows, "{label}: {item:#?}");
+    }
+}
+
+#[test]
+fn hang_field_flush_preserves_native_trailspace_without_reusing_br_gap() {
+    // Both exact inputs passed fixed CVS -Tascii/-Tutf8/-Tlint. term.c's
+    // term_flushln() restores minbl=trailspace even when nbr=0; explicit
+    // roff_term_pre_br() clears BRIND, while NODE_LINE sets NOSPACE.
+    for (middle, expected) in [(".No \\p", "X Y"), (".br\n.No \"\"", "XY")] {
+        let item = review_definition_item(&format!(
+            ".nf\n.Bl -hang -width 4n\n.It Xo\n.No X\n{middle}\n.No Y\n.Xc\n.No BODY\n.El\n"
+        ));
+        assert_eq!(inline_text(&item.terms[0]), expected, "{middle}: {item:#?}");
+        if middle == ".No \\p" {
+            assert!(
+                !item
+                    .entry
+                    .as_ref()
+                    .is_some_and(|entry| entry.names.iter().any(|name| name == "XY")),
+                "a lost native separator changed entry identity: {item:#?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn hang_field_rejects_only_the_unaccepted_word_end_suffix() {
+    // Exact single-TEXT and cross-TEXT cases passed fixed CVS
+    // -Tascii/-Tutf8/-Tlint. term.c::term_fill() restarts from the remaining
+    // buffer after every accepted prefix, resetting graph for each pass.
+    for (head, expected) in [
+        (".No \"X\\p Y\"\n.No \"\\p Z\"", "X\nY"),
+        (".No X\\p\n.No \\p\n.No \"\"\n.No Z", "X"),
+        (".No X\n.No \\p\n.No Y", "X"),
+        (".No X\\p\n.No \"\"\n.No Y", "X\nY"),
+    ] {
+        let item = review_definition_item(&format!(
+            ".Bl -hang -width 4n\n.It Xo\n{head}\n.Xc\n.No BODY\n.El\n"
+        ));
+        assert_eq!(inline_text(&item.terms[0]), expected, "{head}: {item:#?}");
+        assert!(!inline_text(&item.terms[0]).contains('Z'));
+    }
+    // The same term_fill() consumption runs for OHANG even though its HEAD
+    // does not use HANG geometry. The pinned reference drops Y here too.
+    let item =
+        review_definition_item(".Bl -ohang\n.It Xo\n.No X\n.No \\p\n.No Y\n.Xc\n.No BODY\n.El\n");
+    assert_eq!(inline_text(&item.terms[0]), "X\n", "{item:#?}");
+}
+
+#[test]
+fn no_fill_head_projects_each_buffered_word_end_row_once() {
+    // Both exact sources passed fixed CVS -Tascii/-Tutf8/-Tlint.
+    // term.c::ESCAPE_BREAK writes a newline into the native buffer; each
+    // later NODE_LINE invokes term_newln(), even after an earlier row ended.
+    for (breaks, expected) in [(1, "X\n\nY"), (2, "X\n\n\nY")] {
+        let item = review_definition_item(&format!(
+            ".nf\n.Bl -ohang\n.It Xo\n.No X\n{}.No Y\n.Xc\n.No BODY\n.El\n",
+            ".No \\p\n".repeat(breaks)
+        ));
+        assert_eq!(inline_text(&item.terms[0]), expected, "{item:#?}");
+    }
+}
+
+#[test]
+fn literal_definition_body_shares_only_a_continued_head_row() {
+    // Exact positive and negative inputs passed fixed CVS -Tascii/-Tutf8/
+    // -Tlint. mdoc_term.c enters no-fill BODY at NODE_LINE; TERMP_NONEWLINE
+    // from a final \c suppresses that row break and survives the IR drain.
+    for (head, joins) in [(".No X\\c", true), (".No X", false)] {
+        let item = review_definition_item(&format!(
+            ".nf\n.Bl -hang -width 4n\n.It Xo\n{head}\n.Xc\n.No BODY\n.El\n"
+        ));
+        assert!(matches!(
+            item.description.first(),
+            Some(Block::Preformatted { .. })
+        ));
+        assert_eq!(item.layout.inline_term, joins, "{head}: {item:#?}");
+        assert_eq!(
+            item.inline_description().is_some(),
+            joins,
+            "{head}: {item:#?}"
+        );
+    }
+}
+
+#[test]
+fn definition_body_uses_continuation_after_generated_words_and_zero_row_requests() {
+    // Each exact source passed fixed CVS -Tascii/-Tutf8/-Tlint. In
+    // mdoc_term.c::termp_it_pre(), inset BODY's term_word("\\ ") consumes a
+    // pending \c before NODE_LINE. In roff_term.c::pre_sp/pre_ce, a zero-row
+    // request calls pre_br()/term_newln() without clearing TERMP_NONEWLINE;
+    // term.c::term_flushln() can keep a HANG device row open.
+    let inset =
+        review_definition_item(".nf\n.Bl -inset\n.It Xo\n.No X\\c\n.Xc\n.No BODY\n.El\n.fi\n");
+    assert_eq!(inline_text(&inset.terms[0]), "X");
+    assert!(!inset.layout.inline_term, "{inset:#?}");
+    for request in [".sp 0", ".ce 0", ".rj 0"] {
+        let item = review_definition_item(&format!(
+            ".nf\n.Bl -hang -width 4n\n.It Xo\n.No X\\c\n{request}\n.Xc\n.No BODY\n.El\n.fi\n"
+        ));
+        assert!(item.layout.inline_term, "{request}: {item:#?}");
+        assert!(item.inline_description().is_some(), "{request}: {item:#?}");
+    }
+}
+
+#[test]
+fn rejected_hang_link_field_does_not_reintroduce_a_wrapped_suffix() {
+    // Exact HANG/TAG sources passed fixed CVS -Tascii/-Tutf8/-Tlint.
+    // term.c::term_fill() returns nbr=0 when a \p is followed by the next
+    // word's ordinary separator before any graph in that pass. A typed Lk
+    // wrapper cannot turn the rejected suffix into a committed prefix.
+    for style in ["hang", "tag"] {
+        let item = review_definition_item(&format!(
+            ".Bl -{style} -width 4n\n.It Xo\n.Lk https://example.com \\p QAXAQ\n.Xc\n.No BODY\n.El\n"
+        ));
+        assert!(
+            !inline_text(&item.terms[0]).contains("QAXAQ"),
+            "{style}: {item:#?}"
+        );
+        let Block::Paragraph { children, .. } = &item.description[0] else {
+            panic!("expected BODY paragraph: {item:#?}");
+        };
+        assert_eq!(inline_text(children), "BODY");
+    }
+}
+
+#[test]
+fn hang_field_restarts_term_fill_from_the_actual_breakable_blank() {
+    // Exact sources passed fixed CVS -Tascii/-Tutf8/-Tlint. term.c::term_fill()
+    // records nbr at the first ordinary space, then restarts from that space
+    // after \p. With "X \p Y", the next pass has no graph and rejects Y/Z;
+    // with "X\p Y", it accepts Y in the next pass.
+    for (first, expected, rejected) in [("X \\p Y", "X", true), ("X\\p Y", "X\nY Z", false)] {
+        let item = review_definition_item(&format!(
+            ".Bl -hang -width 4n\n.It Xo\n.No \"{first}\"\n.No Z\n.Xc\n.No BODY\n.El\n"
+        ));
+        assert_eq!(inline_text(&item.terms[0]), expected, "{first}: {item:#?}");
+        assert_eq!(inline_text(&item.terms[0]).contains('Z'), !rejected);
+    }
+}
+
+#[test]
+fn tag_margin_flush_does_not_print_an_unconsumed_next_field_separator() {
+    // This exact source passed fixed CVS -Tascii/-Tutf8/-Tlint. In
+    // roff_term.c::roff_term_pre_mc(), TERMP_NOBREAK flushes the TAG field;
+    // mdoc_term.c::termp_it_post() then closes HEAD. The ordinary separator
+    // for a *later* term_word() has not occupied a second physical row.
+    let item = review_definition_item(
+        ".nf\n.Bl -tag -width 4n\n.It Xo\n.No QHEADQ\\c\n.mc |\n.Xc\n.No QBODYQ\n.El\n.fi\n",
+    );
+    assert_eq!(inline_text(&item.terms[0]), "QHEADQ", "{item:#?}");
+    assert!(!item.layout.inline_term, "{item:#?}");
+    assert!(!matches!(
+        item.description.first(),
+        Some(Block::VerticalSpace { .. })
+    ));
+}
+
+#[test]
+fn margin_control_flushes_rejected_native_field_before_starting_another() {
+    // These exact HANG/TAG sources passed fixed CVS -Tascii/-Tutf8/-Tlint.
+    // roff_term.c::roff_term_pre_mc() calls term_flushln() when p->col is
+    // occupied; term.c::term_fill() can reject the suffix after \\p there,
+    // before `.mc` changes NOBREAK and prepares the following field.
+    for style in ["hang", "tag"] {
+        let item = review_definition_item(&format!(
+            ".Bl -{style} -width 4n\n.It Xo\n.No \"QAA \\p QBB\"\n.mc |\n.Xc\n.No QBODYQ\n.El\n"
+        ));
+        assert_eq!(
+            inline_text(&item.terms[0]).trim_end(),
+            "QAA",
+            "{style}: {item:#?}"
+        );
+    }
+    let empty = review_definition_item(
+        ".Bl -hang -width 4n\n.It Xo\n.No \"\\p QAA\"\n.mc |\n.Xc\n.No QBODYQ\n.El\n",
+    );
+    assert!(!inline_text(&empty.terms[0]).contains("QAA"), "{empty:#?}");
+}
+
+#[test]
+fn every_post_margin_field_flush_rejects_the_pending_suffix() {
+    // Exact br/sp0/ce0/rj0 sources passed fixed CVS -Tascii/-Tutf8/-Tlint.
+    // roff_term.c::pre_br() calls term_newln(), which reaches term_fill()
+    // even after a prior `.mc` opened another NOBREAK field. The accepted
+    // QBB prefix survives; the later QCC suffix is never printed.
+    for request in [".br", ".sp 0", ".ce 0", ".rj 0"] {
+        let item = review_definition_item(&format!(
+            ".Bl -hang -width 4n\n.It Xo\n.No QAA\n.mc |\n.No \"QBB \\p QCC\"\n{request}\n.Xc\n.No QBODYQ\n.El\n"
+        ));
+        let term = inline_text(&item.terms[0]);
+        assert!(
+            term.contains("QAA") && term.contains("QBB"),
+            "{request}: {item:#?}"
+        );
+        assert!(!term.contains("QCC"), "{request}: {item:#?}");
+    }
+}
+
 #[test]
 fn diagnostic_xo_spelling_is_not_an_explicit_definition_head_scope() {
     // Exact -diag and -inset inputs passed fixed CVS -Ttree/-Tascii/-Tutf8/
@@ -30,6 +293,11 @@ fn diagnostic_xo_spelling_is_not_an_explicit_definition_head_scope() {
             .unwrap();
         let head = first_it_head(&report.document.root).expect("It HEAD");
         assert_eq!(head.children[0].kind, expected_kind, "{list}: {head:#?}");
+        assert_eq!(
+            head.children[0].flags.broken,
+            list == "inset",
+            "mdoc_macro.c::blk_exp_close() preserves native close evidence: {head:#?}"
+        );
     }
 }
 

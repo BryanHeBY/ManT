@@ -55,11 +55,16 @@ pub(super) struct DefinitionBodyObservation {
     before_visible: bool,
     pending_head_row: bool,
     placement_breaks: bool,
+    source_continues_after_run_in: Option<bool>,
 }
 
 impl DefinitionBodyObservation {
     pub(super) const fn placement_breaks(self) -> bool {
         self.placement_breaks
+    }
+
+    pub(super) const fn source_continues_after_run_in(self) -> Option<bool> {
+        self.source_continues_after_run_in
     }
 }
 
@@ -114,6 +119,7 @@ impl FormatterState {
             before_visible: true,
             pending_head_row: shares_pending_head_row,
             placement_breaks: false,
+            source_continues_after_run_in: None,
         });
     }
 
@@ -134,6 +140,13 @@ impl FormatterState {
             if body.before_visible {
                 body.placement_breaks = true;
             }
+        }
+    }
+
+    pub(super) fn note_definition_run_in_executed(&mut self) {
+        let continuation = self.execution.source_row_continues();
+        if let Some(body) = self.definition_bodies.last_mut() {
+            body.source_continues_after_run_in = Some(continuation);
         }
     }
 
@@ -259,6 +272,7 @@ impl FormatterState {
         // an explicit .br. Do not export IR from a HANG field for which
         // term_fill() never produced a printable device slice.
         builder.discard_unprinted_definition_field_output();
+        builder.settle_provisional_definition_break();
         let definition_field_exited = builder.definition_field_exited();
         let definition_body_gap_consumed = builder.definition_body_gap_consumed();
         let definition_term_breaks = builder.take_definition_term_breaks();

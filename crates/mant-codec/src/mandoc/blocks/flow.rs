@@ -422,6 +422,7 @@ impl BlockState {
             .inherit_preserved_execution(&mut self.formatter, state);
         self.paragraph
             .append_run_in_cells(&mut self.formatter, generated_cells, generated_word);
+        self.formatter.note_definition_run_in_executed();
     }
 
     pub(super) fn flush_paragraph(&mut self) {

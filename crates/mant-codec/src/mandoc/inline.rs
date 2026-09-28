@@ -357,7 +357,9 @@ pub(super) fn node_emits_visible_output(node: &Node, default_name: Option<&str>)
         return false;
     }
     match node.macro_name.as_deref() {
-        Some("Tg" | "Ns" | "br" | "Pp" | "sp" | "ft" | "Sm") => false,
+        // ce/rj's first child is the line count, not term_word() payload.
+        // roff_term_pre_ce() executes pre_br() before any later child word.
+        Some("Tg" | "Ns" | "br" | "Pp" | "sp" | "ft" | "Sm" | "ce" | "rj") => false,
         // An empty enclosure still emits its paired delimiters through the
         // shared container stream.  Those glyphs are the next formatter word
         // and must resolve a preceding `\\z` state before they are written.
@@ -430,11 +432,13 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
         &mut builder.execution.zero_advance,
         pending_word_end_break && !deferred_hang_break,
     );
-    if execution.break_before_graph && builder.in_definition_field() {
+    if let Some(prefix) = execution.break_before_graph_prefix
+        && builder.in_definition_field()
+    {
         // term.c::term_fill() sees the decoded events in source order. A
         // single quoted TEXT can contain both \p and the blank that prevents
         // the field from printing, before any later Y glyph is considered.
-        builder.note_hang_break_before_graph();
+        builder.note_hang_break_before_graph(prefix);
     }
     // mdoc_term gives an empty text node a vertical row only when the text
     // itself begins an input line. An empty No/Em argument does not, whereas
@@ -455,11 +459,16 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
         builder.tighten_next_boundary();
         builder.note_zero_advance_join();
     }
+    let provisional_definition_break = execution.pending_word_end_break
+        && matches!(execution.output.last(), Some(Inline::LineBreak));
     builder.append_word_with_literal_row(
         execution.output,
         occupies_literal_row,
         execution.trailing_output,
     );
+    if provisional_definition_break {
+        builder.note_provisional_definition_break();
+    }
     if events
         .iter()
         .any(|event| matches!(event, RoffInlineEvent::ZeroWidthGlyph))
@@ -469,7 +478,9 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
         // executed, before a same-word \p is left pending.
         builder.note_hang_native_graph();
     }
-    if deferred_hang_break || execution.pending_word_end_break {
+    if (deferred_hang_break && !builder.consumed_pending_hang_word_end_break())
+        || execution.pending_word_end_break
+    {
         builder.request_word_end_break();
     }
     let continues_line = execution

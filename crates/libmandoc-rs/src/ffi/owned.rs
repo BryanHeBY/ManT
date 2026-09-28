@@ -17,6 +17,7 @@ const NODE_GENERATED: u32 = 1 << 0;
 const NODE_SENTENCE_END: u32 = 1 << 1;
 const NODE_NO_PRINT: u32 = 1 << 2;
 const NODE_NO_FILL: u32 = 1 << 3;
+const NODE_BROKEN: u32 = 1 << 11;
 const NODE_DEEP_LINK_TARGET: u32 = 1 << 4;
 const NODE_PERMALINK: u32 = 1 << 5;
 const NODE_LINE_START: u32 = 1 << 6;
@@ -572,6 +573,7 @@ unsafe fn copy_node_shallow(
             sentence_end: view.flags & NODE_SENTENCE_END != 0,
             no_print: view.flags & NODE_NO_PRINT != 0,
             no_fill: view.flags & NODE_NO_FILL != 0,
+            broken: view.flags & NODE_BROKEN != 0,
             deep_link_target: view.flags & NODE_DEEP_LINK_TARGET != 0,
             permalink: view.flags & NODE_PERMALINK != 0,
             line_start: view.flags & NODE_LINE_START != 0,

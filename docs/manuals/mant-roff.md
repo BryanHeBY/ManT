@@ -197,6 +197,26 @@ an explicit nested block also ends the old `It` ownership before BODY begins;
 a subsequent invisible BODY row is therefore new output.
 An inset item with no HEAD child generates no separator word at all, so that
 case does not consume formatter word state.
+Definition HEAD/BODY placement uses the executed physical row after generated
+inset/diagnostic words and zero-row controls have run. An ordinary block such
+as `Bq` is not evidence that the HEAD row closed; native `NODE_BROKEN` records
+an explicit scope close, while `\c` can keep the row active across that close.
+The first literal BODY block may share the HEAD line only when that execution
+still leaves the line open. `sp 0`, `ce 0`, and `rj 0` call `term_newln()` but
+can leave a HANG row open, whereas an inset BODY's generated spacing word
+consumes `\c` before the next no-fill source line.
+
+Field consumption follows `term_fill()`'s accepted byte prefix. A `\p` after
+an ordinary breakable blank can start the next pass before any graph, causing
+that pass and its later suffix to be rejected; `X\p Y` and `X \p Y` therefore
+have different accepted text. Styling and link wrappers do not commit a
+rejected suffix or erase the accepted prefix. A TAG margin flush from `.mc`
+leaves its next-word separator pending; closing HEAD before that word does not
+print another row. The `.mc` flush also runs the ordinary native field
+acceptance step before it starts the next field, so a `\p`-rejected suffix
+cannot be revived by its output wrapper. Later `br`, `sp`, and aligned-line
+requests drain that new field through the same acceptance step before they
+change row ownership.
 
 Display offsets use terminal-column unit conversion. Unsupported or excessive
 offsets use the default indentation; cumulative indentation is capped at 4096

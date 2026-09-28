@@ -96,14 +96,6 @@ pub(super) fn definition_item(
         formatter.note_definition_visible();
     }
     let head = visible_definition_head(node);
-    // CVS mdoc_macro.c::blk_exp_close() breaks an intermediate It block when
-    // an explicit block inside its HEAD closes. In no-fill mode that HEAD's
-    // physical row is already represented before BODY's first invisible
-    // cell executes. This follows AST topology, including Fo/Fc and Bo/Bc;
-    // a literal "Xo" term in -diag is only TEXT and does not qualify.
-    let closed_explicit_head_scope = head
-        .iter()
-        .any(|child| child.kind == NodeKind::Block && child.flags.no_fill);
     let body = first_part_children(node, NodeKind::Body);
     let (displaced_equations, body) = displaced_definition_equations(head, body);
     let man_node = context.macro_set == libmandoc_rs::MacroSet::Man;
@@ -117,6 +109,14 @@ pub(super) fn definition_item(
         definition_body_gap_consumed,
         term_breaks,
     ) = lower_definition_head(head, &displaced_equations, context, flow, formatter);
+    // TERMP_NONEWLINE survives the HEAD output drain. It is the execution
+    // evidence that the first no-fill BODY row still belongs on that line.
+    let head_source_continues = formatter.execution.source_row_continues();
+    // mdoc_macro.c::blk_exp_close() marks the original block BROKEN when a
+    // later explicit end closes its formatting scope. Only combine that
+    // parser event with the executed \c register: neither "is a Block" nor
+    // the presence of a close macro alone proves the physical row ended.
+    let closed_head_scope = head.iter().any(native_broken_head_scope) && !head_source_continues;
     if man_node {
         formatter.font.man_text_boundary(); // HEAD post
         formatter.font.man_text_boundary(); // BODY pre
@@ -172,7 +172,7 @@ pub(super) fn definition_item(
             && rendered_head_row
             && !closed_head_row
             && !definition_field_exited
-            && !closed_explicit_head_scope,
+            && !closed_head_scope,
     );
     let mut description = if let Some(run_in) = run_in_execution {
         lower_blocks_with_predecessor_and_run_in(
@@ -212,6 +212,15 @@ pub(super) fn definition_item(
     if flow.shares_pending_term_row && observed.placement_breaks() {
         geometry.placement = crate::mandoc::layout::TermPlacement::Stacked;
     }
+    if matches!(description.first(), Some(Block::Preformatted { .. }))
+        && !observed
+            .source_continues_after_run_in()
+            .unwrap_or(head_source_continues)
+    {
+        // A literal BODY can run in only when CVS kept the source row open
+        // with \\c. Ordinary no-fill NODE_LINE starts a fresh physical row.
+        geometry.placement = crate::mandoc::layout::TermPlacement::Stacked;
+    }
     let layout = geometry.layout(indent_columns, body_origin, &terms);
     let mut item = DefinitionItem {
         source: source_span(node),
@@ -236,6 +245,11 @@ pub(super) fn definition_item(
         context.native_heads.borrow_mut().record(&item, role);
     }
     item
+}
+
+fn native_broken_head_scope(node: &Node) -> bool {
+    (node.kind == NodeKind::Block && node.flags.broken)
+        || node.children.iter().any(native_broken_head_scope)
 }
 
 fn only_breakable_head_padding(inline: &Inline) -> bool {

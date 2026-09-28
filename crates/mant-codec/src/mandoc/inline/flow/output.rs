@@ -238,12 +238,14 @@ impl InlineBuilder {
             .rev()
             .take_while(|node| !matches!(node, Inline::LineBreak))
             .any(|node| has_printable_character(std::slice::from_ref(node)));
-        if self.execution.formatter_column == FormatterColumn::Advanced
+        if (self.execution.formatter_column == FormatterColumn::Advanced
+            || (self.execution.word_end_break == WordEndBreak::Pending
+                && matches!(self.nodes.last(), Some(Inline::LineBreak))))
             && !current_row_has_printable
         {
-            // ESCAPE_IGNORE (`\&`) advances the native buffer without a
-            // visible glyph. A real line boundary must retain that physical
-            // row, even though renderer-neutral IR has no character for it.
+            // ESCAPE_IGNORE (`\&`) and ESCAPE_BREAK (`\p`) can occupy a
+            // fresh native buffer after an earlier line was already closed.
+            // Its own term_newln() must remain distinct from that break.
             self.nodes.push(Inline::Text {
                 value: String::new(),
             });
@@ -695,11 +697,32 @@ impl InlineBuilder {
         } else {
             needs_boundary_space(self.execution.last_visible_character, incoming_first)
         };
-        if word {
-            self.record_hang_word(incoming, add_space, boundary);
+        let (accepted_word_prefix, accepted_row_break) = if word {
+            self.record_hang_word(incoming, add_space, boundary)
+        } else {
+            (None, false)
+        };
+        if accepted_row_break {
+            // A consumed \p separator closes the already accepted prefix.
+            // Its blank is part of the break, not a new formatter word cell.
+            self.execution.pending_breakable_spaces = 0;
+            if !matches!(self.nodes.last(), Some(Inline::LineBreak))
+                && !matches!(incoming.first(), Some(Inline::LineBreak))
+            {
+                self.nodes.push(Inline::LineBreak);
+            }
+        } else {
+            self.append_boundary_spacing(boundary, add_space, word, empty_word);
         }
-        self.append_boundary_spacing(boundary, add_space, word, empty_word);
+        let word_output_start = self.nodes.len();
         self.nodes.append(incoming);
+        if let Some(prefix) = accepted_word_prefix
+            && let Some(author) = &mut self.execution.author_execution
+        {
+            // This TEXT can contain both an accepted \p prefix and a later
+            // rejected field. A following flush may delete only the suffix.
+            author.field_output_start = word_output_start.saturating_add(prefix);
+        }
         if incoming_last.is_some() {
             self.execution.last_visible_character = incoming_last;
             // Generic projected words are formatter glyphs, not trim-eligible
@@ -734,13 +757,30 @@ impl InlineBuilder {
         incoming: &[Inline],
         add_space: bool,
         boundary: PendingBoundary,
-    ) {
+    ) -> (Option<usize>, bool) {
         if self.execution.definition.is_none() || self.execution.author_execution.is_none() {
-            return;
+            return (None, false);
         }
         let Some(definition) = &mut self.execution.definition else {
-            return;
+            return (None, false);
         };
+        let rejected_prefix =
+            if let Some(prefix) = definition.hang_row.field_break_before_graph_prefix.take() {
+                let accepted = prefix > 0 || definition.hang_row.field_native_graph;
+                definition.hang_row.field_discarded = true;
+                Some(if prefix > 0 {
+                    prefix
+                } else if accepted {
+                    incoming
+                        .iter()
+                        .position(|node| matches!(node, Inline::LineBreak))
+                        .map_or(0, |index| index + 1)
+                } else {
+                    0
+                })
+            } else {
+                None
+            };
         // term_word() buffers its separator and glyph in the native field.
         // Generated IR padding is excluded from that field.
         let native_word_space = (add_space || self.execution.empty_word)
@@ -758,6 +798,11 @@ impl InlineBuilder {
         } else {
             usize::from(native_word_space && !definition.hang_row.suppress_next_auto_space)
         };
+        let accepted_prior_field = !definition.hang_row.field_discarded
+            && separator > 0
+            && definition.hang_row.field_pending_word_end_break
+            && definition.hang_row.field_native_graph;
+        definition.hang_row.accepted_prefix_before_rejection |= accepted_prior_field;
         let projected = super::super::plain_text(incoming);
         let trimmed = projected.trim_end_matches(' ');
         let trailing_spaces = projected.len().saturating_sub(trimmed.len());
@@ -778,6 +823,20 @@ impl InlineBuilder {
                 .find(|part| !part.is_empty())
                 .map_or(0, mant_ir::geometry::text_width);
         }
+        let accepted_row_break = definition.hang_row.accepted_prefix_before_rejection
+            && printable
+            && !definition.hang_row.field_discarded;
+        if accepted_row_break {
+            definition.hang_row.accepted_prefix_before_rejection = false;
+        }
+        (
+            rejected_prefix.or_else(|| {
+                accepted_row_break
+                    .then_some(incoming.len())
+                    .or(accepted_prior_field.then_some(0))
+            }),
+            accepted_row_break,
+        )
     }
 
     fn append_boundary_spacing(
@@ -1222,7 +1281,7 @@ fn join_authored_links(nodes: &mut Vec<Inline>) {
     }
 }
 
-pub(super) fn trim_trailing_breakable_spaces(nodes: &mut Vec<Inline>, count: usize) {
+pub(in crate::mandoc) fn trim_trailing_breakable_spaces(nodes: &mut Vec<Inline>, count: usize) {
     fn trim(nodes: &mut Vec<Inline>, remaining: &mut usize) -> bool {
         let mut index = nodes.len();
         while index > 0 && *remaining > 0 {

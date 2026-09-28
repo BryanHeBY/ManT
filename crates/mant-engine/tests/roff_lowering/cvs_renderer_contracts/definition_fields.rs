@@ -1,6 +1,42 @@
 use super::*;
 
 #[test]
+fn continued_literal_definition_body_reaches_the_text_consumer_on_the_head_row() {
+    // Both exact sources passed the pinned reference -Tascii/-Tutf8/-Tlint.
+    // mdoc_term.c::print_mdoc_node() observes NODE_LINE before BODY dispatch;
+    // TERMP_NONEWLINE from \c alone keeps that physical row open.
+    fn content_lines(output: &str) -> Vec<String> {
+        output
+            .lines()
+            .skip_while(|line| line.trim() != "DESCRIPTION")
+            .skip(1)
+            .take_while(|line| !line.contains("Linux 6."))
+            .map(str::trim)
+            .filter(|line| !line.is_empty())
+            .map(str::to_owned)
+            .collect()
+    }
+    let prefix = ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -hang -width 4n\n.It Xo\n";
+    for (head, same_row) in [(".No X\\c", true), (".No X", false)] {
+        let source = format!("{prefix}{head}\n.Xc\n.No BODY\n.El\n");
+        let native = content_lines(&native_terminal(&source));
+        let lowered = content_lines(&lowered_terminal(&source));
+        assert_eq!(
+            native.len(),
+            if same_row { 1 } else { 2 },
+            "{head}: {native:?}"
+        );
+        assert_eq!(lowered.len(), native.len(), "{head}: {lowered:?}");
+        if same_row {
+            assert!(lowered[0].contains('X') && lowered[0].contains("BODY"));
+        } else {
+            assert_eq!(lowered[0], "X");
+            assert_eq!(lowered[1], "BODY");
+        }
+    }
+}
+
+#[test]
 fn one_authored_link_keeps_one_identity_across_committed_and_rejected_fields() {
     // These exact inputs passed fixed CVS -Tascii/-Tutf8/-Tlint. Its
     // mdoc_html.c::mdoc_lk_pre() opens one anchor per Lk; term.c::term_flushln()

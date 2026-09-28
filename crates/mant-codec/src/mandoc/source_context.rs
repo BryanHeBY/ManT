@@ -211,6 +211,9 @@ impl<'a> LoweringContext<'a> {
             self.active_mdoc_section() == MdocSectionContext::Authors,
             author_break_effect,
         );
+        if preserve_rows {
+            builder.begin_definition_head_consumption();
+        }
         builder.scope_posts = self.scope_posts.clone();
         // The HEAD can execute .nf after this session begins. Each entered
         // NODE_LINE/NODE_NOFILL pair, not the inbound fill-mode snapshot,
@@ -252,6 +255,7 @@ impl<'a> LoweringContext<'a> {
             self.active_mdoc_section() == MdocSectionContext::Authors,
             inline::AuthorBreakEffect::Line,
         );
+        builder.begin_definition_head_consumption();
         builder.scope_posts = self.scope_posts.clone();
         builder.observe_no_fill_source_lines(true);
         let saved_font = strong_scope.then(|| {
@@ -265,6 +269,8 @@ impl<'a> LoweringContext<'a> {
         builder.observe_no_fill_source_lines(false);
         let surviving_cells = generated_cells
             - usize::from(generated_cells > 0 && builder.settle_head_glyph_before_run_in_cells());
+        builder.discard_unprinted_definition_field_output();
+        builder.settle_provisional_definition_break();
         if let Some(saved_font) = saved_font {
             builder.font.pop_scope(saved_font);
         }
