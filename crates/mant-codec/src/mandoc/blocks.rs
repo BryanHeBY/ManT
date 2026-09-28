@@ -430,6 +430,14 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             self.push_bibliography(node);
             return;
         }
+        if matches!(node.macro_name.as_deref(), Some("UR" | "MT")) {
+            // man_term.c::print_man_node() observes this source line before
+            // pre_UR(), but pre_UR() itself does not close a formatter row.
+            // Keep the active literal sink and pending \c/\z for BODY text.
+            self.enter_no_fill_source_line(node);
+            self.push_man_link(node);
+            return;
+        }
         self.state.flush_preformatted();
         if self.push_mdoc_synopsis_declaration(node, synopsis_previous) {
             return;
@@ -445,8 +453,6 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         }
         if node.macro_name.as_deref() == Some("br") {
             self.state.hard_break();
-        } else if matches!(node.macro_name.as_deref(), Some("UR" | "MT")) {
-            self.push_man_link(node);
         } else if participates_in_inline_flow(node) {
             self.push_inline_node(node, next);
         } else {

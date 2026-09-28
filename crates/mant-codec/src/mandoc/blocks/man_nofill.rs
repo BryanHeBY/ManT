@@ -44,9 +44,13 @@ pub(super) fn no_fill_boundary(node: &Node, single_line_literal: bool) -> Format
     if let Some(control) = formatter_control(node.macro_name.as_deref()) {
         return control.boundary;
     }
-    // mdoc_term.c::termp_rs_pre() has no row break in DESCRIPTION. Rs enters
-    // its BODY through the same source-line dispatcher as adjacent text.
-    if is_no_fill_payload(node, single_line_literal) || node.macro_name.as_deref() == Some("Rs") {
+    // These block scopes do not execute term_newln() on entry. The common
+    // NODE_NOFILL/NODE_LINE rule decides whether the source row ends; a
+    // preceding \c can carry it into their BODY or generated post text.
+    // See man_term.c::pre_UR() and mdoc_term.c::termp_rs_pre().
+    if is_no_fill_payload(node, single_line_literal)
+        || matches!(node.macro_name.as_deref(), Some("Rs" | "UR" | "MT"))
+    {
         FormatterBoundary::None
     } else {
         FormatterBoundary::Line

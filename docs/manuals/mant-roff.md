@@ -82,6 +82,18 @@ The following [man(7)](https://mandoc.bsd.lv/man/man.7.html) macros documented b
 | `MT`, `ME` | Inline email link; a label and its address both remain visible without splitting the surrounding sentence |
 | `MR` | Typed manual-page reference |
 
+`UR` and `MT` execute their BODY through the ordinary man node driver. Their
+block entry observes the active no-fill source line, so a preceding `\c`
+continues into the label and a pending `\z` glyph can be overstruck there.
+The macro itself does not force a new row. When the BODY has no syntax
+children, the HEAD address is the visible, clickable link label; a BODY with
+nonprinting children such as `\&` remains distinct from an absent BODY.
+The terminal-style closing words execute even if the target decodes to empty,
+so they settle pending formatter state before the following text. An empty
+target does not create a typed link. This follows the pinned CVS
+`man_term.c::print_man_node()`/`post_UR()` execution order and
+`man_html.c::man_UR_pre()` label choice.
+
 `br` inside a flow becomes an immediate inline line break. The `\p` escape instead requests a break at the next ordinary word boundary; it crosses tight `Ns` joins and non-breaking spaces, and repeated requests before that boundary are idempotent. A following `\c` can continue the current formatter word but does not cancel that pending word-end break. This `\p\c` ordering follows the pinned mandoc CVS formatter; GNU troff can diagnose or project such non-portable combinations differently. `sp` becomes explicit vertical space. Filled source lines normally join with spaces; an indented input line and no-fill input preserve line boundaries. No-fill rows follow executed AST events: executed empty-row events are retained, including leading and trailing rows, and independent `sp` requests accumulate. Skipped conditions and uncalled macro definitions do not contribute rows. Leading empty literal rows follow mandoc's terminal behavior; groff may suppress them in no-space contexts. A final unescaped `\c` suppresses the next implicit space or line break and joins the next input line directly. Word spacing and physical-line continuation remain independent: a generated or explicitly empty formatter word consumes the latter even when it adds no visible glyph.
 
 An empty macro parameter is not automatically a physical blank line: ManT follows mandoc's macro-set-specific word behavior, preserving zero-width row glyphs such as `\&` separately from pure font state. A groff `\z` operand is an overstrike glyph with no advance: ManT consumes its complete control spelling and retains a final literal glyph when no later glyph can cover it. Executed `fi`/`nf` inside `SY` or a display switch the actual content mode; a filled run resumes ordinary source-word and indented-line handling. Explicit argument and enclosure wrapper boundaries remain observable even when their child text shares one macro call-site line number.

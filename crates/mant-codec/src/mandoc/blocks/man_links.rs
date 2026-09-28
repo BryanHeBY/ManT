@@ -41,43 +41,51 @@ impl super::BlockLowerer<'_, '_> {
         self.push_nodes(body);
         self.state.formatter.font.select(Font::Regular); // BODY post
 
-        if target_text.is_empty() {
-            self.state
-                .formatter
-                .execution
-                .zero_advance
-                .end_output_owner();
-        } else {
-            // The first generated word's native boundary may settle a final
-            // BODY \z glyph. Execute that boundary before choosing the
-            // semantic label, while a tight \c still permits overstrike.
-            self.push_link_word(node, InlineBuilder::prepare_generated_word);
-            let prior_glyph_emitted = self
-                .state
-                .formatter
-                .execution
-                .zero_advance
-                .end_output_owner();
-            if !self
+        // man_term.c::post_UR() always executes its first generated word,
+        // even for an empty HEAD. Its boundary may settle a final BODY \z
+        // glyph, while a tight \c still permits the bracket to overstrike.
+        self.push_link_word(node, InlineBuilder::prepare_generated_word);
+        let prior_glyph_emitted = self
+            .state
+            .formatter
+            .execution
+            .zero_advance
+            .end_output_owner();
+        let head_is_label = body.is_empty() && !target_text.is_empty();
+        if !target_text.is_empty()
+            && !head_is_label
+            && !self
                 .state
                 .wrap_first_link_since(output_start, &target, prior_glyph_emitted)
-            {
-                self.push_link_word(node, |builder| {
-                    builder.append(vec![Inline::Link {
-                        target: target.clone(),
-                        title: None,
-                        children: Vec::new(),
-                    }]);
-                });
-            }
+        {
             self.push_link_word(node, |builder| {
-                builder.append_prepared_text("⟨");
-                builder.tighten_next_boundary();
-                append_inline_nodes(builder, head, self.context.default_name);
-                builder.tighten_next_boundary();
-                builder.append_text("⟩");
+                builder.append(vec![Inline::Link {
+                    target: target.clone(),
+                    title: None,
+                    children: Vec::new(),
+                }]);
             });
         }
+        self.push_link_word(node, |builder| {
+            builder.append_prepared_text("⟨");
+            builder.tighten_next_boundary();
+            if head_is_label {
+                builder.append_scope(
+                    |builder| append_inline_nodes(builder, head, self.context.default_name),
+                    |children| {
+                        vec![Inline::Link {
+                            target,
+                            title: None,
+                            children,
+                        }]
+                    },
+                );
+            } else {
+                append_inline_nodes(builder, head, self.context.default_name);
+            }
+            builder.tighten_next_boundary();
+            builder.append_text("⟩");
+        });
         self.state.formatter.font.select(Font::Regular); // BLOCK post
     }
 

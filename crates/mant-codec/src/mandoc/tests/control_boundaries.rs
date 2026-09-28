@@ -220,6 +220,98 @@ fn man_links_preserve_empty_body_identity_and_terminal_target() {
 }
 
 #[test]
+fn man_link_entry_observes_no_fill_source_rows_without_ending_a_continuation() {
+    // Exact UR/MT inputs checked with fixed CVS -Tascii/-Tlint. In
+    // man_term.c::print_man_node(), NODE_LINE calls term_newln() only when
+    // TERMP_NONEWLINE is clear; pre_UR() adds no further row boundary.
+    for (open, close) in [("UR", "UE"), ("MT", "ME")] {
+        for prefix in ["prefix\\c", "prefix\\zX\\c"] {
+            let source = format!(
+                ".TH TEST 1\n.SH DESCRIPTION\n.nf\n{prefix}\n.{open} https://example.com\nlabel\n.{close}\n.fi\n"
+            );
+            let document = parse_manual_bytes(
+                std::path::Path::new("man-link-continuation.1"),
+                source.as_bytes(),
+            )
+            .unwrap();
+            let literal = document.sections[0]
+                .blocks
+                .iter()
+                .find_map(|block| match block {
+                    Block::Preformatted { children, .. } => Some(inline_text(children)),
+                    _ => None,
+                })
+                .expect("continued literal row");
+            assert!(
+                literal.contains("prefixlabel"),
+                "{open} {prefix}: {document:#?}"
+            );
+            assert!(
+                !literal.contains("prefixX"),
+                "{open} {prefix}: {document:#?}"
+            );
+            assert!(
+                !literal.contains("prefix\nlabel"),
+                "{open} {prefix}: {document:#?}"
+            );
+        }
+    }
+
+    // Without \c, the same CVS NODE_LINE entry ends the preceding row.
+    let source =
+        b".TH TEST 1\n.SH DESCRIPTION\n.nf\nprefix\n.UR https://example.com\nlabel\n.UE\n.fi\n";
+    let document = parse_manual_bytes(std::path::Path::new("man-link-new-row.1"), source).unwrap();
+    let literal = document.sections[0]
+        .blocks
+        .iter()
+        .find_map(|block| match block {
+            Block::Preformatted { children, .. } => Some(inline_text(children)),
+            _ => None,
+        })
+        .expect("literal rows");
+    assert!(literal.contains("prefix\nlabel"), "{document:#?}");
+
+    // Exact empty-BODY variants checked with fixed CVS -Tascii/-Tlint:
+    // post_UR() supplies the first visible word, so it owns the same source
+    // continuation decision as a real BODY label.
+    for (prefix, expected) in [
+        ("prefix\\c", "prefix⟨https://example.com⟩"),
+        ("prefix", "prefix\n⟨https://example.com⟩"),
+    ] {
+        let source = format!(
+            ".TH TEST 1\n.SH DESCRIPTION\n.nf\n{prefix}\n.UR https://example.com\n.UE\n.fi\n"
+        );
+        let document = parse_manual_bytes(
+            std::path::Path::new("man-link-empty-body-row.1"),
+            source.as_bytes(),
+        )
+        .unwrap();
+        let literal = document.sections[0]
+            .blocks
+            .iter()
+            .find_map(|block| match block {
+                Block::Preformatted { children, .. } => Some(inline_text(children)),
+                _ => None,
+            })
+            .expect("empty-BODY literal row");
+        assert!(literal.contains(expected), "{prefix}: {document:#?}");
+    }
+}
+
+#[test]
+fn man_link_empty_target_still_executes_terminal_block_post() {
+    // Exact source checked with fixed CVS -Tascii/-Thtml/-Tlint. The HTML
+    // fallback loses the first glyph of after; terminal post_UR() always
+    // executes its generated words, even when HEAD decodes to empty text.
+    let source = b".TH TEST 1\n.SH DESCRIPTION\n.UR \\&\nlabel\\z\n.UE\nafter\n";
+    let document = parse_manual_bytes(std::path::Path::new("empty-link-target.1"), source).unwrap();
+    let text = projected_document_text(&document);
+    assert!(text.contains("label"), "{document:#?}");
+    assert!(text.contains("after"), "{document:#?}");
+    assert!(document_link_targets(&document).is_empty(), "{document:#?}");
+}
+
+#[test]
 fn man_link_body_previous_font_uses_all_macro_boundaries() {
     // Exact input checked with fixed CVS -Tascii/-Thtml/-Tlint.
     // man_term.c::print_man_node() calls term_fontrepl() on BLOCK, HEAD,
@@ -290,7 +382,7 @@ fn pending_glyph_before_man_link_stays_outside_its_label() {
     // term.c::term_word() may emit the prior BACKBEFORE glyph only after the
     // link BODY or the generated post_UR() target starts executing.
     for (open, close, prefix, body, expected_label) in [
-        ("UR", "UE", "\\zX", "", ""),
+        ("UR", "UE", "\\zX", "", "https://example.com"),
         ("UR", "UE", "\\zX", "label\n", "label"),
         ("UR", "UE", "\\zX\\c", "label\n", "label"),
         ("MT", "ME", "\\zX", "label\n", "label"),
