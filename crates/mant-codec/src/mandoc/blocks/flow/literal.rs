@@ -119,6 +119,13 @@ impl LiteralFlow {
         self.formatter_column = FormatterColumn::Origin;
     }
 
+    /// A pre-handler can write a complete formatter word before its source
+    /// operand executes on the same physical row. Its ordinary `term_word()`
+    /// boundary must survive the split between two IR fragments.
+    pub(super) fn ordinary_word_boundary(&mut self) {
+        self.ordinary_continuation = self.row_occupied && !self.tight_boundary;
+    }
+
     pub(super) const fn has_formatter_column(&self) -> bool {
         matches!(self.formatter_column, FormatterColumn::Advanced)
     }

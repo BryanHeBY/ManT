@@ -229,6 +229,10 @@ impl BlockState {
         self.literal.no_break_flush(nodes);
     }
 
+    pub(super) fn no_fill_ordinary_word_boundary(&mut self) {
+        self.literal.ordinary_word_boundary();
+    }
+
     pub(super) fn has_formatter_cell(&self) -> bool {
         self.paragraph.has_formatter_cell() || self.literal.has_formatter_column()
     }

@@ -34,7 +34,9 @@ pub(super) fn no_fill_boundary(node: &Node) -> FormatterBoundary {
     if let Some(control) = formatter_control(node.macro_name.as_deref()) {
         return control.boundary;
     }
-    if is_no_fill_payload(node) {
+    // mdoc_term.c::termp_rs_pre() has no row break in DESCRIPTION. Rs enters
+    // its BODY through the same source-line dispatcher as adjacent text.
+    if is_no_fill_payload(node) || node.macro_name.as_deref() == Some("Rs") {
         FormatterBoundary::None
     } else {
         FormatterBoundary::Line
@@ -43,6 +45,7 @@ pub(super) fn no_fill_boundary(node: &Node) -> FormatterBoundary {
 
 fn lower_no_fill_lines(
     node: &Node,
+    source_line_entered: bool,
     default_name: Option<&str>,
     font: &mut FontState,
     inline_state: &mut crate::mandoc::inline::NoFillInlineState,
@@ -81,7 +84,7 @@ fn lower_no_fill_lines(
             nodes,
             source: source_span(node),
             continues_line,
-            starts_line: node.flags.line_start,
+            starts_line: node.flags.line_start && !source_line_entered,
             occupies_row,
         }]);
     }
@@ -126,12 +129,15 @@ fn empty_word_rows(node: &Node) -> usize {
 }
 
 impl super::BlockLowerer<'_, '_> {
-    pub(super) fn push_no_fill_lines(&mut self, node: &Node) -> bool {
+    pub(super) fn push_no_fill_lines(&mut self, node: &Node, source_line_entered: bool) -> bool {
         if !is_no_fill_payload(node) {
             return false;
         }
         self.resume_no_fill_row();
-        if node.flags.line_start && !self.formatter.no_fill_inline.continues_source_line() {
+        if node.flags.line_start
+            && !source_line_entered
+            && !self.formatter.no_fill_inline.continues_source_line()
+        {
             self.settle_no_fill_inline();
         }
         // `nf`/`fi` split presentation buffers, not the native formatter.
@@ -142,6 +148,7 @@ impl super::BlockLowerer<'_, '_> {
             .inherit_zero_advance_armed(self.state.take_zero_advance_armed());
         let Some(lines) = lower_no_fill_lines(
             node,
+            source_line_entered,
             self.context.default_name,
             &mut self.formatter.font,
             &mut self.formatter.no_fill_inline,

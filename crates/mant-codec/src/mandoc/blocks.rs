@@ -18,8 +18,8 @@ use super::{
         lower_man_link, lower_no_fill_line_with_font_state, plain_text,
     },
     layout::{
-        add_leading_spacing, layout, layout_with_spacing, section_spacing, set_block_spacing,
-        update_paragraph_distance, vertical_space_delta,
+        add_leading_spacing, layout, section_spacing, set_block_spacing, update_paragraph_distance,
+        vertical_space_delta,
     },
     part_child_groups,
     roff_escape::visible_text,
@@ -248,6 +248,13 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
     }
 
     fn push_nodes(&mut self, nodes: &[Node]) {
+        self.push_nodes_with_reference_posts(nodes, false);
+    }
+
+    /// Bibliography fields use the same source execution path as surrounding
+    /// text. CVS `termp____post()` writes punctuation after each direct Rs
+    /// field; the Rs wrapper itself has no post text or formatter row break.
+    fn push_nodes_with_reference_posts(&mut self, nodes: &[Node], reference_body: bool) {
         let table_plan = TableEmbeddingPlan::new(nodes, self.context);
         let mut synopsis_previous = None;
         for (index, node) in nodes.iter().enumerate() {
@@ -257,13 +264,40 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             if follows_inline_equation_punctuation(nodes, index) {
                 self.state.tighten_next_boundary();
             }
+            // CVS print_mdoc_node() enters NODE_LINE before a macro's pre
+            // handler writes generated words such as the final author's and.
+            self.prepare_node_execution(node);
+            self.observe_source_fill_mode(node);
+            let author_pre = reference_body && reference_author_conjunction(nodes, index);
+            if author_pre {
+                self.enter_no_fill_source_line(node);
+                self.push_generated_container_event(
+                    node,
+                    crate::mandoc::containers::Event::Glyph("and".to_owned()),
+                );
+                if self.formatter.no_fill {
+                    self.state.no_fill_ordinary_word_boundary();
+                }
+            }
             self.push(
                 node,
                 nodes.get(index + 1),
                 table_plan.embedding(index),
                 synopsis_previous,
                 adjacent_ip_run(nodes, index),
+                author_pre && self.formatter.no_fill,
             );
+            if reference_body && let Some(punctuation) = reference_field_post(nodes, index) {
+                self.push_generated_container_event(node, crate::mandoc::containers::Event::Tight);
+                self.push_generated_container_event(
+                    node,
+                    crate::mandoc::containers::Event::Glyph(punctuation.to_owned()),
+                );
+                self.push_generated_container_event(
+                    node,
+                    crate::mandoc::containers::Event::Release,
+                );
+            }
             // Source execution, not visible output, owns the predecessor fact.
             if self.context.macro_set == libmandoc_rs::MacroSet::Mdoc
                 && super::adjacency::is_logical_sibling(node)
@@ -273,6 +307,34 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             if !synopsis::transparent_synopsis_predecessor(node) {
                 synopsis_previous = Some(node);
             }
+        }
+    }
+
+    fn push_bibliography(&mut self, node: &Node) {
+        // CVS termp_rs_pre() calls term_vspace only for a non-first Rs in
+        // SEE ALSO. This is an executed pre boundary, before BODY fields.
+        if node.section == libmandoc_rs::NormalizedSection::SeeAlso && self.paragraph_predecessor {
+            self.settle_no_fill_inline();
+            self.state.flush_preformatted();
+            let lines = self.state.resolve_vertical_space(1);
+            self.state.flush_paragraph_for_vertical_request();
+            self.state.output.push(Block::VerticalSpace {
+                lines,
+                source: source_span(node),
+            });
+        }
+        let Some(body) = node
+            .children
+            .iter()
+            .find(|child| child.kind == NodeKind::Body)
+        else {
+            return;
+        };
+        let posts = self.context.scope_posts.clone();
+        posts.enter_body(body.id, self.formatter.font.checkpoint());
+        self.push_nodes_with_reference_posts(&body.children, true);
+        if let Some(saved) = posts.exit_body(body.id) {
+            self.formatter.font.pop_scope(saved);
         }
     }
 
@@ -299,9 +361,8 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         table_embedding: Option<&TableEmbedding>,
         synopsis_previous: Option<&Node>,
         ip_run: Option<lists::man::IpRun>,
+        source_line_entered: bool,
     ) {
-        self.prepare_node_execution(node);
-        self.observe_source_fill_mode(node);
         if node.macro_name.as_deref() == Some("ft") {
             lower_inline_nodes_with_font_state(
                 std::slice::from_ref(node),
@@ -340,9 +401,13 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             }
             return;
         }
-        if self.push_no_fill_lines(node) {
+        if self.push_no_fill_lines(node, source_line_entered) {
             self.state
                 .queue_targets(structural_targets, source_span(node));
+            return;
+        }
+        if node.macro_name.as_deref() == Some("Rs") {
+            self.push_bibliography(node);
             return;
         }
         self.state.flush_preformatted();
@@ -444,6 +509,17 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         }
     }
 
+    fn enter_no_fill_source_line(&mut self, node: &Node) {
+        if !self.formatter.no_fill {
+            return;
+        }
+        self.resume_no_fill_row();
+        if node.flags.line_start && !self.formatter.no_fill_inline.continues_source_line() {
+            self.settle_no_fill_inline();
+            self.state.begin_no_fill_source_line();
+        }
+    }
+
     fn settle_no_fill_inline(&mut self) {
         let nodes = self.formatter.no_fill_inline.take_settled_row();
         if !nodes.is_empty() {
@@ -468,6 +544,70 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         self.context.check_gap_bounds(&blocks);
         blocks
     }
+}
+
+fn is_reference_field(node: &Node) -> bool {
+    matches!(
+        node.macro_name.as_deref(),
+        Some(
+            "%A" | "%B"
+                | "%C"
+                | "%D"
+                | "%I"
+                | "%J"
+                | "%N"
+                | "%O"
+                | "%P"
+                | "%Q"
+                | "%R"
+                | "%T"
+                | "%U"
+                | "%V"
+        )
+    )
+}
+
+/// `roff.c::roff_node_prev()/next()` skip comments, NOPRT nodes and the
+/// formatter's transparent requests before bibliography pre/post handlers
+/// inspect neighboring fields.
+fn next_reference_sibling(nodes: &[Node], index: usize) -> Option<usize> {
+    ((index + 1)..nodes.len()).find(|&next| super::adjacency::is_logical_sibling(&nodes[next]))
+}
+
+fn previous_reference_sibling(nodes: &[Node], index: usize) -> Option<usize> {
+    (0..index)
+        .rev()
+        .find(|&previous| super::adjacency::is_logical_sibling(&nodes[previous]))
+}
+
+/// CVS `mdoc_term.c::termp__a_pre()` adds `and` before the final author.
+fn reference_author_conjunction(nodes: &[Node], index: usize) -> bool {
+    nodes[index].macro_name.as_deref() == Some("%A")
+        && previous_reference_sibling(nodes, index)
+            .is_some_and(|previous| nodes[previous].macro_name.as_deref() == Some("%A"))
+        && next_reference_sibling(nodes, index)
+            .is_none_or(|next| nodes[next].macro_name.as_deref() != Some("%A"))
+}
+
+/// CVS `mdoc_term.c::termp____post()` omits the first comma for exactly two
+/// adjacent authors, then uses a period only after the final Rs field.
+fn reference_field_post(nodes: &[Node], index: usize) -> Option<&'static str> {
+    let node = &nodes[index];
+    if !is_reference_field(node) {
+        return None;
+    }
+    let next = next_reference_sibling(nodes, index);
+    if node.macro_name.as_deref() == Some("%A")
+        && next.is_some_and(|next| nodes[next].macro_name.as_deref() == Some("%A"))
+        && next
+            .and_then(|next| next_reference_sibling(nodes, next))
+            .is_none_or(|after| nodes[after].macro_name.as_deref() != Some("%A"))
+        && previous_reference_sibling(nodes, index)
+            .is_none_or(|previous| nodes[previous].macro_name.as_deref() != Some("%A"))
+    {
+        return None;
+    }
+    Some(if next.is_none() { "." } else { "," })
 }
 
 /// These man macros explicitly assign the formatter's macro base. Passive

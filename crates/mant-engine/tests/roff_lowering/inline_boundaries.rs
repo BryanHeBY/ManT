@@ -342,6 +342,9 @@ fn preserves_the_complete_libbsd_library_identity() {
 
 #[test]
 fn joins_the_final_mdoc_bibliography_authors() {
+    // Exact input checked with the pinned CVS -Tascii oracle: the first of
+    // two authors omits its comma, while termp____post() prints one after
+    // the final author before the title.
     let document = parse_manual_bytes(
         std::path::Path::new("bibliography.3"),
         b".Dd August 19, 2026\n.Dt BIBLIOGRAPHY 3\n.Os\n.Sh SEE ALSO\n\
@@ -354,7 +357,7 @@ fn joins_the_final_mdoc_bibliography_authors() {
 
     assert_eq!(
         inline_text(children),
-        "Bentley, J.L. and McIlroy, M.D. Engineering a Sort Function."
+        "Bentley, J.L. and McIlroy, M.D., Engineering a Sort Function."
     );
 }
 

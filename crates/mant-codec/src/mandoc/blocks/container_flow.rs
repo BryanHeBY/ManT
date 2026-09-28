@@ -19,6 +19,7 @@ impl super::BlockLowerer<'_, '_> {
     fn push_no_fill_generated(
         &mut self,
         source: &Node,
+        source_continuation_fallback: bool,
         finishes_row: bool,
         starts_line: bool,
         append: impl FnOnce(&mut InlineBuilder),
@@ -32,7 +33,7 @@ impl super::BlockLowerer<'_, '_> {
             &mut self.formatter.font,
             &mut self.formatter.no_fill_inline,
             &self.context.scope_posts,
-            super::ends_with_line_continuation(source),
+            source_continuation_fallback,
             finishes_row,
             append,
         );
@@ -51,14 +52,20 @@ impl super::BlockLowerer<'_, '_> {
 
     fn push_function_argument(&mut self, argument: &Node, comma_after: bool) {
         if self.formatter.no_fill {
-            self.push_no_fill_generated(argument, false, argument.flags.line_start, |builder| {
-                crate::mandoc::inline::function_argument(
-                    builder,
-                    argument,
-                    comma_after,
-                    self.context.default_name,
-                );
-            });
+            self.push_no_fill_generated(
+                argument,
+                super::ends_with_line_continuation(argument),
+                false,
+                argument.flags.line_start,
+                |builder| {
+                    crate::mandoc::inline::function_argument(
+                        builder,
+                        argument,
+                        comma_after,
+                        self.context.default_name,
+                    );
+                },
+            );
         } else {
             self.state.flush_preformatted();
             self.state.push_source_inline_with(
@@ -80,9 +87,12 @@ impl super::BlockLowerer<'_, '_> {
         }
     }
 
-    fn push_generated_container_event(&mut self, source: &Node, event: Event<'_>) {
+    pub(super) fn push_generated_container_event(&mut self, source: &Node, event: Event<'_>) {
         if self.formatter.no_fill {
-            self.push_no_fill_generated(source, false, false, |builder| {
+            // Generated words are their own term_word() calls. They consume
+            // the preceding authored `\c`; only state-only events inherit it.
+            let continuation = self.formatter.no_fill_inline.continues_source_line();
+            self.push_no_fill_generated(source, continuation, false, false, |builder| {
                 append_generated_event(builder, event);
             });
         } else {

@@ -1746,6 +1746,109 @@ fn man_synopsis_and_hanging_body_posts_settle_their_own_no_fill_rows() {
 }
 
 #[test]
+fn bibliography_wrapper_uses_the_active_filled_or_no_fill_text_execution() {
+    for (label, mode) in [("filled", ""), ("no-fill", ".nf\n")] {
+        // Exact inputs checked against pinned CVS -Tascii/-Tlint.  Rs has
+        // no terminal post break or punctuation of its own: mdoc_term.c
+        // termp_rs_pre() only adds spacing in SEE ALSO. The following Y
+        // overstrikes the pending \zX in the same termp row even across Re.
+        let manual = format!(
+            ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd state probe\n.Sh DESCRIPTION\n{mode}.Rs\n\\zX\\c\n.Re\nY\n{}",
+            if mode.is_empty() { "" } else { ".fi\n" },
+        );
+        let document = parse_manual_bytes(
+            std::path::Path::new(&format!("mdoc-rs-active-{label}.1")),
+            manual.as_bytes(),
+        )
+        .expect("parse reference wrapper fixture");
+        let [block] = document.sections[1].blocks.as_slice() else {
+            panic!("{label}: Rs split execution: {:#?}", document.sections);
+        };
+        match (mode.is_empty(), block) {
+            (true, Block::Paragraph { children, .. })
+            | (false, Block::Preformatted { children, .. }) => {
+                assert_eq!(inline_text(children), "Y", "{label}: {children:?}");
+            }
+            _ => panic!("{label}: wrong output channel: {block:?}"),
+        }
+    }
+}
+
+#[test]
+fn bibliography_field_posts_emit_native_punctuation_and_author_conjunction() {
+    // These exact inputs were checked with fixed CVS -Tascii before writing
+    // the assertions. mdoc_term.c::termp__a_pre()/termp____post() emit `and`,
+    // commas and a final period at the field's own execution point;
+    // termp_under_pre() styles %J and an unquoted %T.
+    let authors = b".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd state probe\n.Sh SEE ALSO\n.Rs\n.%A Ada\n.%A Babbage\n.%T Title\n.Re\nY\n";
+    let document = parse_manual_bytes(std::path::Path::new("mdoc-rs-authors.1"), authors)
+        .expect("parse author reference fixture");
+    let [Block::Paragraph { children, .. }] = document.sections[1].blocks.as_slice() else {
+        panic!("unexpected reference output: {:#?}", document.sections);
+    };
+    assert_eq!(inline_text(children), "Ada and Babbage, Title. Y");
+    assert!(children.iter().any(|inline| {
+        matches!(inline, Inline::Emphasis { children } if inline_text(children) == "Title")
+    }));
+
+    let journal = b".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd state probe\n.Sh SEE ALSO\n.Rs\n.%A Ada\n.%T Title\n.%J Journal\n.Re\nY\n";
+    let document = parse_manual_bytes(std::path::Path::new("mdoc-rs-journal.1"), journal)
+        .expect("parse journal reference fixture");
+    let [Block::Paragraph { children, .. }] = document.sections[1].blocks.as_slice() else {
+        panic!("unexpected journal output: {:#?}", document.sections);
+    };
+    assert!(inline_text(children).contains("Ada, “Title”, Journal. Y"));
+    assert!(children.iter().any(|inline| {
+        matches!(inline, Inline::Emphasis { children } if inline_text(children) == "Journal")
+    }));
+}
+
+#[test]
+fn bibliography_pre_and_post_obey_no_fill_source_rows() {
+    // Both exact inputs were run with the fixed CVS -Tascii and -Tlint oracle.
+    // mdoc_term.c::print_mdoc_node() applies NODE_LINE before termp__a_pre(),
+    // while termp____post() writes a real word that consumes the field's \c.
+    for (label, fields, expected) in [
+        (
+            "authors",
+            ".%A Ada\n.%A Babbage\n.%T Title\n",
+            "Ada\nand Babbage,\nTitle.\nY",
+        ),
+        (
+            "post-continuation",
+            ".%A Ada\\c\n.%T Title\n",
+            "Ada,\nTitle.\nY",
+        ),
+    ] {
+        let manual = format!(
+            ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd state probe\n.Sh SEE ALSO\n.nf\n.Rs\n{fields}.Re\nY\n.fi\n"
+        );
+        let document = parse_manual_bytes(
+            std::path::Path::new(&format!("mdoc-rs-{label}.1")),
+            manual.as_bytes(),
+        )
+        .unwrap();
+        let blocks = &document.sections[1].blocks;
+        assert!(blocks.iter().any(|block| matches!(block, Block::Preformatted { children, .. } if inline_text(children) == expected)), "{label}: {blocks:#?}");
+    }
+}
+
+#[test]
+fn bibliography_entry_preserves_continuation_and_see_also_spacing() {
+    // Exact inputs checked with pinned CVS -Tascii/-Tlint. The NODE_LINE
+    // check in mdoc_term.c::print_mdoc_node() respects TERMP_NONEWLINE on Rs;
+    // termp_rs_pre() inserts vspace between adjacent SEE ALSO references.
+    let entry = b".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd state probe\n.Sh DESCRIPTION\n.nf\n\\zX\\c\n.Rs\nY\n.Re\nZ\n.fi\n";
+    let document = parse_manual_bytes(std::path::Path::new("rs-continuation.1"), entry).unwrap();
+    assert!(document.sections[1].blocks.iter().any(|block| matches!(block, Block::Preformatted { children, .. } if inline_text(children) == "Y\nZ")), "{:#?}", document.sections[1].blocks);
+
+    let adjacent = b".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd state probe\n.Sh SEE ALSO\n.Rs\n.%A Ada\n.%T One\n.Re\n.Rs\n.%A Bob\n.%T Two\n.Re\n";
+    let document = parse_manual_bytes(std::path::Path::new("rs-adjacent.1"), adjacent).unwrap();
+    let blocks = &document.sections[1].blocks;
+    assert!(blocks.windows(3).any(|parts| matches!(parts, [Block::Paragraph { children: first, .. }, Block::VerticalSpace { lines: 1, .. }, Block::Paragraph { children: second, .. }] if inline_text(first) == "Ada, One." && inline_text(second) == "Bob, Two.")), "{blocks:#?}");
+}
+
+#[test]
 fn semantic_link_identity_executes_zero_advance_controls_without_guessing_display_text() {
     for (label, macro_name, source, expected) in [
         (

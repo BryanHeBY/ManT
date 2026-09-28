@@ -87,6 +87,13 @@ pub(super) fn append(builder: &mut InlineBuilder, node: &Node, name: Option<&str
             append_inline_nodes(builder, children, name);
         }
         Some("%T") if node.reference_quotes_title => append_quoted_title(builder, children, name),
+        // mdoc_term.c maps these reference fields through termp_under_pre();
+        // quoted %T takes the separate branch above when a journal is present.
+        Some("%B" | "%I" | "%J" | "%T") => {
+            builder.with_font_scope(Font::Emphasis, |builder| {
+                append_inline_nodes(builder, children, name);
+            });
+        }
         _ => append_inline_nodes(builder, children, name),
     }
 }
