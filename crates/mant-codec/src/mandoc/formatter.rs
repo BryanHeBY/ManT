@@ -7,6 +7,7 @@ use super::inline::{
 
 pub(super) struct FinishedInlineLine {
     pub(super) output: Vec<mant_ir::Inline>,
+    pub(super) definition_term_breaks: Vec<usize>,
     pub(super) definition_field_exited: bool,
     pub(super) definition_body_gap_consumed: bool,
 }
@@ -239,14 +240,16 @@ impl FormatterState {
     }
 
     /// Commit an inline session at a native formatter-line boundary.
-    pub(super) fn finish_inline_line(&mut self, builder: InlineBuilder) -> FinishedInlineLine {
+    pub(super) fn finish_inline_line(&mut self, mut builder: InlineBuilder) -> FinishedInlineLine {
         let definition_field_exited = builder.definition_field_exited();
         let definition_body_gap_consumed = builder.definition_body_gap_consumed();
+        let definition_term_breaks = builder.take_definition_term_breaks();
         let (output, mut execution) = builder.finish_formatter_line();
         std::mem::swap(&mut execution, &mut self.execution);
         self.spare_execution = Some(execution);
         FinishedInlineLine {
             output,
+            definition_term_breaks,
             definition_field_exited,
             definition_body_gap_consumed,
         }

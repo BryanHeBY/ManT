@@ -15,6 +15,7 @@ use output::trim_trailing_breakable_spaces;
 
 pub(in crate::mandoc) struct InlineBuilder {
     nodes: Vec<Inline>,
+    definition_term_breaks: Vec<usize>,
     pub(in crate::mandoc) execution: InlineExecutionState,
     /// A detached definition HEAD occupies the native formatter row even
     /// though its term lives in a different IR output container.
@@ -70,6 +71,9 @@ pub(in crate::mandoc) struct InlineExecutionState {
     /// Ordinary paragraphs keep word and row events without field widths.
     definition: Option<DefinitionFieldState>,
     last_executed_source_line: Option<u32>,
+    /// Detached definition HEADs use the same NODE_LINE entry rule as the
+    /// block driver while their output is collected in a term field.
+    observe_no_fill_source_lines: bool,
     pub(in crate::mandoc) scope_posts: crate::mandoc::containers::ScopePostState,
 }
 
@@ -562,6 +566,7 @@ impl InlineBuilder {
     pub(in crate::mandoc) fn with_spacing(spacing_enabled: bool) -> Self {
         Self {
             nodes: Vec::new(),
+            definition_term_breaks: Vec::new(),
             execution: InlineExecutionState::with_spacing(spacing_enabled),
             external_head_row_pending: false,
         }
@@ -573,6 +578,7 @@ impl InlineBuilder {
     ) -> Self {
         Self {
             nodes,
+            definition_term_breaks: Vec::new(),
             execution,
             external_head_row_pending: false,
         }
@@ -580,6 +586,18 @@ impl InlineBuilder {
 
     pub(in crate::mandoc) fn inherit_external_head_row(&mut self, pending: bool) {
         self.external_head_row_pending = pending;
+    }
+
+    pub(in crate::mandoc) fn mark_definition_term_break(&mut self) {
+        if matches!(self.nodes.last(), Some(Inline::LineBreak))
+            && self.definition_term_breaks.last() != Some(&(self.nodes.len() - 1))
+        {
+            self.definition_term_breaks.push(self.nodes.len() - 1);
+        }
+    }
+
+    pub(in crate::mandoc) fn take_definition_term_breaks(&mut self) -> Vec<usize> {
+        std::mem::take(&mut self.definition_term_breaks)
     }
 
     pub(in crate::mandoc) fn into_parts(self) -> (Vec<Inline>, InlineExecutionState) {
@@ -613,6 +631,7 @@ impl InlineExecutionState {
             author_execution: None,
             definition: None,
             last_executed_source_line: None,
+            observe_no_fill_source_lines: false,
             scope_posts: crate::mandoc::containers::ScopePostState::default(),
         }
     }

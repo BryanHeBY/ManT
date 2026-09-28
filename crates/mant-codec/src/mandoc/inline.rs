@@ -221,6 +221,7 @@ pub(super) fn append_inline_node_with_next(
                 builder.append(vec![Inline::anchor_at(target, super::source_span(node))]);
             }
             builder.hard_break();
+            builder.mark_definition_term_break();
         }
         // Formatting requests carry control arguments such as `CW` and `R`.
         // `Es` likewise only changes the delimiters later `En` nodes use;

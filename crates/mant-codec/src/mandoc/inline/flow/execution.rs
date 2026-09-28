@@ -130,6 +130,20 @@ impl InlineBuilder {
     }
 
     pub(in crate::mandoc) fn begin_executed_node(&mut self, node: &libmandoc_rs::Node) {
+        if self.execution.observe_no_fill_source_lines
+            && node.flags.no_fill
+            && node.flags.line_start
+            && node.line != 0
+            && self
+                .execution
+                .last_executed_source_line
+                .is_some_and(|line| line != node.line)
+            && !self.final_source_continuation_or(false)
+        {
+            // mdoc_term.c::print_mdoc_node() performs NODE_NOFILL/NODE_LINE
+            // before macro pre or generated punctuation, even in It HEAD.
+            self.hard_break();
+        }
         if node.line != 0 {
             self.execution.last_executed_source_line = Some(node.line);
         }
@@ -139,6 +153,10 @@ impl InlineBuilder {
         if self.execution.keep.keeping() && node.flags.line_start {
             self.execution.keep.phase = KeepPhase::PreKeep;
         }
+    }
+
+    pub(in crate::mandoc) fn observe_no_fill_source_lines(&mut self, enabled: bool) {
+        self.execution.observe_no_fill_source_lines = enabled;
     }
 
     pub(in crate::mandoc) fn final_word_join_or(&self, fallback: bool) -> bool {

@@ -89,18 +89,26 @@ pub(super) fn definition_item(
     let head = visible_definition_head(node);
     let body = first_part_children(node, NodeKind::Body);
     let (displaced_equations, body) = displaced_definition_equations(head, body);
-    let (mut term, run_in_execution, definition_field_exited, definition_body_gap_consumed) =
-        lower_definition_head(head, &displaced_equations, context, flow, formatter);
+    let (
+        term,
+        run_in_execution,
+        definition_field_exited,
+        definition_body_gap_consumed,
+        term_breaks,
+    ) = lower_definition_head(head, &displaced_equations, context, flow, formatter);
     if definition_field_exited {
         geometry.placement = crate::mandoc::layout::TermPlacement::Stacked;
     }
     if definition_body_gap_consumed {
         geometry.gap = 0;
     }
+    let mut terms = split_definition_terms(term, &term_breaks);
     if let Some(id) = definition_head_anchor(node) {
-        term.insert(0, Inline::anchor_at(id, source_span(node)));
+        if terms.is_empty() {
+            terms.push(Vec::new());
+        }
+        terms[0].insert(0, Inline::anchor_at(id, source_span(node)));
     }
-    let terms = split_definition_terms(term);
     if flow.head.generated_cells().is_some() {
         // The native generated cells execute inside the shared stream below.
         // Their surviving projection is carried by the description itself;
@@ -179,6 +187,7 @@ fn lower_definition_head(
     Option<crate::mandoc::inline::PreservedInlineState>,
     bool,
     bool,
+    Vec<usize>,
 ) {
     let groups = std::iter::once(head).chain(
         displaced_equations
@@ -186,7 +195,7 @@ fn lower_definition_head(
             .map(|equation| std::slice::from_ref(*equation)),
     );
     if flow.head.generated_cells().is_some() {
-        let (term, mut execution) = context.lower_run_in_definition_head(
+        let (term, mut execution, term_breaks) = context.lower_run_in_definition_head(
             groups,
             flow.spacing_enabled,
             formatter,
@@ -197,19 +206,26 @@ fn lower_definition_head(
             .chain(displaced_equations.iter().copied())
             .filter_map(latest_source_line)
             .max();
-        return (term, Some(execution), false, false);
+        return (term, Some(execution), false, false, term_breaks);
     }
 
     let mut term_builder = InlineBuilder::with_spacing(flow.spacing_enabled);
     let mut definition_field_exited = false;
     let mut definition_body_gap_consumed = false;
-    for group in groups {
-        let (lowered, field_exited, body_gap_consumed) = context.lower_inline_with_author_break(
-            group,
-            flow.spacing_enabled,
-            formatter,
-            flow.head.author_break_effect(),
-        );
+    let mut term_breaks = Vec::new();
+    for (index, group) in groups.enumerate() {
+        let (lowered, field_exited, body_gap_consumed, breaks) = context
+            .lower_inline_with_author_break(
+                group,
+                flow.spacing_enabled,
+                formatter,
+                flow.head.author_break_effect(),
+            );
+        // Only the original HEAD can contain .Pp alternatives. Equations
+        // displaced from it are later source operands, not term separators.
+        if index == 0 {
+            term_breaks = breaks;
+        }
         term_builder.append(lowered);
         definition_field_exited |= field_exited;
         definition_body_gap_consumed |= body_gap_consumed;
@@ -219,6 +235,7 @@ fn lower_definition_head(
         None,
         definition_field_exited,
         definition_body_gap_consumed,
+        term_breaks,
     )
 }
 
@@ -275,11 +292,16 @@ fn maximum_node_line(node: &Node) -> u32 {
 /// position it separates equivalent term spellings rather than starting a
 /// new description paragraph. The IR already models such aliases as several
 /// terms on one definition item, so preserve that structure explicitly.
-pub(super) fn split_definition_terms(term: Vec<Inline>) -> Vec<Vec<Inline>> {
+pub(super) fn split_definition_terms(
+    term: Vec<Inline>,
+    alternative_breaks: &[usize],
+) -> Vec<Vec<Inline>> {
     let mut terms = Vec::new();
     let mut current = Vec::new();
-    for node in term {
-        if node == Inline::LineBreak {
+    let mut alternatives = alternative_breaks.iter().copied().peekable();
+    for (index, node) in term.into_iter().enumerate() {
+        if node == Inline::LineBreak && alternatives.peek() == Some(&index) {
+            alternatives.next();
             if mant_ir::has_printable_character(&current) {
                 terms.push(std::mem::take(&mut current));
             } else {

@@ -283,6 +283,81 @@ fn synopsis_head_consumes_pending_zero_advance_before_body() {
 }
 
 #[test]
+fn definition_heads_execute_no_fill_source_rows() {
+    // Both exact inputs checked with fixed CVS -Tascii/-Thtml/-Tlint.
+    // mdoc_term.c::print_mdoc_node() applies NODE_NOFILL/NODE_LINE to each
+    // Xo child and Fo/Fa event before the It HEAD's field is laid out.
+    for (name, head, expected) in [
+        ("xo", ".It Xo\nfirst\nsecond\n.Xc", "first\nsecond"),
+        (
+            "fo",
+            ".It Fo call\n.Fa first\n.Fa second\n.Fc",
+            "call(\nfirst,\nsecond)",
+        ),
+    ] {
+        let source = format!(
+            ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\n.nf\n.Bl -tag -width xxx\n{head}\nbody\n.El\n.fi\n"
+        );
+        let document = parse_manual_bytes(std::path::Path::new(name), source.as_bytes()).unwrap();
+        let terms = document.sections[0]
+            .blocks
+            .iter()
+            .find_map(|block| match block {
+                Block::DefinitionList { items, .. } => items.first().map(|item| &item.terms),
+                _ => None,
+            })
+            .expect("definition term");
+        assert!(
+            terms
+                .iter()
+                .any(|term| inline_text(term).contains(expected)),
+            "{name}: {document:#?}"
+        );
+    }
+}
+
+#[test]
+fn definition_head_anchor_does_not_shift_explicit_term_separator() {
+    // Exact input checked with fixed CVS -Tascii/-Thtml/-Tlint. The .Tg
+    // anchor is attached to It HEAD, while mdoc_term.c still executes .Pp
+    // between first and second as a separate native term paragraph.
+    let source = b".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width xxx\n.It Xo\n.Tg sample\nfirst\n.Pp\nsecond\n.Xc\nbody\n.El\n";
+    let document =
+        parse_manual_bytes(std::path::Path::new("definition-anchor-pp.1"), source).unwrap();
+    let item = document.sections[0]
+        .blocks
+        .iter()
+        .find_map(|block| match block {
+            Block::DefinitionList { items, .. } => items.first(),
+            _ => None,
+        })
+        .expect("definition item");
+    assert_eq!(item.terms.len(), 2, "{item:#?}");
+    assert_eq!(inline_text(&item.terms[0]), "first");
+    assert_eq!(inline_text(&item.terms[1]), "second");
+
+    // Consecutive Pp requests may reuse one projected LineBreak when an
+    // intervening bare \z has not occupied a formatter cell. The later Pp
+    // must still split the following term. Exact source checked with fixed
+    // CVS -Tascii/-Thtml/-Tlint; mdoc_term.c executes each Pp in order.
+    let source = b".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width xxx\n.It Xo\nfirst\n.Pp\n\\z\n.Pp\nsecond\n.Pp\nthird\n.Xc\nbody\n.El\n";
+    let document =
+        parse_manual_bytes(std::path::Path::new("definition-repeated-pp.1"), source).unwrap();
+    let item = document.sections[0]
+        .blocks
+        .iter()
+        .find_map(|block| match block {
+            Block::DefinitionList { items, .. } => items.first(),
+            _ => None,
+        })
+        .expect("definition item");
+    assert_eq!(item.terms.len(), 3, "{item:#?}");
+    assert_eq!(inline_text(&item.terms[0]), "first");
+    assert!(inline_text(&item.terms[1]).contains("cond"), "{item:#?}");
+    assert_eq!(inline_text(&item.terms[2]), "third");
+}
+
+#[test]
 fn generated_function_events_follow_no_fill_source_order_and_rows() {
     // Both exact inputs were run through the fixed CVS -Ttree, -Thtml,
     // -Tutf8, and -Tlint oracle before these assertions. In

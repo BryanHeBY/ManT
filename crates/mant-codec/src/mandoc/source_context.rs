@@ -172,19 +172,22 @@ impl<'a> LoweringContext<'a> {
         spacing: bool,
         formatter: &mut formatter::FormatterState,
         author_break_effect: inline::AuthorBreakEffect,
-    ) -> (Vec<mant_ir::Inline>, bool, bool) {
+    ) -> (Vec<mant_ir::Inline>, bool, bool, Vec<usize>) {
         let mut builder = formatter.begin_inline_session(
             spacing,
             self.active_mdoc_section() == MdocSectionContext::Authors,
             author_break_effect,
         );
         builder.scope_posts = self.scope_posts.clone();
+        builder.observe_no_fill_source_lines(formatter.no_fill);
         inline::append_inline_nodes(&mut builder, nodes, self.default_name);
+        builder.observe_no_fill_source_lines(false);
         let finished = formatter.finish_inline_line(builder);
         (
             finished.output,
             finished.definition_field_exited,
             finished.definition_body_gap_consumed,
+            finished.definition_term_breaks,
         )
     }
 
@@ -200,13 +203,18 @@ impl<'a> LoweringContext<'a> {
         spacing: bool,
         formatter: &mut formatter::FormatterState,
         strong_scope: bool,
-    ) -> (Vec<mant_ir::Inline>, inline::PreservedInlineState) {
+    ) -> (
+        Vec<mant_ir::Inline>,
+        inline::PreservedInlineState,
+        Vec<usize>,
+    ) {
         let mut builder = formatter.begin_inline_session(
             spacing,
             self.active_mdoc_section() == MdocSectionContext::Authors,
             inline::AuthorBreakEffect::Line,
         );
         builder.scope_posts = self.scope_posts.clone();
+        builder.observe_no_fill_source_lines(formatter.no_fill);
         let saved_font = strong_scope.then(|| {
             builder
                 .font
@@ -215,10 +223,13 @@ impl<'a> LoweringContext<'a> {
         for nodes in groups {
             inline::append_inline_nodes(&mut builder, nodes, self.default_name);
         }
+        builder.observe_no_fill_source_lines(false);
         if let Some(saved_font) = saved_font {
             builder.font.pop_scope(saved_font);
         }
-        formatter.finish_inline_scope(builder)
+        let breaks = builder.take_definition_term_breaks();
+        let (output, execution) = formatter.finish_inline_scope(builder);
+        (output, execution, breaks)
     }
 
     /// Execute a section heading in the surrounding formatter stream.

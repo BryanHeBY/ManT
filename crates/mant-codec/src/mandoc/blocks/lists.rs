@@ -88,15 +88,18 @@ mod tests {
 
     #[test]
     fn extended_definition_terms_split_only_at_semantic_line_breaks() {
-        let terms = super::split_definition_terms(vec![
-            Inline::Text {
-                value: "first".to_owned(),
-            },
-            Inline::LineBreak,
-            Inline::Strong {
-                children: text("second"),
-            },
-        ]);
+        let terms = super::split_definition_terms(
+            vec![
+                Inline::Text {
+                    value: "first".to_owned(),
+                },
+                Inline::LineBreak,
+                Inline::Strong {
+                    children: text("second"),
+                },
+            ],
+            &[1],
+        );
 
         assert_eq!(
             terms,
@@ -106,6 +109,21 @@ mod tests {
                     children: text("second")
                 }]
             ]
+        );
+        assert_eq!(
+            super::split_definition_terms(
+                vec![
+                    text("first")[0].clone(),
+                    Inline::LineBreak,
+                    text("second")[0].clone()
+                ],
+                &[]
+            ),
+            [vec![
+                text("first")[0].clone(),
+                Inline::LineBreak,
+                text("second")[0].clone()
+            ]],
         );
     }
 }
