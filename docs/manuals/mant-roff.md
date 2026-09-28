@@ -96,6 +96,10 @@ paragraph, then returns its active final word to the enclosing link's closing
 words. An empty target does not create a typed link. This follows the pinned CVS
 `man_term.c::print_man_node()`/`post_UR()` execution order and
 `man_html.c::man_UR_pre()` label choice.
+The shared man/mdoc node entry executes `NODE_NOFILL | NODE_LINE` before
+dispatching even a state-only request such as `ft`, `PD`, `ta`, `ll`, or `po`.
+This closes the previous source row unless `\c` requested continuation; the
+request itself does not force a row break.
 The link annotation excludes a trailing physical line break: a label ended
 by `fi` remains one no-fill row, followed immediately by the closing address
 on the next row.
@@ -117,6 +121,30 @@ handler; these transitions update the previous-font register used by `\fP`.
 `br` inside a flow becomes an immediate inline line break. The `\p` escape instead requests a break at the next ordinary word boundary; it crosses tight `Ns` joins and non-breaking spaces, and repeated requests before that boundary are idempotent. A following `\c` can continue the current formatter word but does not cancel that pending word-end break. This `\p\c` ordering follows the pinned mandoc CVS formatter; GNU troff can diagnose or project such non-portable combinations differently. `sp` becomes explicit vertical space. Filled source lines normally join with spaces; an indented input line and no-fill input preserve line boundaries. No-fill rows follow executed AST events: executed empty-row events are retained, including leading and trailing rows, and independent `sp` requests accumulate. Skipped conditions and uncalled macro definitions do not contribute rows. Leading empty literal rows follow mandoc's terminal behavior; groff may suppress them in no-space contexts. A final unescaped `\c` suppresses the next implicit space or line break and joins the next input line directly. Word spacing and physical-line continuation remain independent: a generated or explicitly empty formatter word consumes the latter even when it adds no visible glyph.
 
 An empty macro parameter is not automatically a physical blank line: ManT follows mandoc's macro-set-specific word behavior, preserving zero-width row glyphs such as `\&` separately from pure font state. A groff `\z` operand is an overstrike glyph with no advance: ManT consumes its complete control spelling and retains a final literal glyph when no later glyph can cover it. Executed `fi`/`nf` inside `SY` or a display switch the actual content mode; a filled run resumes ordinary source-word and indented-line handling. Explicit argument and enclosure wrapper boundaries remain observable even when their child text shares one macro call-site line number.
+
+An empty native TEXT node follows the pinned CVS text visitor: man uses
+`term_vspace()` for every visited empty TEXT, while mdoc does so only for a
+`NODE_LINE` text node. This consumes negative `.sp` debt as vertical space in
+filled and no-fill flow. A preceding `\c` takes the visitor's `term_newln()`
+branch and remains active across successive empty TEXT nodes. Direct formatter
+words remain distinct: `\&` clears the debt, and
+`BR` operands call `term_word()` from their macro handler even when empty.
+Whitespace-only formatter words also occupy a native row even if terminal
+`term_fill()` prints no glyph; their IR row is retained when a paragraph ends.
+Native `term_newln()` and `term_flushln()` can close a physical row without
+consuming `TERMP_NONEWLINE`. Accordingly, `\c` survives source empty TEXT,
+line requests, and IR paragraph/literal drains until a formatter word executes.
+In mdoc definition items, generated `-diag` and `-inset` padding is a formatter
+word but does not count as visible BODY content. The pending HEAD row settles
+when the current BODY node executes an actual glyph; zero-width cells, empty
+operands, and font-only nodes leave it pending. This follows
+`mdoc_term.c::termp_it_pre()` and the shared `term_word()` execution order.
+If a definition HEAD ends with a completed `\z` glyph, the first generated
+inset/diagnostic fixed space retains that glyph in the term and uses its
+position; the BODY receives only the remaining separator cells. This follows
+`term.c::encode1()` when `TERMP_BACKBEFORE` meets an escaped space.
+An inset item with no HEAD child generates no separator word at all, so that
+case does not consume formatter word state.
 
 Display offsets use terminal-column unit conversion. Unsupported or excessive
 offsets use the default indentation; cumulative indentation is capped at 4096

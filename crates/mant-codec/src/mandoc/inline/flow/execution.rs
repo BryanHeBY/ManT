@@ -165,15 +165,14 @@ impl InlineBuilder {
         self.execution.final_word_join.unwrap_or(fallback)
     }
 
-    /// Start one source fragment with an empty result slot while retaining the
-    /// prior formatter decision for transparent fragments such as `.Tg`.
-    /// A real word, break, or release writes its own final state; an anchor or
-    /// font-only request leaves the slot empty and therefore cannot consume a
-    /// still-live physical continuation.
+    /// Start one source fragment with an empty word-join result slot. Source
+    /// continuation is also a live native formatter register: the fragment's
+    /// empty TEXT visitor must still see `TERMP_NONEWLINE` from its predecessor.
+    /// A real word replaces it; a transparent fragment leaves it live.
     pub(in crate::mandoc) fn begin_source_fragment(&mut self) -> SourceFragmentState {
         SourceFragmentState {
             final_word_join: self.execution.final_word_join.take(),
-            final_source_continuation: self.execution.final_source_continuation.take(),
+            final_source_continuation: self.execution.final_source_continuation,
             execution_epoch: self.execution.execution_epoch,
         }
     }
@@ -284,23 +283,44 @@ impl InlineBuilder {
         }
     }
 
-    /// Execute the generated no-break cells between an mdoc inset/diagnostic
-    /// head and body.  The caller represents surviving cells as body-leading
-    /// inline space, so no independent layout gap is added later.
-    pub(in crate::mandoc) fn append_run_in_cells(&mut self, count: usize) {
-        if count == 0 {
+    /// CVS `term.c::encode1()` preserves a completed nonblank BACKBEFORE
+    /// glyph when a generated escaped space overstrikes it.  Settle that
+    /// glyph while its definition HEAD still owns the output; the first
+    /// generated cell occupies its position instead of adding body spacing.
+    pub(in crate::mandoc) fn settle_head_glyph_before_run_in_cells(&mut self) -> bool {
+        if !self.execution.zero_advance.has_pending_glyph()
+            || !self.execution.zero_advance.has_printable_pending_glyph()
+        {
+            return false;
+        }
+        let glyph = self
+            .execution
+            .zero_advance
+            .resolve_at_word_boundary()
+            .expect("completed BACKBEFORE glyph");
+        self.append_projected(vec![glyph]);
+        true
+    }
+
+    /// Execute the generated no-break word between an mdoc inset/diagnostic
+    /// head and body.  Its `term_word()` transition still runs when the only
+    /// fixed cell was consumed by a completed HEAD glyph.
+    pub(in crate::mandoc) fn append_run_in_cells(&mut self, count: usize, generated_word: bool) {
+        if !generated_word {
             return;
         }
         self.tighten_next_boundary();
         self.begin_word_projection(true);
-        let mut projected = Vec::new();
-        self.execution.zero_advance.append_generated_cells(
-            count,
-            &mut projected,
-            self.execution.font.display_current(),
-        );
-        self.append_word(projected);
-        self.execution.trailing_output = TrailingOutput::FixedBlank;
+        if count > 0 {
+            let mut projected = Vec::new();
+            self.execution.zero_advance.append_generated_cells(
+                count,
+                &mut projected,
+                self.execution.font.display_current(),
+            );
+            self.append_word(projected);
+            self.execution.trailing_output = TrailingOutput::FixedBlank;
+        }
         // CVS sets TERMP_NOSPACE again before executing BODY children.
         self.tighten_next_boundary();
         self.execution.final_word_join = Some(false);

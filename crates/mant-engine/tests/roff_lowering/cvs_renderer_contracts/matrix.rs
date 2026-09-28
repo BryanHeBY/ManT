@@ -76,7 +76,10 @@ fn terminal_divergence_matrix_pins_native_and_lowered_behavior_together() {
                 ".Bl -inset\n.It A\\zX\n.No BC\n.El\n",
             ),
             native_contains: &["     A\u{a0}BC"],
-            lowered_contains: &["A BC"],
+            // term.c::encode1() leaves X in the prior column when the
+            // generated escaped space overstrikes it; the semantic reading
+            // retains AX even though generic backspace stripping loses X.
+            lowered_contains: &["AXBC"],
             selected: SelectedContract::Cvs,
         },
         TerminalCase {
@@ -96,7 +99,7 @@ fn terminal_divergence_matrix_pins_native_and_lowered_behavior_together() {
                 ".Bl -diag\n.It A\\zX\n.No BC\n.El\n",
             ),
             native_contains: &["     A\u{a0}\u{a0}BC"],
-            lowered_contains: &["A  BC"],
+            lowered_contains: &["AX BC"],
             selected: SelectedContract::Cvs,
         },
         TerminalCase {
@@ -126,7 +129,7 @@ fn terminal_divergence_matrix_pins_native_and_lowered_behavior_together() {
                 ".de XX\n.Bl -inset\n.It A\\zX\n BC\n.El\n..\n.XX\n",
             ),
             native_contains: &["\n      BC"],
-            lowered_contains: &["A \n BC"],
+            lowered_contains: &["AX\n BC"],
             selected: SelectedContract::Cvs,
         },
         TerminalCase {
@@ -136,7 +139,7 @@ fn terminal_divergence_matrix_pins_native_and_lowered_behavior_together() {
                 ".de XX\n.Bl -diag\n.It A\\zX\n BC\n.El\n..\n.XX\n",
             ),
             native_contains: &["\n      BC"],
-            lowered_contains: &["A  \n BC"],
+            lowered_contains: &["AX \n BC"],
             selected: SelectedContract::Cvs,
         },
         TerminalCase {

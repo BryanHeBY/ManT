@@ -243,7 +243,9 @@ fn explicit_literal_spacing_retains_start_end_and_empty_display_boundaries() {
             ("ALPHA\n.sp 2", "ALPHA\n\n\nAFTER"),
             ("ALPHA\n.sp 2\n", "ALPHA\n\n\n\nAFTER"),
             ("ALPHA\n.sp 1\n\n.sp 1", "ALPHA\n\n\n\nAFTER"),
-            ("ALPHA\\c\n\n\nBETA", "ALPHA\n\nBETA"),
+            // CVS term_newln() leaves TERMP_NONEWLINE set: consecutive empty
+            // TEXT nodes close the occupied row without asserting vspace.
+            ("ALPHA\\c\n\n\nBETA", "ALPHA\nBETA"),
         ] {
             let source = format!("{header}\nBEFORE\n{open}\n{body}\n{close}\nAFTER\n");
             let text = render_query_text(&load_roff_bytes(source.as_bytes()).unwrap());

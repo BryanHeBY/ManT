@@ -31,6 +31,151 @@ fn native_section_pd_and_explicit_requests_compose_once() {
 }
 
 #[test]
+fn no_fill_source_line_precedes_state_only_requests_inside_man_links() {
+    // Exact UR/MT x ft/PD/ta/ll/po x continuation inputs were run with the
+    // fixed CVS -Tascii/-Tlint oracle. man_term.c::print_man_node() handles
+    // NODE_NOFILL | NODE_LINE before the roff request handler; a preceding
+    // \c suppresses only that source-line break.
+    for (open, close, target) in [
+        ("UR", "UE", "https://example.org"),
+        ("MT", "ME", "user@example.org"),
+    ] {
+        for request in ["ft B", "PD 0", "ta 8n", "ll 40n", "po 1n"] {
+            for continued in [false, true] {
+                let join = if continued { "\\c" } else { "" };
+                let input = format!(
+                    ".TH TEST 1 \"2026-09-28\"\n.SH DESCRIPTION\n.nf\n.{open} {target}\nlabel{join}\n.{request}\n.{close}\nafter\n"
+                );
+                let query = load_roff_bytes(input.as_bytes()).unwrap();
+                let text = render_query_text(&query);
+                let boundary = if continued {
+                    format!("label⟨{target}⟩\nafter")
+                } else {
+                    format!("label\n⟨{target}⟩\nafter")
+                };
+                assert!(text.contains(&boundary), "{input}\n{text:?}");
+            }
+        }
+    }
+}
+
+#[test]
+fn native_line_requests_release_a_continued_literal_row() {
+    // Fixed CVS roff_term.c::roff_term_pre_ti()/pre_br() executes term_newln()
+    // before applying indentation. in/ce/rj use the same physical boundary.
+    for request in ["ti 8n", "in 1n", "ce 1", "rj 1"] {
+        let input = format!(
+            ".TH TEST 1 \"2026-09-28\"\n.SH DESCRIPTION\n.nf\nALPHA\\c\n.{request}\nBETA\n.fi\n"
+        );
+        let text = render_query_text(&load_roff_bytes(input.as_bytes()).unwrap());
+        let tail = text.split("ALPHA").nth(1).unwrap_or_default();
+        assert!(tail.starts_with('\n'), "{input}\n{text:?}");
+        assert!(tail.contains("BETA"), "{input}\n{text:?}");
+    }
+}
+
+#[test]
+fn visited_empty_text_consumes_negative_space_without_executing_a_word() {
+    // Every exact case was checked with fixed CVS -Tascii/-Tlint. The empty
+    // TEXT branch in man_term.c and mdoc_term.c calls term_vspace(), while
+    // man_term.c::pre_alternate() calls term_word() for BR operands and \& is
+    // an actual zero-width formatter word that clears skipvsp.
+    for (name, body, expected) in [
+        ("one-blank", "\n", "BEFORE\nAFTER"),
+        ("two-blanks", "\n\n", "BEFORE\n\nAFTER"),
+        ("bold-empty", ".B \"\"\n", "BEFORE\nAFTER"),
+        ("italic-empty", ".I \"\"\n", "BEFORE\nAFTER"),
+        ("alternate-empty", ".BR \"\" \"\"\n", "BEFORE\n\nAFTER"),
+        ("zero-width", "\\&\n", "BEFORE\n\n\nAFTER"),
+    ] {
+        let input = format!(
+            ".TH TEST 1 \"2026-09-28\"\n.SH DESCRIPTION\n.nf\nBEFORE\n.sp -2\n{body}.PP\nAFTER\n"
+        );
+        let text = render_query_text(&load_roff_bytes(input.as_bytes()).unwrap());
+        assert!(text.contains(expected), "{name}: {input}\n{text:?}");
+    }
+    for (name, body, expected) in [
+        ("one-blank", "\n", "BEFORE\nAFTER"),
+        ("two-blanks", "\n\n", "BEFORE\n\nAFTER"),
+        ("empty-emphasis", ".Em \"\"\n", "BEFORE\n\nAFTER"),
+        ("zero-width", "\\&\n", "BEFORE\n\n\nAFTER"),
+    ] {
+        let input = format!(
+            ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\n.nf\nBEFORE\n.sp -2\n{body}.Pp\nAFTER\n.fi\n"
+        );
+        let text = render_query_text(&load_roff_bytes(input.as_bytes()).unwrap());
+        assert!(text.contains(expected), "{name}: {input}\n{text:?}");
+    }
+
+    // The original one-row review case has no following paragraph request.
+    // man_term.c visits the blank TEXT via term_vspace(), cancelling .sp -1.
+    let original = ".TH TEST 1 \"2026-09-28\"\n.SH DESCRIPTION\n.nf\nBEFORE\n.sp -1\n\nAFTER\n";
+    let text = render_query_text(&load_roff_bytes(original.as_bytes()).unwrap());
+    assert!(text.contains("BEFORE\nAFTER"), "{text:?}");
+    let continued = ".TH TEST 1 \"2026-09-28\"\n.SH DESCRIPTION\n.nf\nBEFORE\\c\n.sp -1\n\nAFTER\n";
+    let text = render_query_text(&load_roff_bytes(continued.as_bytes()).unwrap());
+    assert!(text.contains("BEFORE\nAFTER"), "{text:?}");
+    // term_newln() keeps TERMP_NONEWLINE, even when several visited empty
+    // TEXT nodes intervene. The result is one physical break, not blank rows.
+    let continued_blanks =
+        ".TH TEST 1 \"2026-09-28\"\n.SH DESCRIPTION\n.nf\nBEFORE\\c\n\n\nAFTER\n.fi\n";
+    let text = render_query_text(&load_roff_bytes(continued_blanks.as_bytes()).unwrap());
+    assert!(text.contains("BEFORE\nAFTER"), "{text:?}");
+    for macro_name in ["B", "I", "R"] {
+        let input = format!(
+            ".TH TEST 1 \"2026-09-28\"\n.SH DESCRIPTION\nBEFORE\\c\n.{macro_name} \"\"\nAFTER\n"
+        );
+        let text = render_query_text(&load_roff_bytes(input.as_bytes()).unwrap());
+        assert!(text.contains("BEFORE\nAFTER"), "{input}\n{text:?}");
+    }
+
+    // The same native empty-TEXT rule applies in filled flow. The BR operands
+    // differ because pre_alternate() calls term_word() directly for each one.
+    for (name, body, expected) in [
+        ("raw", "\n", "BEFORE\nAFTER"),
+        ("bold", ".B \"\"\n", "BEFORE\nAFTER"),
+        ("italic", ".I \"\"\n", "BEFORE\nAFTER"),
+        ("alternate", ".BR \"\" \"\"\n", "BEFORE\n\nAFTER"),
+        ("zero-width", "\\&\n", "BEFORE\n\n\nAFTER"),
+    ] {
+        let input = format!(
+            ".TH TEST 1 \"2026-09-28\"\n.SH DESCRIPTION\nBEFORE\n.sp -2\n{body}.PP\nAFTER\n"
+        );
+        let text = render_query_text(&load_roff_bytes(input.as_bytes()).unwrap());
+        assert!(text.contains(expected), "{name}: {input}\n{text:?}");
+    }
+    // CVS term_word(" ") from B's combined operands clears skipvsp, then
+    // term_flushln() ends its whitespace-only cell before PP adds distance.
+    let spaced_word =
+        ".TH TEST 1 \"2026-09-28\"\n.SH DESCRIPTION\nBEFORE\n.sp -1\n.B \"\" \"\"\n.PP\nAFTER\n";
+    let text = render_query_text(&load_roff_bytes(spaced_word.as_bytes()).unwrap());
+    assert!(text.contains("BEFORE\n\n\nAFTER"), "{text:?}");
+}
+
+#[test]
+fn native_newlines_and_ir_drains_keep_source_continuation_until_a_word() {
+    // CVS term.c::term_newln()/term_flushln() leave TERMP_NONEWLINE intact;
+    // only term_word() consumes it. roff_term_pre_sp() adds debt before its
+    // final term_newln(). All exact inputs were run with fixed -Tascii/-Tlint.
+    for no_fill in [false, true] {
+        for request in ["sp -1", "br", "ti 8n", "in 1n", "nf"] {
+            let input = format!(
+                ".TH TEST 1 \"2026-09-28\"\n.SH DESCRIPTION\n{}BEFORE\\c\n.{request}\n.B \"\"\n.PP\nAFTER\n{}",
+                if no_fill { ".nf\n" } else { "" },
+                if no_fill { ".fi\n" } else { "" }
+            );
+            let text = render_query_text(&load_roff_bytes(input.as_bytes()).unwrap());
+            let expected = if request == "sp -1" {
+                "BEFORE\nAFTER"
+            } else {
+                "BEFORE\n\nAFTER"
+            };
+            assert!(text.contains(expected), "{input}\n{text:?}");
+        }
+    }
+}
+
+#[test]
 fn section_tail_requests_survive_document_and_excerpt_facades() {
     let content = load_roff_bytes(b".TH PROBE 1\n.SH FIRST\nALPHA\n.sp 3\n").unwrap();
     assert!(render_query_text(&content).ends_with("ALPHA\n\n\n"));

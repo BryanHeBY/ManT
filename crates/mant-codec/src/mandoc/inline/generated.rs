@@ -156,12 +156,14 @@ pub(super) fn manual_reference(builder: &mut InlineBuilder, node: &Node, name: O
         .filter(|value| !value.is_empty());
     builder.append_scope(
         |builder| {
-            append_inline_node(builder, first, name);
+            builder.with_direct_word_operands(|builder| append_inline_node(builder, first, name));
             if let Some(section_node) = children.get(1) {
                 builder.tighten_next_boundary();
                 builder.append_text("(");
                 builder.tighten_next_boundary();
-                append_inline_node(builder, section_node, name);
+                builder.with_direct_word_operands(|builder| {
+                    append_inline_node(builder, section_node, name);
+                });
                 builder.tighten_next_boundary();
                 builder.append_text(")");
             }
@@ -182,6 +184,6 @@ pub(super) fn manual_reference(builder: &mut InlineBuilder, node: &Node, name: O
     );
     for child in children.get(2..).unwrap_or_default() {
         builder.tighten_next_boundary();
-        append_inline_node(builder, child, name);
+        builder.with_direct_word_operands(|builder| append_inline_node(builder, child, name));
     }
 }

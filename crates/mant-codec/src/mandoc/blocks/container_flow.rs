@@ -29,12 +29,13 @@ impl super::BlockLowerer<'_, '_> {
             self.state.flush_paragraph();
         }
         let formatter = &mut self.state.formatter;
-        let (nodes, continues_line) = crate::mandoc::inline::lower_no_fill_fragment_with_formatter(
-            formatter,
-            source_continuation_fallback,
-            finishes_row,
-            append,
-        );
+        let (nodes, continues_line, asserted_vertical_row) =
+            crate::mandoc::inline::lower_no_fill_fragment_with_formatter(
+                formatter,
+                source_continuation_fallback,
+                finishes_row,
+                append,
+            );
         let occupies_row = mant_ir::has_printable_character(&nodes);
         if occupies_row {
             self.state.clear_formatter_word_debt();
@@ -46,6 +47,9 @@ impl super::BlockLowerer<'_, '_> {
             starts_line,
             occupies_row,
         );
+        if asserted_vertical_row {
+            self.state.mark_literal_vertical_row();
+        }
     }
 
     fn push_function_argument(&mut self, argument: &Node, comma_after: bool) {

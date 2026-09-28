@@ -1,6 +1,46 @@
 use super::*;
 
 #[test]
+fn run_in_fixed_cells_keep_completed_head_glyph_in_its_term() {
+    // Fixed CVS mdoc_term.c::termp_it_pre() sends inset/diag cells through
+    // term_word("\\ ") / term_word("\\ \\ "). term.c::encode1() retains a
+    // completed nonblank BACKBEFORE glyph under the first escaped space.
+    // The raw terminal rows for these exact inputs contain X/Y, while bare
+    // or blank \z operands do not contribute a visible HEAD glyph.
+    for style in ["inset", "diag"] {
+        for (head, expected_term) in [(r"\zX", "X"), (r"x\zY", "xY"), (r"\z", ""), ("\\z ", "")] {
+            let source = format!(
+                ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Bl -{style}\n.It {head}\n.No Q\n.El\n"
+            );
+            let native = native_terminal_raw(&source);
+            if !expected_term.is_empty() {
+                assert!(native.contains(expected_term), "{style} {head}: {native:?}");
+            }
+            let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+            let item = first_definition_item(query.document.as_ref().unwrap());
+            let term = item
+                .terms
+                .iter()
+                .map(|part| mant_ir::inline_plain_text(part))
+                .collect::<Vec<_>>()
+                .join(" ");
+            assert_eq!(term, expected_term, "{style} {head}: {item:?}");
+            if style == "diag" && !expected_term.is_empty() {
+                assert!(
+                    item.terms
+                        .iter()
+                        .flatten()
+                        .any(|inline| matches!(inline, Inline::Strong { .. })),
+                    "{style} {head}: {item:?}"
+                );
+            }
+            let rendered = mant_render::render_query_text(&query);
+            assert!(rendered.contains('Q'), "{style} {head}: {rendered:?}");
+        }
+    }
+}
+
+#[test]
 fn no_break_flush_releases_a_word_boundary_after_fixed_run_in_cells() {
     for (style, spaces) in [("inset", 2), ("diag", 3)] {
         let source = format!(

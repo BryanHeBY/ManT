@@ -8,6 +8,7 @@ pub(super) struct LiteralFlow {
     tight_boundary: bool,
     ordinary_continuation: bool,
     row_occupied: bool,
+    trailing_vertical_row: TrailingRow,
     formatter_column: FormatterColumn,
     adopted_layout: Option<mant_ir::LayoutHint>,
 }
@@ -16,6 +17,12 @@ pub(super) struct LiteralFlow {
 enum FormatterColumn {
     Origin,
     Advanced,
+}
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum TrailingRow {
+    Ordinary,
+    AssertedVertical,
 }
 
 impl LiteralFlow {
@@ -44,6 +51,7 @@ impl LiteralFlow {
             tight_boundary: false,
             ordinary_continuation: false,
             row_occupied: false,
+            trailing_vertical_row: TrailingRow::Ordinary,
             formatter_column: FormatterColumn::Origin,
             adopted_layout: None,
         }
@@ -63,6 +71,10 @@ impl LiteralFlow {
         self.ordinary_continuation = false;
     }
 
+    pub(super) fn mark_vertical_row(&mut self) {
+        self.trailing_vertical_row = TrailingRow::AssertedVertical;
+    }
+
     pub(super) fn append(
         &mut self,
         mut nodes: Vec<Inline>,
@@ -71,6 +83,9 @@ impl LiteralFlow {
         starts_line: bool,
         occupies_row: bool,
     ) {
+        if !nodes.is_empty() || occupies_row {
+            self.trailing_vertical_row = TrailingRow::Ordinary;
+        }
         if nodes.is_empty() && occupies_row {
             nodes.push(Inline::Text {
                 value: String::new(),
@@ -171,9 +186,16 @@ impl LiteralFlow {
     pub(super) fn take(&mut self, indent: crate::mandoc::layout::SourceIndent) -> Option<Block> {
         let mut previous = std::mem::replace(self, Self::new());
         // A formatter-only word closes a row without occupying the next one.
-        // Actual empty rows end with an explicit empty text sentinel.
+        // A visited empty TEXT asserts one empty row at this edge. Encode that
+        // row as an empty cell, since an IR-only terminal LineBreak would add
+        // another blank line when this block is followed by a new owner.
         if !previous.row_occupied && matches!(previous.nodes.last(), Some(Inline::LineBreak)) {
             previous.nodes.pop();
+            if previous.trailing_vertical_row == TrailingRow::AssertedVertical {
+                previous.nodes.push(Inline::Text {
+                    value: String::new(),
+                });
+            }
         }
         (!previous.nodes.is_empty()).then(|| Block::Preformatted {
             children: previous.nodes,

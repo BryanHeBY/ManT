@@ -50,12 +50,14 @@ pub(super) fn lower_man_font_scope(
             if index > 0 {
                 output.tighten_next_boundary();
             }
-            super::append_inline_node_with_next(
-                output,
-                child,
-                node.children.get(index + 1),
-                default_name,
-            );
+            output.with_direct_word_operands(|output| {
+                super::append_inline_node_with_next(
+                    output,
+                    child,
+                    node.children.get(index + 1),
+                    default_name,
+                );
+            });
         }
         output.font.select(Font::Regular);
         return;
@@ -73,12 +75,14 @@ pub(super) fn lower_man_font_scope(
             } else {
                 Font::Emphasis
             });
-            super::append_inline_node_with_next(
-                output,
-                child,
-                node.children.get(index + 1),
-                default_name,
-            );
+            output.with_direct_word_operands(|output| {
+                super::append_inline_node_with_next(
+                    output,
+                    child,
+                    node.children.get(index + 1),
+                    default_name,
+                );
+            });
         }
         // OP resets for its closing bracket, then the man macro scope resets
         // again. Consequently a following fP selects regular, not its operand.

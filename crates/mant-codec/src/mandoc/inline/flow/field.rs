@@ -380,6 +380,23 @@ impl InlineBuilder {
         self.execution.boundary = PendingBoundary::Tight;
     }
 
+    /// Execute a visited empty TEXT at its actual node position. Native
+    /// `print_man_node()`/`print_mdoc_node()` call `term_newln()` for an active \c;
+    /// otherwise `term_vspace()` consumes skipvsp before emitting a blank row.
+    pub(in crate::mandoc) fn execute_visited_empty_text(&mut self) {
+        if self.final_source_continuation_or(false) {
+            self.hard_break();
+            // term_newln() does not clear TERMP_NONEWLINE. Another empty
+            // source TEXT therefore also takes this branch, without adding
+            // a vertical row or consuming skipvsp.
+            self.continue_source_line(true);
+        } else {
+            let rows = self.resolve_vertical_space(1);
+            self.vertical_space(usize::from(rows));
+            self.asserted_vertical_row |= rows > 0;
+        }
+    }
+
     /// Execute an inline vertical-space request without retaining its
     /// numeric operand as document text.  `term_vspace(n)` first closes an
     /// occupied row, then emits `n` empty rows.

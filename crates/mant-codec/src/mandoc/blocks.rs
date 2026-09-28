@@ -161,7 +161,7 @@ fn lower_blocks_with_predecessor_and_run_in(
     spacing_enabled: bool,
     paragraph_predecessor: bool,
     formatter: &mut crate::mandoc::formatter::FormatterState,
-    run_in: Option<(crate::mandoc::inline::PreservedInlineState, usize)>,
+    run_in: Option<(crate::mandoc::inline::PreservedInlineState, usize, bool)>,
     row_boundary: FormatterRowBoundary,
 ) -> Vec<Block> {
     let mut lowerer = BlockLowerer::new(
@@ -172,10 +172,10 @@ fn lower_blocks_with_predecessor_and_run_in(
         Vec::new(),
         std::mem::take(formatter),
     );
-    if let Some((execution, generated_cells)) = run_in {
+    if let Some((execution, generated_cells, generated_word)) = run_in {
         lowerer
             .state
-            .inherit_run_in_execution(execution, generated_cells);
+            .inherit_run_in_execution(execution, generated_cells, generated_word);
     }
     lowerer.paragraph_predecessor = paragraph_predecessor;
     lowerer.push_nodes(nodes);
@@ -244,6 +244,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         formatter: crate::mandoc::formatter::FormatterState,
     ) -> Self {
         let mut state = BlockState::with_output(indent_columns, spacing_enabled, output, formatter);
+        state.formatter.execution.macro_set = context.macro_set;
         state.inherit_scope_posts(context.scope_posts.clone());
         state.inherit_author_execution(
             state.formatter.author_flow(),
@@ -288,13 +289,14 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             if follows_inline_equation_punctuation(nodes, index) {
                 self.state.tighten_next_boundary();
             }
-            // CVS print_mdoc_node() enters NODE_LINE before a macro's pre
-            // handler writes generated words such as the final author's and.
-            self.prepare_node_execution(node);
             self.observe_source_fill_mode(node);
+            // Both print_man_node() and print_mdoc_node() execute NODE_LINE
+            // before visiting a text node or dispatching any request. This
+            // source event is independent of the request's own line effect.
+            let source_line_entered = self.enter_no_fill_source_line(node);
+            self.prepare_node_execution(node);
             let author_pre = reference_body && reference_author_conjunction(nodes, index);
             if author_pre {
-                self.enter_no_fill_source_line(node);
                 self.push_generated_container_event(
                     node,
                     crate::mandoc::containers::Event::Glyph("and".to_owned()),
@@ -307,7 +309,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
                 synopsis_previous,
                 adjacent_ip_run(nodes, index),
                 NodeSourceContext {
-                    line_entered: author_pre && self.state.formatter.no_fill,
+                    line_entered: source_line_entered,
                     predecessor: source_predecessor,
                     previous_is_sy,
                 },
@@ -508,7 +510,6 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             // man_term.c::print_man_node() observes this source line before
             // pre_UR(), but pre_UR() itself does not close a formatter row.
             // Keep the active literal sink and pending \c/\z for BODY text.
-            self.enter_no_fill_source_line(node);
             self.push_man_link(node);
             return;
         }
@@ -579,6 +580,12 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             FormatterBoundary::Line => {
                 self.state.formatter.clear_trailing_literal_row();
                 self.settle_no_fill_inline();
+                if formatter_control.is_some() && self.state.formatter.no_fill {
+                    // roff_term_pre_br()/term_newln() end the literal owner's
+                    // row even after \c; the request's handler may still
+                    // apply geometry or spacing afterward.
+                    self.state.end_literal_execution_line();
+                }
                 if formatter_control.is_some_and(|control| {
                     !control.specialized
                         || control.settle_before_handler && !self.state.formatter.no_fill
@@ -621,15 +628,16 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         }
     }
 
-    fn enter_no_fill_source_line(&mut self, node: &Node) {
-        if !self.state.formatter.no_fill {
-            return;
+    fn enter_no_fill_source_line(&mut self, node: &Node) -> bool {
+        if !self.state.formatter.no_fill || !node.flags.no_fill || !node.flags.line_start {
+            return false;
         }
         self.resume_no_fill_row();
-        if node.flags.line_start && !self.state.formatter.no_fill_inline.continues_source_line() {
+        if !self.state.formatter.no_fill_inline.continues_source_line() {
             self.settle_no_fill_inline();
             self.state.begin_no_fill_source_line();
         }
+        true
     }
 
     fn settle_no_fill_inline(&mut self) {

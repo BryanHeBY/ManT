@@ -110,7 +110,14 @@ impl BlockState {
     /// Those children can lack `NODE_LINE` themselves (notably Eo operands).
     pub(super) fn begin_no_fill_source_line(&mut self) {
         if self.literal.starts_new_row(true) {
-            self.literal.end_line();
+            if self.hanging_origin.is_some() {
+                // man_term.c switches an HP BODY to its hanging origin after
+                // the first no-fill child row. Keep that first row in its own
+                // IR owner before entering the next executed source row.
+                self.flush_preformatted();
+            } else {
+                self.literal.end_line();
+            }
         }
     }
     pub(super) fn with_output(
@@ -186,6 +193,7 @@ impl BlockState {
         ordinary_text: bool,
         append: impl FnOnce(&mut InlineBuilder),
     ) {
+        let visible_before = self.formatter.execution.visible_content_checkpoint();
         self.paragraph.append(
             &mut self.formatter,
             source,
@@ -208,7 +216,10 @@ impl BlockState {
             self.formatter.settle_definition_head_rows();
         }
         if self.formatter.definition_before_visible()
-            && self.formatter.execution.has_executed_visible_content()
+            && self
+                .formatter
+                .execution
+                .has_visible_content_since(visible_before)
         {
             self.formatter.note_definition_visible();
         }
@@ -227,6 +238,13 @@ impl BlockState {
             self.formatter.consume_definition_head_row();
         }
         self.formatter.settle_definition_head_rows();
+    }
+
+    /// Execute a native `term_newln()` request against the literal row owner.
+    /// The request ends an active row even when its source was continued by
+    /// \c; an IR paragraph break alone cannot release `LiteralFlow`'s join.
+    pub(super) fn end_literal_execution_line(&mut self) {
+        self.literal.end_line();
     }
 
     pub(super) fn tighten_next_boundary(&mut self) {
@@ -336,6 +354,10 @@ impl BlockState {
             .append(nodes, source, continues_line, starts_line, occupies_row);
     }
 
+    pub(super) fn mark_literal_vertical_row(&mut self) {
+        self.literal.mark_vertical_row();
+    }
+
     pub(super) fn adopt_trailing_preformatted(&mut self) -> bool {
         if !self.literal.is_empty() {
             return false;
@@ -394,11 +416,12 @@ impl BlockState {
         &mut self,
         state: crate::mandoc::inline::PreservedInlineState,
         generated_cells: usize,
+        generated_word: bool,
     ) {
         self.paragraph
             .inherit_preserved_execution(&mut self.formatter, state);
         self.paragraph
-            .append_run_in_cells(&mut self.formatter, generated_cells);
+            .append_run_in_cells(&mut self.formatter, generated_cells, generated_word);
     }
 
     pub(super) fn flush_paragraph(&mut self) {
@@ -426,14 +449,15 @@ impl BlockState {
                     children,
                     layout,
                     source,
-                } if !mant_ir::has_printable_character(&children)
-                    && children.iter().any(
-                        |inline| matches!(inline, Inline::Text { value } if value.is_empty()),
-                    ) =>
+                } if mant_ir::inline_plain_text(&children)
+                    .chars()
+                    .all(char::is_whitespace)
+                    && has_formatter_text_cell(&children) =>
                 {
-                    // An explicit empty formatter cell (for example `\&`)
-                    // owns one physical row. Empty paragraphs are otherwise
-                    // presentation-neutral, so encode the row as spacing.
+                    // An empty or whitespace-only formatter word owns one
+                    // physical row even when term_fill() prints no glyph.
+                    // This includes a styled space made by `.B "" ""` and an
+                    // explicit zero-width cell such as `\&`.
                     // Retain zero-width targets at that row during the
                     // representation change.
                     let completed_rows = children
@@ -557,6 +581,16 @@ impl BlockState {
         let output_end = self.output.len();
         self.attach_pending_to_structural_output(output_end);
     }
+}
+
+fn has_formatter_text_cell(nodes: &[Inline]) -> bool {
+    nodes.iter().any(|node| match node {
+        Inline::Text { .. } | Inline::Code { .. } | Inline::Equation { .. } => true,
+        Inline::Strong { children }
+        | Inline::Emphasis { children }
+        | Inline::Link { children, .. } => has_formatter_text_cell(children),
+        Inline::Anchor { .. } | Inline::LineBreak => false,
+    })
 }
 
 /// Only actual buffered rows satisfy an unconditional formatter flush.

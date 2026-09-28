@@ -66,7 +66,8 @@ impl NoFillInlineState {
         let bare_armed = self.formatter_cell == NoFillFormatterCell::Origin
             && execution.zero_advance.take_armed();
         execution.reset_no_fill_row(bare_armed);
-        self.continued = false;
+        // term_newln() closes a physical row without clearing TERMP_NONEWLINE.
+        // Only the next term_word() consumes an active source continuation.
         self.formatter_cell = NoFillFormatterCell::Origin;
         self.active = false;
     }
@@ -143,7 +144,8 @@ impl InlineExecutionState {
         self.zero_advance.reset_projection(bare_armed);
         self.zero_advance_joined = false;
         self.final_word_join = None;
-        self.final_source_continuation = None;
+        // The source continuation register survives term_newln() even though
+        // the projected row geometry is reset.
     }
 }
 
@@ -154,11 +156,11 @@ pub(in crate::mandoc) fn lower_no_fill_fragment_with_formatter(
     source_continuation_fallback: bool,
     finishes_row: bool,
     append: impl FnOnce(&mut InlineBuilder),
-) -> (Vec<Inline>, bool) {
+) -> (Vec<Inline>, bool, bool) {
     let continued = formatter.no_fill_inline.continued;
     let mut output = Vec::new();
-    let (continues_line, formatter_cell_occupied) =
-        formatter.with_output_builder(&mut output, |builder| {
+    let (continues_line, formatter_cell_occupied, asserted_vertical_row) = formatter
+        .with_output_builder(&mut output, |builder| {
             if continued {
                 builder.continue_source_line(true);
             }
@@ -166,6 +168,7 @@ pub(in crate::mandoc) fn lower_no_fill_fragment_with_formatter(
             (
                 builder.final_source_continuation_or(source_continuation_fallback),
                 builder.has_formatter_cell(),
+                builder.asserted_vertical_row(),
             )
         });
     // A generated word can realize a pending \p inside this fragment. The
@@ -182,5 +185,5 @@ pub(in crate::mandoc) fn lower_no_fill_fragment_with_formatter(
     if finishes_row && !continues_line {
         row.finish_row(&mut formatter.execution, &mut output);
     }
-    (output, continues_line)
+    (output, continues_line, asserted_vertical_row)
 }

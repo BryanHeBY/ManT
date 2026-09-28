@@ -276,6 +276,40 @@ fn zero_width_cells_trigger_real_formatter_boundaries() {
 }
 
 #[test]
+fn mdoc_definition_generated_padding_does_not_count_as_body_content() {
+    // mdoc_term.c::termp_it_pre() writes diag/inset padding through term_word(),
+    // but that generated whitespace is not BODY content.  The first visible
+    // BODY glyph, including a pending \z glyph, is the point at which the
+    // definition's pending HEAD row is consumed.  Fixed CVS keeps BODY on the
+    // next row after each of these exact operands and .sp 0.
+    for style in ["diag", "inset", "tag", "hang"] {
+        for operand in [r"\&", "\" \"", r"\fB", r"\zX", "X"] {
+            let source = format!(
+                ".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Bl -{style} -width Ds\n.It x\n.No {operand}\n.Tg item-gap\n.sp 0\n.No BODY\n.El\n"
+            );
+            let rendered = mant_render::render_query_text(
+                &mant_loader::load_roff_bytes(source.as_bytes()).unwrap(),
+            );
+            let lines = rendered.lines().collect::<Vec<_>>();
+            let head = lines
+                .iter()
+                .position(|line| line.trim_start().starts_with('x'))
+                .unwrap();
+            assert_eq!(
+                lines[head + 1].trim(),
+                "BODY",
+                "{style} {operand}: {rendered:?}"
+            );
+            assert_eq!(
+                lines[head].contains('X'),
+                matches!(operand, r"\zX" | "X"),
+                "{style} {operand}: {rendered:?}"
+            );
+        }
+    }
+}
+
+#[test]
 fn mdoc_definition_terms_share_only_their_native_pending_row() {
     for style in ["tag", "diag", "hang", "inset", "ohang"] {
         for (request, requested_rows) in [(".br", 0), (".sp 0", 0), (".sp 1", 1), (".Pp", 1)] {

@@ -106,11 +106,17 @@ impl super::BlockLowerer<'_, '_> {
             && node.text.as_deref().is_some_and(str::is_empty)
             && !node.flags.no_fill
         {
-            self.state.flush_paragraph();
-            self.state.output.push(Block::VerticalSpace {
-                lines: 1,
-                source: source_span(node),
-            });
+            // The filled source-line path also visits an empty TEXT through
+            // term_vspace(), so negative .sp debt is consumed here instead
+            // of turning the blank into an unconditional IR gap.
+            let lines = self.state.resolve_vertical_space(1);
+            self.state.flush_paragraph_for_line_request();
+            if lines > 0 {
+                self.state.output.push(Block::VerticalSpace {
+                    lines,
+                    source: source_span(node),
+                });
+            }
             return true;
         }
         false

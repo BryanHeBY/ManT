@@ -353,6 +353,13 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
         builder.tighten_next_boundary();
     }
     let source = node.decoder_text().unwrap_or_default();
+    if source.is_empty() && builder.visits_empty_text_as_space(node) {
+        // man_term.c visits every empty TEXT through term_vspace(); mdoc_term.c
+        // does so only for NODE_LINE. Neither path calls term_word(), so a
+        // negative .sp debt remains available to cancel the requested row.
+        builder.execute_visited_empty_text();
+        return;
+    }
     // `term_word()` consumes its inter-word boundary even for an explicit
     // empty operand. That word event can resolve a preceding `\\z` glyph
     // before generated enclosure punctuation is emitted. Control *nodes* are

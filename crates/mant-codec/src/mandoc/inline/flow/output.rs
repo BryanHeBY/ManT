@@ -222,7 +222,7 @@ impl InlineBuilder {
             self.execution.last_visible_character = Some('\n');
         }
         self.execution.final_word_join = Some(false);
-        self.execution.final_source_continuation = Some(false);
+        // term_newln() does not clear TERMP_NONEWLINE; the next word does.
     }
 
     pub(in crate::mandoc) fn has_formatter_cell(&self) -> bool {
@@ -529,6 +529,7 @@ impl InlineBuilder {
         let incoming_first = first_visible_character(incoming);
         let incoming_last = last_visible_character(incoming);
         let incoming_has_printable = has_printable_character(incoming);
+        let incoming_has_glyph = has_non_whitespace_glyph(incoming);
         let incoming_has_line_break = line_break_count(incoming) > 0;
         if incoming_has_printable || word {
             self.execution.execution_epoch = self.execution.execution_epoch.wrapping_add(1);
@@ -580,6 +581,9 @@ impl InlineBuilder {
             };
         }
         self.execution.has_printable_content |= incoming_has_printable;
+        if incoming_has_glyph {
+            self.execution.visible_glyph_epoch = self.execution.visible_glyph_epoch.wrapping_add(1);
+        }
         if incoming_has_line_break {
             self.execution.formatter_column =
                 if incoming_has_printable && !matches!(incoming_last, Some('\n')) {
@@ -770,6 +774,7 @@ impl InlineBuilder {
         }
         let last = last_visible_character(&incoming);
         let printable = has_printable_character(&incoming);
+        let has_glyph = has_non_whitespace_glyph(&incoming);
         self.nodes.append(&mut incoming);
         if last.is_some() {
             self.execution.last_visible_character = last;
@@ -780,6 +785,9 @@ impl InlineBuilder {
             };
         }
         self.execution.has_printable_content |= printable;
+        if has_glyph {
+            self.execution.visible_glyph_epoch = self.execution.visible_glyph_epoch.wrapping_add(1);
+        }
     }
 
     fn append_retained_layout(&mut self, retained: Vec<Inline>) {
@@ -806,6 +814,14 @@ impl InlineBuilder {
         self.execution.pending_breakable_spaces = 0;
         self.execution.pending_field_spaces = 0;
     }
+}
+
+fn has_non_whitespace_glyph(nodes: &[Inline]) -> bool {
+    let mut found = false;
+    mant_ir::visit_inline_plain_text(nodes, |text| {
+        found |= text.chars().any(|character| !character.is_whitespace());
+    });
+    found
 }
 
 /// Count formatter-breakable ASCII blanks at the end of the current field.

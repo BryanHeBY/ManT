@@ -12,6 +12,13 @@ struct LoweredNoFillLine {
     continues_line: bool,
     starts_line: bool,
     occupies_row: bool,
+    vertical_assertion: VerticalAssertion,
+}
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum VerticalAssertion {
+    None,
+    Asserted,
 }
 
 #[derive(Clone, Copy)]
@@ -21,7 +28,6 @@ struct NoFillSource<'a> {
     source_line_entered: bool,
     single_line_literal: bool,
     default_name: Option<&'a str>,
-    macro_set: libmandoc_rs::MacroSet,
 }
 
 pub(super) fn is_no_fill_payload(node: &Node, single_line_literal: bool) -> bool {
@@ -67,35 +73,21 @@ fn lower_no_fill_lines(
         source_line_entered,
         single_line_literal,
         default_name,
-        macro_set,
     } = source;
     if is_no_fill_payload(node, single_line_literal) {
-        let (mut nodes, continues_line) = lower_no_fill_fragment_with_formatter(
-            formatter,
-            ends_with_line_continuation(node),
-            false,
-            |builder| {
-                append_inline_node_with_next(builder, node, next, default_name);
-            },
-        );
+        let (mut nodes, continues_line, asserted_vertical_row) =
+            lower_no_fill_fragment_with_formatter(
+                formatter,
+                ends_with_line_continuation(node),
+                false,
+                |builder| {
+                    append_inline_node_with_next(builder, node, next, default_name);
+                },
+            );
         let mut occupies_row = !nodes.is_empty();
         if nodes.is_empty() {
-            let blank_rows = empty_word_rows(node, macro_set == libmandoc_rs::MacroSet::Mdoc);
-            occupies_row = blank_rows > 0;
-            // An empty native TEXT calls term_vspace() at this source node.
-            // Settle its formatter cell now; otherwise the next request
-            // would count the same authored blank row a second time.
-            if node.kind == NodeKind::Text && node.decoder_text().unwrap_or_default().is_empty() {
-                nodes.extend(
-                    formatter
-                        .no_fill_inline
-                        .take_settled_row(&mut formatter.execution),
-                );
-            }
-            for index in usize::from(!nodes.is_empty())..blank_rows {
-                if index > 0 {
-                    nodes.push(Inline::LineBreak);
-                }
+            occupies_row = has_invisible_word_cell(node);
+            if occupies_row {
                 nodes.push(Inline::Text {
                     value: String::new(),
                 });
@@ -107,49 +99,43 @@ fn lower_no_fill_lines(
             continues_line,
             starts_line: node.flags.line_start && !source_line_entered,
             occupies_row,
+            vertical_assertion: if asserted_vertical_row {
+                VerticalAssertion::Asserted
+            } else {
+                VerticalAssertion::None
+            },
         }]);
     }
     None
 }
 
-/// `man_term` renders every empty TEXT as vertical space, including a B/I
-/// operand; `ESCAPE_IGNORE` instead buffers an invisible glyph on the current
-/// row. Pure font escapes do neither. Inspect typed decoded events only when
-/// ordinary lowering returned no visible payload.
-fn empty_word_rows(node: &Node, is_mdoc: bool) -> usize {
-    // Alternating font macros call term_word on operands themselves instead
-    // of visiting man TEXT nodes, so their empty parameters are not vspace.
-    // mdoc_term.c::print_mdoc_node() only interprets an empty TEXT as a blank
-    // input row under NODE_LINE; an empty macro argument merely calls
-    // term_word(""). man_term.c interprets every visited empty TEXT as vspace.
-    let empty_text_is_row =
-        crate::mandoc::inline::alternating_font_pair(node.macro_name.as_deref()).is_none();
+/// A zero-width formatter word occupies a row without a printable glyph.
+/// Empty TEXT is executed as `term_vspace()` during the actual inline walk;
+/// reconstructing its rows after the fact would lose skipvsp and \c state.
+fn has_invisible_word_cell(node: &Node) -> bool {
     let mut stack = vec![node];
-    let mut blanks = 0usize;
-    let mut zero_width_glyph = false;
     while let Some(node) = stack.pop() {
         if node.flags.no_print || node.kind == NodeKind::Comment {
             continue;
         }
         if node.kind == NodeKind::Text {
             let text = node.decoder_text().unwrap_or_default();
-            if text.is_empty() && empty_text_is_row && (!is_mdoc || node.flags.line_start) {
-                blanks = blanks.saturating_add(1);
-            } else {
-                zero_width_glyph |= crate::mandoc::roff_escape::decode(text)
-                    .iter()
-                    .any(|event| {
-                        matches!(
-                            event,
-                            crate::mandoc::roff_escape::RoffInlineEvent::ZeroWidthGlyph
-                        )
-                    });
+            if crate::mandoc::roff_escape::decode(text)
+                .iter()
+                .any(|event| {
+                    matches!(
+                        event,
+                        crate::mandoc::roff_escape::RoffInlineEvent::ZeroWidthGlyph
+                    )
+                })
+            {
+                return true;
             }
         } else {
             stack.extend(node.children.iter().rev());
         }
     }
-    blanks.max(usize::from(zero_width_glyph))
+    false
 }
 
 impl super::BlockLowerer<'_, '_> {
@@ -184,15 +170,14 @@ impl super::BlockLowerer<'_, '_> {
                 source_line_entered,
                 single_line_literal,
                 default_name: self.context.default_name,
-                macro_set: self.context.macro_set,
             },
             formatter,
         ) else {
             unreachable!("a no-fill payload must lower as a no-fill row");
         };
-        // Every accepted no-fill payload represents a real `term_word()` and
-        // consequently clears formatter-global negative `.sp` debt.
-        self.state.clear_formatter_word_debt();
+        // Actual term_word() calls clear skipvsp in begin_word_projection().
+        // A visited empty TEXT instead calls term_vspace(), possibly consuming
+        // that debt without producing a visible row.
         for line in lines {
             self.state.push_preformatted(
                 line.nodes,
@@ -201,6 +186,9 @@ impl super::BlockLowerer<'_, '_> {
                 line.starts_line,
                 line.occupies_row,
             );
+            if line.vertical_assertion == VerticalAssertion::Asserted {
+                self.state.mark_literal_vertical_row();
+            }
         }
         true
     }

@@ -42,6 +42,12 @@ pub(super) enum RunInHeadStyle {
     Strong,
 }
 
+struct RunInExecution {
+    state: crate::mandoc::inline::PreservedInlineState,
+    surviving_cells: usize,
+    generated_word: bool,
+}
+
 impl DefinitionHeadFlow {
     fn generated_cells(self) -> Option<u8> {
         match self {
@@ -128,7 +134,7 @@ pub(super) fn definition_item(
     // boundary preceded the first visible word and whether the detached head
     // already accounts for an invisible first row.
     formatter.begin_definition_body(flow.shares_pending_term_row);
-    let description = if let Some(execution) = run_in_execution {
+    let description = if let Some(run_in) = run_in_execution {
         lower_blocks_with_predecessor_and_run_in(
             body,
             context,
@@ -137,10 +143,7 @@ pub(super) fn definition_item(
             formatter.spacing_enabled(),
             flow.paragraph_predecessor,
             formatter,
-            Some((
-                execution,
-                usize::from(flow.head.generated_cells().unwrap_or_default()),
-            )),
+            Some((run_in.state, run_in.surviving_cells, run_in.generated_word)),
             super::super::FormatterRowBoundary::Settle,
         )
     } else {
@@ -193,31 +196,38 @@ fn lower_definition_head(
     context: &LoweringContext<'_>,
     flow: DefinitionFlow,
     formatter: &mut crate::mandoc::formatter::FormatterState,
-) -> (
-    Vec<Inline>,
-    Option<crate::mandoc::inline::PreservedInlineState>,
-    bool,
-    bool,
-    Vec<usize>,
-) {
+) -> (Vec<Inline>, Option<RunInExecution>, bool, bool, Vec<usize>) {
     let groups = std::iter::once(head).chain(
         displaced_equations
             .iter()
             .map(|equation| std::slice::from_ref(*equation)),
     );
     if flow.head.generated_cells().is_some() {
-        let (term, mut execution, term_breaks) = context.lower_run_in_definition_head(
-            groups,
-            flow.spacing_enabled,
-            formatter,
-            flow.head.strong_scope(),
-        );
+        let generated_cells = usize::from(flow.head.generated_cells().unwrap_or_default());
+        let (term, mut execution, term_breaks, surviving_cells, generated_word) = context
+            .lower_run_in_definition_head(
+                groups,
+                flow.spacing_enabled,
+                formatter,
+                flow.head.strong_scope(),
+                generated_cells,
+            );
         execution.last_executed_source_line = head
             .iter()
             .chain(displaced_equations.iter().copied())
             .filter_map(latest_source_line)
             .max();
-        return (term, Some(execution), false, false, term_breaks);
+        return (
+            term,
+            Some(RunInExecution {
+                state: execution,
+                surviving_cells,
+                generated_word,
+            }),
+            false,
+            false,
+            term_breaks,
+        );
     }
 
     let mut term_builder = InlineBuilder::with_spacing(flow.spacing_enabled);

@@ -1,5 +1,6 @@
 //! Filled flow preserves font, spacing and pending boundaries across scopes.
 use super::{Font, ZeroAdvanceState, needs_boundary_space, push_text, updated_spacing};
+use libmandoc_rs::MacroSet;
 use mant_ir::Inline;
 use mant_ir::{first_visible_character, has_printable_character, last_visible_character};
 
@@ -15,6 +16,12 @@ use output::trim_trailing_breakable_spaces;
 
 pub(in crate::mandoc) struct InlineBuilder {
     nodes: Vec<Inline>,
+    // Macro handlers such as pre_alternate() call term_word() directly on
+    // operands instead of visiting those TEXT nodes through print_man_node().
+    direct_word_operands: bool,
+    // An actual term_vspace() from empty TEXT asserted an empty output row.
+    // The literal owner must distinguish it from a trailing term_newln().
+    asserted_vertical_row: bool,
     definition_term_breaks: Vec<usize>,
     pub(in crate::mandoc) execution: InlineExecutionState,
     /// A detached definition HEAD occupies the native formatter row even
@@ -43,6 +50,10 @@ pub(in crate::mandoc) struct InlineExecutionState {
     spacing: SpacingMode,
     last_visible_character: Option<char>,
     has_printable_content: bool,
+    // Native visible-glyph execution advances independently of generated
+    // padding, formatter cells, and IR owner drains. Definition BODY checks
+    // the increment made by its current source node.
+    visible_glyph_epoch: u64,
     // Unlike `has_printable_content`, this is reset at each real formatter
     // row boundary and does not count a pending zero-advance glyph.
     formatter_column: FormatterColumn,
@@ -58,6 +69,7 @@ pub(in crate::mandoc) struct InlineExecutionState {
     pub(in crate::mandoc) vertical_space_debt: u16,
     pub(in crate::mandoc) keep: KeepState,
     pub(in crate::mandoc) font: FontState,
+    pub(in crate::mandoc) macro_set: MacroSet,
     pub(in crate::mandoc) zero_advance: ZeroAdvanceState,
     // A nested inline scope can resolve a `\\z` glyph that was armed by its
     // parent.  Preserve that boundary fact when the scope returns its nodes:
@@ -579,6 +591,8 @@ impl InlineBuilder {
     pub(in crate::mandoc) fn with_spacing(spacing_enabled: bool) -> Self {
         Self {
             nodes: Vec::new(),
+            direct_word_operands: false,
+            asserted_vertical_row: false,
             definition_term_breaks: Vec::new(),
             execution: InlineExecutionState::with_spacing(spacing_enabled),
             external_head_row_pending: false,
@@ -591,6 +605,8 @@ impl InlineBuilder {
     ) -> Self {
         Self {
             nodes,
+            direct_word_operands: false,
+            asserted_vertical_row: false,
             definition_term_breaks: Vec::new(),
             execution,
             external_head_row_pending: false,
@@ -599,6 +615,31 @@ impl InlineBuilder {
 
     pub(in crate::mandoc) fn inherit_external_head_row(&mut self, pending: bool) {
         self.external_head_row_pending = pending;
+    }
+
+    pub(in crate::mandoc) fn with_direct_word_operands<R>(
+        &mut self,
+        append: impl FnOnce(&mut Self) -> R,
+    ) -> R {
+        let previous = std::mem::replace(&mut self.direct_word_operands, true);
+        let result = append(self);
+        self.direct_word_operands = previous;
+        result
+    }
+
+    pub(in crate::mandoc) const fn asserted_vertical_row(&self) -> bool {
+        self.asserted_vertical_row
+    }
+
+    pub(in crate::mandoc) fn visits_empty_text_as_space(&self, node: &libmandoc_rs::Node) -> bool {
+        if self.direct_word_operands {
+            return false;
+        }
+        match self.execution.macro_set {
+            MacroSet::Man => true,
+            MacroSet::Mdoc => node.flags.line_start,
+            MacroSet::None => false,
+        }
     }
 
     pub(in crate::mandoc) fn mark_definition_term_break(&mut self) {
@@ -625,6 +666,7 @@ impl InlineExecutionState {
             spacing: SpacingMode::from_enabled(spacing_enabled),
             last_visible_character: None,
             has_printable_content: false,
+            visible_glyph_epoch: 0,
             formatter_column: FormatterColumn::Origin,
             empty_word: false,
             trailing_output: TrailingOutput::None,
@@ -636,6 +678,7 @@ impl InlineExecutionState {
             vertical_space_debt: 0,
             keep: KeepState::new(),
             font: FontState::new(),
+            macro_set: MacroSet::None,
             zero_advance: ZeroAdvanceState::new(),
             zero_advance_joined: false,
             final_word_join: None,
@@ -664,7 +707,8 @@ impl InlineExecutionState {
         self.zero_advance.reset_projection(armed_zero_advance);
         self.zero_advance_joined = false;
         self.final_word_join = None;
-        self.final_source_continuation = None;
+        // TERMP_NONEWLINE is a native execution register, not an IR segment
+        // property. A paragraph drain does not consume a preceding \c.
         self.execution_epoch = 0;
         self.definition = None;
         self.last_executed_source_line = None;
@@ -689,8 +733,16 @@ impl InlineExecutionState {
             || self.word_end_break == WordEndBreak::Pending
     }
 
-    pub(in crate::mandoc) fn has_executed_visible_content(&self) -> bool {
-        self.has_printable_content || self.zero_advance.has_printable_pending_glyph()
+    pub(in crate::mandoc) fn visible_content_checkpoint(&self) -> (u64, bool) {
+        (
+            self.visible_glyph_epoch,
+            self.zero_advance.has_printable_pending_glyph(),
+        )
+    }
+
+    pub(in crate::mandoc) fn has_visible_content_since(&self, before: (u64, bool)) -> bool {
+        self.visible_glyph_epoch != before.0
+            || (!before.1 && self.zero_advance.has_printable_pending_glyph())
     }
 
     pub(in crate::mandoc) fn has_printable_pending_zero_advance_glyph(&self) -> bool {

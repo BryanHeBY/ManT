@@ -206,10 +206,13 @@ impl<'a> LoweringContext<'a> {
         spacing: bool,
         formatter: &mut formatter::FormatterState,
         strong_scope: bool,
+        generated_cells: usize,
     ) -> (
         Vec<mant_ir::Inline>,
         inline::PreservedInlineState,
         Vec<usize>,
+        usize,
+        bool,
     ) {
         let mut builder = formatter.begin_inline_session(
             spacing,
@@ -227,12 +230,20 @@ impl<'a> LoweringContext<'a> {
             inline::append_inline_nodes(&mut builder, nodes, self.default_name);
         }
         builder.observe_no_fill_source_lines(false);
+        let surviving_cells = generated_cells
+            - usize::from(generated_cells > 0 && builder.settle_head_glyph_before_run_in_cells());
         if let Some(saved_font) = saved_font {
             builder.font.pop_scope(saved_font);
         }
         let breaks = builder.take_definition_term_breaks();
         let (output, execution) = formatter.finish_inline_scope(builder);
-        (output, execution, breaks)
+        (
+            output,
+            execution,
+            breaks,
+            surviving_cells,
+            generated_cells > 0,
+        )
     }
 
     /// Execute a section heading in the surrounding formatter stream.

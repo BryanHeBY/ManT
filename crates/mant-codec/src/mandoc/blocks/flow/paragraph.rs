@@ -108,8 +108,15 @@ impl ParagraphFlow {
         });
     }
 
-    pub(super) fn append_run_in_cells(&mut self, formatter: &mut FormatterState, count: usize) {
-        self.with_inline_builder(formatter, |builder| builder.append_run_in_cells(count));
+    pub(super) fn append_run_in_cells(
+        &mut self,
+        formatter: &mut FormatterState,
+        count: usize,
+        generated_word: bool,
+    ) {
+        self.with_inline_builder(formatter, |builder| {
+            builder.append_run_in_cells(count, generated_word);
+        });
     }
 
     pub(super) fn append(
