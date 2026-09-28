@@ -147,6 +147,8 @@ pub(super) fn append_inline_node(
     append_inline_node_with_next(builder, node, None, default_name);
 }
 
+// Node entry, handler, and post have one shared execution sequence.
+#[allow(clippy::too_many_lines)]
 pub(super) fn append_inline_node_with_next(
     builder: &mut InlineBuilder,
     node: &Node,
@@ -182,7 +184,21 @@ pub(super) fn append_inline_node_with_next(
     if execute_author_pre(builder, node) {
         return;
     }
-    builder.begin_word_projection(node_emits_visible_output(node, default_name));
+    let begins_visible_word = node_emits_visible_output(node, default_name);
+    // A container may have visible descendants without emitting a glyph at
+    // its own pre phase. Let the actual child word decide whether a pending
+    // \p can break the line; otherwise a whitespace-only child is mistaken
+    // for printed content before term_fill() sees the field.
+    let generates_break_glyph = is_enclosure_macro(node.macro_name.as_deref())
+        || matches!(node.macro_name.as_deref(), Some("Fl" | "Nd" | "OP"))
+        || (node.macro_name.as_deref() == Some("Nm")
+            && node.kind == NodeKind::Block
+            && node.children.is_empty()
+            && default_name.is_some());
+    builder.begin_word_projection_with_break(
+        begins_visible_word,
+        !builder.in_definition_field() || generates_break_glyph,
+    );
     if node.flags.delimiter_close {
         builder.tighten_next_boundary();
     }
@@ -363,6 +379,24 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
         builder.tighten_next_boundary();
     }
     let source = node.decoder_text().unwrap_or_default();
+    let events = decode(source);
+    if source.contains('\u{1c}')
+        || events.iter().any(|event| {
+            matches!(
+                event,
+                RoffInlineEvent::Presentation {
+                    kind: super::roff_escape::PresentationKind::Spacing,
+                    ..
+                }
+            )
+        })
+    {
+        // CVS roff.c and mdoc_validate.c::post_hyph() mark source hyphens with
+        // ASCII_HYPH; term_fill() can also break at \:. Both markers lose
+        // their distinct identity in readable IR text, so they must reach
+        // the HANG gap proof before that projection.
+        builder.note_discretionary_hang_field_break();
+    }
     if source.is_empty() && builder.visits_empty_text_as_space(node) {
         // man_term.c visits every empty TEXT through term_vspace(); mdoc_term.c
         // does so only for NODE_LINE. Neither path calls term_word(), so a
@@ -374,22 +408,41 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
     // empty operand. That word event can resolve a preceding `\\z` glyph
     // before generated enclosure punctuation is emitted. Control *nodes* are
     // routed separately and therefore do not gain this behavior.
-    builder.begin_word_projection(true);
+    let has_glyph = events.iter().any(|event| match event {
+        RoffInlineEvent::Text(value)
+        | RoffInlineEvent::Glyph(value)
+        | RoffInlineEvent::FallbackGlyph(value) => value
+            .chars()
+            .any(|character| !is_formatter_word_blank(character) && character != '\n'),
+        RoffInlineEvent::DeviceName | RoffInlineEvent::Overstrike { .. } => true,
+        _ => false,
+    });
+    builder.begin_word_projection_with_break(true, !builder.in_definition_field() || has_glyph);
     let pending_word_end_break = builder.take_word_end_break();
+    // In a HANG field, term.c::term_fill() does not turn \p followed only by
+    // blank/control words into a printed line. Keep that marker in the
+    // active field until a visible word or term_flushln() decides its fate.
+    let deferred_hang_break = pending_word_end_break && !has_glyph && builder.in_definition_field();
     let execution = font::parse_roff_text_with_zero_advance(
         source,
         &mut builder.execution.font,
         !node.flags.no_fill,
         &mut builder.execution.zero_advance,
-        pending_word_end_break,
+        pending_word_end_break && !deferred_hang_break,
     );
+    if execution.break_before_graph && builder.in_definition_field() {
+        // term.c::term_fill() sees the decoded events in source order. A
+        // single quoted TEXT can contain both \p and the blank that prevents
+        // the field from printing, before any later Y glyph is considered.
+        builder.note_hang_break_before_graph();
+    }
     // mdoc_term gives an empty text node a vertical row only when the text
     // itself begins an input line. An empty No/Em argument does not, whereas
     // a buffered zero-width glyph (for example \&) still occupies that row.
     let occupies_literal_row = !execution.output.is_empty()
         || builder.zero_advance.has_buffered_glyph()
         || (node.flags.line_start && node.text.as_deref().is_some_and(str::is_empty))
-        || decode(source)
+        || events
             .iter()
             .any(|event| matches!(event, RoffInlineEvent::ZeroWidthGlyph));
     if execution.joins_preceding_node {
@@ -401,7 +454,16 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
         occupies_literal_row,
         execution.trailing_output,
     );
-    if execution.pending_word_end_break {
+    if events
+        .iter()
+        .any(|event| matches!(event, RoffInlineEvent::ZeroWidthGlyph))
+    {
+        // term_fill() treats ASCII_NBRZW as graph even though its IR glyph
+        // is invisible. Record it after this word's leading separator has
+        // executed, before a same-word \p is left pending.
+        builder.note_hang_native_graph();
+    }
+    if deferred_hang_break || execution.pending_word_end_break {
         builder.request_word_end_break();
     }
     let continues_line = execution

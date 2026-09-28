@@ -180,9 +180,12 @@ impl ParagraphFlow {
         &mut self,
         formatter: &mut FormatterState,
         indent: crate::mandoc::layout::SourceIndent,
+        line_request: bool,
     ) -> (Option<Block>, bool, u16) {
-        let (children, empty_word_end_break, completed_vertical_rows) =
-            self.with_inline_builder(formatter, InlineBuilder::take_paragraph_segment);
+        let (children, empty_word_end_break, completed_vertical_rows) = self
+            .with_inline_builder(formatter, |builder| {
+                builder.take_paragraph_segment(line_request)
+            });
         let source = self.source.take();
         self.last_line = None;
         (

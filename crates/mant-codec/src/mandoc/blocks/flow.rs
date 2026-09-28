@@ -439,9 +439,9 @@ impl BlockState {
             return;
         }
         let output_start = self.output.len();
-        let (block, empty_word_end_break, completed_vertical_rows) = self
-            .paragraph
-            .take(&mut self.formatter, self.indent_columns);
+        let (block, empty_word_end_break, completed_vertical_rows) =
+            self.paragraph
+                .take(&mut self.formatter, self.indent_columns, line_request);
         let mut suppressed_head_row = false;
         if let Some(block) = block {
             match block {

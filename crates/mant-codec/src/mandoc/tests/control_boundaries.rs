@@ -481,6 +481,95 @@ fn final_hang_field_reestablishes_body_word_gap() {
 }
 
 #[test]
+fn completed_definition_head_and_body_rows_have_distinct_owners() {
+    // Both exact inputs passed fixed CVS -Tascii/-Tutf8/-Tlint. CVS
+    // mdoc_term.c::termp_it_pre() creates the inset BODY separator only after
+    // the HEAD has closed; the later roff_term.c::roff_term_pre_br() closes
+    // that new row, not the already represented HEAD row.
+    for (head_request, expected_term) in [(".br", "X"), (".sp 1", "X\n")] {
+        let source = format!(
+            ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset\n.It Xo X\n{head_request}\n.Xc\n.br\n.No BODY\n.El\n"
+        );
+        let document = parse_manual_bytes(
+            std::path::Path::new("closed-head-new-body-row.1"),
+            source.as_bytes(),
+        )
+        .unwrap();
+        let Block::DefinitionList { items, .. } = &document.sections[1].blocks[0] else {
+            panic!("{head_request}: {document:#?}");
+        };
+        assert_eq!(inline_text(&items[0].terms[0]), expected_term);
+        assert!(
+            matches!(&items[0].description[0], Block::Paragraph { children, .. } if inline_text(children) == " \nBODY"),
+            "{head_request}: {items:#?}"
+        );
+    }
+}
+
+#[test]
+fn detached_definition_head_keeps_authored_vertical_rows() {
+    // Exact hang/tag/ohang .sp 1/.sp 2 cases passed fixed CVS
+    // -Tascii/-Tutf8/-Tlint. term.c::term_vspace() has already emitted its
+    // row before the detached HEAD returns to mdoc_term.c::termp_it_post().
+    for (style, request, expected_term) in [
+        ("hang -width 4n", ".sp 1", "X"),
+        ("hang -width 4n", ".sp 2", "X\n"),
+        ("tag -width 4n", ".sp 2", "X\n"),
+        ("ohang", ".sp 1", "X\n"),
+    ] {
+        let source = format!(
+            ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -{style}\n.It Xo X\n{request}\n.Xc\n.No BODY\n.El\n"
+        );
+        let document = parse_manual_bytes(
+            std::path::Path::new("detached-head-vertical-rows.1"),
+            source.as_bytes(),
+        )
+        .unwrap();
+        let Block::DefinitionList { items, .. } = &document.sections[1].blocks[0] else {
+            panic!("{style} {request}: {document:#?}");
+        };
+        assert_eq!(inline_text(&items[0].terms[0]), expected_term);
+        assert!(
+            !items[0].layout.inline_term,
+            "{style} {request}: {items:#?}"
+        );
+    }
+}
+
+#[test]
+fn final_hang_field_only_consumes_a_proven_body_gap() {
+    // All exact fields passed fixed CVS -Tascii/-Tutf8/-Tlint.
+    // term.c::term_fill() may break a field at ordinary spaces after .br;
+    // cumulative field width is not the final native row column. An
+    // indivisible last word spanning the BODY origin still proves no gap.
+    for (words, expected_gap) in [
+        ("AA BB CC", 1),
+        ("YYYYY Z", 1),
+        ("YYYYY ZZZZZZZZ", 0),
+        (r"YYYYY\:Z", 1),
+        (r"YYY\:Z", 0),
+        (r"YYY\pZ", 0),
+        (r"A BBBBBB\zC", 0),
+    ] {
+        let source = format!(
+            ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo X\n.br\n.No {words}\n.Xc\n.No BODY\n.El\n"
+        );
+        let document = parse_manual_bytes(
+            std::path::Path::new("hang-final-physical-field.1"),
+            source.as_bytes(),
+        )
+        .unwrap();
+        let Block::DefinitionList { items, .. } = &document.sections[1].blocks[0] else {
+            panic!("{words}: {document:#?}");
+        };
+        assert_eq!(
+            items[0].layout.min_term_gap_columns, expected_gap,
+            "{items:#?}"
+        );
+    }
+}
+
+#[test]
 fn crossed_body_close_pops_font_stack_without_restoring_an_old_value() {
     // Exact input checked with fixed CVS -Tascii/-Tlint. term.c's
     // term_fontrepl() changes the active fontq slot, while mdoc_term.c's

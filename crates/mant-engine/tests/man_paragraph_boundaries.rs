@@ -126,11 +126,13 @@ fn headless_continuations_keep_pd_and_body_space_as_independent_requests() {
                 );
                 let query = load_roff_bytes(source.as_bytes()).unwrap();
                 let text = render_query_text(&query);
-                // An invisible tag is not an extra content row. Preserve
-                // the authored PD and sp, not a formatter's empty-head flush.
+                // CVS man_term.c::post_IP()/post_TP() flush an executed empty
+                // formatter word as one row. A missing head or a lone \\&
+                // produces no such row; PD and .sp remain independent.
+                let empty_head_word = matches!(head, ".IP \"\" 4" | ".TP 4\n.B \"\"");
                 assert_eq!(
                     blank_rows_before(&text, "SECOND"),
-                    pd + space,
+                    pd + space + usize::from(empty_head_word),
                     "{source}\n{text}"
                 );
                 if head.starts_with(".IP") {

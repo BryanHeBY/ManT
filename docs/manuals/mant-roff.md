@@ -158,16 +158,32 @@ Draining the HEAD's IR term does not reset the native word separator or its
 current row. If the generated separator has no cell left, an empty BODY word
 can still consume the no-space setting before the following visible word.
 An occupied native HEAD row is distinct from a HEAD row actually represented
-by an IR term. A whitespace term, including `\~` and `\0`, represents its row;
-`\&` alone does not. Only a represented row can consume an invisible BODY row
-on an explicit break. In no-fill, an empty or font-only BODY word also cannot
-reproject the HEAD's cell; a new `\&` cell can occupy its own BODY row.
-An explicit final HEAD `br` or `sp` closes the run-in row once; additional
-vertical rows stay in the term. If that HEAD row held an invisible formatter
-cell, its completed line belongs to the description when no visible term can
-represent it. A hang field's BODY gap is decided from the last device row:
-earlier field padding alone cannot settle it, and a row already reaching the
-BODY origin must not receive another gap.
+by an IR term. A whitespace term in an inset or diagnostic list, including
+`\~` and `\0`, represents its row; `\&` alone does not. In detached tag and
+hang heads, `term_fill()` discards a field made only of ordinary breakable
+spaces; fixed blanks remain cells. Only a represented, still open HEAD row can
+consume an invisible BODY row on an explicit break. In no-fill, an empty or
+font-only BODY word also cannot reproject the HEAD's cell; a new `\&` cell can
+occupy its own BODY row. An explicit final HEAD `br` or `sp` closes the row
+once; additional vertical rows stay in the term or transfer to the description
+when no visible term can represent them. A later BODY `br` or `sp` owns its new
+row independently. Empty formatter words can write an automatic separator
+cell after a preceding hard break even while the last visible character is
+that break. A bare pending `\p` and the next `br`/`sp` request close the same
+occupied row once. A man `IP` with an executed empty tag word similarly keeps
+its terminal row in the description while remaining a semantic headless
+continuation of the preceding labelled item. A hang field's BODY gap is
+decided from the last provable device
+row: earlier field padding alone cannot settle it, and breakable spaces or
+zero-width breakpoints may wrap within the final field. When its final column
+cannot be proved, the projection retains the word separator.
+In TAG and HANG HEADs, `\p` remains buffered until a later formatter word or
+field flush. Blank/control-only words cannot themselves establish a hard row;
+if an ordinary separator follows `\p` before any native graph,
+`term_fill()` discards the unprinted buffer while its anchors and typed targets
+remain available to queries. A literal tab is a native graph, so it does not
+qualify as that separator. TAG may leave NOBREAK before HEAD returns, but the
+same buffered-word rule still applies to its remaining HEAD text.
 An inset item with no HEAD child generates no separator word at all, so that
 case does not consume formatter word state.
 

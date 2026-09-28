@@ -77,6 +77,8 @@ impl DefinitionHeadFlow {
     }
 }
 
+// Keep the native HEAD/BODY checkpoint decisions in source execution order.
+#[allow(clippy::too_many_lines)]
 pub(super) fn definition_item(
     node: &Node,
     context: &LoweringContext<'_>,
@@ -118,6 +120,17 @@ pub(super) fn definition_item(
         geometry.gap = 0;
     }
     let mut terms = split_definition_terms(term, &term_breaks);
+    if matches!(flow.head, DefinitionHeadFlow::Detached { .. }) {
+        for term in &mut terms {
+            // CVS term.c::term_fill() drops a field made solely of ordinary
+            // breakable spaces. Such a HEAD owns no printed row, so an early
+            // BODY .sp must not make its IR term appear as another blank row.
+            // Fixed blanks (\~ and \0) remain real cells in the UTF-8 device.
+            if term.iter().all(only_breakable_head_padding) {
+                clear_breakable_head_padding(term);
+            }
+        }
+    }
     if let Some(id) = definition_head_anchor(node) {
         if terms.is_empty() {
             terms.push(Vec::new());
@@ -146,7 +159,9 @@ pub(super) fn definition_item(
     let rendered_head_row = terms
         .iter()
         .any(|term| mant_ir::has_printable_character(term));
-    formatter.begin_definition_body(flow.shares_pending_term_row && rendered_head_row);
+    formatter.begin_definition_body(
+        flow.shares_pending_term_row && rendered_head_row && !closed_head_row,
+    );
     let mut description = if let Some(run_in) = run_in_execution {
         lower_blocks_with_predecessor_and_run_in(
             body,
@@ -171,6 +186,13 @@ pub(super) fn definition_item(
         )
     };
     carry_invisible_head_row(node, &terms, closed_head_row, &mut description);
+    if node.macro_name.as_deref() == Some("IP") {
+        // man_term.c::post_IP() can complete an empty HEAD word even though
+        // it supplies no tag. Its row now belongs to the description; an
+        // empty term shell must not turn a headless .IP continuation into a
+        // new semantic definition.
+        terms.retain(|term| !term.is_empty());
+    }
     let observed = formatter.finish_definition_body();
     if man_node {
         formatter.font.man_text_boundary(); // BODY post
@@ -204,6 +226,38 @@ pub(super) fn definition_item(
     item
 }
 
+fn only_breakable_head_padding(inline: &Inline) -> bool {
+    match inline {
+        Inline::Anchor { .. } | Inline::LineBreak => true,
+        Inline::Text { value } | Inline::Code { value } => value.chars().all(|ch| ch == ' '),
+        Inline::Emphasis { children }
+        | Inline::Strong { children }
+        | Inline::Link { children, .. } => children.iter().all(only_breakable_head_padding),
+        // Equations and other semantic nodes are not ordinary term_fill()
+        // padding cells.
+        Inline::Equation { .. } => false,
+    }
+}
+
+fn clear_breakable_head_padding(term: &mut Vec<Inline>) {
+    term.retain_mut(|inline| match inline {
+        Inline::Anchor { .. } | Inline::LineBreak => true,
+        Inline::Link { children, .. } => {
+            // Preserve the typed destination while removing its unprinted
+            // whitespace label. Link resolution may later unwrap an unknown
+            // section target; an empty child cannot revive the field row.
+            clear_breakable_head_padding(children);
+            true
+        }
+        Inline::Emphasis { children } | Inline::Strong { children } => {
+            clear_breakable_head_padding(children);
+            !children.is_empty()
+        }
+        Inline::Text { .. } | Inline::Code { .. } => false,
+        Inline::Equation { .. } => unreachable!("padding predicate excludes equations"),
+    });
+}
+
 fn take_closed_head_row(terms: &mut [Vec<Inline>]) -> bool {
     let Some(term) = terms.last_mut() else {
         return false;
@@ -223,12 +277,10 @@ fn take_closed_head_row(terms: &mut [Vec<Inline>]) -> bool {
 
 fn invisible_closed_head_row(terms: &[Vec<Inline>]) -> bool {
     terms.last().is_some_and(|term| {
-        term.iter()
-            .any(|inline| matches!(inline, Inline::Text { value } if value.is_empty()))
-            && !term.iter().any(|inline| {
-                matches!(inline, Inline::LineBreak)
-                    || mant_ir::has_printable_character(std::slice::from_ref(inline))
-            })
+        !term.iter().any(|inline| {
+            matches!(inline, Inline::LineBreak)
+                || mant_ir::has_printable_character(std::slice::from_ref(inline))
+        })
     })
 }
 
@@ -297,7 +349,7 @@ fn lower_definition_head(
     let mut term_breaks = Vec::new();
     for (index, group) in groups.enumerate() {
         let (lowered, field_exited, body_gap_consumed, breaks) = context
-            .lower_inline_with_author_break(
+            .lower_inline_with_author_break_preserving_rows(
                 group,
                 flow.spacing_enabled,
                 formatter,
@@ -313,7 +365,7 @@ fn lower_definition_head(
         definition_body_gap_consumed |= body_gap_consumed;
     }
     (
-        term_builder.finish(),
+        term_builder.finish_preserving_rows(),
         None,
         definition_field_exited,
         definition_body_gap_consumed,

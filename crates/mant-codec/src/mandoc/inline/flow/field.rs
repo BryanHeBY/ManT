@@ -68,6 +68,8 @@ impl InlineBuilder {
         self.flush_definition_field(start, gap, body, wraps, true)
     }
 
+    // The NOBREAK flush commits field, row, and BRIND state in native order.
+    #[allow(clippy::too_many_lines)]
     pub(super) fn flush_definition_field(
         &mut self,
         field_output_start: usize,
@@ -76,9 +78,20 @@ impl InlineBuilder {
         wraps: bool,
         exit_field: bool,
     ) -> bool {
-        if !wraps {
-            self.flush_native_hang_field(gap_cells, body_width_columns, exit_field);
-        }
+        let native_field_discarded = self
+            .execution
+            .definition
+            .as_ref()
+            .is_some_and(|state| state.hang_row.field_discarded);
+        let native_field_printable = !wraps
+            && !native_field_discarded
+            && (self
+                .execution
+                .definition
+                .as_ref()
+                .is_some_and(|state| state.hang_row.field_printable)
+                || self.pending_hang_glyph_width().is_some());
+        self.flush_native_hang_field(gap_cells, body_width_columns, exit_field);
         if !self.has_formatter_cell() {
             // `roff_term_pre_br()` applies BRIND even when `term_newln()` had
             // no tcol bytes or device row to flush.  It moves the next word
@@ -119,9 +132,35 @@ impl InlineBuilder {
             return false;
         }
         self.flush_zero_advance();
+        if native_field_discarded {
+            let mut field = self
+                .nodes
+                .split_off(field_output_start.min(self.nodes.len()));
+            retain_unprinted_field_targets(&mut field);
+            self.nodes.extend(field);
+        }
         let field = self.nodes.get(field_output_start..).unwrap_or_default();
-        let field_is_printable = has_printable_character(field);
+        // term_fill() returns nbr=0 for a HANG field containing only \p,
+        // ordinary breakable blanks, or invisible controls. Its IR padding
+        // may look printable, but term_flushln() keeps the device row open.
+        let field_is_printable = if native_field_discarded {
+            false
+        } else if wraps {
+            has_printable_character(field)
+        } else {
+            native_field_printable
+        };
         let field_width = mant_ir::geometry::text_width(&super::super::plain_text(field));
+        if !wraps && !field_is_printable {
+            // term_fill() returns nbr=0 for a HANG field with only ordinary
+            // blanks and controls. Drop only this field's breakable padding:
+            // the fixed cells from the preceding field still position BODY.
+            let mut unprinted = self
+                .nodes
+                .split_off(field_output_start.min(self.nodes.len()));
+            trim_trailing_breakable_spaces(&mut unprinted, usize::MAX);
+            self.nodes.extend(unprinted);
+        }
         let body_width = usize::from(body_width_columns);
         let overruns = field_is_printable
             && wraps
@@ -198,7 +237,7 @@ impl InlineBuilder {
         let pending_glyph_width = self.pending_hang_glyph_width();
         if let Some(definition) = &mut self.execution.definition {
             if let Some(width) = pending_glyph_width {
-                definition.hang_row.word(0, width, 0, true);
+                definition.hang_row.pending_glyph(width);
             }
             if had_cell || pending_glyph_width.is_some() || definition.hang_row.viscol > 0 {
                 definition.hang_row.flush(usize::from(gap));
@@ -251,11 +290,122 @@ impl InlineBuilder {
             // `minbl` for the BODY even when the HEAD overran its margin.
             let mut final_row = state.hang_row.clone();
             if let Some(width) = self.pending_hang_glyph_width() {
-                final_row.word(0, width, 0, true);
+                final_row.pending_glyph(width);
             }
-            return gap_cells == 0 && final_row.final_column() >= usize::from(body_width_columns);
+            let body_column = usize::from(body_width_columns);
+            let cumulative_column = final_row.final_column();
+            if final_row.field_discarded {
+                // No new glyph reached the device. The preceding field's
+                // viscol and minbl still locate BODY; source text inside the
+                // discarded field cannot create a soft-wrap uncertainty.
+                return cumulative_column >= body_column;
+            }
+            // CVS term.c::term_fill() may wrap at a breakable cell *inside*
+            // this final field. Its summed width then says nothing about the
+            // last physical row. Retain the word boundary unless the field
+            // provably stayed on one row (or had no breakable cell).
+            let final_row_proven = !final_row.field_unproven_break
+                && (cumulative_column <= body_column
+                    || (!final_row.field_discretionary_break
+                        && (final_row.field_last_unbreakable_width >= body_column
+                            || !final_row.field_breakable)));
+            return gap_cells == 0 && final_row_proven && cumulative_column >= body_column;
         }
         state.outcome.body_gap_consumed()
+    }
+
+    pub(in crate::mandoc) fn note_discretionary_hang_field_break(&mut self) {
+        if let Some(definition) = &mut self.execution.definition {
+            definition.hang_row.field_discretionary_break = true;
+        }
+    }
+
+    pub(in crate::mandoc) fn note_hang_native_graph(&mut self) {
+        if let Some(definition) = &mut self.execution.definition {
+            definition.hang_row.field_native_graph = true;
+        }
+    }
+
+    /// `term.c::term_fill()` stops at a breakable blank after `\p`. When the
+    /// field has not supplied a graph yet, even later words in that field are
+    /// never printed. The text decoder reports this event inside one word;
+    /// `HangNativeRow::word()` handles the same event across words.
+    pub(in crate::mandoc) fn note_hang_break_before_graph(&mut self) {
+        if let Some(definition) = &mut self.execution.definition {
+            let row = &mut definition.hang_row;
+            row.field_discarded |= !row.field_native_graph;
+            row.field_unproven_break = true;
+        }
+    }
+
+    pub(in crate::mandoc) fn discard_unprinted_definition_field_output(&mut self) {
+        let Some((start, exited_field)) = self
+            .execution
+            .author_execution
+            .as_ref()
+            .filter(|_| self.execution.definition.is_some())
+            .map(|execution| {
+                (
+                    execution.field_output_start,
+                    matches!(execution.break_effect, AuthorBreakEffect::Line),
+                )
+            })
+        else {
+            return;
+        };
+        if !self
+            .execution
+            .definition
+            .as_ref()
+            .is_some_and(|state| state.hang_row.field_discarded)
+        {
+            return;
+        }
+        let mut field = self.nodes.split_off(start.min(self.nodes.len()));
+        retain_unprinted_field_targets(&mut field);
+        self.nodes.extend(field);
+        self.execution.last_visible_character = last_visible_character(&self.nodes);
+        if exited_field {
+            // A TAG .br may have already ended NOBREAK, but subsequent words
+            // still share one term_fill() input buffer until the next actual
+            // line request. Dropping that buffer leaves no current cell.
+            self.execution.formatter_column = FormatterColumn::Origin;
+            self.execution.word_end_break = WordEndBreak::Clear;
+            self.execution.pending_breakable_spaces = 0;
+            self.execution.trailing_output = TrailingOutput::None;
+            if let Some(execution) = &mut self.execution.author_execution {
+                execution.field_output_start = self.nodes.len();
+            }
+        }
+    }
+
+    pub(in crate::mandoc) fn discarded_exited_definition_buffer(&self) -> bool {
+        self.execution
+            .definition
+            .as_ref()
+            .is_some_and(|definition| {
+                definition.hang_row.field_discarded
+                    && self
+                        .execution
+                        .author_execution
+                        .as_ref()
+                        .is_some_and(|execution| {
+                            matches!(execution.break_effect, AuthorBreakEffect::Line)
+                        })
+            })
+    }
+
+    pub(in crate::mandoc) fn pending_definition_break_has_no_graph(&self) -> bool {
+        self.in_definition_field()
+            && self.execution.definition.as_ref().is_some_and(|state| {
+                state.hang_row.field_discarded
+                    || (state.hang_row.field_pending_word_end_break
+                        && !state.hang_row.field_native_graph)
+            })
+    }
+
+    pub(in crate::mandoc) fn in_definition_field(&self) -> bool {
+        self.execution.definition.is_some() && self.execution.author_execution.is_some()
     }
 
     pub(super) fn append_fixed_cells(&mut self, count: usize) {
@@ -459,10 +609,27 @@ impl InlineBuilder {
     /// Execute an inline vertical-space request without retaining its
     /// numeric operand as document text.  `term_vspace(n)` first closes an
     /// occupied row, then emits `n` empty rows.
+    // term_vspace() must settle the active field before asserting rows.
+    #[allow(clippy::too_many_lines)]
     pub(in crate::mandoc) fn vertical_space(&mut self, rows: usize) {
         if let Some(field) = self.take_no_break_field() {
             self.vertical_space_in_definition_field(field, rows);
             self.finish_native_vertical_row(rows);
+            if rows > 0
+                && self
+                    .execution
+                    .author_execution
+                    .as_ref()
+                    .is_some_and(|execution| {
+                        matches!(execution.break_effect, AuthorBreakEffect::Line)
+                    })
+            {
+                self.execution
+                    .author_execution
+                    .as_mut()
+                    .unwrap()
+                    .field_output_start = self.nodes.len();
+            }
             return;
         }
         if rows == 0 {
@@ -473,6 +640,9 @@ impl InlineBuilder {
             self.execution.final_source_continuation = Some(false);
             return;
         }
+        // term_vspace() first runs term_newln(). Settle an unprintable HANG
+        // field there, before the request's vertical rows are projected.
+        self.discard_unprinted_definition_field_output();
         let field = self
             .execution
             .author_execution
@@ -568,6 +738,19 @@ impl InlineBuilder {
             self.retain_line_breaks(rows);
         }
         self.finish_native_vertical_row(rows);
+        if self.execution.definition.is_some()
+            && self
+                .execution
+                .author_execution
+                .as_ref()
+                .is_some_and(|execution| matches!(execution.break_effect, AuthorBreakEffect::Line))
+        {
+            self.execution
+                .author_execution
+                .as_mut()
+                .unwrap()
+                .field_output_start = self.nodes.len();
+        }
         self.execution.final_word_join = Some(false);
         self.execution.final_source_continuation = Some(false);
     }
@@ -981,4 +1164,23 @@ impl InlineBuilder {
         self.execution.pending_field_spaces = 0;
         self.execution.formatter_column = FormatterColumn::Origin;
     }
+}
+
+fn retain_unprinted_field_targets(inlines: &mut Vec<Inline>) {
+    inlines.retain_mut(|inline| match inline {
+        Inline::Anchor { .. } => true,
+        // term_fill() returned nbr=0: a buffered \p line request in this
+        // field never reached the device, even inside a semantic Link.
+        Inline::LineBreak | Inline::Text { .. } | Inline::Code { .. } | Inline::Equation { .. } => {
+            false
+        }
+        Inline::Link { children, .. } => {
+            retain_unprinted_field_targets(children);
+            true
+        }
+        Inline::Strong { children } | Inline::Emphasis { children } => {
+            retain_unprinted_field_targets(children);
+            !children.is_empty()
+        }
+    });
 }

@@ -1143,3 +1143,371 @@ fn final_hang_field_decides_body_gap_from_executed_columns() {
         }
     }
 }
+
+#[test]
+fn completed_head_rows_and_body_rows_match_the_pinned_terminal() {
+    // All 160 exact documents were checked with the fixed CVS binary using
+    // -Tutf8 and -Tlint before recording this matrix. In mdoc_term.c,
+    // termp_it_pre() enters the BODY after the HEAD post; roff_term.c's
+    // pre_br()/pre_sp() then close only the currently occupied device row.
+    // A source blank made only of breakable spaces is discarded by
+    // term.c::term_fill(), whereas \~ is a fixed cell on the UTF-8 device.
+    fn rows_before_body(output: &str) -> usize {
+        let description = output
+            .split_once("DESCRIPTION")
+            .expect("rendered section heading")
+            .1;
+        description
+            .lines()
+            .take_while(|line| !line.contains("BODY"))
+            .count()
+    }
+    for style in ["inset", "diag", "hang -width 4n", "tag -width 4n", "ohang"] {
+        for label in ["X", "\" \"", r"\~", r"\&"] {
+            for head_request in [".br", ".sp 0", ".sp 1", ".sp 2"] {
+                for body_request in [".br", ".sp 1"] {
+                    let source = format!(
+                        ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -{style}\n.It Xo {label}\n{head_request}\n.Xc\n{body_request}\n.No BODY\n.El\n"
+                    );
+                    let native = native_terminal(&source);
+                    let lowered = lowered_terminal(&source);
+                    assert_eq!(
+                        rows_before_body(&lowered),
+                        rows_before_body(&native),
+                        "{style}, {label}, {head_request}, {body_request}: native={native:?}, lowered={lowered:?}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn empty_formatter_words_after_a_break_occupy_their_new_row() {
+    // Both complete inputs passed fixed CVS -Tascii/-Tutf8/-Tlint.
+    // term.c::term_word() writes the second empty word's separator even
+    // though the last visible character belongs to the preceding row;
+    // roff_term.c::pre_br()/pre_sp() then close that occupied row.
+    for request in [".br", ".sp 0"] {
+        let source = format!(
+            ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No X\n.br\n.No \"\" No \"\"\n{request}\n.No BODY\n"
+        );
+        let native = without_line_indentation(&native_terminal(&source));
+        let lowered = lowered_terminal(&source);
+        for (kind, output) in [("native", native), ("lowered", lowered)] {
+            assert!(output.contains("X\n\nBODY"), "{request} {kind}: {output:?}");
+        }
+    }
+}
+
+#[test]
+fn a_wrapping_hang_field_keeps_only_the_proven_body_word_boundary() {
+    // All three fields passed fixed CVS -Tascii/-Tutf8/-Tlint. Following
+    // roff_term.c::pre_br(), term.c::term_fill() can wrap inside one HEAD
+    // field. The renderer-neutral projection may omit that soft wrap, but
+    // it must not merge the final HEAD word with BODY.
+    for (field, expected_tail) in [
+        ("AA BB CC", "CC BODY"),
+        ("YYYYY Z", "Z BODY"),
+        ("YYYYY ZZZZZZZZ", "ZZZZZZZZBODY"),
+    ] {
+        let source = format!(
+            ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo X\n.br\n.No {field}\n.Xc\n.No BODY\n.El\n"
+        );
+        let native = native_terminal(&source);
+        let lowered = lowered_terminal(&source);
+        assert!(
+            native.contains(expected_tail) || native.contains(&expected_tail.replace(' ', "     ")),
+            "{field}: {native:?}"
+        );
+        assert!(lowered.contains(expected_tail), "{field}: {lowered:?}");
+    }
+    // Exact fixed CVS -Tascii/-Tutf8/-Tlint probe: ASCII wraps at the
+    // invisible \: breakpoint, whereas UTF-8 keeps this short field on one
+    // line. The source-neutral projection cannot prove the final column and
+    // therefore preserves the BODY word boundary in either presentation.
+    let source = ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo X\n.br\n.No YYYYY\\:Z\n.Xc\n.No BODY\n.El\n";
+    let lowered = lowered_terminal(source);
+    assert!(lowered.contains("YYYYYZ BODY"), "{lowered:?}");
+    // Exact fixed CVS -Tascii/-Tutf8/-Tlint: roff.c::post_hyph() marks
+    // this source hyphen ASCII_HYPH, and term.c::term_fill() wraps after it.
+    // It is ordinary text in the AST, so the gap proof must see that marker
+    // before readable IR normalizes it to '-'.
+    let source = ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo X\n.br\nYYYYY-Z\n.Xc\n.No BODY\n.El\n";
+    let native = native_terminal(source);
+    let lowered = lowered_terminal(source);
+    assert!(native.contains("YYYYY-\n     Z     BODY"), "{native:?}");
+    assert!(lowered.contains("YYYYY-Z BODY"), "{lowered:?}");
+    for (field, expected) in [
+        (r"YYY\:Z", "YYYZBODY"),
+        (r"YYY\pZ", "YYYZBODY"),
+        (r"A BBBBBB\zC", "BBBBBBCBODY"),
+    ] {
+        // Each exact input passed fixed CVS -Tascii/-Tutf8/-Tlint. In
+        // term_fill(), a short field with an unused breakpoint still fits;
+        // encode1() keeps the pending \z glyph in the current final word.
+        let source = format!(
+            ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo X\n.br\n.No {field}\n.Xc\n.No BODY\n.El\n"
+        );
+        let native = native_terminal(&source);
+        let lowered = lowered_terminal(&source);
+        assert!(native.contains(expected), "{field}: {native:?}");
+        assert!(lowered.contains(expected), "{field}: {lowered:?}");
+    }
+}
+
+#[test]
+fn a_control_only_hang_field_does_not_close_its_device_row() {
+    // All six exact inputs passed fixed CVS -Tutf8/-Tlint. In term.c,
+    // term_word() buffers \p and the following empty word's separator, but
+    // term_fill() returns nbr=0 for this field. term_flushln() under
+    // TERMP_HANG therefore leaves X and BODY on the same physical row.
+    for word in [".No \"\"", ".No \"\" \"\"", r".No \&"] {
+        for request in [".br", ".sp 0"] {
+            let source = format!(
+                ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo\n.No X\n.br\n.No \\p\n{word}\n{request}\n.Xc\n.No BODY\n.El\n"
+            );
+            let native = without_line_indentation(&native_terminal(&source));
+            let lowered = lowered_terminal(&source);
+            assert!(
+                native.contains("X     BODY"),
+                "{word} {request}: {native:?}"
+            );
+            assert!(
+                lowered.contains("X     BODY"),
+                "{word} {request}: {lowered:?}"
+            );
+        }
+    }
+    // Both exact inputs also passed fixed CVS -Tascii/-Tutf8/-Tlint. With
+    // no graph before \p, the next automatic separator makes term_fill()
+    // return nbr=0 and drop that field, including a later Y operand.
+    for words in [".No Y", ".No \"\"\n.No Y"] {
+        let source = format!(
+            ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo\n.No X\n.br\n.No \\p\n{words}\n.br\n.Xc\n.No BODY\n.El\n"
+        );
+        let native = without_line_indentation(&native_terminal(&source));
+        let lowered = lowered_terminal(&source);
+        assert!(native.contains("X     BODY"), "{words}: {native:?}");
+        assert!(lowered.contains("X     BODY"), "{words}: {lowered:?}");
+    }
+}
+
+#[test]
+fn a_hang_field_discarded_by_word_end_break_does_not_export_its_projection() {
+    // Each exact input passed fixed CVS -Tutf8/-Tlint. term.c::term_fill()
+    // returns nbr=0 when \p precedes a breakable blank before the field's
+    // first graph. This also applies within one quoted TEXT and when HEAD
+    // post, rather than .br, settles the field. An emitted Link target may
+    // remain in IR, but neither its label nor its buffered line break prints.
+    for field in [
+        ".No \"\\p Y\"\n.br\n",
+        ".No \\p\n.No Y\n.No Z\n",
+        ".No \\p\n.Lk https://example.com visible\n.br\n",
+        ".No \\p\n.Lk https://example.com \"\"\n.br\n",
+        ".Lk https://example.com \"\\p Y\"\n.br\n",
+    ] {
+        let source = format!(
+            ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo\n.No X\n.br\n{field}.Xc\n.No BODY\n.El\n"
+        );
+        let native = without_line_indentation(&native_terminal(&source));
+        let lowered = lowered_terminal(&source);
+        assert!(native.contains("X     BODY"), "{field}: {native:?}");
+        assert!(lowered.contains("X     BODY"), "{field}: {lowered:?}");
+    }
+    let source = concat!(
+        ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n",
+        ".Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo\n.No X\n.br\n",
+        ".No \\p\n.No Y\n.sp 1\n.Xc\n.No BODY\n.El\n",
+    );
+    // term_vspace() emits a real row after discarding the pending field.
+    let native = without_line_indentation(&native_terminal(source));
+    let lowered = lowered_terminal(source);
+    assert!(native.contains("X\nBODY"), "native: {native:?}");
+    assert!(
+        lowered.contains("X     \n      BODY"),
+        "lowered: {lowered:?}"
+    );
+}
+
+#[test]
+fn tag_and_hang_fields_share_the_native_word_end_and_graph_rules() {
+    // Both exact inputs passed fixed CVS -Tutf8/-Tlint. mdoc_term.c gives
+    // TAG and HANG the same NOBREAK field execution; term.c::term_fill()
+    // discards a field broken before its first graph, but treats a literal
+    // TAB as graph rather than an ordinary breakable space.
+    let prefix =
+        ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n";
+    let tag = format!(
+        "{prefix}.Bl -tag -width 4n\n.It Xo X\n.br\n.No \\p\n.No Y\n.br\n.Xc\n.No BODY\n.El\n"
+    );
+    let native = without_line_indentation(&native_terminal(&tag));
+    let lowered = lowered_terminal(&tag);
+    assert!(native.contains("X\nBODY"), "native TAG: {native:?}");
+    let lowered_rows = lowered.lines().map(str::trim).collect::<Vec<_>>();
+    assert!(
+        lowered_rows.windows(2).any(|rows| rows == ["X", "BODY"]),
+        "lowered TAG: {lowered:?}"
+    );
+
+    let tab = format!(
+        "{prefix}.nf\n.Bl -hang -width 4n\n.It Xo X\n.br\n.No \"\\p\t\"\n.No Y\n.br\n.Xc\n.No BODY\n.El\n.fi\n"
+    );
+    let native = native_terminal(&tab);
+    let lowered = lowered_terminal(&tab);
+    assert!(native.contains("X     Y"), "native TAB: {native:?}");
+    assert!(
+        lowered
+            .lines()
+            .any(|line| line.contains('X') && line.contains('Y')),
+        "lowered TAB: {lowered:?}"
+    );
+}
+
+#[test]
+fn discarded_tag_head_buffer_preserves_prior_rows_and_waits_for_real_flush() {
+    // All three exact inputs passed fixed CVS -Tutf8/-Tlint. term_fill()
+    // discards the entire pending buffer after a leading \p and separator;
+    // a later term_newln() releases subsequent words but never erases rows
+    // already completed by roff_term_pre_br()/pre_sp().
+    let prefix = ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It Xo X\n";
+    for (tail, expected_rows) in [
+        (".br\n.No \\p\n.No Y\n.No Z\n", vec!["X", "BODY"]),
+        (".br\n.No \\p\n.No Y\n.br\n.No Z\n", vec!["X", "Z", "BODY"]),
+        (".sp 1\n.No \\p\n.No Y\n.br\n", vec!["X", "", "BODY"]),
+    ] {
+        let source = format!("{prefix}{tail}.Xc\n.No BODY\n.El\n");
+        let native = native_terminal(&source);
+        let lowered = lowered_terminal(&source);
+        let rows = |value: &str| {
+            value
+                .split("DESCRIPTION\n")
+                .nth(1)
+                .unwrap()
+                .lines()
+                .map(str::trim)
+                .take_while(|row| *row != "Linux 6.18.33.2-microsoft-standard-WSL2")
+                .filter(|row| !row.is_empty() || expected_rows.contains(&""))
+                .take(expected_rows.len())
+                .map(str::to_owned)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(rows(&native), expected_rows, "native {tail}: {native:?}");
+        assert_eq!(rows(&lowered), expected_rows, "lowered {tail}: {lowered:?}");
+    }
+    let long_tag = ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It Xo XXXXXX\n.br\n.No \\p\n.No Y\n.br\n.Xc\n.No BODY\n.El\n";
+    let native = native_terminal(long_tag);
+    let lowered = lowered_terminal(long_tag);
+    assert!(native.contains("XXXXXX\n\n"), "native: {native:?}");
+    assert!(lowered.contains("XXXXXX\n\n"), "lowered: {lowered:?}");
+}
+
+#[test]
+fn discarded_terminal_fields_keep_authored_link_destinations() {
+    // Each exact input passed fixed CVS -Tutf8/-Thtml/-Tlint. term_fill()
+    // discards the visible NOBREAK field, while mdoc_html.c still emits the
+    // Lk/Mt href from the authored operand. Preserve the typed IR target.
+    for (link, target) in [
+        (
+            ".Lk https://example.com visible",
+            mant_ir::LinkTarget::External {
+                uri: "https://example.com".to_owned(),
+            },
+        ),
+        (
+            ".Lk https://example.com",
+            mant_ir::LinkTarget::External {
+                uri: "https://example.com".to_owned(),
+            },
+        ),
+        (
+            ".Mt user@example.com",
+            mant_ir::LinkTarget::Email {
+                address: "user@example.com".to_owned(),
+            },
+        ),
+    ] {
+        let source = format!(
+            ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo X\n.br\n.No \\p\n{link}\n.br\n.Xc\n.No BODY\n.El\n"
+        );
+        let native = native_terminal(&source);
+        let lowered = lowered_terminal(&source);
+        assert!(native.contains("X     BODY"), "{link}: {native:?}");
+        assert!(lowered.contains("X     BODY"), "{link}: {lowered:?}");
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+        let item = first_definition_item(query.document.as_ref().unwrap());
+        let targets = item
+            .terms
+            .iter()
+            .flatten()
+            .filter_map(|inline| match inline {
+                Inline::Link { target, .. } => Some(target),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(targets, vec![&target], "{link}: {item:?}");
+    }
+}
+
+#[test]
+fn blank_link_heads_do_not_claim_a_printed_definition_row() {
+    // Each exact input passed fixed CVS -Tascii/-Tutf8/-Tlint. A field made
+    // solely of ordinary spaces is discarded by term.c::term_fill(), even
+    // when its IR node is a link; a real .Lk target remains visible.
+    for head in [
+        ".Sx \" \"",
+        ".Mt \" \"",
+        ".Lk \" \"",
+        ".Lk https://example.com \" \"",
+    ] {
+        let source = format!(
+            ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It Xo\n{head}\n.br\n.Xc\n.No BODY\n.El\n"
+        );
+        let native = native_terminal(&source);
+        let lowered = lowered_terminal(&source);
+        let rows_before_body = |output: &str| {
+            output
+                .split_once("DESCRIPTION")
+                .unwrap()
+                .1
+                .lines()
+                .take_while(|line| !line.contains("BODY"))
+                .count()
+        };
+        assert_eq!(
+            rows_before_body(&lowered),
+            rows_before_body(&native),
+            "{head}: native={native:?}, lowered={lowered:?}"
+        );
+        if head.starts_with(".Lk https") {
+            assert!(lowered.contains("https://example.com"), "{lowered:?}");
+        }
+    }
+}
+
+#[test]
+fn styled_breakable_only_head_does_not_create_a_device_row() {
+    // These exact tag heads passed fixed CVS -Tascii/-Tutf8/-Tlint. The
+    // renderer calls term_fill() after the style macros, so ordinary spaces
+    // alone still print no field. A styled \~ remains a fixed UTF-8 cell.
+    for macro_name in ["No", "Em", "Sy", "Li"] {
+        let source = format!(
+            ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It Xo\n.{macro_name} \" \"\n.br\n.Xc\n.No BODY\n.El\n"
+        );
+        let native = native_terminal(&source);
+        let lowered = lowered_terminal(&source);
+        let native_section = native.split_once("DESCRIPTION").unwrap().1;
+        let lowered_section = lowered.split_once("DESCRIPTION").unwrap().1;
+        assert_eq!(
+            native_section
+                .lines()
+                .take_while(|line| !line.contains("BODY"))
+                .count(),
+            lowered_section
+                .lines()
+                .take_while(|line| !line.contains("BODY"))
+                .count(),
+            "{macro_name}: native={native:?}, lowered={lowered:?}"
+        );
+    }
+}

@@ -146,6 +146,8 @@ struct DefinitionFieldState {
 
 /// The two persistent columns in `term.c::term_flushln()`, plus its unflushed
 /// input field. Generated IR padding never enters this ledger.
+// These are independent flags of one native field, not alternative states.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Clone, Default)]
 struct HangNativeRow {
     viscol: usize,
@@ -156,6 +158,17 @@ struct HangNativeRow {
     field_width: usize,
     trailing_breakable: usize,
     field_printable: bool,
+    // A field with a breakable boundary can be redistributed by term_fill().
+    // The cumulative width is then not proof of its final device column.
+    field_breakable: bool,
+    field_discretionary_break: bool,
+    field_unproven_break: bool,
+    field_pending_word_end_break: bool,
+    // term_fill() returns nbr=0 if \p precedes the field's first graph and
+    // the next formatter word adds a separator. No part of that field prints.
+    field_native_graph: bool,
+    field_discarded: bool,
+    field_last_unbreakable_width: usize,
     transition: HangRowTransition,
     suppress_next_auto_space: bool,
     margin_flush_seen: bool,
@@ -171,6 +184,15 @@ enum HangRowTransition {
 
 impl HangNativeRow {
     fn word(&mut self, separator: usize, width: usize, trailing_spaces: usize, printable: bool) {
+        if separator > 0 && self.field_pending_word_end_break {
+            self.field_unproven_break = true;
+            self.field_discarded |= !self.field_native_graph;
+        }
+        if separator > 0 {
+            self.field_pending_word_end_break = false;
+        }
+        self.field_breakable |=
+            self.field_printable && self.trailing_breakable.saturating_add(separator) > 0;
         self.trailing_breakable = self.trailing_breakable.saturating_add(separator);
         if printable {
             self.field_width = self
@@ -179,6 +201,10 @@ impl HangNativeRow {
                 .saturating_add(width);
             self.trailing_breakable = 0;
             self.field_printable = true;
+            self.field_native_graph = true;
+            // Callers with a pending glyph have one indivisible formatter
+            // word. Source words refine this to their final component.
+            self.field_last_unbreakable_width = width;
         }
         self.trailing_breakable = self.trailing_breakable.saturating_add(trailing_spaces);
         if self.transition == HangRowTransition::Flushed {
@@ -187,10 +213,19 @@ impl HangNativeRow {
         self.suppress_next_auto_space = false;
     }
 
+    fn pending_glyph(&mut self, width: usize) {
+        let extends_last_word = self.field_printable && self.trailing_breakable == 0;
+        let previous_width = self.field_last_unbreakable_width;
+        self.word(0, width, 0, true);
+        if extends_last_word {
+            self.field_last_unbreakable_width = previous_width.saturating_add(width);
+        }
+    }
+
     fn flush(&mut self, trailspace: usize) {
         // term_fill() drops trailing ordinary spaces. term_field() advances
         // vbl only when there is a printable cell, including a fixed blank.
-        if self.field_printable {
+        if self.field_printable && !self.field_discarded {
             self.viscol = self
                 .viscol
                 .saturating_add(self.minbl)
@@ -200,6 +235,13 @@ impl HangNativeRow {
         self.field_width = 0;
         self.trailing_breakable = 0;
         self.field_printable = false;
+        self.field_breakable = false;
+        self.field_discretionary_break = false;
+        self.field_unproven_break = false;
+        self.field_pending_word_end_break = false;
+        self.field_native_graph = false;
+        self.field_discarded = false;
+        self.field_last_unbreakable_width = 0;
         self.minbl = trailspace;
         self.transition = HangRowTransition::Flushed;
     }
@@ -210,16 +252,28 @@ impl HangNativeRow {
         self.field_width = 0;
         self.trailing_breakable = 0;
         self.field_printable = false;
+        self.field_breakable = false;
+        self.field_discretionary_break = false;
+        self.field_unproven_break = false;
+        self.field_pending_word_end_break = false;
+        self.field_native_graph = false;
+        self.field_discarded = false;
+        self.field_last_unbreakable_width = 0;
         self.transition = HangRowTransition::Flushed;
     }
 
     fn final_column(&self) -> usize {
-        if self.field_printable {
+        if self.field_printable && !self.field_discarded {
             self.viscol
                 .saturating_add(self.minbl)
                 .saturating_add(self.field_width)
         } else {
+            // An unprinted field does not erase the previous field's
+            // trailspace. term_flushln() keeps minbl for the BODY word even
+            // when term_fill() returns nbr=0 for the current field.
             self.viscol
+                .saturating_add(self.minbl)
+                .max(self.field_offset)
         }
     }
 }

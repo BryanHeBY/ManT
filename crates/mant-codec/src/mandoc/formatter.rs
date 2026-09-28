@@ -240,11 +240,29 @@ impl FormatterState {
     }
 
     /// Commit an inline session at a native formatter-line boundary.
-    pub(super) fn finish_inline_line(&mut self, mut builder: InlineBuilder) -> FinishedInlineLine {
+    pub(super) fn finish_inline_line(&mut self, builder: InlineBuilder) -> FinishedInlineLine {
+        self.finish_inline_line_with_rows(builder, false)
+    }
+
+    pub(super) fn finish_inline_line_with_rows(
+        &mut self,
+        mut builder: InlineBuilder,
+        preserve_rows: bool,
+    ) -> FinishedInlineLine {
+        if builder.discarded_exited_definition_buffer() {
+            // mdoc_term.c::termp_it_post() calls term_newln() for the HEAD.
+            // A buffered but unprinted TAG word can complete an empty row
+            // after an earlier .sp closed the tag row.
+            builder.hard_break();
+        }
+        // A detached HEAD ends at mdoc_term.c::termp_it_post(), even without
+        // an explicit .br. Do not export IR from a HANG field for which
+        // term_fill() never produced a printable device slice.
+        builder.discard_unprinted_definition_field_output();
         let definition_field_exited = builder.definition_field_exited();
         let definition_body_gap_consumed = builder.definition_body_gap_consumed();
         let definition_term_breaks = builder.take_definition_term_breaks();
-        let (output, mut execution) = builder.finish_formatter_line();
+        let (output, mut execution) = builder.finish_formatter_line(preserve_rows);
         std::mem::swap(&mut execution, &mut self.execution);
         self.spare_execution = Some(execution);
         FinishedInlineLine {

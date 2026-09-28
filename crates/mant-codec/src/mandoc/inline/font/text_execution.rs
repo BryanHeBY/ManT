@@ -31,6 +31,9 @@ pub(in crate::mandoc) struct TextExecution {
     pub(in crate::mandoc) joins_preceding_node: bool,
     pub(in crate::mandoc) source_continuation: Option<bool>,
     pub(in crate::mandoc) pending_word_end_break: bool,
+    /// A formatter blank followed `\p` before this word supplied a graph.
+    /// The HANG field owner combines this with graphs from earlier words.
+    pub(in crate::mandoc) break_before_graph: bool,
     pub(in crate::mandoc) trailing_output: TrailingOutput,
 }
 
@@ -47,9 +50,13 @@ enum FormatterWordEvent {
     Code(String),
 }
 
+// Decoder controls and field-proof observations coexist during one word.
+#[allow(clippy::struct_excessive_bools)]
 struct TextEventState {
     pending_word_end_break: bool,
     suppress_break_whitespace: bool,
+    graph_seen: bool,
+    break_before_graph: bool,
 }
 
 impl TextEventState {
@@ -57,6 +64,8 @@ impl TextEventState {
         Self {
             pending_word_end_break,
             suppress_break_whitespace: false,
+            graph_seen: false,
+            break_before_graph: false,
         }
     }
 }
@@ -73,6 +82,7 @@ fn append_text_event(
     let mut chunk = String::new();
     for character in value.chars() {
         if state.pending_word_end_break && is_formatter_word_blank(character) {
+            state.break_before_graph |= !state.graph_seen;
             zero_advance.append_text(&chunk, output, buffer, font, link);
             chunk.clear();
             if zero_advance.has_pending_glyph() {
@@ -94,6 +104,7 @@ fn append_text_event(
             continue;
         }
         state.suppress_break_whitespace = false;
+        state.graph_seen |= !is_formatter_word_blank(character) && character != '\n';
         chunk.push(character);
     }
     // The decoder has already classified controls. A backslash produced by
@@ -152,6 +163,8 @@ pub(in crate::mandoc) fn parse_formatter_word_parts_with_zero_advance(
     )
 }
 
+// Keep the decoded escape events in their native term_word() order.
+#[allow(clippy::too_many_lines)]
 fn execute_formatter_word_events(
     events: &[FormatterWordEvent],
     state: &mut FontState,
@@ -197,15 +210,18 @@ fn execute_formatter_word_events(
                 },
             ) => {
                 text_state.suppress_break_whitespace = false;
+                text_state.graph_seen = true;
                 zero_advance.append_glyph(value, &mut buffer, font, link.as_deref());
             }
             FormatterWordEvent::Source(RoffInlineEvent::FallbackGlyph(value)) => {
                 if zero_advance.append_fallback_glyph(value, &mut buffer, font, link.as_deref()) {
                     text_state.suppress_break_whitespace = false;
+                    text_state.graph_seen = true;
                 }
             }
             FormatterWordEvent::Source(RoffInlineEvent::DeviceName) => {
                 text_state.suppress_break_whitespace = false;
+                text_state.graph_seen = true;
                 zero_advance.append_text("utf8", &mut output, &mut buffer, font, link.as_deref());
             }
             FormatterWordEvent::Source(RoffInlineEvent::ZeroAdvance) => zero_advance.arm(),
@@ -242,9 +258,11 @@ fn execute_formatter_word_events(
             FormatterWordEvent::Source(RoffInlineEvent::LineBreak) => {
                 text_state.pending_word_end_break = true;
             }
+            FormatterWordEvent::Source(RoffInlineEvent::ZeroWidthGlyph) => {
+                text_state.graph_seen = true;
+            }
             FormatterWordEvent::Source(
                 RoffInlineEvent::Presentation { .. }
-                | RoffInlineEvent::ZeroWidthGlyph
                 | RoffInlineEvent::Overstrike { terminal: None, .. },
             ) => {}
         }
@@ -256,6 +274,7 @@ fn execute_formatter_word_events(
         zero_advance,
         explicit_line_continuation,
         text_state.pending_word_end_break,
+        text_state.break_before_graph,
     )
 }
 
@@ -281,6 +300,7 @@ fn finish_text_execution(
     zero_advance: &mut ZeroAdvanceState,
     source_continuation: Option<bool>,
     pending_word_end_break: bool,
+    break_before_graph: bool,
 ) -> TextExecution {
     let trailing_output = match mant_ir::last_visible_character(&output) {
         None | Some('\n') => TrailingOutput::None,
@@ -300,6 +320,7 @@ fn finish_text_execution(
         joins_preceding_node: zero_advance.take_preceding_join(),
         source_continuation,
         pending_word_end_break,
+        break_before_graph,
         trailing_output,
     }
 }

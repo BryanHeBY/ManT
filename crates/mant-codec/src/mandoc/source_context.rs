@@ -173,6 +173,39 @@ impl<'a> LoweringContext<'a> {
         formatter: &mut formatter::FormatterState,
         author_break_effect: inline::AuthorBreakEffect,
     ) -> (Vec<mant_ir::Inline>, bool, bool, Vec<usize>) {
+        self.lower_inline_with_author_break_rows(
+            nodes,
+            spacing,
+            formatter,
+            author_break_effect,
+            false,
+        )
+    }
+
+    pub(super) fn lower_inline_with_author_break_preserving_rows(
+        &self,
+        nodes: &[Node],
+        spacing: bool,
+        formatter: &mut formatter::FormatterState,
+        author_break_effect: inline::AuthorBreakEffect,
+    ) -> (Vec<mant_ir::Inline>, bool, bool, Vec<usize>) {
+        self.lower_inline_with_author_break_rows(
+            nodes,
+            spacing,
+            formatter,
+            author_break_effect,
+            true,
+        )
+    }
+
+    fn lower_inline_with_author_break_rows(
+        &self,
+        nodes: &[Node],
+        spacing: bool,
+        formatter: &mut formatter::FormatterState,
+        author_break_effect: inline::AuthorBreakEffect,
+        preserve_rows: bool,
+    ) -> (Vec<mant_ir::Inline>, bool, bool, Vec<usize>) {
         let mut builder = formatter.begin_inline_session(
             spacing,
             self.active_mdoc_section() == MdocSectionContext::Authors,
@@ -185,7 +218,7 @@ impl<'a> LoweringContext<'a> {
         builder.observe_no_fill_source_lines(true);
         inline::append_inline_nodes(&mut builder, nodes, self.default_name);
         builder.observe_no_fill_source_lines(false);
-        let finished = formatter.finish_inline_line(builder);
+        let finished = formatter.finish_inline_line_with_rows(builder, preserve_rows);
         (
             finished.output,
             finished.definition_field_exited,

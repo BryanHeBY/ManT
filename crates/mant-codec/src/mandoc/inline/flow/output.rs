@@ -1,8 +1,8 @@
 use super::{
-    AuthorBreakEffect, FilledBoundary, Font, FormatterColumn, InboundExecution, Inline,
-    InlineBuilder, KeepPhase, OutputRollback, OutputTransaction, PendingBoundary,
-    PreservedInlineState, TrailingOutput, WordEndBreak, first_visible_character,
-    has_printable_character, last_visible_character, needs_boundary_space, push_text,
+    FilledBoundary, Font, FormatterColumn, InboundExecution, Inline, InlineBuilder, KeepPhase,
+    OutputRollback, OutputTransaction, PendingBoundary, PreservedInlineState, TrailingOutput,
+    WordEndBreak, first_visible_character, has_printable_character, last_visible_character,
+    needs_boundary_space, push_text,
 };
 
 impl InlineBuilder {
@@ -177,13 +177,29 @@ impl InlineBuilder {
     /// Preserve a formatter-requested line boundary without creating empty
     /// leading, repeated, or trailing rows around the paragraph.
     pub(in crate::mandoc) fn hard_break(&mut self) {
+        let exited_discarded_buffer = self.discarded_exited_definition_buffer();
+        let exited_definition_row = self
+            .execution
+            .definition
+            .as_ref()
+            .is_some_and(|definition| {
+                definition.hang_row.viscol > 0
+                    && self
+                        .execution
+                        .author_execution
+                        .as_ref()
+                        .is_some_and(|execution| {
+                            matches!(execution.break_effect, super::AuthorBreakEffect::Line)
+                        })
+            });
+        self.discard_unprinted_definition_field_output();
         if !self.execution.has_printable_content {
             self.execution.leading_line_boundary = super::LeadingLineBoundary::BeforeVisibleWord;
         }
         // term_newln() flushes only an occupied terminal cell. A completed
         // `\zX` glyph and a buffered `\p` both advanced the native buffer;
         // a bare armed `\z` did not and remains ordered before the next word.
-        if !self.has_formatter_cell() {
+        if !self.has_formatter_cell() && !exited_definition_row && !exited_discarded_buffer {
             if self.external_head_row_pending {
                 // term_newln() still flushes the detached native tag row.
                 // term_flushln() clears a bare \\z before the next BODY word.
@@ -233,11 +249,26 @@ impl InlineBuilder {
         self.execution.pending_field_spaces = 0;
         self.execution.word_end_break = WordEndBreak::Clear;
         self.execution.formatter_column = FormatterColumn::Origin;
-        if !matches!(self.nodes.last(), Some(Inline::LineBreak)) {
+        if (exited_discarded_buffer && !exited_definition_row)
+            || !matches!(self.nodes.last(), Some(Inline::LineBreak))
+        {
             self.nodes.push(Inline::LineBreak);
             self.execution.last_visible_character = Some('\n');
         }
         self.execution.final_word_join = Some(false);
+        if let Some(definition) = &mut self.execution.definition {
+            // A committed hard break closes the native device row even when
+            // the HEAD is still in its TAG field. Otherwise an overrun tag
+            // leaves stale viscol for a later discarded buffer.
+            definition.hang_row.endline();
+        }
+        if exited_definition_row || exited_discarded_buffer {
+            self.execution
+                .author_execution
+                .as_mut()
+                .unwrap()
+                .field_output_start = self.nodes.len();
+        }
         // term_newln() does not clear TERMP_NONEWLINE; the next word does.
     }
 
@@ -400,6 +431,16 @@ impl InlineBuilder {
     /// own inter-word space. Tight joins (for example alternating `.BR`
     /// operands) deliberately bypass this transition and overstrike instead.
     pub(in crate::mandoc) fn begin_word_projection(&mut self, next_is_visible: bool) {
+        self.begin_word_projection_with_break(next_is_visible, next_is_visible);
+    }
+
+    /// An empty or control-only formatter word still updates registers, but
+    /// it cannot by itself make `term_fill()` print after a pending \p.
+    pub(in crate::mandoc) fn begin_word_projection_with_break(
+        &mut self,
+        next_is_visible: bool,
+        next_has_glyph: bool,
+    ) {
         if next_is_visible {
             // term_word() clears skipvsp before consuming the word itself.
             self.execution.vertical_space_debt = 0;
@@ -423,6 +464,8 @@ impl InlineBuilder {
             }
         }
         if next_is_visible
+            && next_has_glyph
+            && !self.pending_definition_break_has_no_graph()
             && !self.execution.boundary.is_nonbreaking()
             && self.execution.word_end_break == WordEndBreak::Pending
             && (self.execution.spacing.enabled()
@@ -576,7 +619,17 @@ impl InlineBuilder {
         let fixed_blank_boundary = (incoming_starts_with_fixed_blank
             && incoming_first.is_some_and(char::is_whitespace))
             || self.execution.trailing_output == TrailingOutput::FixedBlank;
-        let add_space = if fixed_blank_boundary {
+        let add_space = if empty_word
+            && self.execution.formatter_column == FormatterColumn::Origin
+            && self.execution.last_visible_character == Some('\n')
+            && !self.execution.empty_word
+        {
+            // term_newln() selects NOSPACE for the first word of the new
+            // physical row. A second empty term_word() can then buffer its
+            // automatic separator even while the last visible glyph remains
+            // the preceding row's newline.
+            false
+        } else if fixed_blank_boundary {
             self.execution.has_printable_content
         } else if (matches!(boundary, PendingBoundary::Continued)
             && incoming_first.is_some_and(char::is_whitespace))
@@ -629,12 +682,7 @@ impl InlineBuilder {
         add_space: bool,
         boundary: PendingBoundary,
     ) {
-        if !matches!(
-            self.execution
-                .author_execution
-                .map(|author| author.break_effect),
-            Some(AuthorBreakEffect::Field { wraps: false, .. })
-        ) {
+        if self.execution.definition.is_none() || self.execution.author_execution.is_none() {
             return;
         }
         let Some(definition) = &mut self.execution.definition else {
@@ -661,14 +709,22 @@ impl InlineBuilder {
         let trimmed = projected.trim_end_matches(' ');
         let trailing_spaces = projected.len().saturating_sub(trimmed.len());
         let width = mant_ir::geometry::text_width(trimmed);
+        definition.hang_row.field_breakable |= trimmed.contains(' ');
+        definition.hang_row.field_unproven_break |= trimmed.contains('\n');
         // term_fill() discards a field containing only ordinary breakable
         // blanks. A nonbreaking blank from \~ or \0 is a printable cell.
         let printable = trimmed
             .chars()
-            .any(|ch| !ch.is_whitespace() || ch == '\u{a0}');
+            .any(|ch| !super::super::is_formatter_word_blank(ch) && ch != '\n');
         definition
             .hang_row
             .word(separator, width, trailing_spaces, printable);
+        if printable {
+            definition.hang_row.field_last_unbreakable_width = trimmed
+                .rsplit([' ', '\n'])
+                .find(|part| !part.is_empty())
+                .map_or(0, mant_ir::geometry::text_width);
+        }
     }
 
     fn append_boundary_spacing(
@@ -681,10 +737,8 @@ impl InlineBuilder {
         let materialized_field_separator =
             formatter_word && self.execution.pending_field_spaces > 0;
         if !empty_word && self.execution.pending_breakable_spaces > 0 {
-            push_text(
-                &mut self.nodes,
-                " ".repeat(self.execution.pending_breakable_spaces),
-            );
+            let spaces = " ".repeat(self.execution.pending_breakable_spaces);
+            self.push_field_owned_breakable_space(spaces);
             let prior = match self.execution.trailing_output {
                 TrailingOutput::BreakableBlank(count) => count,
                 _ => 0,
@@ -718,14 +772,12 @@ impl InlineBuilder {
             // authored term content. Materialize it at the next glyph. CVS
             // term_word() has already buffered this cell, so a line request
             // must still close the otherwise invisible physical row.
-            if self.execution.last_visible_character != Some('\n') {
-                self.execution.pending_breakable_spaces =
-                    self.execution.pending_breakable_spaces.saturating_add(1);
-                self.execution.formatter_column = FormatterColumn::Advanced;
-                self.note_produced_formatter_cell(true);
-            }
+            self.execution.pending_breakable_spaces =
+                self.execution.pending_breakable_spaces.saturating_add(1);
+            self.execution.formatter_column = FormatterColumn::Advanced;
+            self.note_produced_formatter_cell(true);
         } else {
-            push_text(&mut self.nodes, " ".to_owned());
+            self.push_field_owned_breakable_space(" ".to_owned());
             let prior = match self.execution.trailing_output {
                 TrailingOutput::BreakableBlank(count) => count,
                 _ => 0,
@@ -738,17 +790,41 @@ impl InlineBuilder {
         }
     }
 
+    fn push_field_owned_breakable_space(&mut self, spaces: String) {
+        if self
+            .execution
+            .author_execution
+            .as_ref()
+            .is_some_and(|execution| execution.field_output_start == self.nodes.len())
+        {
+            // Keep the new field's blank separate from the preceding field's
+            // fixed padding. term_fill() may discard the new field entirely.
+            self.nodes.push(Inline::Text { value: spaces });
+        } else {
+            push_text(&mut self.nodes, spaces);
+        }
+    }
+
     pub(in crate::mandoc) fn finish(mut self) -> Vec<Inline> {
         self.flush_zero_advance();
         self.finish_nodes()
+    }
+
+    /// A definition HEAD hands its completed source rows to the item layout.
+    /// Only a paragraph terminator may discard a trailing `LineBreak`.
+    pub(in crate::mandoc) fn finish_preserving_rows(mut self) -> Vec<Inline> {
+        self.flush_zero_advance();
+        std::mem::take(&mut self.nodes)
     }
 
     /// Drain one IR paragraph without ending the formatter's execution
     /// lifetime.  Only paragraph-local joins and row projections reset; the
     /// source formatter's keep, author, spacing, and vertical-space registers
     /// remain in this same execution state.
-    pub(in crate::mandoc) fn take_paragraph_segment(&mut self) -> (Vec<Inline>, bool, u16) {
-        let mut invisible_formatter_cell = self.has_invisible_formatter_cell();
+    pub(in crate::mandoc) fn take_paragraph_segment(
+        &mut self,
+        line_request: bool,
+    ) -> (Vec<Inline>, bool, u16) {
         // finish_nodes() trims a trailing break because it normally ends an
         // IR paragraph. If another invisible cell is already active after
         // that break, the break closed a real earlier row (term_newln()) and
@@ -757,7 +833,46 @@ impl InlineBuilder {
         let armed = carry_armed_zero_advance && self.execution.zero_advance.take_armed();
         let empty_word_end_break = self.take_unrepresented_word_end_break();
         self.flush_zero_advance();
-        let mut completed_vertical_rows = self.execution.completed_vertical_rows;
+        let mut invisible_formatter_cell = self.has_invisible_formatter_cell();
+        // .br and the final pre_br() phase of .sp close an occupied native
+        // cell before this output owner is drained. A preceding visible row
+        // can already end in LineBreak while the current empty-word cell has
+        // no glyph of its own; it still needs its own completed row. A bare
+        // pending \p is already transferred through empty_word_end_break,
+        // so it cannot also claim a completed empty-word row.
+        let requested_invisible_row = line_request
+            && invisible_formatter_cell
+            && !empty_word_end_break
+            && !self.external_head_row_pending;
+        let trailing_invisible_rows = if requested_invisible_row {
+            let mut rows = 0u16;
+            let mut row_has_glyph = false;
+            for node in &self.nodes {
+                if matches!(node, Inline::LineBreak) {
+                    rows = if row_has_glyph {
+                        0
+                    } else {
+                        rows.saturating_add(1)
+                    };
+                    row_has_glyph = false;
+                } else {
+                    row_has_glyph |= has_non_whitespace_glyph(std::slice::from_ref(node));
+                }
+            }
+            rows
+        } else {
+            0
+        };
+        // Trailing LineBreak nodes own already closed rows; the current
+        // invisible cell is a later row. A bare \p was excluded above and
+        // is transferred separately through empty_word_end_break.
+        let mut completed_vertical_rows = self
+            .execution
+            .completed_vertical_rows
+            .saturating_add(u16::from(requested_invisible_row))
+            .saturating_add(
+                trailing_invisible_rows.saturating_sub(self.execution.completed_vertical_rows),
+            );
         if completed_vertical_rows > 0 {
             // term_vspace() has already emitted these rows. Remove only their
             // trailing inline projection, including a later invisible word
@@ -775,8 +890,8 @@ impl InlineBuilder {
                     .rev()
                     .take_while(|node| !matches!(node, Inline::LineBreak))
                     .any(|node| has_non_whitespace_glyph(std::slice::from_ref(node)));
-            completed_vertical_rows =
-                completed_vertical_rows.saturating_add(u16::from(active_invisible_cell));
+            completed_vertical_rows = completed_vertical_rows
+                .saturating_add(u16::from(active_invisible_cell && !requested_invisible_row));
             // The completed-row owner now accounts for this cell. The old
             // invisible-word fallback must not manufacture it a second time.
             invisible_formatter_cell &= !active_invisible_cell;
@@ -819,6 +934,7 @@ impl InlineBuilder {
     /// from exporting state before this boundary has executed.
     pub(in crate::mandoc) fn finish_formatter_line(
         mut self,
+        preserve_rows: bool,
     ) -> (Vec<Inline>, super::InlineExecutionState) {
         let surviving_armed = if self.has_formatter_cell() {
             false
@@ -826,7 +942,12 @@ impl InlineBuilder {
             self.execution.zero_advance.take_armed()
         };
         self.flush_zero_advance();
-        let output = self.finish_nodes();
+        let output = if preserve_rows {
+            self.execution.word_end_break = WordEndBreak::Clear;
+            std::mem::take(&mut self.nodes)
+        } else {
+            self.finish_nodes()
+        };
         self.execution.reset_paragraph_segment(surviving_armed);
         (output, self.execution)
     }
@@ -1004,13 +1125,20 @@ pub(super) fn trim_trailing_breakable_spaces(nodes: &mut Vec<Inline>, count: usi
                     }
                     remove
                 }
-                Inline::Strong { children }
-                | Inline::Emphasis { children }
-                | Inline::Link { children, .. } => {
+                Inline::Strong { children } | Inline::Emphasis { children } => {
                     if !trim(children, remaining) {
                         return false;
                     }
                     children.is_empty()
+                }
+                Inline::Link { children, .. } => {
+                    // A discarded native field can empty the label, but the
+                    // authored destination is still a typed IR fact (CVS
+                    // mdoc_html.c keeps its href). Trim label blanks only.
+                    if !trim(children, remaining) {
+                        return false;
+                    }
+                    false
                 }
             };
             if remove {

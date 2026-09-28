@@ -113,6 +113,9 @@ impl InlineBuilder {
     }
 
     pub(in crate::mandoc) fn request_word_end_break(&mut self) {
+        if let Some(definition) = &mut self.execution.definition {
+            definition.hang_row.field_pending_word_end_break = true;
+        }
         // CVS ESCAPE_BREAK buffers a newline cell even when the decoded word
         // has no glyph. This cell belongs to the current source fragment,
         // unlike an occupied formatter row inherited from a detached HEAD.
