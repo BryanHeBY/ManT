@@ -66,6 +66,7 @@ impl LiteralFlow {
                 self.nodes.push(Inline::LineBreak);
             }
             self.row_occupied = false;
+            self.ordinary_continuation = false;
             self.formatter_column = FormatterColumn::Origin;
         }
         if self.ordinary_continuation && occupies_row {
@@ -117,13 +118,6 @@ impl LiteralFlow {
         // still-tight physical row boundary.
         self.ordinary_continuation = self.tight_boundary;
         self.formatter_column = FormatterColumn::Origin;
-    }
-
-    /// A pre-handler can write a complete formatter word before its source
-    /// operand executes on the same physical row. Its ordinary `term_word()`
-    /// boundary must survive the split between two IR fragments.
-    pub(super) fn ordinary_word_boundary(&mut self) {
-        self.ordinary_continuation = self.row_occupied && !self.tight_boundary;
     }
 
     pub(super) const fn has_formatter_column(&self) -> bool {

@@ -12,9 +12,8 @@ pub(in crate::mandoc) use generated::function_argument;
 mod links;
 pub(super) use links::lower_man_link;
 mod scopes;
-mod source_cursor;
 mod source_fragment;
-pub(in crate::mandoc) use flow::{AuthorBreakEffect, PreservedInlineState};
+pub(in crate::mandoc) use flow::{AuthorBreakEffect, KeepState, PreservedInlineState};
 pub(super) use flow::{FilledBoundary, FontScope, FontState, InlineBuilder};
 mod source;
 
@@ -26,8 +25,8 @@ pub(super) use font::{
     parse_roff_text_with_state, parse_roff_text_with_zero_advance,
 };
 pub(super) use font::{
-    NoFillInlineState, lower_inline_nodes_with_font_state, lower_no_fill_fragment_with_font_state,
-    lower_no_fill_line_with_font_state, parse_roff_text,
+    NoFillInlineState, NoFillRegisters, lower_inline_nodes_with_font_state,
+    lower_no_fill_fragment_with_font_state, parse_roff_text,
 };
 pub(in crate::mandoc) use source_fragment::lower_source_fragment_with_formatter_state;
 

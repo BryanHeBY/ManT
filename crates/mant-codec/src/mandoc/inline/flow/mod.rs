@@ -34,11 +34,10 @@ pub(in crate::mandoc) struct InlineBuilder {
     // otherwise the parent would invent a word separator before the
     // overwriting glyph.
     zero_advance_joined: bool,
-    source_cursor: Option<super::source_cursor::SourceCursor>,
-    // The formatter's final next-word decision.  This is deliberately *not*
-    // the physical source-line state held by `SourceCursor`: `\\c` may keep
-    // reading the input line while a generated delimiter or container close
-    // releases the next formatter word.  ParagraphFlow consumes only this
+    // The formatter's final next-word decision differs from the physical
+    // source-line state: `\\c` may keep reading the input line while a
+    // generated delimiter or container close releases the next formatter
+    // word.  ParagraphFlow consumes only this
     // post-execution result.
     final_word_join: Option<bool>,
     final_source_continuation: Option<bool>,
@@ -49,6 +48,35 @@ pub(in crate::mandoc) struct InlineBuilder {
     definition: Option<DefinitionFieldState>,
     last_executed_source_line: Option<u32>,
     pub(in crate::mandoc) scope_posts: crate::mandoc::containers::ScopePostState,
+}
+
+/// Formatter word context survives an IR fragment drain inside one no-fill
+/// row. It is reset only by an executed row boundary or no-break field flush.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(in crate::mandoc) struct WordBoundaryState {
+    last_visible_character: Option<char>,
+    has_printable_content: bool,
+    formatter_column: FormatterColumn,
+    empty_word: bool,
+    trailing_output: TrailingOutput,
+    pending_breakable_spaces: usize,
+    pending_field_spaces: usize,
+    keep: KeepState,
+}
+
+impl WordBoundaryState {
+    pub(in crate::mandoc) const fn new() -> Self {
+        Self {
+            last_visible_character: None,
+            has_printable_content: false,
+            formatter_column: FormatterColumn::Origin,
+            empty_word: false,
+            trailing_output: TrailingOutput::None,
+            pending_breakable_spaces: 0,
+            pending_field_spaces: 0,
+            keep: KeepState::new(),
+        }
+    }
 }
 #[derive(Clone, Copy)]
 struct AuthorExecution {
@@ -433,15 +461,23 @@ pub(in crate::mandoc) enum TrailingOutput {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct KeepState {
+pub(in crate::mandoc) struct KeepState {
     phase: KeepPhase,
 }
 
 impl KeepState {
-    const fn new() -> Self {
+    pub(in crate::mandoc) const fn new() -> Self {
         Self {
             phase: KeepPhase::Inactive,
         }
+    }
+
+    pub(in crate::mandoc) fn enter(&mut self) {
+        self.phase = KeepPhase::PreKeep;
+    }
+
+    pub(in crate::mandoc) fn exit(&mut self) {
+        self.phase = KeepPhase::Inactive;
     }
 
     const fn keeping(self) -> bool {
@@ -511,7 +547,6 @@ impl InlineBuilder {
             font: FontState::new(),
             zero_advance: ZeroAdvanceState::new(),
             zero_advance_joined: false,
-            source_cursor: None,
             final_word_join: None,
             final_source_continuation: None,
             execution_epoch: 0,
@@ -541,7 +576,6 @@ impl InlineBuilder {
             font: FontState::new(),
             zero_advance: ZeroAdvanceState::new(),
             zero_advance_joined: false,
-            source_cursor: None,
             final_word_join: None,
             final_source_continuation: None,
             execution_epoch: 0,

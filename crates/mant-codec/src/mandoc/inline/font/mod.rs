@@ -11,7 +11,7 @@ mod text_execution;
 mod zero_advance;
 
 pub(in crate::mandoc) use no_fill::{
-    NoFillInlineState, lower_no_fill_fragment_with_font_state, lower_no_fill_line_with_font_state,
+    NoFillInlineState, NoFillRegisters, lower_no_fill_fragment_with_font_state,
 };
 pub(super) use style::coalesce_font_runs;
 pub(in crate::mandoc) use text_execution::{

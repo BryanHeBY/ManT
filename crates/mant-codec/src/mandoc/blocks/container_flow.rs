@@ -30,8 +30,11 @@ impl super::BlockLowerer<'_, '_> {
             .inherit_zero_advance_armed(self.state.take_zero_advance_armed());
         let (nodes, continues_line) = crate::mandoc::inline::lower_no_fill_fragment_with_font_state(
             self.state.spacing_enabled(),
-            &mut self.formatter.font,
-            &mut self.formatter.no_fill_inline,
+            crate::mandoc::inline::NoFillRegisters {
+                font: &mut self.formatter.font,
+                row: &mut self.formatter.no_fill_inline,
+                keep: &mut self.formatter.keep,
+            },
             &self.context.scope_posts,
             source_continuation_fallback,
             finishes_row,
@@ -187,26 +190,8 @@ impl<'node> ContainerSink<'node> for BlockContainerSink<'node, '_, '_> {
                 .state
                 .flush_requested_line(source_span(self.root)),
             Event::Children(nodes) => self.lowerer.push_nodes(nodes),
-            Event::EnterKeep => {
-                self.lowerer.state.push_inline_with(
-                    source_span(self.root),
-                    false,
-                    false,
-                    |builder| {
-                        builder.enter_keep_words();
-                    },
-                );
-            }
-            Event::ExitKeep => {
-                self.lowerer.state.push_inline_with(
-                    source_span(self.root),
-                    false,
-                    false,
-                    |builder| {
-                        builder.exit_keep_words();
-                    },
-                );
-            }
+            Event::EnterKeep => self.lowerer.formatter.enter_keep_words(),
+            Event::ExitKeep => self.lowerer.formatter.exit_keep_words(),
             Event::FunctionArgument(argument, comma_after) => {
                 self.lowerer.push_function_argument(argument, comma_after);
             }

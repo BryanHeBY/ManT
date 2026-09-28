@@ -105,9 +105,7 @@ fn execute_hidden_node(builder: &mut InlineBuilder, node: &Node, default_name: O
     // make the resolved glyph part of the later hidden word.
     builder.begin_word_projection(true);
     let checkpoint = builder.begin_output_transaction();
-    builder.without_source_node_boundaries(|builder| {
-        append_inline_node(builder, node, default_name);
-    });
+    append_inline_node(builder, node, default_name);
     builder.discard_output_preserving_execution(&checkpoint);
     builder.zero_advance.discard_hidden_pending_glyph();
 }

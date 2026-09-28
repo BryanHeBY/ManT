@@ -49,16 +49,21 @@ fn man_empty_font_macro_operands_and_invisible_glyphs_occupy_a_row() {
 
 #[test]
 fn empty_mdoc_or_alternating_font_parameters_are_not_literal_blank_rows() {
+    // CVS mdoc_term.c::print_mdoc_node() treats an empty TEXT as a blank row
+    // only under NODE_LINE; macro operands do not start a source row.
     for (mode, requests) in [
-        ("mdoc", [".No \"\"", ".Em \"\"", ".Sy \"\""]),
-        ("man", [".BI \"\"", ".BR \"\"", ".IR \"\""]),
+        (
+            "mdoc",
+            &[".No \"\"", ".Em \"\"", ".Sy \"\"", ".Ar \"\"", ".Cm \"\""][..],
+        ),
+        ("man", &[".BI \"\"", ".BR \"\"", ".IR \"\""][..]),
     ] {
         for request in requests {
             let text = render_query_text(&query(mode, &format!("ALPHA\n{request}\nBETA")));
             assert!(text.contains("ALPHA\nBETA"), "{mode}: {request}: {text}");
         }
     }
-    for request in [".No \\&", ".Em \\&", ".Sy \\&"] {
+    for request in [".No \\&", ".Em \\&", ".Sy \\&", ".Ar \\&", ".Cm \\&"] {
         let text = render_query_text(&query("mdoc", &format!("ALPHA\n{request}\nBETA")));
         assert!(text.contains("ALPHA\n\nBETA"), "{request}: {text}");
     }

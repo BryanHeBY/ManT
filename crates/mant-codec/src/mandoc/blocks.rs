@@ -15,7 +15,7 @@ use super::{
     inline::{
         FilledBoundary, FontState, InlineBuilder, append_inline_node_with_next, is_enclosure_macro,
         lower_inline_nodes, lower_inline_nodes_with_font_state, lower_inline_nodes_with_spacing,
-        lower_man_link, lower_no_fill_line_with_font_state, plain_text,
+        lower_man_link, plain_text,
     },
     layout::{
         add_leading_spacing, layout, section_spacing, set_block_spacing, update_paragraph_distance,
@@ -33,7 +33,6 @@ pub(super) use inline_flow::ends_with_line_continuation;
 use inline_flow::{
     append_to_last_inline_block, follows_inline_equation_punctuation, is_inline_equation,
     is_inline_equation_quote_artifact, participates_in_inline_flow, push_man_link,
-    starts_indented_filled_line,
 };
 
 mod sections;
@@ -192,6 +191,14 @@ enum FormatterRowBoundary {
     Settle,
 }
 
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum DisplayFillMode {
+    /// Bd uses each source node's parsed `NODE_NOFILL` bit.
+    NodeFlags,
+    /// D1/Dl enter one literal row even though their operands lack the bit.
+    SingleLine,
+}
+
 struct BlockLowerer<'a, 'source> {
     context: &'a LoweringContext<'source>,
     indent_columns: crate::mandoc::layout::SourceIndent,
@@ -208,6 +215,7 @@ struct BlockLowerer<'a, 'source> {
     // Transparent `.RS` scopes retain their native predecessor even when
     // their IR is collected separately for attachment to an ordered item.
     paragraph_predecessor: bool,
+    display_fill: Option<DisplayFillMode>,
 }
 
 impl<'a, 'source> BlockLowerer<'a, 'source> {
@@ -244,6 +252,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             definition_hanging_width: crate::mandoc::layout::Distance::cells(DEFAULT_MAN_TAG_WIDTH),
             man_list_state: ManListState::new(),
             paragraph_predecessor: false,
+            display_fill: None,
         }
     }
 
@@ -275,9 +284,6 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
                     node,
                     crate::mandoc::containers::Event::Glyph("and".to_owned()),
                 );
-                if self.formatter.no_fill {
-                    self.state.no_fill_ordinary_word_boundary();
-                }
             }
             self.push(
                 node,
@@ -338,11 +344,28 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         }
     }
 
+    fn consume_font_request(&mut self, node: &Node) -> bool {
+        if node.macro_name.as_deref() != Some("ft") {
+            return false;
+        }
+        lower_inline_nodes_with_font_state(
+            std::slice::from_ref(node),
+            self.context.default_name,
+            self.state.spacing_enabled(),
+            &mut self.formatter.font,
+        );
+        true
+    }
+
     fn observe_source_fill_mode(&mut self, node: &Node) {
         let was_no_fill = self.formatter.no_fill;
         match node.macro_name.as_deref() {
             Some("nf") => self.formatter.no_fill = true,
             Some("fi") => self.formatter.no_fill = false,
+            _ if self.display_fill == Some(DisplayFillMode::NodeFlags) => {
+                self.formatter.no_fill = node.flags.no_fill;
+            }
+            _ if self.display_fill == Some(DisplayFillMode::SingleLine) => {}
             _ if node.flags.no_fill => self.formatter.no_fill = true,
             _ if node.scope_end.is_none() && participates_in_inline_flow(node) => {
                 self.formatter.no_fill = false;
@@ -363,13 +386,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         ip_run: Option<lists::man::IpRun>,
         source_line_entered: bool,
     ) {
-        if node.macro_name.as_deref() == Some("ft") {
-            lower_inline_nodes_with_font_state(
-                std::slice::from_ref(node),
-                self.context.default_name,
-                self.state.spacing_enabled(),
-                &mut self.formatter.font,
-            );
+        if self.consume_font_request(node) {
             return;
         }
         // The container callback returns child execution to this same driver.
@@ -393,7 +410,13 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             self.state.flush_paragraph_for_vertical_request();
             self.state
                 .queue_targets(structural_targets, source_span(node));
-            if self.paragraph_predecessor || !self.state.output.is_empty() {
+            // CVS termp_pp_pre() executes term_vspace() even for the first
+            // child of a compact Bd BODY. A detached display starts with an
+            // empty IR sink, but that does not cancel the authored request.
+            if self.paragraph_predecessor
+                || !self.state.output.is_empty()
+                || self.display_fill.is_some()
+            {
                 self.state.output.push(Block::VerticalSpace {
                     lines,
                     source: source_span(node),
@@ -401,7 +424,9 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             }
             return;
         }
-        if self.push_no_fill_lines(node, source_line_entered) {
+        let single_line_literal =
+            self.display_fill == Some(DisplayFillMode::SingleLine) && self.formatter.no_fill;
+        if self.push_no_fill_lines(node, next, source_line_entered, single_line_literal) {
             self.state
                 .queue_targets(structural_targets, source_span(node));
             return;
@@ -483,7 +508,9 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
 
     fn prepare_node_execution(&mut self, node: &Node) {
         let formatter_control = super::controls::formatter_control(node.macro_name.as_deref());
-        match no_fill_boundary(node) {
+        let single_line_literal =
+            self.display_fill == Some(DisplayFillMode::SingleLine) && self.formatter.no_fill;
+        match no_fill_boundary(node, single_line_literal) {
             FormatterBoundary::None => {}
             FormatterBoundary::Line => {
                 self.formatter.clear_trailing_literal_row();

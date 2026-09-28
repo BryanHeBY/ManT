@@ -149,7 +149,7 @@ fn block_state_literal_take_resets_continuation_occupancy_and_provenance() {
 }
 
 #[test]
-fn block_state_paragraph_take_resets_source_cursor_and_pending_join() {
+fn block_state_paragraph_take_resets_pending_join() {
     let mut state = BlockState::with_output(0.into(), true, Vec::new());
     state.push_inline(text("first"), Some(source(1)), false, true);
     state.flush_paragraph();

@@ -2,7 +2,7 @@
 use libmandoc_rs::AuthorMode;
 
 use super::inline::{
-    AuthorBreakEffect, FontState, InlineBuilder, NoFillInlineState, PreservedInlineState,
+    AuthorBreakEffect, FontState, InlineBuilder, KeepState, NoFillInlineState, PreservedInlineState,
 };
 
 pub(super) struct FinishedInlineLine {
@@ -37,6 +37,9 @@ pub(super) struct FormatterState {
     /// CVS term.c keeps the row and backtracking flags in one `termp`; a
     /// `BlockLowerer` is only a destination for IR, not a new formatter.
     pub(super) no_fill_inline: NoFillInlineState,
+    /// CVS PREKEEP/KEEP survives output owner and fill-mode changes until
+    /// the native Bk BODY post clears it.
+    pub(super) keep: KeepState,
     /// A crossed display can return while its last literal row is still the
     /// formatter's active row. The parent output sink adopts that row before
     /// writing the next source or generated word.
@@ -61,6 +64,7 @@ impl Default for FormatterState {
             spacing: true,
             no_fill: false,
             no_fill_inline: NoFillInlineState::new(),
+            keep: KeepState::new(),
             row_handoff: RowHandoff::None,
             vertical_space_debt: 0,
             zero_advance_armed: false,
@@ -99,7 +103,10 @@ impl FormatterState {
         // text/font before walking to the next sibling.
         debug_assert_eq!(builder.font, FontState::new());
         std::mem::swap(&mut builder.font, &mut self.font);
+        builder.inherit_keep_state(self.keep);
         let result = execute(builder);
+        self.keep = builder.keep_state();
+        builder.inherit_keep_state(KeepState::new());
         std::mem::swap(&mut builder.font, &mut self.font);
         self.spacing = builder.spacing_enabled();
         self.vertical_space_debt = builder.vertical_space_debt();
@@ -120,6 +127,7 @@ impl FormatterState {
         author_break_effect: AuthorBreakEffect,
     ) -> InlineBuilder {
         let mut builder = InlineBuilder::with_spacing(spacing);
+        builder.inherit_keep_state(self.keep);
         builder.font = std::mem::replace(&mut self.font, FontState::new());
         self.spacing = true;
         builder.inherit_vertical_space_debt(std::mem::take(&mut self.vertical_space_debt));
@@ -158,6 +166,7 @@ impl FormatterState {
     }
 
     fn inherit_inline_registers(&mut self, builder: &InlineBuilder) {
+        self.keep = builder.keep_state();
         if let Some(author_flow) = builder.author_flow() {
             self.author_flow = author_flow;
         }
@@ -207,6 +216,14 @@ impl FormatterState {
 
     pub(super) fn set_author_flow(&mut self, flow: AuthorFlow) {
         self.author_flow = flow;
+    }
+
+    pub(super) fn enter_keep_words(&mut self) {
+        self.keep.enter();
+    }
+
+    pub(super) fn exit_keep_words(&mut self) {
+        self.keep.exit();
     }
 }
 

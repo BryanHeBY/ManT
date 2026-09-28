@@ -1,10 +1,11 @@
 //! Man no-fill words retain executed empty rows, not formatter operands.
 use super::{
-    FontState, Inline, Node, NodeKind, ends_with_line_continuation, first_part_children,
-    lower_inline_nodes_with_font_state, lower_no_fill_line_with_font_state,
-    participates_in_inline_flow, source_span, targets,
+    FontState, Inline, Node, NodeKind, append_inline_node_with_next, ends_with_line_continuation,
+    first_part_children, lower_inline_nodes_with_font_state, participates_in_inline_flow,
+    source_span, targets,
 };
 use crate::mandoc::controls::{FormatterBoundary, formatter_control};
+use crate::mandoc::inline::{NoFillRegisters, lower_no_fill_fragment_with_font_state};
 
 struct LoweredNoFillLine {
     nodes: Vec<Inline>,
@@ -14,8 +15,19 @@ struct LoweredNoFillLine {
     occupies_row: bool,
 }
 
-pub(super) fn is_no_fill_payload(node: &Node) -> bool {
-    node.flags.no_fill
+#[derive(Clone, Copy)]
+struct NoFillSource<'a> {
+    node: &'a Node,
+    next: Option<&'a Node>,
+    source_line_entered: bool,
+    single_line_literal: bool,
+    default_name: Option<&'a str>,
+    spacing_enabled: bool,
+    macro_set: libmandoc_rs::MacroSet,
+}
+
+pub(super) fn is_no_fill_payload(node: &Node, single_line_literal: bool) -> bool {
+    (node.flags.no_fill || single_line_literal)
         && participates_in_inline_flow(node)
         && !matches!(
             node.macro_name.as_deref(),
@@ -30,13 +42,13 @@ pub(super) fn is_no_fill_payload(node: &Node) -> bool {
 /// execute without calling `term_newln()` or `term_flushln()`, so pending
 /// `\c`, `\p`, and `\z` state crosses them.  Requests that establish a real
 /// line boundary are settled before their normal block dispatch executes.
-pub(super) fn no_fill_boundary(node: &Node) -> FormatterBoundary {
+pub(super) fn no_fill_boundary(node: &Node, single_line_literal: bool) -> FormatterBoundary {
     if let Some(control) = formatter_control(node.macro_name.as_deref()) {
         return control.boundary;
     }
     // mdoc_term.c::termp_rs_pre() has no row break in DESCRIPTION. Rs enters
     // its BODY through the same source-line dispatcher as adjacent text.
-    if is_no_fill_payload(node) || node.macro_name.as_deref() == Some("Rs") {
+    if is_no_fill_payload(node, single_line_literal) || node.macro_name.as_deref() == Some("Rs") {
         FormatterBoundary::None
     } else {
         FormatterBoundary::Line
@@ -44,26 +56,37 @@ pub(super) fn no_fill_boundary(node: &Node) -> FormatterBoundary {
 }
 
 fn lower_no_fill_lines(
-    node: &Node,
-    source_line_entered: bool,
-    default_name: Option<&str>,
+    source: NoFillSource<'_>,
     font: &mut FontState,
     inline_state: &mut crate::mandoc::inline::NoFillInlineState,
+    keep: &mut crate::mandoc::inline::KeepState,
     scope_posts: &crate::mandoc::containers::ScopePostState,
 ) -> Option<Vec<LoweredNoFillLine>> {
-    if is_no_fill_payload(node) {
-        let (mut nodes, continues_line) = lower_no_fill_line_with_font_state(
-            std::slice::from_ref(node),
-            default_name,
-            true,
-            font,
-            inline_state,
+    let NoFillSource {
+        node,
+        next,
+        source_line_entered,
+        single_line_literal,
+        default_name,
+        spacing_enabled,
+        macro_set,
+    } = source;
+    if is_no_fill_payload(node, single_line_literal) {
+        let (mut nodes, continues_line) = lower_no_fill_fragment_with_font_state(
+            spacing_enabled,
+            NoFillRegisters {
+                font,
+                row: inline_state,
+                keep,
+            },
             scope_posts,
             ends_with_line_continuation(node),
+            false,
+            |builder| append_inline_node_with_next(builder, node, next, default_name),
         );
         let mut occupies_row = !nodes.is_empty();
         if nodes.is_empty() {
-            let blank_rows = empty_word_rows(node);
+            let blank_rows = empty_word_rows(node, macro_set == libmandoc_rs::MacroSet::Mdoc);
             occupies_row = blank_rows > 0;
             // An empty native TEXT calls term_vspace() at this source node.
             // Settle its formatter cell now; otherwise the next request
@@ -95,9 +118,12 @@ fn lower_no_fill_lines(
 /// operand; `ESCAPE_IGNORE` instead buffers an invisible glyph on the current
 /// row. Pure font escapes do neither. Inspect typed decoded events only when
 /// ordinary lowering returned no visible payload.
-fn empty_word_rows(node: &Node) -> usize {
+fn empty_word_rows(node: &Node, is_mdoc: bool) -> usize {
     // Alternating font macros call term_word on operands themselves instead
     // of visiting man TEXT nodes, so their empty parameters are not vspace.
+    // mdoc_term.c::print_mdoc_node() only interprets an empty TEXT as a blank
+    // input row under NODE_LINE; an empty macro argument merely calls
+    // term_word(""). man_term.c interprets every visited empty TEXT as vspace.
     let empty_text_is_row =
         crate::mandoc::inline::alternating_font_pair(node.macro_name.as_deref()).is_none();
     let mut stack = vec![node];
@@ -109,7 +135,7 @@ fn empty_word_rows(node: &Node) -> usize {
         }
         if node.kind == NodeKind::Text {
             let text = node.decoder_text().unwrap_or_default();
-            if text.is_empty() && empty_text_is_row {
+            if text.is_empty() && empty_text_is_row && (!is_mdoc || node.flags.line_start) {
                 blanks = blanks.saturating_add(1);
             } else {
                 zero_width_glyph |= crate::mandoc::roff_escape::decode(text)
@@ -129,8 +155,14 @@ fn empty_word_rows(node: &Node) -> usize {
 }
 
 impl super::BlockLowerer<'_, '_> {
-    pub(super) fn push_no_fill_lines(&mut self, node: &Node, source_line_entered: bool) -> bool {
-        if !is_no_fill_payload(node) {
+    pub(super) fn push_no_fill_lines(
+        &mut self,
+        node: &Node,
+        next: Option<&Node>,
+        source_line_entered: bool,
+        single_line_literal: bool,
+    ) -> bool {
+        if !is_no_fill_payload(node, single_line_literal) {
             return false;
         }
         self.resume_no_fill_row();
@@ -147,11 +179,18 @@ impl super::BlockLowerer<'_, '_> {
             .no_fill_inline
             .inherit_zero_advance_armed(self.state.take_zero_advance_armed());
         let Some(lines) = lower_no_fill_lines(
-            node,
-            source_line_entered,
-            self.context.default_name,
+            NoFillSource {
+                node,
+                next,
+                source_line_entered,
+                single_line_literal,
+                default_name: self.context.default_name,
+                spacing_enabled: self.state.spacing_enabled(),
+                macro_set: self.context.macro_set,
+            },
             &mut self.formatter.font,
             &mut self.formatter.no_fill_inline,
+            &mut self.formatter.keep,
             &self.context.scope_posts,
         ) else {
             unreachable!("a no-fill payload must lower as a no-fill row");

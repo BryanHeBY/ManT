@@ -213,9 +213,6 @@ impl InlineBuilder {
             self.nodes.push(Inline::LineBreak);
             self.last_visible_character = Some('\n');
         }
-        if let Some(cursor) = &mut self.source_cursor {
-            cursor.explicit_line_break(false);
-        }
         self.final_word_join = Some(false);
         self.final_source_continuation = Some(false);
     }
@@ -344,9 +341,6 @@ impl InlineBuilder {
             .append_generated_text(value, &mut projected, self.font.display_current());
         self.append_word(projected);
         if !value.is_empty() {
-            if let Some(cursor) = &mut self.source_cursor {
-                cursor.continue_line(false);
-            }
             self.final_word_join = Some(false);
             self.final_source_continuation = Some(false);
         }
@@ -513,37 +507,6 @@ impl InlineBuilder {
             self.nodes.append(incoming);
             return;
         }
-        if let Some(cursor) = &mut self.source_cursor {
-            let pending = cursor.pending();
-            let empty_row = pending && incoming.is_empty() && word && occupies_row;
-            if cursor.word(occupies_row) {
-                self.nodes.push(Inline::LineBreak);
-                self.last_visible_character = Some('\n');
-                self.boundary = PendingBoundary::Ordinary;
-                self.trailing_output = TrailingOutput::None;
-                self.pending_breakable_spaces = 0;
-                self.pending_field_spaces = 0;
-                self.empty_word = false;
-            }
-            // The previous physical-line decision is consumed before CVS
-            // term_word() clears TERMP_NONEWLINE for the current word.
-            cursor.continue_line(false);
-            if empty_row {
-                // Empty executed rows are content, including at a display's
-                // start/end. Do not turn them into inter-word padding.
-                self.nodes.push(Inline::Text {
-                    value: String::new(),
-                });
-                // `term_word()` has nevertheless advanced the native output
-                // column.  Later `.ti` and `.mc` requests must observe this
-                // formatter cell even though it has no visible glyph.
-                self.formatter_column = FormatterColumn::Advanced;
-                return;
-            }
-            if pending && !occupies_row && incoming.is_empty() {
-                return;
-            }
-        }
         if (incoming_has_printable || word)
             && (self.pending_definition_indent().is_some() || self.pending_line_indent > 0)
         {
@@ -572,16 +535,7 @@ impl InlineBuilder {
             needs_boundary_space(self.last_visible_character, incoming_first)
         };
         self.append_boundary_spacing(boundary, add_space, word, empty_word);
-        let appended_start = self.nodes.len();
         self.nodes.append(incoming);
-        if line_break_count(&self.nodes[appended_start..]) > 0 {
-            // `incoming` has moved, so inspect the tail already appended.
-            // An explicit break is an executed row transition, independent
-            // of the next source node's physical line number.
-            if let Some(cursor) = &mut self.source_cursor {
-                cursor.explicit_line_break(incoming_last != Some('\n'));
-            }
-        }
         if incoming_last.is_some() {
             self.last_visible_character = incoming_last;
             // Generic projected words are formatter glyphs, not trim-eligible
@@ -709,18 +663,6 @@ impl InlineBuilder {
 
     fn finish_nodes(&mut self) -> Vec<Inline> {
         self.word_end_break = WordEndBreak::Clear;
-        if let Some(cursor) = &self.source_cursor {
-            if !cursor.row_occupied()
-                && let Some(last) = self
-                    .nodes
-                    .iter()
-                    .rposition(|node| !matches!(node, Inline::Anchor { .. }))
-                && matches!(self.nodes[last], Inline::LineBreak)
-            {
-                self.nodes.remove(last);
-            }
-            return std::mem::take(&mut self.nodes);
-        }
         while matches!(self.nodes.last(), Some(Inline::LineBreak)) {
             self.nodes.pop();
         }
@@ -777,9 +719,6 @@ impl InlineBuilder {
         }
         self.nodes
             .extend(std::iter::repeat_n(Inline::LineBreak, count));
-        if let Some(cursor) = &mut self.source_cursor {
-            cursor.explicit_line_break(false);
-        }
         self.last_visible_character = Some('\n');
         self.formatter_column = FormatterColumn::Origin;
         self.empty_word = false;

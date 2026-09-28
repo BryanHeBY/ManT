@@ -57,6 +57,31 @@ fn generated_function_events_follow_no_fill_source_order_and_rows() {
 }
 
 #[test]
+fn keep_words_survives_display_output_switches() {
+    // Exact inputs checked with pinned CVS -Tascii/-Tlint.  Its
+    // mdoc_term.c::termp_bk_pre/post keeps TERMP_PREKEEP/KEEP in the native
+    // formatter across Bd BODY entry and exit.  term.c's escape break stays
+    // within the kept formatter word, so both display variants read A B.
+    for (name, body) in [
+        (
+            "keep-inside-display",
+            ".Bd -literal\n.Bk -words\n.No A\\p No B\n.Ek\n.Ed",
+        ),
+        (
+            "keep-outside-display",
+            ".Bk -words\n.Bd -literal\n.No A\\p No B\n.Ed\n.Ek",
+        ),
+    ] {
+        let source = format!(
+            ".Dd September 28, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd keep probe\n.Sh DESCRIPTION\n{body}\nTAIL\n"
+        );
+        let document = parse_manual_bytes(std::path::Path::new(name), source.as_bytes()).unwrap();
+        let blocks = &document.sections[1].blocks;
+        assert!(blocks.iter().any(|block| matches!(block, Block::Preformatted { children, .. } if inline_text(children).contains("A B"))), "{name}: {blocks:#?}");
+    }
+}
+
+#[test]
 fn function_head_target_stays_with_the_active_output_channel() {
     struct Anchors(Vec<(String, Option<u32>)>);
     impl<'ir> Visit<'ir> for Anchors {
@@ -613,6 +638,24 @@ fn dl_single_line_display_does_not_require_native_no_fill_flags() {
         );
     };
     assert_eq!(inline_text(children), "[n] redir-op file");
+}
+
+#[test]
+fn display_nodes_keep_native_word_and_row_execution_across_fragments() {
+    // Exact input checked with the pinned CVS -Tascii/-Thtml/-Tlint oracle.
+    // mdoc_term.c::termp_fl_pre()/termp_pf_post() bind adjacent words;
+    // termp_eo_post() releases NOSPACE while TERMP_NONEWLINE keeps the
+    // following authored leading blank on the same literal row.
+    let source = b".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd state probe\n.Sh DESCRIPTION\n.Bd -literal\n.Fl Ar file\n.No a Pf \\& No b\n.Eo [\n.No BEFORE\\c\n.Ec\n AFTER\n.Ed\n";
+    let document =
+        parse_manual_bytes(std::path::Path::new("display-source-execution.1"), source).unwrap();
+    let [Block::Preformatted { children, .. }] = document.sections[1].blocks.as_slice() else {
+        panic!(
+            "display lost its literal body: {:#?}",
+            document.sections[1].blocks
+        );
+    };
+    assert_eq!(inline_text(children), "-file\na b\n[\nBEFORE  AFTER");
 }
 
 #[test]

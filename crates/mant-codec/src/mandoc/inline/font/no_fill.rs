@@ -1,8 +1,5 @@
-use super::super::flow::PendingBoundary;
-use super::{
-    FontState, Inline, InlineBuilder, Node, ZeroAdvanceState, append_inline_nodes,
-    builder_with_zero_advance,
-};
+use super::super::flow::{KeepState, PendingBoundary, WordBoundaryState};
+use super::{FontState, Inline, InlineBuilder, ZeroAdvanceState, builder_with_zero_advance};
 use crate::mandoc::containers::ScopePostState;
 
 /// Lower one executed no-fill input row.
@@ -18,6 +15,7 @@ pub(in crate::mandoc) struct NoFillInlineState {
     continued: bool,
     formatter_cell: NoFillFormatterCell,
     boundary: PendingBoundary,
+    word_boundary: WordBoundaryState,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -35,6 +33,7 @@ impl NoFillInlineState {
             continued: false,
             formatter_cell: NoFillFormatterCell::Origin,
             boundary: PendingBoundary::Ordinary,
+            word_boundary: WordBoundaryState::new(),
         }
     }
 
@@ -73,6 +72,7 @@ impl NoFillInlineState {
         self.continued = false;
         self.formatter_cell = NoFillFormatterCell::Origin;
         self.boundary = PendingBoundary::Ordinary;
+        self.word_boundary = WordBoundaryState::new();
     }
 
     pub(in crate::mandoc) fn take_settled_row(&mut self) -> Vec<Inline> {
@@ -97,8 +97,11 @@ impl NoFillInlineState {
             output.push(Inline::LineBreak);
         }
         self.pending_word_end_break = false;
-        self.continued = false;
+        // roff_term_pre_mc() clears NOSPACE for the next formatter word but
+        // preserves independently active TERMP_NONEWLINE from authored \c.
         self.formatter_cell = NoFillFormatterCell::Origin;
+        self.boundary = PendingBoundary::Ordinary;
+        self.word_boundary = WordBoundaryState::new();
         output
     }
 
@@ -127,49 +130,37 @@ impl NoFillInlineState {
     }
 }
 
-pub(in crate::mandoc) fn lower_no_fill_line_with_font_state(
-    nodes: &[Node],
-    default_name: Option<&str>,
-    spacing: bool,
-    state: &mut FontState,
-    inline_state: &mut NoFillInlineState,
-    scope_posts: &ScopePostState,
-    source_continuation_fallback: bool,
-) -> (Vec<Inline>, bool) {
-    lower_no_fill_fragment_with_font_state(
-        spacing,
-        state,
-        inline_state,
-        scope_posts,
-        source_continuation_fallback,
-        false,
-        |builder| append_inline_nodes(builder, nodes, default_name),
-    )
-}
-
 /// Execute generated container content in the same no-fill formatter state
 /// as ordinary source nodes. Generated punctuation does not itself finish an
 /// authored input row; source operands do.
 pub(in crate::mandoc) fn lower_no_fill_fragment_with_font_state(
     spacing: bool,
-    state: &mut FontState,
-    inline_state: &mut NoFillInlineState,
+    registers: NoFillRegisters<'_>,
     scope_posts: &ScopePostState,
     source_continuation_fallback: bool,
     finishes_row: bool,
     append: impl FnOnce(&mut InlineBuilder),
 ) -> (Vec<Inline>, bool) {
+    let NoFillRegisters {
+        font: state,
+        row: inline_state,
+        keep,
+    } = registers;
     let mut builder = builder_with_zero_advance(spacing, *state, &mut inline_state.zero_advance);
     builder.scope_posts = scope_posts.clone();
+    builder.inherit_word_boundary_state(inline_state.word_boundary);
+    builder.inherit_keep_state(*keep);
     builder.inherit_boundary_state(inline_state.boundary);
     if inline_state.continued {
         builder.continue_source_line(true);
-        builder.tighten_next_boundary();
+        builder.inherit_boundary_state(inline_state.boundary);
     }
     if inline_state.pending_word_end_break {
         builder.request_word_end_break();
     }
     append(&mut builder);
+    *keep = builder.keep_state();
+    inline_state.word_boundary = builder.word_boundary_state();
     inline_state.boundary = builder.boundary_state();
     *state = builder.font;
     let (mut output, execution) = builder.finish_preserving_execution();
@@ -190,4 +181,10 @@ pub(in crate::mandoc) fn lower_no_fill_fragment_with_font_state(
         inline_state.finish_row(&mut output);
     }
     (output, continues_line)
+}
+
+pub(in crate::mandoc) struct NoFillRegisters<'a> {
+    pub(in crate::mandoc) font: &'a mut FontState,
+    pub(in crate::mandoc) row: &'a mut NoFillInlineState,
+    pub(in crate::mandoc) keep: &'a mut KeepState,
 }

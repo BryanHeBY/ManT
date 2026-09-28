@@ -491,33 +491,7 @@ impl InlineBuilder {
         if self.no_break_definition_field() {
             return;
         }
-        let literal_flow = self.source_cursor.is_some();
-        let continued = self.final_source_continuation_or(false);
-        let realizes_literal_word_end_break =
-            literal_flow && self.word_end_break == WordEndBreak::Pending && !continued;
         self.flush_zero_advance();
-        // A visible glyph always makes the field printable.  CVS also keeps
-        // an otherwise invisible `\&` cell when `\c` suppresses the source
-        // line flush; without that continuation, the invisible-only field is
-        // discarded before `.mc` and contributes no relative separator.
-        if realizes_literal_word_end_break {
-            if !self
-                .nodes
-                .iter()
-                .rev()
-                .take_while(|node| !matches!(node, Inline::LineBreak))
-                .any(|node| has_printable_character(std::slice::from_ref(node)))
-            {
-                self.nodes.push(Inline::Text {
-                    value: String::new(),
-                });
-            }
-            self.nodes.push(Inline::LineBreak);
-            self.last_visible_character = Some('\n');
-            if let Some(cursor) = &mut self.source_cursor {
-                cursor.explicit_line_break(false);
-            }
-        }
         self.boundary = PendingBoundary::Ordinary;
         self.empty_word = false;
         if let TrailingOutput::BreakableBlank(count) = self.trailing_output {
@@ -536,7 +510,7 @@ impl InlineBuilder {
         // different formatter geometry: it survives `.Sm off`, `.Ns`, and
         // delimiter flags and replaces the next word's automatic boundary.
         self.pending_breakable_spaces = 0;
-        self.pending_field_spaces = usize::from(!realizes_literal_word_end_break);
+        self.pending_field_spaces = 1;
         self.word_end_break = WordEndBreak::Clear;
         self.formatter_column = FormatterColumn::Origin;
         // TERMP_NOBREAK only changes this flush; it does not create

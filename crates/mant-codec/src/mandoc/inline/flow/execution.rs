@@ -1,11 +1,43 @@
 use super::{
     AuthorBreakEffect, AuthorExecution, FormatterColumn, Inline, InlineBuilder, KeepPhase,
     KeepState, PendingBoundary, PreservedInlineState, SourceFragmentState, SpacingMode,
-    TrailingOutput, WordEndBreak, last_visible_character, trim_trailing_breakable_spaces,
-    updated_spacing,
+    TrailingOutput, WordBoundaryState, WordEndBreak, last_visible_character,
+    trim_trailing_breakable_spaces, updated_spacing,
 };
 
 impl InlineBuilder {
+    pub(in crate::mandoc) const fn keep_state(&self) -> KeepState {
+        self.keep
+    }
+
+    pub(in crate::mandoc) fn inherit_keep_state(&mut self, state: KeepState) {
+        self.keep = state;
+    }
+
+    pub(in crate::mandoc) const fn word_boundary_state(&self) -> WordBoundaryState {
+        WordBoundaryState {
+            last_visible_character: self.last_visible_character,
+            has_printable_content: self.has_printable_content,
+            formatter_column: self.formatter_column,
+            empty_word: self.empty_word,
+            trailing_output: self.trailing_output,
+            pending_breakable_spaces: self.pending_breakable_spaces,
+            pending_field_spaces: self.pending_field_spaces,
+            keep: self.keep,
+        }
+    }
+
+    pub(in crate::mandoc) fn inherit_word_boundary_state(&mut self, state: WordBoundaryState) {
+        self.last_visible_character = state.last_visible_character;
+        self.has_printable_content = state.has_printable_content;
+        self.formatter_column = state.formatter_column;
+        self.empty_word = state.empty_word;
+        self.trailing_output = state.trailing_output;
+        self.pending_breakable_spaces = state.pending_breakable_spaces;
+        self.pending_field_spaces = state.pending_field_spaces;
+        self.keep = state.keep;
+    }
+
     pub(in crate::mandoc) fn tighten_next_boundary(&mut self) {
         self.boundary = PendingBoundary::Tight;
     }
@@ -125,10 +157,6 @@ impl InlineBuilder {
         self.zero_advance_joined = true;
     }
 
-    pub(in crate::mandoc) fn track_executed_lines(&mut self) {
-        self.source_cursor = Some(super::super::source_cursor::SourceCursor::new());
-    }
-
     pub(in crate::mandoc) fn begin_executed_node(&mut self, node: &libmandoc_rs::Node) {
         if node.line != 0 {
             self.last_executed_source_line = Some(node.line);
@@ -138,24 +166,6 @@ impl InlineBuilder {
         // execute several input rows that all retain the call site's line.
         if self.keep.keeping() && node.flags.line_start {
             self.keep.phase = KeepPhase::PreKeep;
-        }
-        if node.flags.line_start {
-            let has_physical_line_boundary = self.source_cursor.as_mut().is_some_and(|cursor| {
-                cursor.begin();
-                cursor.has_physical_line_boundary()
-            });
-            if has_physical_line_boundary {
-                // CVS stores `\p` as a deferred word-end marker. At a real
-                // no-fill input-line boundary, the ordinary row flush
-                // settles it; retaining both would create a blank line.
-                // A pending BACKBEFORE glyph still belongs to the row being
-                // closed. CVS `term_flushln()` commits that cell before the
-                // next input line starts; flushing after `SourceCursor`
-                // emits its boundary would move the glyph to the new row.
-                self.flush_zero_advance();
-                self.formatter_column = FormatterColumn::Origin;
-                self.word_end_break = WordEndBreak::Clear;
-            }
         }
     }
 
@@ -187,9 +197,6 @@ impl InlineBuilder {
     }
 
     pub(in crate::mandoc) fn continue_source_line(&mut self, continued: bool) {
-        if let Some(cursor) = &mut self.source_cursor {
-            cursor.continue_line(continued);
-        }
         self.final_word_join = Some(continued);
         self.final_source_continuation = Some(continued);
     }
@@ -208,33 +215,6 @@ impl InlineBuilder {
     /// order.
     pub(in crate::mandoc) fn inherit_final_word_join(&mut self, result: Option<bool>) {
         self.final_word_join = result;
-    }
-
-    pub(in crate::mandoc) fn transfer_source_cursor(&mut self, next: &mut Self) {
-        next.source_cursor = self.source_cursor.take();
-    }
-
-    /// Execute a source operand whose formatter order differs from its AST
-    /// order without inventing a second physical row. `.Lk` renders its label
-    /// before the URI even though the URI is the first source child. Explicit
-    /// `\\p` output and the operand's final continuation still survive.
-    pub(in crate::mandoc) fn without_source_node_boundaries(
-        &mut self,
-        execute: impl FnOnce(&mut Self),
-    ) {
-        let cursor = self.source_cursor.take();
-        execute(self);
-        let continued = self.final_source_continuation_or(false);
-        self.source_cursor = cursor;
-        if let Some(cursor) = &mut self.source_cursor {
-            cursor.continue_line(continued);
-        }
-    }
-
-    pub(in crate::mandoc) fn reset_source_cursor(&mut self) {
-        if let Some(cursor) = &mut self.source_cursor {
-            cursor.reset();
-        }
     }
 
     pub(in crate::mandoc) fn release_next_boundary(&mut self) {
