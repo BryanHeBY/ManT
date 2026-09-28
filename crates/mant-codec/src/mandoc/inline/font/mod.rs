@@ -146,8 +146,8 @@ fn lower_inline_nodes_with_font_state_and_zero_advance(
     state: &mut FontState,
     zero_advance: &mut ZeroAdvanceState,
 ) -> (Vec<Inline>, super::flow::PreservedInlineState) {
-    let mut builder = builder_with_zero_advance(spacing, *state, zero_advance);
+    let mut builder = builder_with_zero_advance(spacing, state.clone(), zero_advance);
     append_inline_nodes(&mut builder, nodes, default_name);
-    *state = builder.font;
+    *state = builder.font.clone();
     finish_with_zero_advance(builder, zero_advance)
 }

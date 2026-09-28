@@ -60,7 +60,7 @@ pub(in crate::mandoc) fn lower_source_fragment_with_formatter_state(
     }
 
     let fallback = || {
-        let mut font = formatter.font;
+        let mut font = formatter.font.clone();
         RecoveredFragment {
             inlines: parse_roff_text_with_state(source, &mut font, true),
             complete: false,
@@ -177,7 +177,7 @@ fn lower_body(
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> Vec<Inline> {
     let mut builder = InlineBuilder::with_spacing(formatter.spacing_enabled());
-    builder.font = formatter.font;
+    builder.font = formatter.font.clone();
     builder.inherit_vertical_space_debt(formatter.vertical_space_debt);
     builder.inherit_zero_advance_armed(formatter.take_zero_advance_armed());
     for (index, node) in nodes.iter().enumerate() {
@@ -191,7 +191,7 @@ fn lower_body(
             append_inline_node_with_next(&mut builder, node, nodes.get(index + 1), default_name);
         }
     }
-    formatter.font = builder.font;
+    formatter.font = builder.font.clone();
     formatter.set_spacing_enabled(builder.spacing_enabled());
     formatter.vertical_space_debt = builder.vertical_space_debt();
     formatter.inherit_zero_advance_armed(builder.take_zero_advance_armed());

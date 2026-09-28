@@ -58,6 +58,29 @@ fn table_layout_font_can_be_overridden_and_restored_within_one_cell() {
 }
 
 #[test]
+fn source_recovered_code_cell_restores_presentation_after_inner_font_scope() {
+    // Exact input checked with fixed CVS -Tutf8/-Thtml/-Tlint. tbl_html.c
+    // retains one Li environment for the fCR cell; an admitted inline .Em
+    // extension must restore that environment after its own font scope.
+    let source = b".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\n.TS\nl fCR.\nT{\n.Em WORD\nafter\nT}\n.TE\n";
+    let document =
+        parse_manual_bytes(std::path::Path::new("table-code-inner-scope.1"), source).unwrap();
+    let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+        panic!("table")
+    };
+    let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
+        panic!("cell")
+    };
+    let after = children
+        .iter()
+        .find(|inline| inline_text(std::slice::from_ref(*inline)).contains("after"));
+    assert!(
+        matches!(after, Some(Inline::Code { value }) if value.contains("after")),
+        "{children:#?}"
+    );
+}
+
+#[test]
 fn table_cell_font_selection_does_not_leak_to_next_cell_or_prose() {
     // Exact input checked with the fixed -Thtml/-Tutf8/-Tlint oracle.
     // CVS tbl_term.c::tbl_word pushes layout->font and term_fontpopq()

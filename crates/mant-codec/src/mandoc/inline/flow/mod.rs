@@ -236,7 +236,7 @@ pub(in crate::mandoc) struct SourceFragmentState {
 }
 
 /// Roff remembers the previous selection independently of the current font.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub(in crate::mandoc) struct FontState {
     /// Terminal execution registers used by `\\fP` and `.ft P`.
     pub(super) current: Font,
@@ -254,7 +254,9 @@ pub(in crate::mandoc) struct FontState {
     /// CVS term.c keeps mdoc fonts in a stack.  An ordinary `.ft` changes
     /// the current slot without pushing it, so BODY unwinding must restore
     /// only scopes pushed after that BODY was entered.
-    scope_depth: usize,
+    // Saved lower slots; `current` is the mutable active slot. A `.ft`
+    // replaces that slot, and term_fontpopq() only changes the active depth.
+    font_stack: Vec<(Font, Font)>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -265,14 +267,12 @@ struct TablePresentationFont {
 
 #[derive(Clone, Copy)]
 pub(in crate::mandoc) struct FontScope {
-    current: Font,
-    display_current: Font,
-    table_presentation_current: Option<Font>,
     depth: usize,
+    table_presentation_current: Option<Font>,
 }
 
 impl FontState {
-    pub(in crate::mandoc) const fn new() -> Self {
+    pub(in crate::mandoc) fn new() -> Self {
         Self {
             current: Font::Regular,
             previous: Font::Regular,
@@ -280,18 +280,18 @@ impl FontState {
             display_previous: Font::Regular,
             table_presentation: None,
             heading_bold_italic: false,
-            scope_depth: 0,
+            font_stack: Vec::new(),
         }
     }
 
-    pub(in crate::mandoc) const fn display_current(self) -> Font {
+    pub(in crate::mandoc) const fn display_current(&self) -> Font {
         match self.table_presentation {
             Some(presentation) => presentation.current,
             None => self.display_current,
         }
     }
 
-    pub(super) fn select(&mut self, font: Font) {
+    pub(in crate::mandoc) fn select(&mut self, font: Font) {
         let display = if self.heading_bold_italic && font == Font::Emphasis {
             Font::StrongEmphasis
         } else {
@@ -325,33 +325,29 @@ impl FontState {
         }
     }
 
-    /// mdoc font scopes push a selection. Popping restores the saved current
-    /// font, not the previous-selection register used by `\\fP` and `.ft P`.
+    /// mdoc font scopes push a slot. The previous-font register is separate.
     pub(in crate::mandoc) fn push_scope(&mut self, font: Font) -> FontScope {
         let saved = self.checkpoint();
-        self.scope_depth += 1;
+        self.font_stack.push((self.current, self.display_current));
         self.select(font);
         saved
     }
 
     pub(in crate::mandoc) fn checkpoint(&self) -> FontScope {
         FontScope {
-            current: self.current,
-            display_current: self.display_current,
+            depth: self.font_stack.len(),
             table_presentation_current: self.table_presentation.map(|font| font.current),
-            depth: self.scope_depth,
         }
     }
 
     pub(in crate::mandoc) fn pop_scope(&mut self, saved: FontScope) {
         // term.c::term_fontpopq() is a no-op if a crossed BODY has already
         // unwound this font depth.  A later return must not revive it.
-        if self.scope_depth <= saved.depth {
+        if self.font_stack.len() <= saved.depth {
             return;
         }
-        self.scope_depth = saved.depth;
-        self.current = saved.current;
-        self.display_current = saved.display_current;
+        (self.current, self.display_current) = self.font_stack[saved.depth];
+        self.font_stack.truncate(saved.depth);
         if let (Some(presentation), Some(current)) = (
             &mut self.table_presentation,
             saved.table_presentation_current,
@@ -411,6 +407,28 @@ impl FontState {
         self.heading_bold_italic = false;
         self.select(Font::Regular);
         self.select(Font::Regular);
+    }
+}
+
+#[cfg(test)]
+mod font_state_tests {
+    use super::{Font, FontState};
+
+    #[test]
+    fn crossed_body_pop_uses_live_lower_slot_and_keeps_previous_register() {
+        // The exact Ao/.ft B/Bf/.Ac source was checked with pinned CVS
+        // -Tascii. term.c::term_fontrepl() changes the active fontq slot;
+        // term_fontpopq() only changes the index at the original BODY close.
+        let mut font = FontState::new();
+        let outer = font.checkpoint();
+        font.select(Font::Strong);
+        let inner = font.push_scope(Font::Emphasis);
+        assert_eq!(font.current, Font::Emphasis);
+        font.pop_scope(outer);
+        assert_eq!(font.current, Font::Strong);
+        assert_eq!(font.previous, Font::Strong);
+        font.pop_scope(inner);
+        assert_eq!(font.current, Font::Strong);
     }
 }
 
