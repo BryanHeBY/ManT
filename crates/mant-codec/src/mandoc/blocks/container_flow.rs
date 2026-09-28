@@ -25,15 +25,20 @@ impl super::BlockLowerer<'_, '_> {
         append: impl FnOnce(&mut InlineBuilder),
     ) {
         self.resume_no_fill_row();
-        self.formatter
+        let armed = self.state.take_zero_advance_armed();
+        let spacing = self.state.spacing_enabled();
+        self.state
+            .formatter
             .no_fill_inline
-            .inherit_zero_advance_armed(self.state.take_zero_advance_armed());
+            .inherit_zero_advance_armed(armed);
+        let formatter = &mut self.state.formatter;
+        let execution = &mut formatter.execution;
         let (nodes, continues_line) = crate::mandoc::inline::lower_no_fill_fragment_with_font_state(
-            self.state.spacing_enabled(),
+            spacing,
             crate::mandoc::inline::NoFillRegisters {
-                font: &mut self.formatter.font,
-                row: &mut self.formatter.no_fill_inline,
-                keep: &mut self.formatter.keep,
+                font: &mut execution.font,
+                row: &mut formatter.no_fill_inline,
+                keep: &mut execution.keep,
             },
             &self.context.scope_posts,
             source_continuation_fallback,
@@ -54,7 +59,7 @@ impl super::BlockLowerer<'_, '_> {
     }
 
     fn push_function_argument(&mut self, argument: &Node, comma_after: bool) {
-        if self.formatter.no_fill {
+        if self.state.formatter.no_fill {
             self.push_no_fill_generated(
                 argument,
                 super::ends_with_line_continuation(argument),
@@ -77,24 +82,22 @@ impl super::BlockLowerer<'_, '_> {
                 false,
                 false,
                 |builder| {
-                    self.formatter.with_inline_node(builder, |builder| {
-                        crate::mandoc::inline::function_argument(
-                            builder,
-                            argument,
-                            comma_after,
-                            self.context.default_name,
-                        );
-                    });
+                    crate::mandoc::inline::function_argument(
+                        builder,
+                        argument,
+                        comma_after,
+                        self.context.default_name,
+                    );
                 },
             );
         }
     }
 
     pub(super) fn push_generated_container_event(&mut self, source: &Node, event: Event<'_>) {
-        if self.formatter.no_fill {
+        if self.state.formatter.no_fill {
             // Generated words are their own term_word() calls. They consume
             // the preceding authored `\c`; only state-only events inherit it.
-            let continuation = self.formatter.no_fill_inline.continues_source_line();
+            let continuation = self.state.formatter.no_fill_inline.continues_source_line();
             self.push_no_fill_generated(source, continuation, false, false, |builder| {
                 append_generated_event(builder, event);
             });
@@ -102,9 +105,7 @@ impl super::BlockLowerer<'_, '_> {
             self.state.flush_preformatted();
             self.state
                 .push_inline_with(source_span(source), false, false, |builder| {
-                    self.formatter.with_inline_node(builder, |builder| {
-                        append_generated_event(builder, event);
-                    });
+                    append_generated_event(builder, event);
                 });
         }
     }
@@ -117,7 +118,7 @@ impl super::BlockLowerer<'_, '_> {
         }
         if node.scope_end.is_none()
             && !matches!(node.macro_name.as_deref(), Some("Bf" | "Bk"))
-            && !self.formatter.no_fill
+            && !self.state.formatter.no_fill
             && !self.context.scope_posts.has_structural_payload(node)
         {
             return false;
@@ -142,7 +143,7 @@ struct BlockContainerSink<'l, 'a, 'source> {
 
 impl<'node> ContainerSink<'node> for BlockContainerSink<'node, '_, '_> {
     fn font(&mut self) -> &mut crate::mandoc::inline::FontState {
-        &mut self.lowerer.formatter.font
+        &mut self.lowerer.state.formatter.font
     }
 
     fn source_node(&mut self, source: &'node Node, starts_line: bool) {
@@ -155,7 +156,7 @@ impl<'node> ContainerSink<'node> for BlockContainerSink<'node, '_, '_> {
         }
         self.emission_source = source;
         self.lowerer.observe_source_fill_mode(source);
-        if self.lowerer.formatter.no_fill {
+        if self.lowerer.state.formatter.no_fill {
             self.lowerer.resume_no_fill_row();
         }
         // CVS mdoc_term.c::print_mdoc_node() settles a physical no-fill row
@@ -163,9 +164,10 @@ impl<'node> ContainerSink<'node> for BlockContainerSink<'node, '_, '_> {
         // posts and a preceding \z glyph therefore share the same row.
         if starts_line
             && source.flags.line_start
-            && self.lowerer.formatter.no_fill
+            && self.lowerer.state.formatter.no_fill
             && !self
                 .lowerer
+                .state
                 .formatter
                 .no_fill_inline
                 .continues_source_line()
@@ -190,8 +192,8 @@ impl<'node> ContainerSink<'node> for BlockContainerSink<'node, '_, '_> {
                 .state
                 .flush_requested_line(source_span(self.root)),
             Event::Children(nodes) => self.lowerer.push_nodes(nodes),
-            Event::EnterKeep => self.lowerer.formatter.enter_keep_words(),
-            Event::ExitKeep => self.lowerer.formatter.exit_keep_words(),
+            Event::EnterKeep => self.lowerer.state.formatter.enter_keep_words(),
+            Event::ExitKeep => self.lowerer.state.formatter.exit_keep_words(),
             Event::FunctionArgument(argument, comma_after) => {
                 self.lowerer.push_function_argument(argument, comma_after);
             }
@@ -202,6 +204,6 @@ impl<'node> ContainerSink<'node> for BlockContainerSink<'node, '_, '_> {
     }
 
     fn restore_fill(&mut self, fill: bool) {
-        self.lowerer.formatter.no_fill = fill;
+        self.lowerer.state.formatter.no_fill = fill;
     }
 }

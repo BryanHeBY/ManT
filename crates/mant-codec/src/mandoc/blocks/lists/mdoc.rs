@@ -21,7 +21,7 @@ pub(in crate::mandoc::blocks) fn lower_mdoc_list(
         trailing_targets,
         trailing_controls,
     } = mdoc_list_items(node);
-    formatter.spacing = initial_spacing;
+    formatter.set_spacing_enabled(initial_spacing);
     let is_definition = matches!(
         node.list_kind,
         Some(NormalizedListKind::Definition | NormalizedListKind::Column)
@@ -83,7 +83,7 @@ pub(in crate::mandoc::blocks) fn lower_mdoc_list(
             source,
         );
     }
-    context.lower_inline_with_spacing(trailing_controls, formatter.spacing, formatter);
+    context.lower_inline_with_spacing(trailing_controls, formatter.spacing_enabled(), formatter);
     block
 }
 
@@ -143,7 +143,7 @@ fn lower_mdoc_plain_list(
                     .content_origin();
                 context.lower_inline_with_spacing(
                     item.leading_controls,
-                    formatter.spacing,
+                    formatter.spacing_enabled(),
                     formatter,
                 );
                 if kind != ListKind::Plain {
@@ -151,7 +151,7 @@ fn lower_mdoc_plain_list(
                 }
                 context.lower_inline_with_spacing(
                     first_part_children(item.node, NodeKind::Head),
-                    formatter.spacing,
+                    formatter.spacing_enabled(),
                     formatter,
                 );
                 let mut blocks = lower_blocks_with_body_post_row_end(
@@ -159,7 +159,7 @@ fn lower_mdoc_plain_list(
                     context,
                     body_origin,
                     paragraph_distance,
-                    formatter.spacing,
+                    formatter.spacing_enabled(),
                     item_body_predecessor(kind == ListKind::Plain, index, paragraph_predecessor),
                     formatter,
                 );
@@ -280,7 +280,11 @@ fn lower_mdoc_definition_item(
     style: Option<DefinitionListStyle>,
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> DefinitionItem {
-    context.lower_inline_with_spacing(item.leading_controls, formatter.spacing, formatter);
+    context.lower_inline_with_spacing(
+        item.leading_controls,
+        formatter.spacing_enabled(),
+        formatter,
+    );
     let shares_pending_term_row = style != Some(DefinitionListStyle::Overhang);
     let head = first_part_children(item.node, NodeKind::Head);
     let mut lowered = definition_item(
@@ -290,7 +294,7 @@ fn lower_mdoc_definition_item(
         paragraph_distance,
         geometry,
         DefinitionFlow {
-            spacing_enabled: formatter.spacing,
+            spacing_enabled: formatter.spacing_enabled(),
             paragraph_predecessor: true,
             shares_pending_term_row,
             head: match style {
@@ -475,10 +479,14 @@ fn lower_mdoc_column_list(
     let rows = items
         .into_iter()
         .map(|item| {
-            context.lower_inline_with_spacing(item.leading_controls, formatter.spacing, formatter);
+            context.lower_inline_with_spacing(
+                item.leading_controls,
+                formatter.spacing_enabled(),
+                formatter,
+            );
             context.lower_inline_with_spacing(
                 first_part_children(item.node, NodeKind::Head),
-                formatter.spacing,
+                formatter.spacing_enabled(),
                 formatter,
             );
             let mut cells = part_child_groups(item.node, NodeKind::Body)
@@ -489,7 +497,7 @@ fn lower_mdoc_column_list(
                         context,
                         cell_indent.content_origin(),
                         paragraph_distance,
-                        formatter.spacing,
+                        formatter.spacing_enabled(),
                         item_body_predecessor(false, 0, false),
                         formatter,
                     ),

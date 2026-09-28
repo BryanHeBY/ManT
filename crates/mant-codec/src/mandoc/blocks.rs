@@ -204,7 +204,6 @@ struct BlockLowerer<'a, 'source> {
     indent_columns: crate::mandoc::layout::SourceIndent,
     paragraph_distance: &'a mut u16,
     state: BlockState,
-    formatter: crate::mandoc::formatter::FormatterState,
     // man(7) starts each section or relative-indent scope with a seven-column
     // hanging margin. Explicit `.TP`/`.IP` widths update it for following
     // tagged paragraphs, exactly as mandoc's terminal renderer does.
@@ -220,7 +219,7 @@ struct BlockLowerer<'a, 'source> {
 
 impl<'a, 'source> BlockLowerer<'a, 'source> {
     fn resume_no_fill_row(&mut self) {
-        if self.formatter.take_trailing_literal_row() {
+        if self.state.formatter.take_trailing_literal_row() {
             self.state.adopt_trailing_preformatted();
         }
     }
@@ -233,13 +232,10 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         output: Vec<Block>,
         formatter: crate::mandoc::formatter::FormatterState,
     ) -> Self {
-        let mut formatter = formatter;
-        let mut state = BlockState::with_output(indent_columns, spacing_enabled, output);
+        let mut state = BlockState::with_output(indent_columns, spacing_enabled, output, formatter);
         state.inherit_scope_posts(context.scope_posts.clone());
-        state.inherit_vertical_space_debt(formatter.vertical_space_debt);
-        state.inherit_zero_advance_armed(std::mem::take(&mut formatter.zero_advance_armed));
         state.inherit_author_execution(
-            formatter.author_flow(),
+            state.formatter.author_flow(),
             context.active_mdoc_section()
                 == crate::mandoc::source_context::MdocSectionContext::Authors,
         );
@@ -248,7 +244,6 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             indent_columns,
             paragraph_distance,
             state,
-            formatter,
             definition_hanging_width: crate::mandoc::layout::Distance::cells(DEFAULT_MAN_TAG_WIDTH),
             man_list_state: ManListState::new(),
             paragraph_predecessor: false,
@@ -291,7 +286,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
                 table_plan.embedding(index),
                 synopsis_previous,
                 adjacent_ip_run(nodes, index),
-                author_pre && self.formatter.no_fill,
+                author_pre && self.state.formatter.no_fill,
             );
             if reference_body && let Some(punctuation) = reference_field_post(nodes, index) {
                 self.push_generated_container_event(node, crate::mandoc::containers::Event::Tight);
@@ -337,10 +332,10 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             return;
         };
         let posts = self.context.scope_posts.clone();
-        posts.enter_body(body.id, self.formatter.font.checkpoint());
+        posts.enter_body(body.id, self.state.formatter.font.checkpoint());
         self.push_nodes_with_reference_posts(&body.children, true);
         if let Some(saved) = posts.exit_body(body.id) {
-            self.formatter.font.pop_scope(saved);
+            self.state.formatter.font.pop_scope(saved);
         }
     }
 
@@ -352,28 +347,28 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             std::slice::from_ref(node),
             self.context.default_name,
             self.state.spacing_enabled(),
-            &mut self.formatter.font,
+            &mut self.state.formatter.font,
         );
         true
     }
 
     fn observe_source_fill_mode(&mut self, node: &Node) {
-        let was_no_fill = self.formatter.no_fill;
+        let was_no_fill = self.state.formatter.no_fill;
         match node.macro_name.as_deref() {
-            Some("nf") => self.formatter.no_fill = true,
-            Some("fi") => self.formatter.no_fill = false,
+            Some("nf") => self.state.formatter.no_fill = true,
+            Some("fi") => self.state.formatter.no_fill = false,
             _ if self.display_fill == Some(DisplayFillMode::NodeFlags) => {
-                self.formatter.no_fill = node.flags.no_fill;
+                self.state.formatter.no_fill = node.flags.no_fill;
             }
             _ if self.display_fill == Some(DisplayFillMode::SingleLine) => {}
-            _ if node.flags.no_fill => self.formatter.no_fill = true,
+            _ if node.flags.no_fill => self.state.formatter.no_fill = true,
             _ if node.scope_end.is_none() && participates_in_inline_flow(node) => {
-                self.formatter.no_fill = false;
+                self.state.formatter.no_fill = false;
             }
             _ => {}
         }
-        if was_no_fill && !self.formatter.no_fill {
-            self.formatter.clear_trailing_literal_row();
+        if was_no_fill && !self.state.formatter.no_fill {
+            self.state.formatter.clear_trailing_literal_row();
         }
     }
 
@@ -425,7 +420,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             return;
         }
         let single_line_literal =
-            self.display_fill == Some(DisplayFillMode::SingleLine) && self.formatter.no_fill;
+            self.display_fill == Some(DisplayFillMode::SingleLine) && self.state.formatter.no_fill;
         if self.push_no_fill_lines(node, next, source_line_entered, single_line_literal) {
             self.state
                 .queue_targets(structural_targets, source_span(node));
@@ -462,7 +457,6 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             self.push_inline_node(node, next);
         } else {
             self.state.flush_paragraph();
-            self.state.sync_formatter_state(&mut self.formatter);
             let output_start = self.state.output.len();
             let spacing_enabled = self.state.spacing_enabled();
             StructuralLowerer {
@@ -479,41 +473,27 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
                 man_list_state: &mut self.man_list_state,
                 ip_run,
                 spacing_enabled,
-                formatter: &mut self.formatter,
+                formatter: &mut self.state.formatter,
             }
             .push(node, table_embedding);
             if restores_macro_indent(node) {
                 self.state
                     .set_source_indent(self.indent_columns.macro_origin());
             }
-            self.sync_paragraph_formatter_state();
             self.state
                 .queue_targets(structural_targets, source_span(node));
             self.state.attach_pending_to_structural_output(output_start);
         }
     }
 
-    fn sync_paragraph_formatter_state(&mut self) {
-        self.state.inherit_spacing(self.formatter.spacing);
-        self.state.inherit_author_execution(
-            self.formatter.author_flow(),
-            self.context.active_mdoc_section()
-                == crate::mandoc::source_context::MdocSectionContext::Authors,
-        );
-        self.state
-            .inherit_vertical_space_debt(self.formatter.vertical_space_debt);
-        self.state
-            .inherit_zero_advance_armed(std::mem::take(&mut self.formatter.zero_advance_armed));
-    }
-
     fn prepare_node_execution(&mut self, node: &Node) {
         let formatter_control = super::controls::formatter_control(node.macro_name.as_deref());
         let single_line_literal =
-            self.display_fill == Some(DisplayFillMode::SingleLine) && self.formatter.no_fill;
+            self.display_fill == Some(DisplayFillMode::SingleLine) && self.state.formatter.no_fill;
         match no_fill_boundary(node, single_line_literal) {
             FormatterBoundary::None => {}
             FormatterBoundary::Line => {
-                self.formatter.clear_trailing_literal_row();
+                self.state.formatter.clear_trailing_literal_row();
                 self.settle_no_fill_inline();
                 if formatter_control.is_some_and(|control| !control.specialized) {
                     self.state.hard_break();
@@ -521,9 +501,13 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             }
             FormatterBoundary::NoBreak => {
                 if self.state.has_formatter_cell()
-                    || self.formatter.no_fill_inline.has_pending_formatter_cell()
+                    || self
+                        .state
+                        .formatter
+                        .no_fill_inline
+                        .has_pending_formatter_cell()
                 {
-                    let nodes = self.formatter.no_fill_inline.take_no_break_cell();
+                    let nodes = self.state.formatter.no_fill_inline.take_no_break_cell();
                     self.state.no_break_formatter_flush(nodes);
                 }
             }
@@ -532,30 +516,33 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             node.macro_name.as_deref(),
             Some("PP" | "P" | "LP" | "HP" | "IP" | "TP" | "TQ" | "RS" | "SY")
         ) {
-            self.formatter.font = FontState::new();
+            self.state.formatter.font = FontState::new();
         }
     }
 
     fn enter_no_fill_source_line(&mut self, node: &Node) {
-        if !self.formatter.no_fill {
+        if !self.state.formatter.no_fill {
             return;
         }
         self.resume_no_fill_row();
-        if node.flags.line_start && !self.formatter.no_fill_inline.continues_source_line() {
+        if node.flags.line_start && !self.state.formatter.no_fill_inline.continues_source_line() {
             self.settle_no_fill_inline();
             self.state.begin_no_fill_source_line();
         }
     }
 
     fn settle_no_fill_inline(&mut self) {
-        let nodes = self.formatter.no_fill_inline.take_settled_row();
+        let nodes = self.state.formatter.no_fill_inline.take_settled_row();
         if !nodes.is_empty() {
             self.state
                 .push_preformatted(nodes, None, false, false, true);
         }
-        self.state.inherit_zero_advance_armed(
-            self.formatter.no_fill_inline.take_bare_zero_advance_armed(),
-        );
+        let armed = self
+            .state
+            .formatter
+            .no_fill_inline
+            .take_bare_zero_advance_armed();
+        self.state.inherit_zero_advance_armed(armed);
     }
 
     fn finish_into(
@@ -566,8 +553,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         if row_boundary == FormatterRowBoundary::Settle {
             self.settle_no_fill_inline();
         }
-        let blocks = self.state.finish_with_formatter(&mut self.formatter);
-        *formatter = self.formatter;
+        let blocks = self.state.finish_with_formatter(formatter);
         self.context.check_gap_bounds(&blocks);
         blocks
     }

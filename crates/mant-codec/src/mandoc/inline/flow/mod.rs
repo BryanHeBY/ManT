@@ -18,6 +18,7 @@ pub(in crate::mandoc) struct InlineBuilder {
 /// Text execution registers have a different lifetime from an IR segment.
 /// A paragraph, literal row, or nested output owner may drain `nodes` while
 /// the formatter continues to execute the same source stream.
+#[derive(Clone)]
 pub(in crate::mandoc) struct InlineExecutionState {
     boundary: PendingBoundary,
     spacing: SpacingMode,
@@ -32,8 +33,8 @@ pub(in crate::mandoc) struct InlineExecutionState {
     pending_field_spaces: usize,
     pending_line_indent: usize,
     word_end_break: WordEndBreak,
-    vertical_space_debt: u16,
-    keep: KeepState,
+    pub(in crate::mandoc) vertical_space_debt: u16,
+    pub(in crate::mandoc) keep: KeepState,
     pub(in crate::mandoc) font: FontState,
     pub(in crate::mandoc) zero_advance: ZeroAdvanceState,
     // A nested inline scope can resolve a `\\z` glyph that was armed by its
@@ -110,7 +111,7 @@ struct AuthorExecution {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct DefinitionOutcome(u8);
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 struct DefinitionFieldState {
     pending_indent: Option<usize>,
     outcome: DefinitionOutcome,
@@ -559,10 +560,21 @@ impl InlineBuilder {
             execution: InlineExecutionState::with_spacing(spacing_enabled),
         }
     }
+
+    pub(in crate::mandoc) fn from_parts(
+        nodes: Vec<Inline>,
+        execution: InlineExecutionState,
+    ) -> Self {
+        Self { nodes, execution }
+    }
+
+    pub(in crate::mandoc) fn into_parts(self) -> (Vec<Inline>, InlineExecutionState) {
+        (self.nodes, self.execution)
+    }
 }
 
 impl InlineExecutionState {
-    fn with_spacing(spacing_enabled: bool) -> Self {
+    pub(in crate::mandoc) fn with_spacing(spacing_enabled: bool) -> Self {
         Self {
             boundary: PendingBoundary::Ordinary,
             spacing: SpacingMode::from_enabled(spacing_enabled),
@@ -601,7 +613,6 @@ impl InlineExecutionState {
         self.pending_field_spaces = 0;
         self.pending_line_indent = 0;
         self.word_end_break = WordEndBreak::Clear;
-        self.font = FontState::new();
         self.zero_advance = ZeroAdvanceState::new();
         self.zero_advance.inherit_armed(armed_zero_advance);
         self.zero_advance_joined = false;
@@ -610,5 +621,58 @@ impl InlineExecutionState {
         self.execution_epoch = 0;
         self.definition = None;
         self.last_executed_source_line = None;
+        if let Some(author) = &mut self.author_execution {
+            // The author mode is a formatter register; this index belongs to
+            // the drained IR segment and cannot cross its output boundary.
+            author.field_output_start = 0;
+        }
+    }
+
+    pub(in crate::mandoc) fn spacing_enabled(&self) -> bool {
+        self.spacing == SpacingMode::Enabled
+    }
+
+    pub(in crate::mandoc) fn set_spacing_enabled(&mut self, enabled: bool) {
+        self.spacing = SpacingMode::from_enabled(enabled);
+    }
+
+    pub(in crate::mandoc) fn has_formatter_cell(&self) -> bool {
+        self.formatter_column == FormatterColumn::Advanced
+            || self.zero_advance.has_buffered_glyph()
+            || self.word_end_break == WordEndBreak::Pending
+    }
+
+    pub(in crate::mandoc) fn take_zero_advance_armed(&mut self) -> bool {
+        self.zero_advance.take_armed()
+    }
+
+    pub(in crate::mandoc) fn inherit_zero_advance_armed(&mut self, armed: bool) {
+        self.zero_advance.inherit_armed(armed);
+    }
+
+    pub(in crate::mandoc) fn author_flow(&self) -> Option<crate::mandoc::formatter::AuthorFlow> {
+        self.author_execution.map(|execution| execution.flow)
+    }
+
+    pub(in crate::mandoc) fn set_author_flow(
+        &mut self,
+        flow: crate::mandoc::formatter::AuthorFlow,
+    ) {
+        if let Some(execution) = &mut self.author_execution {
+            execution.flow = flow;
+        } else {
+            self.author_execution = Some(AuthorExecution {
+                flow,
+                authors_section: false,
+                break_effect: AuthorBreakEffect::Line,
+                field_output_start: 0,
+            });
+        }
+    }
+}
+
+impl Default for InlineExecutionState {
+    fn default() -> Self {
+        Self::with_spacing(true)
     }
 }

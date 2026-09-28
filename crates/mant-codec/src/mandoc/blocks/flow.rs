@@ -11,6 +11,7 @@ use paragraph::ParagraphFlow;
 
 pub(super) struct BlockState {
     pub(super) output: Vec<Block>,
+    pub(super) formatter: crate::mandoc::formatter::FormatterState,
     // Filled and literal buffers are independent, not mutually exclusive modes.
     paragraph: ParagraphFlow,
     literal: LiteralFlow,
@@ -66,10 +67,13 @@ impl BlockState {
         indent_columns: crate::mandoc::layout::SourceIndent,
         spacing_enabled: bool,
         output: Vec<Block>,
+        mut formatter: crate::mandoc::formatter::FormatterState,
     ) -> Self {
+        formatter.set_spacing_enabled(spacing_enabled);
         Self {
             output,
-            paragraph: ParagraphFlow::new(spacing_enabled),
+            formatter,
+            paragraph: ParagraphFlow::new(),
             literal: LiteralFlow::new(),
             pending_targets: targets::PendingTargets::new(),
             indent_columns,
@@ -78,28 +82,18 @@ impl BlockState {
     }
 
     pub(super) fn inherit_scope_posts(&mut self, posts: crate::mandoc::containers::ScopePostState) {
-        self.paragraph.inherit_scope_posts(posts);
+        self.formatter.execution.scope_posts = posts;
     }
 
     pub(super) fn spacing_enabled(&self) -> bool {
-        self.paragraph.spacing_enabled()
+        self.formatter.spacing_enabled()
     }
 
     pub(super) fn set_spacing(&mut self, setting: &str) {
-        self.paragraph.set_spacing(setting);
-    }
-
-    /// Carry formatter state out of a structural subtree.
-    ///
-    /// Nested mdoc enclosures can contain `.Sm` transitions that affect later
-    /// sibling nodes even though the enclosure itself is lowered by a nested
-    /// block builder. The nested builder has already applied the transition at
-    /// its source position, so the parent inherits only the final state.
-    pub(super) fn inherit_spacing(&mut self, spacing_enabled: bool) {
-        if spacing_enabled == self.spacing_enabled() {
-            return;
-        }
-        self.paragraph.inherit_spacing(spacing_enabled);
+        self.paragraph
+            .with_inline_builder(&mut self.formatter, |builder| {
+                builder.set_spacing(setting);
+            });
     }
 
     pub(super) fn push_inline(
@@ -111,7 +105,7 @@ impl BlockState {
     ) {
         if nodes.is_empty() {
             if continues_line {
-                self.paragraph.tighten_next_boundary();
+                self.paragraph.tighten_next_boundary(&mut self.formatter);
             }
             return;
         }
@@ -141,6 +135,7 @@ impl BlockState {
         append: impl FnOnce(&mut InlineBuilder),
     ) {
         self.paragraph.append(
+            &mut self.formatter,
             source,
             starts_indented_line,
             continues_line,
@@ -154,11 +149,11 @@ impl BlockState {
     }
 
     pub(super) fn hard_break(&mut self) {
-        self.paragraph.hard_break();
+        self.paragraph.hard_break(&mut self.formatter);
     }
 
     pub(super) fn tighten_next_boundary(&mut self) {
-        self.paragraph.tighten_next_boundary();
+        self.paragraph.tighten_next_boundary(&mut self.formatter);
     }
 
     pub(super) fn queue_targets(
@@ -225,31 +220,28 @@ impl BlockState {
     }
 
     pub(super) fn no_break_formatter_flush(&mut self, nodes: Vec<Inline>) {
-        self.paragraph.no_break_flush();
+        self.paragraph.no_break_flush(&mut self.formatter);
         self.literal.no_break_flush(nodes);
     }
 
     pub(super) fn has_formatter_cell(&self) -> bool {
-        self.paragraph.has_formatter_cell() || self.literal.has_formatter_column()
+        self.formatter.execution.has_formatter_cell() || self.literal.has_formatter_column()
     }
 
     pub(super) fn resolve_vertical_space(&mut self, rows: i32) -> u16 {
-        self.paragraph.resolve_vertical_space(rows)
-    }
-
-    pub(super) fn inherit_vertical_space_debt(&mut self, debt: u16) {
-        self.paragraph.inherit_vertical_space_debt(debt);
+        self.paragraph
+            .resolve_vertical_space(&mut self.formatter, rows)
     }
 
     /// Execute one native formatter word while the visible row is owned by
     /// the no-fill flow.  The word still clears CVS `skipvsp`, which belongs
     /// to the surrounding formatter rather than either IR buffer.
     pub(super) fn execute_formatter_word(&mut self) {
-        self.paragraph.inherit_vertical_space_debt(0);
+        self.formatter.execute_word();
     }
 
     pub(super) fn inherit_zero_advance_armed(&mut self, armed: bool) {
-        self.paragraph.inherit_zero_advance_armed(armed);
+        self.formatter.inherit_zero_advance_armed(armed);
     }
 
     pub(super) fn inherit_author_execution(
@@ -258,7 +250,9 @@ impl BlockState {
         authors_section: bool,
     ) {
         self.paragraph
-            .inherit_author_execution(flow, authors_section);
+            .with_inline_builder(&mut self.formatter, |builder| {
+                builder.inherit_author_execution(flow, authors_section);
+            });
     }
 
     pub(super) fn inherit_run_in_execution(
@@ -266,24 +260,14 @@ impl BlockState {
         state: crate::mandoc::inline::PreservedInlineState,
         generated_cells: usize,
     ) {
-        self.paragraph.inherit_preserved_execution(state);
-        self.paragraph.append_run_in_cells(generated_cells);
+        self.paragraph
+            .inherit_preserved_execution(&mut self.formatter, state);
+        self.paragraph
+            .append_run_in_cells(&mut self.formatter, generated_cells);
     }
 
     pub(super) fn take_zero_advance_armed(&mut self) -> bool {
-        self.paragraph.take_zero_advance_armed()
-    }
-
-    pub(super) fn sync_formatter_state(
-        &mut self,
-        formatter: &mut crate::mandoc::formatter::FormatterState,
-    ) {
-        formatter.spacing = self.spacing_enabled();
-        formatter.vertical_space_debt = self.paragraph.vertical_space_debt();
-        formatter.zero_advance_armed = self.paragraph.take_zero_advance_armed();
-        if let Some(author_flow) = self.paragraph.author_flow() {
-            formatter.set_author_flow(author_flow);
-        }
+        self.formatter.take_zero_advance_armed()
     }
 
     pub(super) fn flush_paragraph(&mut self) {
@@ -296,12 +280,10 @@ impl BlockState {
 
     fn flush_paragraph_with(&mut self, vertical_request: bool) {
         let output_start = self.output.len();
-        let (block, empty_word_end_break) = if vertical_request {
-            self.paragraph
-                .take_for_vertical_request(self.indent_columns)
-        } else {
-            self.paragraph.take(self.indent_columns)
-        };
+        let _ = vertical_request;
+        let (block, empty_word_end_break) = self
+            .paragraph
+            .take(&mut self.formatter, self.indent_columns);
         if let Some(block) = block {
             match block {
                 Block::Paragraph {
@@ -396,7 +378,7 @@ impl BlockState {
         formatter: &mut crate::mandoc::formatter::FormatterState,
     ) -> Vec<Block> {
         self.settle();
-        self.sync_formatter_state(formatter);
+        *formatter = self.formatter;
         self.output
     }
 

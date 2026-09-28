@@ -176,10 +176,10 @@ fn lower_body(
     default_name: Option<&str>,
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> Vec<Inline> {
-    let mut builder = InlineBuilder::with_spacing(formatter.spacing);
+    let mut builder = InlineBuilder::with_spacing(formatter.spacing_enabled());
     builder.font = formatter.font;
     builder.inherit_vertical_space_debt(formatter.vertical_space_debt);
-    builder.inherit_zero_advance_armed(std::mem::take(&mut formatter.zero_advance_armed));
+    builder.inherit_zero_advance_armed(formatter.take_zero_advance_armed());
     for (index, node) in nodes.iter().enumerate() {
         if matches!(node.macro_name.as_deref(), Some("UR" | "MT")) {
             builder.append(lower_man_link(
@@ -192,9 +192,9 @@ fn lower_body(
         }
     }
     formatter.font = builder.font;
-    formatter.spacing = builder.spacing_enabled();
+    formatter.set_spacing_enabled(builder.spacing_enabled());
     formatter.vertical_space_debt = builder.vertical_space_debt();
-    formatter.zero_advance_armed = builder.take_zero_advance_armed();
+    formatter.inherit_zero_advance_armed(builder.take_zero_advance_armed());
     builder.finish()
 }
 

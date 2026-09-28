@@ -163,7 +163,7 @@ pub(in crate::mandoc) fn lower_no_fill_fragment_with_font_state(
     inline_state.word_boundary = builder.word_boundary_state();
     inline_state.boundary = builder.boundary_state();
     *state = builder.font;
-    let (mut output, execution) = builder.finish_preserving_execution();
+    let (mut output, execution, _) = builder.finish_preserving_execution();
     let continues_line = execution
         .source_continuation
         .unwrap_or(source_continuation_fallback);

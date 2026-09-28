@@ -126,12 +126,6 @@ impl InlineBuilder {
         }
     }
 
-    pub(in crate::mandoc) fn author_flow(&self) -> Option<crate::mandoc::formatter::AuthorFlow> {
-        self.execution
-            .author_execution
-            .map(|execution| execution.flow)
-    }
-
     pub(in crate::mandoc) fn request_word_end_break(&mut self) {
         // A NOBREAK field separator is ordered before the next formatter
         // word, but it is still trailing field geometry until that word
@@ -403,18 +397,5 @@ impl InlineBuilder {
             _ => PendingBoundary::Ordinary,
         };
         self.execution.spacing = SpacingMode::from(updated);
-    }
-
-    /// Carry formatter state out of a nested structural wrapper.
-    ///
-    /// The nested builder has already applied the transition at its exact
-    /// source position. The parent therefore inherits only the final state;
-    /// replaying `set_spacing` here would invent a preserved boundary after a
-    /// nested `Sm off` request.
-    pub(in crate::mandoc) fn inherit_spacing(&mut self, spacing_enabled: bool) {
-        self.execution.spacing = SpacingMode::from(spacing_enabled);
-        if matches!(self.execution.boundary, PendingBoundary::Preserved) {
-            self.execution.boundary = PendingBoundary::Ordinary;
-        }
     }
 }

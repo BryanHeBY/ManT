@@ -117,7 +117,8 @@ fn finish_with_zero_advance(
     builder: InlineBuilder,
     _zero_advance: &mut ZeroAdvanceState,
 ) -> (Vec<Inline>, super::flow::PreservedInlineState) {
-    builder.finish_preserving_execution()
+    let (output, preserved, _) = builder.finish_preserving_execution();
+    (output, preserved)
 }
 
 pub(in crate::mandoc) fn lower_inline_nodes_with_font_state(

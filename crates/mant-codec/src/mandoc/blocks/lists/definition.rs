@@ -403,7 +403,7 @@ pub(super) fn definition_item(
             context,
             body_origin,
             paragraph_distance,
-            formatter.spacing,
+            formatter.spacing_enabled(),
             flow.paragraph_predecessor,
             formatter,
             Some((
@@ -418,7 +418,7 @@ pub(super) fn definition_item(
             context,
             body_origin,
             paragraph_distance,
-            formatter.spacing,
+            formatter.spacing_enabled(),
             flow.paragraph_predecessor,
             formatter,
         )

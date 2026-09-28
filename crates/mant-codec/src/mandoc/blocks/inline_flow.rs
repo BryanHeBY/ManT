@@ -12,13 +12,8 @@ impl super::BlockLowerer<'_, '_> {
             starts_indented_filled_line(node),
             ends_with_line_continuation(node),
             node.kind == NodeKind::Text && node.flags.line_start,
-            |builder| {
-                self.formatter.with_inline_node(builder, |builder| {
-                    append_inline_node_with_next(builder, node, next, self.context.default_name);
-                });
-            },
+            |builder| append_inline_node_with_next(builder, node, next, self.context.default_name),
         );
-        self.state.inherit_spacing(self.formatter.spacing);
     }
 }
 

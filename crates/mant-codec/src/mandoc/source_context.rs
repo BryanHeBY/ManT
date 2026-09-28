@@ -234,7 +234,7 @@ impl<'a> LoweringContext<'a> {
         authors_section: bool,
     ) -> Vec<mant_ir::Inline> {
         let mut builder = formatter.begin_inline_session(
-            formatter.spacing,
+            formatter.spacing_enabled(),
             authors_section,
             inline::AuthorBreakEffect::Line,
         );
@@ -260,7 +260,7 @@ impl<'a> LoweringContext<'a> {
         formatter: &mut formatter::FormatterState,
     ) -> Vec<mant_ir::Inline> {
         let mut zero_advance = inline::ZeroAdvanceState::new();
-        zero_advance.inherit_armed(std::mem::take(&mut formatter.zero_advance_armed));
+        zero_advance.inherit_armed(formatter.take_zero_advance_armed());
         let execution = inline::parse_roff_text_with_zero_advance(
             source,
             &mut formatter.font,
@@ -276,7 +276,7 @@ impl<'a> LoweringContext<'a> {
         // formatter-global skipvsp and can leave a bare BACKAFTER request for
         // the next cell-external word.
         formatter.execute_word();
-        formatter.zero_advance_armed = zero_advance.take_armed();
+        formatter.inherit_zero_advance_armed(zero_advance.take_armed());
         zero_advance.finish_into(&mut output);
         output
     }
@@ -290,7 +290,7 @@ impl<'a> LoweringContext<'a> {
         formatter: &mut formatter::FormatterState,
     ) -> Vec<mant_ir::Inline> {
         let mut zero_advance = inline::ZeroAdvanceState::new();
-        zero_advance.inherit_armed(std::mem::take(&mut formatter.zero_advance_armed));
+        zero_advance.inherit_armed(formatter.take_zero_advance_armed());
         let execution = inline::parse_formatter_word_parts_with_zero_advance(
             parts,
             &mut formatter.font,
@@ -303,7 +303,7 @@ impl<'a> LoweringContext<'a> {
             output.push(mant_ir::Inline::LineBreak);
         }
         formatter.execute_word();
-        formatter.zero_advance_armed = zero_advance.take_armed();
+        formatter.inherit_zero_advance_armed(zero_advance.take_armed());
         zero_advance.finish_into(&mut output);
         output
     }

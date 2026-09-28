@@ -21,7 +21,12 @@ const fn source(line: u32) -> SourceSpan {
 
 #[test]
 fn block_state_preserves_filled_line_boundaries_and_continuations() {
-    let mut state = BlockState::with_output(3.into(), true, Vec::new());
+    let mut state = BlockState::with_output(
+        3.into(),
+        true,
+        Vec::new(),
+        crate::mandoc::formatter::FormatterState::default(),
+    );
     state.push_inline(text("alpha"), Some(source(1)), false, false);
     state.push_inline(text("beta"), Some(source(2)), false, false);
     state.push_inline(text("gamma"), Some(source(3)), true, false);
@@ -53,7 +58,12 @@ fn block_state_preserves_filled_line_boundaries_and_continuations() {
 
 #[test]
 fn block_state_flushes_paragraph_before_tight_preformatted_lines() {
-    let mut state = BlockState::with_output(2.into(), true, Vec::new());
+    let mut state = BlockState::with_output(
+        2.into(),
+        true,
+        Vec::new(),
+        crate::mandoc::formatter::FormatterState::default(),
+    );
     state.push_inline(text("prose"), Some(source(1)), false, false);
     state.push_preformatted(text("first"), Some(source(3)), false, true, true);
     state.push_preformatted(text("second"), Some(source(4)), true, true, true);
@@ -94,7 +104,12 @@ fn block_state_flushes_paragraph_before_tight_preformatted_lines() {
 
 #[test]
 fn block_state_finish_keeps_target_only_tail_and_original_source() {
-    let mut state = BlockState::with_output(3.into(), true, Vec::new());
+    let mut state = BlockState::with_output(
+        3.into(),
+        true,
+        Vec::new(),
+        crate::mandoc::formatter::FormatterState::default(),
+    );
     state.queue_targets(["tail-target".to_owned()], Some(source(9)));
     state.flush_paragraph();
     state.flush_preformatted();
@@ -118,7 +133,12 @@ fn block_state_finish_keeps_target_only_tail_and_original_source() {
 
 #[test]
 fn block_state_literal_take_resets_continuation_occupancy_and_provenance() {
-    let mut state = BlockState::with_output(2.into(), true, Vec::new());
+    let mut state = BlockState::with_output(
+        2.into(),
+        true,
+        Vec::new(),
+        crate::mandoc::formatter::FormatterState::default(),
+    );
     state.push_preformatted(text("first"), Some(source(1)), true, true, true);
     state.flush_preformatted();
     state.flush_preformatted();
@@ -150,7 +170,12 @@ fn block_state_literal_take_resets_continuation_occupancy_and_provenance() {
 
 #[test]
 fn block_state_paragraph_take_resets_pending_join() {
-    let mut state = BlockState::with_output(0.into(), true, Vec::new());
+    let mut state = BlockState::with_output(
+        0.into(),
+        true,
+        Vec::new(),
+        crate::mandoc::formatter::FormatterState::default(),
+    );
     state.push_inline(text("first"), Some(source(1)), false, true);
     state.flush_paragraph();
     assert!(state.paragraph_is_empty());
@@ -177,7 +202,12 @@ fn block_state_paragraph_take_resets_pending_join() {
 
 #[test]
 fn block_state_hp_flushes_first_literal_row_once_and_keeps_targets() {
-    let mut state = BlockState::with_output(0.into(), true, Vec::new());
+    let mut state = BlockState::with_output(
+        0.into(),
+        true,
+        Vec::new(),
+        crate::mandoc::formatter::FormatterState::default(),
+    );
     state.start_hanging(8.into());
     state.queue_targets(["first".to_owned()], Some(source(1)));
     state.push_preformatted(text("one"), Some(source(1)), true, true, true);

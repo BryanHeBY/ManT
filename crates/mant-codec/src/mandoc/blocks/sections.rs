@@ -30,7 +30,7 @@ pub(in crate::mandoc) fn lower_document_structure(
             context,
             crate::mandoc::layout::SourceIndent::default(),
             &mut root_paragraph_distance,
-            formatter.spacing,
+            formatter.spacing_enabled(),
             &mut formatter,
         ));
         root_start = index + 1;
@@ -55,7 +55,7 @@ pub(in crate::mandoc) fn lower_document_structure(
         context,
         crate::mandoc::layout::SourceIndent::default(),
         &mut root_paragraph_distance,
-        formatter.spacing,
+        formatter.spacing_enabled(),
         &mut formatter,
     ));
     (root_blocks, sections)
@@ -98,7 +98,7 @@ fn lower_section(
         context,
         crate::mandoc::layout::SourceIndent::default(),
         paragraph_distance,
-        formatter.spacing,
+        formatter.spacing_enabled(),
         formatter,
     );
     let mut children = Vec::new();

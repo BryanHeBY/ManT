@@ -2,7 +2,7 @@
 use libmandoc_rs::AuthorMode;
 
 use super::inline::{
-    AuthorBreakEffect, FontState, InlineBuilder, KeepState, NoFillInlineState, PreservedInlineState,
+    AuthorBreakEffect, InlineBuilder, InlineExecutionState, NoFillInlineState, PreservedInlineState,
 };
 
 pub(super) struct FinishedInlineLine {
@@ -26,10 +26,13 @@ pub(in crate::mandoc) enum AuthorFlow {
     NoSplit,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct FormatterState {
-    pub(super) font: FontState,
-    pub(super) spacing: bool,
+    /// One execution owner across paragraph, heading, definition, and output
+    /// segment lifetimes. Inline builders borrow this state by moving it for
+    /// one call and returning it before the next source node is dispatched.
+    pub(super) execution: InlineExecutionState,
+    // Reused inert slot; source-node execution never allocates a new state.
+    spare_execution: Option<InlineExecutionState>,
     /// Source-order roff fill channel. List bodies return this state to their
     /// parent; a literal Bd restores its inbound channel at its own post.
     pub(super) no_fill: bool,
@@ -37,43 +40,75 @@ pub(super) struct FormatterState {
     /// CVS term.c keeps the row and backtracking flags in one `termp`; a
     /// `BlockLowerer` is only a destination for IR, not a new formatter.
     pub(super) no_fill_inline: NoFillInlineState,
-    /// CVS PREKEEP/KEEP survives output owner and fill-mode changes until
-    /// the native Bk BODY post clears it.
-    pub(super) keep: KeepState,
     /// A crossed display can return while its last literal row is still the
     /// formatter's active row. The parent output sink adopts that row before
     /// writing the next source or generated word.
     row_handoff: RowHandoff,
-    /// CVS `termp.skipvsp` is formatter-global: structural and presentation
-    /// scopes do not clear it, while the next real formatter word does.
-    pub(super) vertical_space_debt: u16,
-    /// Bare CVS `TERMP_BACKAFTER` state.  A structural newline with no
-    /// formatter cell does not clear it; the next real or generated word
-    /// consumes it.  Tables are the deliberate exception and clear both
-    /// backtracking flags before rendering each native cell.
-    pub(super) zero_advance_armed: bool,
-    /// CVS `TERMP_SPLIT`/`TERMP_NOSPLIT` persist across intervening inline
-    /// nodes and nested block lowerers; they are not `.An` adjacency.
-    author_flow: AuthorFlow,
+}
+
+impl Clone for FormatterState {
+    fn clone(&self) -> Self {
+        // Clones are speculative table/definition forks, never a second
+        // source-order walk. A BODY post executed there must not mark the
+        // live walk as closed through ScopePostState's shared record.
+        let mut execution = self.execution.clone();
+        execution.scope_posts = crate::mandoc::containers::ScopePostState::default();
+        Self {
+            execution,
+            spare_execution: Some(InlineExecutionState::default()),
+            no_fill: self.no_fill,
+            no_fill_inline: self.no_fill_inline.clone(),
+            row_handoff: self.row_handoff,
+        }
+    }
 }
 
 impl Default for FormatterState {
     fn default() -> Self {
         Self {
-            font: FontState::new(),
-            spacing: true,
+            execution: InlineExecutionState::default(),
+            spare_execution: Some(InlineExecutionState::default()),
             no_fill: false,
             no_fill_inline: NoFillInlineState::new(),
-            keep: KeepState::new(),
             row_handoff: RowHandoff::None,
-            vertical_space_debt: 0,
-            zero_advance_armed: false,
-            author_flow: AuthorFlow::default(),
         }
     }
 }
 
+impl std::ops::Deref for FormatterState {
+    type Target = InlineExecutionState;
+
+    fn deref(&self) -> &Self::Target {
+        &self.execution
+    }
+}
+
+impl std::ops::DerefMut for FormatterState {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.execution
+    }
+}
+
 impl FormatterState {
+    pub(super) fn with_output_builder<R>(
+        &mut self,
+        nodes: &mut Vec<mant_ir::Inline>,
+        operation: impl FnOnce(&mut InlineBuilder) -> R,
+    ) -> R {
+        let mut active = self
+            .spare_execution
+            .take()
+            .expect("only one builder can borrow formatter execution");
+        std::mem::swap(&mut active, &mut self.execution);
+        let mut builder = InlineBuilder::from_parts(std::mem::take(nodes), active);
+        let result = operation(&mut builder);
+        let (output, mut returned) = builder.into_parts();
+        *nodes = output;
+        std::mem::swap(&mut returned, &mut self.execution);
+        self.spare_execution = Some(returned);
+        result
+    }
+
     pub(super) fn mark_trailing_literal_row(&mut self) {
         self.row_handoff = RowHandoff::AdoptTrailingLiteral;
     }
@@ -88,65 +123,37 @@ impl FormatterState {
     pub(super) fn clear_trailing_literal_row(&mut self) {
         self.row_handoff = RowHandoff::None;
     }
-    /// Execute one source-order node in an already live paragraph builder.
-    /// The builder owns joins and buffered IR; this carrier owns the font
-    /// register between nodes. There is no independently writable font copy
-    /// while the node is executing.
-    pub(super) fn with_inline_node<R>(
-        &mut self,
-        builder: &mut InlineBuilder,
-        execute: impl FnOnce(&mut InlineBuilder) -> R,
-    ) -> R {
-        // The paragraph keeps a neutral slot between nodes. Swap the live
-        // register into it for this node, then return that same register to
-        // the formatter. CVS man_html.c::print_man_node processes one node's
-        // text/font before walking to the next sibling.
-        debug_assert_eq!(builder.font, FontState::new());
-        std::mem::swap(&mut builder.font, &mut self.font);
-        builder.inherit_keep_state(self.keep);
-        let result = execute(builder);
-        self.keep = builder.keep_state();
-        builder.inherit_keep_state(KeepState::new());
-        std::mem::swap(&mut builder.font, &mut self.font);
-        self.spacing = builder.spacing_enabled();
-        self.vertical_space_debt = builder.vertical_space_debt();
-        result
-    }
-
     /// Move document-global registers into one active inline session.
     ///
     /// Keeping this paired with [`Self::finish_inline_line`] and
-    /// [`Self::finish_inline_scope`] prevents callers from silently omitting
-    /// a newly added execution register during a structural handoff. Live
-    /// paragraph flows and isolated table fragments intentionally have split
-    /// ownership and do not use this author-aware session.
+    /// [`Self::finish_inline_scope`] returns every register to the same owner.
+    /// Ordinary paragraphs borrow through [`Self::with_output_builder`];
+    /// table fragments execute in a separately proved local scope.
     pub(super) fn begin_inline_session(
         &mut self,
         spacing: bool,
         authors_section: bool,
         author_break_effect: AuthorBreakEffect,
     ) -> InlineBuilder {
-        let mut builder = InlineBuilder::with_spacing(spacing);
-        builder.inherit_keep_state(self.keep);
-        builder.font = std::mem::replace(&mut self.font, FontState::new());
-        self.spacing = true;
-        builder.inherit_vertical_space_debt(std::mem::take(&mut self.vertical_space_debt));
-        builder.inherit_zero_advance_armed(std::mem::take(&mut self.zero_advance_armed));
-        builder.inherit_author_execution_with_effect(
-            std::mem::take(&mut self.author_flow),
-            authors_section,
-            author_break_effect,
-        );
+        let flow = self.author_flow();
+        self.execution.set_spacing_enabled(spacing);
+        let mut active = self
+            .spare_execution
+            .take()
+            .expect("only one builder can borrow formatter execution");
+        std::mem::swap(&mut active, &mut self.execution);
+        let mut builder = InlineBuilder::from_parts(Vec::new(), active);
+        builder.inherit_author_execution_with_effect(flow, authors_section, author_break_effect);
         builder
     }
 
     /// Commit an inline session at a native formatter-line boundary.
     pub(super) fn finish_inline_line(&mut self, builder: InlineBuilder) -> FinishedInlineLine {
-        self.inherit_inline_registers(&builder);
         let definition_field_exited = builder.definition_field_exited();
         let definition_body_gap_consumed = builder.definition_body_gap_consumed();
-        let (output, surviving_armed) = builder.finish_formatter_line();
-        self.zero_advance_armed = surviving_armed;
+        let (output, mut execution) = builder.finish_formatter_line();
+        std::mem::swap(&mut execution, &mut self.execution);
+        self.spare_execution = Some(execution);
         FinishedInlineLine {
             output,
             definition_field_exited,
@@ -160,19 +167,10 @@ impl FormatterState {
         &mut self,
         builder: InlineBuilder,
     ) -> (Vec<mant_ir::Inline>, PreservedInlineState) {
-        self.inherit_inline_registers(&builder);
-        self.zero_advance_armed = false;
-        builder.finish_preserving_execution()
-    }
-
-    fn inherit_inline_registers(&mut self, builder: &InlineBuilder) {
-        self.keep = builder.keep_state();
-        if let Some(author_flow) = builder.author_flow() {
-            self.author_flow = author_flow;
-        }
-        self.font = builder.font;
-        self.spacing = builder.spacing_enabled();
-        self.vertical_space_debt = builder.vertical_space_debt();
+        let (output, preserved, mut execution) = builder.finish_preserving_execution();
+        std::mem::swap(&mut execution, &mut self.execution);
+        self.spare_execution = Some(execution);
+        (output, preserved)
     }
 
     /// Enter the body of a top-level mdoc AUTHORS section.
@@ -181,7 +179,7 @@ impl FormatterState {
     /// subsections inherit the resulting mode and unrelated sections do not
     /// reset an explicitly selected mode.
     pub(super) fn enter_authors_section(&mut self) {
-        self.author_flow = AuthorFlow::Automatic;
+        self.execution.set_author_flow(AuthorFlow::Automatic);
     }
 
     /// Execute one formatter word at a structural boundary.
@@ -191,11 +189,11 @@ impl FormatterState {
     /// `term_word()`, which clears pending vertical-space debt.
     pub(super) fn execute_word(&mut self) {
         self.vertical_space_debt = 0;
-        self.zero_advance_armed = false;
+        self.execution.take_zero_advance_armed();
     }
 
     pub(super) fn clear_zero_advance(&mut self) {
-        self.zero_advance_armed = false;
+        self.execution.take_zero_advance_armed();
     }
 
     /// Execute one mdoc `.An` mode or name in source order.
@@ -207,15 +205,30 @@ impl FormatterState {
         mode: Option<AuthorMode>,
         authors_section: bool,
     ) -> bool {
-        self.author_flow.execute(mode, authors_section)
+        let mut flow = self.author_flow();
+        let breaks = flow.execute(mode, authors_section);
+        self.execution.set_author_flow(flow);
+        breaks
     }
 
-    pub(super) const fn author_flow(&self) -> AuthorFlow {
-        self.author_flow
+    pub(super) fn author_flow(&self) -> AuthorFlow {
+        self.execution.author_flow().unwrap_or_default()
     }
 
-    pub(super) fn set_author_flow(&mut self, flow: AuthorFlow) {
-        self.author_flow = flow;
+    pub(super) fn spacing_enabled(&self) -> bool {
+        self.execution.spacing_enabled()
+    }
+
+    pub(super) fn set_spacing_enabled(&mut self, enabled: bool) {
+        self.execution.set_spacing_enabled(enabled);
+    }
+
+    pub(super) fn take_zero_advance_armed(&mut self) -> bool {
+        self.execution.take_zero_advance_armed()
+    }
+
+    pub(super) fn inherit_zero_advance_armed(&mut self, armed: bool) {
+        self.execution.inherit_zero_advance_armed(armed);
     }
 
     pub(super) fn enter_keep_words(&mut self) {

@@ -168,16 +168,21 @@ impl super::BlockLowerer<'_, '_> {
         self.resume_no_fill_row();
         if node.flags.line_start
             && !source_line_entered
-            && !self.formatter.no_fill_inline.continues_source_line()
+            && !self.state.formatter.no_fill_inline.continues_source_line()
         {
             self.settle_no_fill_inline();
         }
         // `nf`/`fi` split presentation buffers, not the native formatter.
         // Move a surviving bare BACKAFTER request into the no-fill executor;
         // an occupied cell was already settled by the mode boundary.
-        self.formatter
+        let armed = self.state.take_zero_advance_armed();
+        self.state
+            .formatter
             .no_fill_inline
-            .inherit_zero_advance_armed(self.state.take_zero_advance_armed());
+            .inherit_zero_advance_armed(armed);
+        let spacing_enabled = self.state.spacing_enabled();
+        let formatter = &mut self.state.formatter;
+        let execution = &mut formatter.execution;
         let Some(lines) = lower_no_fill_lines(
             NoFillSource {
                 node,
@@ -185,12 +190,12 @@ impl super::BlockLowerer<'_, '_> {
                 source_line_entered,
                 single_line_literal,
                 default_name: self.context.default_name,
-                spacing_enabled: self.state.spacing_enabled(),
+                spacing_enabled,
                 macro_set: self.context.macro_set,
             },
-            &mut self.formatter.font,
-            &mut self.formatter.no_fill_inline,
-            &mut self.formatter.keep,
+            &mut execution.font,
+            &mut formatter.no_fill_inline,
+            &mut execution.keep,
             &self.context.scope_posts,
         ) else {
             unreachable!("a no-fill payload must lower as a no-fill row");
@@ -222,6 +227,7 @@ impl super::BlockLowerer<'_, '_> {
             .queue_targets(targets::structural_targets(node), source_span(node));
         let head = first_part_children(node, NodeKind::Head);
         let saved = self
+            .state
             .formatter
             .font
             .push_scope(crate::mandoc::roff_escape::RoffFont::Strong);
@@ -229,9 +235,9 @@ impl super::BlockLowerer<'_, '_> {
             head,
             self.context.default_name,
             self.state.spacing_enabled(),
-            &mut self.formatter.font,
+            &mut self.state.formatter.font,
         );
-        self.formatter.font.pop_scope(saved);
+        self.state.formatter.font.pop_scope(saved);
         if !nodes.is_empty() {
             self.state.push_preformatted(
                 nodes,
@@ -250,7 +256,7 @@ impl super::BlockLowerer<'_, '_> {
         self.settle_no_fill_inline();
         self.state.flush_paragraph();
         self.state.flush_preformatted();
-        self.formatter.font = FontState::new();
+        self.state.formatter.font = FontState::new();
         true
     }
 }

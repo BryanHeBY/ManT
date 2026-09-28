@@ -33,7 +33,7 @@ pub(super) fn preformatted_blocks(
     } else {
         DisplayFillMode::SingleLine
     });
-    lowerer.formatter.no_fill = true;
+    lowerer.state.formatter.no_fill = true;
 
     let body_index = node
         .children
@@ -43,7 +43,7 @@ pub(super) fn preformatted_blocks(
         let body = &node.children[index];
         context
             .scope_posts
-            .enter_body(body.id, lowerer.formatter.font.checkpoint());
+            .enter_body(body.id, lowerer.state.formatter.font.checkpoint());
         if node.macro_name.as_deref() == Some("Bd") {
             context
                 .scope_posts
@@ -59,7 +59,7 @@ pub(super) fn preformatted_blocks(
             lowerer.push_nodes(std::slice::from_ref(child));
         }
         if let Some(saved) = context.scope_posts.exit_body(body.id) {
-            lowerer.formatter.font.pop_scope(saved);
+            lowerer.state.formatter.font.pop_scope(saved);
         }
     } else {
         lowerer.push_nodes(&node.children);
@@ -74,7 +74,7 @@ pub(super) fn preformatted_blocks(
                 .exit_display_fill(node.children[index].id)
             {
                 Some(fill) => {
-                    lowerer.formatter.no_fill = fill;
+                    lowerer.state.formatter.no_fill = fill;
                     false
                 }
                 None => true,

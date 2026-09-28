@@ -116,7 +116,13 @@ impl CellCandidate {
         context: &LoweringContext<'_>,
         formatter: &mut crate::mandoc::formatter::FormatterState,
     ) -> Vec<Inline> {
+        // CVS tbl_html.c::print_tbl() and tbl_term.c::tbl_word() scope the
+        // cell's local font, then continue the same outer mdoc walk. A
+        // speculative T{} parser may contribute executed text registers,
+        // but its private BODY-post record must not replace the live one.
+        let scope_posts = formatter.execution.scope_posts.clone();
         *formatter = self.formatter;
+        formatter.execution.scope_posts = scope_posts;
         context.diagnostics.borrow_mut().extend(self.diagnostics);
         self.inlines
     }
@@ -194,7 +200,8 @@ pub(super) fn lower_table_cell(
                 return Some(candidate.commit(context, formatter));
             }
         }
-        *formatter = initial_state;
+        // Rejected candidates ran only on copies; the live formatter and its
+        // indexed BODY-post record remain exactly as they were at entry.
     }
     if cell.text.as_deref().is_some_and(|text| !text.is_empty()) {
         return Some(lower_table_cell_text(
@@ -303,14 +310,14 @@ fn lower_raw_table_text_block(
     // A malformed raw operand must remain visible even if the richer bounded
     // fragment parser declines it. This final path decodes complete escape
     // operands but intentionally does not assign macro semantics.
-    let mut builder = InlineBuilder::with_spacing(formatter.spacing);
+    let mut builder = InlineBuilder::with_spacing(formatter.spacing_enabled());
     builder.inherit_vertical_space_debt(formatter.vertical_space_debt);
     if !operand_source.is_empty() {
         let lowered = context.lower_text(&operand_source, formatter);
         builder.begin_word_projection(mant_ir::has_printable_character(&lowered));
         builder.append_filled(lowered, FilledBoundary::Word);
     }
-    formatter.spacing = builder.spacing_enabled();
+    formatter.set_spacing_enabled(builder.spacing_enabled());
     formatter.vertical_space_debt = builder.vertical_space_debt();
     builder.finish()
 }
@@ -391,6 +398,12 @@ mod tests {
                 escape: Some(b'\\'),
             };
             let mut state = crate::mandoc::formatter::FormatterState::default();
+            // Pinned CVS mdoc_term.c::print_mdoc_node() retains the original
+            // BODY close record around tbl_term.c::tbl_word(); an Ao/T{} /
+            // Ac input with a font escape was checked with -Tutf8/-Tlint.
+            // A recovered candidate may update text registers, but must not
+            // discard a close that the enclosing source walk already made.
+            state.execution.scope_posts.finish(u32::MAX);
             state
                 .font
                 .push_scope(crate::mandoc::roff_escape::RoffFont::Strong);
@@ -410,7 +423,8 @@ mod tests {
                 expected_text,
                 "{source}"
             );
-            assert_eq!(state.spacing, expected_spacing, "{source}");
+            assert_eq!(state.spacing_enabled(), expected_spacing, "{source}");
+            assert!(state.execution.scope_posts.ended(u32::MAX), "{source}");
         }
     }
 

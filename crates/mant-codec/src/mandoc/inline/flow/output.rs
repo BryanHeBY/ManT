@@ -6,10 +6,6 @@ use super::{
 };
 
 impl InlineBuilder {
-    pub(in crate::mandoc) fn is_empty(&self) -> bool {
-        self.nodes.is_empty()
-    }
-
     pub(in crate::mandoc) fn node_count(&self) -> usize {
         self.nodes.len()
     }
@@ -672,14 +668,18 @@ impl InlineBuilder {
     /// `TERMP_BACKAFTER` live for the next formatter word.  Returning the
     /// surviving flag together with the committed output prevents callers
     /// from exporting state before this boundary has executed.
-    pub(in crate::mandoc) fn finish_formatter_line(mut self) -> (Vec<Inline>, bool) {
+    pub(in crate::mandoc) fn finish_formatter_line(
+        mut self,
+    ) -> (Vec<Inline>, super::InlineExecutionState) {
         let surviving_armed = if self.has_formatter_cell() {
             false
         } else {
             self.execution.zero_advance.take_armed()
         };
         self.flush_zero_advance();
-        (self.finish_nodes(), surviving_armed)
+        let output = self.finish_nodes();
+        self.execution.reset_paragraph_segment(surviving_armed);
+        (output, self.execution)
     }
 
     /// Return an inner scope without forcing a pending `\\z` glyph to become
@@ -688,7 +688,11 @@ impl InlineBuilder {
     /// surrounding inline stream before committing it at a real boundary.
     pub(in crate::mandoc) fn finish_preserving_execution(
         mut self,
-    ) -> (Vec<Inline>, PreservedInlineState) {
+    ) -> (
+        Vec<Inline>,
+        PreservedInlineState,
+        super::InlineExecutionState,
+    ) {
         let formatter_cell_occupied = self.has_formatter_cell();
         let state = PreservedInlineState {
             zero_advance: std::mem::take(&mut self.execution.zero_advance),
@@ -699,7 +703,9 @@ impl InlineBuilder {
             pending_definition_indent: self.pending_definition_indent(),
             last_executed_source_line: self.execution.last_executed_source_line,
         };
-        (self.finish_nodes(), state)
+        let output = self.finish_nodes();
+        self.execution.reset_paragraph_segment(false);
+        (output, state, self.execution)
     }
 
     fn finish_nodes(&mut self) -> Vec<Inline> {
