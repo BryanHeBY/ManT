@@ -5,6 +5,34 @@ use super::{
 };
 
 impl InlineBuilder {
+    /// CVS `mdoc_term.c` enters `NODE_LINE` before each no-fill child, but
+    /// `term_newln()` flushes an active `NOBREAK` definition field. `BRIND` may
+    /// start a new row when a tag overruns its width; HANG keeps that row.
+    pub(in crate::mandoc) fn no_fill_source_line(&mut self) {
+        let field = self
+            .execution
+            .author_execution
+            .as_ref()
+            .and_then(|execution| match execution.break_effect {
+                AuthorBreakEffect::Field {
+                    gap_cells,
+                    body_width_columns,
+                    wraps,
+                } => Some((
+                    execution.field_output_start,
+                    gap_cells,
+                    body_width_columns,
+                    wraps,
+                )),
+                AuthorBreakEffect::Line => None,
+            });
+        if let Some((start, gap, body, wraps)) = field {
+            self.flush_definition_field(start, if wraps { gap } else { 0 }, body, wraps, false);
+        } else {
+            self.hard_break();
+        }
+    }
+
     /// Execute an explicit formatter line request inside a definition HEAD.
     ///
     /// CVS keeps `LIST_tag/LIST_hang` in a NOBREAK field until `term_newln()`

@@ -179,7 +179,10 @@ impl<'a> LoweringContext<'a> {
             author_break_effect,
         );
         builder.scope_posts = self.scope_posts.clone();
-        builder.observe_no_fill_source_lines(formatter.no_fill);
+        // The HEAD can execute .nf after this session begins. Each entered
+        // NODE_LINE/NODE_NOFILL pair, not the inbound fill-mode snapshot,
+        // decides whether to end the current formatter row.
+        builder.observe_no_fill_source_lines(true);
         inline::append_inline_nodes(&mut builder, nodes, self.default_name);
         builder.observe_no_fill_source_lines(false);
         let finished = formatter.finish_inline_line(builder);
@@ -214,7 +217,7 @@ impl<'a> LoweringContext<'a> {
             inline::AuthorBreakEffect::Line,
         );
         builder.scope_posts = self.scope_posts.clone();
-        builder.observe_no_fill_source_lines(formatter.no_fill);
+        builder.observe_no_fill_source_lines(true);
         let saved_font = strong_scope.then(|| {
             builder
                 .font

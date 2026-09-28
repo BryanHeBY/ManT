@@ -134,16 +134,13 @@ impl InlineBuilder {
         if self.execution.observe_no_fill_source_lines == SourceLineObservation::NoFill
             && node.flags.no_fill
             && node.flags.line_start
-            && node.line != 0
-            && self
-                .execution
-                .last_executed_source_line
-                .is_some_and(|line| line != node.line)
             && !self.final_source_continuation_or(false)
         {
             // mdoc_term.c::print_mdoc_node() performs NODE_NOFILL/NODE_LINE
             // before macro pre or generated punctuation, even in It HEAD.
-            self.hard_break();
+            // Distinct expanded rows can have the same source coordinate.
+            // A repeated event on an empty formatter cell is a no-op.
+            self.no_fill_source_line();
         }
         if node.line != 0 {
             self.execution.last_executed_source_line = Some(node.line);

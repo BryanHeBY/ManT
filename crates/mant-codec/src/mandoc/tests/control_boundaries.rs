@@ -322,6 +322,39 @@ fn definition_heads_execute_no_fill_source_rows() {
 }
 
 #[test]
+fn definition_head_rows_follow_executed_flags_after_nf_and_macro_expansion() {
+    // Both exact inputs checked with fixed CVS -Tascii/-Thtml/-Tlint.
+    // mdoc_term.c::print_mdoc_node() handles each NODE_LINE/NODE_NOFILL
+    // entry, including two expanded words that share one source coordinate.
+    for (name, source) in [
+        (
+            "head-enters-no-fill.1",
+            ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width xxx\n.It Xo\n.nf\nfirst\nsecond\n.fi\n.Xc\nbody\n.El\n",
+        ),
+        (
+            "head-expanded-rows.1",
+            ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\n.de XX\nfirst\nsecond\n..\n.nf\n.Bl -tag -width xxx\n.It Xo\n.XX\n.Xc\nbody\n.El\n.fi\n",
+        ),
+    ] {
+        let document = parse_manual_bytes(std::path::Path::new(name), source.as_bytes()).unwrap();
+        let terms = document.sections[0]
+            .blocks
+            .iter()
+            .find_map(|block| match block {
+                Block::DefinitionList { items, .. } => items.first().map(|item| &item.terms),
+                _ => None,
+            })
+            .expect("definition term");
+        assert!(
+            terms
+                .iter()
+                .any(|term| inline_text(term).contains("first\nsecond")),
+            "{name}: {document:#?}"
+        );
+    }
+}
+
+#[test]
 fn definition_head_anchor_does_not_shift_explicit_term_separator() {
     // Exact input checked with fixed CVS -Tascii/-Thtml/-Tlint. The .Tg
     // anchor is attached to It HEAD, while mdoc_term.c still executes .Pp
