@@ -14,7 +14,7 @@ use libmandoc_rs::{
 use mant_ir::Inline;
 
 use super::{
-    InlineBuilder, append_inline_node_with_next, lower_man_link, parse_roff_text_with_state,
+    InlineBuilder, append_inline_node_with_next, append_man_link, parse_roff_text_with_state,
 };
 
 #[must_use]
@@ -182,11 +182,7 @@ fn lower_body(
     builder.inherit_zero_advance_armed(formatter.take_zero_advance_armed());
     for (index, node) in nodes.iter().enumerate() {
         if matches!(node.macro_name.as_deref(), Some("UR" | "MT")) {
-            builder.append(lower_man_link(
-                node,
-                default_name,
-                builder.spacing_enabled(),
-            ));
+            append_man_link(&mut builder, node, default_name, node.flags.no_fill);
         } else {
             append_inline_node_with_next(&mut builder, node, nodes.get(index + 1), default_name);
         }

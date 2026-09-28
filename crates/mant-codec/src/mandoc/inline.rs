@@ -10,7 +10,7 @@ mod font;
 mod generated;
 pub(in crate::mandoc) use generated::function_argument;
 mod links;
-pub(super) use links::lower_man_link;
+pub(super) use links::append_man_link;
 mod scopes;
 mod source_fragment;
 pub(in crate::mandoc) use flow::{
@@ -535,6 +535,7 @@ pub(super) fn alternating_font_pair(macro_name: Option<&str>) -> Option<(Font, F
 /// Consumers that inspect an executed prefix (for example a pending
 /// definition head) may recurse through these nodes.  Generated-glyph
 /// enclosures and atomic semantic macros are deliberately excluded.
+#[cfg(test)]
 fn text_node(value: &str) -> Vec<Inline> {
     vec![Inline::Text {
         value: value.to_owned(),

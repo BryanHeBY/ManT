@@ -13,9 +13,8 @@ use super::{
     controls::FormatterBoundary,
     first_part_children,
     inline::{
-        FilledBoundary, FontState, InlineBuilder, append_inline_node_with_next, is_enclosure_macro,
-        lower_inline_nodes, lower_inline_nodes_with_font_state, lower_inline_nodes_with_spacing,
-        lower_man_link, plain_text,
+        FilledBoundary, FontState, InlineBuilder, append_inline_node_with_next, append_man_link,
+        is_enclosure_macro, lower_inline_nodes, lower_inline_nodes_with_font_state, plain_text,
     },
     layout::{
         add_leading_spacing, layout, section_spacing, set_block_spacing, update_paragraph_distance,
@@ -446,13 +445,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         if node.macro_name.as_deref() == Some("br") {
             self.state.hard_break();
         } else if matches!(node.macro_name.as_deref(), Some("UR" | "MT")) {
-            let spacing_enabled = self.state.spacing_enabled();
-            push_man_link(
-                &mut self.state,
-                node,
-                self.context.default_name,
-                spacing_enabled,
-            );
+            push_man_link(&mut self.state, node, self.context.default_name);
         } else if participates_in_inline_flow(node) {
             self.push_inline_node(node, next);
         } else {

@@ -2,7 +2,7 @@
 use super::{
     Font, Inline, InlineBuilder, Node, NodeKind, RoffInlineEvent, append_inline_node,
     append_inline_nodes, decode, first_part_children, inline_children,
-    lower_inline_nodes_with_spacing, plain_text, text_node, visible_text,
+    lower_inline_nodes_with_spacing, plain_text, visible_text,
 };
 
 /// Execute mdoc `.Lk` in the caller's formatter stream, then wrap the visible
@@ -362,31 +362,22 @@ fn external_link_target(address: String, email: bool) -> mant_ir::LinkTarget {
 /// a body, but they do not start a paragraph in man(7). A descriptive label
 /// keeps the target visible after the link so text search and citation views
 /// retain both pieces of source information.
-pub(in crate::mandoc) fn lower_man_link(
+pub(in crate::mandoc) fn append_man_link(
+    builder: &mut InlineBuilder,
     node: &Node,
     default_name: Option<&str>,
-    spacing_enabled: bool,
-) -> Vec<Inline> {
+    no_fill: bool,
+) {
+    // man_term.c::print_man_node() resets the current font at each man macro
+    // boundary; BODY text still executes in the caller's termp stream.
+    builder.font.select(Font::Regular);
+    let head = first_part_children(node, NodeKind::Head);
     let target = plain_text(&lower_inline_nodes_with_spacing(
-        first_part_children(node, NodeKind::Head),
+        head,
         default_name,
-        spacing_enabled,
+        builder.spacing_enabled(),
     ));
-    if target.is_empty() {
-        return lower_inline_nodes_with_spacing(
-            first_part_children(node, NodeKind::Body),
-            default_name,
-            spacing_enabled,
-        );
-    }
-
-    let label = lower_inline_nodes_with_spacing(
-        first_part_children(node, NodeKind::Body),
-        default_name,
-        spacing_enabled,
-    );
-    let has_label = !label.is_empty();
-    let children = if has_label { label } else { text_node(&target) };
+    let body = first_part_children(node, NodeKind::Body);
     let link_target = if node.macro_name.as_deref() == Some("MT") {
         mant_ir::LinkTarget::Email {
             address: target.clone(),
@@ -396,22 +387,78 @@ pub(in crate::mandoc) fn lower_man_link(
             uri: target.clone(),
         }
     };
-    let mut output = vec![Inline::Link {
-        target: link_target,
-        title: None,
-        children,
-    }];
-    if has_label {
-        output.push(Inline::Text {
-            value: format!(" ⟨{target}⟩"),
-        });
+    if target.is_empty() {
+        append_man_link_body(builder, body, default_name, no_fill);
+        builder.font.select(Font::Regular);
+    } else {
+        let checkpoint = builder.begin_output_transaction();
+        append_man_link_body(builder, body, default_name, no_fill);
+        // man_term.c resets BODY font before BLOCK post prints the angle
+        // brackets and HEAD target. The final BLOCK reset below updates the
+        // independent previous-font register a second time.
+        builder.font.select(Font::Regular);
+        if builder.output_since_has_non_whitespace_glyph(&checkpoint) {
+            builder.wrap_output_since(&checkpoint, |children| {
+                let (prefix, children) = split_boundary_prefix(children);
+                let mut output = prefix;
+                output.push(Inline::Link {
+                    target: link_target,
+                    title: None,
+                    children,
+                });
+                output
+            });
+            // man_term.c::post_UR() prints the HEAD after BODY, enclosed by
+            // generated angle brackets. Its escapes execute at that point.
+            builder.append_text("⟨");
+            builder.tighten_next_boundary();
+            append_inline_nodes(builder, head, default_name);
+            builder.tighten_next_boundary();
+            builder.append_text("⟩");
+        } else {
+            // man_html.c::man_UR_pre() falls back to HEAD when BODY has no
+            // printable child. Execute invisible BODY controls once, then
+            // choose the visible target without reviving their output.
+            builder.discard_output_preserving_execution(&checkpoint);
+            builder.append_scope(
+                |builder| append_inline_nodes(builder, head, default_name),
+                |children| {
+                    vec![Inline::Link {
+                        target: link_target,
+                        title: None,
+                        children,
+                    }]
+                },
+            );
+        }
     }
-    output.extend(lower_inline_nodes_with_spacing(
+    append_man_link_body(
+        builder,
         first_part_children(node, NodeKind::Tail),
         default_name,
-        spacing_enabled,
-    ));
-    output
+        no_fill,
+    );
+    builder.font.select(Font::Regular);
+}
+
+fn append_man_link_body(
+    builder: &mut InlineBuilder,
+    nodes: &[Node],
+    name: Option<&str>,
+    no_fill: bool,
+) {
+    for (index, child) in nodes.iter().enumerate() {
+        if no_fill
+            && index > 0
+            && child.flags.line_start
+            && !builder.final_source_continuation_or(false)
+        {
+            // man_term.c::print_man_node() applies NODE_LINE before visiting
+            // each BODY child, including lines inside UR/MT.
+            builder.hard_break();
+        }
+        append_inline_node(builder, child, name);
+    }
 }
 
 #[cfg(test)]

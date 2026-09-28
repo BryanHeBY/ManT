@@ -1,8 +1,8 @@
 //! Man no-fill words retain executed empty rows, not formatter operands.
 use super::{
-    FontState, Inline, Node, NodeKind, append_inline_node_with_next, ends_with_line_continuation,
-    first_part_children, lower_inline_nodes_with_font_state, participates_in_inline_flow,
-    source_span, targets,
+    FontState, Inline, Node, NodeKind, append_inline_node_with_next, append_man_link,
+    ends_with_line_continuation, first_part_children, participates_in_inline_flow, source_span,
+    targets,
 };
 use crate::mandoc::controls::{FormatterBoundary, formatter_control};
 use crate::mandoc::inline::lower_no_fill_fragment_with_formatter;
@@ -27,7 +27,8 @@ struct NoFillSource<'a> {
 
 pub(super) fn is_no_fill_payload(node: &Node, single_line_literal: bool) -> bool {
     (node.flags.no_fill || single_line_literal)
-        && participates_in_inline_flow(node)
+        && (participates_in_inline_flow(node)
+            || matches!(node.macro_name.as_deref(), Some("UR" | "MT")))
         && !matches!(
             node.macro_name.as_deref(),
             Some("PD" | "nf" | "fi" | "EX" | "EE" | "An" | "Sm" | "ft" | "in" | "sp" | "br" | "Pp")
@@ -71,7 +72,13 @@ fn lower_no_fill_lines(
             formatter,
             ends_with_line_continuation(node),
             false,
-            |builder| append_inline_node_with_next(builder, node, next, default_name),
+            |builder| {
+                if matches!(node.macro_name.as_deref(), Some("UR" | "MT")) {
+                    append_man_link(builder, node, default_name, true);
+                } else {
+                    append_inline_node_with_next(builder, node, next, default_name);
+                }
+            },
         );
         let mut occupies_row = !nodes.is_empty();
         if nodes.is_empty() {
@@ -211,18 +218,12 @@ impl super::BlockLowerer<'_, '_> {
         self.state
             .queue_targets(targets::structural_targets(node), source_span(node));
         let head = first_part_children(node, NodeKind::Head);
-        let saved = self
-            .state
-            .formatter
-            .font
-            .push_scope(crate::mandoc::roff_escape::RoffFont::Strong);
-        let nodes = lower_inline_nodes_with_font_state(
-            head,
-            self.context.default_name,
+        let nodes = super::synopsis::execute_synopsis_head(
+            node,
+            self.context,
             self.state.spacing_enabled(),
-            &mut self.state.formatter.font,
+            &mut self.state.formatter,
         );
-        self.state.formatter.font.pop_scope(saved);
         if !nodes.is_empty() {
             self.state.push_preformatted(
                 nodes,

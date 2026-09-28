@@ -33,6 +33,256 @@ fn strong_document_text(document: &mant_ir::Document) -> String {
 }
 
 #[test]
+fn crossed_body_close_pops_font_stack_without_restoring_an_old_value() {
+    // Exact input checked with fixed CVS -Tascii/-Tlint. term.c's
+    // term_fontrepl() changes the active fontq slot, while mdoc_term.c's
+    // print_mdoc_node() uses term_fontpopq() at the original BODY close.
+    let source = b".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\n.Ao\n.ft B\n.Bf -emphasis\ninside\n.Ac\nafter\n.Ef\ntail\n";
+    let document = parse_manual_bytes(std::path::Path::new("crossed-font-body.1"), source).unwrap();
+    assert!(
+        emphasized_document_text(&document).contains("inside"),
+        "{document:#?}"
+    );
+    let strong = strong_document_text(&document);
+    assert!(strong.contains('>'), "{document:#?}");
+    assert!(strong.contains("after"), "{document:#?}");
+    assert!(strong.contains("tail"), "{document:#?}");
+}
+
+#[test]
+fn man_links_execute_labels_in_the_surrounding_text_stream() {
+    // Exact UR/MT variants checked with fixed CVS -Tascii/-Tlint.
+    // man_term.c::print_man_node() visits each BODY child in the same termp,
+    // applies NODE_LINE in no-fill, and resets font at man macro boundaries.
+    for (open, close, target) in [
+        ("UR", "UE", "https://example.com"),
+        ("MT", "ME", "test@example.com"),
+    ] {
+        let source =
+            format!(".TH TEST 1\n.SH DESCRIPTION\n\\z\n.{open} {target}\nlabel\n.{close}\nafter\n");
+        let document =
+            parse_manual_bytes(std::path::Path::new("man-link-zero.1"), source.as_bytes()).unwrap();
+        let text = document.sections[0]
+            .blocks
+            .iter()
+            .filter_map(|block| match block {
+                Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
+                    Some(inline_text(children))
+                }
+                _ => None,
+            })
+            .collect::<String>();
+        let link_label = document.sections[0]
+            .blocks
+            .iter()
+            .find_map(|block| match block {
+                Block::Paragraph { children, .. } => {
+                    children.iter().find_map(|inline| match inline {
+                        Inline::Link { children, .. } => Some(inline_text(children)),
+                        _ => None,
+                    })
+                }
+                _ => None,
+            })
+            .expect("visible link label");
+        assert_eq!(link_label, "abel", "{open}: {document:#?}");
+        assert!(text.ends_with("after"), "{open}: {document:#?}");
+
+        for (label, separator) in [("label", " "), ("label\\c", "")] {
+            let source =
+                format!(".TH TEST 1\n.SH DESCRIPTION\n.{open} {target}\n{label}\n.{close}\n");
+            let document = parse_manual_bytes(
+                std::path::Path::new("man-link-post-boundary.1"),
+                source.as_bytes(),
+            )
+            .unwrap();
+            let text = document.sections[0]
+                .blocks
+                .iter()
+                .filter_map(|block| match block {
+                    Block::Paragraph { children, .. } => Some(inline_text(children)),
+                    _ => None,
+                })
+                .collect::<String>();
+            assert!(
+                text.contains(&format!("label{separator}⟨{target}⟩")),
+                "{open} {label}: {document:#?}"
+            );
+        }
+
+        let source = format!(
+            ".TH TEST 1\n.SH DESCRIPTION\n.nf\n.{open} {target}\nfirst\nsecond\n.{close}\n.fi\n"
+        );
+        let document = parse_manual_bytes(
+            std::path::Path::new("man-link-no-fill.1"),
+            source.as_bytes(),
+        )
+        .unwrap();
+        assert!(document.sections[0].blocks.iter().any(|block| matches!(block, Block::Preformatted { children, .. } if inline_text(children).contains("first\nsecond"))), "{open}: {document:#?}");
+
+        // man_term.c::print_man_node() suppresses NODE_LINE after a \c row.
+        // The fixed CVS terminal oracle keeps the two label words together.
+        let source = format!(
+            ".TH TEST 1\n.SH DESCRIPTION\n.nf\n.{open} {target}\nfirst\\c\nsecond\n.{close}\n.fi\n"
+        );
+        let document = parse_manual_bytes(
+            std::path::Path::new("man-link-no-fill-continuation.1"),
+            source.as_bytes(),
+        )
+        .unwrap();
+        assert!(document.sections[0].blocks.iter().any(|block| matches!(block, Block::Preformatted { children, .. } if inline_text(children).contains("firstsecond"))), "{open}: {document:#?}");
+
+        let source = format!(
+            ".TH TEST 1\n.SH DESCRIPTION\n.ft B\n.{open} {target}\nlabel\n.{close}\nafter\n"
+        );
+        let document =
+            parse_manual_bytes(std::path::Path::new("man-link-font.1"), source.as_bytes()).unwrap();
+        assert!(
+            !strong_document_text(&document).contains("after"),
+            "{open}: {document:#?}"
+        );
+
+        let source = format!(
+            ".TH TEST 1\n.SH DESCRIPTION\n.{open} {target}\n.ft B\nlabel\n.{close}\n\\fPafter\n"
+        );
+        let document = parse_manual_bytes(
+            std::path::Path::new("man-link-body-font.1"),
+            source.as_bytes(),
+        )
+        .unwrap();
+        let strong = strong_document_text(&document);
+        assert!(strong.contains("label"), "{open}: {document:#?}");
+        assert!(!strong.contains(target), "{open}: {document:#?}");
+        assert!(!strong.contains("after"), "{open}: {document:#?}");
+    }
+    // A nonprinting BODY is still executed, but CVS man_html.c::man_UR_pre()
+    // chooses HEAD text when there is no printable label.
+    let source = b".TH TEST 1\n.SH DESCRIPTION\n.UR https://example.com\n\\&\n.UE\nafter\n";
+    let document =
+        parse_manual_bytes(std::path::Path::new("man-link-invisible-label.1"), source).unwrap();
+    let text = document.sections[0]
+        .blocks
+        .iter()
+        .filter_map(|block| match block {
+            Block::Paragraph { children, .. } => Some(inline_text(children)),
+            _ => None,
+        })
+        .collect::<String>();
+    assert!(text.contains("https://example.com after"), "{document:#?}");
+    assert_eq!(
+        text.matches("https://example.com").count(),
+        1,
+        "{document:#?}"
+    );
+    let source = b".TH TEST 1\n.SH DESCRIPTION\n.UR https://example.com\n.ft B\n.UE\nafter\n";
+    let document =
+        parse_manual_bytes(std::path::Path::new("man-link-font-only-label.1"), source).unwrap();
+    let text = document.sections[0]
+        .blocks
+        .iter()
+        .filter_map(|block| match block {
+            Block::Paragraph { children, .. } => Some(inline_text(children)),
+            _ => None,
+        })
+        .collect::<String>();
+    assert!(text.contains("https://example.com after"), "{document:#?}");
+    assert!(
+        !strong_document_text(&document).contains("after"),
+        "{document:#?}"
+    );
+}
+
+#[test]
+fn synopsis_head_consumes_pending_zero_advance_before_body() {
+    // Both exact sources checked with fixed CVS -Tascii/-Tlint. The common
+    // print_man_node()/print_mdoc_node() traversal executes HEAD before BODY
+    // against the same termp zero-width state.
+    let man = b".TH TEST 1\n.SH SYNOPSIS\n\\z\n.SY call\narg\n.YS\n";
+    let document = parse_manual_bytes(std::path::Path::new("sy-head-zero.1"), man).unwrap();
+    let text = document.sections[0]
+        .blocks
+        .iter()
+        .filter_map(|block| match block {
+            Block::Paragraph { children, .. } => Some(inline_text(children)),
+            _ => None,
+        })
+        .collect::<String>();
+    assert!(text.trim_start().starts_with("all arg"), "{document:#?}");
+
+    let mdoc = b".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh SYNOPSIS\n\\z\n.Nm call\n.Ar arg\n";
+    let document = parse_manual_bytes(std::path::Path::new("nm-head-zero.1"), mdoc).unwrap();
+    let text = document.sections[0]
+        .blocks
+        .iter()
+        .filter_map(|block| match block {
+            Block::Paragraph { children, .. } => Some(inline_text(children)),
+            _ => None,
+        })
+        .collect::<String>();
+    assert!(text.trim_start().starts_with("all"), "{document:#?}");
+    assert!(!text.trim_start().starts_with("call"), "{document:#?}");
+    assert!(text.contains("arg"), "{document:#?}");
+
+    // man_term.c::print_man_node() resets fonts at each SY BLOCK/HEAD/BODY
+    // boundary. Its head alone is bold; a preceding .ft B cannot style BODY.
+    let man = b".TH TEST 1\n.SH SYNOPSIS\n.ft B\n.SY call\narg\n.YS\nafter\n\\fPprevious\n";
+    let document = parse_manual_bytes(std::path::Path::new("sy-head-font.1"), man).unwrap();
+    let strong = strong_document_text(&document);
+    assert!(strong.contains("call"), "{document:#?}");
+    assert!(!strong.contains("arg"), "{document:#?}");
+    assert!(!strong.contains("after"), "{document:#?}");
+    assert!(!strong.contains("previous"), "{document:#?}");
+
+    let man = b".TH TEST 1\n.SH SYNOPSIS\n.SY \\fIcall\n\\fParg\n.YS\n";
+    let document =
+        parse_manual_bytes(std::path::Path::new("sy-head-previous-font.1"), man).unwrap();
+    // Exact input checked with fixed CVS -Tascii/-Tlint. The HEAD post and
+    // BODY entry both run man_term.c's Roman term_fontrepl() transition.
+    assert!(
+        !strong_document_text(&document).contains("arg"),
+        "{document:#?}"
+    );
+    assert!(
+        !emphasized_document_text(&document).contains("arg"),
+        "{document:#?}"
+    );
+
+    // The no-fill SY path must use the same HEAD execution. Exact source
+    // checked with fixed CVS -Tascii/-Thtml/-Tlint; BODY's arg stays intact.
+    let man = b".TH TEST 1\n.SH SYNOPSIS\n\\z\n.SY call\n.nf\narg\n.YS\n.fi\n";
+    let document = parse_manual_bytes(std::path::Path::new("sy-head-nofill-zero.1"), man).unwrap();
+    assert!(document.sections[0].blocks.iter().any(|block| matches!(block, Block::Preformatted { children, .. } if inline_text(children).contains("arg"))), "{document:#?}");
+
+    // HEAD post is a real formatter flush in both macros when BODY exists.
+    // Fixed CVS -Tascii retains X from a trailing \zX on the head row.
+    for (name, source) in [
+        (
+            "sy",
+            b".TH TEST 1\n.SH SYNOPSIS\n.SY call\\zX\narg\n.YS\n".as_slice(),
+        ),
+        (
+            "nm",
+            b".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh SYNOPSIS\n.Nm call\\zX\n.Ar arg\n"
+                .as_slice(),
+        ),
+    ] {
+        let document = parse_manual_bytes(std::path::Path::new(name), source).unwrap();
+        let text = document.sections[0]
+            .blocks
+            .iter()
+            .filter_map(|block| match block {
+                Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
+                    Some(inline_text(children))
+                }
+                _ => None,
+            })
+            .collect::<String>();
+        assert!(text.contains('X'), "{name}: {document:#?}");
+        assert!(text.contains("arg"), "{name}: {document:#?}");
+    }
+}
+
+#[test]
 fn generated_function_events_follow_no_fill_source_order_and_rows() {
     // Both exact inputs were run through the fixed CVS -Ttree, -Thtml,
     // -Tutf8, and -Tlint oracle before these assertions. In

@@ -100,6 +100,7 @@ impl BlockState {
             });
     }
 
+    #[cfg(test)]
     pub(super) fn push_inline(
         &mut self,
         nodes: Vec<Inline>,

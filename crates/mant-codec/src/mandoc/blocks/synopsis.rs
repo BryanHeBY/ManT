@@ -1,7 +1,7 @@
 //! Declaration geometry selected by the native SYNOPSIS flags.
 use super::{
     Block, Inline, InlineBuilder, LoweringContext, Node, NodeKind, first_part_children, layout,
-    lower_blocks_with_spacing, lower_inline_nodes_with_spacing, source_span,
+    lower_blocks_with_spacing, source_span,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -150,11 +150,7 @@ pub(super) fn lower_synopsis_head(
     spacing_enabled: bool,
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) {
-    let head = lower_inline_nodes_with_spacing(
-        first_part_children(node, NodeKind::Head),
-        context.default_name,
-        spacing_enabled,
-    );
+    let head = execute_synopsis_head(node, context, spacing_enabled, formatter);
     let mut nested = lower_blocks_with_spacing(
         first_part_children(node, NodeKind::Body),
         context,
@@ -168,7 +164,6 @@ pub(super) fn lower_synopsis_head(
         return;
     }
 
-    let head = vec![Inline::Strong { children: head }];
     if let Some(Block::Paragraph {
         children, source, ..
     }) = nested.first_mut()
@@ -189,6 +184,77 @@ pub(super) fn lower_synopsis_head(
         source: source_span(node),
     });
     output.extend(nested);
+}
+
+pub(super) fn execute_synopsis_head(
+    node: &Node,
+    context: &LoweringContext<'_>,
+    spacing_enabled: bool,
+    formatter: &mut crate::mandoc::formatter::FormatterState,
+) -> Vec<Inline> {
+    // man_term.c::print_man_node() and mdoc_term.c::print_mdoc_node()
+    // execute HEAD children in the same formatter stream as BODY. The head
+    // is a separate IR destination, not a separate font/zero-width state.
+    if node.macro_name.as_deref() == Some("SY") {
+        // Unlike mdoc Nm, each man SY BLOCK/HEAD boundary resets the native
+        // current font before the head pre-handler selects bold.
+        formatter
+            .font
+            .select(crate::mandoc::roff_escape::RoffFont::Regular);
+    }
+    let mut head_builder = formatter.begin_inline_session(
+        spacing_enabled,
+        context.active_mdoc_section() == crate::mandoc::source_context::MdocSectionContext::Authors,
+        crate::mandoc::inline::AuthorBreakEffect::Line,
+    );
+    head_builder.scope_posts = context.scope_posts.clone();
+    let saved_font = head_builder
+        .font
+        .push_scope(crate::mandoc::roff_escape::RoffFont::Strong);
+    crate::mandoc::inline::append_inline_nodes(
+        &mut head_builder,
+        first_part_children(node, NodeKind::Head),
+        context.default_name,
+    );
+    head_builder.font.pop_scope(saved_font);
+    let head = if node.macro_name.as_deref() == Some("SY")
+        || !first_part_children(node, NodeKind::Body).is_empty()
+    {
+        // man_term.c::post_SY(HEAD) always flushes; mdoc_term.c's
+        // termp_nm_post(HEAD) flushes when BODY is present. Settle pending
+        // zero-width glyphs here before output ownership moves to BODY.
+        formatter.finish_inline_line(head_builder).output
+    } else {
+        let (head, preserved) = formatter.finish_inline_scope(head_builder);
+        let mut no_output = Vec::new();
+        formatter.with_output_builder(&mut no_output, |builder| {
+            builder.inherit_preserved_execution(preserved);
+        });
+        debug_assert!(no_output.is_empty());
+        head
+    };
+    if node.macro_name.as_deref() == Some("SY") {
+        // man_term.c::print_man_node() replaces the current font at HEAD
+        // post and again at BODY entry. Both transitions update fontlast,
+        // which a BODY-leading \fP reads before any visible argument.
+        formatter
+            .font
+            .select(crate::mandoc::roff_escape::RoffFont::Regular);
+    }
+    if head.is_empty() {
+        return head;
+    }
+    // HTML represents the whole SY/Nm name as one code cell even when a
+    // font escape changes an interior run. Keep that structural Strong owner
+    // after the HEAD has executed; flatten only redundant direct Strong runs.
+    let children = head
+        .into_iter()
+        .flat_map(|inline| match inline {
+            Inline::Strong { children } => children,
+            inline => vec![inline],
+        })
+        .collect();
+    vec![Inline::Strong { children }]
 }
 
 impl super::BlockLowerer<'_, '_> {
