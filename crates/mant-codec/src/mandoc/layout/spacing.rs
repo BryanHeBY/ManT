@@ -9,15 +9,20 @@ use mant_ir::geometry::block_layout_mut;
 /// Transparent RS scopes may carry a predecessor outside a detached output
 /// buffer. Conversely a first tagged paragraph has none, even when it will
 /// become an ordered list. Rendered container emptiness cannot decide this.
-pub(in crate::mandoc) const fn man_paragraph_spacing(
+pub(in crate::mandoc) fn execute_man_paragraph_spacing(
+    formatter: &mut crate::mandoc::formatter::FormatterState,
     paragraph_distance: u16,
     has_predecessor: bool,
 ) -> u16 {
-    if has_predecessor {
-        paragraph_distance
-    } else {
-        0
+    if !has_predecessor {
+        return 0;
     }
+    // man_term.c::print_bvspace() calls term_vspace() once for every PD row.
+    // term_vspace() first consumes the skipvsp debt left by a negative .sp;
+    // the layout hint receives only rows that actually remain visible.
+    formatter
+        .execution
+        .resolve_vertical_space(i32::from(paragraph_distance))
 }
 
 impl crate::mandoc::LoweringContext<'_> {

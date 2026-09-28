@@ -3,7 +3,6 @@ use super::{Block, Inline, Node, NodeKind, first_part_children, source_span};
 use crate::mandoc::inline::{
     InlineBuilder, append_inline_nodes, lower_inline_nodes_with_spacing, plain_text,
 };
-use crate::mandoc::roff_escape::RoffFont as Font;
 use mant_ir::LinkTarget;
 
 impl super::BlockLowerer<'_, '_> {
@@ -34,16 +33,16 @@ impl super::BlockLowerer<'_, '_> {
             .execution
             .zero_advance
             .begin_output_owner();
-        self.state.formatter.font.select(Font::Regular); // BLOCK pre
-        self.state.formatter.font.select(Font::Regular); // HEAD pre
-        self.state.formatter.font.select(Font::Regular); // HEAD post
-        self.state.formatter.font.select(Font::Regular); // BODY pre
+        self.state.formatter.font.man_text_boundary(); // BLOCK pre
+        self.state.formatter.font.man_text_boundary(); // HEAD pre
+        self.state.formatter.font.man_text_boundary(); // HEAD post
+        self.state.formatter.font.man_text_boundary(); // BODY pre
         // A link BODY is a new non-RS sibling list. print_bvspace() cannot
         // climb through UR/MT to an earlier paragraph outside this BODY.
         let inherited = std::mem::take(&mut self.man_source_predecessor);
         self.push_nodes(body);
         self.man_source_predecessor = inherited;
-        self.state.formatter.font.select(Font::Regular); // BODY post
+        self.state.formatter.font.man_text_boundary(); // BODY post
 
         // man_term.c::post_UR() always executes its first generated word,
         // even for an empty HEAD. Its boundary may settle a final BODY \z
@@ -90,7 +89,7 @@ impl super::BlockLowerer<'_, '_> {
             builder.tighten_next_boundary();
             builder.append_text("⟩");
         });
-        self.state.formatter.font.select(Font::Regular); // BLOCK post
+        self.state.formatter.font.man_text_boundary(); // BLOCK post
     }
 
     fn push_link_word(&mut self, node: &Node, append: impl FnOnce(&mut InlineBuilder)) {
@@ -126,12 +125,29 @@ pub(super) fn wrap_first_visible_inline(
     else {
         return false;
     };
-    let children = nodes.split_off(first);
+    let mut children = nodes.split_off(first);
+    // The link annotates label glyphs, not a formatter row terminator. Keep
+    // trailing hard breaks outside the wrapper so the literal sink can tell
+    // whether that physical row was already closed by fi/nf or a word-end
+    // break. Internal breaks between label glyphs remain inside the link.
+    let tail_start = children
+        .iter()
+        .rposition(|node| !matches!(node, Inline::Anchor { .. } | Inline::LineBreak))
+        .map_or(0, |index| index + 1);
+    let trailing = if children[tail_start..]
+        .iter()
+        .any(|node| matches!(node, Inline::LineBreak))
+    {
+        children.split_off(tail_start)
+    } else {
+        Vec::new()
+    };
     nodes.push(Inline::Link {
         target: target.clone(),
         title: None,
         children,
     });
+    nodes.extend(trailing);
     true
 }
 

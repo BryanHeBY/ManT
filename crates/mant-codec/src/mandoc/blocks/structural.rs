@@ -168,10 +168,16 @@ impl StructuralLowerer<'_, '_, '_> {
                 self.context
                     .distance_or(node, argument, *self.definition_hanging_width);
         }
-        let spacing = crate::mandoc::layout::man_paragraph_spacing(
+        let spacing = crate::mandoc::layout::execute_man_paragraph_spacing(
+            self.formatter,
             *self.paragraph_distance,
             self.man_source_predecessor,
         );
+        // pre_HP(HEAD) consumes no children, but print_man_node() still
+        // replaces the font on HEAD and BODY entry and exit.
+        self.formatter.font.man_text_boundary(); // HEAD pre
+        self.formatter.font.man_text_boundary(); // HEAD post
+        self.formatter.font.man_text_boundary(); // BODY pre
         let mut lowerer = super::BlockLowerer::new(
             self.context,
             self.indent_columns,
@@ -191,6 +197,8 @@ impl StructuralLowerer<'_, '_, '_> {
         // man_term.c::post_HP() closes its BODY row. PP/P/LP have no post
         // handler and execute in the caller's live BlockState instead.
         let nested = lowerer.finish_into(self.formatter, super::FormatterRowBoundary::Settle);
+        self.formatter.font.man_text_boundary(); // BODY post
+        self.formatter.font.man_text_boundary(); // BLOCK post
         extend_blocks_with_spacing(self.output, nested, spacing, node);
     }
 
@@ -221,6 +229,9 @@ impl StructuralLowerer<'_, '_, '_> {
                 // must not erase that source fact: RS itself adds no gap,
                 // while its first PP still applies the current PD distance.
                 let paragraph_predecessor = self.has_paragraph_predecessor();
+                self.formatter.font.man_text_boundary(); // HEAD pre
+                self.formatter.font.man_text_boundary(); // HEAD post
+                self.formatter.font.man_text_boundary(); // BODY pre
                 let continues_item = self.man_list_state.is_active();
                 let output = if continues_item {
                     Vec::new()
@@ -244,6 +255,8 @@ impl StructuralLowerer<'_, '_, '_> {
                 lowerer.push_nodes(first_part_children(node, NodeKind::Body));
                 let mut nested =
                     lowerer.finish_into(self.formatter, super::FormatterRowBoundary::Settle);
+                self.formatter.font.man_text_boundary(); // BODY post
+                self.formatter.font.man_text_boundary(); // BLOCK post
                 if continues_item {
                     if append_relative_continuation(
                         self.output,

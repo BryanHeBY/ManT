@@ -395,6 +395,159 @@ fn man_paragraph_body_returns_its_live_word_to_the_enclosing_link_post() {
 }
 
 #[test]
+fn man_paragraph_node_exit_updates_the_previous_font_register() {
+    // Each exact UR/MT x PP/P/LP input was checked with fixed CVS -Tascii
+    // and -Tlint. man_term.c::print_man_node() applies term_fontrepl() at
+    // BLOCK, HEAD, and BODY entry/exit even though pre_PP has no post handler.
+    for (open, close, target) in [
+        ("UR", "UE", "https://example.org"),
+        ("MT", "ME", "user@example.org"),
+    ] {
+        for paragraph in ["PP", "P", "LP"] {
+            let source = format!(
+                ".TH TEST 1 \"2026-09-28\"\n.SH DESCRIPTION\n.{open} \\fP{target}\n.{paragraph}\n\\fBlabel\n.{close}\n\\fPafter\n"
+            );
+            let document = parse_manual_bytes(
+                std::path::Path::new("paragraph-font-register.1"),
+                source.as_bytes(),
+            )
+            .unwrap();
+            let strong = strong_document_text(&document);
+            assert!(
+                strong.contains("label"),
+                "{open}/{paragraph}: {document:#?}"
+            );
+            assert!(
+                !strong.contains(target),
+                "{open}/{paragraph}: {document:#?}"
+            );
+            assert!(!strong.contains('⟩'), "{open}/{paragraph}: {document:#?}");
+            assert!(
+                !strong.contains("after"),
+                "{open}/{paragraph}: {document:#?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn other_man_block_nodes_restore_font_before_enclosing_link_post() {
+    // Exact HP/IP/TP/RS cases were checked with fixed CVS -Tascii/-Tlint.
+    // print_man_node() applies the same generic font replacement around
+    // every printable BLOCK, HEAD, and BODY, including post_IP/post_TP and
+    // post_RS paths. A later \fP must not recover the inner bold font.
+    for (name, body) in [
+        ("HP", ".HP\n\\fBlabel"),
+        ("IP", ".IP tag 4\n\\fBlabel"),
+        ("TP", ".TP\ntag\n\\fBlabel"),
+        ("RS", ".RS\n\\fBlabel\n.RE"),
+    ] {
+        let source = format!(
+            ".TH TEST 1 \"2026-09-28\"\n.SH DESCRIPTION\n.UR \\fPhttps://example.org\n{body}\n.UE\n\\fPafter\n"
+        );
+        let document = parse_manual_bytes(
+            std::path::Path::new("man-block-font-register.1"),
+            source.as_bytes(),
+        )
+        .unwrap();
+        let strong = strong_document_text(&document);
+        assert!(strong.contains("label"), "{name}: {document:#?}");
+        assert!(
+            !strong.contains("https://example.org"),
+            "{name}: {document:#?}"
+        );
+        assert!(!strong.contains('⟩'), "{name}: {document:#?}");
+        assert!(!strong.contains("after"), "{name}: {document:#?}");
+    }
+}
+
+#[test]
+fn automatic_man_paragraph_space_consumes_negative_sp_debt() {
+    // Every exact PP/P/LP/SY/HP/IP/TP input was checked with fixed CVS
+    // -Tascii/-Tlint. man_term.c::print_bvspace() calls term_vspace(), whose
+    // skipvsp rule consumes the preceding .sp -1 before producing any gap.
+    for (macro_name, tail) in [
+        ("PP", ".PP\nAFTER"),
+        ("P", ".P\nAFTER"),
+        ("LP", ".LP\nAFTER"),
+        ("SY", ".SY call\narg\n.YS"),
+        ("HP", ".HP\nAFTER"),
+        ("IP", ".IP tag 4\nAFTER"),
+        ("TP", ".TP\ntag\nAFTER"),
+    ] {
+        let source =
+            format!(".TH TEST 1 \"2026-09-28\"\n.SH DESCRIPTION\nBEFORE\n.sp -1\n{tail}\n");
+        let document = parse_manual_bytes(
+            std::path::Path::new("negative-sp-automatic-gap.1"),
+            source.as_bytes(),
+        )
+        .unwrap();
+        let gap = document.sections[0]
+            .blocks
+            .iter()
+            .find_map(|block| match block {
+                Block::Paragraph {
+                    children, layout, ..
+                }
+                | Block::Preformatted {
+                    children, layout, ..
+                } if inline_text(children).contains("AFTER")
+                    || inline_text(children).contains("call") =>
+                {
+                    Some(layout.spacing_before_lines)
+                }
+                Block::DefinitionList { layout, .. } if matches!(macro_name, "IP" | "TP") => {
+                    Some(layout.spacing_before_lines)
+                }
+                _ => None,
+            });
+        assert_eq!(gap, Some(0), "{macro_name}: {document:#?}");
+    }
+}
+
+#[test]
+fn semantic_link_wrapper_does_not_own_a_closed_no_fill_row() {
+    // All exact UR/MT and font/word-end variants were checked with fixed
+    // CVS -Tascii/-Tlint. roff_term_pre_br() calls term_newln() at fi; a
+    // semantic link annotation cannot create another physical empty row.
+    for (open, close, target) in [
+        ("UR", "UE", "https://example.org"),
+        ("MT", "ME", "user@example.org"),
+    ] {
+        for middle in [
+            ".nf\nlabel\n.fi",
+            ".nf\nlabel\\p\n.fi",
+            ".nf\nlabel\\p\n.ft B\n.fi",
+            ".nf\nlabel\n.fi\n.ft B",
+        ] {
+            let source = format!(
+                ".TH TEST 1 \"2026-09-28\"\n.SH DESCRIPTION\n.{open} {target}\n{middle}\n.{close}\nafter\n"
+            );
+            let document = parse_manual_bytes(
+                std::path::Path::new("link-closed-no-fill-row.1"),
+                source.as_bytes(),
+            )
+            .unwrap();
+            let blocks = &document.sections[0].blocks;
+            let literal = blocks.iter().find_map(|block| match block {
+                Block::Preformatted { children, .. } => Some(children),
+                _ => None,
+            });
+            let literal = literal.expect("label row");
+            assert_eq!(
+                inline_text(literal),
+                "label",
+                "{open}/{middle}: {document:#?}"
+            );
+            assert!(
+                blocks.iter().any(|block| matches!(block, Block::Paragraph { children, .. } if inline_text(children).contains(&format!("⟨{target}⟩ after")))),
+                "{open}/{middle}: {document:#?}"
+            );
+        }
+    }
+}
+
+#[test]
 fn man_paragraph_spacing_uses_source_siblings_through_rs_only() {
     // All nine exact outer/inner combinations were checked with fixed CVS
     // -Tascii/-Tlint. man_term.c::print_bvspace() climbs a first-child RS,

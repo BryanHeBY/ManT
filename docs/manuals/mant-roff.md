@@ -96,6 +96,9 @@ paragraph, then returns its active final word to the enclosing link's closing
 words. An empty target does not create a typed link. This follows the pinned CVS
 `man_term.c::print_man_node()`/`post_UR()` execution order and
 `man_html.c::man_UR_pre()` label choice.
+The link annotation excludes a trailing physical line break: a label ended
+by `fi` remains one no-fill row, followed immediately by the closing address
+on the next row.
 
 `PP`, `P`, and `LP` start a new paragraph but do not close the final BODY
 word on return. Their leading distance follows the pinned CVS
@@ -105,6 +108,11 @@ BODY cannot; transparent requests such as `ft` and `PD` do not count as
 predecessors. The same source rule supplies leading distance for `HP`, `IP`,
 and `TP`. A `SY` declaration applies it unless its direct previous visible
 sibling is another `SY`; an intervening `YS` starts a new spaced declaration.
+Each automatic distance executes through the terminal's `skipvsp` state, so
+a preceding negative `sp` can cancel rows requested by `PP`, `SY`, `HP`,
+`IP`, or `TP`. Printable man BLOCK, HEAD, and BODY nodes still perform their
+generic Roman font transitions at entry and exit even without a macro post
+handler; these transitions update the previous-font register used by `\fP`.
 
 `br` inside a flow becomes an immediate inline line break. The `\p` escape instead requests a break at the next ordinary word boundary; it crosses tight `Ns` joins and non-breaking spaces, and repeated requests before that boundary are idempotent. A following `\c` can continue the current formatter word but does not cancel that pending word-end break. This `\p\c` ordering follows the pinned mandoc CVS formatter; GNU troff can diagnose or project such non-portable combinations differently. `sp` becomes explicit vertical space. Filled source lines normally join with spaces; an indented input line and no-fill input preserve line boundaries. No-fill rows follow executed AST events: executed empty-row events are retained, including leading and trailing rows, and independent `sp` requests accumulate. Skipped conditions and uncalled macro definitions do not contribute rows. Leading empty literal rows follow mandoc's terminal behavior; groff may suppress them in no-space contexts. A final unescaped `\c` suppresses the next implicit space or line break and joins the next input line directly. Word spacing and physical-line continuation remain independent: a generated or explicitly empty formatter word consumes the latter even when it adds no visible glyph.
 

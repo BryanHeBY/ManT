@@ -21,9 +21,17 @@ pub(in crate::mandoc::blocks) fn lower_man_definition(
         ip_run,
         has_predecessor,
     } = state;
+    // pre_IP/pre_TP execute print_bvspace before HEAD and BODY words can
+    // clear skipvsp. TQ requests no distance but retains its own tag role.
+    let requested = if node.macro_name.as_deref() == Some("TQ") {
+        0
+    } else {
+        *paragraph_distance
+    };
+    let spacing_before =
+        crate::mandoc::layout::execute_man_paragraph_spacing(formatter, requested, has_predecessor);
     let LoweredManItem {
         mut item,
-        spacing_before,
         max_width,
     } = lower_man_item(
         node,
@@ -34,8 +42,9 @@ pub(in crate::mandoc::blocks) fn lower_man_definition(
         spacing_enabled,
         formatter,
     );
-    let spacing_before =
-        crate::mandoc::layout::man_paragraph_spacing(spacing_before, has_predecessor);
+    // print_man_node() finishes the BLOCK after HEAD/BODY execution and
+    // post_IP/post_TP; its Roman replacement updates fontlast as well.
+    formatter.font.man_text_boundary();
     let macro_name = node.macro_name.as_deref();
     let independent_mark = matches!(macro_name, Some("IP" | "TP" | "TQ"))
         && ip_run.is_none()
@@ -161,7 +170,6 @@ fn emit_man_definition(
 
 struct LoweredManItem {
     item: DefinitionItem,
-    spacing_before: u16,
     max_width: usize,
 }
 
@@ -174,14 +182,6 @@ fn lower_man_item(
     spacing_enabled: bool,
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> LoweredManItem {
-    // Capture the distance before lowering the body: a `.PD` request that
-    // follows this item can live inside libmandoc's block scope and updates
-    // spacing for the *next* item, not the current one.
-    let spacing_before = if node.macro_name.as_deref() == Some("TQ") {
-        0
-    } else {
-        *paragraph_distance
-    };
     let head = first_part_children(node, NodeKind::Head);
     let leading_head_distance = leading_paragraph_distance(head);
     if let Some(distance) = leading_head_distance {
@@ -216,11 +216,7 @@ fn lower_man_item(
             .saturating_sub(i32::from(item.layout.min_term_gap_columns)),
     )
     .unwrap_or(0);
-    LoweredManItem {
-        item,
-        spacing_before,
-        max_width,
-    }
+    LoweredManItem { item, max_width }
 }
 
 pub(in crate::mandoc::blocks) struct ManDefinitionState<'a> {

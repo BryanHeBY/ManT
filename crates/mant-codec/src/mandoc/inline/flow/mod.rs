@@ -327,6 +327,13 @@ impl FontState {
         }
     }
 
+    /// Every printable man(7) node enters and leaves through the generic
+    /// `print_man_node()` font replacement, even when its macro has no post
+    /// handler. Replacing Roman also updates the previous-font register.
+    pub(in crate::mandoc) fn man_text_boundary(&mut self) {
+        self.select(Font::Regular);
+    }
+
     pub(super) fn restore(&mut self) {
         std::mem::swap(&mut self.current, &mut self.previous);
         std::mem::swap(&mut self.display_current, &mut self.display_previous);

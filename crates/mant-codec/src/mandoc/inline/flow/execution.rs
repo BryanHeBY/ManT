@@ -1,8 +1,8 @@
 use super::{
-    AuthorBreakEffect, AuthorExecution, FormatterColumn, Inline, InlineBuilder, KeepPhase,
-    PendingBoundary, PreservedInlineState, SourceFragmentState, SourceLineObservation, SpacingMode,
-    TrailingOutput, WordEndBreak, last_visible_character, trim_trailing_breakable_spaces,
-    updated_spacing,
+    AuthorBreakEffect, AuthorExecution, FormatterColumn, Inline, InlineBuilder,
+    InlineExecutionState, KeepPhase, PendingBoundary, PreservedInlineState, SourceFragmentState,
+    SourceLineObservation, SpacingMode, TrailingOutput, WordEndBreak, last_visible_character,
+    trim_trailing_breakable_spaces, updated_spacing,
 };
 
 impl InlineBuilder {
@@ -250,16 +250,7 @@ impl InlineBuilder {
     /// Apply one signed `.sp`/`.Pp` request to CVS `skipvsp` state and return
     /// the rows that remain visible in the renderer-neutral IR.
     pub(in crate::mandoc) fn resolve_vertical_space(&mut self, rows: i32) -> u16 {
-        if rows < 0 {
-            let debt = u16::try_from(rows.unsigned_abs()).unwrap_or(u16::MAX);
-            self.execution.vertical_space_debt =
-                self.execution.vertical_space_debt.saturating_add(debt);
-            return 0;
-        }
-        let rows = u16::try_from(rows).unwrap_or(u16::MAX);
-        let consumed = rows.min(self.execution.vertical_space_debt);
-        self.execution.vertical_space_debt -= consumed;
-        rows - consumed
+        self.execution.resolve_vertical_space(rows)
     }
 
     pub(in crate::mandoc) fn inherit_vertical_space_debt(&mut self, debt: u16) {
@@ -376,5 +367,19 @@ impl InlineBuilder {
             _ => PendingBoundary::Ordinary,
         };
         self.execution.spacing = SpacingMode::from(updated);
+    }
+}
+
+impl InlineExecutionState {
+    pub(in crate::mandoc) fn resolve_vertical_space(&mut self, rows: i32) -> u16 {
+        if rows < 0 {
+            let debt = u16::try_from(rows.unsigned_abs()).unwrap_or(u16::MAX);
+            self.vertical_space_debt = self.vertical_space_debt.saturating_add(debt);
+            return 0;
+        }
+        let rows = u16::try_from(rows).unwrap_or(u16::MAX);
+        let consumed = rows.min(self.vertical_space_debt);
+        self.vertical_space_debt -= consumed;
+        rows - consumed
     }
 }

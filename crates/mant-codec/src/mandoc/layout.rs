@@ -20,7 +20,7 @@ pub(super) use source_indent::SourceIndent;
 #[cfg(test)]
 pub(super) use spacing::vertical_distance_lines;
 pub(super) use spacing::{
-    add_leading_spacing, man_paragraph_spacing, paragraph_distance_lines, section_spacing,
+    add_leading_spacing, execute_man_paragraph_spacing, paragraph_distance_lines, section_spacing,
     set_block_spacing, update_paragraph_distance, vertical_space_delta,
 };
 

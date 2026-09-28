@@ -13,7 +13,7 @@ use super::{
     controls::FormatterBoundary,
     first_part_children,
     inline::{
-        FilledBoundary, FontState, InlineBuilder, append_inline_node_with_next, is_enclosure_macro,
+        FilledBoundary, InlineBuilder, append_inline_node_with_next, is_enclosure_macro,
         lower_inline_nodes, lower_inline_nodes_with_font_state, plain_text,
     },
     layout::{
@@ -374,13 +374,22 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         self.man_list_state.reset();
         self.definition_hanging_width =
             crate::mandoc::layout::Distance::cells(DEFAULT_MAN_TAG_WIDTH);
-        let spacing =
-            super::layout::man_paragraph_spacing(*self.paragraph_distance, source_predecessor);
-        self.state
-            .request_leading_spacing(spacing, source_span(node));
+        self.state.request_man_paragraph_spacing(
+            *self.paragraph_distance,
+            source_predecessor,
+            source_span(node),
+        );
+        // The BLOCK pre ran at node entry. Its empty HEAD and its BODY still
+        // pass through print_man_node(), whose generic pre/post font changes
+        // are independent of pre_PP's absent macro-specific post handler.
+        self.state.formatter.font.man_text_boundary(); // HEAD pre
+        self.state.formatter.font.man_text_boundary(); // HEAD post
+        self.state.formatter.font.man_text_boundary(); // BODY pre
         let inherited = std::mem::take(&mut self.man_source_predecessor);
         self.push_nodes(first_part_children(node, NodeKind::Body));
         self.man_source_predecessor = inherited;
+        self.state.formatter.font.man_text_boundary(); // BODY post
+        self.state.formatter.font.man_text_boundary(); // BLOCK post
         self.state.materialize_idle_spacing();
     }
 
@@ -396,9 +405,11 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         // man_term.c::pre_SY() calls print_bvspace() unless the direct
         // previous native sibling is another SY. The first SY in an RS
         // chain uses the same source-predecessor rule.
-        let lines =
-            super::layout::man_paragraph_spacing(*self.paragraph_distance, source.predecessor);
-        self.state.request_leading_spacing(lines, source_span(node));
+        self.state.request_man_paragraph_spacing(
+            *self.paragraph_distance,
+            source.predecessor,
+            source_span(node),
+        );
     }
 
     fn consume_font_request(&mut self, node: &Node) -> bool {
@@ -599,15 +610,14 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         if node.macro_name.as_deref() == Some("SY") {
             // man_term.c::print_man_node() replaces the active slot when SY
             // BLOCK enters; it does not clear the font stack or fontlast.
-            self.state
-                .formatter
-                .font
-                .select(super::roff_escape::RoffFont::Regular);
+            self.state.formatter.font.man_text_boundary();
         } else if matches!(
             node.macro_name.as_deref(),
             Some("PP" | "P" | "LP" | "HP" | "IP" | "TP" | "TQ" | "RS")
         ) {
-            self.state.formatter.font = FontState::new();
+            // This is the BLOCK pre transition, not a fresh font stack.
+            // print_man_node() preserves the independent previous register.
+            self.state.formatter.font.man_text_boundary();
         }
     }
 

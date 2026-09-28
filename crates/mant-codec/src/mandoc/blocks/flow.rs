@@ -280,6 +280,20 @@ impl BlockState {
         );
     }
 
+    pub(super) fn request_man_paragraph_spacing(
+        &mut self,
+        distance: u16,
+        has_predecessor: bool,
+        source: Option<mant_ir::SourceSpan>,
+    ) {
+        let lines = crate::mandoc::layout::execute_man_paragraph_spacing(
+            &mut self.formatter,
+            distance,
+            has_predecessor,
+        );
+        self.request_leading_spacing(lines, source);
+    }
+
     /// An empty paragraph BODY still executed native `print_bvspace()`.
     pub(super) fn materialize_idle_spacing(&mut self) {
         if !self.paragraph.is_empty()

@@ -89,6 +89,10 @@ pub(super) fn definition_item(
     let head = visible_definition_head(node);
     let body = first_part_children(node, NodeKind::Body);
     let (displaced_equations, body) = displaced_definition_equations(head, body);
+    let man_node = context.macro_set == libmandoc_rs::MacroSet::Man;
+    if man_node {
+        formatter.font.man_text_boundary(); // HEAD pre
+    }
     let (
         term,
         run_in_execution,
@@ -96,6 +100,10 @@ pub(super) fn definition_item(
         definition_body_gap_consumed,
         term_breaks,
     ) = lower_definition_head(head, &displaced_equations, context, flow, formatter);
+    if man_node {
+        formatter.font.man_text_boundary(); // HEAD post
+        formatter.font.man_text_boundary(); // BODY pre
+    }
     if definition_field_exited {
         geometry.placement = crate::mandoc::layout::TermPlacement::Stacked;
     }
@@ -147,6 +155,9 @@ pub(super) fn definition_item(
         )
     };
     let observed = formatter.finish_definition_body();
+    if man_node {
+        formatter.font.man_text_boundary(); // BODY post
+    }
     if flow.shares_pending_term_row && observed.placement_breaks() {
         geometry.placement = crate::mandoc::layout::TermPlacement::Stacked;
     }
