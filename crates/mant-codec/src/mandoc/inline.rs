@@ -360,9 +360,9 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
     let pending_word_end_break = builder.take_word_end_break();
     let execution = font::parse_roff_text_with_zero_advance(
         source,
-        &mut builder.font,
+        &mut builder.execution.font,
         !node.flags.no_fill,
-        &mut builder.zero_advance,
+        &mut builder.execution.zero_advance,
         pending_word_end_break,
     );
     // mdoc_term gives an empty text node a vertical row only when the text

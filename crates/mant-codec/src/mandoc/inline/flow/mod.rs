@@ -12,6 +12,13 @@ use output::trim_trailing_breakable_spaces;
 
 pub(in crate::mandoc) struct InlineBuilder {
     nodes: Vec<Inline>,
+    pub(in crate::mandoc) execution: InlineExecutionState,
+}
+
+/// Text execution registers have a different lifetime from an IR segment.
+/// A paragraph, literal row, or nested output owner may drain `nodes` while
+/// the formatter continues to execute the same source stream.
+pub(in crate::mandoc) struct InlineExecutionState {
     boundary: PendingBoundary,
     spacing: SpacingMode,
     last_visible_character: Option<char>,
@@ -48,6 +55,20 @@ pub(in crate::mandoc) struct InlineBuilder {
     definition: Option<DefinitionFieldState>,
     last_executed_source_line: Option<u32>,
     pub(in crate::mandoc) scope_posts: crate::mandoc::containers::ScopePostState,
+}
+
+impl std::ops::Deref for InlineBuilder {
+    type Target = InlineExecutionState;
+
+    fn deref(&self) -> &Self::Target {
+        &self.execution
+    }
+}
+
+impl std::ops::DerefMut for InlineBuilder {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.execution
+    }
 }
 
 /// Formatter word context survives an IR fragment drain inside one no-fill
@@ -529,37 +550,20 @@ pub(in crate::mandoc) enum FilledBoundary {
 impl InlineBuilder {
     #[cfg(test)]
     pub(in crate::mandoc) fn new() -> Self {
-        Self {
-            nodes: Vec::new(),
-            boundary: PendingBoundary::Ordinary,
-            spacing: SpacingMode::Enabled,
-            last_visible_character: None,
-            has_printable_content: false,
-            formatter_column: FormatterColumn::Origin,
-            empty_word: false,
-            trailing_output: TrailingOutput::None,
-            pending_breakable_spaces: 0,
-            pending_field_spaces: 0,
-            pending_line_indent: 0,
-            word_end_break: WordEndBreak::Clear,
-            vertical_space_debt: 0,
-            keep: KeepState::new(),
-            font: FontState::new(),
-            zero_advance: ZeroAdvanceState::new(),
-            zero_advance_joined: false,
-            final_word_join: None,
-            final_source_continuation: None,
-            execution_epoch: 0,
-            author_execution: None,
-            definition: None,
-            last_executed_source_line: None,
-            scope_posts: crate::mandoc::containers::ScopePostState::default(),
-        }
+        Self::with_spacing(true)
     }
 
     pub(in crate::mandoc) fn with_spacing(spacing_enabled: bool) -> Self {
         Self {
             nodes: Vec::new(),
+            execution: InlineExecutionState::with_spacing(spacing_enabled),
+        }
+    }
+}
+
+impl InlineExecutionState {
+    fn with_spacing(spacing_enabled: bool) -> Self {
+        Self {
             boundary: PendingBoundary::Ordinary,
             spacing: SpacingMode::from_enabled(spacing_enabled),
             last_visible_character: None,
@@ -584,5 +588,27 @@ impl InlineBuilder {
             last_executed_source_line: None,
             scope_posts: crate::mandoc::containers::ScopePostState::default(),
         }
+    }
+
+    fn reset_paragraph_segment(&mut self, armed_zero_advance: bool) {
+        self.boundary = PendingBoundary::Ordinary;
+        self.last_visible_character = None;
+        self.has_printable_content = false;
+        self.formatter_column = FormatterColumn::Origin;
+        self.empty_word = false;
+        self.trailing_output = TrailingOutput::None;
+        self.pending_breakable_spaces = 0;
+        self.pending_field_spaces = 0;
+        self.pending_line_indent = 0;
+        self.word_end_break = WordEndBreak::Clear;
+        self.font = FontState::new();
+        self.zero_advance = ZeroAdvanceState::new();
+        self.zero_advance.inherit_armed(armed_zero_advance);
+        self.zero_advance_joined = false;
+        self.final_word_join = None;
+        self.final_source_continuation = None;
+        self.execution_epoch = 0;
+        self.definition = None;
+        self.last_executed_source_line = None;
     }
 }

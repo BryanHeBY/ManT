@@ -150,50 +150,25 @@ impl ParagraphFlow {
         &mut self,
         indent: crate::mandoc::layout::SourceIndent,
     ) -> (Option<Block>, bool) {
-        self.take_with(indent, false)
+        self.take_with(indent)
     }
 
     pub(super) fn take_for_vertical_request(
         &mut self,
         indent: crate::mandoc::layout::SourceIndent,
     ) -> (Option<Block>, bool) {
-        self.take_with(indent, true)
+        self.take_with(indent)
     }
 
-    fn take_with(
-        &mut self,
-        indent: crate::mandoc::layout::SourceIndent,
-        vertical_request: bool,
-    ) -> (Option<Block>, bool) {
-        let spacing = self.builder.spacing_enabled();
-        let mut next = Self::new(spacing);
-        next.builder.scope_posts = self.builder.scope_posts.clone();
-        let invisible_formatter_cell = self.builder.has_invisible_formatter_cell();
-        if vertical_request {
-            self.builder
-                .transfer_vertical_request_execution(&mut next.builder);
-        } else {
-            self.builder.transfer_container_execution(&mut next.builder);
-        }
-        // The pending break makes this an active native cell. Transfer any
-        // bare `\z` decision before extracting the otherwise unrepresentable
-        // leading break, so the two effects remain ordered atomically.
-        let empty_word_end_break = self.builder.take_unrepresented_word_end_break();
-        let previous = std::mem::replace(self, next);
-        let mut children = previous.builder.finish();
-        if invisible_formatter_cell
-            && !empty_word_end_break
-            && !mant_ir::has_printable_character(&children)
-        {
-            children.push(mant_ir::Inline::Text {
-                value: String::new(),
-            });
-        }
+    fn take_with(&mut self, indent: crate::mandoc::layout::SourceIndent) -> (Option<Block>, bool) {
+        let (children, empty_word_end_break) = self.builder.take_paragraph_segment();
+        let source = self.source.take();
+        self.last_line = None;
         (
             (!children.is_empty()).then(|| Block::Paragraph {
                 children,
                 layout: layout(indent),
-                source: previous.source,
+                source,
             }),
             empty_word_end_break,
         )

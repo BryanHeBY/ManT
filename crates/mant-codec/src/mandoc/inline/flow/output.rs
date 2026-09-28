@@ -22,15 +22,15 @@ impl InlineBuilder {
         OutputTransaction {
             rollback: OutputRollback {
                 node_count: self.nodes.len(),
-                last_visible_character: self.last_visible_character,
-                has_printable_content: self.has_printable_content,
-                trailing_output: self.trailing_output,
-                pending_breakable_spaces: self.pending_breakable_spaces,
-                pending_field_spaces: self.pending_field_spaces,
+                last_visible_character: self.execution.last_visible_character,
+                has_printable_content: self.execution.has_printable_content,
+                trailing_output: self.execution.trailing_output,
+                pending_breakable_spaces: self.execution.pending_breakable_spaces,
+                pending_field_spaces: self.execution.pending_field_spaces,
             },
             inbound: InboundExecution {
-                boundary: self.boundary,
-                final_source_continuation: self.final_source_continuation,
+                boundary: self.execution.boundary,
+                final_source_continuation: self.execution.final_source_continuation,
             },
         }
     }
@@ -61,11 +61,11 @@ impl InlineBuilder {
 
     fn rollback_compacted_output(&mut self, rollback: &OutputRollback) {
         self.nodes.truncate(rollback.node_count);
-        self.last_visible_character = rollback.last_visible_character;
-        self.has_printable_content = rollback.has_printable_content;
-        self.trailing_output = rollback.trailing_output;
-        self.pending_breakable_spaces = rollback.pending_breakable_spaces;
-        self.pending_field_spaces = rollback.pending_field_spaces;
+        self.execution.last_visible_character = rollback.last_visible_character;
+        self.execution.has_printable_content = rollback.has_printable_content;
+        self.execution.trailing_output = rollback.trailing_output;
+        self.execution.pending_breakable_spaces = rollback.pending_breakable_spaces;
+        self.execution.pending_field_spaces = rollback.pending_field_spaces;
     }
 
     /// Drop a compactly hidden operand's output while preserving the
@@ -128,15 +128,15 @@ impl InlineBuilder {
             // that empty word is therefore not presentation content.
             transaction.rollback.pending_breakable_spaces
         } else {
-            self.pending_breakable_spaces
+            self.execution.pending_breakable_spaces
         };
 
         // These fields summarize projected output rather than formatter
         // execution.  Rewind only them before installing the replacement;
         // boundary, cursor, word-end break, KEEP, and zero-advance state must
         // remain the post-execution values.
-        self.last_visible_character = transaction.rollback.last_visible_character;
-        self.has_printable_content = transaction.rollback.has_printable_content;
+        self.execution.last_visible_character = transaction.rollback.last_visible_character;
+        self.execution.has_printable_content = transaction.rollback.has_printable_content;
         self.append_projected(retained);
         if !boundary_materialized && replacement_word_spaces > 0 {
             self.append_projected(vec![Inline::Text {
@@ -144,10 +144,10 @@ impl InlineBuilder {
             }]);
         } else if !boundary_materialized
             && !inbound_continued
-            && self.empty_word
+            && self.execution.empty_word
             && transaction.rollback.has_printable_content
-            && self.spacing.enabled()
-            && !self.boundary.is_tight()
+            && self.execution.spacing.enabled()
+            && !self.execution.boundary.is_tight()
         {
             self.append_projected(vec![Inline::Text {
                 value: " ".to_owned(),
@@ -156,10 +156,10 @@ impl InlineBuilder {
         // The replacement occupies the already executed word. Any deferred
         // empty-word padding has now been materialized exactly once and must
         // not leak into the following source word.
-        self.empty_word = false;
-        self.trailing_output = TrailingOutput::None;
-        self.pending_breakable_spaces = 0;
-        self.pending_field_spaces = 0;
+        self.execution.empty_word = false;
+        self.execution.trailing_output = TrailingOutput::None;
+        self.execution.pending_breakable_spaces = 0;
+        self.execution.pending_field_spaces = 0;
         // The validator-generated replacement is a formatter word, not an
         // inert IR splice. It consumes authored `\z`/`\c` state while a
         // deferred `\p` remains pending until the next real word boundary.
@@ -174,8 +174,8 @@ impl InlineBuilder {
     /// one ordinary boundary, but padding already queued on its left must not
     /// be replayed in addition to the following word's own boundary.
     pub(in crate::mandoc) fn consume_compacted_pending_padding(&mut self) {
-        self.pending_breakable_spaces = 0;
-        self.pending_field_spaces = 0;
+        self.execution.pending_breakable_spaces = 0;
+        self.execution.pending_field_spaces = 0;
     }
 
     /// Preserve a formatter-requested line boundary without creating empty
@@ -194,7 +194,9 @@ impl InlineBuilder {
             .rev()
             .take_while(|node| !matches!(node, Inline::LineBreak))
             .any(|node| has_printable_character(std::slice::from_ref(node)));
-        if self.formatter_column == FormatterColumn::Advanced && !current_row_has_printable {
+        if self.execution.formatter_column == FormatterColumn::Advanced
+            && !current_row_has_printable
+        {
             // ESCAPE_IGNORE (`\&`) advances the native buffer without a
             // visible glyph. A real line boundary must retain that physical
             // row, even though renderer-neutral IR has no character for it.
@@ -202,29 +204,29 @@ impl InlineBuilder {
                 value: String::new(),
             });
         }
-        self.boundary = PendingBoundary::Ordinary;
-        self.empty_word = false;
-        self.trailing_output = TrailingOutput::None;
-        self.pending_breakable_spaces = 0;
-        self.pending_field_spaces = 0;
-        self.word_end_break = WordEndBreak::Clear;
-        self.formatter_column = FormatterColumn::Origin;
+        self.execution.boundary = PendingBoundary::Ordinary;
+        self.execution.empty_word = false;
+        self.execution.trailing_output = TrailingOutput::None;
+        self.execution.pending_breakable_spaces = 0;
+        self.execution.pending_field_spaces = 0;
+        self.execution.word_end_break = WordEndBreak::Clear;
+        self.execution.formatter_column = FormatterColumn::Origin;
         if !matches!(self.nodes.last(), Some(Inline::LineBreak)) {
             self.nodes.push(Inline::LineBreak);
-            self.last_visible_character = Some('\n');
+            self.execution.last_visible_character = Some('\n');
         }
-        self.final_word_join = Some(false);
-        self.final_source_continuation = Some(false);
+        self.execution.final_word_join = Some(false);
+        self.execution.final_source_continuation = Some(false);
     }
 
     pub(in crate::mandoc) fn has_formatter_cell(&self) -> bool {
-        self.formatter_column == FormatterColumn::Advanced
-            || self.zero_advance.has_buffered_glyph()
-            || self.word_end_break == WordEndBreak::Pending
+        self.execution.formatter_column == FormatterColumn::Advanced
+            || self.execution.zero_advance.has_buffered_glyph()
+            || self.execution.word_end_break == WordEndBreak::Pending
     }
 
     pub(in crate::mandoc) fn has_invisible_formatter_cell(&self) -> bool {
-        self.formatter_column == FormatterColumn::Advanced
+        self.execution.formatter_column == FormatterColumn::Advanced
             && !self
                 .nodes
                 .iter()
@@ -260,7 +262,7 @@ impl InlineBuilder {
         );
         self.materialize_boundary_before_pending_glyph();
         if trailing_output != TrailingOutput::None {
-            self.trailing_output = trailing_output;
+            self.execution.trailing_output = trailing_output;
         }
     }
 
@@ -271,11 +273,11 @@ impl InlineBuilder {
     /// first boundary until that point incorrectly moves it after X.  Commit
     /// only the already executed padding here and leave the glyph pending.
     fn materialize_boundary_before_pending_glyph(&mut self) {
-        if !self.zero_advance.has_pending_glyph() {
+        if !self.execution.zero_advance.has_pending_glyph() {
             return;
         }
-        let breakable = std::mem::take(&mut self.pending_breakable_spaces);
-        let field = std::mem::take(&mut self.pending_field_spaces);
+        let breakable = std::mem::take(&mut self.execution.pending_breakable_spaces);
+        let field = std::mem::take(&mut self.execution.pending_field_spaces);
         let count = breakable.saturating_add(field);
         if count == 0 {
             return;
@@ -283,12 +285,12 @@ impl InlineBuilder {
         self.append_projected(vec![Inline::Text {
             value: " ".repeat(count),
         }]);
-        self.trailing_output = if field > 0 {
+        self.execution.trailing_output = if field > 0 {
             TrailingOutput::FieldBlank(field)
         } else {
             TrailingOutput::BreakableBlank(breakable)
         };
-        self.formatter_column = FormatterColumn::Advanced;
+        self.execution.formatter_column = FormatterColumn::Advanced;
     }
 
     pub(in crate::mandoc) fn execute_empty_word(&mut self) {
@@ -300,20 +302,23 @@ impl InlineBuilder {
     /// are not reparsed as roff source (names can contain literal escapes).
     pub(in crate::mandoc) fn append_text(&mut self, value: &str) {
         self.begin_word_projection(!value.is_empty());
-        let kept_zero_boundary = self.boundary == PendingBoundary::Kept
+        let kept_zero_boundary = self.execution.boundary == PendingBoundary::Kept
             && value
                 .chars()
                 .next()
                 .is_some_and(super::super::is_formatter_word_blank)
-            && self.zero_advance.has_pending_glyph();
+            && self.execution.zero_advance.has_pending_glyph();
         let mut projected = Vec::new();
-        self.zero_advance
-            .append_generated_text(value, &mut projected, self.font.display_current());
+        self.execution.zero_advance.append_generated_text(
+            value,
+            &mut projected,
+            self.execution.font.display_current(),
+        );
         if kept_zero_boundary {
             // TERMP_KEEP inserts a non-breaking formatter blank.  A pending
             // BACKBEFORE glyph consumes that cell, so retain the glyph while
             // suppressing both the virtual blank and ordinary boundary.
-            self.boundary = PendingBoundary::Tight;
+            self.execution.boundary = PendingBoundary::Tight;
         }
         // Every formatter-generated spelling is a real `term_word()` call.
         // Even when a preceding bare `\z` buffers its only glyph, the word
@@ -324,7 +329,7 @@ impl InlineBuilder {
         // delimiters) cannot themselves carry source `\\c`; they consume a
         // preceding continuation before the next source operand runs.
         if !value.is_empty() {
-            self.final_word_join = Some(false);
+            self.execution.final_word_join = Some(false);
         }
     }
 
@@ -337,12 +342,15 @@ impl InlineBuilder {
     pub(in crate::mandoc) fn append_generated_word(&mut self, value: &str) {
         self.begin_word_projection(!value.is_empty());
         let mut projected = Vec::new();
-        self.zero_advance
-            .append_generated_text(value, &mut projected, self.font.display_current());
+        self.execution.zero_advance.append_generated_text(
+            value,
+            &mut projected,
+            self.execution.font.display_current(),
+        );
         self.append_word(projected);
         if !value.is_empty() {
-            self.final_word_join = Some(false);
-            self.final_source_continuation = Some(false);
+            self.execution.final_word_join = Some(false);
+            self.execution.final_source_continuation = Some(false);
         }
     }
 
@@ -354,87 +362,90 @@ impl InlineBuilder {
     pub(in crate::mandoc) fn begin_word_projection(&mut self, next_is_visible: bool) {
         if next_is_visible {
             // term_word() clears skipvsp before consuming the word itself.
-            self.vertical_space_debt = 0;
-            self.execution_epoch = self.execution_epoch.wrapping_add(1);
+            self.execution.vertical_space_debt = 0;
+            self.execution.execution_epoch = self.execution.execution_epoch.wrapping_add(1);
         }
         let continued_word = next_is_visible
             && self.final_source_continuation_or(false)
-            && !self.boundary.is_tight();
+            && !self.execution.boundary.is_tight();
         if next_is_visible {
-            self.final_word_join = Some(false);
-            self.final_source_continuation = Some(false);
+            self.execution.final_word_join = Some(false);
+            self.execution.final_source_continuation = Some(false);
         }
-        if next_is_visible && self.keep.keeping() && !self.boundary.is_tight() {
-            self.boundary = PendingBoundary::Kept;
-            if let Some(glyph) = self.zero_advance.resolve_at_word_boundary() {
+        if next_is_visible && self.execution.keep.keeping() && !self.execution.boundary.is_tight() {
+            self.execution.boundary = PendingBoundary::Kept;
+            if let Some(glyph) = self.execution.zero_advance.resolve_at_word_boundary() {
                 // CVS writes TERMP_KEEP's implicit NBRSP before the next
                 // glyph. It settles BACKBEFORE without becoming visible, so
                 // retain the glyph and join the incoming formatter word.
                 self.append_projected(vec![glyph]);
-                self.boundary = PendingBoundary::Tight;
+                self.execution.boundary = PendingBoundary::Tight;
             }
         }
         if next_is_visible
-            && !self.boundary.is_nonbreaking()
-            && self.word_end_break == WordEndBreak::Pending
-            && (self.spacing.enabled()
+            && !self.execution.boundary.is_nonbreaking()
+            && self.execution.word_end_break == WordEndBreak::Pending
+            && (self.execution.spacing.enabled()
                 || matches!(
-                    self.boundary,
+                    self.execution.boundary,
                     PendingBoundary::Preserved | PendingBoundary::Continued
                 ))
         {
-            if let Some(glyph) = self.zero_advance.resolve_at_word_boundary() {
+            if let Some(glyph) = self.execution.zero_advance.resolve_at_word_boundary() {
                 // The formatter's automatic word blank settles BACKBEFORE
                 // before a buffered `\\p` can become a line boundary.  Keep
                 // the glyph and join the incoming word at that position.
                 self.append_projected(vec![glyph]);
-                self.boundary = PendingBoundary::Tight;
+                self.execution.boundary = PendingBoundary::Tight;
             } else {
                 self.hard_break();
             }
         }
-        if continued_word && !self.boundary.is_tight() {
+        if continued_word && !self.execution.boundary.is_tight() {
             // TERMP_NONEWLINE suppresses the physical source break while an
             // `.Ec`-style release permits the normal formatter blank.  An
             // authored leading blank is retained separately by the incoming
             // word, producing the two spaces emitted by CVS in both filled
             // and literal flows.
-            self.boundary = PendingBoundary::Continued;
+            self.execution.boundary = PendingBoundary::Continued;
         }
-        if next_is_visible && self.keep.phase == KeepPhase::PreKeep {
+        if next_is_visible && self.execution.keep.phase == KeepPhase::PreKeep {
             // term_word() inserts the leading boundary using the *previous*
             // KEEP value, then promotes PREKEEP. Execute that ordering before
             // decoding the word: a bare BACKAFTER survives the ordinary blank,
             // while BACKBEFORE consumes it and retains its buffered glyph.
-            if !self.boundary.is_nonbreaking()
-                && (self.formatter_column == FormatterColumn::Advanced
-                    || self.zero_advance.has_pending_glyph())
-                && (self.spacing.enabled() || matches!(self.boundary, PendingBoundary::Preserved))
+            if !self.execution.boundary.is_nonbreaking()
+                && (self.execution.formatter_column == FormatterColumn::Advanced
+                    || self.execution.zero_advance.has_pending_glyph())
+                && (self.execution.spacing.enabled()
+                    || matches!(self.execution.boundary, PendingBoundary::Preserved))
             {
-                if let Some(glyph) = self.zero_advance.resolve_at_word_boundary() {
+                if let Some(glyph) = self.execution.zero_advance.resolve_at_word_boundary() {
                     self.append_projected(vec![glyph]);
                 } else {
                     self.append_projected(vec![Inline::Text {
                         value: " ".to_owned(),
                     }]);
-                    self.formatter_column = FormatterColumn::Advanced;
+                    self.execution.formatter_column = FormatterColumn::Advanced;
                 }
-                self.boundary = PendingBoundary::Tight;
+                self.execution.boundary = PendingBoundary::Tight;
             }
-            self.keep.phase = KeepPhase::Keep;
+            self.execution.keep.phase = KeepPhase::Keep;
         }
         if !next_is_visible
-            || self.boundary.is_nonbreaking()
-            || !(self.has_printable_content || self.zero_advance.has_pending_glyph())
-            || !(self.spacing.enabled() || matches!(self.boundary, PendingBoundary::Preserved))
+            || self.execution.boundary.is_nonbreaking()
+            || !(self.execution.has_printable_content
+                || self.execution.zero_advance.has_pending_glyph())
+            || !(self.execution.spacing.enabled()
+                || matches!(self.execution.boundary, PendingBoundary::Preserved))
         {
             return;
         }
-        let Some(glyph) = self.zero_advance.resolve_at_word_boundary() else {
+        let Some(glyph) = self.execution.zero_advance.resolve_at_word_boundary() else {
             return;
         };
         self.append_projected(vec![glyph]);
-        self.boundary = PendingBoundary::Tight;
+        self.execution.boundary = PendingBoundary::Tight;
     }
 
     /// Only macros that select a font establish this scope. Transparent
@@ -444,9 +455,9 @@ impl InlineBuilder {
         font: Font,
         append: impl FnOnce(&mut Self),
     ) {
-        let saved = self.font.push_scope(font);
+        let saved = self.execution.font.push_scope(font);
         append(self);
-        self.font.pop_scope(saved);
+        self.execution.font.pop_scope(saved);
     }
 
     /// Style newly appended content without creating a new formatter state.
@@ -501,64 +512,66 @@ impl InlineBuilder {
         let incoming_has_printable = has_printable_character(incoming);
         let incoming_has_line_break = line_break_count(incoming) > 0;
         if incoming_has_printable || word {
-            self.execution_epoch = self.execution_epoch.wrapping_add(1);
+            self.execution.execution_epoch = self.execution.execution_epoch.wrapping_add(1);
         }
         if incoming_first.is_none() && !incoming_has_printable && !word {
             self.nodes.append(incoming);
             return;
         }
         if (incoming_has_printable || word)
-            && (self.pending_definition_indent().is_some() || self.pending_line_indent > 0)
+            && (self.pending_definition_indent().is_some()
+                || self.execution.pending_line_indent > 0)
         {
             let cells = self
                 .definition
                 .as_mut()
                 .and_then(|state| state.pending_indent.take())
-                .unwrap_or_else(|| std::mem::take(&mut self.pending_line_indent));
+                .unwrap_or_else(|| std::mem::take(&mut self.execution.pending_line_indent));
             self.append_fixed_cells(cells);
-            self.boundary = PendingBoundary::Tight;
+            self.execution.boundary = PendingBoundary::Tight;
         }
         let empty_word = word && incoming_first.is_none() && !incoming_has_printable;
-        let boundary = std::mem::replace(&mut self.boundary, PendingBoundary::Ordinary);
+        let boundary = std::mem::replace(&mut self.execution.boundary, PendingBoundary::Ordinary);
         let fixed_blank_boundary = (incoming_starts_with_fixed_blank
             && incoming_first.is_some_and(char::is_whitespace))
-            || self.trailing_output == TrailingOutput::FixedBlank;
+            || self.execution.trailing_output == TrailingOutput::FixedBlank;
         let add_space = if fixed_blank_boundary {
-            self.has_printable_content
+            self.execution.has_printable_content
         } else if (matches!(boundary, PendingBoundary::Continued)
             && incoming_first.is_some_and(char::is_whitespace))
             || empty_word
-            || self.empty_word
+            || self.execution.empty_word
         {
-            self.has_printable_content || self.trailing_output != TrailingOutput::None
+            self.execution.has_printable_content
+                || self.execution.trailing_output != TrailingOutput::None
         } else {
-            needs_boundary_space(self.last_visible_character, incoming_first)
+            needs_boundary_space(self.execution.last_visible_character, incoming_first)
         };
         self.append_boundary_spacing(boundary, add_space, word, empty_word);
         self.nodes.append(incoming);
         if incoming_last.is_some() {
-            self.last_visible_character = incoming_last;
+            self.execution.last_visible_character = incoming_last;
             // Generic projected words are formatter glyphs, not trim-eligible
             // source padding. Raw text execution supplies its precise class
             // through `append_word_with_literal_row()` above.
-            self.trailing_output = if incoming_last.is_some_and(char::is_whitespace) {
+            self.execution.trailing_output = if incoming_last.is_some_and(char::is_whitespace) {
                 TrailingOutput::BoundaryBlank
             } else {
                 TrailingOutput::NonBlank
             };
         }
-        self.has_printable_content |= incoming_has_printable;
+        self.execution.has_printable_content |= incoming_has_printable;
         if incoming_has_line_break {
-            self.formatter_column =
+            self.execution.formatter_column =
                 if incoming_has_printable && !matches!(incoming_last, Some('\n')) {
                     FormatterColumn::Advanced
                 } else {
                     FormatterColumn::Origin
                 };
         } else if incoming_has_printable || occupies_row {
-            self.formatter_column = FormatterColumn::Advanced;
+            self.execution.formatter_column = FormatterColumn::Advanced;
         }
-        self.empty_word = empty_word;
+        self.execution.empty_word = empty_word;
     }
 
     fn append_boundary_spacing(
@@ -568,26 +581,31 @@ impl InlineBuilder {
         formatter_word: bool,
         empty_word: bool,
     ) {
-        let materialized_field_separator = formatter_word && self.pending_field_spaces > 0;
-        if !empty_word && self.pending_breakable_spaces > 0 {
-            push_text(&mut self.nodes, " ".repeat(self.pending_breakable_spaces));
-            let prior = match self.trailing_output {
+        let materialized_field_separator =
+            formatter_word && self.execution.pending_field_spaces > 0;
+        if !empty_word && self.execution.pending_breakable_spaces > 0 {
+            push_text(
+                &mut self.nodes,
+                " ".repeat(self.execution.pending_breakable_spaces),
+            );
+            let prior = match self.execution.trailing_output {
                 TrailingOutput::BreakableBlank(count) => count,
                 _ => 0,
             };
-            self.trailing_output =
-                TrailingOutput::BreakableBlank(prior.saturating_add(self.pending_breakable_spaces));
-            self.pending_breakable_spaces = 0;
+            self.execution.trailing_output = TrailingOutput::BreakableBlank(
+                prior.saturating_add(self.execution.pending_breakable_spaces),
+            );
+            self.execution.pending_breakable_spaces = 0;
         }
         if materialized_field_separator {
-            let count = self.pending_field_spaces;
+            let count = self.execution.pending_field_spaces;
             push_text(&mut self.nodes, " ".repeat(count));
-            self.pending_field_spaces = 0;
-            self.trailing_output = TrailingOutput::FieldBlank(count);
-            self.last_visible_character = Some(' ');
-            self.formatter_column = FormatterColumn::Advanced;
+            self.execution.pending_field_spaces = 0;
+            self.execution.trailing_output = TrailingOutput::FieldBlank(count);
+            self.execution.last_visible_character = Some(' ');
+            self.execution.formatter_column = FormatterColumn::Advanced;
         }
-        if !(self.spacing.enabled()
+        if !(self.execution.spacing.enabled()
             || matches!(
                 boundary,
                 PendingBoundary::Preserved | PendingBoundary::Continued | PendingBoundary::Kept
@@ -601,25 +619,48 @@ impl InlineBuilder {
         if empty_word {
             // A word boundary is real, but trailing formatter padding is not
             // authored term content. Materialize it at the next glyph.
-            if self.last_visible_character != Some('\n') {
-                self.pending_breakable_spaces = self.pending_breakable_spaces.saturating_add(1);
+            if self.execution.last_visible_character != Some('\n') {
+                self.execution.pending_breakable_spaces =
+                    self.execution.pending_breakable_spaces.saturating_add(1);
             }
         } else {
             push_text(&mut self.nodes, " ".to_owned());
-            let prior = match self.trailing_output {
+            let prior = match self.execution.trailing_output {
                 TrailingOutput::BreakableBlank(count) => count,
                 _ => 0,
             };
-            self.trailing_output = TrailingOutput::BreakableBlank(prior.saturating_add(1));
-            self.last_visible_character = Some(' ');
-            self.has_printable_content = true;
-            self.formatter_column = FormatterColumn::Advanced;
+            self.execution.trailing_output =
+                TrailingOutput::BreakableBlank(prior.saturating_add(1));
+            self.execution.last_visible_character = Some(' ');
+            self.execution.has_printable_content = true;
+            self.execution.formatter_column = FormatterColumn::Advanced;
         }
     }
 
     pub(in crate::mandoc) fn finish(mut self) -> Vec<Inline> {
         self.flush_zero_advance();
         self.finish_nodes()
+    }
+
+    /// Drain one IR paragraph without ending the formatter's execution
+    /// lifetime.  Only paragraph-local joins and row projections reset; the
+    /// source formatter's keep, author, spacing, and vertical-space registers
+    /// remain in this same execution state.
+    pub(in crate::mandoc) fn take_paragraph_segment(&mut self) -> (Vec<Inline>, bool) {
+        let invisible_formatter_cell = self.has_invisible_formatter_cell();
+        let carry_armed_zero_advance = !self.has_formatter_cell();
+        let armed = carry_armed_zero_advance && self.execution.zero_advance.take_armed();
+        let empty_word_end_break = self.take_unrepresented_word_end_break();
+        self.flush_zero_advance();
+        let mut children = self.finish_nodes();
+        if invisible_formatter_cell && !empty_word_end_break && !has_printable_character(&children)
+        {
+            children.push(Inline::Text {
+                value: String::new(),
+            });
+        }
+        self.execution.reset_paragraph_segment(armed);
+        (children, empty_word_end_break)
     }
 
     /// Finish one native formatter line and return a bare `\\z` request only
@@ -635,7 +676,7 @@ impl InlineBuilder {
         let surviving_armed = if self.has_formatter_cell() {
             false
         } else {
-            self.zero_advance.take_armed()
+            self.execution.zero_advance.take_armed()
         };
         self.flush_zero_advance();
         (self.finish_nodes(), surviving_armed)
@@ -650,19 +691,19 @@ impl InlineBuilder {
     ) -> (Vec<Inline>, PreservedInlineState) {
         let formatter_cell_occupied = self.has_formatter_cell();
         let state = PreservedInlineState {
-            zero_advance: std::mem::take(&mut self.zero_advance),
-            word_end_break: self.word_end_break == WordEndBreak::Pending,
-            source_continuation: self.final_source_continuation,
+            zero_advance: std::mem::take(&mut self.execution.zero_advance),
+            word_end_break: self.execution.word_end_break == WordEndBreak::Pending,
+            source_continuation: self.execution.final_source_continuation,
             formatter_cell_occupied,
-            pending_line_indent: self.pending_line_indent,
+            pending_line_indent: self.execution.pending_line_indent,
             pending_definition_indent: self.pending_definition_indent(),
-            last_executed_source_line: self.last_executed_source_line,
+            last_executed_source_line: self.execution.last_executed_source_line,
         };
         (self.finish_nodes(), state)
     }
 
     fn finish_nodes(&mut self) -> Vec<Inline> {
-        self.word_end_break = WordEndBreak::Clear;
+        self.execution.word_end_break = WordEndBreak::Clear;
         while matches!(self.nodes.last(), Some(Inline::LineBreak)) {
             self.nodes.pop();
         }
@@ -671,12 +712,13 @@ impl InlineBuilder {
 
     pub(super) fn flush_zero_advance(&mut self) {
         let mut pending = Vec::new();
-        self.zero_advance.finish_into(&mut pending);
+        self.execution.zero_advance.finish_into(&mut pending);
         if !pending.is_empty()
-            && (self.pending_breakable_spaces > 0 || self.pending_field_spaces > 0)
+            && (self.execution.pending_breakable_spaces > 0
+                || self.execution.pending_field_spaces > 0)
         {
-            let spaces = std::mem::take(&mut self.pending_breakable_spaces)
-                .saturating_add(std::mem::take(&mut self.pending_field_spaces));
+            let spaces = std::mem::take(&mut self.execution.pending_breakable_spaces)
+                .saturating_add(std::mem::take(&mut self.execution.pending_field_spaces));
             self.append_projected(vec![Inline::Text {
                 value: " ".repeat(spaces),
             }]);
@@ -692,14 +734,14 @@ impl InlineBuilder {
         let printable = has_printable_character(&incoming);
         self.nodes.append(&mut incoming);
         if last.is_some() {
-            self.last_visible_character = last;
-            self.trailing_output = if last.is_some_and(char::is_whitespace) {
+            self.execution.last_visible_character = last;
+            self.execution.trailing_output = if last.is_some_and(char::is_whitespace) {
                 TrailingOutput::BoundaryBlank
             } else {
                 TrailingOutput::NonBlank
             };
         }
-        self.has_printable_content |= printable;
+        self.execution.has_printable_content |= printable;
     }
 
     fn append_retained_layout(&mut self, retained: Vec<Inline>) {
@@ -707,8 +749,8 @@ impl InlineBuilder {
             return;
         }
         if last_visible_character(&retained) == Some('\n') {
-            self.last_visible_character = Some('\n');
-            self.trailing_output = TrailingOutput::None;
+            self.execution.last_visible_character = Some('\n');
+            self.execution.trailing_output = TrailingOutput::None;
         }
         self.nodes.extend(retained);
     }
@@ -719,12 +761,12 @@ impl InlineBuilder {
         }
         self.nodes
             .extend(std::iter::repeat_n(Inline::LineBreak, count));
-        self.last_visible_character = Some('\n');
-        self.formatter_column = FormatterColumn::Origin;
-        self.empty_word = false;
-        self.trailing_output = TrailingOutput::None;
-        self.pending_breakable_spaces = 0;
-        self.pending_field_spaces = 0;
+        self.execution.last_visible_character = Some('\n');
+        self.execution.formatter_column = FormatterColumn::Origin;
+        self.execution.empty_word = false;
+        self.execution.trailing_output = TrailingOutput::None;
+        self.execution.pending_breakable_spaces = 0;
+        self.execution.pending_field_spaces = 0;
     }
 }
 
