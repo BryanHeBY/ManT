@@ -394,6 +394,8 @@ impl InlineBuilder {
             let rows = self.resolve_vertical_space(1);
             self.vertical_space(usize::from(rows));
             self.asserted_vertical_row |= rows > 0;
+            self.execution.completed_vertical_rows =
+                self.execution.completed_vertical_rows.saturating_add(rows);
         }
     }
 

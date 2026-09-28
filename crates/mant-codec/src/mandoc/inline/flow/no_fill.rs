@@ -171,6 +171,9 @@ pub(in crate::mandoc) fn lower_no_fill_fragment_with_formatter(
                 builder.asserted_vertical_row(),
             )
         });
+    // LiteralFlow owns the asserted row for this fragment. Its execution
+    // fact must not be replayed if the formatter later returns to filled IR.
+    formatter.execution.completed_vertical_rows = 0;
     // A generated word can realize a pending \p inside this fragment. The
     // fragment return is not term_newln(): the projected break belongs to the
     // active literal sink even when it is the last node produced here.

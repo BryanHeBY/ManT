@@ -194,6 +194,22 @@ impl InlineBuilder {
         }
         self.flush_zero_advance();
         self.external_head_row_pending = false;
+        if self.execution.completed_vertical_rows > 0
+            && self.execution.formatter_column == FormatterColumn::Advanced
+            && !self
+                .nodes
+                .iter()
+                .rev()
+                .take_while(|node| !matches!(node, Inline::LineBreak))
+                .any(|node| has_non_whitespace_glyph(std::slice::from_ref(node)))
+        {
+            // term_newln() commits a whitespace-only formatter row even
+            // though term_fill() prints no glyphs. When a later empty TEXT
+            // requests another term_vspace(), that committed row must remain
+            // in the completed-row count after formatter_column resets.
+            self.execution.completed_vertical_rows =
+                self.execution.completed_vertical_rows.saturating_add(1);
+        }
         let current_row_has_printable = self
             .nodes
             .iter()
@@ -583,6 +599,7 @@ impl InlineBuilder {
         self.execution.has_printable_content |= incoming_has_printable;
         if incoming_has_glyph {
             self.execution.visible_glyph_epoch = self.execution.visible_glyph_epoch.wrapping_add(1);
+            self.execution.completed_vertical_rows = 0;
         }
         if incoming_has_line_break {
             self.execution.formatter_column =
@@ -669,7 +686,7 @@ impl InlineBuilder {
     /// lifetime.  Only paragraph-local joins and row projections reset; the
     /// source formatter's keep, author, spacing, and vertical-space registers
     /// remain in this same execution state.
-    pub(in crate::mandoc) fn take_paragraph_segment(&mut self) -> (Vec<Inline>, bool) {
+    pub(in crate::mandoc) fn take_paragraph_segment(&mut self) -> (Vec<Inline>, bool, u16) {
         let invisible_formatter_cell = self.has_invisible_formatter_cell();
         // finish_nodes() trims a trailing break because it normally ends an
         // IR paragraph. If another invisible cell is already active after
@@ -679,6 +696,38 @@ impl InlineBuilder {
         let armed = carry_armed_zero_advance && self.execution.zero_advance.take_armed();
         let empty_word_end_break = self.take_unrepresented_word_end_break();
         self.flush_zero_advance();
+        let mut completed_vertical_rows = self.execution.completed_vertical_rows;
+        if completed_vertical_rows > 0 {
+            // term_vspace() has already emitted these rows. Remove only their
+            // trailing inline projection, including a later invisible word
+            // cell; the block owner will carry the completed rows across the
+            // structural split. Ordinary trailing term_newln() stays trimable.
+            // term_fill() can end a row whose only buffered cells are
+            // breakable blanks from a visited whitespace-only TEXT. Those
+            // cells are printable to our inline model, yet still form an
+            // additional physical row after term_vspace().
+            let active_invisible_cell = self.execution.formatter_column
+                == FormatterColumn::Advanced
+                && !self
+                    .nodes
+                    .iter()
+                    .rev()
+                    .take_while(|node| !matches!(node, Inline::LineBreak))
+                    .any(|node| has_non_whitespace_glyph(std::slice::from_ref(node)));
+            completed_vertical_rows =
+                completed_vertical_rows.saturating_add(u16::from(active_invisible_cell));
+            let mut anchors = Vec::new();
+            while self.nodes.last().is_some_and(|node| {
+                matches!(node, Inline::LineBreak)
+                    || !has_non_whitespace_glyph(std::slice::from_ref(node))
+            }) {
+                if let Some(anchor @ Inline::Anchor { .. }) = self.nodes.pop() {
+                    anchors.push(anchor);
+                }
+            }
+            anchors.reverse();
+            self.nodes.extend(anchors);
+        }
         let completed_invisible_row =
             invisible_formatter_cell && matches!(self.nodes.last(), Some(Inline::LineBreak));
         let mut children = self.finish_nodes();
@@ -692,7 +741,7 @@ impl InlineBuilder {
             });
         }
         self.execution.reset_paragraph_segment(armed);
-        (children, empty_word_end_break)
+        (children, empty_word_end_break, completed_vertical_rows)
     }
 
     /// Finish one native formatter line and return a bare `\\z` request only
@@ -740,7 +789,10 @@ impl InlineBuilder {
             last_executed_source_line: self.execution.last_executed_source_line,
         };
         let output = self.finish_nodes();
-        self.execution.reset_paragraph_segment(false);
+        // The output owner ended, but CVS term_word() still sees the same
+        // physical row and word separator after an inset/diag HEAD. Keep its
+        // registers, retiring only offsets into the drained node vector.
+        self.execution.retire_output_owner();
         (output, state, self.execution)
     }
 
@@ -787,6 +839,7 @@ impl InlineBuilder {
         self.execution.has_printable_content |= printable;
         if has_glyph {
             self.execution.visible_glyph_epoch = self.execution.visible_glyph_epoch.wrapping_add(1);
+            self.execution.completed_vertical_rows = 0;
         }
     }
 

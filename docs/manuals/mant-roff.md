@@ -131,6 +131,11 @@ words remain distinct: `\&` clears the debt, and
 `BR` operands call `term_word()` from their macro handler even when empty.
 Whitespace-only formatter words also occupy a native row even if terminal
 `term_fill()` prints no glyph; their IR row is retained when a paragraph ends.
+An empty TEXT's completed `term_vspace()` row stays distinct from a paragraph
+terminator when filled output is split. It adds to a later `PP` distance and
+survives `fi`/`nf`. A later whitespace-only formatter word can occupy one
+additional physical row when the next request closes it; a direct empty `BR`
+operand does not assert an empty TEXT row.
 Native `term_newln()` and `term_flushln()` can close a physical row without
 consuming `TERMP_NONEWLINE`. Accordingly, `\c` survives source empty TEXT,
 line requests, and IR paragraph/literal drains until a formatter word executes.
@@ -143,6 +148,9 @@ If a definition HEAD ends with a completed `\z` glyph, the first generated
 inset/diagnostic fixed space retains that glyph in the term and uses its
 position; the BODY receives only the remaining separator cells. This follows
 `term.c::encode1()` when `TERMP_BACKBEFORE` meets an escaped space.
+Draining the HEAD's IR term does not reset the native word separator or its
+current row. If the generated separator has no cell left, an empty BODY word
+can still consume the no-space setting before the following visible word.
 An inset item with no HEAD child generates no separator word at all, so that
 case does not consume formatter word state.
 

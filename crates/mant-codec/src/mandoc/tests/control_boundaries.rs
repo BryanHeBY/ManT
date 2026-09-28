@@ -48,6 +48,86 @@ fn document_link_targets(document: &mant_ir::Document) -> Vec<mant_ir::LinkTarge
 }
 
 #[test]
+fn inset_head_drain_keeps_native_word_separator_state() {
+    // Exact variants checked with fixed CVS -Tascii/-Tlint. In
+    // mdoc_term.c::termp_it_pre(), the inset BODY executes term_word("\\ ")
+    // even when a pending HEAD glyph consumed that cell. term.c::term_word()
+    // then consumes NOSPACE for an empty BODY word before the visible word.
+    for (middle, expected_body) in [
+        (".No \"\"\n", " BODY"),
+        (".No \\&\n", " BODY"),
+        (".No \\fB\n", " BODY"),
+        ("", "BODY"),
+    ] {
+        let source = format!(
+            ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd review probe\n.Sh DESCRIPTION\n.Bl -inset\n.It \\zX\n{middle}.No BODY\n.El\n"
+        );
+        let document = parse_manual_bytes(
+            std::path::Path::new("inset-word-state.1"),
+            source.as_bytes(),
+        )
+        .unwrap();
+        let Block::DefinitionList { items, .. } = &document.sections[1].blocks[0] else {
+            panic!("missing definition item: {document:#?}");
+        };
+        assert_eq!(inline_text(&items[0].terms[0]), "X", "{middle}: {items:#?}");
+        let Block::Paragraph { children, .. } = &items[0].description[0] else {
+            panic!("missing definition body: {items:#?}");
+        };
+        assert_eq!(inline_text(children), expected_body, "{middle}: {items:#?}");
+    }
+}
+
+#[test]
+fn completed_empty_text_rows_survive_filled_output_drains() {
+    // Exact combinations checked with fixed CVS -Tascii/-Tlint.
+    // man_term.c::print_man_node() sends an empty TEXT to term_vspace();
+    // term.c::term_vspace() emits one row independently of later PP or fi/nf.
+    // pre_alternate() instead sends BR's empty operands through term_word().
+    for (empty, completed_rows) in [
+        (".B \"\"", 1),
+        (".I \"\"", 1),
+        (".B \"\"\n.B \"\"", 2),
+        (".B \"\"\n.B \"\" \"\"", 2),
+        (".B \"\"\n.B \"\" \"\"\n.B \"\" \"\"", 2),
+        (".B \"\"\n.B \"\" \"\"\n.B \"\"", 3),
+        (".B \"\"\n\\&\n.B \"\"", 3),
+        (".B \"\"\n.BR \"\" \"\"", 1),
+        (".B \"\"\n\\&", 2),
+    ] {
+        for boundary in [".PP", ".fi", ".nf"] {
+            let source = format!(
+                ".TH TEST 1 \"2026-09-28\"\n.SH DESCRIPTION\nBEFORE\n{empty}\n{boundary}\nAFTER\n"
+            );
+            let document = parse_manual_bytes(
+                std::path::Path::new("filled-empty-text-rows.1"),
+                source.as_bytes(),
+            )
+            .unwrap();
+            let blocks = &document.sections[0].blocks;
+            assert!(
+                matches!(&blocks[0], Block::Paragraph { children, .. } if inline_text(children) == "BEFORE"),
+                "{empty}, {boundary}: {blocks:#?}"
+            );
+            assert!(
+                matches!(&blocks[1], Block::VerticalSpace { lines, .. } if *lines == completed_rows),
+                "{empty}, {boundary}: {blocks:#?}"
+            );
+            assert!(
+                matches!(&blocks[2], Block::Paragraph { children, .. } | Block::Preformatted { children, .. } if inline_text(children) == "AFTER"),
+                "{empty}, {boundary}: {blocks:#?}"
+            );
+            let expected_paragraph_gap = u16::from(boundary == ".PP");
+            assert_eq!(
+                mant_ir::geometry::block_gap(&blocks[2]),
+                expected_paragraph_gap,
+                "{empty}, {boundary}: {blocks:#?}"
+            );
+        }
+    }
+}
+
+#[test]
 fn crossed_body_close_pops_font_stack_without_restoring_an_old_value() {
     // Exact input checked with fixed CVS -Tascii/-Tlint. term.c's
     // term_fontrepl() changes the active fontq slot, while mdoc_term.c's

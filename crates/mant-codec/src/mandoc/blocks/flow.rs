@@ -439,7 +439,7 @@ impl BlockState {
             return;
         }
         let output_start = self.output.len();
-        let (block, empty_word_end_break) = self
+        let (block, empty_word_end_break, completed_vertical_rows) = self
             .paragraph
             .take(&mut self.formatter, self.indent_columns);
         let mut suppressed_head_row = false;
@@ -494,6 +494,12 @@ impl BlockState {
                 }
                 block => self.output.push(block),
             }
+        }
+        if completed_vertical_rows > 0 {
+            self.output.push(Block::VerticalSpace {
+                lines: completed_vertical_rows,
+                source: None,
+            });
         }
         if empty_word_end_break && !suppressed_head_row {
             // A bare \p can occupy the native tag row without leaving an

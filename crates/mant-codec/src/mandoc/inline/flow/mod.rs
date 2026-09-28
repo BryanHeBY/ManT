@@ -67,6 +67,10 @@ pub(in crate::mandoc) struct InlineExecutionState {
     /// segment. Definition BODY checkpoints consume this source-order fact.
     leading_line_boundary: LeadingLineBoundary,
     pub(in crate::mandoc) vertical_space_debt: u16,
+    // Rows already emitted by an empty TEXT's term_vspace(), still at the
+    // tail of the current IR segment. A structural drain must project these
+    // rows even though ordinary terminal line endings are trim-eligible.
+    completed_vertical_rows: u16,
     pub(in crate::mandoc) keep: KeepState,
     pub(in crate::mandoc) font: FontState,
     pub(in crate::mandoc) macro_set: MacroSet,
@@ -676,6 +680,7 @@ impl InlineExecutionState {
             word_end_break: WordEndBreak::Clear,
             leading_line_boundary: LeadingLineBoundary::None,
             vertical_space_debt: 0,
+            completed_vertical_rows: 0,
             keep: KeepState::new(),
             font: FontState::new(),
             macro_set: MacroSet::None,
@@ -712,9 +717,29 @@ impl InlineExecutionState {
         self.execution_epoch = 0;
         self.definition = None;
         self.last_executed_source_line = None;
+        self.completed_vertical_rows = 0;
         if let Some(author) = &mut self.author_execution {
             // The author mode is a formatter register; this index belongs to
             // the drained IR segment and cannot cross its output boundary.
+            author.field_output_start = 0;
+        }
+    }
+
+    /// Retire only indices into a drained IR owner. The native word, row,
+    /// and separator registers continue across an mdoc HEAD/BODY split.
+    fn retire_output_owner(&mut self) {
+        // These observations were already projected into the detached HEAD.
+        // In particular, an An -split term_newln() cannot become a second
+        // leading break before the BODY's first word.
+        self.leading_line_boundary = LeadingLineBoundary::None;
+        self.completed_vertical_rows = 0;
+        self.pending_line_indent = 0;
+        self.zero_advance_joined = false;
+        self.final_word_join = None;
+        self.execution_epoch = 0;
+        self.definition = None;
+        self.last_executed_source_line = None;
+        if let Some(author) = &mut self.author_execution {
             author.field_output_start = 0;
         }
     }
