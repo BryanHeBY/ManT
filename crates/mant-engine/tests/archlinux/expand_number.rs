@@ -23,7 +23,7 @@ fn separates_multiple_operands_from_one_fa_invocation() {
     assert!(
         declarations
             .iter()
-            .any(|declaration| declaration == "int expand_number(const char *buf, uint64_t *num);")
+            .any(|declaration| declaration == "int\nexpand_number(const char *buf, uint64_t *num);")
     );
 }
 

@@ -367,6 +367,197 @@ fn mdoc_definition_terms_share_only_their_native_pending_row() {
 }
 
 #[test]
+fn man_definition_body_uses_actual_break_and_no_break_requests() {
+    // Both exact inputs were run through the fixed CVS -Tutf8/-Tlint oracle.
+    // man_term.c::pre_TP/pre_IP leave the tag field active; term.c settles
+    // the deferred word-end break at the real row or TERMP_NOBREAK flush.
+    for (name, source, same_row) in [
+        (
+            "tp-pending-row",
+            b".TH PROBE 1 \"September 28, 2026\"\n.SH DESCRIPTION\n.TP\nkey\n\\&\\p\nBODY\n"
+                .as_slice(),
+            false,
+        ),
+        (
+            "ip-no-break",
+            b".TH PROBE 1 \"September 28, 2026\"\n.SH DESCRIPTION\n.IP key\n\\&\\p\n.mc |\nBODY\n"
+                .as_slice(),
+            true,
+        ),
+    ] {
+        let query = mant_loader::load_roff_bytes(source).expect("lower man definition");
+        let rendered = mant_render::render_query_text(&query);
+        let lines = rendered.lines().collect::<Vec<_>>();
+        let key_line = lines
+            .iter()
+            .position(|line| line.trim_start().starts_with("key"))
+            .expect("term row");
+        if same_row {
+            assert!(lines[key_line].contains("BODY"), "{name}: {rendered:?}");
+        } else {
+            assert!(!lines[key_line].contains("BODY"), "{name}: {rendered:?}");
+            assert_eq!(
+                lines.get(key_line + 1).copied().map(str::trim),
+                Some("BODY"),
+                "{name}: {rendered:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn author_split_in_definition_body_uses_the_executed_line_boundary() {
+    // Exact source checked with fixed CVS -Tutf8/-Tlint. In mdoc_term.c,
+    // An's pre-handler calls term_newln() after -split before the first name.
+    let source = b".Dd September 28, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd definition boundary\n.Sh AUTHORS\n.Bl -tag -width Ds\n.It key\n.An -split\n.An Ada\n.An Babbage\n.El\n";
+    let query = mant_loader::load_roff_bytes(source).expect("lower AUTHORS definition");
+    let rendered = mant_render::render_query_text(&query);
+    let lines = rendered.lines().collect::<Vec<_>>();
+    let key = lines
+        .iter()
+        .position(|line| line.trim() == "key")
+        .expect("term row");
+    assert_eq!(
+        lines.get(key + 1).copied().map(str::trim),
+        Some("Ada"),
+        "{rendered:?}"
+    );
+    assert_eq!(
+        lines.get(key + 2).copied().map(str::trim),
+        Some("Babbage"),
+        "{rendered:?}"
+    );
+}
+
+#[test]
+fn nested_definition_content_closes_the_outer_pending_head_row() {
+    // Both exact sources were checked with fixed CVS -Tutf8/-Tlint.
+    // mdoc_term.c::termp_it_pre() executes nested items and bullet markers as
+    // formatter content before the following text/control-only row.
+    let nested_definition = b".Dd September 28, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd nested definition row\n.Sh DESCRIPTION\n.Bl -tag -width outer\n.It outer\n.Bl -tag -width inner\n.It inner\ntext\n.El\n\\&\\p\nafter\n.El\n";
+    let rendered = mant_render::render_query_text(
+        &mant_loader::load_roff_bytes(nested_definition).expect("lower nested definition"),
+    );
+    let lines = rendered.lines().map(str::trim).collect::<Vec<_>>();
+    let inner = lines
+        .iter()
+        .position(|line| *line == "inner  text")
+        .expect("inner definition: {rendered:?}");
+    assert_eq!(lines.get(inner + 1), Some(&""), "{rendered:?}");
+    assert_eq!(lines.get(inner + 2), Some(&"after"), "{rendered:?}");
+
+    let nested_bullet = b".Dd September 28, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd nested bullet row\n.Sh DESCRIPTION\n.Bl -tag -width outer\n.It outer\n.Bl -bullet\n.It\n\\&\\p\ntext\n.El\nafter\n.El\n";
+    let rendered = mant_render::render_query_text(
+        &mant_loader::load_roff_bytes(nested_bullet).expect("lower nested bullet"),
+    );
+    let lines = rendered.lines().map(str::trim).collect::<Vec<_>>();
+    let marker = lines
+        .iter()
+        .position(|line| *line == "•")
+        .expect("bullet marker: {rendered:?}");
+    assert_eq!(lines.get(marker + 1), Some(&"text"), "{rendered:?}");
+}
+
+#[test]
+fn definition_head_row_settles_at_the_first_real_request_boundary() {
+    // Each exact .TP input was checked with fixed CVS -Tutf8/-Tlint.
+    // roff_term.c::roff_term_pre_br/sp() call term_newln() at the request;
+    // term_vspace() adds its own row only after flushing the occupied tag row.
+    for (name, body, blank_rows) in [
+        ("break-before-cell", ".br\n\\&\\p\nBODY", 1),
+        ("space-before-cell", ".sp 1\n\\&\\p\nBODY", 2),
+        ("cell-before-break", "\\&\\p\n.br\nBODY", 0),
+        ("cell-before-space", "\\&\\p\n.sp 1\nBODY", 1),
+    ] {
+        let source =
+            format!(".TH PROBE 1 \"September 28, 2026\"\n.SH DESCRIPTION\n.TP\nkey\n{body}\n");
+        let rendered = mant_render::render_query_text(
+            &mant_loader::load_roff_bytes(source.as_bytes()).expect("lower definition row"),
+        );
+        let lines = rendered.lines().map(str::trim).collect::<Vec<_>>();
+        let key = lines
+            .iter()
+            .position(|line| *line == "key")
+            .expect("key row");
+        let body = lines
+            .iter()
+            .position(|line| *line == "BODY")
+            .expect("body row");
+        assert_eq!(body - key - 1, blank_rows, "{name}: {rendered:?}");
+    }
+
+    // The exact .nf/.fi and .Pp inputs were also run through fixed CVS
+    // -Tutf8/-Tlint. man_term.c::print_man_node() changes the no-fill line
+    // boundary at the request; mdoc_term.c::termp_pp_pre() calls term_vspace().
+    for (name, body, blank_rows) in [
+        ("cell-before-nofill", "\\&\\p\n.nf\nBODY\n.fi", 0),
+        ("nofill-before-cell", ".nf\n\\&\\p\nBODY\n.fi", 1),
+    ] {
+        let source =
+            format!(".TH PROBE 1 \"September 28, 2026\"\n.SH DESCRIPTION\n.TP\nkey\n{body}\n");
+        let rendered = mant_render::render_query_text(
+            &mant_loader::load_roff_bytes(source.as_bytes()).expect("lower no-fill definition"),
+        );
+        let lines = rendered.lines().map(str::trim).collect::<Vec<_>>();
+        let key = lines
+            .iter()
+            .position(|line| *line == "key")
+            .expect("key row");
+        let body = lines
+            .iter()
+            .position(|line| *line == "BODY")
+            .expect("body row");
+        assert_eq!(body - key - 1, blank_rows, "{name}: {rendered:?}");
+    }
+    for (name, body, blank_rows) in [
+        ("cell-before-paragraph", "\\&\\p\n.Pp\nBODY", 1),
+        ("paragraph-before-cell", ".Pp\n\\&\\p\nBODY", 2),
+    ] {
+        let source = format!(
+            ".Dd September 28, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd definition row\n.Sh DESCRIPTION\n.Bl -tag -width key\n.It key\n{body}\n.El\n"
+        );
+        let rendered = mant_render::render_query_text(
+            &mant_loader::load_roff_bytes(source.as_bytes()).expect("lower paragraph definition"),
+        );
+        let lines = rendered.lines().map(str::trim).collect::<Vec<_>>();
+        let key = lines
+            .iter()
+            .position(|line| *line == "key")
+            .expect("key row");
+        let body = lines
+            .iter()
+            .position(|line| *line == "BODY")
+            .expect("body row");
+        assert_eq!(body - key - 1, blank_rows, "{name}: {rendered:?}");
+    }
+}
+
+#[test]
+fn author_pre_break_settles_an_invisible_definition_head_row() {
+    // All exact sources were checked with fixed CVS -Tutf8/-Tlint.
+    // mdoc_term.c::termp_an_pre() calls term_newln() before Ada when split
+    // mode is active, closing any invisible formatter cell on the tag row.
+    for (name, body) in [
+        ("cell-before-split", "\\&\n.An -split\n.An Ada"),
+        ("cell-after-split", ".An -split\n\\&\n.An Ada"),
+        ("word-end-before-split", "\\&\\p\n.An -split\n.An Ada"),
+    ] {
+        let source = format!(
+            ".Dd September 28, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd author row\n.Sh AUTHORS\n.Bl -tag -width 20n\n.It key\n{body}\n.El\n"
+        );
+        let rendered = mant_render::render_query_text(
+            &mant_loader::load_roff_bytes(source.as_bytes()).expect("lower author definition"),
+        );
+        let lines = rendered.lines().map(str::trim).collect::<Vec<_>>();
+        let key = lines
+            .iter()
+            .position(|line| *line == "key")
+            .expect("key row");
+        assert_eq!(lines.get(key + 1), Some(&"Ada"), "{name}: {rendered:?}");
+    }
+}
+
+#[test]
 fn no_fill_control_only_cells_survive_mode_and_spacing_boundaries() {
     for (label, request, expected) in [
         ("fill", ".fi", "DESCRIPTION\n\nAFTER"),

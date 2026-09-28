@@ -318,7 +318,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             self.settle_no_fill_inline();
             self.state.flush_preformatted();
             let lines = self.state.resolve_vertical_space(1);
-            self.state.flush_paragraph_for_vertical_request();
+            self.state.flush_paragraph_for_line_request();
             self.state.output.push(Block::VerticalSpace {
                 lines,
                 source: source_span(node),
@@ -402,7 +402,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         if node.macro_name.as_deref() == Some("Pp") {
             self.state.flush_preformatted();
             let lines = self.state.resolve_vertical_space(1);
-            self.state.flush_paragraph_for_vertical_request();
+            self.state.flush_paragraph_for_line_request();
             self.state
                 .queue_targets(structural_targets, source_span(node));
             // CVS termp_pp_pre() executes term_vspace() even for the first
@@ -488,6 +488,11 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
 
     fn prepare_node_execution(&mut self, node: &Node) {
         let formatter_control = super::controls::formatter_control(node.macro_name.as_deref());
+        if formatter_control.is_some_and(|control| control.boundary == FormatterBoundary::Line) {
+            // This is the actual request dispatch, after HEAD execution and
+            // before BODY output. The definition checkpoint records it once.
+            self.state.formatter.note_definition_boundary();
+        }
         let single_line_literal =
             self.display_fill == Some(DisplayFillMode::SingleLine) && self.state.formatter.no_fill;
         match no_fill_boundary(node, single_line_literal) {
@@ -495,7 +500,14 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             FormatterBoundary::Line => {
                 self.state.formatter.clear_trailing_literal_row();
                 self.settle_no_fill_inline();
-                if formatter_control.is_some_and(|control| !control.specialized) {
+                if formatter_control.is_some_and(|control| {
+                    !control.specialized
+                        || control.settle_before_handler && !self.state.formatter.no_fill
+                }) {
+                    // The request's native term_newln() precedes its other
+                    // effects. Close the shared execution row here even when
+                    // a later handler owns payload or geometry (notably ce,
+                    // rj, and in); otherwise a pending \z reaches BODY text.
                     self.state.hard_break();
                 }
             }

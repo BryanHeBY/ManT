@@ -423,6 +423,8 @@ fn preserves_mdoc_name_and_function_punctuation_by_context() {
 
 #[test]
 fn preserves_mdoc_synopsis_declaration_units() {
+    // Exact source checked with fixed CVS -Tutf8/-Tlint. Its
+    // mdoc_term.c::synopsis_pre() uses term_newln() between Ft and Fn/Fo.
     let document = parse_manual_bytes(
         std::path::Path::new("synopsis-declarations.3"),
         b".Dd August 19, 2026\n.Dt SYNOPSIS-DECLARATIONS 3\n.Os\n\
@@ -447,8 +449,8 @@ fn preserves_mdoc_synopsis_declaration_units() {
         rendered,
         [
             "#include <synprobe.h>",
-            "const struct stat * synprobe_first(struct thing *a);",
-            "void synprobe_second(struct thing *a, int n);",
+            "const struct stat *\nsynprobe_first(struct thing *a);",
+            "void\nsynprobe_second(struct thing *a, int n);",
             "synprobe_third(int n);",
         ]
     );
@@ -460,4 +462,30 @@ fn preserves_mdoc_synopsis_declaration_units() {
             .count(),
         3
     );
+}
+
+#[test]
+fn definition_body_executes_synopsis_pre_boundary_once() {
+    // Exact source checked with fixed CVS -Tutf8/-Tlint. Ft runs on the
+    // term row; mdoc_term.c::synopsis_pre() calls term_newln() before Fn.
+    let source = b".Dd September 28, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd definition boundary\n.Sh SYNOPSIS\n.Bl -tag -width Ds\n.It key\n.Ft int\n.Fn call\n.El\n";
+    let document = parse_manual_bytes(std::path::Path::new("synopsis-definition.1"), source)
+        .expect("lower synopsis definition once");
+    let [Block::DefinitionList { items, .. }] = document.sections[1].blocks.as_slice() else {
+        panic!(
+            "expected one definition list: {:#?}",
+            document.sections[1].blocks
+        );
+    };
+    let [item] = items.as_slice() else {
+        panic!("expected one definition item: {items:#?}");
+    };
+    assert!(item.layout.inline_term, "{item:#?}");
+    let [Block::Paragraph { children, .. }] = item.description.as_slice() else {
+        panic!(
+            "expected one declaration paragraph: {:#?}",
+            item.description
+        );
+    };
+    assert_eq!(inline_text(children), "int\ncall();");
 }

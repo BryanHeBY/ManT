@@ -146,6 +146,65 @@ fn pending_tag_row_distinguishes_invisible_and_printable_word_end_breaks() {
 }
 
 #[test]
+fn buffered_zero_advance_glyph_precedes_definition_line_requests() {
+    // Each exact input was checked with fixed CVS -Tutf8. man_term.c::pre_TP
+    // leaves the tag row active; term.c::term_word buffers X before
+    // roff_term.c::roff_term_pre_br/sp closes that same row.
+    for head in ["key", ".B x"] {
+        for (request, blank_rows) in [(".br", 0), (".sp 0", 0), (".sp 1", 1)] {
+            let source = format!(".TH PROBE 1\n.SH TEST\n.TP\n{head}\n\\zX\\p\n{request}\nBODY\n");
+            let rendered = render_query_text(&load_roff_bytes(source.as_bytes()).unwrap());
+            let lines = rendered.lines().map(str::trim).collect::<Vec<_>>();
+            let tag = if head == "key" { "key" } else { "x" };
+            let tag_row = lines
+                .iter()
+                .position(|line| line.starts_with(tag))
+                .expect("tag row");
+            assert!(lines[tag_row].contains('X'), "{source}\n{rendered}");
+            let body_row = lines
+                .iter()
+                .position(|line| *line == "BODY")
+                .expect("BODY row");
+            assert_eq!(body_row - tag_row - 1, blank_rows, "{source}\n{rendered}");
+        }
+    }
+}
+
+#[test]
+fn empty_zero_advance_request_ends_with_its_native_tag_row() {
+    // Exact inputs checked with fixed CVS -Tutf8. term_flushln() clears
+    // TERMP_BACKAFTER/BACKBEFORE when the pending tag row ends. In pinned
+    // CVS, roff_term_pre_ce() calls pre_br(), and man_term.c::pre_in() also
+    // calls term_newln() before executing its own effect.
+    for request in [
+        ".br", ".sp 0", ".nf", ".fi", ".ti 0", ".ce 1", ".rj 1", ".in +2n",
+    ] {
+        for zero in ["\\z", "\\z "] {
+            let source = format!(".TH PROBE 1\n.SH TEST\n.TP\nkey\n{zero}\n{request}\nBODY\n.fi\n");
+            let rendered = render_query_text(&load_roff_bytes(source.as_bytes()).unwrap());
+            let lines = rendered.lines().map(str::trim).collect::<Vec<_>>();
+            let tag_row = lines
+                .iter()
+                .position(|line| *line == "key")
+                .expect("tag row");
+            assert_eq!(
+                lines.get(tag_row + 1),
+                Some(&"BODY"),
+                "{source}\n{rendered}"
+            );
+        }
+    }
+    let source = b".Dd September 28, 2026\n.Dt PROBE 1\n.Os\n.Sh AUTHORS\n.Bl -tag -width key\n.It key\n\\z\n.An -split\n.An Ada\n.El\n";
+    let rendered = render_query_text(&load_roff_bytes(source).unwrap());
+    let lines = rendered.lines().map(str::trim).collect::<Vec<_>>();
+    let tag_row = lines
+        .iter()
+        .position(|line| *line == "key")
+        .expect("tag row");
+    assert_eq!(lines.get(tag_row + 1), Some(&"Ada"), "{rendered}");
+}
+
+#[test]
 fn pending_head_effects_recurse_through_state_only_wrappers() {
     for wrapper in [
         "B", "I", "SB", "SM", "R", "BI", "BR", "IB", "IR", "RB", "RI",

@@ -127,6 +127,10 @@ impl<T> ZeroAdvanceMachine<T> {
         self.pending.is_some()
     }
 
+    pub(super) const fn pending_ref(&self) -> Option<&T> {
+        self.pending.as_ref()
+    }
+
     pub(super) fn cancel_armed(&mut self) -> bool {
         std::mem::take(&mut self.armed)
     }

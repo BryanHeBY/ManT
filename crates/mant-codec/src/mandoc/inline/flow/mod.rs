@@ -16,6 +16,15 @@ use output::trim_trailing_breakable_spaces;
 pub(in crate::mandoc) struct InlineBuilder {
     nodes: Vec<Inline>,
     pub(in crate::mandoc) execution: InlineExecutionState,
+    /// A detached definition HEAD occupies the native formatter row even
+    /// though its term lives in a different IR output container.
+    external_head_row_pending: bool,
+}
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum LeadingLineBoundary {
+    None,
+    BeforeVisibleWord,
 }
 
 /// Text execution registers have a different lifetime from an IR segment.
@@ -36,6 +45,9 @@ pub(in crate::mandoc) struct InlineExecutionState {
     pending_field_spaces: usize,
     pending_line_indent: usize,
     word_end_break: WordEndBreak,
+    /// An executed line request before the first visible word of this IR
+    /// segment. Definition BODY checkpoints consume this source-order fact.
+    leading_line_boundary: LeadingLineBoundary,
     pub(in crate::mandoc) vertical_space_debt: u16,
     pub(in crate::mandoc) keep: KeepState,
     pub(in crate::mandoc) font: FontState,
@@ -533,6 +545,7 @@ impl InlineBuilder {
         Self {
             nodes: Vec::new(),
             execution: InlineExecutionState::with_spacing(spacing_enabled),
+            external_head_row_pending: false,
         }
     }
 
@@ -540,7 +553,15 @@ impl InlineBuilder {
         nodes: Vec<Inline>,
         execution: InlineExecutionState,
     ) -> Self {
-        Self { nodes, execution }
+        Self {
+            nodes,
+            execution,
+            external_head_row_pending: false,
+        }
+    }
+
+    pub(in crate::mandoc) fn inherit_external_head_row(&mut self, pending: bool) {
+        self.external_head_row_pending = pending;
     }
 
     pub(in crate::mandoc) fn into_parts(self) -> (Vec<Inline>, InlineExecutionState) {
@@ -562,6 +583,7 @@ impl InlineExecutionState {
             pending_field_spaces: 0,
             pending_line_indent: 0,
             word_end_break: WordEndBreak::Clear,
+            leading_line_boundary: LeadingLineBoundary::None,
             vertical_space_debt: 0,
             keep: KeepState::new(),
             font: FontState::new(),
@@ -588,6 +610,7 @@ impl InlineExecutionState {
         self.pending_field_spaces = 0;
         self.pending_line_indent = 0;
         self.word_end_break = WordEndBreak::Clear;
+        self.leading_line_boundary = LeadingLineBoundary::None;
         self.zero_advance = ZeroAdvanceState::new();
         self.zero_advance.inherit_armed(armed_zero_advance);
         self.zero_advance_joined = false;
@@ -615,6 +638,23 @@ impl InlineExecutionState {
         self.formatter_column == FormatterColumn::Advanced
             || self.zero_advance.has_buffered_glyph()
             || self.word_end_break == WordEndBreak::Pending
+    }
+
+    pub(in crate::mandoc) fn has_executed_visible_content(&self) -> bool {
+        self.has_printable_content || self.zero_advance.has_printable_pending_glyph()
+    }
+
+    pub(in crate::mandoc) fn has_printable_pending_zero_advance_glyph(&self) -> bool {
+        self.zero_advance.has_printable_pending_glyph()
+    }
+
+    pub(in crate::mandoc) fn discard_zero_advance_at_row_end(&mut self) {
+        self.zero_advance.discard_at_row_end();
+    }
+
+    pub(in crate::mandoc) fn take_leading_line_boundary(&mut self) -> bool {
+        std::mem::replace(&mut self.leading_line_boundary, LeadingLineBoundary::None)
+            == LeadingLineBoundary::BeforeVisibleWord
     }
 
     pub(in crate::mandoc) fn take_zero_advance_armed(&mut self) -> bool {

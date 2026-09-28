@@ -83,14 +83,6 @@ pub(super) fn transparent_synopsis_predecessor(node: &Node) -> bool {
         )
 }
 
-/// Whether this syntax node has begun the visible body stream.  `In`, `Fn`,
-/// and `Fo` generate punctuation even when their authored operands are empty;
-/// that output is part of their CVS terminal handlers, not visible AST text.
-pub(super) fn node_emits_visible_output(node: &Node, default_name: Option<&str>) -> bool {
-    matches!(node.macro_name.as_deref(), Some("In" | "Fn" | "Fo"))
-        || crate::mandoc::inline::node_emits_visible_output(node, default_name)
-}
-
 /// Mirror CVS `mdoc_term.c::synopsis_pre()` without guessing from rendered
 /// text.  The caller decides whether the native newline is already represented
 /// by its paragraph boundary; only vertical space needs an additional IR row.
@@ -207,9 +199,10 @@ impl super::BlockLowerer<'_, '_> {
     /// intentionally richer than `ManT`'s IR, but the declaration boundary is
     /// semantic: a following synopsis macro applies its native pre-boundary,
     /// while only `Fd`, `Fn`, and `Fo` end their declaration afterwards.
-    /// `Ft` plus an immediately following function macro remain one useful IR
-    /// paragraph; macros without a native post break can share their row with
-    /// ordinary following body text.
+    /// `Ft` and the following function declaration share a paragraph but
+    /// retain the native hard row boundary between return type and function.
+    /// Macros without a native post break can share their row with ordinary
+    /// following body text.
     pub(super) fn push_mdoc_synopsis_declaration(
         &mut self,
         node: &Node,
@@ -224,13 +217,21 @@ impl super::BlockLowerer<'_, '_> {
                 SynopsisToken::from_node(node),
             );
             if boundary == SynopsisBoundary::VerticalSpace {
-                self.state.flush_paragraph();
+                self.state.formatter.note_definition_boundary();
+                self.state.flush_paragraph_for_line_request();
                 self.state.output.push(Block::VerticalSpace {
                     lines: 1,
                     source: source_span(node),
                 });
             } else {
                 newline_boundary = true;
+                // synopsis_pre() executes term_newln() even if the detached
+                // BODY has no local cell: the native definition HEAD may
+                // still be buffered on that row.
+                self.state.formatter.note_definition_boundary();
+                if !self.state.has_formatter_cell() {
+                    self.state.formatter.settle_definition_head_rows();
+                }
             }
         }
 
@@ -238,10 +239,8 @@ impl super::BlockLowerer<'_, '_> {
             return false;
         };
 
-        // A wholly invisible leading prefix is accounted for by the pending
-        // definition-head execution pass.  Once visible body output exists,
-        // preserve CVS vertical spacing at the source position instead of
-        // moving it ahead of that output.
+        // The real BODY walk owns its leading boundary. Once a visible word
+        // exists, keep each CVS synopsis break at that source position.
         match role {
             SynopsisDeclarationRole::ReturnType | SynopsisDeclarationRole::NoPostBreak => {
                 if newline_boundary && self.state.has_formatter_cell() {
@@ -250,12 +249,16 @@ impl super::BlockLowerer<'_, '_> {
                 self.push_inline_node(node, None);
             }
             SynopsisDeclarationRole::Function => {
-                if newline_boundary
-                    && !previous
+                if newline_boundary && self.state.has_formatter_cell() {
+                    if previous
                         .is_some_and(|node| SynopsisToken::from_node(node) == SynopsisToken::Ft)
-                    && self.state.has_formatter_cell()
-                {
-                    self.state.flush_paragraph();
+                    {
+                        // CVS synopsis_pre() calls term_newln() for Ft→Fn/Fo.
+                        // This is one declaration paragraph with two rows.
+                        self.state.hard_break();
+                    } else {
+                        self.state.flush_paragraph();
+                    }
                 }
                 self.push_inline_node(node, None);
                 self.state.flush_paragraph();

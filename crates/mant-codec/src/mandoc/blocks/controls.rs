@@ -36,7 +36,7 @@ impl super::BlockLowerer<'_, '_> {
         let lines = self
             .state
             .resolve_vertical_space(vertical_space_delta(node));
-        self.state.flush_paragraph_for_vertical_request();
+        self.state.flush_paragraph_for_line_request();
         self.state.consume_hanging_first_line();
         if space {
             self.state.output.push(Block::VerticalSpace {

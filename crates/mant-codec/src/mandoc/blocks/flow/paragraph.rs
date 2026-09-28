@@ -33,6 +33,32 @@ impl ParagraphFlow {
         self.nodes.is_empty()
     }
 
+    /// The detached definition HEAD already represents its pending native
+    /// row. Drop that row at the moment a real BODY break closes it, while
+    /// retaining target anchors that identify the following visible word.
+    pub(super) fn consume_invisible_head_row(&mut self) -> bool {
+        let Some(break_index) = self
+            .nodes
+            .iter()
+            .position(|node| matches!(node, Inline::LineBreak))
+        else {
+            return false;
+        };
+        if !mant_ir::inline_plain_text(&self.nodes[..break_index])
+            .chars()
+            .all(char::is_whitespace)
+        {
+            return false;
+        }
+        let anchors = self
+            .nodes
+            .drain(..=break_index)
+            .filter(|node| matches!(node, Inline::Anchor { .. }))
+            .collect::<Vec<_>>();
+        self.nodes.splice(0..0, anchors);
+        true
+    }
+
     pub(super) fn hard_break(&mut self, formatter: &mut FormatterState) {
         self.with_inline_builder(formatter, InlineBuilder::hard_break);
     }

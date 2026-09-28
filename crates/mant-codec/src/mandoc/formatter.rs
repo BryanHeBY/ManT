@@ -44,6 +44,22 @@ pub(super) struct FormatterState {
     /// formatter's active row. The parent output sink adopts that row before
     /// writing the next source or generated word.
     row_handoff: RowHandoff,
+    /// Definition BODY checkpoints observe the one real source walk. Nested
+    /// items push their own checkpoint without replaying their parent body.
+    definition_bodies: Vec<DefinitionBodyObservation>,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(super) struct DefinitionBodyObservation {
+    before_visible: bool,
+    pending_head_row: bool,
+    placement_breaks: bool,
+}
+
+impl DefinitionBodyObservation {
+    pub(super) const fn placement_breaks(self) -> bool {
+        self.placement_breaks
+    }
 }
 
 impl Clone for FormatterState {
@@ -59,6 +75,7 @@ impl Clone for FormatterState {
             no_fill: self.no_fill,
             no_fill_inline: self.no_fill_inline.clone(),
             row_handoff: self.row_handoff,
+            definition_bodies: self.definition_bodies.clone(),
         }
     }
 }
@@ -71,6 +88,7 @@ impl Default for FormatterState {
             no_fill: false,
             no_fill_inline: NoFillInlineState::new(),
             row_handoff: RowHandoff::None,
+            definition_bodies: Vec::new(),
         }
     }
 }
@@ -90,6 +108,78 @@ impl std::ops::DerefMut for FormatterState {
 }
 
 impl FormatterState {
+    pub(super) fn begin_definition_body(&mut self, shares_pending_head_row: bool) {
+        self.definition_bodies.push(DefinitionBodyObservation {
+            before_visible: true,
+            pending_head_row: shares_pending_head_row,
+            placement_breaks: false,
+        });
+    }
+
+    pub(super) fn finish_definition_body(&mut self) -> DefinitionBodyObservation {
+        self.definition_bodies
+            .pop()
+            .expect("definition body checkpoint must close after its source walk")
+    }
+
+    pub(super) fn definition_before_visible(&self) -> bool {
+        self.definition_bodies
+            .last()
+            .is_some_and(|body| body.before_visible)
+    }
+
+    pub(super) fn note_definition_boundary(&mut self) {
+        for body in &mut self.definition_bodies {
+            if body.before_visible {
+                body.placement_breaks = true;
+            }
+        }
+    }
+
+    pub(super) fn note_definition_visible(&mut self) {
+        // A nested list or definition is also visible content in every
+        // enclosing BODY. Do not let an outer pending head row consume a
+        // later control-only row after the nested content has appeared.
+        for body in &mut self.definition_bodies {
+            body.before_visible = false;
+            body.pending_head_row = false;
+        }
+    }
+
+    pub(super) fn consume_definition_head_row(&mut self) -> bool {
+        let Some(body) = self.definition_bodies.last_mut() else {
+            return false;
+        };
+        let pending = body.before_visible && body.pending_head_row;
+        if pending {
+            body.pending_head_row = false;
+        }
+        pending
+    }
+
+    pub(super) fn settle_definition_head_rows(&mut self) {
+        // CVS term_newln() closes the current tag row even when that request
+        // had no BODY cell to project into IR. A later invisible word starts
+        // its own physical row and must not be consumed as the tag row.
+        if self
+            .definition_bodies
+            .iter()
+            .any(|body| body.pending_head_row)
+            && !self.execution.has_printable_pending_zero_advance_glyph()
+        {
+            self.execution.discard_zero_advance_at_row_end();
+        }
+        for body in &mut self.definition_bodies {
+            body.pending_head_row = false;
+        }
+    }
+
+    pub(super) fn definition_head_row_pending(&self) -> bool {
+        self.definition_bodies
+            .last()
+            .is_some_and(|body| body.before_visible && body.pending_head_row)
+    }
+
     pub(super) fn with_output_builder<R>(
         &mut self,
         nodes: &mut Vec<mant_ir::Inline>,
@@ -101,6 +191,7 @@ impl FormatterState {
             .expect("only one builder can borrow formatter execution");
         std::mem::swap(&mut active, &mut self.execution);
         let mut builder = InlineBuilder::from_parts(std::mem::take(nodes), active);
+        builder.inherit_external_head_row(self.definition_head_row_pending());
         let result = operation(&mut builder);
         let (output, mut returned) = builder.into_parts();
         *nodes = output;
@@ -192,23 +283,16 @@ impl FormatterState {
         self.execution.take_zero_advance_armed();
     }
 
-    pub(super) fn clear_zero_advance(&mut self) {
-        self.execution.take_zero_advance_armed();
+    /// Execute a generated formatter word that is also visible in IR.
+    /// Unlike a control-only tbl word, a list marker ends every enclosing
+    /// definition BODY's pending head-row prefix (`mdoc_term.c::termp_it_pre`).
+    pub(super) fn execute_visible_generated_word(&mut self) {
+        self.execute_word();
+        self.note_definition_visible();
     }
 
-    /// Execute one mdoc `.An` mode or name in source order.
-    ///
-    /// Returns whether the name starts a new formatter line.  The first
-    /// ordinary name in AUTHORS enables splitting unless `-nosplit` is active.
-    pub(super) fn execute_author(
-        &mut self,
-        mode: Option<AuthorMode>,
-        authors_section: bool,
-    ) -> bool {
-        let mut flow = self.author_flow();
-        let breaks = flow.execute(mode, authors_section);
-        self.execution.set_author_flow(flow);
-        breaks
+    pub(super) fn clear_zero_advance(&mut self) {
+        self.execution.take_zero_advance_armed();
     }
 
     pub(super) fn author_flow(&self) -> AuthorFlow {

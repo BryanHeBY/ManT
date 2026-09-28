@@ -27,15 +27,15 @@ fn keeps_include_and_function_declarations_independently_addressable() {
     assert_eq!(paragraphs[0], "#include <archive_entry.h>");
     assert_eq!(
         paragraphs[1],
-        "const struct stat * archive_entry_stat(struct archive_entry *a);"
+        "const struct stat *\narchive_entry_stat(struct archive_entry *a);"
     );
     assert_eq!(
         paragraphs[2],
-        "void archive_entry_copy_stat(struct archive_entry *a, const struct stat *sb);"
+        "void\narchive_entry_copy_stat(struct archive_entry *a, const struct stat *sb);"
     );
     assert_eq!(
         paragraphs.last().map(String::as_str),
-        Some("void archive_entry_set_rdevminor(struct archive_entry *a, dev_t minor);")
+        Some("void\narchive_entry_set_rdevminor(struct archive_entry *a, dev_t minor);")
     );
     assert!(
         paragraphs

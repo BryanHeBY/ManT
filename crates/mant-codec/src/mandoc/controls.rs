@@ -37,29 +37,34 @@ pub(super) struct FormatterControl {
     /// mode changes. Generic consumers must execute only non-specialized
     /// boundaries, avoiding a second flush around those handlers.
     pub(super) specialized: bool,
+    /// This request calls `term_newln()` before its other effects, and its
+    /// specialized Rust handler does not settle the shared execution row.
+    pub(super) settle_before_handler: bool,
 }
 
 /// Classify formatter control requests using the pinned CVS `roff_term_pre()`
 /// contract. Device geometry is intentionally omitted, but its execution
 /// boundary remains observable through pending `\z`, `\c`, and `\p` state.
 pub(super) fn formatter_control(name: Option<&str>) -> Option<FormatterControl> {
-    let (boundary, specialized) = match name? {
+    let (boundary, specialized, settle_before_handler) = match name? {
         // `mc` uses TERMP_NOBREAK around term_flushln(); `ti` calls the
         // ordinary break handler before installing its temporary indent.
-        "mc" => (FormatterBoundary::NoBreak, false),
-        "ti" => (FormatterBoundary::Line, false),
+        "mc" => (FormatterBoundary::NoBreak, false, false),
+        "ti" => (FormatterBoundary::Line, false, true),
+        // roff_term_pre_ce() calls pre_br() before centering/right-justifying;
+        // man_term.c::pre_in() calls term_newln() before changing its offset.
+        "ce" | "rj" | "in" => (FormatterBoundary::Line, true, true),
         // These requests own additional behavior in block/display lowering.
-        "br" | "ce" | "rj" | "fi" | "nf" | "EX" | "EE" | "sp" | "in" | "Pp" => {
-            (FormatterBoundary::Line, true)
-        }
+        "br" | "fi" | "nf" | "EX" | "EE" | "sp" | "Pp" => (FormatterBoundary::Line, true, false),
         // State-only or device/page presentation controls do not flush.
         "ft" | "PD" | "Sm" | "Tg" | "ad" | "na" | "hy" | "nh" | "ne" | "nr" | "ta" | "DT"
-        | "ll" | "po" => (FormatterBoundary::None, true),
+        | "ll" | "po" => (FormatterBoundary::None, true, false),
         _ => return None,
     };
     Some(FormatterControl {
         boundary,
         specialized,
+        settle_before_handler,
     })
 }
 

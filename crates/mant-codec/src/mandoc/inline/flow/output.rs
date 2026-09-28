@@ -177,13 +177,23 @@ impl InlineBuilder {
     /// Preserve a formatter-requested line boundary without creating empty
     /// leading, repeated, or trailing rows around the paragraph.
     pub(in crate::mandoc) fn hard_break(&mut self) {
+        if !self.execution.has_printable_content {
+            self.execution.leading_line_boundary = super::LeadingLineBoundary::BeforeVisibleWord;
+        }
         // term_newln() flushes only an occupied terminal cell. A completed
         // `\zX` glyph and a buffered `\p` both advanced the native buffer;
         // a bare armed `\z` did not and remains ordered before the next word.
         if !self.has_formatter_cell() {
+            if self.external_head_row_pending {
+                // term_newln() still flushes the detached native tag row.
+                // term_flushln() clears a bare \\z before the next BODY word.
+                self.execution.zero_advance.discard_at_row_end();
+                self.external_head_row_pending = false;
+            }
             return;
         }
         self.flush_zero_advance();
+        self.external_head_row_pending = false;
         let current_row_has_printable = self
             .nodes
             .iter()
@@ -644,11 +654,20 @@ impl InlineBuilder {
     /// remain in this same execution state.
     pub(in crate::mandoc) fn take_paragraph_segment(&mut self) -> (Vec<Inline>, bool) {
         let invisible_formatter_cell = self.has_invisible_formatter_cell();
+        // finish_nodes() trims a trailing break because it normally ends an
+        // IR paragraph. If another invisible cell is already active after
+        // that break, the break closed a real earlier row (term_newln()) and
+        // must remain between the two cells.
         let carry_armed_zero_advance = !self.has_formatter_cell();
         let armed = carry_armed_zero_advance && self.execution.zero_advance.take_armed();
         let empty_word_end_break = self.take_unrepresented_word_end_break();
         self.flush_zero_advance();
+        let completed_invisible_row =
+            invisible_formatter_cell && matches!(self.nodes.last(), Some(Inline::LineBreak));
         let mut children = self.finish_nodes();
+        if completed_invisible_row {
+            children.push(Inline::LineBreak);
+        }
         if invisible_formatter_cell && !empty_word_end_break && !has_printable_character(&children)
         {
             children.push(Inline::Text {

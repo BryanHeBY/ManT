@@ -23,14 +23,23 @@ impl DefinitionGeometry {
         u16::try_from(self.body.position_columns().max(0)).unwrap_or(u16::MAX)
     }
 
-    pub(in crate::mandoc) fn resolve(
+    pub(in crate::mandoc) fn body_origin(
         self,
         context: &LoweringContext<'_>,
         node: &Node,
         origin: SourceIndent,
+    ) -> SourceIndent {
+        context
+            .offset_indent(node, origin, self.body)
+            .content_origin()
+    }
+
+    pub(in crate::mandoc) fn layout(
+        self,
+        origin: SourceIndent,
+        body_origin: SourceIndent,
         terms: &[Vec<Inline>],
-    ) -> (DefinitionLayout, SourceIndent) {
-        let body_origin = context.offset_indent(node, origin, self.body);
+    ) -> DefinitionLayout {
         let body_indent_columns = body_origin.offset_from(origin);
         let inline_term = match self.placement {
             TermPlacement::Fit => mant_ir::terms_fit_inline(
@@ -41,14 +50,11 @@ impl DefinitionGeometry {
             TermPlacement::RunIn => true,
             TermPlacement::Stacked => false,
         };
-        (
-            DefinitionLayout {
-                inline_term,
-                body_indent_columns,
-                min_term_gap_columns: self.gap,
-                spacing_before_lines: None,
-            },
-            body_origin.content_origin(),
-        )
+        DefinitionLayout {
+            inline_term,
+            body_indent_columns,
+            min_term_gap_columns: self.gap,
+            spacing_before_lines: None,
+        }
     }
 }

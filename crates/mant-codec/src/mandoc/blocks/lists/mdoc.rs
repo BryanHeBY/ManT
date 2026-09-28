@@ -147,7 +147,7 @@ fn lower_mdoc_plain_list(
                     formatter,
                 );
                 if kind != ListKind::Plain {
-                    formatter.execute_word();
+                    formatter.execute_visible_generated_word();
                 }
                 context.lower_inline_with_spacing(
                     first_part_children(item.node, NodeKind::Head),

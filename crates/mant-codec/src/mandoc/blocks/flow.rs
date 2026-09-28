@@ -48,12 +48,16 @@ impl BlockState {
         // their pending row (including a continued word), not adding a gap.
         if self.hanging_origin.is_some() {
             self.flush_preformatted();
-            self.flush_paragraph();
+            self.flush_paragraph_for_line_request();
             self.consume_hanging_first_line();
         } else {
             self.literal.end_line();
-            self.flush_paragraph();
+            self.flush_paragraph_for_line_request();
         }
+        // .nf/.fi have an authored source position and close the current
+        // terminal row. The next no-fill word cannot still consume a pending
+        // definition HEAD row (man_term.c::print_man_node, NODE_NOFILL).
+        self.formatter.settle_definition_head_rows();
     }
 
     /// A mdoc container's `NODE_LINE` is executed before its HEAD children.
@@ -142,6 +146,24 @@ impl BlockState {
             ordinary_text,
             append,
         );
+        if self.formatter.definition_before_visible()
+            && self.formatter.execution.take_leading_line_boundary()
+        {
+            self.formatter.note_definition_boundary();
+            if self.formatter.definition_head_row_pending()
+                && self.paragraph.consume_invisible_head_row()
+            {
+                self.formatter.consume_definition_head_row();
+            }
+            // Inline macro pre-handlers, such as An in AUTHORS, execute
+            // term_newln() in the same source stream as block requests.
+            self.formatter.settle_definition_head_rows();
+        }
+        if self.formatter.definition_before_visible()
+            && self.formatter.execution.has_executed_visible_content()
+        {
+            self.formatter.note_definition_visible();
+        }
     }
 
     pub(super) fn paragraph_is_empty(&self) -> bool {
@@ -149,7 +171,14 @@ impl BlockState {
     }
 
     pub(super) fn hard_break(&mut self) {
+        self.formatter.note_definition_boundary();
         self.paragraph.hard_break(&mut self.formatter);
+        if self.formatter.definition_head_row_pending()
+            && self.paragraph.consume_invisible_head_row()
+        {
+            self.formatter.consume_definition_head_row();
+        }
+        self.formatter.settle_definition_head_rows();
     }
 
     pub(super) fn tighten_next_boundary(&mut self) {
@@ -194,6 +223,9 @@ impl BlockState {
         if !self.formatter.no_fill || !self.paragraph.is_empty() {
             self.flush_paragraph();
         }
+        if mant_ir::has_printable_character(&nodes) {
+            self.formatter.note_definition_visible();
+        }
         if self.hanging_origin.is_some() && self.literal.starts_new_row(starts_line) {
             // Materialize HP's temporary first row before adopting its permanent
             // body origin. A continued source line does not reach this boundary.
@@ -235,6 +267,7 @@ impl BlockState {
     }
 
     pub(super) fn resolve_vertical_space(&mut self, rows: i32) -> u16 {
+        self.formatter.note_definition_boundary();
         self.paragraph
             .resolve_vertical_space(&mut self.formatter, rows)
     }
@@ -271,21 +304,21 @@ impl BlockState {
         self.flush_paragraph_with(false);
     }
 
-    pub(super) fn flush_paragraph_for_vertical_request(&mut self) {
+    pub(super) fn flush_paragraph_for_line_request(&mut self) {
         self.flush_paragraph_with(true);
     }
 
-    fn flush_paragraph_with(&mut self, vertical_request: bool) {
-        if self.formatter.no_fill && self.paragraph.is_empty() {
+    fn flush_paragraph_with(&mut self, line_request: bool) {
+        if self.formatter.no_fill && self.paragraph.is_empty() && !line_request {
             // A block output boundary has no filled content to drain. The
             // current no-fill formatter row remains live until term_newln().
             return;
         }
         let output_start = self.output.len();
-        let _ = vertical_request;
         let (block, empty_word_end_break) = self
             .paragraph
             .take(&mut self.formatter, self.indent_columns);
+        let mut suppressed_head_row = false;
         if let Some(block) = block {
             match block {
                 Block::Paragraph {
@@ -302,6 +335,18 @@ impl BlockState {
                     // presentation-neutral, so encode the row as spacing.
                     // Retain zero-width targets at that row during the
                     // representation change.
+                    let completed_rows = children
+                        .iter()
+                        .filter(|inline| matches!(inline, Inline::LineBreak))
+                        .count();
+                    let active_row = children
+                        .iter()
+                        .rev()
+                        .take_while(|inline| !matches!(inline, Inline::LineBreak))
+                        .any(|inline| !matches!(inline, Inline::Anchor { .. }));
+                    let rows = u16::try_from(completed_rows + usize::from(active_row))
+                        .unwrap_or(u16::MAX)
+                        .max(1);
                     let anchors = children
                         .into_iter()
                         .filter(|inline| matches!(inline, Inline::Anchor { .. }))
@@ -313,16 +358,34 @@ impl BlockState {
                             source,
                         });
                     }
-                    self.output.push(Block::VerticalSpace { lines: 1, source });
+                    suppressed_head_row = self.formatter.consume_definition_head_row();
+                    let body_rows = rows.saturating_sub(u16::from(suppressed_head_row));
+                    if body_rows > 0 {
+                        self.output.push(Block::VerticalSpace {
+                            lines: body_rows,
+                            source,
+                        });
+                    }
                 }
                 block => self.output.push(block),
             }
         }
-        if empty_word_end_break {
-            self.output.push(Block::VerticalSpace {
-                lines: 1,
-                source: None,
-            });
+        if empty_word_end_break && !suppressed_head_row {
+            // A bare \p can occupy the native tag row without leaving an
+            // inline paragraph. Consume that row at this actual flush, just
+            // as for an explicit empty formatter cell above.
+            if !self.formatter.consume_definition_head_row() {
+                self.output.push(Block::VerticalSpace {
+                    lines: 1,
+                    source: None,
+                });
+            }
+        }
+        if line_request {
+            // roff_term_pre_sp() calls term_vspace() (and thus term_newln())
+            // before adding its own empty row. Settle the native tag row now;
+            // subsequent control-only BODY words own independent rows.
+            self.formatter.settle_definition_head_rows();
         }
         if self.output.len() > output_start {
             if let Some(origin) = self.hanging_origin
