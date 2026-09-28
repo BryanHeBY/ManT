@@ -5,14 +5,10 @@ use super::{
     is_formatter_word_blank,
 };
 
-mod no_fill;
 mod style;
 mod text_execution;
 mod zero_advance;
 
-pub(in crate::mandoc) use no_fill::{
-    NoFillInlineState, NoFillRegisters, lower_no_fill_fragment_with_font_state,
-};
 pub(super) use style::coalesce_font_runs;
 pub(in crate::mandoc) use text_execution::{
     FormatterWordPart, parse_formatter_word_parts_with_zero_advance, parse_roff_text_with_state,

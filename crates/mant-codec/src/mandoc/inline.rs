@@ -14,7 +14,8 @@ pub(super) use links::lower_man_link;
 mod scopes;
 mod source_fragment;
 pub(in crate::mandoc) use flow::{
-    AuthorBreakEffect, InlineExecutionState, KeepState, PreservedInlineState,
+    AuthorBreakEffect, InlineExecutionState, NoFillInlineState, PreservedInlineState,
+    lower_no_fill_fragment_with_formatter,
 };
 pub(super) use flow::{FilledBoundary, FontScope, FontState, InlineBuilder};
 mod source;
@@ -26,10 +27,7 @@ pub(super) use font::{
     FormatterWordPart, ZeroAdvanceState, parse_formatter_word_parts_with_zero_advance,
     parse_roff_text_with_state, parse_roff_text_with_zero_advance,
 };
-pub(super) use font::{
-    NoFillInlineState, NoFillRegisters, lower_inline_nodes_with_font_state,
-    lower_no_fill_fragment_with_font_state, parse_roff_text,
-};
+pub(super) use font::{lower_inline_nodes_with_font_state, parse_roff_text};
 pub(in crate::mandoc) use source_fragment::lower_source_fragment_with_formatter_state;
 
 pub(super) use source::roff_macro_arguments;

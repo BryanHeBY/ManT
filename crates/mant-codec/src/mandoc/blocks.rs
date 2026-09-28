@@ -505,9 +505,13 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
                         .state
                         .formatter
                         .no_fill_inline
-                        .has_pending_formatter_cell()
+                        .has_pending_formatter_cell(&self.state.formatter.execution)
                 {
-                    let nodes = self.state.formatter.no_fill_inline.take_no_break_cell();
+                    let nodes = self
+                        .state
+                        .formatter
+                        .no_fill_inline
+                        .take_no_break_cell(&mut self.state.formatter.execution);
                     self.state.no_break_formatter_flush(nodes);
                 }
             }
@@ -532,17 +536,15 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
     }
 
     fn settle_no_fill_inline(&mut self) {
-        let nodes = self.state.formatter.no_fill_inline.take_settled_row();
+        let nodes = self
+            .state
+            .formatter
+            .no_fill_inline
+            .take_settled_row(&mut self.state.formatter.execution);
         if !nodes.is_empty() {
             self.state
                 .push_preformatted(nodes, None, false, false, true);
         }
-        let armed = self
-            .state
-            .formatter
-            .no_fill_inline
-            .take_bare_zero_advance_armed();
-        self.state.inherit_zero_advance_armed(armed);
     }
 
     fn finish_into(

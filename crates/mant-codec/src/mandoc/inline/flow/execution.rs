@@ -1,43 +1,10 @@
 use super::{
     AuthorBreakEffect, AuthorExecution, FormatterColumn, Inline, InlineBuilder, KeepPhase,
-    KeepState, PendingBoundary, PreservedInlineState, SourceFragmentState, SpacingMode,
-    TrailingOutput, WordBoundaryState, WordEndBreak, last_visible_character,
-    trim_trailing_breakable_spaces, updated_spacing,
+    PendingBoundary, PreservedInlineState, SourceFragmentState, SpacingMode, TrailingOutput,
+    WordEndBreak, last_visible_character, trim_trailing_breakable_spaces, updated_spacing,
 };
 
 impl InlineBuilder {
-    pub(in crate::mandoc) const fn keep_state(&self) -> KeepState {
-        self.execution.keep
-    }
-
-    pub(in crate::mandoc) fn inherit_keep_state(&mut self, state: KeepState) {
-        self.execution.keep = state;
-    }
-
-    pub(in crate::mandoc) const fn word_boundary_state(&self) -> WordBoundaryState {
-        WordBoundaryState {
-            last_visible_character: self.execution.last_visible_character,
-            has_printable_content: self.execution.has_printable_content,
-            formatter_column: self.execution.formatter_column,
-            empty_word: self.execution.empty_word,
-            trailing_output: self.execution.trailing_output,
-            pending_breakable_spaces: self.execution.pending_breakable_spaces,
-            pending_field_spaces: self.execution.pending_field_spaces,
-            keep: self.execution.keep,
-        }
-    }
-
-    pub(in crate::mandoc) fn inherit_word_boundary_state(&mut self, state: WordBoundaryState) {
-        self.execution.last_visible_character = state.last_visible_character;
-        self.execution.has_printable_content = state.has_printable_content;
-        self.execution.formatter_column = state.formatter_column;
-        self.execution.empty_word = state.empty_word;
-        self.execution.trailing_output = state.trailing_output;
-        self.execution.pending_breakable_spaces = state.pending_breakable_spaces;
-        self.execution.pending_field_spaces = state.pending_field_spaces;
-        self.execution.keep = state.keep;
-    }
-
     pub(in crate::mandoc) fn tighten_next_boundary(&mut self) {
         self.execution.boundary = PendingBoundary::Tight;
     }
@@ -364,14 +331,6 @@ impl InlineBuilder {
 
     pub(in crate::mandoc) const fn has_tight_boundary(&self) -> bool {
         self.execution.boundary.is_tight()
-    }
-
-    pub(in crate::mandoc) const fn boundary_state(&self) -> PendingBoundary {
-        self.execution.boundary
-    }
-
-    pub(in crate::mandoc) fn inherit_boundary_state(&mut self, boundary: PendingBoundary) {
-        self.execution.boundary = boundary;
     }
 
     pub(in crate::mandoc) const fn spacing_enabled(&self) -> bool {

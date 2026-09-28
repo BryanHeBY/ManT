@@ -5,7 +5,7 @@ use super::{
     source_span, targets,
 };
 use crate::mandoc::controls::{FormatterBoundary, formatter_control};
-use crate::mandoc::inline::{NoFillRegisters, lower_no_fill_fragment_with_font_state};
+use crate::mandoc::inline::lower_no_fill_fragment_with_formatter;
 
 struct LoweredNoFillLine {
     nodes: Vec<Inline>,
@@ -22,7 +22,6 @@ struct NoFillSource<'a> {
     source_line_entered: bool,
     single_line_literal: bool,
     default_name: Option<&'a str>,
-    spacing_enabled: bool,
     macro_set: libmandoc_rs::MacroSet,
 }
 
@@ -57,10 +56,7 @@ pub(super) fn no_fill_boundary(node: &Node, single_line_literal: bool) -> Format
 
 fn lower_no_fill_lines(
     source: NoFillSource<'_>,
-    font: &mut FontState,
-    inline_state: &mut crate::mandoc::inline::NoFillInlineState,
-    keep: &mut crate::mandoc::inline::KeepState,
-    scope_posts: &crate::mandoc::containers::ScopePostState,
+    formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> Option<Vec<LoweredNoFillLine>> {
     let NoFillSource {
         node,
@@ -68,18 +64,11 @@ fn lower_no_fill_lines(
         source_line_entered,
         single_line_literal,
         default_name,
-        spacing_enabled,
         macro_set,
     } = source;
     if is_no_fill_payload(node, single_line_literal) {
-        let (mut nodes, continues_line) = lower_no_fill_fragment_with_font_state(
-            spacing_enabled,
-            NoFillRegisters {
-                font,
-                row: inline_state,
-                keep,
-            },
-            scope_posts,
+        let (mut nodes, continues_line) = lower_no_fill_fragment_with_formatter(
+            formatter,
             ends_with_line_continuation(node),
             false,
             |builder| append_inline_node_with_next(builder, node, next, default_name),
@@ -92,7 +81,11 @@ fn lower_no_fill_lines(
             // Settle its formatter cell now; otherwise the next request
             // would count the same authored blank row a second time.
             if node.kind == NodeKind::Text && node.decoder_text().unwrap_or_default().is_empty() {
-                nodes.extend(inline_state.take_settled_row());
+                nodes.extend(
+                    formatter
+                        .no_fill_inline
+                        .take_settled_row(&mut formatter.execution),
+                );
             }
             for index in usize::from(!nodes.is_empty())..blank_rows {
                 if index > 0 {
@@ -166,6 +159,9 @@ impl super::BlockLowerer<'_, '_> {
             return false;
         }
         self.resume_no_fill_row();
+        if !self.state.paragraph_is_empty() {
+            self.state.flush_paragraph();
+        }
         if node.flags.line_start
             && !source_line_entered
             && !self.state.formatter.no_fill_inline.continues_source_line()
@@ -175,14 +171,7 @@ impl super::BlockLowerer<'_, '_> {
         // `nf`/`fi` split presentation buffers, not the native formatter.
         // Move a surviving bare BACKAFTER request into the no-fill executor;
         // an occupied cell was already settled by the mode boundary.
-        let armed = self.state.take_zero_advance_armed();
-        self.state
-            .formatter
-            .no_fill_inline
-            .inherit_zero_advance_armed(armed);
-        let spacing_enabled = self.state.spacing_enabled();
         let formatter = &mut self.state.formatter;
-        let execution = &mut formatter.execution;
         let Some(lines) = lower_no_fill_lines(
             NoFillSource {
                 node,
@@ -190,19 +179,15 @@ impl super::BlockLowerer<'_, '_> {
                 source_line_entered,
                 single_line_literal,
                 default_name: self.context.default_name,
-                spacing_enabled,
                 macro_set: self.context.macro_set,
             },
-            &mut execution.font,
-            &mut formatter.no_fill_inline,
-            &mut execution.keep,
-            &self.context.scope_posts,
+            formatter,
         ) else {
             unreachable!("a no-fill payload must lower as a no-fill row");
         };
         // Every accepted no-fill payload represents a real `term_word()` and
         // consequently clears formatter-global negative `.sp` debt.
-        self.state.execute_formatter_word();
+        self.state.clear_formatter_word_debt();
         for line in lines {
             self.state.push_preformatted(
                 line.nodes,

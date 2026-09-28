@@ -25,29 +25,19 @@ impl super::BlockLowerer<'_, '_> {
         append: impl FnOnce(&mut InlineBuilder),
     ) {
         self.resume_no_fill_row();
-        let armed = self.state.take_zero_advance_armed();
-        let spacing = self.state.spacing_enabled();
-        self.state
-            .formatter
-            .no_fill_inline
-            .inherit_zero_advance_armed(armed);
+        if !self.state.paragraph_is_empty() {
+            self.state.flush_paragraph();
+        }
         let formatter = &mut self.state.formatter;
-        let execution = &mut formatter.execution;
-        let (nodes, continues_line) = crate::mandoc::inline::lower_no_fill_fragment_with_font_state(
-            spacing,
-            crate::mandoc::inline::NoFillRegisters {
-                font: &mut execution.font,
-                row: &mut formatter.no_fill_inline,
-                keep: &mut execution.keep,
-            },
-            &self.context.scope_posts,
+        let (nodes, continues_line) = crate::mandoc::inline::lower_no_fill_fragment_with_formatter(
+            formatter,
             source_continuation_fallback,
             finishes_row,
             append,
         );
         let occupies_row = mant_ir::has_printable_character(&nodes);
         if occupies_row {
-            self.state.execute_formatter_word();
+            self.state.clear_formatter_word_debt();
         }
         self.state.push_preformatted(
             nodes,
@@ -183,14 +173,21 @@ impl<'node> ContainerSink<'node> for BlockContainerSink<'node, '_, '_> {
             // not paragraph breaks. Literal DisplayFlow consumes them.
             Event::BeginNode(_) => {}
             Event::Break => {
+                // roff_term_pre_br() ends the active formatter row before
+                // either IR destination is drained.
+                self.lowerer.settle_no_fill_inline();
                 self.lowerer.state.flush_preformatted();
                 self.lowerer.state.flush_paragraph();
                 self.lowerer.state.consume_hanging_first_line();
             }
-            Event::FlushLine => self
-                .lowerer
-                .state
-                .flush_requested_line(source_span(self.root)),
+            Event::FlushLine => {
+                // roff_term_pre_ce() calls term_flushln() after each grouped
+                // source row, including a pending zero-advance glyph.
+                self.lowerer.settle_no_fill_inline();
+                self.lowerer
+                    .state
+                    .flush_requested_line(source_span(self.root));
+            }
             Event::Children(nodes) => self.lowerer.push_nodes(nodes),
             Event::EnterKeep => self.lowerer.state.formatter.enter_keep_words(),
             Event::ExitKeep => self.lowerer.state.formatter.exit_keep_words(),

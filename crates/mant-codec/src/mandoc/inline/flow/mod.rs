@@ -5,7 +5,10 @@ use mant_ir::{first_visible_character, has_printable_character, last_visible_cha
 
 mod execution;
 mod field;
+mod no_fill;
 mod output;
+
+pub(in crate::mandoc) use no_fill::{NoFillInlineState, lower_no_fill_fragment_with_formatter};
 
 pub(super) use output::trailing_ascii_spaces;
 use output::trim_trailing_breakable_spaces;
@@ -72,34 +75,6 @@ impl std::ops::DerefMut for InlineBuilder {
     }
 }
 
-/// Formatter word context survives an IR fragment drain inside one no-fill
-/// row. It is reset only by an executed row boundary or no-break field flush.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(in crate::mandoc) struct WordBoundaryState {
-    last_visible_character: Option<char>,
-    has_printable_content: bool,
-    formatter_column: FormatterColumn,
-    empty_word: bool,
-    trailing_output: TrailingOutput,
-    pending_breakable_spaces: usize,
-    pending_field_spaces: usize,
-    keep: KeepState,
-}
-
-impl WordBoundaryState {
-    pub(in crate::mandoc) const fn new() -> Self {
-        Self {
-            last_visible_character: None,
-            has_printable_content: false,
-            formatter_column: FormatterColumn::Origin,
-            empty_word: false,
-            trailing_output: TrailingOutput::None,
-            pending_breakable_spaces: 0,
-            pending_field_spaces: 0,
-            keep: KeepState::new(),
-        }
-    }
-}
 #[derive(Clone, Copy)]
 struct AuthorExecution {
     flow: crate::mandoc::formatter::AuthorFlow,

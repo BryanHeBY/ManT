@@ -189,7 +189,11 @@ impl BlockState {
         starts_line: bool,
         occupies_row: bool,
     ) {
-        self.flush_paragraph();
+        // The no-fill word has already executed against the same formatter.
+        // Flushing an empty paragraph here would reset its live row state.
+        if !self.formatter.no_fill || !self.paragraph.is_empty() {
+            self.flush_paragraph();
+        }
         if self.hanging_origin.is_some() && self.literal.starts_new_row(starts_line) {
             // Materialize HP's temporary first row before adopting its permanent
             // body origin. A continued source line does not reach this boundary.
@@ -220,7 +224,9 @@ impl BlockState {
     }
 
     pub(super) fn no_break_formatter_flush(&mut self, nodes: Vec<Inline>) {
-        self.paragraph.no_break_flush(&mut self.formatter);
+        if !self.formatter.no_fill {
+            self.paragraph.no_break_flush(&mut self.formatter);
+        }
         self.literal.no_break_flush(nodes);
     }
 
@@ -233,15 +239,10 @@ impl BlockState {
             .resolve_vertical_space(&mut self.formatter, rows)
     }
 
-    /// Execute one native formatter word while the visible row is owned by
-    /// the no-fill flow.  The word still clears CVS `skipvsp`, which belongs
-    /// to the surrounding formatter rather than either IR buffer.
-    pub(super) fn execute_formatter_word(&mut self) {
-        self.formatter.execute_word();
-    }
-
-    pub(super) fn inherit_zero_advance_armed(&mut self, armed: bool) {
-        self.formatter.inherit_zero_advance_armed(armed);
+    /// A no-fill word clears CVS skipvsp; its zero-width registers are
+    /// already updated by the shared text executor.
+    pub(super) fn clear_formatter_word_debt(&mut self) {
+        self.formatter.vertical_space_debt = 0;
     }
 
     pub(super) fn inherit_author_execution(
@@ -266,10 +267,6 @@ impl BlockState {
             .append_run_in_cells(&mut self.formatter, generated_cells);
     }
 
-    pub(super) fn take_zero_advance_armed(&mut self) -> bool {
-        self.formatter.take_zero_advance_armed()
-    }
-
     pub(super) fn flush_paragraph(&mut self) {
         self.flush_paragraph_with(false);
     }
@@ -279,6 +276,11 @@ impl BlockState {
     }
 
     fn flush_paragraph_with(&mut self, vertical_request: bool) {
+        if self.formatter.no_fill && self.paragraph.is_empty() {
+            // A block output boundary has no filled content to drain. The
+            // current no-fill formatter row remains live until term_newln().
+            return;
+        }
         let output_start = self.output.len();
         let _ = vertical_request;
         let (block, empty_word_end_break) = self

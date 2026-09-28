@@ -57,6 +57,53 @@ fn generated_function_events_follow_no_fill_source_order_and_rows() {
 }
 
 #[test]
+fn filled_and_no_fill_segments_share_one_pending_text_execution() {
+    // This exact source was run through the fixed CVS -Tutf8/-Tlint oracle.
+    // mdoc_term.c::print_mdoc_node() changes the fill channel at NODE_LINE,
+    // while term.c::term_word() keeps the backtracking and word-end registers
+    // in the same termp across the output destinations.
+    let source = b".Dd September 28, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd shared text execution\n.Sh DESCRIPTION\n.No BEFORE\\zX\\c\n.nf\n.No NEXT\n.No SECOND\\p\n.fi\n.No AFTER\n";
+    let document = parse_manual_bytes(std::path::Path::new("shared-fill-state.1"), source)
+        .expect("lower fill changes with one formatter");
+    let blocks = &document.sections[1].blocks;
+    assert!(blocks.iter().any(|block| matches!(block, Block::Paragraph { children, .. } if inline_text(children) == "BEFOREX")), "{blocks:#?}");
+    assert!(blocks.iter().any(|block| matches!(block, Block::Preformatted { children, .. } if inline_text(children).contains("NEXT\nSECOND"))), "{blocks:#?}");
+    assert!(blocks.iter().any(|block| matches!(block, Block::Paragraph { children, .. } if inline_text(children) == "AFTER")), "{blocks:#?}");
+}
+
+#[test]
+fn aligned_no_fill_rows_settle_pending_glyphs_at_the_native_flush() {
+    // Every exact input was run through the fixed CVS -Tutf8/-Tlint oracle.
+    // roff_term.c::roff_term_pre_ce() flushes each grouped line; its .br
+    // child calls roff_term_pre_br() and therefore term_newln() first.
+    for (name, request, tail, expected) in [
+        ("center", ".ce 1", "", "X"),
+        ("right", ".rj 1", "", "X"),
+        ("center-break", ".ce 2", ".br\nY\n", "XY"),
+    ] {
+        let source = format!(
+            ".TH PROBE 1 \"September 28, 2026\"\n.SH DESCRIPTION\n.nf\n{request}\n\\zX\n{tail}.fi\nAFTER\n"
+        );
+        let document = parse_manual_bytes(std::path::Path::new(name), source.as_bytes())
+            .expect("lower aligned no-fill row");
+        let blocks = &document.sections[0].blocks;
+        let literal_text = blocks
+            .iter()
+            .filter_map(|block| match block {
+                Block::Preformatted { children, .. } => Some(inline_text(children)),
+                _ => None,
+            })
+            .collect::<String>();
+        assert_eq!(
+            literal_text.replace('\n', ""),
+            expected,
+            "{name}: {blocks:#?}"
+        );
+        assert!(blocks.iter().any(|block| matches!(block, Block::Paragraph { children, .. } if inline_text(children) == "AFTER")), "{name}: {blocks:#?}");
+    }
+}
+
+#[test]
 fn keep_words_survives_display_output_switches() {
     // Exact inputs checked with pinned CVS -Tascii/-Tlint.  Its
     // mdoc_term.c::termp_bk_pre/post keeps TERMP_PREKEEP/KEEP in the native
