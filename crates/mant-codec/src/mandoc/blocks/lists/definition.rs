@@ -74,6 +74,7 @@ impl DefinitionHeadFlow {
                 // (termp_it_pre default arm), so no width-based overrun can
                 // fire; the field decisions come from the flags alone.
                 body_width_columns: u16::MAX,
+                field_width_columns: u16::MAX,
                 flags,
             },
         }
@@ -448,6 +449,7 @@ fn lower_definition_head(
                     // this field's right bound is the page margin, which the
                     // width-agnostic IR lowering cannot know.
                     body_width_columns: u16::MAX,
+                    field_width_columns: u16::MAX,
                     flags,
                 }
             }

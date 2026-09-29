@@ -29,6 +29,20 @@ pub(super) struct DefinitionFieldState {
     /// BODY words and must be committed at the item post drain
     /// (mdoc_term.c:939-945), the only `term_newln()` this field ever sees.
     pub(super) run_in_continuation: bool,
+    /// A line-break request (`.sp`/`.br`, and `.nf`/`.fi` through the same
+    /// `roff_term_pre_br()` dispatch, roff_term.c:45-58, 71-78) ran inside
+    /// this field and cleared `TERMP_NOBREAK`. Roff request nodes return
+    /// before the flag save/restore (mdoc_term.c:394-396), so the clear
+    /// outlives the request; only the item post resets it
+    /// (mdoc_term.c:961-962). While set, every pass of the field's
+    /// `term_fill()` targets `vfield` instead of the page margin
+    /// (term.c:134-136): head words wrap at the field's own width.
+    pub(super) no_break_cleared: bool,
+    /// The head field's content capacity `rmargin - offset`, latched for
+    /// `no_break_cleared` sessions: the request that cleared NOBREAK may
+    /// also degrade the author effect to `Line`, but the remaining head
+    /// words still fill against this bound (term.c:134-136).
+    pub(super) cleared_field_capacity_columns: u16,
     /// The native input buffer of this field, fed in source order at each
     /// formatter word (term.c's `tcol->buf`); pass decisions at flush time
     /// come from it instead of streaming heuristics.
@@ -65,6 +79,7 @@ pub(in crate::mandoc) struct PreservedDefinitionField {
     pub(super) state: DefinitionFieldState,
     pub(super) gap_cells: u8,
     pub(super) body_width_columns: u16,
+    pub(super) field_width_columns: u16,
     pub(super) flags: super::native_field::FieldFlags,
 }
 
@@ -307,6 +322,9 @@ pub(super) struct NoBreakField {
     resumed_execution_epoch: u64,
     field_width: usize,
     body_width: usize,
+    /// `rmargin - offset` of the head field (term.c:124-125 uses it as the
+    /// pass target after a request cleared `TERMP_NOBREAK`).
+    field_capacity_columns: u16,
     trailspace_cells: usize,
     separator_cells: usize,
     style: DefinitionFieldStyle,
@@ -338,17 +356,19 @@ impl InlineBuilder {
                 AuthorBreakEffect::Field {
                     gap_cells,
                     body_width_columns,
+                    field_width_columns,
                     flags,
                 } => Some((
                     execution.field_output_start,
                     gap_cells,
                     body_width_columns,
+                    field_width_columns,
                     flags,
                 )),
                 AuthorBreakEffect::Line => None,
             });
-        if let Some((start, gap, body, flags)) = field {
-            self.flush_definition_field(start, gap, body, flags, false);
+        if let Some((start, gap, body, field_width, flags)) = field {
+            self.flush_definition_field(start, gap, body, field_width, flags, false);
             if self.execution.pending_field_spaces > 0 {
                 self.definition_state_mut().pending_gap_origin = PendingFieldGapOrigin::SourceLine;
             }
@@ -372,32 +392,52 @@ impl InlineBuilder {
     /// so `.br`, `.ti`, and the break phase of `.sp` must use this entrypoint.
     pub(in crate::mandoc) fn control_line_break(&mut self) -> bool {
         if let Some(field) = self.take_no_break_field() {
+            let capacity = field.field_capacity_columns;
+            self.note_field_control_cleared_no_break(true, capacity);
             self.settle_no_break_field_line(field);
             return true;
         }
-        let Some((start, gap, body, flags)) =
-            self.execution
-                .author_execution
-                .as_ref()
-                .and_then(|execution| match execution.break_effect {
-                    AuthorBreakEffect::Field {
-                        gap_cells,
-                        body_width_columns,
-                        flags,
-                    } => Some((
-                        execution.field_output_start,
-                        gap_cells,
-                        body_width_columns,
-                        flags,
-                    )),
-                    AuthorBreakEffect::Line => None,
-                })
+        let Some((start, gap, body, field_width_columns, flags)) = self
+            .execution
+            .author_execution
+            .as_ref()
+            .and_then(|execution| match execution.break_effect {
+                AuthorBreakEffect::Field {
+                    gap_cells,
+                    body_width_columns,
+                    field_width_columns,
+                    flags,
+                } => Some((
+                    execution.field_output_start,
+                    gap_cells,
+                    body_width_columns,
+                    field_width_columns,
+                    flags,
+                )),
+                AuthorBreakEffect::Line => None,
+            })
         else {
             let had_cell = self.has_formatter_cell();
             self.hard_break();
             return had_cell;
         };
-        self.flush_definition_field(start, gap, body, flags, true)
+        self.note_field_control_cleared_no_break(
+            flags.contains(FieldFlag::Brind),
+            field_width_columns,
+        );
+        self.flush_definition_field(start, gap, body, field_width_columns, flags, true)
+    }
+
+    /// `roff_term_pre_br()` clears `TERMP_NOBREAK` (with `TERMP_BRIND`) for the
+    /// rest of this field (roff_term.c:71-78); the enclosing request node
+    /// returns before any flag restore (mdoc_term.c:394-396).
+    fn note_field_control_cleared_no_break(&mut self, brind: bool, capacity: u16) {
+        if !brind {
+            return;
+        }
+        let definition = self.definition_state_mut();
+        definition.no_break_cleared = true;
+        definition.cleared_field_capacity_columns = capacity;
     }
 
     // The NOBREAK flush commits field, row, and BRIND state in native order.
@@ -407,6 +447,7 @@ impl InlineBuilder {
         field_output_start: usize,
         gap_cells: u8,
         body_width_columns: u16,
+        field_width_columns: u16,
         flags: FieldFlags,
         exit_field: bool,
     ) -> bool {
@@ -468,6 +509,7 @@ impl InlineBuilder {
                         execution.break_effect = AuthorBreakEffect::Field {
                             gap_cells: 0,
                             body_width_columns,
+                            field_width_columns,
                             flags,
                         };
                     }
@@ -615,6 +657,7 @@ impl InlineBuilder {
                 execution.break_effect = AuthorBreakEffect::Field {
                     gap_cells: 0,
                     body_width_columns,
+                    field_width_columns,
                     flags,
                 };
             }
@@ -675,6 +718,7 @@ impl InlineBuilder {
                 body_width_columns,
                 gap_cells,
                 flags,
+                ..
             }) = self
                 .execution
                 .author_execution
@@ -1027,35 +1071,37 @@ impl InlineBuilder {
             self.finish_definition_field_control(field, 0, false);
             return;
         }
-        let Some((start, gap, body, flags)) =
-            self.execution
-                .author_execution
-                .as_ref()
-                .and_then(|execution| match execution.break_effect {
-                    AuthorBreakEffect::Field {
-                        gap_cells,
-                        body_width_columns,
-                        flags,
-                    } => Some((
-                        execution.field_output_start,
-                        gap_cells,
-                        body_width_columns,
-                        flags,
-                    )),
-                    AuthorBreakEffect::Line => None,
-                })
+        let Some((start, gap, body, field_width_columns, flags)) = self
+            .execution
+            .author_execution
+            .as_ref()
+            .and_then(|execution| match execution.break_effect {
+                AuthorBreakEffect::Field {
+                    gap_cells,
+                    body_width_columns,
+                    field_width_columns,
+                    flags,
+                } => Some((
+                    execution.field_output_start,
+                    gap_cells,
+                    body_width_columns,
+                    field_width_columns,
+                    flags,
+                )),
+                AuthorBreakEffect::Line => None,
+            })
         else {
             self.control_line_break();
             return;
         };
         if !self.has_formatter_cell() {
-            self.flush_definition_field(start, gap, body, flags, true);
+            self.flush_definition_field(start, gap, body, field_width_columns, flags, true);
             return;
         }
         self.flush_zero_advance();
         let field = self.nodes.get(start..).unwrap_or_default();
         if !has_printable_character(field) {
-            self.flush_definition_field(start, gap, body, flags, true);
+            self.flush_definition_field(start, gap, body, field_width_columns, flags, true);
             return;
         }
         let field_width = mant_ir::geometry::text_width(&super::super::plain_text(field));
@@ -1086,6 +1132,7 @@ impl InlineBuilder {
                 execution.break_effect = AuthorBreakEffect::Field {
                     gap_cells: 0,
                     body_width_columns: body,
+                    field_width_columns,
                     flags,
                 };
             }
@@ -1098,6 +1145,10 @@ impl InlineBuilder {
     /// own `roff_term_pre_br()` dispatch.
     pub(in crate::mandoc) fn fill_mode_boundary(&mut self) {
         if let Some(field) = self.take_no_break_field() {
+            // print_mdoc_node() runs this fill-mode boundary in addition to
+            // the request's own roff_term_pre_br() (roff_term.c:45-58).
+            let capacity = field.field_capacity_columns;
+            self.note_field_control_cleared_no_break(true, capacity);
             self.settle_no_break_field_line(field);
             self.execution
                 .definition
@@ -1107,34 +1158,43 @@ impl InlineBuilder {
                 .mark_field_exited();
             return;
         }
-        let Some((start, gap, body, flags)) =
-            self.execution
-                .author_execution
-                .as_ref()
-                .and_then(|execution| match execution.break_effect {
-                    AuthorBreakEffect::Field {
-                        gap_cells,
-                        body_width_columns,
-                        flags,
-                    } => Some((
-                        execution.field_output_start,
-                        gap_cells,
-                        body_width_columns,
-                        flags,
-                    )),
-                    AuthorBreakEffect::Line => None,
-                })
+        let Some((start, gap, body, field_width_columns, flags)) = self
+            .execution
+            .author_execution
+            .as_ref()
+            .and_then(|execution| match execution.break_effect {
+                AuthorBreakEffect::Field {
+                    gap_cells,
+                    body_width_columns,
+                    field_width_columns,
+                    flags,
+                } => Some((
+                    execution.field_output_start,
+                    gap_cells,
+                    body_width_columns,
+                    field_width_columns,
+                    flags,
+                )),
+                AuthorBreakEffect::Line => None,
+            })
         else {
             self.control_line_break();
             return;
         };
+        self.note_field_control_cleared_no_break(
+            flags.contains(FieldFlag::Brind),
+            field_width_columns,
+        );
+        // roff.c:3581-3585 with 957-958: every node under ROFF_NOFILL prints
+        // with NODE_NOFILL, and mdoc_term.c:314-318 maps that to
+        // TERMP_BRNEVER — an infinite term_fill() target (term.c:143-144).
         if !self.has_formatter_cell() {
             return;
         }
         self.flush_zero_advance();
         let field = self.nodes.get(start..).unwrap_or_default();
         if !has_printable_character(field) {
-            self.flush_definition_field(start, gap, body, flags, true);
+            self.flush_definition_field(start, gap, body, field_width_columns, flags, true);
             return;
         }
         if flags.wraps() {
@@ -1158,6 +1218,7 @@ impl InlineBuilder {
                 AuthorBreakEffect::Field {
                     gap_cells: 0,
                     body_width_columns: body,
+                    field_width_columns,
                     flags,
                 }
             };
@@ -1229,12 +1290,17 @@ impl InlineBuilder {
             .and_then(|execution| match execution.break_effect {
                 AuthorBreakEffect::Field {
                     body_width_columns,
+                    field_width_columns,
                     flags,
                     ..
-                } => Some((body_width_columns, flags)),
+                } => Some((body_width_columns, field_width_columns, flags)),
                 AuthorBreakEffect::Line => None,
             });
-        if let Some((body_width_columns, flags)) = field {
+        if let Some((body_width_columns, field_width_columns, flags)) = field {
+            self.note_field_control_cleared_no_break(
+                flags.contains(FieldFlag::Brind),
+                field_width_columns,
+            );
             if !self.has_formatter_cell() {
                 // `term_vspace()` always emits its requested empty row, but
                 // its leading `term_newln()` leaves a bare BACKAFTER armed
@@ -1317,6 +1383,7 @@ impl InlineBuilder {
                     execution.break_effect = AuthorBreakEffect::Field {
                         gap_cells: 0,
                         body_width_columns,
+                        field_width_columns,
                         flags,
                     };
                 }
@@ -1356,6 +1423,8 @@ impl InlineBuilder {
     }
 
     fn vertical_space_in_definition_field(&mut self, field: NoBreakField, rows: usize) {
+        let capacity = field.field_capacity_columns;
+        self.note_field_control_cleared_no_break(true, capacity);
         if rows == 0 {
             // roff_term_pre_sp() skips term_vspace() for zero rows, then runs
             // roff_term_pre_br(). HANG's term_flushln() retains the same
@@ -1428,9 +1497,9 @@ impl InlineBuilder {
         }
         self.execution.trailing_output = TrailingOutput::None;
         // An invisible formatter word still advanced `p->col`. Under `.mc`'s
-        // TERMP_NOBREAK flush, a continued following word starts after that
+        // `TERMP_NOBREAK` flush, a continued following word starts after that
         // cell even though there is no glyph to carry the distance in IR.
-        // A TERMP_NOBREAK field owns one committed separator before the next
+        // A `TERMP_NOBREAK` field owns one committed separator before the next
         // field.  It is formatter geometry, not a cancellable word boundary:
         // `.Sm off`, `.Ns`, and delimiter flags may suppress an additional
         // automatic blank but cannot move the already flushed field back.
@@ -1442,7 +1511,7 @@ impl InlineBuilder {
         self.execution.pending_field_spaces = 1;
         self.execution.word_end_break = WordEndBreak::Clear;
         self.execution.formatter_column = FormatterColumn::Origin;
-        // TERMP_NOBREAK only changes this flush; it does not create
+        // `TERMP_NOBREAK` only changes this flush; it does not create
         // TERMP_NONEWLINE.  Preserve any already-executed `\c` continuation,
         // while releasing its tight word boundary like CVS clears NOSPACE.
         self.execution.final_word_join = Some(false);
@@ -1550,23 +1619,25 @@ impl InlineBuilder {
     }
 
     fn no_break_definition_field(&mut self) -> bool {
-        let Some((start, gap, body, flags)) =
-            self.execution
-                .author_execution
-                .as_ref()
-                .and_then(|execution| match execution.break_effect {
-                    AuthorBreakEffect::Field {
-                        gap_cells,
-                        body_width_columns,
-                        flags,
-                    } => Some((
-                        execution.field_output_start,
-                        gap_cells,
-                        body_width_columns,
-                        flags,
-                    )),
-                    AuthorBreakEffect::Line => None,
-                })
+        let Some((start, gap, body, field_width_columns, flags)) = self
+            .execution
+            .author_execution
+            .as_ref()
+            .and_then(|execution| match execution.break_effect {
+                AuthorBreakEffect::Field {
+                    gap_cells,
+                    body_width_columns,
+                    field_width_columns,
+                    flags,
+                } => Some((
+                    execution.field_output_start,
+                    gap_cells,
+                    body_width_columns,
+                    field_width_columns,
+                    flags,
+                )),
+                AuthorBreakEffect::Line => None,
+            })
         else {
             return false;
         };
@@ -1619,6 +1690,7 @@ impl InlineBuilder {
             resumed_output_start: self.nodes.len(),
             resumed_execution_epoch: self.execution.execution_epoch,
             field_width: width,
+            field_capacity_columns: field_width_columns,
             body_width: usize::from(body),
             trailspace_cells: usize::from(gap),
             separator_cells: if overrun {
@@ -1744,10 +1816,18 @@ impl InlineBuilder {
         if field.style == DefinitionFieldStyle::Hang {
             let had_cell = self.has_formatter_cell();
             let definition = self.definition_state_mut();
+            // term.c:250-253 with 205-207: a HANG head that filled its
+            // whole capacity while a request had cleared `TERMP_NOBREAK`
+            // reaches the body column with no trailspace left (pre_br
+            // zeroed it), so the body word concatenates directly — the
+            // reference prints `afterwardstail text` on one row.
+            let field_full = definition.no_break_cleared
+                && field.field_width >= usize::from(field.field_capacity_columns);
             if had_cell || definition.hang_row.viscol > 0 {
                 definition.hang_row.flush(usize::from(hang_gap_cells));
             }
             definition.hang_row.field_offset = field.body_width;
+            self.execution.concat_next_word = field_full;
         }
         if consume_body_gap {
             self.execution
@@ -1764,6 +1844,7 @@ impl InlineBuilder {
                 DefinitionFieldStyle::Hang => AuthorBreakEffect::Field {
                     gap_cells: hang_gap_cells,
                     body_width_columns: u16::try_from(field.body_width).unwrap_or(u16::MAX),
+                    field_width_columns: field.field_capacity_columns,
                     flags: FieldFlags::hang(),
                 },
             };

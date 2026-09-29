@@ -197,6 +197,10 @@ fn lower_man_item(
             body: *definition_hanging_width,
             placement: crate::mandoc::layout::TermPlacement::Fit,
             gap: 1,
+            // man's TP/HP head is not an mdoc NOBREAK field: the head
+            // width governs body placement only (man_term.c), never a
+            // term_fill pass target.
+            head_field_columns: 0,
         },
         super::super::DefinitionFlow {
             spacing_enabled,

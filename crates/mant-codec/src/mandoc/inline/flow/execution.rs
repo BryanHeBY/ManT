@@ -88,7 +88,9 @@ impl InlineBuilder {
             AuthorBreakEffect::Field {
                 gap_cells,
                 body_width_columns,
+                field_width_columns,
                 flags,
+                ..
             } => {
                 if flags.contains(super::native_field::FieldFlag::Hang)
                     && let Some(definition) = &mut self.execution.definition
@@ -106,6 +108,7 @@ impl InlineBuilder {
                     field_output_start,
                     gap_cells,
                     body_width_columns,
+                    field_width_columns,
                     flags,
                     false,
                 );
@@ -181,6 +184,11 @@ impl InlineBuilder {
     }
 
     pub(in crate::mandoc) fn begin_executed_node(&mut self, node: &libmandoc_rs::Node) {
+        // mdoc_term.c:314-318: a NODE_NOFILL node prints its whole subtree
+        // under TERMP_BRNEVER, whose term_fill() target is infinite
+        // (term.c:143-144) — no pass can end a device row. roff.c:957-958
+        // flags every node created under ROFF_NOFILL.
+        self.execution.no_fill_word_active = node.flags.no_fill;
         if self.execution.observe_no_fill_source_lines == SourceLineObservation::NoFill
             && node.flags.no_fill
             && node.flags.line_start
@@ -336,12 +344,22 @@ impl InlineBuilder {
             // termp_it_pre() until the BODY post term_newln()); continue it
             // with its original configuration.
             let mut state = field.state;
+            // term.c:250-253 with 205-207: a HANG head that filled its
+            // capacity while a request had cleared TERMP_NOBREAK reaches
+            // the body column with no trailspace (the request zeroed it),
+            // so the first BODY word concatenates directly.
+            if state.no_break_cleared
+                && state.hang_row.viscol >= usize::from(field.field_width_columns)
+            {
+                self.execution.concat_next_word = true;
+            }
             state.run_in_continuation = true;
             self.execution.definition = Some(state);
             if let Some(author) = &mut self.execution.author_execution {
                 author.break_effect = AuthorBreakEffect::Field {
                     gap_cells: field.gap_cells,
                     body_width_columns: field.body_width_columns,
+                    field_width_columns: field.field_width_columns,
                     flags: field.flags,
                 };
                 author.field_output_start = 0;

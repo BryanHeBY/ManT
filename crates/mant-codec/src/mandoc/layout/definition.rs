@@ -16,6 +16,11 @@ pub(in crate::mandoc) struct DefinitionGeometry {
     pub(in crate::mandoc) body: Distance,
     pub(in crate::mandoc) placement: TermPlacement,
     pub(in crate::mandoc) gap: u16,
+    /// The head field's content capacity: the resolved list width distance
+    /// before it is composed with the list offset (mdoc_term.c:846-856:
+    /// `rmargin = offset + width`). Zero means the style sets no field
+    /// width (inset/diagnostic/overhang keep the page right margin).
+    pub(in crate::mandoc) head_field_columns: u16,
 }
 
 impl DefinitionGeometry {

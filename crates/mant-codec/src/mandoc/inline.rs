@@ -268,6 +268,8 @@ pub(super) fn append_inline_node_with_next(
         Some("ti") => {
             builder.temporary_indent();
         }
+        // The request's own roff_term_pre_br() dispatch (roff_term.c:45-58)
+        // also clears the field's NOBREAK state.
         Some("nf" | "fi") => {
             builder.fill_mode_boundary();
         }

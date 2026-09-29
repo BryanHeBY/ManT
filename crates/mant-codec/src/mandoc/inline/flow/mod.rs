@@ -58,6 +58,8 @@ enum CellProduction {
 /// A paragraph, literal row, or nested output owner may drain `nodes` while
 /// the formatter continues to execute the same source stream.
 #[derive(Clone)]
+// The formatter registers are independent native flags, not a state chart.
+#[allow(clippy::struct_excessive_bools)]
 pub(in crate::mandoc) struct InlineExecutionState {
     boundary: PendingBoundary,
     spacing: SpacingMode,
@@ -109,6 +111,16 @@ pub(in crate::mandoc) struct InlineExecutionState {
     /// Detached definition HEADs use the same `NODE_LINE` entry rule as the
     /// block driver while their output is collected in a term field.
     observe_no_fill_source_lines: SourceLineObservation,
+    /// `TERMP_BRNEVER` mirror (term.c:143-144): a `NODE_NOFILL` subtree is
+    /// printing, so `term_fill()` runs with an infinite target and no pass
+    /// can end a device row.
+    pub(in crate::mandoc) no_fill_word_active: bool,
+    /// A HANG head that filled its capacity under a cleared
+    /// `TERMP_NOBREAK` reaches the body column with no trailspace
+    /// (term.c:250-253 with 205-207): the next word concatenates directly,
+    /// like the `TERMP_NOSPACE` left by the request's own `term_newln()`
+    /// (`roff_term.c:78`).
+    pub(in crate::mandoc) concat_next_word: bool,
     pub(in crate::mandoc) scope_posts: crate::mandoc::containers::ScopePostState,
 }
 
@@ -140,6 +152,11 @@ pub(in crate::mandoc) enum AuthorBreakEffect {
     Field {
         gap_cells: u8,
         body_width_columns: u16,
+        /// The head field's content capacity `rmargin - offset`
+        /// (mdoc_term.c:846-856): the `vtarget` term.c:134-136 selects for
+        /// every pass once a request cleared `TERMP_NOBREAK`. Run-in styles
+        /// never shorten the right margin, so they carry `u16::MAX`.
+        field_width_columns: u16,
         /// Upstream pad/break flags for the HEAD field, set per list kind
         /// exactly as `mdoc_term.c::termp_it_pre()` does; the row decisions
         /// in `native_field` consume them.
@@ -668,6 +685,8 @@ impl InlineExecutionState {
             definition: None,
             last_executed_source_line: None,
             observe_no_fill_source_lines: SourceLineObservation::Disabled,
+            no_fill_word_active: false,
+            concat_next_word: false,
             scope_posts: crate::mandoc::containers::ScopePostState::default(),
         }
     }

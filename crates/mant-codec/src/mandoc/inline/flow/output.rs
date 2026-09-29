@@ -635,6 +635,9 @@ impl InlineBuilder {
         }
     }
 
+    // The register choreography mirrors print_mdoc_node()/term_word(); the
+    // length is the sequence itself.
+    #[allow(clippy::too_many_lines)]
     fn append_at_boundary(
         &mut self,
         incoming: &mut Vec<Inline>,
@@ -674,7 +677,10 @@ impl InlineBuilder {
         let fixed_blank_boundary = (incoming_starts_with_fixed_blank
             && incoming_first.is_some_and(char::is_whitespace))
             || self.execution.trailing_output == TrailingOutput::FixedBlank;
-        let add_space = if empty_word
+        let concat_next_word = std::mem::take(&mut self.execution.concat_next_word);
+        let add_space = if concat_next_word {
+            false
+        } else if empty_word
             && self.execution.formatter_column == FormatterColumn::Origin
             && self.execution.last_visible_character == Some('\n')
             && !self.execution.empty_word
@@ -697,10 +703,10 @@ impl InlineBuilder {
         } else {
             needs_boundary_space(self.execution.last_visible_character, incoming_first)
         };
-        let (accepted_word_prefix, accepted_row_break) = if word {
+        let (accepted_word_prefix, accepted_row_break, split_word) = if word {
             self.record_hang_word(incoming, add_space, boundary, empty_word)
         } else {
-            (None, false)
+            (None, false, None)
         };
         if accepted_row_break {
             // A consumed \p separator closes the already accepted prefix.
@@ -715,7 +721,10 @@ impl InlineBuilder {
             self.append_boundary_spacing(boundary, add_space, word, empty_word);
         }
         let word_output_start = self.nodes.len();
-        self.nodes.append(incoming);
+        match split_word {
+            Some(split) => self.nodes.extend(split),
+            None => self.nodes.append(incoming),
+        }
         if let Some(prefix) = accepted_word_prefix
             && let Some(author) = &mut self.execution.author_execution
         {
@@ -761,12 +770,12 @@ impl InlineBuilder {
         add_space: bool,
         boundary: PendingBoundary,
         empty_word: bool,
-    ) -> (Option<usize>, bool) {
+    ) -> (Option<usize>, bool, Option<Vec<Inline>>) {
         if self.execution.definition.is_none() || self.execution.author_execution.is_none() {
-            return (None, false);
+            return (None, false, None);
         }
         let Some(definition) = &mut self.execution.definition else {
-            return (None, false);
+            return (None, false, None);
         };
         let rejected_prefix =
             if let Some(prefix) = definition.hang_row.field_break_before_graph_prefix.take() {
@@ -828,6 +837,7 @@ impl InlineBuilder {
         definition
             .field_word_anchors
             .push((definition.field_buffer.cells().len(), anchor_ir_start));
+        let marker_fed_this_word = definition.trailing_marker_unfed;
         if definition.trailing_marker_unfed {
             // The PREVIOUS word's trailing \p deferred into the field:
             // its '\n' cell precedes this word's separator (term.c writes
@@ -886,19 +896,68 @@ impl InlineBuilder {
                 .find(|part| !part.is_empty())
                 .map_or(0, mant_ir::geometry::text_width);
         }
-        let accepted_row_break = definition.hang_row.accepted_prefix_before_rejection
+        let marker_row_break = definition.hang_row.accepted_prefix_before_rejection
             && printable
             && !definition.hang_row.field_discarded;
-        if accepted_row_break {
+        if marker_row_break {
             definition.hang_row.accepted_prefix_before_rejection = false;
         }
+        // term.c:134-136: with TERMP_NOBREAK cleared by a request, every
+        // term_fill() pass targets `vfield` — the field's own capacity
+        // `rmargin - offset` (constant across the head's passes: each
+        // continuation restarts at the offset, term.c:229-230). A pass
+        // boundary ends the device row (term.c:220); the blanks around it
+        // belong to the break (term.c:205-207). Simulate the pass chain
+        // over the fed buffer and map the boundaries into this word: one
+        // at or before its first content cell closes the row before it
+        // (the `accepted_row_break` channel); one inside it splits the
+        // operand at the consumed blanks into separate device rows.
+        let anchor_count = definition.field_word_anchors.len();
+        let mut inside_splits: Vec<usize> = Vec::new();
+        let width_row_break = definition.no_break_cleared
+            && printable
+            && !definition.hang_row.field_discarded
+            && !self.execution.no_fill_word_active
+            && anchor_count > 0
+            && definition.cleared_field_capacity_columns > 0
+            && {
+                let vtarget = usize::from(definition.cleared_field_capacity_columns);
+                {
+                    let word_anchor = definition.field_word_anchors[anchor_count - 1].0;
+                    let word_first_cell = word_anchor
+                        + usize::from(marker_fed_this_word)
+                        + usize::from(separator > 0 || empty_word);
+                    let word_end = definition.field_buffer.cells().len();
+                    let mut simulation = definition.field_buffer.clone();
+                    let mut closes_before = false;
+                    while let Some(pass) = simulation.fill_pass(vtarget) {
+                        let accepted_end = pass.accepted_end;
+                        simulation.advance_past(accepted_end);
+                        simulation.consume_break_blanks();
+                        let boundary = simulation.resume_offset();
+                        if boundary > word_anchor && boundary <= word_first_cell {
+                            closes_before = true;
+                        } else if boundary > word_first_cell && boundary < word_end {
+                            inside_splits.push(boundary - word_first_cell);
+                        }
+                        if boundary >= word_end {
+                            break;
+                        }
+                    }
+                    closes_before
+                }
+            };
+        let accepted_row_break = width_row_break || marker_row_break;
+        let split_word = (!inside_splits.is_empty())
+            .then(|| split_word_at_row_boundaries(incoming, &mut inside_splits));
         (
             rejected_prefix.or_else(|| {
-                accepted_row_break
+                marker_row_break
                     .then_some(incoming.len())
                     .or(accepted_prior_field.then_some(0))
             }),
             accepted_row_break,
+            split_word,
         )
     }
 
@@ -1169,6 +1228,7 @@ impl InlineBuilder {
                 Some(AuthorBreakEffect::Field {
                     gap_cells,
                     body_width_columns,
+                    field_width_columns,
                     flags,
                 }),
                 Some(state),
@@ -1176,6 +1236,7 @@ impl InlineBuilder {
                 state,
                 gap_cells,
                 body_width_columns,
+                field_width_columns,
                 flags,
             }),
             // Every other field dies with the drained owner below, exactly
@@ -1582,5 +1643,152 @@ fn feed_field_text(buffer: &mut super::field_buffer::FieldBuffer, value: &str) {
             let width = mant_ir::geometry::text_width(&character.to_string());
             buffer.push_graph(character, width);
         }
+    }
+}
+
+/// Split a formatter word at the row boundaries its field passes decided
+/// (term.c:220 with 205-207): each boundary is a cell offset inside the
+/// word's content; the breakable blanks immediately before it were
+/// consumed by the break, and the continuation starts at the boundary.
+fn split_word_at_row_boundaries(incoming: &[Inline], boundaries: &mut Vec<usize>) -> Vec<Inline> {
+    boundaries.sort_unstable();
+    boundaries.dedup();
+    let mut output = Vec::with_capacity(incoming.len() + boundaries.len());
+    let mut next_boundary = boundaries.first().copied();
+    split_nodes_at_boundaries(
+        incoming,
+        &mut 0,
+        &mut next_boundary,
+        boundaries,
+        &mut output,
+    );
+    output
+}
+
+/// Returns true when the whole remainder was emitted (a boundary fell in a
+/// non-cell node, so no further split can apply).
+fn split_nodes_at_boundaries(
+    nodes: &[Inline],
+    cell: &mut usize,
+    next_boundary: &mut Option<usize>,
+    boundaries: &[usize],
+    output: &mut Vec<Inline>,
+) {
+    for node in nodes {
+        match node {
+            Inline::Text { value } | Inline::Code { value } => {
+                split_text_at_boundaries(value, node, cell, next_boundary, boundaries, output);
+            }
+            Inline::LineBreak => {
+                output.push(Inline::LineBreak);
+                *cell += 1;
+                advance_boundary(cell, next_boundary, boundaries);
+            }
+            Inline::Strong { children } => {
+                output.push(Inline::Strong {
+                    children: std::mem::take(&mut split_nodes_at_boundaries_owned(
+                        children,
+                        cell,
+                        next_boundary,
+                        boundaries,
+                    )),
+                });
+            }
+            Inline::Emphasis { children } => {
+                output.push(Inline::Emphasis {
+                    children: std::mem::take(&mut split_nodes_at_boundaries_owned(
+                        children,
+                        cell,
+                        next_boundary,
+                        boundaries,
+                    )),
+                });
+            }
+            other => output.push(other.clone()),
+        }
+    }
+}
+
+fn split_nodes_at_boundaries_owned(
+    nodes: &[Inline],
+    cell: &mut usize,
+    next_boundary: &mut Option<usize>,
+    boundaries: &[usize],
+) -> Vec<Inline> {
+    let mut output = Vec::with_capacity(nodes.len());
+    split_nodes_at_boundaries(nodes, cell, next_boundary, boundaries, &mut output);
+    output
+}
+
+fn split_text_at_boundaries(
+    value: &str,
+    node: &Inline,
+    cell: &mut usize,
+    next_boundary: &mut Option<usize>,
+    boundaries: &[usize],
+    output: &mut Vec<Inline>,
+) {
+    let chars: Vec<char> = value.chars().collect();
+    let mut index = 0;
+    let mut run = String::with_capacity(value.len());
+    while index < chars.len() {
+        let character = chars[index];
+        if character == '\n' {
+            run.push(character);
+            push_split_text(&mut run, node, output);
+            *cell += 1;
+            index += 1;
+            advance_boundary(cell, next_boundary, boundaries);
+            continue;
+        }
+        if super::super::is_formatter_word_blank(character) {
+            // Measure the whole blank run. When its end lands on the next
+            // row boundary, the run is the break's consumed separator
+            // (term.c:205-207): the accepted row ends here and the word
+            // continues on the next device row.
+            let mut end = index;
+            while end < chars.len() && super::super::is_formatter_word_blank(chars[end]) {
+                end += 1;
+            }
+            if *next_boundary == Some(*cell + (end - index)) {
+                while run
+                    .chars()
+                    .last()
+                    .is_some_and(super::super::is_formatter_word_blank)
+                {
+                    run.pop();
+                }
+                push_split_text(&mut run, node, output);
+                output.push(Inline::LineBreak);
+                *cell += end - index;
+                index = end;
+                advance_boundary(cell, next_boundary, boundaries);
+                continue;
+            }
+        }
+        run.push(character);
+        *cell += 1;
+        index += 1;
+    }
+    push_split_text(&mut run, node, output);
+}
+
+fn advance_boundary(cell: &mut usize, next_boundary: &mut Option<usize>, boundaries: &[usize]) {
+    if *next_boundary == Some(*cell) {
+        *next_boundary = boundaries
+            .iter()
+            .copied()
+            .find(|&boundary| boundary > *cell);
+    }
+}
+
+fn push_split_text(run: &mut String, node: &Inline, output: &mut Vec<Inline>) {
+    if run.is_empty() {
+        return;
+    }
+    let text = std::mem::take(run);
+    match node {
+        Inline::Code { .. } => output.push(Inline::Code { value: text }),
+        _ => output.push(Inline::Text { value: text }),
     }
 }

@@ -114,15 +114,55 @@ fn empty_head_sp_keeps_its_blank_rows() {
     // HEAD field still executes term_vspace(): term.c:486-498 runs one
     // conditional term_newln() and then one unconditional endline per
     // requested row, so `.sp` contributes a blank row before the head's
-    // remaining words. The post-request row-width wrap (NOBREAK cleared)
-    // remains a separate open behavior and is not pinned here.
+    // remaining words. The request also cleared TERMP_NOBREAK
+    // (roff_term.c:71-78); the head post's term_flushln() therefore wraps
+    // the remaining head words at the field's own vfield (term.c:134-136,
+    // reference: `after`/`space` rows at the list offset), while the
+    // restored head margins keep tag's final row closed for BODY.
     let item = review_definition_item(
         ".Bl -tag -width 4n\n.It Xo\n.sp\n.No after space\n.Xc\n.No tail text\n.El\n",
     );
     let term = inline_text(&item.terms[0]);
     assert!(
-        term.starts_with("\n\n") && term.contains("after space"),
-        "the requested blank row must precede the head words: {item:#?}"
+        term.starts_with("\n\n") && term.contains("after\nspace"),
+        "the requested blank row must precede the wrapped head words: {item:#?}"
+    );
+}
+
+#[test]
+fn cleared_no_break_field_wraps_hang_head_words_at_the_field_width() {
+    // The exact source passed fixed CVS -Tascii. The `.sp` ran
+    // term_vspace() then roff_term_pre_br(), which cleared TERMP_NOBREAK
+    // (roff_term.c:71-78); the roff node returns before any flag restore
+    // (mdoc_term.c:394-396), so the HEAD post flush fills the remaining
+    // head words with vtarget=vfield (term.c:134-136): `after` and
+    // `space` take separate rows at the list offset, and HANG keeps the
+    // last row open for its body (term.c:250-253).
+    let item = review_definition_item(
+        ".Bl -hang -width 4n\n.It Xo\n.sp\n.No after space\n.Xc\n.No tail text\n.El\n",
+    );
+    assert_eq!(inline_text(&item.terms[0]), "\n\nafter\nspace", "{item:#?}");
+    assert!(
+        item.layout.inline_term,
+        "hang body stays on the last wrapped head row: {item:#?}"
+    );
+}
+
+#[test]
+fn no_fill_head_words_never_wrap_at_the_field_width() {
+    // The exact source passed fixed CVS -Tascii. Even after `.nf` cleared
+    // TERMP_NOBREAK through the shared roff_term_pre_br() dispatch
+    // (roff_term.c:45-58), its NODE_NOFILL subtree prints under
+    // TERMP_BRNEVER (mdoc_term.c:314-318): term_fill() runs with an
+    // infinite target (term.c:143-144), so `after space` stays on one row
+    // and only the BODY column follows.
+    let item = review_definition_item(
+        ".Bl -hang -width 4n\n.It Xo\n.nf\n.No after space\n.Xc\n.No tail text\n.El\n",
+    );
+    assert_eq!(inline_text(&item.terms[0]), "after space", "{item:#?}");
+    assert!(
+        !item.layout.inline_term,
+        "the fill-mode boundary closed the head row before BODY: {item:#?}"
     );
 }
 

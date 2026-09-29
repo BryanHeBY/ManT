@@ -201,31 +201,37 @@ fn lower_mdoc_definition_list(
             .add(Distance::cells(2))
             .0
     });
+    let head_field_columns = u16::try_from(width.position_columns().max(0)).unwrap_or(u16::MAX);
     let geometry = match node.definition_list_style {
         Some(DefinitionListStyle::Hang) => DefinitionGeometry {
             body: width,
             placement: TermPlacement::RunIn,
             gap: 1,
+            head_field_columns,
         },
         Some(DefinitionListStyle::Inset) => DefinitionGeometry {
             body: Distance::default(),
             placement: TermPlacement::RunIn,
             gap: 1,
+            head_field_columns: 0,
         },
         Some(DefinitionListStyle::Diagnostic) => DefinitionGeometry {
             body: Distance::default(),
             placement: TermPlacement::RunIn,
             gap: 2,
+            head_field_columns: 0,
         },
         Some(DefinitionListStyle::Overhang) => DefinitionGeometry {
             body: Distance::default(),
             placement: TermPlacement::Stacked,
             gap: 0,
+            head_field_columns: 0,
         },
         _ => DefinitionGeometry {
             body: width,
             placement: TermPlacement::Fit,
             gap: 2,
+            head_field_columns,
         },
     };
     let lowered_items = items
@@ -321,6 +327,7 @@ fn lower_mdoc_definition_item(
                     author_break_effect: crate::mandoc::inline::AuthorBreakEffect::Field {
                         gap_cells: 2,
                         body_width_columns: geometry.body_columns(),
+                        field_width_columns: geometry.head_field_columns,
                         // mdoc_term.c:805-814: NOBREAK|BRTRSP|BRIND, plus
                         // HANG exactly when the item has no BODY.
                         flags: crate::mandoc::inline::FieldFlags::tag(
@@ -332,6 +339,7 @@ fn lower_mdoc_definition_item(
                     author_break_effect: crate::mandoc::inline::AuthorBreakEffect::Field {
                         gap_cells: 1,
                         body_width_columns: geometry.body_columns(),
+                        field_width_columns: geometry.head_field_columns,
                         // mdoc_term.c:800-804: NOBREAK|BRIND|HANG.
                         flags: crate::mandoc::inline::FieldFlags::hang(),
                     },

@@ -168,7 +168,12 @@ pub(in crate::mandoc) fn lower_no_fill_fragment_with_formatter(
             if continued {
                 builder.continue_source_line(true);
             }
+            // mdoc_term.c:314-318: the NODE_NOFILL subtree prints under
+            // TERMP_BRNEVER.
+            let was_no_fill_word = builder.execution.no_fill_word_active;
+            builder.execution.no_fill_word_active = true;
             append(builder);
+            builder.execution.no_fill_word_active = was_no_fill_word;
             (
                 builder.final_source_continuation_or(source_continuation_fallback),
                 builder.has_formatter_cell(),
