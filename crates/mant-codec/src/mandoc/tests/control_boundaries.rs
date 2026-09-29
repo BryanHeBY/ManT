@@ -1048,6 +1048,47 @@ fn final_hang_field_only_consumes_a_proven_body_gap() {
 }
 
 #[test]
+fn colon_breakpoint_wraps_the_head_row_like_the_reference() {
+    // Fixed CVS -Tascii: an overrunning operand breaks at its buffered
+    // ASCII_BREAK cell (term.c:287-300) and the remainder wraps, while a
+    // fitting operand stays one row and joins BODY.
+    // Width sweep against fixed CVS -Tascii (all rows verified): the
+    // buffered ASCII_BREAK ends the row only when the pass truncates or
+    // breaks at it (term.c:294-295, 362-366) — the ZcWrapTrace probe pins
+    // both shapes; a fitting operand stays one row whatever sits inside.
+    for (words, expected_rows) in [
+        // `X YYYYY` / `Z     BODY`: the tail truncated at the breakpoint.
+        (r"YYYYY\:Z", 2),
+        // `X YYYY` / `ZZ    BODY`: the overrun broke at the recorded
+        // word-end candidate (term.c:350-351 with 296-299).
+        (r"YYYY\:ZZ", 2),
+        // `X Y` / `ZZZZ  BODY`: the four-column tail overruns.
+        (r"Y\:ZZZZ", 2),
+        // Fitting operands keep one row and BODY concatenates:
+        // `X YYZZBODY`, `X YYYZBODY`.
+        (r"YY\:ZZ", 1),
+        (r"YYY\:Z", 1),
+    ] {
+        let source = format!(
+            ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo X\n.br\n.No {words}\n.Xc\n.No BODY\n.El\n"
+        );
+        let document = parse_manual_bytes(
+            std::path::Path::new("colon-breakpoint-rows.1"),
+            source.as_bytes(),
+        )
+        .unwrap();
+        let Block::DefinitionList { items, .. } = &document.sections[1].blocks[0] else {
+            panic!("{words}: {document:#?}");
+        };
+        let row_breaks = items[0].terms[0]
+            .iter()
+            .filter(|node| matches!(node, Inline::LineBreak { .. }))
+            .count();
+        assert_eq!(row_breaks + 1, expected_rows, "{words}: {items:#?}");
+    }
+}
+
+#[test]
 fn head_body_relation_classifies_shared_rows() {
     // Expectations classify rows the fixed CVS reference printed for the
     // oracle matrix families (`/tmp/fix/oramatrix` c/f/m rows):

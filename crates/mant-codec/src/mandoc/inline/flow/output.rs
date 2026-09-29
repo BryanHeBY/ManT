@@ -890,16 +890,6 @@ impl InlineBuilder {
         } else if separator > 0 {
             definition.field_buffer.push_separator_blank();
         }
-        match self.execution.zero_advance.printable_pending_glyph_text() {
-            Some((text, width)) if !definition.pending_glyph_fed => {
-                let first = text.chars().next().unwrap_or(' ');
-                definition.field_buffer.push_graph(first, width);
-                definition.field_buffer.arm_backbefore();
-                definition.pending_glyph_fed = true;
-            }
-            Some((_, _)) => {}
-            None => definition.pending_glyph_fed = false,
-        }
         let breakpoints = std::mem::take(&mut self.execution.word_zero_break_prefixes);
         let mut graph_count = 0;
         let mut next_breakpoint = 0;
@@ -910,6 +900,19 @@ impl InlineBuilder {
             &mut next_breakpoint,
             &breakpoints,
         );
+        // A pending `\z` glyph enters at its own word's tail
+        // (term.c:886-929: encode1() writes it at the current buffer
+        // position when the word ends, arming BACKBEFORE for the next
+        // word's separator — term.c:924-927), never at the next word's
+        // head.
+        if let Some((text, width)) = self.execution.zero_advance.printable_pending_glyph_text()
+            && !definition.pending_glyph_fed
+        {
+            let first = text.chars().next().unwrap_or(' ');
+            definition.field_buffer.push_graph(first, width);
+            definition.field_buffer.arm_backbefore();
+            definition.pending_glyph_fed = true;
+        }
         if self.execution.word_end_break == WordEndBreak::Pending {
             // This word's own trailing \p returned as the pending
             // word-end break; its '\n' cell follows the word's cells.
@@ -968,18 +971,18 @@ impl InlineBuilder {
             && anchor_count > 0
             && definition.cleared_field_capacity_columns > 0
             && {
-                // term.c:113-116,124-125: the pass target subtracts the row
-                // the head already used — the flushed prefix at `viscol`
-                // plus its trailing separator cell — and the floor
-                // `minbl = trailspace` (term.c:236; the hang head runs with
-                // trailspace 1, mdoc_term.c:804-805).
+                // term.c:113-116,124-125: the pass target subtracts the
+                // flushed prefix at `viscol` and the row's `vbl`, which the
+                // `minbl = trailspace` floor supplies (term.c:236; the hang
+                // head leaves trailspace 1, mdoc_term.c:804-805). The
+                // pinned W/WB probes put both flushes at viscol=1 column
+                // with vbl=1: target = capacity - (viscol + 1).
                 let prefix_used = if definition.hang_row.viscol > 0 {
                     definition.hang_row.viscol + 1
                 } else {
                     0
                 };
                 let first_vtarget = usize::from(definition.cleared_field_capacity_columns)
-                    .saturating_sub(1)
                     .saturating_sub(prefix_used);
                 // Continuation rows restart at the field offset with the
                 // request-cleared trailspace (roff_term.c:77): no minbl, no
@@ -1797,6 +1800,16 @@ fn split_text_at_boundaries(
     let mut index = 0;
     let mut run = String::with_capacity(value.len());
     while index < chars.len() {
+        // A row boundary before this graph — the zero-width breakpoint's
+        // cell (term.c:287-300; the pass truncated at it, 362-366) or a
+        // word-tail candidate an overrun cut at (353-354): the row ends
+        // here and the graph starts the next one. The breakpoint itself
+        // never prints (term.c:396-398).
+        if *next_boundary == Some(*cell) {
+            push_split_text(&mut run, node, output);
+            output.push(Inline::line_break());
+            advance_boundary(cell, next_boundary, boundaries);
+        }
         let character = chars[index];
         if character == '\n' {
             run.push(character);

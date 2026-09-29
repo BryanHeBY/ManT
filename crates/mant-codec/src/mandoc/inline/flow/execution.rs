@@ -112,6 +112,18 @@ impl InlineBuilder {
                     flags,
                     false,
                 );
+                // mdoc_term.c:1084-1085 with term.c:474-480, 250-253: the
+                // split marker's term_newln() flushed the field; without
+                // HANG the tail rule ends the row (a -diag head never
+                // shortens rmargin, mdoc_term.c:872, so vfield is 0 and
+                // the rule fires whenever the field showed content).
+                let field_showed_content = self
+                    .nodes
+                    .get(field_output_start..)
+                    .is_some_and(mant_ir::has_printable_character);
+                if !flags.contains(super::native_field::FieldFlag::Hang) && field_showed_content {
+                    self.hard_break();
+                }
                 if !flags.wraps()
                     && let Some(definition) = &mut self.execution.definition
                 {

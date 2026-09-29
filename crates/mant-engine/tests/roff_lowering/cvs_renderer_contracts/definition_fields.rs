@@ -1575,7 +1575,11 @@ fn a_wrapping_hang_field_keeps_only_the_proven_body_word_boundary() {
     // therefore preserves the BODY word boundary in either presentation.
     let source = ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo X\n.br\n.No YYYYY\\:Z\n.Xc\n.No BODY\n.El\n";
     let lowered = lowered_terminal(source);
-    assert!(lowered.contains("YYYYYZ BODY"), "{lowered:?}");
+    // Fixed CVS -Tascii: `X YYYYY` then `Z     BODY` — the ASCII wraps at
+    // the buffered breakpoint (term.c:287-300) and BODY joins the wrapped
+    // remainder row (the column-relative renderer keeps the reference's
+    // five-column gap).
+    assert!(lowered.contains("YYYYY\nZ     BODY"), "{lowered:?}");
     // Exact fixed CVS -Tascii/-Tutf8/-Tlint: roff.c::post_hyph() marks
     // this source hyphen ASCII_HYPH, and term.c::term_fill() wraps after it.
     // It is ordinary text in the AST, so the gap proof must see that marker
