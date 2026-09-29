@@ -16,6 +16,11 @@ pub(super) struct DefinitionOutcome(u8);
 #[derive(Clone, Default)]
 pub(super) struct DefinitionFieldState {
     pub(super) pending_indent: Option<usize>,
+    /// Latched: some pass rejected and the buffer wipe (term.c:144-146
+    /// with 235) discarded its suffix. Unlike `hang_row.field_discarded`
+    /// this fact survives later flushes; a run-in BODY reads it to know
+    /// its first text shared the wiped buffer.
+    pub(super) suffix_discarded_seen: bool,
     pub(super) outcome: DefinitionOutcome,
     pub(super) no_break: Option<NoBreakField>,
     // A positive term_vspace() ends the HANG device row. The next author
@@ -356,6 +361,11 @@ impl InlineBuilder {
         flags: FieldFlags,
         exit_field: bool,
     ) -> bool {
+        let had_marker_passes = self
+            .execution
+            .definition
+            .as_ref()
+            .is_some_and(|state| state.hang_row.transition != HangRowTransition::Initial);
         let pending_native_gap = self.execution.pending_field_spaces > 0;
         let native_field_discarded = self
             .execution
@@ -486,12 +496,11 @@ impl InlineBuilder {
             // NOBREAK field without HANG closes the row before BODY: the
             // accepted prefixes stay on their own rows and the body starts a
             // new one. HANG ignores the overrun and keeps the shared row.
-            let restarted_at_margin = self
-                .execution
-                .definition
-                .as_ref()
-                .is_some_and(|state| state.hang_row.viscol >= body_width);
-            if restarted_at_margin && !flags.contains(FieldFlag::Hang) {
+            // `hang_row.viscol` already carries the `field_offset` floor
+            // from this field's own flush, so the restart signal is the
+            // pre-flush transition: only accepted or rejected in-word
+            // `term_fill()` passes leave it non-initial.
+            if had_marker_passes && !row_continues(flags, 0, 0) {
                 self.definition_state_mut().pending_indent = Some(body_width);
                 self.execution
                     .definition
@@ -664,6 +673,7 @@ impl InlineBuilder {
     /// `HangNativeRow::word()` handles the same event across words.
     pub(in crate::mandoc) fn note_hang_break_before_graph(&mut self, accepted_prefix: usize) {
         if let Some(definition) = &mut self.execution.definition {
+            definition.suffix_discarded_seen = true;
             let row = &mut definition.hang_row;
             row.field_discarded = true;
             row.field_break_before_graph_prefix = Some(accepted_prefix);
@@ -1058,7 +1068,11 @@ impl InlineBuilder {
                 // when neither tcol nor viscol is occupied.  The following
                 // BRIND phase still ends a tag field; HANG keeps its run-in
                 // body contract.  Preserve those independent effects.
-                self.retain_line_breaks(rows);
+                // term.c:486-498: term_vspace() runs one conditional
+                // term_newln() and then one unconditional endline per
+                // requested row, so the row close consumes one break and
+                // `rows` blank rows remain.
+                self.retain_line_breaks(rows + 1);
                 self.execution.boundary = PendingBoundary::Tight;
                 if flags.wraps() {
                     self.execution

@@ -16,6 +16,116 @@ fn review_definition_item(body: &str) -> mant_ir::DefinitionItem {
 }
 
 #[test]
+fn inset_mid_word_marker_wipes_body_first_text() {
+    // The exact source passed fixed CVS -Tascii/-Tutf8/-Tlint. The inset
+    // HEAD field flushes late (at the BODY word's NODE_LINE); its buffer
+    // still holds the marker suffix, the generated separator, and the
+    // BODY text, and the rejected pass wipes that whole buffer
+    // (term.c:144-146 with 235): only the accepted prefix prints.
+    let item = review_definition_item(
+        ".Bl -inset\n.It Xo\n.No \"alpha \\p beta\"\n.Xc\n.No tail text\n.El\n",
+    );
+    assert_eq!(inline_text(&item.terms[0]), "alpha", "{item:#?}");
+    assert!(
+        item.description.is_empty(),
+        "the shared buffer's body text never prints: {item:#?}"
+    );
+}
+
+#[test]
+fn inset_empty_text_after_marker_closes_its_row() {
+    // The exact sources passed fixed CVS -Tascii/-Tutf8/-Tlint. The
+    // generated inset separator is a non-breaking space (term.c:347-350),
+    // so an armed trailing \p alone keeps the field row open for the
+    // joining BODY; a separate empty TEXT runs term_newln() mid-HEAD
+    // (NODE_LINE), and a field without NOBREAK or HANG closes there
+    // (term.c:250-252). DIAG keeps NOBREAK and its shared row.
+    let inset = review_definition_item(
+        ".Bl -inset\n.It Xo\n.No alpha\\p\n.No \"\"\n.Xc\n.No tail text\n.El\n",
+    );
+    assert_eq!(inline_text(&inset.terms[0]), "alpha", "{inset:#?}");
+    assert!(
+        !inset.layout.inline_term,
+        "inset body must start its own row: {inset:#?}"
+    );
+    let diag = review_definition_item(
+        ".Bl -diag\n.It Xo\n.No alpha\\p\n.No \"\"\n.Xc\n.No tail text\n.El\n",
+    );
+    assert!(
+        diag.layout.inline_term,
+        "diag NOBREAK keeps the shared row: {diag:#?}"
+    );
+    let armed_only =
+        review_definition_item(".Bl -inset\n.It Xo\n.No alpha\\p\n.Xc\n.No tail text\n.El\n");
+    assert!(
+        armed_only.layout.inline_term,
+        r"a trailing \p without the empty TEXT keeps the shared row: {armed_only:#?}"
+    );
+}
+
+#[test]
+fn inset_separate_marker_text_wipes_body_first_text() {
+    // The exact source passed fixed CVS -Tascii/-Tutf8/-Tlint. With the
+    // marker in its own TEXT, the following word's separator meets the
+    // armed field before any new graph: term.c:287-299 with 349-360 make
+    // that pass reject, and the buffer wipe (term.c:144-146 with 235)
+    // discards the suffix together with the run-in BODY text that still
+    // shared the buffer. This latches at the `word()` accounting site,
+    // unlike the single-TEXT case above.
+    let item = review_definition_item(
+        ".Bl -inset\n.It Xo\n.No one\n.No \\p\n.No two\n.Xc\n.No tail text\n.El\n",
+    );
+    assert_eq!(inline_text(&item.terms[0]), "one", "{item:#?}");
+    assert!(
+        item.description.is_empty(),
+        "the shared buffer's body text never prints: {item:#?}"
+    );
+}
+
+#[test]
+fn empty_head_sp_keeps_its_blank_rows() {
+    // The exact source passed fixed CVS -Tascii/-Tutf8/-Tlint. An empty
+    // HEAD field still executes term_vspace(): term.c:486-498 runs one
+    // conditional term_newln() and then one unconditional endline per
+    // requested row, so `.sp` contributes a blank row before the head's
+    // remaining words. The post-request row-width wrap (NOBREAK cleared)
+    // remains a separate open behavior and is not pinned here.
+    let item = review_definition_item(
+        ".Bl -tag -width 4n\n.It Xo\n.sp\n.No after space\n.Xc\n.No tail text\n.El\n",
+    );
+    let term = inline_text(&item.terms[0]);
+    assert!(
+        term.starts_with("\n\n") && term.contains("after space"),
+        "the requested blank row must precede the head words: {item:#?}"
+    );
+}
+
+#[test]
+fn tag_marker_split_head_closes_its_final_row() {
+    // The exact sources passed fixed CVS -Tascii/-Tutf8/-Tlint. In-word
+    // \p markers already flushed term_fill() passes, so the term_flushln()
+    // tail rule (term.c:250-252) closes a NOBREAK-without-HANG (tag) row at
+    // the final pass: BODY starts its own row even without a trailing
+    // break. A HANG field keeps the shared row for its body.
+    let tag = review_definition_item(
+        ".Bl -tag -width 4n\n.It Xo\n.No \"x\\p y\\p z\"\n.Xc\n.No tail text\n.El\n",
+    );
+    assert_eq!(inline_text(&tag.terms[0]), "x\ny\nz", "{tag:#?}");
+    assert!(
+        !tag.layout.inline_term,
+        "tag body must start its own row: {tag:#?}"
+    );
+    let hang = review_definition_item(
+        ".Bl -hang -width 4n\n.It Xo\n.No \"x\\p y\\p z\"\n.Xc\n.No tail text\n.El\n",
+    );
+    assert_eq!(inline_text(&hang.terms[0]), "x\ny\nz", "{hang:#?}");
+    assert!(
+        hang.layout.inline_term,
+        "hang body stays on the last row: {hang:#?}"
+    );
+}
+
+#[test]
 fn definition_head_handoff_uses_native_close_and_executed_continuation() {
     // Each exact source passed fixed CVS -Tascii/-Tutf8/-Tlint. The entry
     // rule in mdoc_term.c::print_mdoc_node() runs NODE_LINE before dispatch;

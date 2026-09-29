@@ -768,6 +768,7 @@ impl InlineBuilder {
             if let Some(prefix) = definition.hang_row.field_break_before_graph_prefix.take() {
                 let accepted = prefix > 0 || definition.hang_row.field_native_graph;
                 definition.hang_row.field_discarded = true;
+                definition.suffix_discarded_seen = true;
                 Some(if prefix > 0 {
                     prefix
                 } else if accepted {
@@ -817,6 +818,9 @@ impl InlineBuilder {
         definition
             .hang_row
             .word(separator, width, trailing_spaces, printable);
+        // `word()` may itself discard the field (a \p-armed separator met
+        // no graph); latch that rejection for the run-in BODY wipe.
+        definition.suffix_discarded_seen |= definition.hang_row.field_discarded;
         if printable {
             definition.hang_row.field_last_unbreakable_width = trimmed
                 .rsplit([' ', '\n'])
@@ -1076,9 +1080,11 @@ impl InlineBuilder {
         super::InlineExecutionState,
     ) {
         let formatter_cell_occupied = self.has_formatter_cell();
+        let definition_suffix_discarded = self.execution.definition_suffix_discarded();
         let state = PreservedInlineState {
             zero_advance: std::mem::take(&mut self.execution.zero_advance),
             word_end_break: self.execution.word_end_break == WordEndBreak::Pending,
+            definition_suffix_discarded,
             source_continuation: self.execution.final_source_continuation,
             formatter_cell_occupied,
             pending_line_indent: self.execution.pending_line_indent,

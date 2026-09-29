@@ -158,7 +158,25 @@ pub(super) fn definition_item(
         }
         terms[0].insert(0, Inline::anchor_at(id, source_span(node)));
     }
-    let closed_head_row = take_closed_head_row(&mut terms);
+    let empty_text_closes_run_in = flow.head.generated_cells().is_some()
+        && head.iter().any(has_empty_text_child)
+        && terms
+            .last()
+            .is_some_and(|term| mant_ir::has_printable_character(term))
+        && matches!(
+            flow.head,
+            DefinitionHeadFlow::RunIn { flags, .. }
+                if !flags.contains(crate::mandoc::inline::FieldFlag::Hang)
+                    && !flags.contains(crate::mandoc::inline::FieldFlag::NoBreak)
+        );
+    // term.c:250-252 with 347-350: the generated body separator is a
+    // non-breaking space, so an armed trailing `\p` alone keeps the field
+    // (and the joining BODY) on one row. A separate empty TEXT node runs
+    // term_newln() mid-HEAD (NODE_LINE); that flush prints its prefix, and
+    // a field without NOBREAK or HANG (inset) closes the row before BODY.
+    let closed_head_row = take_closed_head_row(&mut terms)
+        || marker_split_field_exited(flow.head, &terms)
+        || empty_text_closes_run_in;
     if closed_head_row {
         // The last explicit HEAD break becomes the term/BODY separation.
         // Earlier breaks, including extra sp rows, remain inside the term.
@@ -191,6 +209,10 @@ pub(super) fn definition_item(
             && !closed_head_scope,
     );
     let spacing_enabled = formatter.spacing_enabled();
+    // Compute before the run-in state is moved into the body scope below.
+    let discarded_run_in_suffix = run_in_execution
+        .as_ref()
+        .is_some_and(|run_in| run_in.state.definition_suffix_discarded);
     let mut description = if let Some(run_in) = run_in_execution {
         lower_scope(
             body,
@@ -214,6 +236,13 @@ pub(super) fn definition_item(
             ScopeFlow::body_post_row_end(body_origin, spacing_enabled, flow.paragraph_predecessor),
         )
     };
+    // term_flushln() clears the whole unflushed buffer when a pass rejects
+    // (term.c:144-146 with 235): for a run-in HEAD whose in-word `\p`
+    // discarded the suffix, the late flush still holds the generated
+    // separator and the first BODY text, so that content never prints.
+    if discarded_run_in_suffix && matches!(description.first(), Some(Block::Paragraph { .. })) {
+        description.remove(0);
+    }
     carry_invisible_head_row(node, &terms, closed_head_row, &mut description);
     if node.macro_name.as_deref() == Some("IP") {
         // man_term.c::post_IP() can complete an empty HEAD word even though

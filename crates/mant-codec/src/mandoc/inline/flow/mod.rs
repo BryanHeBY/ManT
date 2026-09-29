@@ -188,6 +188,10 @@ struct InboundExecution {
 pub(in crate::mandoc) struct PreservedInlineState {
     pub(in crate::mandoc) zero_advance: ZeroAdvanceState,
     pub(in crate::mandoc) word_end_break: bool,
+    /// Latched: a pass of the run-in HEAD field rejected and the buffer
+    /// wipe (term.c:144-146 with 235) discarded its suffix. The BODY's
+    /// first text shared that buffer and never prints.
+    pub(in crate::mandoc) definition_suffix_discarded: bool,
     pub(in crate::mandoc) source_continuation: Option<bool>,
     pub(in crate::mandoc) formatter_cell_occupied: bool,
     pub(in crate::mandoc) pending_line_indent: usize,
@@ -619,6 +623,15 @@ impl InlineBuilder {
 impl InlineExecutionState {
     pub(in crate::mandoc) fn source_row_continues(&self) -> bool {
         self.final_source_continuation.unwrap_or(false)
+    }
+
+    /// Whether any pass of the active definition field rejected and had
+    /// its suffix wiped (`term_fill()` nbr=0 after a printed prefix); the
+    /// fact is latched for the field's whole lifetime.
+    pub(in crate::mandoc) fn definition_suffix_discarded(&self) -> bool {
+        self.definition
+            .as_ref()
+            .is_some_and(|state| state.suffix_discarded_seen)
     }
 
     pub(in crate::mandoc) fn with_spacing(spacing_enabled: bool) -> Self {
