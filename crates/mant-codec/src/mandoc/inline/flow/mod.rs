@@ -192,6 +192,10 @@ pub(in crate::mandoc) struct PreservedInlineState {
     /// wipe (term.c:144-146 with 235) discarded its suffix. The BODY's
     /// first text shared that buffer and never prints.
     pub(in crate::mandoc) definition_suffix_discarded: bool,
+    /// A HEAD field still open at the ownership split (NOBREAK run-in
+    /// heads, `mdoc_term.c::termp_it_pre()`). The BODY session continues
+    /// this field instead of starting an unconfigured stream.
+    pub(in crate::mandoc) definition_field: Option<definition::PreservedDefinitionField>,
     pub(in crate::mandoc) source_continuation: Option<bool>,
     pub(in crate::mandoc) formatter_cell_occupied: bool,
     pub(in crate::mandoc) pending_line_indent: usize,

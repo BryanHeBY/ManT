@@ -83,6 +83,32 @@ fn inset_separate_marker_text_wipes_body_first_text() {
 }
 
 #[test]
+fn diag_literal_head_marker_wipes_field_suffix() {
+    // The exact source passed fixed CVS -Tascii/-Tutf8/-Tlint. Under
+    // -diag the It HEAD does not parse extension blocks, so `.It Xo`
+    // keeps the literal word "Xo" as its head (mdoc_macro.c:1112-1119)
+    // and the extension's BODY words execute inside the still-open
+    // NOBREAK field that termp_it_pre() configured before the HEAD
+    // printed (mdoc_term.c:827-831) and that only the item's BODY post
+    // term_newln() closes (mdoc_term.c:939-945). The marker's rejected
+    // pass therefore wipes the unprinted suffix (term.c:144-146 with
+    // 235): the accepted prefix prints on the head row and the joining
+    // body text never does. CVS output: one row `Xo  alpha`.
+    let item = review_definition_item(
+        ".Bl -diag\n.It Xo\n.No \"alpha \\p beta\"\n.Xc\n.No tail text\n.El\n",
+    );
+    assert_eq!(inline_text(&item.terms[0]), "Xo", "{item:#?}");
+    assert!(
+        item.layout.inline_term,
+        "diag NOBREAK keeps the head row: {item:#?}"
+    );
+    let [Block::Paragraph { children, .. }] = &item.description[..] else {
+        panic!("expected one run-in paragraph: {item:#?}");
+    };
+    assert_eq!(inline_text(children), "  alpha", "{item:#?}");
+}
+
+#[test]
 fn empty_head_sp_keeps_its_blank_rows() {
     // The exact source passed fixed CVS -Tascii/-Tutf8/-Tlint. An empty
     // HEAD field still executes term_vspace(): term.c:486-498 runs one
@@ -4255,4 +4281,25 @@ fn visible_glyphs_before_a_definition_break_do_not_detach_the_head() {
     // A glyph decoded from a named escape is visible content, not a formatter
     // transition. It therefore remains with x before `.br` starts BODY.
     assert!(text.contains("x α \nBODY"), "{text:?}");
+}
+
+#[test]
+fn hang_marker_before_any_graph_wipes_the_whole_field() {
+    // The exact source passed fixed CVS -Tascii/-Tutf8/-Tlint. A \p whose
+    // pass accepted no graph leaves term_fill() resumed at the NEXT word's
+    // leading blank (term.c:293-295 with 143-146): that blank rejects the
+    // pass before the word's own glyphs, so the entire field - including
+    // the X that follows a second marker in the same operand - is
+    // unprinted buffer and only BODY survives on the open HANG row.
+    let item = review_definition_item(
+        ".Bl -hang -width 4n\n.It Xo\n.No \"\\p\"\n.No \"X\\p \\p Y\"\n.Xc\n.No BODY\n.El\n",
+    );
+    assert!(
+        item.terms.iter().all(|term| inline_text(term).is_empty()),
+        "no part of the rejected field prints: {item:#?}"
+    );
+    let [Block::Paragraph { children, .. }] = &item.description[..] else {
+        panic!("expected the body on the open HANG row: {item:#?}");
+    };
+    assert_eq!(inline_text(children), "BODY", "{item:#?}");
 }

@@ -21,6 +21,11 @@ pub(super) struct DefinitionFieldState {
     /// this fact survives later flushes; a run-in BODY reads it to know
     /// its first text shared the wiped buffer.
     pub(super) suffix_discarded_seen: bool,
+    /// True only for a NOBREAK field carried across the HEAD/BODY ownership
+    /// split (`PreservedDefinitionField`): its rejection is decided by the
+    /// BODY words and must be committed at the item post drain
+    /// (mdoc_term.c:939-945), the only `term_newln()` this field ever sees.
+    pub(super) run_in_continuation: bool,
     pub(super) outcome: DefinitionOutcome,
     pub(super) no_break: Option<NoBreakField>,
     // A positive term_vspace() ends the HANG device row. The next author
@@ -28,6 +33,22 @@ pub(super) struct DefinitionFieldState {
     pub(super) vertical_started_row: bool,
     pub(super) hang_row: HangNativeRow,
     pub(super) pending_gap_origin: PendingFieldGapOrigin,
+}
+
+/// A definition field that stays open across the HEAD/BODY ownership split.
+///
+/// CVS `mdoc_term.c::termp_it_pre()` configures a `-diag` NOBREAK field
+/// before the HEAD prints and keeps it active until the item's BODY post
+/// runs `term_newln()`. When the parsed HEAD degenerates to plain text
+/// (for example `.It Xo`, where the extension block closes outside the
+/// head), the marker-driven field rules must therefore continue in the
+/// BODY session: carry the live field state and its configuration across
+/// the `PreservedInlineState` seam.
+pub(in crate::mandoc) struct PreservedDefinitionField {
+    pub(super) state: DefinitionFieldState,
+    pub(super) gap_cells: u8,
+    pub(super) body_width_columns: u16,
+    pub(super) flags: super::native_field::FieldFlags,
 }
 
 #[derive(Clone, Copy, Default, Eq, PartialEq)]
@@ -73,6 +94,13 @@ pub(super) struct HangNativeRow {
     pub(super) transition: HangRowTransition,
     pub(super) suppress_next_auto_space: bool,
     pub(super) margin_flush_seen: bool,
+    // Snapshot taken when a source word's decode begins: a \p armed by an
+    // EARLIER word starts this word's term_fill() pass at a blank (term.c
+    // resumes right after that word's '\n' buffer cell). When that armed
+    // pass had accepted no graph yet, the very first blank rejects the pass
+    // (nbr=0, term.c:293-295) and this whole word is unprinted buffer.
+    pub(super) field_armed_at_word_start: bool,
+    pub(super) field_native_graph_at_word_start: bool,
 }
 
 #[derive(Clone, Copy, Default, Eq, PartialEq)]
@@ -163,6 +191,8 @@ impl HangNativeRow {
         self.provisional_trailing_break = None;
         self.field_discarded = false;
         self.field_last_unbreakable_width = 0;
+        self.field_armed_at_word_start = false;
+        self.field_native_graph_at_word_start = false;
         self.minbl = trailspace;
         self.transition = HangRowTransition::Flushed;
     }
@@ -186,6 +216,8 @@ impl HangNativeRow {
         self.provisional_trailing_break = None;
         self.field_discarded = false;
         self.field_last_unbreakable_width = 0;
+        self.field_armed_at_word_start = false;
+        self.field_native_graph_at_word_start = false;
         self.transition = HangRowTransition::Flushed;
     }
 
@@ -671,6 +703,16 @@ impl InlineBuilder {
     /// field has not supplied a graph yet, even later words in that field are
     /// never printed. The text decoder reports this event inside one word;
     /// `HangNativeRow::word()` handles the same event across words.
+    /// Snapshot the pass state a source word's decode begins in. See
+    /// `HangNativeRow::field_armed_at_word_start`.
+    pub(in crate::mandoc) fn note_hang_word_decode_start(&mut self) {
+        if let Some(definition) = &mut self.execution.definition {
+            let row = &mut definition.hang_row;
+            row.field_armed_at_word_start = row.field_pending_word_end_break;
+            row.field_native_graph_at_word_start = row.field_native_graph;
+        }
+    }
+
     pub(in crate::mandoc) fn note_hang_break_before_graph(&mut self, accepted_prefix: usize) {
         if let Some(definition) = &mut self.execution.definition {
             definition.suffix_discarded_seen = true;
@@ -1480,10 +1522,20 @@ impl InlineBuilder {
             // the output owner or reset field flags.
             self.discard_unprinted_definition_field_output();
         }
-        self.execution
+        let field = self
+            .execution
             .definition
             .as_mut()
-            .and_then(|state| state.no_break.take())
+            .and_then(|state| state.no_break.take());
+        if field.is_some()
+            && let Some(state) = &mut self.execution.definition
+        {
+            // This request itself ran term_flushln() for the field, so the
+            // item post drain no longer owes the run-in continuation a
+            // separate decision.
+            state.run_in_continuation = false;
+        }
+        field
     }
 
     fn restore_no_break_field_projection(&mut self, field: NoBreakField) -> bool {

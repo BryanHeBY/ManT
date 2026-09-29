@@ -240,9 +240,10 @@ impl<'a> LoweringContext<'a> {
         &self,
         groups: impl IntoIterator<Item = &'n [Node]>,
         spacing: bool,
-        formatter: &mut formatter::FormatterState,
+        formatter: &mut crate::mandoc::formatter::FormatterState,
         strong_scope: bool,
         generated_cells: usize,
+        author_break_effect: inline::AuthorBreakEffect,
     ) -> (
         Vec<mant_ir::Inline>,
         inline::PreservedInlineState,
@@ -253,7 +254,7 @@ impl<'a> LoweringContext<'a> {
         let mut builder = formatter.begin_inline_session(
             spacing,
             self.active_mdoc_section() == MdocSectionContext::Authors,
-            inline::AuthorBreakEffect::Line,
+            author_break_effect,
         );
         builder.begin_definition_head_consumption();
         builder.scope_posts = self.scope_posts.clone();

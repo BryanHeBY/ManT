@@ -1,8 +1,8 @@
 use super::{
-    FilledBoundary, Font, FormatterColumn, InboundExecution, Inline, InlineBuilder, KeepPhase,
-    OutputRollback, OutputTransaction, PendingBoundary, PreservedInlineState, TrailingOutput,
-    WordEndBreak, first_visible_character, has_printable_character, last_visible_character,
-    needs_boundary_space, push_text,
+    AuthorBreakEffect, FilledBoundary, Font, FormatterColumn, InboundExecution, Inline,
+    InlineBuilder, KeepPhase, OutputRollback, OutputTransaction, PendingBoundary,
+    PreservedInlineState, TrailingOutput, WordEndBreak, first_visible_character,
+    has_printable_character, last_visible_character, needs_boundary_space, push_text,
 };
 
 // A private boundary carried only while one authored Link spans two native
@@ -766,19 +766,36 @@ impl InlineBuilder {
         };
         let rejected_prefix =
             if let Some(prefix) = definition.hang_row.field_break_before_graph_prefix.take() {
-                let accepted = prefix > 0 || definition.hang_row.field_native_graph;
+                // term.c:293-295 with 143-146: a \p from an earlier word
+                // left term_fill() resumed at this word's leading blank with
+                // no accepted graph in that pass. The blank rejects the pass
+                // before this word's own glyphs, so the in-word prefix is
+                // unprinted buffer, not an accepted one.
+                let cross_word_rejection = definition.hang_row.field_armed_at_word_start
+                    && !definition.hang_row.field_native_graph_at_word_start;
+                let accepted =
+                    (prefix > 0 || definition.hang_row.field_native_graph) && !cross_word_rejection;
                 definition.hang_row.field_discarded = true;
                 definition.suffix_discarded_seen = true;
-                Some(if prefix > 0 {
-                    prefix
-                } else if accepted {
-                    incoming
-                        .iter()
-                        .position(|node| matches!(node, Inline::LineBreak))
-                        .map_or(0, |index| index + 1)
+                if cross_word_rejection {
+                    // The pass boundary predates this word: term_fill()
+                    // resumed at the earlier word's armed blank. Keep the
+                    // field output range recorded when that word armed
+                    // (request_word_end_break), which already precedes
+                    // every piece of this word.
+                    None
                 } else {
-                    0
-                })
+                    Some(if prefix > 0 {
+                        prefix
+                    } else if accepted {
+                        incoming
+                            .iter()
+                            .position(|node| matches!(node, Inline::LineBreak))
+                            .map_or(0, |index| index + 1)
+                    } else {
+                        0
+                    })
+                }
             } else {
                 None
             };
@@ -1025,6 +1042,20 @@ impl InlineBuilder {
         }
         let completed_invisible_row =
             invisible_formatter_cell && matches!(self.nodes.last(), Some(Inline::LineBreak));
+        // The item post term_newln() (mdoc_term.c:939-945) flushes a
+        // run-in NOBREAK field carried across the HEAD/BODY split before
+        // this owner drains; term_fill() has already decided that field's
+        // rejection, so commit the wipe while the field still owns its
+        // output range. Fresh `.mc` NoBreakField sessions own their own
+        // earlier lifecycle and are not decided here.
+        if self
+            .execution
+            .definition
+            .as_ref()
+            .is_some_and(|definition| definition.run_in_continuation)
+        {
+            self.discard_unprinted_definition_field_output();
+        }
         let mut children = self.finish_nodes();
         if completed_invisible_row {
             children.push(Inline::LineBreak);
@@ -1081,10 +1112,39 @@ impl InlineBuilder {
     ) {
         let formatter_cell_occupied = self.has_formatter_cell();
         let definition_suffix_discarded = self.execution.definition_suffix_discarded();
+        // term.c keeps one NOBREAK field active across the whole list item
+        // (mdoc_term.c::termp_it_pre() through the item's BODY post). When
+        // the HEAD session ends while that field is still configured, carry
+        // it instead of retiring it with the drained output owner.
+        let definition_field = match (
+            self.execution
+                .author_execution
+                .as_ref()
+                .map(|author| author.break_effect),
+            self.execution.definition.take(),
+        ) {
+            (
+                Some(AuthorBreakEffect::Field {
+                    gap_cells,
+                    body_width_columns,
+                    flags,
+                }),
+                Some(state),
+            ) => Some(super::definition::PreservedDefinitionField {
+                state,
+                gap_cells,
+                body_width_columns,
+                flags,
+            }),
+            // Every other field dies with the drained owner below, exactly
+            // as retire_output_owner() has always done.
+            _ => None,
+        };
         let state = PreservedInlineState {
             zero_advance: std::mem::take(&mut self.execution.zero_advance),
             word_end_break: self.execution.word_end_break == WordEndBreak::Pending,
             definition_suffix_discarded,
+            definition_field,
             source_continuation: self.execution.final_source_continuation,
             formatter_cell_occupied,
             pending_line_indent: self.execution.pending_line_indent,

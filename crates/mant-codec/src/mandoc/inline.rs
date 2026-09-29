@@ -419,6 +419,7 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
         RoffInlineEvent::DeviceName | RoffInlineEvent::Overstrike { .. } => true,
         _ => false,
     });
+    builder.note_hang_word_decode_start();
     builder.begin_word_projection_with_break(true, !builder.in_definition_field() || has_glyph);
     let pending_word_end_break = builder.take_word_end_break();
     // In a HANG field, term.c::term_fill() does not turn \p followed only by

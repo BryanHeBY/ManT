@@ -331,6 +331,22 @@ impl InlineBuilder {
         if state.pending_definition_indent.is_some() {
             self.set_pending_definition_indent(state.pending_definition_indent);
         }
+        if let Some(field) = state.definition_field {
+            // The item's NOBREAK field is still open (term.c keeps it from
+            // termp_it_pre() until the BODY post term_newln()); continue it
+            // with its original configuration.
+            let mut state = field.state;
+            state.run_in_continuation = true;
+            self.execution.definition = Some(state);
+            if let Some(author) = &mut self.execution.author_execution {
+                author.break_effect = AuthorBreakEffect::Field {
+                    gap_cells: field.gap_cells,
+                    body_width_columns: field.body_width_columns,
+                    flags: field.flags,
+                };
+                author.field_output_start = 0;
+            }
+        }
     }
 
     /// CVS `term.c::encode1()` preserves a completed nonblank BACKBEFORE

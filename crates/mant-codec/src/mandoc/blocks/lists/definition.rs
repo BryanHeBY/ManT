@@ -416,6 +416,29 @@ fn lower_definition_head(
     );
     if flow.head.generated_cells().is_some() {
         let generated_cells = usize::from(flow.head.generated_cells().unwrap_or_default());
+        // mdoc_term.c::termp_it_pre() configures the NOBREAK field before
+        // the HEAD prints; a `-diag` head (the only NOBREAK run-in kind)
+        // must therefore decode its own words inside that field.
+        let run_in_field = match flow.head {
+            DefinitionHeadFlow::RunIn { flags, .. }
+                if flags.contains(crate::mandoc::inline::FieldFlag::NoBreak) =>
+            {
+                crate::mandoc::inline::AuthorBreakEffect::Field {
+                    // The generated cells execute as a real run-in word
+                    // below (geometry.gap is 0 for the same reason), so the
+                    // field adds no separator of its own.
+                    gap_cells: 0,
+                    // mdoc_term.c::termp_it_pre() shortens rmargin to
+                    // offset+width only for hang/tag-style lists; LIST_diag
+                    // keeps the unshortened margin (mdoc_term.c:843-855), so
+                    // this field's right bound is the page margin, which the
+                    // width-agnostic IR lowering cannot know.
+                    body_width_columns: u16::MAX,
+                    flags,
+                }
+            }
+            _ => crate::mandoc::inline::AuthorBreakEffect::Line,
+        };
         let (term, mut execution, term_breaks, surviving_cells, generated_word) = context
             .lower_run_in_definition_head(
                 groups,
@@ -423,6 +446,7 @@ fn lower_definition_head(
                 formatter,
                 flow.head.strong_scope(),
                 generated_cells,
+                run_in_field,
             );
         execution.last_executed_source_line = head
             .iter()
