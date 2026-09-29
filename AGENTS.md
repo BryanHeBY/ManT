@@ -31,5 +31,7 @@
 - The behavioral reference lives at
   `target/mandoc-migration/reference/mandoc` and dies with every
   `cargo clean`. Restore it with `scripts/rebuild_reference_mandoc.sh`
-  (recipe verified byte-identical on the 54-case matrix) instead of
-  improvising a rebuild.
+  using the locked pristine archive, formal build recipe and active
+  registry identity. Restoration must pass preflight for ASCII, UTF-8
+  and HTML even when the destination already exists; do not reconstruct
+  the oracle from patched vendor sources or improvise a rebuild.

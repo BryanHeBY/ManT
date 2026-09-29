@@ -8,6 +8,7 @@ import unittest
 from unittest.mock import patch
 
 import mandoc_oracle
+import rebuild_reference_mandoc
 
 
 class OracleIdentityTests(unittest.TestCase):
@@ -140,6 +141,75 @@ class OracleIdentityTests(unittest.TestCase):
         registry.write_text(json.dumps(value) + "\n")
         with self.assertRaisesRegex(ValueError, "not registered"):
             self.verify()
+
+    def restoration_fixture(self):
+        self.value["profiles"] = ["ascii", "html", "utf8"]
+        self.value["recipe"]["buildCommand"] = ["make", "-j4", "mandoc"]
+        output = self.root / "target/build"
+        (output / "mandoc").write_bytes(self.binary.read_bytes())
+        (output / "BUILD.json").write_text("locked build record\n")
+        self.value["buildEvidence"]["buildRecord"] = mandoc_oracle.hash_record(
+            self.root, "target/build/BUILD.json", "build record",
+        )
+        self.write_attestation()
+        return self.root / rebuild_reference_mandoc.REFERENCE
+
+    def test_restore_rechecks_and_replaces_an_existing_wrong_reference(self):
+        reference = self.restoration_fixture()
+        reference.parent.mkdir(parents=True)
+        reference.write_text("patched vendor binary\n")
+        with patch("rebuild_reference_mandoc.subprocess.run") as build:
+            result = rebuild_reference_mandoc.restore(self.root)
+        build.assert_not_called()
+        self.assertEqual(reference.read_bytes(), self.binary.read_bytes())
+        self.assertEqual(result["profiles"], ["ascii", "html", "utf8"])
+
+    def test_restore_rejects_recipe_drift_even_when_reference_exists(self):
+        reference = self.restoration_fixture()
+        reference.parent.mkdir(parents=True)
+        reference.write_bytes(self.binary.read_bytes())
+        (self.root / "crates/libmandoc-rs/scripts/build_oracle.py").write_text("changed recipe")
+        with self.assertRaisesRegex(ValueError, "recipe"):
+            rebuild_reference_mandoc.restore(self.root)
+
+    def test_restore_checks_archive_before_accepting_reference(self):
+        reference = self.restoration_fixture()
+        reference.parent.mkdir(parents=True)
+        reference.write_bytes(self.binary.read_bytes())
+        self.archive.write_text("wrong source snapshot")
+        with self.assertRaisesRegex(ValueError, "source archive"):
+            rebuild_reference_mandoc.restore(self.root)
+
+    def test_restore_can_copy_an_exact_saved_archive(self):
+        reference = self.restoration_fixture()
+        saved = self.root / "saved-pristine.tar.gz"
+        self.archive.rename(saved)
+        rebuild_reference_mandoc.restore(self.root, supplied_archive=saved)
+        self.assertEqual(self.archive.read_bytes(), saved.read_bytes())
+        self.assertEqual(reference.read_bytes(), self.binary.read_bytes())
+
+    def test_restore_missing_archive_does_not_fall_back_to_vendor(self):
+        self.restoration_fixture()
+        self.archive.unlink()
+        with patch("rebuild_reference_mandoc.shutil.which", return_value=None):
+            with self.assertRaisesRegex(ValueError, "provide --archive or a CVS client"):
+                rebuild_reference_mandoc.restore(self.root)
+
+    def test_restore_never_installs_an_unregistered_rebuild(self):
+        reference = self.restoration_fixture()
+        candidate = self.root / "target/build/mandoc"
+        candidate.write_text("different build")
+
+        def unregistered_build(*args, **kwargs):
+            output = self.root / "target/build"
+            output.mkdir()
+            (output / "mandoc").write_text("unregistered candidate")
+            (output / "attestation.json").write_text("{}")
+
+        with patch("rebuild_reference_mandoc.subprocess.run", side_effect=unregistered_build):
+            with self.assertRaisesRegex(ValueError, "automatic registration is forbidden"):
+                rebuild_reference_mandoc.restore(self.root)
+        self.assertFalse(reference.exists())
 
 
 if __name__ == "__main__":

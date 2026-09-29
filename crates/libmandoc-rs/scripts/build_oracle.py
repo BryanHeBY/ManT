@@ -101,7 +101,17 @@ def build(root: Path, archive: Path, output: Path, identity: str, jobs: int) -> 
         source_tree = candidate / "source"
         extracted.rename(source_tree)
         configure_command = recipe["configureCommand"]
-        build_command = [item.format(jobs=jobs) for item in recipe["buildCommand"]]
+        # The archive is compiled in a disposable directory. Map that path in
+        # DWARF and __FILE__ so the registered artifact can survive cargo clean
+        # and be reproduced from the same pristine archive and toolchain.
+        build_command = [
+            item.format(jobs=jobs, source=str(source_tree))
+            for item in recipe["buildCommand"]
+        ]
+        recorded_build_command = [
+            item.format(jobs=jobs, source="{source}")
+            for item in recipe["buildCommand"]
+        ]
         subprocess.run(configure_command, cwd=source_tree, env=environment, check=True)
         subprocess.run(build_command, cwd=source_tree, env=environment, check=True)
         binary = source_tree / "mandoc"
@@ -117,7 +127,7 @@ def build(root: Path, archive: Path, output: Path, identity: str, jobs: int) -> 
             "tools": {name: {"path": item[0], "version": item[1]} for name, item in toolchain.items()},
             "environment": recipe["environment"],
             "configureCommand": configure_command,
-            "buildCommand": build_command,
+            "buildCommand": recorded_build_command,
             "productPatchesApplied": False,
         }
         (candidate / "BUILD.json").write_text(json.dumps(build_record, sort_keys=True, indent=2) + "\n")
@@ -142,7 +152,7 @@ def build(root: Path, archive: Path, output: Path, identity: str, jobs: int) -> 
         RECIPE,
         evidence,
         recipe["configureCommand"],
-        [item.format(jobs=jobs) for item in recipe["buildCommand"]],
+        [item.format(jobs=jobs, source="{source}") for item in recipe["buildCommand"]],
         compiler_path,
         compiler_version,
         recipe["profiles"],
