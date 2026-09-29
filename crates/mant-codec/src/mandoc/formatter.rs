@@ -150,6 +150,19 @@ impl FormatterState {
         }
     }
 
+    /// Record the source-continuation register as it stands at a BODY word's
+    /// source-line entry, before that word's own `term_word()` can clear it
+    /// (term.c:588). The last record before the first visible row is the
+    /// `TERMP_NONEWLINE` state that row's `NODE_LINE` gate reads
+    /// (mdoc_term.c:314-317).
+    pub(super) fn note_definition_source_line(&mut self) {
+        if let Some(body) = self.definition_bodies.last_mut()
+            && body.before_visible
+        {
+            body.source_continues_after_run_in = Some(self.execution.source_row_continues());
+        }
+    }
+
     pub(super) fn note_definition_visible(&mut self) {
         // A nested list or definition is also visible content in every
         // enclosing BODY. Do not let an outer pending head row consume a

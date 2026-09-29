@@ -126,10 +126,17 @@ pub(super) fn definition_item(
     // evidence that the first no-fill BODY row still belongs on that line.
     let head_source_continues = formatter.execution.source_row_continues();
     // mdoc_macro.c::blk_exp_close() marks the original block BROKEN when a
-    // later explicit end closes its formatting scope. Only combine that
-    // parser event with the executed \c register: neither "is a Block" nor
-    // the presence of a close macro alone proves the physical row ended.
-    let closed_head_scope = head.iter().any(native_broken_head_scope) && !head_source_continues;
+    // later explicit end closes its formatting scope. The terminal renderer
+    // never reads that flag (no NODE_BROKEN reference in mdoc_term.c or
+    // term.c); it only witnesses the row through executed requests. The
+    // body's `.br` closes the head row once (roff_term_pre_br term_newln);
+    // a SECOND row appears only in no-fill mode, where print_mdoc_node()
+    // runs another term_newln() at the next NODE_LINE
+    // (mdoc_term.c:314-317 with 361-369). Fill mode joins the open row
+    // instead (mdoc.c:238-250 cancels the continuation there).
+    let closed_head_scope = (formatter.no_fill || body.iter().any(node_entered_no_fill))
+        && head.iter().any(native_broken_head_scope)
+        && !head_source_continues;
     if man_node {
         formatter.font.man_text_boundary(); // HEAD post
         formatter.font.man_text_boundary(); // BODY pre
@@ -296,6 +303,13 @@ pub(super) fn definition_item(
 fn native_broken_head_scope(node: &Node) -> bool {
     (node.kind == NodeKind::Block && node.flags.broken)
         || node.children.iter().any(native_broken_head_scope)
+}
+
+/// The extra no-fill row decision needs the fill mode the BODY's first
+/// executed word runs in; an `.nf` inside the HEAD does not survive the
+/// head session's state snapshot, so read it from the parsed nodes.
+fn node_entered_no_fill(node: &Node) -> bool {
+    node.flags.no_fill || node.children.iter().any(node_entered_no_fill)
 }
 
 fn only_breakable_head_padding(inline: &Inline) -> bool {

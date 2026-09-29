@@ -158,6 +158,10 @@ pub(in crate::mandoc) fn lower_no_fill_fragment_with_formatter(
     append: impl FnOnce(&mut InlineBuilder),
 ) -> (Vec<Inline>, bool, bool) {
     let continued = formatter.no_fill_inline.continued;
+    // A no-fill BODY word's NODE_LINE gate reads TERMP_NONEWLINE as it
+    // stands at this fragment's entry (mdoc_term.c:314-317), before the
+    // word's own term_word() clears it (term.c:588).
+    formatter.note_definition_source_line();
     let mut output = Vec::new();
     let (continues_line, formatter_cell_occupied, produced_formatter_cell, asserted_vertical_row) =
         formatter.with_output_builder(&mut output, |builder| {

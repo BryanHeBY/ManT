@@ -135,6 +135,10 @@ impl ParagraphFlow {
             .is_some_and(|(previous, current)| current > previous);
         let has_executed_predecessor =
             self.last_line.is_some() || formatter.execution.has_formatter_cell();
+        // The definition BODY's row decision reads TERMP_NONEWLINE as it
+        // stands at this word's source-line entry, before the word's own
+        // term_word() clears it (term.c:588 with mdoc_term.c:314-317).
+        formatter.note_definition_source_line();
         let changed = self.with_inline_builder(formatter, |builder| {
             let source_continues = builder.final_source_continuation_or(false);
             let boundary = if source_continues {

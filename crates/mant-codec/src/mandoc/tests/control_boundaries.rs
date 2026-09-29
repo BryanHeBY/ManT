@@ -4303,3 +4303,50 @@ fn hang_marker_before_any_graph_wipes_the_whole_field() {
     };
     assert_eq!(inline_text(children), "BODY", "{item:#?}");
 }
+
+#[test]
+fn fill_mode_closed_head_scope_does_not_add_a_row() {
+    // The exact source passed fixed CVS -Tascii/-Tutf8/-Tlint. NODE_BROKEN
+    // is parser state the terminal renderer never reads (no reference in
+    // mdoc_term.c or term.c): the body `.br` closes the head row once
+    // (roff_term_pre_br term_newln) and fill mode joins the open row
+    // (mdoc.c:238-250). Only no-fill mode runs another term_newln() at the
+    // next NODE_LINE (mdoc_term.c:314-317), which is where the closed-scope
+    // extra row comes from.
+    let item = review_definition_item(".Bl -inset\n.It Xo X\n.Xc\n.br\n.No BODY\n.El\n");
+    assert_eq!(inline_text(&item.terms[0]), "X", "{item:#?}");
+    let blank_rows: u16 = item
+        .description
+        .iter()
+        .filter_map(|block| match block {
+            Block::VerticalSpace { lines, .. } => Some(*lines),
+            _ => None,
+        })
+        .sum();
+    assert_eq!(blank_rows, 0, "fill mode adds no row: {item:#?}");
+}
+
+#[test]
+fn empty_operand_ends_the_continued_source_row() {
+    // The exact source passed fixed CVS -Tascii/-Tutf8/-Tlint. The HEAD's
+    // trailing \c set TERMP_NONEWLINE, but the BODY's empty `.No ""`
+    // operand still runs term_word(""): its head clears the latch
+    // (term.c:588), so the following no-fill NODE_LINE starts a fresh
+    // physical row (mdoc_term.c:315-317) and BODY does not run in. A
+    // zero-row `.sp 0` in the same position keeps the latch
+    // (roff_term.c::pre_sp runs only pre_br()) and the BODY joins.
+    let emptied = review_definition_item(
+        ".nf\n.Bl -hang -width 4n\n.It Xo\n.No X\\c\n.Xc\n.No \"\"\n.No BODY\n.El\n",
+    );
+    assert!(
+        !emptied.layout.inline_term,
+        "the cleared latch ends the row: {emptied:#?}"
+    );
+    let zero_row = review_definition_item(
+        ".nf\n.Bl -hang -width 4n\n.It Xo\n.No X\\c\n.sp 0\n.Xc\n.No BODY\n.El\n",
+    );
+    assert!(
+        zero_row.layout.inline_term,
+        "term_newln() alone keeps TERMP_NONEWLINE: {zero_row:#?}"
+    );
+}
