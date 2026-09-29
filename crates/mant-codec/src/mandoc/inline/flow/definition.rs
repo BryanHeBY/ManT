@@ -701,6 +701,19 @@ impl InlineBuilder {
             .then(|| mant_ir::geometry::text_width(&text))
     }
 
+    /// Whether the next word already has a request-armed concatenation
+    /// (`TERMP_NOSPACE`, `roff_term.c:78`) pending.
+    pub(in crate::mandoc) fn concat_word_armed(&self) -> bool {
+        self.execution.concat_next_word
+    }
+
+    /// Record the graph counts at which this word executed a zero-width
+    /// breakpoint `\:` (term.c:287-300). Consumed by the HANG field's
+    /// width simulation when the word's cells are buffered.
+    pub(in crate::mandoc) fn note_word_zero_break_prefixes(&mut self, prefixes: &[usize]) {
+        self.execution.word_zero_break_prefixes = prefixes.to_vec();
+    }
+
     /// Arm the next word's concatenation for a filled cleared field
     /// (term.c:250-253 with 205-207): same no-separator word, but the
     /// body starts at the description column rather than against the

@@ -35,6 +35,9 @@ pub(in crate::mandoc) struct TextExecution {
     /// The HANG field owner combines this with graphs from earlier words.
     pub(in crate::mandoc) break_before_graph_prefix: Option<usize>,
     pub(in crate::mandoc) trailing_output: TrailingOutput,
+    /// Graph counts (from the word's start) at which a zero-width
+    /// breakpoint `\:` executed (term.c:287-300, `ASCII_BREAK`).
+    pub(in crate::mandoc) zero_break_prefixes: Vec<usize>,
 }
 
 /// One presentation segment inside a single native formatter word.
@@ -62,6 +65,11 @@ struct TextEventState {
     break_started_after_blank: bool,
     break_trailing_blanks: usize,
     graph_since_break: bool,
+    /// Graphs produced since the word began, and the graph counts at which
+    /// a zero-width breakpoint (`\:`) occurred (term.c:287-300 shares the
+    /// breakable-blank arm with `ASCII_BREAK`).
+    graph_count: usize,
+    zero_break_prefixes: Vec<usize>,
 }
 
 impl TextEventState {
@@ -76,6 +84,8 @@ impl TextEventState {
             break_started_after_blank: false,
             break_trailing_blanks: 0,
             graph_since_break: false,
+            graph_count: 0,
+            zero_break_prefixes: Vec::new(),
         }
     }
 }
@@ -138,6 +148,9 @@ fn append_text_event(
         }
         state.suppress_break_whitespace = false;
         let graph = !is_formatter_word_blank(character) && character != '\n';
+        if graph {
+            state.graph_count += 1;
+        }
         state.graph_seen |= graph;
         state.graph_since_break |= state.pending_word_end_break && graph;
         state.last_breakable_blank = is_formatter_word_blank(character);
@@ -255,6 +268,7 @@ fn execute_formatter_word_events(
                 text_state.graph_since_break |= text_state.pending_word_end_break;
                 text_state.last_breakable_blank = false;
                 text_state.trailing_breakable_blanks = 0;
+                text_state.graph_count += 1;
                 zero_advance.append_glyph(value, &mut buffer, font, link.as_deref());
             }
             FormatterWordEvent::Source(RoffInlineEvent::FallbackGlyph(value)) => {
@@ -264,6 +278,7 @@ fn execute_formatter_word_events(
                     text_state.graph_since_break |= text_state.pending_word_end_break;
                     text_state.last_breakable_blank = false;
                     text_state.trailing_breakable_blanks = 0;
+                    text_state.graph_count += 1;
                 }
             }
             FormatterWordEvent::Source(RoffInlineEvent::DeviceName) => {
@@ -319,6 +334,15 @@ fn execute_formatter_word_events(
                 text_state.trailing_breakable_blanks = 0;
                 text_state.trailing_breakable_blanks = 0;
             }
+            FormatterWordEvent::Source(RoffInlineEvent::Presentation {
+                kind: crate::mandoc::roff_escape::PresentationKind::Spacing,
+                ..
+            }) => {
+                // `\:` (roff_escape.rs decodes it as a Presentation
+                // request): term.c:287-300 buffers ASCII_BREAK at this
+                // graph position.
+                text_state.zero_break_prefixes.push(text_state.graph_count);
+            }
             FormatterWordEvent::Source(
                 RoffInlineEvent::Presentation { .. }
                 | RoffInlineEvent::Overstrike { terminal: None, .. },
@@ -326,6 +350,7 @@ fn execute_formatter_word_events(
         }
     }
     flush_segment(&mut output, &mut buffer, font, link.as_deref());
+    let zero_break_prefixes = std::mem::take(&mut text_state.zero_break_prefixes);
     finish_text_execution(
         events,
         output,
@@ -333,6 +358,7 @@ fn execute_formatter_word_events(
         explicit_line_continuation,
         text_state.pending_word_end_break,
         text_state.break_before_graph_prefix,
+        zero_break_prefixes,
     )
 }
 
@@ -359,6 +385,7 @@ fn finish_text_execution(
     source_continuation: Option<bool>,
     pending_word_end_break: bool,
     break_before_graph_prefix: Option<usize>,
+    zero_break_prefixes: Vec<usize>,
 ) -> TextExecution {
     let trailing_output = match mant_ir::last_visible_character(&output) {
         None | Some('\n') => TrailingOutput::None,
@@ -380,6 +407,7 @@ fn finish_text_execution(
         pending_word_end_break,
         break_before_graph_prefix,
         trailing_output,
+        zero_break_prefixes,
     }
 }
 

@@ -439,6 +439,7 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
         pending_word_end_break && !deferred_hang_break,
     );
     builder.ensure_definition_field_session();
+    builder.note_word_zero_break_prefixes(&execution.zero_break_prefixes);
     if let Some(prefix) = execution.break_before_graph_prefix
         && builder.in_definition_field()
     {

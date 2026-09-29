@@ -29,6 +29,11 @@ pub(super) enum FieldCell {
     /// A `\p` break marker (`bufferc('\n')`, term.c:657-658). A pass only
     /// arms its LOCAL `breakline` from it (304-306); `term_field` skips it.
     BreakMarker,
+    /// A zero-width breakpoint `\:` (`ASCII_BREAK`, term.c:287-300).
+    /// Shares the breakable-blank arm with no width of its own: a pass may
+    /// break at it, records it as the resume candidate after a graph, and
+    /// never prints it (term.c:396-398).
+    Breakpoint,
     /// The `'\b'` `encode1()` buffers when a BACKBEFORE retreat meets a
     /// non-blank predecessor (term.c:906): fill subtracts the width of the
     /// cell before it (283-286), then the following graph adds its own.
@@ -80,6 +85,11 @@ impl FieldBuffer {
     /// `bufferc('\n')` for `\p` (term.c:657-658).
     pub(super) fn push_break_marker(&mut self) {
         self.cells.push(FieldCell::BreakMarker);
+    }
+
+    /// `bufferc(ASCII_BREAK)` for `\:` (term.c:287-300).
+    pub(super) fn push_breakpoint(&mut self) {
+        self.cells.push(FieldCell::Breakpoint);
     }
 
     /// A fixed-width non-breaking cell: generated `\ ` run-in gaps and
@@ -151,6 +161,22 @@ impl FieldBuffer {
                         })
                         .unwrap_or(0);
                     vis = vis.saturating_sub(previous);
+                    ic += 1;
+                }
+                FieldCell::Breakpoint => {
+                    // term.c:287-300: ASCII_BREAK keeps `vn = vis` (only a
+                    // real ' ' gains enw) but otherwise shares the blank
+                    // arm: break under an armed marker or past the target,
+                    // else record the candidate after a graph.
+                    let vn = vis;
+                    if breakline || vn > vtarget {
+                        break;
+                    }
+                    if graph {
+                        nbr = ic;
+                        vbr = vis;
+                        graph = false;
+                    }
                     ic += 1;
                 }
                 FieldCell::BreakableBlank => {

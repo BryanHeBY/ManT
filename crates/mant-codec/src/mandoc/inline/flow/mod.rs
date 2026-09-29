@@ -120,6 +120,9 @@ pub(in crate::mandoc) struct InlineExecutionState {
     /// (term.c:250-253 with 205-207): the next word concatenates directly,
     /// like the `TERMP_NOSPACE` left by the request's own `term_newln()`
     /// (`roff_term.c:78`).
+    /// Graph counts (word-relative) at which `\:` executed in the word
+    /// currently being appended; cleared once its cells are buffered.
+    pub(in crate::mandoc) word_zero_break_prefixes: Vec<usize>,
     pub(in crate::mandoc) concat_next_word: bool,
     /// Whether `concat_next_word` was armed by a filled cleared field
     /// (term.c:250-253) rather than the request's `TERMP_NOSPACE`
@@ -697,6 +700,7 @@ impl InlineExecutionState {
             last_executed_source_line: None,
             observe_no_fill_source_lines: SourceLineObservation::Disabled,
             no_fill_word_active: false,
+            word_zero_break_prefixes: Vec::new(),
             concat_next_word: false,
             concat_flush_source: false,
             concat_consumed_for_body: false,

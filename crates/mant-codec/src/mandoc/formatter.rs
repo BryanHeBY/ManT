@@ -320,7 +320,10 @@ impl FormatterState {
         let definition_field_exited = builder.definition_field_exited();
         // An armed request NOSPACE (`roff_term.c:78`) already owns the
         // word join; the filled-field rule would misclassify its row.
-        if !definition_field_exited && builder.cleared_field_filled_capacity() {
+        if !definition_field_exited
+            && !builder.concat_word_armed()
+            && builder.cleared_field_filled_capacity()
+        {
             // term.c:250-253 with 205-207: the HANG head ended at or past
             // the field's own right margin with NOBREAK cleared, so the
             // trailspace roff_term_pre_br() zeroed never separated the
