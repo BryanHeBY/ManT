@@ -169,7 +169,7 @@ fn literal_ranges(
             Inline::Link { children, .. } => {
                 literal_ranges(children, literal, parameter, offset, ranges);
             }
-            Inline::LineBreak => *offset += 1,
+            Inline::LineBreak { .. } => *offset += 1,
             Inline::Anchor { .. } => {}
         }
     }
@@ -199,7 +199,7 @@ fn collect_literal_starts(
             Inline::Link { children, .. } => {
                 collect_literal_starts(children, strong, parameter, offset, starts);
             }
-            Inline::LineBreak => *offset += 1,
+            Inline::LineBreak { .. } => *offset += 1,
             Inline::Anchor { .. } => {}
         }
     }

@@ -136,7 +136,7 @@ pub(in crate::mandoc) fn lower_inline_nodes_with_font_state(
         &mut zero_advance,
     );
     if execution.word_end_break {
-        output.push(Inline::LineBreak);
+        output.push(Inline::line_break());
     }
     zero_advance = execution.zero_advance;
     zero_advance.finish_into(&mut output);

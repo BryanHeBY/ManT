@@ -534,7 +534,7 @@ fn record_mark_role(node: &Node, item: &DefinitionItem, context: &LoweringContex
             Inline::Emphasis { children } | Inline::Link { children, .. } => {
                 styled(children, in_style)
             }
-            Inline::LineBreak => false,
+            Inline::LineBreak { .. } => false,
         })
     }
     let [term] = item.terms.as_slice() else {

@@ -422,7 +422,7 @@ fn consume_text(nodes: &[Inline], expected: &mut &str) -> bool {
             Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. } => {
                 value.as_str()
             }
-            Inline::LineBreak => "\n",
+            Inline::LineBreak { .. } => "\n",
             Inline::Anchor { .. } => continue,
             Inline::Strong { children }
             | Inline::Emphasis { children }

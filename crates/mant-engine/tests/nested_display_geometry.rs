@@ -33,7 +33,7 @@ fn visible(children: &[Inline]) -> String {
         fn visit_inline(&mut self, inline: &'ir Inline) {
             match inline {
                 Inline::Text { value } | Inline::Code { value } => self.0.push_str(value),
-                Inline::LineBreak => self.0.push('\n'),
+                Inline::LineBreak { .. } => self.0.push('\n'),
                 _ => visit::walk_inline(self, inline),
             }
         }

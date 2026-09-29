@@ -69,7 +69,7 @@ fn single_line_heading_labels_normalize_structural_and_dynamic_breaks() {
             Inline::Text {
                 value: "before\t".into(),
             },
-            Inline::LineBreak,
+            Inline::line_break(),
             Inline::Emphasis {
                 children: vec![Inline::Text {
                     value: "after\nlast".into(),

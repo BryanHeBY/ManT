@@ -403,7 +403,7 @@ fn semantic_fingerprint(
                 Inline::Strong { .. } => self.field("strong"),
                 Inline::Emphasis { .. } => self.field("emphasis"),
                 Inline::Link { .. } => self.field("link"),
-                Inline::LineBreak => self.field("line-break"),
+                Inline::LineBreak { .. } => self.field("line-break"),
                 Inline::Anchor { .. } => return,
             }
             visit::walk_inline(self, inline);

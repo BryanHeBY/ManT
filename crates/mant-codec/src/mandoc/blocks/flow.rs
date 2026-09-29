@@ -463,12 +463,12 @@ impl BlockState {
                     // representation change.
                     let completed_rows = children
                         .iter()
-                        .filter(|inline| matches!(inline, Inline::LineBreak))
+                        .filter(|inline| matches!(inline, Inline::LineBreak { .. }))
                         .count();
                     let active_row = children
                         .iter()
                         .rev()
-                        .take_while(|inline| !matches!(inline, Inline::LineBreak))
+                        .take_while(|inline| !matches!(inline, Inline::LineBreak { .. }))
                         .any(|inline| !matches!(inline, Inline::Anchor { .. }));
                     let rows = u16::try_from(completed_rows + usize::from(active_row))
                         .unwrap_or(u16::MAX)
@@ -596,7 +596,7 @@ fn has_formatter_text_cell(nodes: &[Inline]) -> bool {
         Inline::Strong { children }
         | Inline::Emphasis { children }
         | Inline::Link { children, .. } => has_formatter_text_cell(children),
-        Inline::Anchor { .. } | Inline::LineBreak => false,
+        Inline::Anchor { .. } | Inline::LineBreak { .. } => false,
     })
 }
 

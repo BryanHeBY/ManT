@@ -30,7 +30,7 @@ pub fn visit_inline_plain_text<'a>(nodes: &'a [Inline], mut emit: impl FnMut(&'a
                 | Inline::Emphasis { children }
                 | Inline::Link { children, .. } => append(children, emit),
                 Inline::Anchor { .. } => {}
-                Inline::LineBreak => emit("\n"),
+                Inline::LineBreak { .. } => emit("\n"),
             }
         }
     }
@@ -63,7 +63,7 @@ pub fn has_printable_character(nodes: &[Inline]) -> bool {
         Inline::Strong { children }
         | Inline::Emphasis { children }
         | Inline::Link { children, .. } => has_printable_character(children),
-        Inline::Anchor { .. } | Inline::LineBreak => false,
+        Inline::Anchor { .. } | Inline::LineBreak { .. } => false,
     })
 }
 
@@ -76,7 +76,7 @@ fn first_character(node: &Inline) -> Option<char> {
         | Inline::Emphasis { children }
         | Inline::Link { children, .. } => first_visible_character(children),
         Inline::Anchor { .. } => None,
-        Inline::LineBreak => Some('\n'),
+        Inline::LineBreak { .. } => Some('\n'),
     }
 }
 
@@ -89,7 +89,7 @@ fn last_character(node: &Inline) -> Option<char> {
         | Inline::Emphasis { children }
         | Inline::Link { children, .. } => last_visible_character(children),
         Inline::Anchor { .. } => None,
-        Inline::LineBreak => Some('\n'),
+        Inline::LineBreak { .. } => Some('\n'),
     }
 }
 
@@ -126,7 +126,7 @@ mod tests {
                     },
                 ],
             },
-            Inline::LineBreak,
+            Inline::line_break(),
             Inline::Text {
                 value: "尾\t ".into(),
             },
@@ -161,7 +161,7 @@ mod tests {
         assert_eq!(last_visible_character(&anchors), None);
         assert!(!has_printable_character(&anchors));
         let breaks = vec![
-            Inline::LineBreak,
+            Inline::line_break(),
             Inline::Emphasis {
                 children: vec![Inline::Text {
                     value: "\n\n".into(),

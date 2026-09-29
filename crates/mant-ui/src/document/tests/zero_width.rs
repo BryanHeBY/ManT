@@ -140,7 +140,7 @@ fn real_literal_empty_lines_keep_their_rows_and_precise_anchor_positions() {
             language: None,
             children: vec![
                 Inline::anchor("first"),
-                Inline::LineBreak,
+                Inline::line_break(),
                 Inline::anchor("second"),
                 Inline::Text {
                     value: "\nBODY".into(),

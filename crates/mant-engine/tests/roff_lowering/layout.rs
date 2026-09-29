@@ -127,7 +127,7 @@ fn preserves_man_synopsis_flow_and_alternating_fonts() {
     assert_eq!(
         children
             .iter()
-            .filter(|node| matches!(node, Inline::LineBreak))
+            .filter(|node| matches!(node, Inline::LineBreak { .. }))
             .count(),
         2
     );
@@ -215,7 +215,7 @@ fn keeps_man_synopsis_lines_together_inside_no_fill_examples() {
     assert_eq!(
         children
             .iter()
-            .filter(|inline| matches!(inline, Inline::LineBreak))
+            .filter(|inline| matches!(inline, Inline::LineBreak { .. }))
             .count(),
         1
     );
@@ -245,7 +245,7 @@ second line\n\
     assert_eq!(
         children
             .iter()
-            .filter(|inline| matches!(inline, Inline::LineBreak))
+            .filter(|inline| matches!(inline, Inline::LineBreak { .. }))
             .count(),
         2
     );
@@ -275,7 +275,7 @@ second line\n\
     assert_eq!(
         children
             .iter()
-            .filter(|inline| matches!(inline, Inline::LineBreak))
+            .filter(|inline| matches!(inline, Inline::LineBreak { .. }))
             .count(),
         2
     );
@@ -308,7 +308,7 @@ second line\n\
     assert_eq!(
         children
             .iter()
-            .filter(|inline| matches!(inline, Inline::LineBreak))
+            .filter(|inline| matches!(inline, Inline::LineBreak { .. }))
             .count(),
         1
     );
@@ -341,7 +341,7 @@ second line\n\
     assert_eq!(
         children
             .iter()
-            .filter(|inline| matches!(inline, Inline::LineBreak))
+            .filter(|inline| matches!(inline, Inline::LineBreak { .. }))
             .count(),
         1
     );
@@ -408,7 +408,7 @@ second line\n\
     assert_eq!(
         children
             .iter()
-            .filter(|inline| matches!(inline, Inline::LineBreak))
+            .filter(|inline| matches!(inline, Inline::LineBreak { .. }))
             .count(),
         3
     );
@@ -451,7 +451,7 @@ fn distinguishes_filled_source_wrapping_from_indented_output_lines() {
     assert_eq!(
         synopsis
             .iter()
-            .filter(|inline| matches!(inline, Inline::LineBreak))
+            .filter(|inline| matches!(inline, Inline::LineBreak { .. }))
             .count(),
         2
     );
@@ -711,7 +711,7 @@ fn temporary_indent_discards_its_operand_but_retains_the_line_boundary() {
     assert_eq!(
         children
             .iter()
-            .filter(|inline| matches!(inline, Inline::LineBreak))
+            .filter(|inline| matches!(inline, Inline::LineBreak { .. }))
             .count(),
         1,
         "each .ti boundary must be represented exactly once: {children:?}"
@@ -898,7 +898,7 @@ fn adjacent_no_fill_regions_scale_without_changing_their_topology() {
     assert_eq!(
         children
             .iter()
-            .filter(|inline| matches!(inline, Inline::LineBreak))
+            .filter(|inline| matches!(inline, Inline::LineBreak { .. }))
             .count(),
         REGION_COUNT - 1
     );

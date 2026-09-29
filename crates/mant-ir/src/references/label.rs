@@ -57,7 +57,7 @@ fn append(
                     label.text.push(character);
                 }
             }
-            Inline::LineBreak => {
+            Inline::LineBreak { .. } => {
                 budget.consume(depth.saturating_add(1), 0, 1)?;
                 if label.text.len() == limit {
                     label.truncated = true;

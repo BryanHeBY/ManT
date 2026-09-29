@@ -986,11 +986,11 @@ impl InlineBuilder {
             .definition
             .as_ref()
             .is_some_and(|state| state.hang_row.accepted_prefix_before_rejection)
-            && !matches!(self.nodes.last(), Some(Inline::LineBreak))
+            && !matches!(self.nodes.last(), Some(Inline::LineBreak { .. }))
         {
             // A prior term_fill() pass printed its accepted prefix; a later
             // nbr=0 discards only the suffix and ends that device line.
-            self.nodes.push(Inline::LineBreak);
+            self.nodes.push(Inline::line_break());
         }
         // term.c::term_flushln() clears both BACKAFTER and BACKBEFORE even
         // when term_fill() returns nbr=0. The rejected field can still own a
@@ -1067,7 +1067,7 @@ impl InlineBuilder {
 
     pub(in crate::mandoc) fn note_provisional_definition_break(&mut self) {
         if let Some(definition) = &mut self.execution.definition
-            && matches!(self.nodes.last(), Some(Inline::LineBreak))
+            && matches!(self.nodes.last(), Some(Inline::LineBreak { .. }))
         {
             definition.hang_row.provisional_trailing_break = Some(self.nodes.len() - 1);
         }
@@ -1679,7 +1679,7 @@ impl InlineBuilder {
         let start = self
             .nodes
             .iter()
-            .rposition(|node| matches!(node, Inline::LineBreak))
+            .rposition(|node| matches!(node, Inline::LineBreak { .. }))
             .map_or(0, |index| index + 1);
         mant_ir::geometry::text_width(&super::super::plain_text(&self.nodes[start..]))
     }
@@ -1921,11 +1921,11 @@ impl InlineBuilder {
     }
 
     fn force_output_line_break(&mut self) {
-        if matches!(self.nodes.last(), Some(Inline::LineBreak)) {
+        if matches!(self.nodes.last(), Some(Inline::LineBreak { .. })) {
             return;
         }
         self.flush_zero_advance();
-        self.nodes.push(Inline::LineBreak);
+        self.nodes.push(Inline::line_break());
         self.execution.last_visible_character = Some('\n');
         self.execution.trailing_output = TrailingOutput::None;
         self.execution.boundary = PendingBoundary::Ordinary;
@@ -1940,9 +1940,10 @@ fn retain_unprinted_field_targets(inlines: &mut Vec<Inline>) {
         Inline::Anchor { .. } => true,
         // term_fill() returned nbr=0: a buffered \p line request in this
         // field never reached the device, even inside a semantic Link.
-        Inline::LineBreak | Inline::Text { .. } | Inline::Code { .. } | Inline::Equation { .. } => {
-            false
-        }
+        Inline::LineBreak { .. }
+        | Inline::Text { .. }
+        | Inline::Code { .. }
+        | Inline::Equation { .. } => false,
         Inline::Link { children, .. } => {
             retain_unprinted_field_targets(children);
             true

@@ -2,7 +2,9 @@
 //! Decorators must preserve visible content and boundary whitespace.
 use super::flow::Flow;
 use super::indent_lines;
-use crate::presentation::{EntryStyleMap, TextPresentation, TextRole, visit_inline_text};
+use crate::presentation::{
+    EntryStyleMap, InlinePresentation, TextPresentation, TextRole, visit_inline_text,
+};
 use mant_ir::geometry::{compose_origin, coordinate, marker_run_in_gap, padding, text_width};
 use mant_ir::{Block, DefinitionItem, Inline, ListItem, ListKind, Section, TableCell};
 
@@ -17,6 +19,51 @@ pub(super) struct BlockRenderer<'a> {
 impl BlockRenderer<'_> {
     pub(super) fn paint(&self, role: TextRole, text: &str) -> String {
         (self.decorate)(role.into(), text)
+    }
+
+    /// Rows of a term with each row's request-relative indent. A
+    /// [`LineBreak`](Inline::LineBreak) closes its row and carries the next
+    /// row's indent (a cleared-BRIND request moved the upstream offset,
+    /// roff_term.c:73-75); wrapped text rows inherit the current indent.
+    pub(super) fn inline_rows(&self, children: &[Inline], role: TextRole) -> Vec<(String, u16)> {
+        if self.locations.is_some() {
+            // The located renderer has no column model; the flat projection
+            // folds request indents away.
+            let text = self.inline_text(children, role);
+            return text.split('\n').map(|row| (row.to_owned(), 0)).collect();
+        }
+        let mut rows: Vec<(String, u16)> = vec![(String::new(), 0)];
+        let mut next_indent = 0_u16;
+        let names = self
+            .names
+            .as_ref()
+            .map_or(&[][..], |map| map.ranges(children));
+        visit_inline_text(children, names, |inline, _, value| {
+            let decorated = &(self.decorate)(
+                TextPresentation {
+                    role,
+                    inline,
+                    matched: false,
+                },
+                value,
+            );
+            if let InlinePresentation {
+                line_break_indent: Some(indent),
+                ..
+            } = inline
+            {
+                next_indent = indent;
+            }
+            for (index, piece) in decorated.split('\n').enumerate() {
+                if index > 0 {
+                    let indent = next_indent;
+                    next_indent = 0;
+                    rows.push((String::new(), indent));
+                }
+                rows.last_mut().expect("open row").0.push_str(piece);
+            }
+        });
+        rows
     }
 
     pub(super) fn inline_text(&self, children: &[Inline], role: TextRole) -> String {
@@ -457,7 +504,7 @@ mod tests {
         let renderer = super::super::plain_renderer();
         let block = Block::Paragraph {
             children: vec![
-                Inline::LineBreak,
+                Inline::line_break(),
                 Inline::Text {
                     value: "BODY".into(),
                 },
@@ -479,7 +526,7 @@ mod tests {
                     blocks: vec![Block::Paragraph {
                         children: vec![
                             Inline::Text { value: "A".into() },
-                            Inline::LineBreak,
+                            Inline::line_break(),
                             Inline::Text {
                                 value: "B C".into(),
                             },
@@ -504,7 +551,7 @@ mod tests {
         for (children, expected) in [
             (
                 vec![
-                    Inline::LineBreak,
+                    Inline::line_break(),
                     Inline::Text {
                         value: "BODY".into(),
                     },
@@ -516,7 +563,7 @@ mod tests {
                     Inline::Text {
                         value: "BODY".into(),
                     },
-                    Inline::LineBreak,
+                    Inline::line_break(),
                 ],
                 "BODY",
             ),

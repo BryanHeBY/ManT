@@ -468,7 +468,7 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
         builder.note_zero_advance_join();
     }
     let provisional_definition_break = execution.pending_word_end_break
-        && matches!(execution.output.last(), Some(Inline::LineBreak));
+        && matches!(execution.output.last(), Some(Inline::LineBreak { .. }));
     builder.append_word_with_literal_row(
         execution.output,
         occupies_literal_row,

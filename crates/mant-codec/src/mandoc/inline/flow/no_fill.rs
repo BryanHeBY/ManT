@@ -56,7 +56,7 @@ impl NoFillInlineState {
         }
         if execution.word_end_break == WordEndBreak::Pending {
             if mant_ir::has_printable_character(output) {
-                output.push(Inline::LineBreak);
+                output.push(Inline::line_break());
             } else {
                 output.push(Inline::Text {
                     value: String::new(),
@@ -103,7 +103,7 @@ impl NoFillInlineState {
                     value: String::new(),
                 });
             }
-            output.push(Inline::LineBreak);
+            output.push(Inline::line_break());
         }
         execution.reset_no_fill_row(false);
         self.formatter_cell = NoFillFormatterCell::Origin;

@@ -87,9 +87,9 @@ fn mark(nodes: &[Inline], cursor: &mut usize, spans: &[Span], strong: bool) -> V
                 target: target.clone(),
                 title: title.clone(),
             }),
-            Inline::LineBreak => {
+            Inline::LineBreak { .. } => {
                 *cursor += 1;
-                output.push(Inline::LineBreak);
+                output.push(Inline::line_break());
             }
             Inline::Anchor { .. } => output.push(node.clone()),
         }

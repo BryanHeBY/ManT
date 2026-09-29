@@ -202,7 +202,7 @@ fn append_syntax(inlines: &[Inline], output: &mut String) {
                     output.push('\0');
                 }
             }
-            Inline::LineBreak => output.push('\n'),
+            Inline::LineBreak { .. } => output.push('\n'),
             Inline::Anchor { .. } => {}
         }
     }

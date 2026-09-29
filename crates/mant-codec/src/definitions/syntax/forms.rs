@@ -171,7 +171,7 @@ fn append_name_prefix(nodes: &[Inline], output: &mut String) -> bool {
                 output.push_str(&plain_text(children));
             }
             Inline::Anchor { .. } => {}
-            Inline::LineBreak => output.push('\n'),
+            Inline::LineBreak { .. } => output.push('\n'),
         }
     }
     true
@@ -327,7 +327,7 @@ fn starts_with_parameter(term: &[Inline]) -> bool {
 /// of flattening text and losing the distinction between a name and a value.
 fn first_content_is_parameter(term: &[Inline]) -> Option<bool> {
     term.iter().find_map(|inline| match inline {
-        Inline::Anchor { .. } | Inline::LineBreak => None,
+        Inline::Anchor { .. } | Inline::LineBreak { .. } => None,
         Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. } => {
             (!value.trim().is_empty()).then_some(false)
         }
@@ -501,7 +501,7 @@ mod tests {
                 children: vec![Inline::Text { value: " ".into() }],
             },
             Inline::anchor("invisible"),
-            Inline::LineBreak,
+            Inline::line_break(),
         ] {
             for separator in [",", "|"] {
                 for parameter in [false, true] {

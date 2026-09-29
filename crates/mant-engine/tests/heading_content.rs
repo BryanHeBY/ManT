@@ -238,7 +238,7 @@ fn deep_multiline_headings_keep_hierarchy_and_links_in_portable_markdown() {
             value: name.to_owned(),
         }],
     };
-    child.heading.content = vec![link("First"), Inline::LineBreak, link("Second")];
+    child.heading.content = vec![link("First"), Inline::line_break(), link("Second")];
     let markdown = render_markdown(&query);
     assert!(
         markdown.contains("### [First](First.md) [Second](Second.md)"),

@@ -190,7 +190,7 @@ fn visit_inlines(inlines: &mut [Inline], array_depth: usize, summary: &mut Summa
             Inline::Text { .. }
             | Inline::Code { .. }
             | Inline::Anchor { .. }
-            | Inline::LineBreak => {}
+            | Inline::LineBreak { .. } => {}
         }
     }
 }

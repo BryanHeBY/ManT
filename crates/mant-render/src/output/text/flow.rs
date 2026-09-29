@@ -9,13 +9,7 @@ pub(super) struct Flow {
 }
 
 enum Part {
-    /// Composable flow text. Leading blank rows here are break requests the
-    /// upstream renderer already accounted (mandoc `term_vspace` counting,
-    /// term.c:473-480), so they merge with an accumulated gap budget by
-    /// maximum instead of stacking.
     Text(String),
-    /// Literal rows the author wrote; never merged or re-indented.
-    Literal(String),
     Gap(u16),
 }
 
@@ -31,7 +25,7 @@ impl Flow {
 
     pub(super) fn literal(value: String) -> Self {
         Self {
-            parts: vec![Part::Literal(value)],
+            parts: vec![Part::Text(value)],
         }
     }
 
@@ -56,26 +50,12 @@ impl Flow {
         for part in self.parts {
             match part {
                 Part::Gap(rows) => gap.append_resolved(rows),
-                Part::Literal(text) => {
+                Part::Text(text) => {
                     if has_content {
                         output.push('\n');
                     }
                     output.push_str(&"\n".repeat(usize::from(gap.rows(0))));
                     output.push_str(&text);
-                    has_content = true;
-                    gap = GapPlan::default();
-                }
-                Part::Text(text) => {
-                    if has_content {
-                        output.push('\n');
-                    }
-                    let leading_rows = text
-                        .chars()
-                        .take_while(|&character| character == '\n')
-                        .count();
-                    let gap_rows = usize::from(gap.rows(0));
-                    output.push_str(&"\n".repeat(gap_rows.max(leading_rows)));
-                    output.push_str(text.trim_start_matches('\n'));
                     has_content = true;
                     gap = GapPlan::default();
                 }

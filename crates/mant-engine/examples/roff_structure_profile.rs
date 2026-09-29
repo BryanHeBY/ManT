@@ -1030,7 +1030,7 @@ fn has_visible_inline(inlines: &[Inline]) -> bool {
         Inline::Strong { children }
         | Inline::Emphasis { children }
         | Inline::Link { children, .. } => has_visible_inline(children),
-        Inline::Anchor { .. } | Inline::LineBreak => false,
+        Inline::Anchor { .. } | Inline::LineBreak { .. } => false,
     })
 }
 
@@ -1058,7 +1058,7 @@ fn collect_inlines(
                 }
                 collect_inlines(children, source_line, inside_table, profile, topology);
             }
-            Inline::LineBreak => profile.hard_breaks += 1,
+            Inline::LineBreak { .. } => profile.hard_breaks += 1,
             Inline::Code { value } | Inline::Equation { value, .. } => {
                 if inside_table {
                     profile.table_equation_candidates += 1;
@@ -1087,7 +1087,7 @@ fn line_break_count(inlines: &[Inline]) -> usize {
             Inline::Strong { children }
             | Inline::Emphasis { children }
             | Inline::Link { children, .. } => line_break_count(children),
-            Inline::LineBreak => 1,
+            Inline::LineBreak { .. } => 1,
             Inline::Text { .. }
             | Inline::Code { .. }
             | Inline::Equation { .. }

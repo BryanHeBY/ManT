@@ -91,7 +91,7 @@ mod tests {
                 Inline::Text {
                     value: "first".to_owned(),
                 },
-                Inline::LineBreak,
+                Inline::line_break(),
                 Inline::Strong {
                     children: text("second"),
                 },
@@ -112,14 +112,14 @@ mod tests {
             super::split_definition_terms(
                 vec![
                     text("first")[0].clone(),
-                    Inline::LineBreak,
+                    Inline::line_break(),
                     text("second")[0].clone()
                 ],
                 &[]
             ),
             [vec![
                 text("first")[0].clone(),
-                Inline::LineBreak,
+                Inline::line_break(),
                 text("second")[0].clone()
             ]],
         );

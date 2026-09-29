@@ -173,7 +173,7 @@ fn nested_heading_author_modes_execute_without_losing_inline_adjacency() {
     assert!(
         heading
             .iter()
-            .any(|inline| matches!(inline, Inline::LineBreak)),
+            .any(|inline| matches!(inline, Inline::LineBreak { .. })),
         "nested An split was not executed: {heading:?}"
     );
     assert_eq!(super::inline_text(heading), "“\nAlice”");

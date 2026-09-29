@@ -94,7 +94,7 @@ fn trim_code_framing_newline(children: &mut Vec<Inline>) {
                 value.pop();
             }
         }
-        Inline::LineBreak => {
+        Inline::LineBreak { .. } => {
             children.pop();
         }
         Inline::Strong { .. }

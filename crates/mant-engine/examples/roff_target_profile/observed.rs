@@ -313,7 +313,7 @@ fn collect_inlines(
             Inline::Text { .. }
             | Inline::Code { .. }
             | Inline::Equation { .. }
-            | Inline::LineBreak => {}
+            | Inline::LineBreak { .. } => {}
         }
     }
 }

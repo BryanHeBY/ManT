@@ -53,7 +53,7 @@ impl InlineBuilder {
                 Inline::Strong { children }
                 | Inline::Emphasis { children }
                 | Inline::Link { children, .. } => contains_glyph(children),
-                Inline::Anchor { .. } | Inline::LineBreak => false,
+                Inline::Anchor { .. } | Inline::LineBreak { .. } => false,
             })
         }
         contains_glyph(&self.nodes[transaction.rollback.node_count..])
@@ -222,7 +222,7 @@ impl InlineBuilder {
                 .nodes
                 .iter()
                 .rev()
-                .take_while(|node| !matches!(node, Inline::LineBreak))
+                .take_while(|node| !matches!(node, Inline::LineBreak { .. }))
                 .any(|node| has_non_whitespace_glyph(std::slice::from_ref(node)))
         {
             // term_newln() commits a whitespace-only formatter row even
@@ -236,11 +236,11 @@ impl InlineBuilder {
             .nodes
             .iter()
             .rev()
-            .take_while(|node| !matches!(node, Inline::LineBreak))
+            .take_while(|node| !matches!(node, Inline::LineBreak { .. }))
             .any(|node| has_printable_character(std::slice::from_ref(node)));
         if (self.execution.formatter_column == FormatterColumn::Advanced
             || (self.execution.word_end_break == WordEndBreak::Pending
-                && matches!(self.nodes.last(), Some(Inline::LineBreak))))
+                && matches!(self.nodes.last(), Some(Inline::LineBreak { .. }))))
             && !current_row_has_printable
         {
             // ESCAPE_IGNORE (`\&`) and ESCAPE_BREAK (`\p`) can occupy a
@@ -258,9 +258,9 @@ impl InlineBuilder {
         self.execution.word_end_break = WordEndBreak::Clear;
         self.execution.formatter_column = FormatterColumn::Origin;
         if (exited_discarded_buffer && !exited_definition_row)
-            || !matches!(self.nodes.last(), Some(Inline::LineBreak))
+            || !matches!(self.nodes.last(), Some(Inline::LineBreak { .. }))
         {
-            self.nodes.push(Inline::LineBreak);
+            self.nodes.push(Inline::line_break());
             self.execution.last_visible_character = Some('\n');
         }
         self.execution.final_word_join = Some(false);
@@ -290,7 +290,7 @@ impl InlineBuilder {
                 .nodes
                 .iter()
                 .rev()
-                .take_while(|node| !matches!(node, Inline::LineBreak))
+                .take_while(|node| !matches!(node, Inline::LineBreak { .. }))
                 .any(|node| has_printable_character(std::slice::from_ref(node)))
     }
 
@@ -726,10 +726,10 @@ impl InlineBuilder {
             // A consumed \p separator closes the already accepted prefix.
             // Its blank is part of the break, not a new formatter word cell.
             self.execution.pending_breakable_spaces = 0;
-            if !matches!(self.nodes.last(), Some(Inline::LineBreak))
-                && !matches!(incoming.first(), Some(Inline::LineBreak))
+            if !matches!(self.nodes.last(), Some(Inline::LineBreak { .. }))
+                && !matches!(incoming.first(), Some(Inline::LineBreak { .. }))
             {
-                self.nodes.push(Inline::LineBreak);
+                self.nodes.push(Inline::line_break());
             }
         } else {
             self.append_boundary_spacing(boundary, add_space, word, empty_word);
@@ -817,7 +817,7 @@ impl InlineBuilder {
                     } else if accepted {
                         incoming
                             .iter()
-                            .position(|node| matches!(node, Inline::LineBreak))
+                            .position(|node| matches!(node, Inline::LineBreak { .. }))
                             .map_or(0, |index| index + 1)
                     } else {
                         0
@@ -1105,7 +1105,7 @@ impl InlineBuilder {
             let mut rows = 0u16;
             let mut row_has_glyph = false;
             for node in &self.nodes {
-                if matches!(node, Inline::LineBreak) {
+                if matches!(node, Inline::LineBreak { .. }) {
                     rows = if row_has_glyph {
                         0
                     } else {
@@ -1145,7 +1145,7 @@ impl InlineBuilder {
                     .nodes
                     .iter()
                     .rev()
-                    .take_while(|node| !matches!(node, Inline::LineBreak))
+                    .take_while(|node| !matches!(node, Inline::LineBreak { .. }))
                     .any(|node| has_non_whitespace_glyph(std::slice::from_ref(node)));
             completed_vertical_rows = completed_vertical_rows
                 .saturating_add(u16::from(active_invisible_cell && !requested_invisible_row));
@@ -1154,7 +1154,7 @@ impl InlineBuilder {
             invisible_formatter_cell &= !active_invisible_cell;
             let mut anchors = Vec::new();
             while self.nodes.last().is_some_and(|node| {
-                matches!(node, Inline::LineBreak)
+                matches!(node, Inline::LineBreak { .. })
                     || !has_non_whitespace_glyph(std::slice::from_ref(node))
             }) {
                 if let Some(anchor @ Inline::Anchor { .. }) = self.nodes.pop() {
@@ -1165,7 +1165,7 @@ impl InlineBuilder {
             self.nodes.extend(anchors);
         }
         let completed_invisible_row =
-            invisible_formatter_cell && matches!(self.nodes.last(), Some(Inline::LineBreak));
+            invisible_formatter_cell && matches!(self.nodes.last(), Some(Inline::LineBreak { .. }));
         // The item post term_newln() (mdoc_term.c:939-945) flushes a
         // run-in NOBREAK field carried across the HEAD/BODY split before
         // this owner drains; term_fill() has already decided that field's
@@ -1182,7 +1182,7 @@ impl InlineBuilder {
         }
         let mut children = self.finish_nodes();
         if completed_invisible_row {
-            children.push(Inline::LineBreak);
+            children.push(Inline::line_break());
         }
         if invisible_formatter_cell && !empty_word_end_break && !has_printable_character(&children)
         {
@@ -1291,7 +1291,7 @@ impl InlineBuilder {
 
     fn finish_nodes(&mut self) -> Vec<Inline> {
         self.execution.word_end_break = WordEndBreak::Clear;
-        while matches!(self.nodes.last(), Some(Inline::LineBreak)) {
+        while matches!(self.nodes.last(), Some(Inline::LineBreak { .. })) {
             self.nodes.pop();
         }
         self.drain_ir_nodes()
@@ -1358,7 +1358,7 @@ impl InlineBuilder {
             return;
         }
         self.nodes
-            .extend(std::iter::repeat_n(Inline::LineBreak, count));
+            .extend(std::iter::repeat_n(Inline::line_break(), count));
         self.execution.last_visible_character = Some('\n');
         self.execution.formatter_column = FormatterColumn::Origin;
         self.execution.empty_word = false;
@@ -1384,7 +1384,7 @@ pub(in crate::mandoc::inline) fn trailing_ascii_spaces(nodes: &[Inline]) -> usiz
         for node in nodes.iter().rev() {
             match node {
                 Inline::Anchor { .. } => {}
-                Inline::LineBreak => return false,
+                Inline::LineBreak { .. } => return false,
                 Inline::Text { value }
                 | Inline::Code { value }
                 | Inline::Equation { value, .. } => {
@@ -1423,7 +1423,7 @@ fn join_authored_links(nodes: &mut Vec<Inline>) {
             | Inline::Code { .. }
             | Inline::Equation { .. }
             | Inline::Anchor { .. }
-            | Inline::LineBreak => {}
+            | Inline::LineBreak { .. } => {}
         }
     }
 
@@ -1480,7 +1480,7 @@ pub(in crate::mandoc) fn trim_trailing_breakable_spaces(nodes: &mut Vec<Inline>,
             index -= 1;
             let remove = match &mut nodes[index] {
                 Inline::Anchor { .. } => continue,
-                Inline::LineBreak => return false,
+                Inline::LineBreak { .. } => return false,
                 Inline::Text { value }
                 | Inline::Code { value }
                 | Inline::Equation { value, .. } => {
@@ -1530,7 +1530,7 @@ fn line_break_count(nodes: &[Inline]) -> usize {
     nodes
         .iter()
         .map(|node| match node {
-            Inline::LineBreak => 1,
+            Inline::LineBreak { .. } => 1,
             Inline::Strong { children }
             | Inline::Emphasis { children }
             | Inline::Link { children, .. } => line_break_count(children),
@@ -1550,7 +1550,7 @@ fn retained_hidden_layout(nodes: &[Inline]) -> Vec<Inline> {
     for node in nodes {
         match node {
             Inline::Anchor { .. } => retained.push(node.clone()),
-            Inline::LineBreak => retained.push(Inline::LineBreak),
+            Inline::LineBreak { .. } => retained.push(Inline::line_break()),
             Inline::Strong { children }
             | Inline::Emphasis { children }
             | Inline::Link { children, .. } => retained.extend(retained_hidden_layout(children)),
@@ -1581,8 +1581,8 @@ fn retained_replacement_layout(nodes: Vec<Inline>) -> Vec<Inline> {
     let mut before_first_glyph = true;
     for node in nodes {
         match node {
-            Inline::LineBreak => {
-                retained.push(Inline::LineBreak);
+            Inline::LineBreak { .. } => {
+                retained.push(Inline::line_break());
                 before_first_glyph = true;
             }
             Inline::Anchor { .. } => retained.push(node),
@@ -1628,7 +1628,7 @@ fn feed_field_inline_with_breakpoints(
 ) {
     for node in nodes {
         match node {
-            Inline::LineBreak => buffer.push_break_marker(),
+            Inline::LineBreak { .. } => buffer.push_break_marker(),
             Inline::Text { value } | Inline::Code { value } => {
                 for character in value.chars() {
                     if character == '\n' {
@@ -1698,8 +1698,8 @@ fn split_nodes_at_boundaries(
             Inline::Text { value } | Inline::Code { value } => {
                 split_text_at_boundaries(value, node, cell, next_boundary, boundaries, output);
             }
-            Inline::LineBreak => {
-                output.push(Inline::LineBreak);
+            Inline::LineBreak { .. } => {
+                output.push(Inline::line_break());
                 *cell += 1;
                 advance_boundary(cell, next_boundary, boundaries);
             }
@@ -1778,7 +1778,7 @@ fn split_text_at_boundaries(
                     run.pop();
                 }
                 push_split_text(&mut run, node, output);
-                output.push(Inline::LineBreak);
+                output.push(Inline::line_break());
                 *cell += end - index;
                 index = end;
                 advance_boundary(cell, next_boundary, boundaries);
@@ -1820,13 +1820,13 @@ mod tests {
     fn retained_layout_summary_ignores_trailing_anchor() {
         let mut builder = InlineBuilder::with_spacing(true);
         builder.append_text("prefix");
-        builder.append_retained_layout(vec![Inline::LineBreak, Inline::anchor("mark")]);
+        builder.append_retained_layout(vec![Inline::line_break(), Inline::anchor("mark")]);
 
         assert_eq!(builder.last_visible_character, Some('\n'));
         assert_eq!(builder.trailing_output, TrailingOutput::None);
         assert!(matches!(
             builder.nodes.as_slice(),
-            [Inline::Text { value }, Inline::LineBreak, Inline::Anchor { .. }] if value == "prefix"
+            [Inline::Text { value }, Inline::LineBreak { .. }, Inline::Anchor { .. }] if value == "prefix"
         ));
     }
 }

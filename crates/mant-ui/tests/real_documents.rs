@@ -479,7 +479,7 @@ fn collect_inlines(inlines: &[Inline], output: &mut Vec<ExpectedFragment>, indep
             | Inline::Link { children, .. } => {
                 collect_inlines(children, output, independent);
             }
-            Inline::Anchor { .. } | Inline::LineBreak => {}
+            Inline::Anchor { .. } | Inline::LineBreak { .. } => {}
         }
     }
 }

@@ -72,10 +72,39 @@ pub enum Inline {
         owner_source: Option<SourceSpan>,
     },
     /// Hard line break that renderers must preserve.
-    LineBreak,
+    ///
+    /// `indent_columns` is the following row's indent relative to the
+    /// containing block's origin - a fixed-width hint for the row a
+    /// request started at (mandoc's cleared-BRIND `offset <- rmargin`,
+    /// roff_term.c:73-75; a `.ti` one-row override, roff_term.c:267-273).
+    /// Zero keeps the block origin. The indent lives until the next
+    /// document node boundary restores the authored geometry
+    /// (mdoc_term.c:329-330, 437-439).
+    LineBreak {
+        /// Columns the following row indents to.
+        #[serde(default, skip_serializing_if = "is_zero_indent")]
+        indent_columns: u16,
+    },
+}
+
+#[allow(clippy::trivially_copy_pass_by_ref)] // Serde predicate.
+const fn is_zero_indent(value: &u16) -> bool {
+    *value == 0
 }
 
 impl Inline {
+    /// Hard line break keeping the containing block's origin.
+    #[must_use]
+    pub const fn line_break() -> Self {
+        Self::LineBreak { indent_columns: 0 }
+    }
+
+    /// Hard line break whose following row indents by `indent_columns`.
+    #[must_use]
+    pub const fn line_break_indented(indent_columns: u16) -> Self {
+        Self::LineBreak { indent_columns }
+    }
+
     /// Construct a normalized local anchor without source-authored aliases.
     #[must_use]
     pub fn anchor(id: impl Into<NodeId>) -> Self {

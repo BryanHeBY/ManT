@@ -328,7 +328,7 @@ fn node_entered_no_fill(node: &Node) -> bool {
 
 fn only_breakable_head_padding(inline: &Inline) -> bool {
     match inline {
-        Inline::Anchor { .. } | Inline::LineBreak => true,
+        Inline::Anchor { .. } | Inline::LineBreak { .. } => true,
         Inline::Text { value } | Inline::Code { value } => value.chars().all(|ch| ch == ' '),
         Inline::Emphasis { children }
         | Inline::Strong { children }
@@ -341,7 +341,7 @@ fn only_breakable_head_padding(inline: &Inline) -> bool {
 
 fn clear_breakable_head_padding(term: &mut Vec<Inline>) {
     term.retain_mut(|inline| match inline {
-        Inline::Anchor { .. } | Inline::LineBreak => true,
+        Inline::Anchor { .. } | Inline::LineBreak { .. } => true,
         Inline::Link { children, .. } => {
             // Preserve the typed destination while removing its unprinted
             // whitespace label. Link resolution may later unwrap an unknown
@@ -368,7 +368,7 @@ fn take_closed_head_row(terms: &mut [Vec<Inline>]) -> bool {
     else {
         return false;
     };
-    if !matches!(term[last_content], Inline::LineBreak) {
+    if !matches!(term[last_content], Inline::LineBreak { .. }) {
         return false;
     }
     term.remove(last_content);
@@ -385,7 +385,7 @@ fn marker_split_field_exited(head: DefinitionHeadFlow, terms: &[Vec<Inline>]) ->
         return false;
     };
     let split_between_words = term.iter().enumerate().any(|(index, node)| {
-        node == &Inline::LineBreak
+        matches!(node, Inline::LineBreak { .. })
             && term[..index]
                 .iter()
                 .any(|before| mant_ir::has_printable_character(std::slice::from_ref(before)))
@@ -405,7 +405,7 @@ fn marker_split_field_exited(head: DefinitionHeadFlow, terms: &[Vec<Inline>]) ->
 fn invisible_closed_head_row(terms: &[Vec<Inline>]) -> bool {
     terms.last().is_some_and(|term| {
         !term.iter().any(|inline| {
-            matches!(inline, Inline::LineBreak)
+            matches!(inline, Inline::LineBreak { .. })
                 || mant_ir::has_printable_character(std::slice::from_ref(inline))
         })
     })
@@ -586,7 +586,7 @@ pub(super) fn split_definition_terms(
     let mut current = Vec::new();
     let mut alternatives = alternative_breaks.iter().copied().peekable();
     for (index, node) in term.into_iter().enumerate() {
-        if node == Inline::LineBreak && alternatives.peek() == Some(&index) {
+        if node == Inline::line_break() && alternatives.peek() == Some(&index) {
             alternatives.next();
             if mant_ir::has_printable_character(&current) {
                 terms.push(std::mem::take(&mut current));
@@ -598,7 +598,7 @@ pub(super) fn split_definition_terms(
                 // renderers are required to ignore.
                 current
                     .retain(|inline| !matches!(inline, Inline::Text { value } if value.is_empty()));
-                current.push(Inline::LineBreak);
+                current.push(Inline::line_break());
             }
         } else {
             current.push(node);

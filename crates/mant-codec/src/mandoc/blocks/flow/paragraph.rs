@@ -58,7 +58,7 @@ impl ParagraphFlow {
         let Some(break_index) = self
             .nodes
             .iter()
-            .position(|node| matches!(node, Inline::LineBreak))
+            .position(|node| matches!(node, Inline::LineBreak { .. }))
         else {
             return false;
         };

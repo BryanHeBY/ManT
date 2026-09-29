@@ -59,7 +59,7 @@ fn main() {}
             )) && children.iter().any(|inline| matches!(
                 inline,
                 Inline::Link { target: mant_ir::LinkTarget::Section { id: target }, .. } if target == "document-overview"
-            )) && children.iter().any(|inline| matches!(inline, Inline::LineBreak))
+            )) && children.iter().any(|inline| matches!(inline, Inline::LineBreak { .. }))
     ));
 
     let options = &document.sections[0];

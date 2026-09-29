@@ -73,7 +73,7 @@ pub fn inline_scalar_len(nodes: &[Inline]) -> usize {
             Inline::Strong { children }
             | Inline::Emphasis { children }
             | Inline::Link { children, .. } => inline_scalar_len(children),
-            Inline::LineBreak => 1,
+            Inline::LineBreak { .. } => 1,
             Inline::Anchor { .. } => 0,
         })
         .sum()
@@ -96,7 +96,7 @@ mod tests {
                 fragment_aliases: vec![],
                 owner_source: None,
             },
-            Inline::LineBreak,
+            Inline::line_break(),
             Inline::Link {
                 target: LinkTarget::External {
                     uri: "https://example.com".into(),
@@ -201,7 +201,7 @@ mod tests {
                 },
                 Inline::Strong { children: vec![] },
                 Inline::Emphasis {
-                    children: vec![Inline::LineBreak]
+                    children: vec![Inline::LineBreak { indent_columns: 0 }]
                 },
                 Inline::Text {
                     value: "e\u{301}👩‍💻".into()

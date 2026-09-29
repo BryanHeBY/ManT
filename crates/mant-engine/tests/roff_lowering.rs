@@ -99,7 +99,7 @@ fn visible_document_text(document: &mant_ir::Document) -> String {
                     self.0.push_str(value);
                     self.0.push(' ');
                 }
-                Inline::LineBreak => self.0.push('\n'),
+                Inline::LineBreak { .. } => self.0.push('\n'),
                 Inline::Strong { .. }
                 | Inline::Emphasis { .. }
                 | Inline::Link { .. }
@@ -125,7 +125,7 @@ fn inline_text(children: &[Inline]) -> String {
             | Inline::Emphasis { children }
             | Inline::Link { children, .. } => inline_text(children),
             Inline::Anchor { .. } => String::new(),
-            Inline::LineBreak => "\n".to_owned(),
+            Inline::LineBreak { .. } => "\n".to_owned(),
         })
         .collect()
 }

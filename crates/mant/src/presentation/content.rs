@@ -100,6 +100,7 @@ mod tests {
                 code: true,
                 link: true,
                 structural_break: false,
+                line_break_indent: None,
                 entry_kind: Some(mant_ir::EntryKind::Command),
             },
             matched: true,

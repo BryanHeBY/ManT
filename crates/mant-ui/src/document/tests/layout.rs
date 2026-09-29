@@ -90,7 +90,7 @@ fn anchors_follow_hard_lines_in_terms_and_run_in_bodies() {
                         Inline::Text {
                             value: "FIRST".into(),
                         },
-                        Inline::LineBreak,
+                        Inline::line_break(),
                         Inline::Strong {
                             children: vec![
                                 Inline::anchor_at("second-head", None),
@@ -140,7 +140,7 @@ fn anchors_follow_hard_lines_in_terms_and_run_in_bodies() {
                         Inline::Text {
                             value: "FIRST".into(),
                         },
-                        Inline::LineBreak,
+                        Inline::line_break(),
                         Inline::anchor_at("second", None),
                         Inline::Text {
                             value: "SECOND".into(),
@@ -172,7 +172,7 @@ fn hanging_paragraph_preserves_hard_and_soft_continuation_origins() {
                 Inline::Text {
                     value: "FIRST words words words".into(),
                 },
-                Inline::LineBreak,
+                Inline::line_break(),
                 Inline::Text {
                     value: "SECOND".into(),
                 },
@@ -307,7 +307,7 @@ fn outdented_list_paragraph_keeps_links_on_the_visible_body() {
                                 value: "LINK".into(),
                             }],
                         },
-                        Inline::LineBreak,
+                        Inline::line_break(),
                         Inline::Text {
                             value: "CONTINUED".into(),
                         },
@@ -485,7 +485,7 @@ fn preformatted_rows_share_one_full_width_surface() {
             Inline::Text {
                 value: "short".to_owned(),
             },
-            Inline::LineBreak,
+            Inline::line_break(),
             Inline::Text {
                 value: "longer code".to_owned(),
             },

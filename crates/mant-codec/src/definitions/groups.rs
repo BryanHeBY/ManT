@@ -55,7 +55,7 @@ fn remove_inlines(inlines: &mut Vec<Inline>) {
             | Inline::Code { .. }
             | Inline::Equation { .. }
             | Inline::Anchor { .. }
-            | Inline::LineBreak => {}
+            | Inline::LineBreak { .. } => {}
         }
         retained.push(inline);
     }

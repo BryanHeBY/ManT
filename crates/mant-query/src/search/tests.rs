@@ -369,7 +369,7 @@ fn visible_search_maps_an_explicit_line_break_to_its_markdown_byte() {
             Inline::Text {
                 value: "alpha".to_owned(),
             },
-            Inline::LineBreak,
+            Inline::line_break(),
             Inline::Text {
                 value: "beta".to_owned(),
             },
@@ -611,7 +611,7 @@ fn exclusive_newline_end_does_not_mark_the_following_context_line() {
                 Inline::Text {
                     value: "alpha".to_owned(),
                 },
-                Inline::LineBreak,
+                Inline::line_break(),
                 Inline::Text {
                     value: "beta".to_owned(),
                 },

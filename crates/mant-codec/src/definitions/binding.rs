@@ -88,7 +88,7 @@ fn collect(nodes: &[Inline], path: &mut Vec<usize>, text: &mut String, leaves: &
             | Inline::Emphasis { children }
             | Inline::Link { children, .. } => collect(children, path, text, leaves),
             Inline::Anchor { .. } => {}
-            Inline::LineBreak => text.push('\n'),
+            Inline::LineBreak { .. } => text.push('\n'),
         }
         path.pop();
     }

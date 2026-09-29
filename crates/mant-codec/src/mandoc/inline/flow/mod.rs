@@ -640,7 +640,7 @@ impl InlineBuilder {
     }
 
     pub(in crate::mandoc) fn mark_definition_term_break(&mut self) {
-        if matches!(self.nodes.last(), Some(Inline::LineBreak))
+        if matches!(self.nodes.last(), Some(Inline::LineBreak { .. }))
             && self.definition_term_breaks.last() != Some(&(self.nodes.len() - 1))
         {
             self.definition_term_breaks.push(self.nodes.len() - 1);

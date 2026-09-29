@@ -30,7 +30,7 @@ pub fn has_literal_rows(nodes: &[crate::Inline]) -> bool {
         crate::Inline::Text { .. }
         | crate::Inline::Code { .. }
         | crate::Inline::Equation { .. }
-        | crate::Inline::LineBreak => true,
+        | crate::Inline::LineBreak { .. } => true,
         crate::Inline::Strong { children }
         | crate::Inline::Emphasis { children }
         | crate::Inline::Link { children, .. } => has_literal_rows(children),

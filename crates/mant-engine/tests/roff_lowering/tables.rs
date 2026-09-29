@@ -235,7 +235,7 @@ fn tbl_text_blocks_do_not_promote_physical_source_rows_to_hard_lines() {
         assert!(
             children
                 .iter()
-                .all(|inline| !matches!(inline, Inline::LineBreak)),
+                .all(|inline| !matches!(inline, Inline::LineBreak { .. })),
             "{label}: {children:?}"
         );
     }
@@ -300,7 +300,7 @@ fn tbl_equation_delimiters_keep_one_formatter_word_execution_stream() {
     assert!(
         children
             .iter()
-            .all(|inline| !matches!(inline, Inline::LineBreak)),
+            .all(|inline| !matches!(inline, Inline::LineBreak { .. })),
         "{children:?}"
     );
     assert!(

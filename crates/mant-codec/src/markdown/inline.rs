@@ -72,7 +72,7 @@ fn parse_inline_sequence(
                 value: value.into_string(),
             }),
             Event::SoftBreak => push_text(&mut output, " ".to_owned()),
-            Event::HardBreak => output.push(Inline::LineBreak),
+            Event::HardBreak => output.push(Inline::line_break()),
             Event::Start(tag @ (Tag::Strong | Tag::Emphasis)) if !cursor.try_descend() => {
                 let name = unsupported_tag_name(&tag);
                 let whole = cursor.consume_balanced(range);
@@ -199,7 +199,7 @@ pub(super) fn inline_text(inlines: &[Inline]) -> String {
             | Inline::Emphasis { children }
             | Inline::Link { children, .. } => output.push_str(&inline_text(children)),
             Inline::Anchor { .. } => {}
-            Inline::LineBreak => output.push(' '),
+            Inline::LineBreak { .. } => output.push(' '),
         }
     }
     output.trim().to_owned()

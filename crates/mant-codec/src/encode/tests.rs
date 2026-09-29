@@ -339,7 +339,7 @@ fn preserves_inline_lists_definitions_and_nested_headings() {
         Inline::Code {
             value: "a`b".to_owned(),
         },
-        Inline::LineBreak,
+        Inline::line_break(),
         Inline::Text {
             value: " a second line; see <<https://example.com/docs>>. ".to_owned(),
         },
@@ -560,7 +560,7 @@ fn chooses_safe_fences_and_preserves_native_table_and_equation_content() {
                         Inline::Text {
                             value: "before ``` marker".to_owned(),
                         },
-                        Inline::LineBreak,
+                        Inline::line_break(),
                         Inline::Strong {
                             children: vec![Inline::Text {
                                 value: "after".to_owned(),
@@ -728,23 +728,23 @@ fn protects_paragraph_lines_from_accidental_block_syntax() {
                 Inline::Text {
                     value: "- not a list".to_owned(),
                 },
-                Inline::LineBreak,
+                Inline::line_break(),
                 Inline::Text {
                     value: "1. not an ordered list".to_owned(),
                 },
-                Inline::LineBreak,
+                Inline::line_break(),
                 Inline::Text {
                     value: "# not a heading".to_owned(),
                 },
-                Inline::LineBreak,
+                Inline::line_break(),
                 Inline::Text {
                     value: "-".to_owned(),
                 },
-                Inline::LineBreak,
+                Inline::line_break(),
                 Inline::Text {
                     value: "===".to_owned(),
                 },
-                Inline::LineBreak,
+                Inline::line_break(),
                 Inline::Text {
                     value: "```".to_owned(),
                 },
@@ -776,16 +776,16 @@ fn preserves_leading_consecutive_and_trailing_hard_breaks() {
         document: Some(manual(vec![section(
             "TEXT",
             vec![paragraph(vec![
-                Inline::LineBreak,
+                Inline::line_break(),
                 Inline::Text {
                     value: "before".to_owned(),
                 },
-                Inline::LineBreak,
-                Inline::LineBreak,
+                Inline::line_break(),
+                Inline::line_break(),
                 Inline::Text {
                     value: "after".to_owned(),
                 },
-                Inline::LineBreak,
+                Inline::line_break(),
             ])],
             Vec::new(),
         )])),

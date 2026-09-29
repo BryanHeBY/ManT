@@ -274,7 +274,7 @@ fn collect_document_targets(inlines: &[Inline], output: &mut Vec<SemanticDocumen
             | Inline::Code { .. }
             | Inline::Equation { .. }
             | Inline::Anchor { .. }
-            | Inline::LineBreak => {}
+            | Inline::LineBreak { .. } => {}
         }
     }
 }
@@ -290,7 +290,7 @@ pub(super) fn inline_text(inlines: &[Inline]) -> String {
             | Inline::Emphasis { children }
             | Inline::Link { children, .. } => output.push_str(&inline_text(children)),
             Inline::Anchor { .. } => {}
-            Inline::LineBreak => output.push('\n'),
+            Inline::LineBreak { .. } => output.push('\n'),
         }
     }
     output

@@ -132,7 +132,8 @@ impl<'node> crate::mandoc::containers::ContainerSink<'node> for InlineContainerS
                 self.builder.control_line_break();
             }
             Event::FlushLine => {
-                self.builder.append(vec![Inline::LineBreak]);
+                self.builder
+                    .append(vec![Inline::LineBreak { indent_columns: 0 }]);
             }
             Event::Children(nodes) => append_inline_nodes(self.builder, nodes, self.name),
             Event::Glyph(value) => self.builder.append_text(&value),

@@ -784,7 +784,7 @@ fn no_fill_body_does_not_replay_detached_head_cell() {
         assert_eq!(
             children
                 .iter()
-                .filter(|inline| matches!(inline, Inline::LineBreak))
+                .filter(|inline| matches!(inline, Inline::LineBreak { .. }))
                 .count(),
             body_breaks,
             "{body_word}: {children:#?}"
@@ -916,7 +916,7 @@ fn empty_word_cell_survives_filled_control_boundaries() {
                 Block::Paragraph { children, .. } => Some(
                     children
                         .iter()
-                        .filter(|inline| matches!(inline, Inline::LineBreak))
+                        .filter(|inline| matches!(inline, Inline::LineBreak { .. }))
                         .count(),
                 ),
                 _ => None,
@@ -3165,7 +3165,7 @@ fn formatter_request_boundaries_execute_inside_mdoc_scopes() {
         assert_eq!(
             children
                 .iter()
-                .filter(|node| matches!(node, Inline::LineBreak))
+                .filter(|node| matches!(node, Inline::LineBreak { .. }))
                 .count(),
             breaks,
             "{label}: {children:?}"
@@ -3191,7 +3191,7 @@ fn formatter_request_boundaries_execute_inside_mdoc_scopes() {
         assert_eq!(
             children
                 .iter()
-                .filter(|node| matches!(node, Inline::LineBreak))
+                .filter(|node| matches!(node, Inline::LineBreak { .. }))
                 .count(),
             breaks,
             "{label}: {children:?}"
@@ -3238,7 +3238,7 @@ fn formatter_request_boundaries_execute_inside_mdoc_scopes() {
         assert_eq!(
             children
                 .iter()
-                .filter(|node| matches!(node, Inline::LineBreak))
+                .filter(|node| matches!(node, Inline::LineBreak { .. }))
                 .count(),
             breaks,
             "{label}: {children:?}"
@@ -3296,7 +3296,7 @@ fn formatter_requests_use_the_current_cell_not_prior_document_output() {
     assert_eq!(
         children
             .iter()
-            .filter(|node| matches!(node, Inline::LineBreak))
+            .filter(|node| matches!(node, Inline::LineBreak { .. }))
             .count(),
         1,
         "{children:?}"
@@ -3751,7 +3751,7 @@ fn bsd_replacement_executes_as_a_generated_formatter_word() {
         assert_eq!(
             children
                 .iter()
-                .filter(|node| matches!(node, Inline::LineBreak))
+                .filter(|node| matches!(node, Inline::LineBreak { .. }))
                 .count(),
             breaks,
             "{label}: {children:?}"
@@ -3797,7 +3797,7 @@ fn bsd_replacement_executes_as_a_generated_formatter_word() {
     assert_eq!(
         children
             .iter()
-            .filter(|node| matches!(node, Inline::LineBreak))
+            .filter(|node| matches!(node, Inline::LineBreak { .. }))
             .count(),
         1,
         "{children:?}"

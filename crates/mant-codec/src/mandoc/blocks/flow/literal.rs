@@ -63,7 +63,7 @@ impl LiteralFlow {
 
     pub(super) fn end_line(&mut self) {
         if self.row_occupied {
-            self.nodes.push(Inline::LineBreak);
+            self.nodes.push(Inline::line_break());
             self.row_occupied = false;
             self.formatter_column = FormatterColumn::Origin;
         }
@@ -95,8 +95,8 @@ impl LiteralFlow {
             // A word-end `\p` at the physical line tail has already emitted
             // this row boundary. The following source row must consume that
             // boundary rather than add an empty line of its own.
-            if !matches!(self.nodes.last(), Some(Inline::LineBreak)) {
-                self.nodes.push(Inline::LineBreak);
+            if !matches!(self.nodes.last(), Some(Inline::LineBreak { .. })) {
+                self.nodes.push(Inline::line_break());
             }
             self.row_occupied = false;
             self.ordinary_continuation = false;
@@ -112,10 +112,10 @@ impl LiteralFlow {
             .iter()
             .rev()
             .find(|node| !matches!(node, Inline::Anchor { .. }))
-            .is_some_and(|node| matches!(node, Inline::LineBreak));
+            .is_some_and(|node| matches!(node, Inline::LineBreak { .. }));
         if let Some(last_break) = nodes
             .iter()
-            .rposition(|node| matches!(node, Inline::LineBreak))
+            .rposition(|node| matches!(node, Inline::LineBreak { .. }))
         {
             self.formatter_column =
                 if mant_ir::has_printable_character(&nodes[last_break.saturating_add(1)..]) {
@@ -170,7 +170,7 @@ impl LiteralFlow {
         debug_assert!(self.nodes.is_empty());
         let last_line = nodes
             .iter()
-            .rposition(|node| matches!(node, Inline::LineBreak))
+            .rposition(|node| matches!(node, Inline::LineBreak { .. }))
             .map_or(nodes.as_slice(), |index| &nodes[index + 1..]);
         self.row_occupied = mant_ir::has_printable_character(last_line);
         self.formatter_column = if self.row_occupied {
@@ -189,7 +189,8 @@ impl LiteralFlow {
         // A visited empty TEXT asserts one empty row at this edge. Encode that
         // row as an empty cell, since an IR-only terminal LineBreak would add
         // another blank line when this block is followed by a new owner.
-        if !previous.row_occupied && matches!(previous.nodes.last(), Some(Inline::LineBreak)) {
+        if !previous.row_occupied && matches!(previous.nodes.last(), Some(Inline::LineBreak { .. }))
+        {
             previous.nodes.pop();
             if previous.trailing_vertical_row == TrailingRow::AssertedVertical {
                 previous.nodes.push(Inline::Text {

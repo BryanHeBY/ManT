@@ -48,7 +48,7 @@ fn block_state_preserves_filled_line_boundaries_and_continuations() {
     assert_eq!(
         children
             .iter()
-            .filter(|inline| matches!(inline, Inline::LineBreak))
+            .filter(|inline| matches!(inline, Inline::LineBreak { .. }))
             .count(),
         1
     );
@@ -91,7 +91,7 @@ fn block_state_flushes_paragraph_before_tight_preformatted_lines() {
     assert_eq!(
         preformatted
             .iter()
-            .filter(|inline| matches!(inline, Inline::LineBreak))
+            .filter(|inline| matches!(inline, Inline::LineBreak { .. }))
             .count(),
         1
     );

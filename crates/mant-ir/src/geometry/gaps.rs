@@ -41,7 +41,7 @@ impl<'ir> Visit<'ir> for VisibleText {
             Inline::Strong { .. } | Inline::Emphasis { .. } | Inline::Link { .. } => {
                 crate::visit::walk_inline(self, inline);
             }
-            Inline::LineBreak | Inline::Anchor { .. } => {}
+            Inline::LineBreak { .. } | Inline::Anchor { .. } => {}
         }
     }
 }
@@ -223,7 +223,7 @@ mod tests {
                 }],
                 true,
             ),
-            (vec![Inline::LineBreak, Inline::anchor("target")], true),
+            (vec![Inline::line_break(), Inline::anchor("target")], true),
             (
                 vec![Inline::Strong {
                     children: Vec::new(),
@@ -232,7 +232,7 @@ mod tests {
             ),
             (
                 vec![Inline::Emphasis {
-                    children: vec![Inline::LineBreak],
+                    children: vec![Inline::LineBreak { indent_columns: 0 }],
                 }],
                 true,
             ),

@@ -59,7 +59,7 @@ pub(super) fn flatten_inline(children: &[Inline]) -> String {
                 output.push_str(&flatten_inline(children));
             }
             Inline::Anchor { .. } => {}
-            Inline::LineBreak => output.push('\n'),
+            Inline::LineBreak { .. } => output.push('\n'),
         }
     }
     output
@@ -263,7 +263,7 @@ fn render_inline_raw(nodes: &[Inline], options: MarkdownOptions, manual_links: b
                 pieces.push(InlinePiece::plain(html_anchors(id, fragment_aliases)));
             }
             Inline::Anchor { .. } => {}
-            Inline::LineBreak => pieces.push(InlinePiece::plain("\n".to_owned())),
+            Inline::LineBreak { .. } => pieces.push(InlinePiece::plain("\n".to_owned())),
         }
         index += 1;
     }

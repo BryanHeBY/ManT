@@ -723,7 +723,7 @@ fn contains_manual_link(children: &[Inline]) -> bool {
         | Inline::Code { .. }
         | Inline::Equation { .. }
         | Inline::Anchor { .. }
-        | Inline::LineBreak => false,
+        | Inline::LineBreak { .. } => false,
     })
 }
 
@@ -735,7 +735,7 @@ fn contains_emphasis(children: &[Inline]) -> bool {
         | Inline::Code { .. }
         | Inline::Equation { .. }
         | Inline::Anchor { .. }
-        | Inline::LineBreak => false,
+        | Inline::LineBreak { .. } => false,
     })
 }
 

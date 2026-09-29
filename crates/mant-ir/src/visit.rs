@@ -137,7 +137,7 @@ where
         | Inline::Code { .. }
         | Inline::Equation { .. }
         | Inline::Anchor { .. }
-        | Inline::LineBreak => {}
+        | Inline::LineBreak { .. } => {}
     }
 }
 
@@ -292,7 +292,7 @@ where
         | Inline::Code { .. }
         | Inline::Equation { .. }
         | Inline::Anchor { .. }
-        | Inline::LineBreak => {}
+        | Inline::LineBreak { .. } => {}
     }
 }
 

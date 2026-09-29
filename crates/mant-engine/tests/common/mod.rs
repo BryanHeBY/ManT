@@ -220,7 +220,7 @@ pub fn assert_gcc_synopsis_layout(document: &Document) {
     assert_eq!(
         synopsis_inlines
             .iter()
-            .filter(|inline| matches!(inline, Inline::LineBreak))
+            .filter(|inline| matches!(inline, Inline::LineBreak { .. }))
             .count(),
         6
     );
@@ -368,7 +368,7 @@ pub fn assert_document_has_no_source_markup(name: &str, document: &Document) {
                 | Inline::Emphasis { .. }
                 | Inline::Link { .. }
                 | Inline::Anchor { .. }
-                | Inline::LineBreak => return,
+                | Inline::LineBreak { .. } => return,
             };
             assert!(
                 !value.contains("\\f")
@@ -521,7 +521,7 @@ pub fn contains_strong(children: &[Inline], expected: &str) -> bool {
         | Inline::Code { .. }
         | Inline::Equation { .. }
         | Inline::Anchor { .. }
-        | Inline::LineBreak => false,
+        | Inline::LineBreak { .. } => false,
     })
 }
 
@@ -535,7 +535,7 @@ pub fn contains_emphasis(children: &[Inline], expected: &str) -> bool {
         | Inline::Code { .. }
         | Inline::Equation { .. }
         | Inline::Anchor { .. }
-        | Inline::LineBreak => false,
+        | Inline::LineBreak { .. } => false,
     })
 }
 
@@ -543,7 +543,7 @@ pub fn count_line_breaks(children: &[Inline]) -> usize {
     children
         .iter()
         .map(|inline| match inline {
-            Inline::LineBreak => 1,
+            Inline::LineBreak { .. } => 1,
             Inline::Strong { children }
             | Inline::Emphasis { children }
             | Inline::Link { children, .. } => count_line_breaks(children),
@@ -570,7 +570,7 @@ pub fn inline_text(children: &[Inline]) -> String {
             | Inline::Emphasis { children }
             | Inline::Link { children, .. } => inline_text(children),
             Inline::Anchor { .. } => String::new(),
-            Inline::LineBreak => "\n".to_owned(),
+            Inline::LineBreak { .. } => "\n".to_owned(),
         })
         .collect()
 }
@@ -681,7 +681,7 @@ fn visit_inlines(children: &[Inline], visitor: &mut impl FnMut(&Inline)) {
             | Inline::Code { .. }
             | Inline::Equation { .. }
             | Inline::Anchor { .. }
-            | Inline::LineBreak => {}
+            | Inline::LineBreak { .. } => {}
         }
     }
 }

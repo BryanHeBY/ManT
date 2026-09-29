@@ -52,7 +52,7 @@ fn collect_anchor_rows(nodes: &[Inline], row: &mut usize, ids: &mut Vec<(String,
             Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. } => {
                 *row += value.matches('\n').count();
             }
-            Inline::LineBreak => *row += 1,
+            Inline::LineBreak { .. } => *row += 1,
         }
     }
 }
@@ -135,7 +135,7 @@ fn reference_marks(
             Inline::Strong { children } | Inline::Emphasis { children } => {
                 reference_marks(children, origins, lines, row, column);
             }
-            Inline::LineBreak => {
+            Inline::LineBreak { .. } => {
                 *row += 1;
                 *column = 0;
             }

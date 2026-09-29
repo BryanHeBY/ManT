@@ -91,7 +91,7 @@ pub(super) fn preformatted_blocks(
     if close_at_source_marker
         && formatter.no_fill
         && output.last().is_some_and(|block| {
-            matches!(block, Block::Preformatted { children, .. } if !matches!(children.last(), Some(Inline::LineBreak)))
+            matches!(block, Block::Preformatted { children, .. } if !matches!(children.last(), Some(Inline::LineBreak { .. })))
         })
     {
         formatter.mark_trailing_literal_row();
@@ -117,7 +117,7 @@ mod tests {
             styled.as_slice(),
             [
                 Inline::Strong { children: first },
-                Inline::LineBreak,
+                Inline::LineBreak { .. },
                 Inline::Strong { children: second },
             ] if mant_ir::inline_plain_text(first) == "first" && mant_ir::inline_plain_text(second) == "second"
         ));

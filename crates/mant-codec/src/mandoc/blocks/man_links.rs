@@ -132,11 +132,11 @@ pub(super) fn wrap_first_visible_inline(
     // break. Internal breaks between label glyphs remain inside the link.
     let tail_start = children
         .iter()
-        .rposition(|node| !matches!(node, Inline::Anchor { .. } | Inline::LineBreak))
+        .rposition(|node| !matches!(node, Inline::Anchor { .. } | Inline::LineBreak { .. }))
         .map_or(0, |index| index + 1);
     let trailing = if children[tail_start..]
         .iter()
-        .any(|node| matches!(node, Inline::LineBreak))
+        .any(|node| matches!(node, Inline::LineBreak { .. }))
     {
         children.split_off(tail_start)
     } else {

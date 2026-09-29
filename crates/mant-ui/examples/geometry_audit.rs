@@ -314,7 +314,7 @@ mod tests {
                     Inline::anchor("a"),
                     Inline::anchor("b"),
                     text("FIRST"),
-                    Inline::LineBreak,
+                    Inline::line_break(),
                     text("SECOND"),
                 ],
                 0,

@@ -566,7 +566,7 @@ pub fn heading_has_local_link(heading: &mant_ir::Heading) -> bool {
             | mant_ir::Inline::Code { .. }
             | mant_ir::Inline::Equation { .. }
             | mant_ir::Inline::Anchor { .. }
-            | mant_ir::Inline::LineBreak => false,
+            | mant_ir::Inline::LineBreak { .. } => false,
         })
     }
     inlines_have_local_link(&heading.content)

@@ -492,7 +492,7 @@ fn inline_text(nodes: &[Inline]) -> String {
             Inline::Strong { children }
             | Inline::Emphasis { children }
             | Inline::Link { children, .. } => output.push_str(&inline_text(children)),
-            Inline::LineBreak => output.push('\n'),
+            Inline::LineBreak { .. } => output.push('\n'),
             Inline::Anchor { .. } => {}
         }
     }

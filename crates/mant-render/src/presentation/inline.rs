@@ -18,6 +18,9 @@ pub struct InlinePresentation {
     pub link: bool,
     /// This span is an IR-authored structural line break, not untrusted text.
     pub structural_break: bool,
+    /// For a structural break: the indent the following row carries
+    /// (a request moved the upstream offset, roff_term.c:73-75).
+    pub line_break_indent: Option<u16>,
     /// This exact source range belongs to a validated semantic name.
     pub entry_kind: Option<EntryKind>,
 }
@@ -119,10 +122,11 @@ fn walk<'a>(
                 cursor,
                 emit,
             ),
-            Inline::LineBreak => text(
+            Inline::LineBreak { indent_columns } => text(
                 "\n",
                 InlinePresentation {
                     structural_break: true,
+                    line_break_indent: Some(*indent_columns),
                     ..style
                 },
                 target,

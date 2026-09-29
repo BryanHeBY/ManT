@@ -78,8 +78,12 @@ impl BlockRenderer<'_> {
         let mut terms = item
             .terms
             .iter()
-            .map(|term| self.inline_text(term, TextRole::DefinitionTerm))
-            .filter(|term| !term.is_empty())
+            .filter_map(|term| {
+                let rows = self.inline_rows(term, TextRole::DefinitionTerm);
+                // A term that only breaks rows still owns those rows (an
+                // empty `.It` operand's field owns its blank lines).
+                (rows.len() > 1 || rows.iter().any(|(row, _)| !row.is_empty())).then_some(rows)
+            })
             .collect::<Vec<_>>();
         // Row structure comes from the semantic relation the producer
         // decided; the column-valued layout fields are fixed-width hints.
@@ -90,8 +94,15 @@ impl BlockRenderer<'_> {
             item.layout.head_body_relation,
             mant_ir::HeadBodyRelation::Separate
         ) && let Some((children, layout)) = item.inline_description()
-            && let Some(last) = terms.pop()
+            && let Some(last_rows) = terms.pop()
         {
+            let last = last_rows
+                .into_iter()
+                .map(|(row, row_indent)| {
+                    indent_lines(&row, padding(origin) + usize::from(row_indent))
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
             let last_width = mant_ir::geometry::definition_run_in_width(&item.terms).unwrap_or(0);
             let first_origin =
                 compose_origin(body_origin, layout.indent_columns).max(compose_origin(
@@ -104,11 +115,17 @@ impl BlockRenderer<'_> {
             let mut lines = body.split('\n');
             let mut output = terms
                 .into_iter()
-                .map(|term| indent_lines(&term, padding(origin)))
+                .flat_map(|term: Vec<(String, u16)>| {
+                    term.into_iter()
+                        .map(|(row, row_indent)| {
+                            indent_lines(&row, padding(origin) + usize::from(row_indent))
+                        })
+                        .collect::<Vec<_>>()
+                })
                 .collect::<Vec<_>>();
             output.push(format!(
                 "{}{}{}",
-                indent_lines(&last, padding(origin)),
+                last,
                 " ".repeat(
                     padding(first_origin)
                         .saturating_sub(padding(origin).saturating_add(last_width))
@@ -131,12 +148,19 @@ impl BlockRenderer<'_> {
             result.extend(self.block_flow(&item.description[1..], body_origin));
             return result;
         }
-        let terms = terms
+        // Rows keep their request-relative indents (a cleared-BRIND request
+        // moved the upstream offset, roff_term.c:73-75).
+        let rows = terms
             .into_iter()
-            .map(|term| indent_lines(&term, padding(origin)))
-            .collect::<Vec<_>>()
-            .join("\n");
-        let mut result = Flow::text(terms);
+            .flat_map(|term| {
+                term.into_iter()
+                    .map(|(row, row_indent)| {
+                        indent_lines(&row, padding(origin) + usize::from(row_indent))
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+        let mut result = Flow::text(rows.join("\n"));
         result.extend(self.block_flow(&item.description, body_origin));
         result
     }

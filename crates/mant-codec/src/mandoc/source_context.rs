@@ -335,7 +335,7 @@ impl<'a> LoweringContext<'a> {
         );
         let mut output = execution.output;
         if execution.pending_word_end_break {
-            output.push(mant_ir::Inline::LineBreak);
+            output.push(mant_ir::Inline::line_break());
         }
         // Even a control-only tbl word enters term_word(): it clears
         // formatter-global skipvsp and can leave a bare BACKAFTER request for
@@ -365,7 +365,7 @@ impl<'a> LoweringContext<'a> {
         );
         let mut output = execution.output;
         if execution.pending_word_end_break {
-            output.push(mant_ir::Inline::LineBreak);
+            output.push(mant_ir::Inline::line_break());
         }
         formatter.execute_word();
         formatter.inherit_zero_advance_armed(zero_advance.take_armed());

@@ -39,7 +39,7 @@ fn append(nodes: &[Inline], row: &mut String, present: &mut bool) {
             Inline::Strong { children }
             | Inline::Emphasis { children }
             | Inline::Link { children, .. } => append(children, row, present),
-            Inline::LineBreak => {
+            Inline::LineBreak { .. } => {
                 row.clear();
                 *present = true;
             }
@@ -78,7 +78,7 @@ mod tests {
     #[test]
     fn anchors_and_wrappers_do_not_reopen_a_closed_label_row() {
         let anchor = Inline::anchor("target");
-        for boundary in [Inline::LineBreak, text("\n")] {
+        for boundary in [Inline::line_break(), text("\n")] {
             assert_eq!(
                 definition_run_in_width(&[vec![text("-b"), boundary, anchor.clone()]]),
                 None
@@ -95,7 +95,7 @@ mod tests {
             None
         );
         assert_eq!(
-            definition_run_in_width(&[vec![text("-b"), Inline::LineBreak, text("-c")]]),
+            definition_run_in_width(&[vec![text("-b"), Inline::line_break(), text("-c")]]),
             Some(2)
         );
     }
@@ -104,7 +104,7 @@ mod tests {
     fn styled_link_fragments_share_unicode_cell_measurement() {
         let terms = vec![vec![
             text("long-label"),
-            Inline::LineBreak,
+            Inline::line_break(),
             Inline::Strong {
                 children: vec![text("日")],
             },

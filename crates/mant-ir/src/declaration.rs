@@ -61,7 +61,7 @@ fn readable_inline(inline: &Inline) -> bool {
         Inline::Strong { children }
         | Inline::Emphasis { children }
         | Inline::Link { children, .. } => children.iter().any(readable_inline),
-        Inline::LineBreak | Inline::Anchor { .. } => false,
+        Inline::LineBreak { .. } | Inline::Anchor { .. } => false,
     }
 }
 

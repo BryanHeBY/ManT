@@ -20,7 +20,7 @@ fn literal_display_returns_author_mode_to_following_section_text() {
     assert!(
         !author
             .iter()
-            .any(|inline| matches!(inline, Inline::LineBreak))
+            .any(|inline| matches!(inline, Inline::LineBreak { .. }))
     );
 }
 
@@ -46,7 +46,7 @@ fn nested_display_list_returns_author_mode_to_following_section_text() {
     assert!(
         !author
             .iter()
-            .any(|inline| matches!(inline, Inline::LineBreak))
+            .any(|inline| matches!(inline, Inline::LineBreak { .. }))
     );
 }
 
@@ -121,7 +121,7 @@ fn man_request_font_order_follows_reading_terminal_registers() {
     assert!(
         matches!(children.as_slice(), [
         Inline::Strong { .. },
-        Inline::LineBreak,
+        Inline::LineBreak { .. },
         Inline::Strong { .. },
         Inline::Text { .. },
         Inline::Strong { .. },

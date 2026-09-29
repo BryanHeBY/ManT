@@ -354,7 +354,7 @@ pub(super) fn inline_anchor_ids(nodes: &[Inline], output: &mut Vec<String>) {
             Inline::Text { .. }
             | Inline::Code { .. }
             | Inline::Equation { .. }
-            | Inline::LineBreak => {}
+            | Inline::LineBreak { .. } => {}
         }
     }
 }
@@ -366,9 +366,10 @@ pub(super) fn inline_anchor_owner_source(nodes: &[Inline]) -> Option<SourceSpan>
         Inline::Strong { children }
         | Inline::Emphasis { children }
         | Inline::Link { children, .. } => inline_anchor_owner_source(children),
-        Inline::Text { .. } | Inline::Code { .. } | Inline::Equation { .. } | Inline::LineBreak => {
-            None
-        }
+        Inline::Text { .. }
+        | Inline::Code { .. }
+        | Inline::Equation { .. }
+        | Inline::LineBreak { .. } => None,
     })
 }
 
@@ -520,9 +521,10 @@ fn inlines_contain_anchor(nodes: &[Inline], target: &str) -> bool {
         Inline::Strong { children }
         | Inline::Emphasis { children }
         | Inline::Link { children, .. } => inlines_contain_anchor(children, target),
-        Inline::Text { .. } | Inline::Code { .. } | Inline::Equation { .. } | Inline::LineBreak => {
-            false
-        }
+        Inline::Text { .. }
+        | Inline::Code { .. }
+        | Inline::Equation { .. }
+        | Inline::LineBreak { .. } => false,
     })
 }
 

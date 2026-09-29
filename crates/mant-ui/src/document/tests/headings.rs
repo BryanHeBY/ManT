@@ -33,7 +33,7 @@ fn heading_only_root_retains_links_styles_anchors_and_hard_lines_once() {
                     fragment: Some("Mixed.Target".into()),
                 },
             ),
-            Inline::LineBreak,
+            Inline::line_break(),
             Inline::anchor_with_aliases("second-line", vec!["Second.Line".into()]),
             Inline::Text {
                 value: "Second row".into(),
@@ -102,7 +102,7 @@ fn section_labels_do_not_replace_linked_body_heading_content() {
                     address: "help@example.com".into(),
                 },
             ),
-            Inline::LineBreak,
+            Inline::line_break(),
             Inline::anchor("heading-tail"),
             Inline::Text {
                 value: "tail".into(),

@@ -202,7 +202,7 @@ fn collect_entity_inlines(inlines: &[Inline], output: &mut Vec<String>) {
             Inline::Code { .. }
             | Inline::Equation { .. }
             | Inline::Anchor { .. }
-            | Inline::LineBreak => {}
+            | Inline::LineBreak { .. } => {}
         }
     }
 }
@@ -528,7 +528,7 @@ fn has_visible_inline(inlines: &[mant_ir::Inline]) -> bool {
         mant_ir::Inline::Strong { children }
         | mant_ir::Inline::Emphasis { children }
         | mant_ir::Inline::Link { children, .. } => has_visible_inline(children),
-        mant_ir::Inline::Anchor { .. } | mant_ir::Inline::LineBreak => false,
+        mant_ir::Inline::Anchor { .. } | mant_ir::Inline::LineBreak { .. } => false,
     })
 }
 

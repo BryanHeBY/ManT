@@ -147,7 +147,7 @@ mod tests {
                     },
                 ],
             },
-            Inline::LineBreak,
+            Inline::line_break(),
             Inline::Text {
                 value: "尾\t\0".into(),
             },

@@ -20,7 +20,7 @@ pub(in crate::mandoc) fn parse_roff_text_with_state(
     );
     let mut output = execution.output;
     if execution.pending_word_end_break {
-        output.push(Inline::LineBreak);
+        output.push(Inline::line_break());
     }
     zero_advance.finish_into(&mut output);
     output
@@ -132,7 +132,7 @@ fn append_text_event(
                 let prefix = output.len() + usize::from(state.graph_seen);
                 state.break_before_graph_prefix.get_or_insert(prefix);
             }
-            output.push(Inline::LineBreak);
+            output.push(Inline::line_break());
             state.pending_word_end_break = false;
             state.suppress_break_whitespace = true;
             state.graph_seen = false;

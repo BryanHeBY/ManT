@@ -748,7 +748,7 @@ fn trailing_no_space_preserves_a_pending_word_end_break() {
         assert_eq!(
             children
                 .iter()
-                .filter(|node| matches!(node, Inline::LineBreak))
+                .filter(|node| matches!(node, Inline::LineBreak { .. }))
                 .count(),
             1,
             "{label}: {children:?}"
@@ -767,7 +767,7 @@ fn trailing_no_space_preserves_a_pending_word_end_break() {
     assert!(
         !children
             .iter()
-            .any(|node| matches!(node, Inline::LineBreak))
+            .any(|node| matches!(node, Inline::LineBreak { .. }))
     );
 
     for (label, source, expected) in [
