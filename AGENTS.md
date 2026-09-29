@@ -21,3 +21,15 @@
 - Prefer fixes at the shared execution/state boundary identified in upstream
   source. Do not add document-specific rules or isolated output patches when
   the upstream cause is a formatter, parser, or macro execution rule.
+
+## Native probing and the reference binary
+
+- Never build, patch, or run `configure`/`make` inside
+  `crates/libmandoc-rs/vendor/`. The vendor tree stays exactly as
+  committed; copy it to a scratch directory for gdb probes or
+  instrumented builds.
+- The behavioral reference lives at
+  `target/mandoc-migration/reference/mandoc` and dies with every
+  `cargo clean`. Restore it with `scripts/rebuild_reference_mandoc.sh`
+  (recipe verified byte-identical on the 54-case matrix) instead of
+  improvising a rebuild.
