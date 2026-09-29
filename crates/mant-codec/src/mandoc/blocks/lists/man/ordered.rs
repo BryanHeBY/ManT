@@ -305,7 +305,7 @@ mod tests {
             source: None,
             entry: None,
             layout: mant_ir::DefinitionLayout {
-                inline_term: false,
+                head_body_relation: mant_ir::HeadBodyRelation::from(false),
                 spacing_before_lines: None,
                 ..Default::default()
             },

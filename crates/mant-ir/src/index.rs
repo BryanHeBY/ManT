@@ -214,7 +214,10 @@ impl<'ir> Visit<'ir> for IndexBuilder {
 
 #[cfg(test)]
 mod tests {
-    use crate::{DocumentMeta, DocumentSource, EntryFacts, EntryKind, NameCase, SourceFormat};
+    use crate::{
+        DocumentMeta, DocumentSource, EntryFacts, EntryKind, HeadBodyRelation, NameCase,
+        SourceFormat,
+    };
 
     use super::*;
 
@@ -251,7 +254,7 @@ mod tests {
                     terms: vec![vec![Inline::anchor(id.clone())]],
                     description: Vec::new(),
                     layout: crate::DefinitionLayout {
-                        inline_term: false,
+                        head_body_relation: HeadBodyRelation::from(false),
                         spacing_before_lines: None,
                         ..Default::default()
                     },

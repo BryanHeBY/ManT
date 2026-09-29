@@ -719,7 +719,7 @@ mod tests {
                 source: None,
                 entry: None,
                 layout: mant_ir::DefinitionLayout {
-                    inline_term: true,
+                    head_body_relation: mant_ir::HeadBodyRelation::from(true),
                     ..Default::default()
                 },
             }],
@@ -757,7 +757,7 @@ mod tests {
                 ],
                 description: vec![paragraph("BODY", 0)],
                 layout: mant_ir::DefinitionLayout {
-                    inline_term: true,
+                    head_body_relation: mant_ir::HeadBodyRelation::from(true),
                     ..Default::default()
                 },
             }],

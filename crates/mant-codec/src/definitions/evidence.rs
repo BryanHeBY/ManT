@@ -115,7 +115,6 @@ mod tests {
             }]],
             description: Vec::new(),
             layout: mant_ir::DefinitionLayout {
-                inline_term: false,
                 spacing_before_lines: None,
                 ..Default::default()
             },

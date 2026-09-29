@@ -281,24 +281,30 @@ pub struct DefinitionItem {
 
 /// Definition-item presentation. Missing spacing inherits list compactness;
 /// explicit zero spacing is a distinct, preserved source request.
+///
+/// The semantic source of truth is [`HeadBodyRelation`]; the column-valued
+/// fields are pre-resolved hints for fixed-width terminal presentation and
+/// must not drive structure decisions in other renderers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DefinitionLayout {
-    /// Render the term on the same line as the first description line (a man(7)
-    /// hanging tag that fits the indent) instead of on its own line. Decided
-    /// once during lowering so every renderer lays the item out identically.
-    #[serde(default, skip_serializing_if = "is_false")]
-    pub inline_term: bool,
+    /// How the head and the first body row relate. Producers decide this
+    /// once during lowering from source execution; renderers must derive
+    /// their row structure from it instead of re-measuring columns.
+    #[serde(default, skip_serializing_if = "is_default_relation")]
+    pub head_body_relation: HeadBodyRelation,
     /// Description content origin relative to the label origin. Hard and
     /// wrapped continuation lines use this origin even if a long run-in head
-    /// forces the first description text further right. The generic default
-    /// is four cells; source producers resolve their own widths explicitly.
+    /// forces the first description text further right. A pre-resolved
+    /// fixed-width hint (mandoc `offset`, term.c:134-136); the generic
+    /// default is four cells.
     #[serde(
         default = "default_definition_indent",
         skip_serializing_if = "is_default_definition_indent"
     )]
     pub body_indent_columns: i32,
     /// Minimum separation after a run-in term, independent of body origin.
+    /// A pre-resolved fixed-width hint (mandoc `trailspace`, mdoc_term.c:801-812).
     #[serde(
         default = "default_term_gap",
         skip_serializing_if = "is_default_term_gap"
@@ -310,21 +316,63 @@ pub struct DefinitionLayout {
     pub spacing_before_lines: Option<u16>,
 }
 
+/// Row relationship between a definition head and its first body row.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+pub enum HeadBodyRelation {
+    /// The body starts on its own row at the description indent (tag-style
+    /// and over-long heads; mdoc `tag`/`diag`, man TP past the tag width).
+    #[default]
+    Separate,
+    /// The body shares the head's row behind a minimum separator (mdoc
+    /// `hang`, man TP/HP inside the tag width).
+    RunIn,
+    /// The body shares the head's row with no separator: a request cleared
+    /// `TERMP_NOBREAK` and armed `TERMP_NOSPACE` (`roff_term.c:75-78`), so
+    /// the first body word prints against the last head cell.
+    JoinedNoSpace,
+    /// The body shares the head's row starting at the description column
+    /// because the cleared field filled its capacity (term.c:250-253 with
+    /// 205-207): the first body column is the further of the head's end
+    /// and the description indent.
+    FlushAtBody,
+}
+
 impl DefinitionLayout {
     /// Whether all presentation choices inherit their existing defaults.
     #[must_use]
     pub const fn is_empty(&self) -> bool {
-        !self.inline_term
+        self.head_body_relation.is_default()
             && self.spacing_before_lines.is_none()
             && self.body_indent_columns == default_definition_indent()
             && self.min_term_gap_columns == default_term_gap()
+    }
+
+    /// Whether the term shares the first description row.
+    #[must_use]
+    pub const fn inline_term(&self) -> bool {
+        !matches!(self.head_body_relation, HeadBodyRelation::Separate)
+    }
+}
+
+impl HeadBodyRelation {
+    /// Whether the relation carries the generic default.
+    #[must_use]
+    pub const fn is_default(&self) -> bool {
+        matches!(self, Self::Separate)
+    }
+}
+
+impl From<bool> for HeadBodyRelation {
+    fn from(runs_in: bool) -> Self {
+        if runs_in { Self::RunIn } else { Self::Separate }
     }
 }
 
 impl Default for DefinitionLayout {
     fn default() -> Self {
         Self {
-            inline_term: false,
+            head_body_relation: HeadBodyRelation::Separate,
             body_indent_columns: default_definition_indent(),
             min_term_gap_columns: default_term_gap(),
             spacing_before_lines: None,
@@ -346,6 +394,10 @@ const fn is_default_definition_indent(value: &i32) -> bool {
 const fn is_default_term_gap(value: &u16) -> bool {
     *value == default_term_gap()
 }
+#[allow(clippy::trivially_copy_pass_by_ref)] // Serde predicate.
+const fn is_default_relation(value: &HeadBodyRelation) -> bool {
+    value.is_default()
+}
 
 impl DefinitionItem {
     /// Generic default for authored definitions. Source-specific producers
@@ -363,7 +415,7 @@ impl DefinitionItem {
     /// spacing prevents the inline presentation.
     #[must_use]
     pub fn inline_description(&self) -> Option<(&[Inline], &LayoutHint)> {
-        if !self.layout.inline_term {
+        if !self.layout.inline_term() {
             return None;
         }
         match self.description.first()? {

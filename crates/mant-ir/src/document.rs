@@ -9,8 +9,9 @@ mod equation;
 mod inline;
 mod source;
 pub use blocks::{
-    Block, DefinitionItem, DefinitionLayout, LayoutHint, ListItem, ListItemLayout, ListKind,
-    TableAlignment, TableCell, TableCellKind, TableRow, TableRowKind, TableRuleCellKind,
+    Block, DefinitionItem, DefinitionLayout, HeadBodyRelation, LayoutHint, ListItem,
+    ListItemLayout, ListKind, TableAlignment, TableCell, TableCellKind, TableRow, TableRowKind,
+    TableRuleCellKind,
 };
 pub use diagnostic::{
     Diagnostic, DiagnosticImpact, DiagnosticLevel, content_complete, semantics_complete,

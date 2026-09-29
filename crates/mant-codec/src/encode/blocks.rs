@@ -236,7 +236,7 @@ fn render_definition_list(
                     // inline prose. Gluing a fenced code block, nested list,
                     // table, or display equation to the term produces invalid
                     // CommonMark and changes the block's meaning.
-                    let sep = if item.layout.inline_term
+                    let sep = if item.layout.inline_term()
                         && matches!(item.description.first(), Some(Block::Paragraph { .. }))
                     {
                         " "

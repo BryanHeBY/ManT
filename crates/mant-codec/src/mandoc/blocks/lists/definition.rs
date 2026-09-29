@@ -266,10 +266,17 @@ pub(super) fn definition_item(
     if flow.shares_pending_term_row && observed.placement_breaks() {
         geometry.placement = crate::mandoc::layout::TermPlacement::Stacked;
     }
-    if observed.first_word_concatenated() {
+    if observed.first_word_flushed_at_body() {
+        // The cleared field filled its capacity (term.c:250-253 with
+        // 205-207): the body shares the head's row starting at the
+        // description column, with no separator cell to count.
+        geometry.relation_override = Some(mant_ir::HeadBodyRelation::FlushAtBody);
+        geometry.gap = 0;
+    } else if observed.first_word_concatenated() {
         // TERMP_NOSPACE at the body's first word leaves no separator cell:
-        // the body column starts at the head's end (term.c:250-253 with
-        // roff_term.c:75-78), so the layout carries no minimum gap.
+        // the body column starts at the head's end (roff_term.c:75-78),
+        // so the layout carries no minimum gap.
+        geometry.relation_override = Some(mant_ir::HeadBodyRelation::JoinedNoSpace);
         geometry.gap = 0;
     }
     if matches!(description.first(), Some(Block::Preformatted { .. }))

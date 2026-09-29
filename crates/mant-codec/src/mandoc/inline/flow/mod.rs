@@ -121,9 +121,17 @@ pub(in crate::mandoc) struct InlineExecutionState {
     /// like the `TERMP_NOSPACE` left by the request's own `term_newln()`
     /// (`roff_term.c:78`).
     pub(in crate::mandoc) concat_next_word: bool,
+    /// Whether `concat_next_word` was armed by a filled cleared field
+    /// (term.c:250-253) rather than the request's `TERMP_NOSPACE`
+    /// (`roff_term.c:78`); the two arm the same no-separator word but
+    /// carry different `HeadBodyRelation` semantics.
+    pub(in crate::mandoc) concat_flush_source: bool,
     /// The most recent word consumed `concat_next_word` while a definition
     /// BODY was waiting for its first visible content.
     pub(in crate::mandoc) concat_consumed_for_body: bool,
+    /// The most recent word consumed a flush-armed `concat_next_word`
+    /// (`term.c:250-253`) while a definition BODY waited for content.
+    pub(in crate::mandoc) flush_consumed_for_body: bool,
     pub(in crate::mandoc) scope_posts: crate::mandoc::containers::ScopePostState,
 }
 
@@ -690,7 +698,9 @@ impl InlineExecutionState {
             observe_no_fill_source_lines: SourceLineObservation::Disabled,
             no_fill_word_active: false,
             concat_next_word: false,
+            concat_flush_source: false,
             concat_consumed_for_body: false,
+            flush_consumed_for_body: false,
             scope_posts: crate::mandoc::containers::ScopePostState::default(),
         }
     }

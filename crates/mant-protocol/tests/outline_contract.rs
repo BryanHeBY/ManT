@@ -180,7 +180,7 @@ fn excerpt_contract_can_return_one_semantic_definition() {
     let entry = DefinitionItem {
         source: None,
         layout: mant_ir::DefinitionLayout {
-            inline_term: false,
+            head_body_relation: mant_ir::HeadBodyRelation::from(false),
             spacing_before_lines: None,
             ..Default::default()
         },

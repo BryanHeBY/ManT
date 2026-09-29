@@ -817,7 +817,7 @@ fn definition_term_and_run_in_description_keep_separate_source_origins() {
                 entry: None,
                 source: None,
                 layout: mant_ir::DefinitionLayout {
-                    inline_term,
+                    head_body_relation: mant_ir::HeadBodyRelation::from(inline_term),
                     ..Default::default()
                 },
             }],

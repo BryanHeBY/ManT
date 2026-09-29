@@ -2,7 +2,7 @@
 use super::{Distance, SourceIndent};
 use crate::mandoc::LoweringContext;
 use libmandoc_rs::Node;
-use mant_ir::{DefinitionLayout, Inline};
+use mant_ir::{DefinitionLayout, HeadBodyRelation, Inline};
 
 #[derive(Clone, Copy)]
 pub(in crate::mandoc) enum TermPlacement {
@@ -21,6 +21,10 @@ pub(in crate::mandoc) struct DefinitionGeometry {
     /// `rmargin = offset + width`). Zero means the style sets no field
     /// width (inset/diagnostic/overhang keep the page right margin).
     pub(in crate::mandoc) head_field_columns: u16,
+    /// Execution-proven head/body row relation overriding the static
+    /// placement decision (`.nf`/`.fi` NOSPACE joins and filled cleared
+    /// fields). `None` keeps the placement-derived relation.
+    pub(in crate::mandoc) relation_override: Option<mant_ir::HeadBodyRelation>,
 }
 
 impl DefinitionGeometry {
@@ -46,17 +50,21 @@ impl DefinitionGeometry {
         terms: &[Vec<Inline>],
     ) -> DefinitionLayout {
         let body_indent_columns = body_origin.offset_from(origin);
-        let inline_term = match self.placement {
-            TermPlacement::Fit => mant_ir::terms_fit_inline(
-                terms,
-                usize::try_from(body_indent_columns.saturating_sub(i32::from(self.gap)))
-                    .unwrap_or(0),
-            ),
-            TermPlacement::RunIn => true,
-            TermPlacement::Stacked => false,
-        };
+        let head_body_relation = self.relation_override.unwrap_or(match self.placement {
+            TermPlacement::Fit
+                if !mant_ir::terms_fit_inline(
+                    terms,
+                    usize::try_from(body_indent_columns.saturating_sub(i32::from(self.gap)))
+                        .unwrap_or(0),
+                ) =>
+            {
+                HeadBodyRelation::Separate
+            }
+            TermPlacement::Fit | TermPlacement::RunIn => HeadBodyRelation::RunIn,
+            TermPlacement::Stacked => HeadBodyRelation::Separate,
+        });
         DefinitionLayout {
-            inline_term,
+            head_body_relation,
             body_indent_columns,
             min_term_gap_columns: self.gap,
             spacing_before_lines: None,

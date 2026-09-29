@@ -81,7 +81,15 @@ impl BlockRenderer<'_> {
             .map(|term| self.inline_text(term, TextRole::DefinitionTerm))
             .filter(|term| !term.is_empty())
             .collect::<Vec<_>>();
-        if let Some((children, layout)) = item.inline_description()
+        // Row structure comes from the semantic relation the producer
+        // decided; the column-valued layout fields are fixed-width hints.
+        // RunIn/JoinedNoSpace/FlushAtBody all share the head's row — the
+        // numeric gap/origin fields already resolve the exact column, and
+        // at terminal width the latter two coincide with RunIn's formula.
+        if !matches!(
+            item.layout.head_body_relation,
+            mant_ir::HeadBodyRelation::Separate
+        ) && let Some((children, layout)) = item.inline_description()
             && let Some(last) = terms.pop()
         {
             let last_width = mant_ir::geometry::definition_run_in_width(&item.terms).unwrap_or(0);

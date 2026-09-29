@@ -118,7 +118,7 @@ mod tests {
                 source: None,
             }],
             layout: crate::DefinitionLayout {
-                inline_term: false,
+                head_body_relation: crate::HeadBodyRelation::from(false),
                 spacing_before_lines: None,
                 ..Default::default()
             },

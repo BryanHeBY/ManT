@@ -118,7 +118,7 @@ fn definition(
             .collect(),
         description,
         layout: mant_ir::DefinitionLayout {
-            inline_term: false,
+            head_body_relation: mant_ir::HeadBodyRelation::from(false),
             spacing_before_lines: None,
             ..Default::default()
         },
@@ -649,7 +649,7 @@ fn structural_paths_take_precedence_over_colliding_entry_ids() {
                 }]],
                 description: Vec::new(),
                 layout: mant_ir::DefinitionLayout {
-                    inline_term: false,
+                    head_body_relation: mant_ir::HeadBodyRelation::from(false),
                     spacing_before_lines: None,
                     ..Default::default()
                 },

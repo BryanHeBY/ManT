@@ -1,4 +1,5 @@
 use super::*;
+use mant_ir::HeadBodyRelation;
 
 fn review_definition_item(body: &str) -> mant_ir::DefinitionItem {
     let source = format!(
@@ -45,20 +46,20 @@ fn inset_empty_text_after_marker_closes_its_row() {
     );
     assert_eq!(inline_text(&inset.terms[0]), "alpha", "{inset:#?}");
     assert!(
-        !inset.layout.inline_term,
+        !inset.layout.inline_term(),
         "inset body must start its own row: {inset:#?}"
     );
     let diag = review_definition_item(
         ".Bl -diag\n.It Xo\n.No alpha\\p\n.No \"\"\n.Xc\n.No tail text\n.El\n",
     );
     assert!(
-        diag.layout.inline_term,
+        diag.layout.inline_term(),
         "diag NOBREAK keeps the shared row: {diag:#?}"
     );
     let armed_only =
         review_definition_item(".Bl -inset\n.It Xo\n.No alpha\\p\n.Xc\n.No tail text\n.El\n");
     assert!(
-        armed_only.layout.inline_term,
+        armed_only.layout.inline_term(),
         r"a trailing \p without the empty TEXT keeps the shared row: {armed_only:#?}"
     );
 }
@@ -99,7 +100,7 @@ fn diag_literal_head_marker_wipes_field_suffix() {
     );
     assert_eq!(inline_text(&item.terms[0]), "Xo", "{item:#?}");
     assert!(
-        item.layout.inline_term,
+        item.layout.inline_term(),
         "diag NOBREAK keeps the head row: {item:#?}"
     );
     let [Block::Paragraph { children, .. }] = &item.description[..] else {
@@ -143,7 +144,7 @@ fn cleared_no_break_field_wraps_hang_head_words_at_the_field_width() {
     );
     assert_eq!(inline_text(&item.terms[0]), "\n\nafter\nspace", "{item:#?}");
     assert!(
-        item.layout.inline_term,
+        item.layout.inline_term(),
         "hang body stays on the last wrapped head row: {item:#?}"
     );
 }
@@ -161,7 +162,7 @@ fn no_fill_head_words_never_wrap_at_the_field_width() {
     );
     assert_eq!(inline_text(&item.terms[0]), "after space", "{item:#?}");
     assert!(
-        !item.layout.inline_term,
+        !item.layout.inline_term(),
         "the fill-mode boundary closed the head row before BODY: {item:#?}"
     );
 }
@@ -178,7 +179,7 @@ fn tag_marker_split_head_closes_its_final_row() {
     );
     assert_eq!(inline_text(&tag.terms[0]), "x\ny\nz", "{tag:#?}");
     assert!(
-        !tag.layout.inline_term,
+        !tag.layout.inline_term(),
         "tag body must start its own row: {tag:#?}"
     );
     let hang = review_definition_item(
@@ -186,7 +187,7 @@ fn tag_marker_split_head_closes_its_final_row() {
     );
     assert_eq!(inline_text(&hang.terms[0]), "x\ny\nz", "{hang:#?}");
     assert!(
-        hang.layout.inline_term,
+        hang.layout.inline_term(),
         "hang body stays on the last row: {hang:#?}"
     );
 }
@@ -316,7 +317,7 @@ fn literal_definition_body_shares_only_a_continued_head_row() {
             item.description.first(),
             Some(Block::Preformatted { .. })
         ));
-        assert_eq!(item.layout.inline_term, joins, "{head}: {item:#?}");
+        assert_eq!(item.layout.inline_term(), joins, "{head}: {item:#?}");
         assert_eq!(
             item.inline_description().is_some(),
             joins,
@@ -335,12 +336,12 @@ fn definition_body_uses_continuation_after_generated_words_and_zero_row_requests
     let inset =
         review_definition_item(".nf\n.Bl -inset\n.It Xo\n.No X\\c\n.Xc\n.No BODY\n.El\n.fi\n");
     assert_eq!(inline_text(&inset.terms[0]), "X");
-    assert!(!inset.layout.inline_term, "{inset:#?}");
+    assert!(!inset.layout.inline_term(), "{inset:#?}");
     for request in [".sp 0", ".ce 0", ".rj 0"] {
         let item = review_definition_item(&format!(
             ".nf\n.Bl -hang -width 4n\n.It Xo\n.No X\\c\n{request}\n.Xc\n.No BODY\n.El\n.fi\n"
         ));
-        assert!(item.layout.inline_term, "{request}: {item:#?}");
+        assert!(item.layout.inline_term(), "{request}: {item:#?}");
         assert!(item.inline_description().is_some(), "{request}: {item:#?}");
     }
 }
@@ -391,7 +392,7 @@ fn tag_margin_flush_does_not_print_an_unconsumed_next_field_separator() {
         ".nf\n.Bl -tag -width 4n\n.It Xo\n.No QHEADQ\\c\n.mc |\n.Xc\n.No QBODYQ\n.El\n.fi\n",
     );
     assert_eq!(inline_text(&item.terms[0]), "QHEADQ", "{item:#?}");
-    assert!(!item.layout.inline_term, "{item:#?}");
+    assert!(!item.layout.inline_term(), "{item:#?}");
     assert!(!matches!(
         item.description.first(),
         Some(Block::VerticalSpace { .. })
@@ -842,7 +843,7 @@ fn final_definition_head_break_moves_once_into_stacked_layout() {
         };
         let item = &items[0];
         assert_eq!(inline_text(&item.terms[0]), expected_term, "{item:#?}");
-        assert!(!item.layout.inline_term, "{request}: {item:#?}");
+        assert!(!item.layout.inline_term(), "{request}: {item:#?}");
         assert!(
             matches!(&item.description[0], Block::Paragraph { children, .. } if inline_text(children) == " BODY"),
             "{request}: {item:#?}"
@@ -948,7 +949,7 @@ fn final_hang_field_reestablishes_body_word_gap() {
         };
         let item = &items[0];
         assert!(inline_text(&item.terms[0]).ends_with('Y'), "{item:#?}");
-        assert!(item.layout.inline_term, "{request}: {item:#?}");
+        assert!(item.layout.inline_term(), "{request}: {item:#?}");
         assert_eq!(item.layout.min_term_gap_columns, 1, "{item:#?}");
         assert!(
             matches!(&item.description[0], Block::Paragraph { children, .. } if inline_text(children) == "BODY"),
@@ -1007,7 +1008,7 @@ fn detached_definition_head_keeps_authored_vertical_rows() {
         };
         assert_eq!(inline_text(&items[0].terms[0]), expected_term);
         assert!(
-            !items[0].layout.inline_term,
+            !items[0].layout.inline_term(),
             "{style} {request}: {items:#?}"
         );
     }
@@ -1043,6 +1044,53 @@ fn final_hang_field_only_consumes_a_proven_body_gap() {
             items[0].layout.min_term_gap_columns, expected_gap,
             "{items:#?}"
         );
+    }
+}
+
+#[test]
+fn head_body_relation_classifies_shared_rows() {
+    // Expectations classify rows the fixed CVS reference printed for the
+    // oracle matrix families (`/tmp/fix/oramatrix` c/f/m rows):
+    // - plain hang: `X BODY` shares the row behind one separator;
+    // - tag: `X` closes its row and BODY starts the next;
+    // - `.fi` tail: `body linetail text` has no separator cell
+    //   (roff_term.c:75-78 TERMP_NOSPACE);
+    // - filled cleared field: `afterwardstail text` starts at the
+    //   description column (term.c:250-253 with 205-207).
+    for (body, expected) in [
+        (
+            ".Bl -hang -width 4n\n.It X\n.No BODY\n.El\n",
+            HeadBodyRelation::RunIn,
+        ),
+        (
+            ".Bl -tag -width 4n\n.It X\n.No BODY\n.El\n",
+            // A short tag fits the field: the reference keeps `X     BODY`
+            // on one row, like hang.
+            HeadBodyRelation::RunIn,
+        ),
+        (
+            ".Bl -tag -width 4n\n.It plain head\n.No BODY\n.El\n",
+            // The reference closes the over-long tag row: `plain head`
+            // then BODY at the description column.
+            HeadBodyRelation::Separate,
+        ),
+        (
+            // f3 family: `.fi` arms TERMP_NOSPACE inside the still-open
+            // head, so the body's first word concatenates onto it; the
+            // reference prints `body linetail text` as one row.
+            ".Bl -hang -width 4n\n.It Xo\n.nf\n.No body line\n.fi\n.Xc\n.No tail text\n.El\n",
+            HeadBodyRelation::JoinedNoSpace,
+        ),
+        (
+            // c family: the control cleared NOBREAK and the field word
+            // overran the width, so the body starts at the description
+            // column; the reference prints `     aftertail text`.
+            ".Bl -hang -width 2n\n.It Xo\n.sp\n.No after\n.Xc\n.No tail text\n.El\n",
+            HeadBodyRelation::FlushAtBody,
+        ),
+    ] {
+        let item = review_definition_item(body);
+        assert_eq!(item.layout.head_body_relation, expected, "{item:#?}");
     }
 }
 
@@ -4379,14 +4427,14 @@ fn empty_operand_ends_the_continued_source_row() {
         ".nf\n.Bl -hang -width 4n\n.It Xo\n.No X\\c\n.Xc\n.No \"\"\n.No BODY\n.El\n",
     );
     assert!(
-        !emptied.layout.inline_term,
+        !emptied.layout.inline_term(),
         "the cleared latch ends the row: {emptied:#?}"
     );
     let zero_row = review_definition_item(
         ".nf\n.Bl -hang -width 4n\n.It Xo\n.No X\\c\n.sp 0\n.Xc\n.No BODY\n.El\n",
     );
     assert!(
-        zero_row.layout.inline_term,
+        zero_row.layout.inline_term(),
         "term_newln() alone keeps TERMP_NONEWLINE: {zero_row:#?}"
     );
 }

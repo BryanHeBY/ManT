@@ -1,7 +1,7 @@
 //! Definition normalize policy; coordinated by the parent discovery passes.
 use super::{context::DefinitionContext, syntax::is_inferred_head};
 use mant_ir::geometry::{block_layout, block_layout_mut};
-use mant_ir::{Block, DefinitionItem, LayoutHint};
+use mant_ir::{Block, DefinitionItem, HeadBodyRelation, LayoutHint};
 use std::{collections::VecDeque, mem};
 
 /// Reattach source-neutral indented continuations to their owning definition.
@@ -145,7 +145,7 @@ pub(super) fn normalize_hanging_definitions(blocks: &mut Vec<Block>, context: De
                 layout: mant_ir::DefinitionLayout {
                     // This is an ownership change, not a request to join two
                     // originally distinct source paragraphs into one line.
-                    inline_term: false,
+                    head_body_relation: HeadBodyRelation::Separate,
                     body_indent_columns: mant_ir::geometry::rebase_origin(
                         description_origin,
                         0,
@@ -215,7 +215,6 @@ mod tests {
                 }]],
                 description: vec![paragraph("Initial description.", 4)],
                 layout: mant_ir::DefinitionLayout {
-                    inline_term: false,
                     spacing_before_lines: None,
                     ..Default::default()
                 },
@@ -300,7 +299,11 @@ mod tests {
                     let Block::DefinitionList { items, .. } = &mut owner else {
                         unreachable!()
                     };
-                    items[0].layout.inline_term = inline_term;
+                    items[0].layout.head_body_relation = if inline_term {
+                        mant_ir::HeadBodyRelation::RunIn
+                    } else {
+                        mant_ir::HeadBodyRelation::Separate
+                    };
                     items[0].terms = vec![vec![Inline::Text {
                         value: label.into(),
                     }]];
@@ -325,7 +328,7 @@ mod tests {
                         unreachable!()
                     };
                     assert_eq!(items[0].description.len(), 8);
-                    assert_eq!(items[0].layout.inline_term, inline_term);
+                    assert_eq!(items[0].layout.inline_term(), inline_term);
                     assert_eq!(
                         items[0].terms,
                         [vec![Inline::Text {
@@ -393,7 +396,7 @@ mod tests {
             let Block::DefinitionList { items, .. } = &blocks[0] else {
                 panic!("inferred definition")
             };
-            assert!(!items[0].layout.inline_term);
+            assert!(!items[0].layout.inline_term());
             assert_eq!(items[0].layout.spacing_before_lines, Some(0));
             assert_eq!(items[0].description[0], space(spacing));
         }
@@ -413,7 +416,7 @@ mod tests {
                     let Block::DefinitionList { items, .. } = &blocks[0] else {
                         panic!("inferred definition")
                     };
-                    assert!(!items[0].layout.inline_term);
+                    assert!(!items[0].layout.inline_term());
                     assert_eq!(items[0].layout.body_indent_columns, offset);
                     assert_eq!(
                         absolute_geometry(&blocks),

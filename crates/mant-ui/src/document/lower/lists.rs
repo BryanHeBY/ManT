@@ -109,7 +109,7 @@ impl DocumentBuilder<'_> {
                 self.anchors
                     .insert(identity.id.to_string(), self.lines.len());
             }
-            if item.layout.inline_term {
+            if item.layout.inline_term() {
                 self.inline_definition(item, indent);
             } else {
                 for term in &item.terms {

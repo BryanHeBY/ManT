@@ -83,7 +83,7 @@ fn anchors_follow_hard_lines_in_terms_and_run_in_bodies() {
                     source: None,
                     entry: None,
                     layout: mant_ir::DefinitionLayout {
-                        inline_term,
+                        head_body_relation: mant_ir::HeadBodyRelation::from(inline_term),
                         ..Default::default()
                     },
                     terms: vec![vec![
@@ -359,7 +359,7 @@ fn target_only_terms_are_zero_width_and_extreme_origins_are_bounded() {
                         ],
                         description: vec![paragraph("BODY")],
                         layout: mant_ir::DefinitionLayout {
-                            inline_term,
+                            head_body_relation: mant_ir::HeadBodyRelation::from(inline_term),
                             ..Default::default()
                         },
                     }],
@@ -403,7 +403,7 @@ fn trailing_zero_width_heads_share_the_final_run_in_row() {
                     terms,
                     description: vec![paragraph("BODY")],
                     layout: mant_ir::DefinitionLayout {
-                        inline_term: true,
+                        head_body_relation: mant_ir::HeadBodyRelation::from(true),
                         ..Default::default()
                     },
                 }],
@@ -444,7 +444,7 @@ fn definition_continuations_keep_rows_when_reparented_across_spacing() {
                         }]],
                         description: vec![paragraph("Initial description.")],
                         layout: mant_ir::DefinitionLayout {
-                            inline_term,
+                            head_body_relation: mant_ir::HeadBodyRelation::from(inline_term),
                             spacing_before_lines: None,
                             ..Default::default()
                         },

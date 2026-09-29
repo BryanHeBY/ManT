@@ -678,8 +678,10 @@ impl InlineBuilder {
             && incoming_first.is_some_and(char::is_whitespace))
             || self.execution.trailing_output == TrailingOutput::FixedBlank;
         let concat_next_word = std::mem::take(&mut self.execution.concat_next_word);
+        let concat_flush_source = std::mem::take(&mut self.execution.concat_flush_source);
         if concat_next_word {
             self.execution.concat_consumed_for_body = true;
+            self.execution.flush_consumed_for_body = concat_flush_source;
             // TERMP_NOSPACE suppresses every form of the pending auto
             // blank, not only the character-driven one: the deferred
             // field separator must not materialize, and trailing
@@ -1605,28 +1607,6 @@ fn retained_replacement_layout(nodes: Vec<Inline>) -> Vec<Inline> {
     retained
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn retained_layout_summary_ignores_trailing_anchor() {
-        let mut builder = InlineBuilder::with_spacing(true);
-        builder.append_text("prefix");
-        builder.append_retained_layout(vec![Inline::LineBreak, Inline::anchor("mark")]);
-
-        assert_eq!(builder.last_visible_character, Some('\n'));
-        assert_eq!(builder.trailing_output, TrailingOutput::None);
-        assert!(matches!(
-            builder.nodes.as_slice(),
-            [Inline::Text { value }, Inline::LineBreak, Inline::Anchor { .. }] if value == "prefix"
-        ));
-    }
-}
-
-/// Feed one projected word's IR into the native field buffer, preserving
-/// cell order: a marker's `LineBreak` becomes the `\p` cell, text blanks
-/// become breakable blanks, and every graph keeps its display width.
 fn feed_field_inline(buffer: &mut super::field_buffer::FieldBuffer, nodes: &[Inline]) {
     for node in nodes {
         match node {
@@ -1802,5 +1782,24 @@ fn push_split_text(run: &mut String, node: &Inline, output: &mut Vec<Inline>) {
     match node {
         Inline::Code { .. } => output.push(Inline::Code { value: text }),
         _ => output.push(Inline::Text { value: text }),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn retained_layout_summary_ignores_trailing_anchor() {
+        let mut builder = InlineBuilder::with_spacing(true);
+        builder.append_text("prefix");
+        builder.append_retained_layout(vec![Inline::LineBreak, Inline::anchor("mark")]);
+
+        assert_eq!(builder.last_visible_character, Some('\n'));
+        assert_eq!(builder.trailing_output, TrailingOutput::None);
+        assert!(matches!(
+            builder.nodes.as_slice(),
+            [Inline::Text { value }, Inline::LineBreak, Inline::Anchor { .. }] if value == "prefix"
+        ));
     }
 }

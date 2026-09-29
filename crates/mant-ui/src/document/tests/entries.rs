@@ -275,7 +275,7 @@ fn definition_lists_honour_compact_and_per_item_spacing() {
             source: None,
         }],
         layout: mant_ir::DefinitionLayout {
-            inline_term: false,
+            head_body_relation: mant_ir::HeadBodyRelation::from(false),
             spacing_before_lines,
             ..Default::default()
         },

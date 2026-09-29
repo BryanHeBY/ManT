@@ -28,7 +28,7 @@ fn target_only_definition(description: Vec<Block>, inline_term: bool) -> Block {
             entry: None,
             source: None,
             layout: mant_ir::DefinitionLayout {
-                inline_term,
+                head_body_relation: mant_ir::HeadBodyRelation::from(inline_term),
                 body_indent_columns: 0,
                 ..Default::default()
             },

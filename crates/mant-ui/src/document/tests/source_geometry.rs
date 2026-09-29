@@ -142,7 +142,7 @@ fn tq_run_in_uses_only_the_final_label_and_preserves_one_source_owner() {
         assert_eq!(items[0].terms.len(), labels.len(), "{source}");
         let last = labels.last().unwrap();
         let runs_in = last.width() <= 6;
-        assert_eq!(items[0].layout.inline_term, runs_in, "{source}");
+        assert_eq!(items[0].layout.inline_term(), runs_in, "{source}");
         if labels.iter().all(|label| label.starts_with('-')) {
             let facts = items[0].entry.as_ref().unwrap();
             assert_eq!(facts.names, labels, "{source}");

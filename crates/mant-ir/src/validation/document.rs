@@ -431,8 +431,9 @@ fn validate_semantic_document_reference(
 #[cfg(test)]
 mod tests {
     use crate::{
-        Block, DefinitionItem, DocumentMeta, DocumentSource, EntryFacts, EntryKind, LayoutHint,
-        NameCase, Section, SourceFormat, TableCell, TableRow, TextRange, TextSize,
+        Block, DefinitionItem, DocumentMeta, DocumentSource, EntryFacts, EntryKind,
+        HeadBodyRelation, LayoutHint, NameCase, Section, SourceFormat, TableCell, TableRow,
+        TextRange, TextSize,
     };
 
     use super::*;
@@ -608,7 +609,7 @@ mod tests {
                     terms: vec![vec![Inline::anchor(shared.clone())]],
                     description: Vec::new(),
                     layout: crate::DefinitionLayout {
-                        inline_term: false,
+                        head_body_relation: HeadBodyRelation::from(false),
                         spacing_before_lines: None,
                         ..Default::default()
                     },
@@ -904,7 +905,7 @@ mod tests {
             terms: vec![vec![Inline::anchor("option-output")]],
             description: Vec::new(),
             layout: crate::DefinitionLayout {
-                inline_term: false,
+                head_body_relation: HeadBodyRelation::from(false),
                 spacing_before_lines: None,
                 ..Default::default()
             },

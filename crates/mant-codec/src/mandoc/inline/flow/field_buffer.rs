@@ -369,7 +369,7 @@ mod term_fill_contract_tests {
     }
 
     /// A non-breaking blank counts width and never breaks
-    /// (ASCII_NBRSP through the default branch, term.c:342-347).
+    /// (`ASCII_NBRSP` through the default branch, term.c:342-347).
     #[test]
     fn non_breaking_blank_counts_width_without_breaking() {
         let mut buffer = FieldBuffer::default();

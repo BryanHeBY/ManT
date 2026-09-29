@@ -362,7 +362,7 @@ fn inline_definitions_hang_the_description_and_expose_their_anchor() {
                 source: None,
             }],
             layout: mant_ir::DefinitionLayout {
-                inline_term: true,
+                head_body_relation: mant_ir::HeadBodyRelation::from(true),
                 spacing_before_lines: None,
                 ..Default::default()
             },

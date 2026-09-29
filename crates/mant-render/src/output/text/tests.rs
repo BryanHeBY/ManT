@@ -269,7 +269,7 @@ fn inline_definition_descriptions_are_tight_against_their_terms() {
                             source: None,
                             entry: None,
                             layout: mant_ir::DefinitionLayout {
-                                inline_term: true,
+                                head_body_relation: mant_ir::HeadBodyRelation::from(true),
                                 spacing_before_lines: Some(1),
                                 ..Default::default()
                             },
@@ -288,7 +288,7 @@ fn inline_definition_descriptions_are_tight_against_their_terms() {
                             source: None,
                             entry: None,
                             layout: mant_ir::DefinitionLayout {
-                                inline_term: true,
+                                head_body_relation: mant_ir::HeadBodyRelation::from(true),
                                 spacing_before_lines: Some(1),
                                 ..Default::default()
                             },
@@ -361,7 +361,7 @@ fn man_format_keeps_inline_definitions_tight() {
                             source: None,
                             entry: None,
                             layout: mant_ir::DefinitionLayout {
-                                inline_term: true,
+                                head_body_relation: mant_ir::HeadBodyRelation::from(true),
                                 spacing_before_lines: Some(1),
                                 ..Default::default()
                             },
@@ -380,7 +380,7 @@ fn man_format_keeps_inline_definitions_tight() {
                             source: None,
                             entry: None,
                             layout: mant_ir::DefinitionLayout {
-                                inline_term: false,
+                                head_body_relation: mant_ir::HeadBodyRelation::from(false),
                                 spacing_before_lines: Some(1),
                                 ..Default::default()
                             },

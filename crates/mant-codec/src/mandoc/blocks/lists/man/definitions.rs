@@ -201,6 +201,7 @@ fn lower_man_item(
             // width governs body placement only (man_term.c), never a
             // term_fill pass target.
             head_field_columns: 0,
+            relation_override: None,
         },
         super::super::DefinitionFlow {
             spacing_enabled,
@@ -374,7 +375,9 @@ fn append_definition(
                 // this does not assert semantic name equivalence.
                 // Adding earlier TQ heads can tighten width fitting, but
                 // cannot reopen the final head's explicitly closed line.
-                item.layout.inline_term &= terms_fit_inline(&item.terms, max_term_width);
+                if !terms_fit_inline(&item.terms, max_term_width) {
+                    item.layout.head_body_relation = mant_ir::HeadBodyRelation::Separate;
+                }
             }
         }
         item.layout.spacing_before_lines = Some(if items.is_empty() {

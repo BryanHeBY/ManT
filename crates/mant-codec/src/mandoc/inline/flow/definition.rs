@@ -701,9 +701,13 @@ impl InlineBuilder {
             .then(|| mant_ir::geometry::text_width(&text))
     }
 
-    /// Arm the next word's `TERMP_NOSPACE` concatenation.
-    pub(in crate::mandoc) fn note_concat_next_word(&mut self) {
+    /// Arm the next word's concatenation for a filled cleared field
+    /// (term.c:250-253 with 205-207): same no-separator word, but the
+    /// body starts at the description column rather than against the
+    /// last head cell.
+    pub(in crate::mandoc) fn note_flushed_at_body_column(&mut self) {
         self.execution.concat_next_word = true;
+        self.execution.concat_flush_source = true;
     }
 
     /// A HANG head that filled its capacity while a request had cleared
@@ -717,12 +721,17 @@ impl InlineBuilder {
             }
             // Only the FINAL pass decides (term.c:362-366 accepted it as
             // the row term_flushln() leaves open): rows a width pass
-            // already ended do not reach the body column. A pass that
+            // already ended do not reach the body column. A `\:` inside
+            // the word buffered its own ASCII_BREAK cell (term.c:287-300),
+            // so an overrun there breaks the pass chain itself and the
+            // short remainder upstream stays the final pass. A pass that
             // exactly meets the capacity only proves the body column when
-            // a wrap resumed there — an unsplit operand exactly filling
-            // the field may still hide a zero-width `\:` break whose
-            // remainder upstream keeps short (term.c:294 with 395-398),
-            // and that decision stays with the final-row arithmetic.
+            // a wrap resumed there: upstream decides with the final row's
+            // `viscol` (term.c:250-253), and reproducing that exactly also
+            // needs the vspace/NOSPACE ledger of the row before the clear
+            // (`minbl = trailspace`, term.c:236, and request-armed
+            // `TERMP_NOSPACE`, roff_term.c:78) — registered as follow-up
+            // work; the resume condition separates the provable cases.
             let mut simulation = state.field_buffer.clone();
             let mut last_width = 0;
             let mut final_pass_started_at_boundary = false;
@@ -1187,6 +1196,7 @@ impl InlineBuilder {
         // `.fi` concatenates onto the current row with no auto blank —
         // the reference prints `body linetail text` after `.fi`.
         self.execution.concat_next_word = true;
+        self.execution.concat_flush_source = false;
         if let Some(field) = self.take_no_break_field() {
             // print_mdoc_node() runs this fill-mode boundary in addition to
             // the request's own roff_term_pre_br() (roff_term.c:45-58).

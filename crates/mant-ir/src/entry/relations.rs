@@ -298,7 +298,7 @@ mod tests {
     use super::*;
     use crate::{
         Block, DefinitionItem, DocumentMeta, DocumentSource, EntryForm, EntryInlineRoot, EntryKind,
-        EntryNameBinding, EntryNameEvidence, Inline, LayoutHint, SourceFormat,
+        EntryNameBinding, EntryNameEvidence, HeadBodyRelation, Inline, LayoutHint, SourceFormat,
     };
 
     fn entry(id: &str, names: &[&str]) -> DefinitionItem {
@@ -347,7 +347,7 @@ mod tests {
                 source: None,
             }],
             layout: crate::DefinitionLayout {
-                inline_term: false,
+                head_body_relation: HeadBodyRelation::from(false),
                 spacing_before_lines: None,
                 ..Default::default()
             },

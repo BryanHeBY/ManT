@@ -69,7 +69,7 @@ fn spaced_relative_continuations_preserve_rows_columns_and_next_owner() {
                 assert!(body.contains(token), "{body}");
             }
             assert!(!body.contains("OUTSIDE_BODY"), "{body}");
-            assert_eq!(owner.layout.inline_term, !label.starts_with("--"));
+            assert_eq!(owner.layout.inline_term(), !label.starts_with("--"));
             assert!(
                 serde_json::to_string(&definition(document, "--next").description)
                     .unwrap()
@@ -102,7 +102,7 @@ fn hanging_paragraph_heads_keep_explicit_space_and_separate_body_rows() {
             assert!(
                 !definition(content.document.as_ref().unwrap(), head)
                     .layout
-                    .inline_term
+                    .inline_term()
             );
         }
     }
@@ -142,7 +142,7 @@ fn hanging_heads_keep_source_offsets_without_promoting_run_in_layout() {
                 assert!(
                     !definition(content.document.as_ref().unwrap(), head)
                         .layout
-                        .inline_term
+                        .inline_term()
                 );
             }
         }

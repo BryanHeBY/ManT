@@ -208,30 +208,35 @@ fn lower_mdoc_definition_list(
             placement: TermPlacement::RunIn,
             gap: 1,
             head_field_columns,
+            relation_override: None,
         },
         Some(DefinitionListStyle::Inset) => DefinitionGeometry {
             body: Distance::default(),
             placement: TermPlacement::RunIn,
             gap: 1,
             head_field_columns: 0,
+            relation_override: None,
         },
         Some(DefinitionListStyle::Diagnostic) => DefinitionGeometry {
             body: Distance::default(),
             placement: TermPlacement::RunIn,
             gap: 2,
             head_field_columns: 0,
+            relation_override: None,
         },
         Some(DefinitionListStyle::Overhang) => DefinitionGeometry {
             body: Distance::default(),
             placement: TermPlacement::Stacked,
             gap: 0,
             head_field_columns: 0,
+            relation_override: None,
         },
         _ => DefinitionGeometry {
             body: width,
             placement: TermPlacement::Fit,
             gap: 2,
             head_field_columns,
+            relation_override: None,
         },
     };
     let lowered_items = items
@@ -616,7 +621,7 @@ fn append_list_targets(
                     ],
                     description: Vec::new(),
                     layout: mant_ir::DefinitionLayout {
-                        inline_term: true,
+                        head_body_relation: mant_ir::HeadBodyRelation::RunIn,
                         spacing_before_lines: None,
                         ..Default::default()
                     },

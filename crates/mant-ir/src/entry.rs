@@ -9,7 +9,7 @@ mod walk;
 #[cfg(test)]
 mod wire;
 #[cfg(test)]
-use crate::{Block, DefinitionItem, Document, Inline, LinkTarget};
+use crate::{Block, DefinitionItem, Document, HeadBodyRelation, Inline, LinkTarget};
 pub use content::*;
 pub use facts::*;
 pub use index::SemanticIndex;
@@ -79,7 +79,7 @@ mod tests {
                 .collect(),
             description,
             layout: crate::DefinitionLayout {
-                inline_term: false,
+                head_body_relation: HeadBodyRelation::from(false),
                 spacing_before_lines: None,
                 ..Default::default()
             },

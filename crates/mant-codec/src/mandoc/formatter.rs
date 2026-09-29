@@ -62,6 +62,10 @@ pub(super) struct DefinitionBodyObservation {
     /// request's `roff_term_pre_br()` left it, `roff_term.c:75-78`): no
     /// separator exists between the head and the body column.
     first_word_concatenated: bool,
+    /// The first visible word concatenated because the cleared head field
+    /// filled its capacity (term.c:250-253), not because of request
+    /// `TERMP_NOSPACE` (`roff_term.c:78`).
+    first_word_flushed_at_body: bool,
 }
 
 impl DefinitionBodyObservation {
@@ -75,6 +79,11 @@ impl DefinitionBodyObservation {
 
     pub(super) const fn first_word_concatenated(self) -> bool {
         self.first_word_concatenated
+    }
+
+    #[must_use]
+    pub(super) const fn first_word_flushed_at_body(self) -> bool {
+        self.first_word_flushed_at_body
     }
 }
 
@@ -132,6 +141,7 @@ impl FormatterState {
             placement_breaks: false,
             source_continues_after_run_in: None,
             first_word_concatenated: false,
+            first_word_flushed_at_body: false,
         });
     }
 
@@ -180,15 +190,18 @@ impl FormatterState {
         // enclosing BODY. Do not let an outer pending head row consume a
         // later control-only row after the nested content has appeared.
         let concatenated = self.execution.concat_consumed_for_body;
+        let flushed = self.execution.flush_consumed_for_body;
         let last = self.definition_bodies.len().saturating_sub(1);
         for (index, body) in self.definition_bodies.iter_mut().enumerate() {
             body.before_visible = false;
             body.pending_head_row = false;
             if concatenated && index == last {
                 body.first_word_concatenated = true;
+                body.first_word_flushed_at_body |= flushed;
             }
         }
         self.execution.concat_consumed_for_body = false;
+        self.execution.flush_consumed_for_body = false;
     }
 
     pub(super) fn consume_definition_head_row(&mut self) -> bool {
@@ -305,12 +318,14 @@ impl FormatterState {
         builder.discard_unprinted_definition_field_output();
         builder.settle_provisional_definition_break();
         let definition_field_exited = builder.definition_field_exited();
+        // An armed request NOSPACE (`roff_term.c:78`) already owns the
+        // word join; the filled-field rule would misclassify its row.
         if !definition_field_exited && builder.cleared_field_filled_capacity() {
             // term.c:250-253 with 205-207: the HANG head ended at or past
             // the field's own right margin with NOBREAK cleared, so the
             // trailspace roff_term_pre_br() zeroed never separated the
             // body word (the reference prints `afterwardstail text`).
-            builder.note_concat_next_word();
+            builder.note_flushed_at_body_column();
         }
         let definition_body_gap_consumed = builder.definition_body_gap_consumed();
         let definition_term_breaks = builder.take_definition_term_breaks();

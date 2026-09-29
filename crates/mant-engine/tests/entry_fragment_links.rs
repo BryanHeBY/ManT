@@ -22,7 +22,7 @@ fn entry_fragments_validate_without_inserting_a_head_anchor() {
                     terms: Vec::new(),
                     description: item.blocks,
                     layout: mant_ir::DefinitionLayout {
-                        inline_term: false,
+                        head_body_relation: mant_ir::HeadBodyRelation::from(false),
                         spacing_before_lines: None,
                         ..Default::default()
                     },
