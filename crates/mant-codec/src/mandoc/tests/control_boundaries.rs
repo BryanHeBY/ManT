@@ -1115,6 +1115,41 @@ fn author_split_restarts_an_overrun_tag_field() {
 }
 
 #[test]
+fn author_split_families_keep_the_reference_row_shapes() {
+    // Fixed CVS -Tascii, one shape per (style, head) pair; the split
+    // marker's term_newln never clears HANG, so a hang head stays on one
+    // row through the split, while a tag head ends its row only when the
+    // field overran (term.c:250-253 through mdoc_term.c:1084-1085):
+    // - tag/LONGTEXT: `LONGTEXT` / `Bob     BODY` — overrun restart, BODY
+    //   shares the restarted row;
+    // - tag/A: `A  Bob  BODY` — the fitting field keeps its row;
+    // - hang/LONGTEXT and hang/A: one row with BODY behind the trailspace.
+    for (style, head, expected_rows, expected_relation) in [
+        ("tag", "LONGTEXT", 2, HeadBodyRelation::RunIn),
+        ("tag", "A", 1, HeadBodyRelation::RunIn),
+        ("hang", "LONGTEXT", 1, HeadBodyRelation::RunIn),
+        ("hang", "A", 1, HeadBodyRelation::RunIn),
+    ] {
+        let item = review_definition_item(&format!(
+            ".Bl -{style} -width 6n\n.It Xo\n.No {head}\n.An -split\n.An Bob\n.Xc\n.No BODY\n.El\n"
+        ));
+        assert_eq!(
+            item.layout.head_body_relation, expected_relation,
+            "{style}/{head}: {item:#?}"
+        );
+        let rows = item
+            .terms
+            .last()
+            .map(|term| {
+                term.split(|node| matches!(node, Inline::LineBreak { .. }))
+                    .count()
+            })
+            .unwrap_or_default();
+        assert_eq!(rows, expected_rows, "{style}/{head}: {item:#?}");
+    }
+}
+
+#[test]
 fn head_body_relation_classifies_shared_rows() {
     // Expectations classify rows the fixed CVS reference printed for the
     // oracle matrix families (`/tmp/fix/oramatrix` c/f/m rows):
