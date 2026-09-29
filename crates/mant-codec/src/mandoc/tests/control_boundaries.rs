@@ -4350,3 +4350,48 @@ fn empty_operand_ends_the_continued_source_row() {
         "term_newln() alone keeps TERMP_NONEWLINE: {zero_row:#?}"
     );
 }
+
+#[test]
+fn zero_advance_retreat_keeps_the_graph_after_the_marker() {
+    // The exact source passed fixed CVS -Tascii/-Tutf8/-Tlint. The `\z`
+    // glyph's TERMP_BACKBEFORE retreat eats the blank directly before the
+    // NEXT glyph (term.c:901-908), so the `\p` pass that follows never sees
+    // a blank under its marker: X prints on the first row, Y survives on
+    // the open HANG row with BODY (term.c:263-367 pass two accepts Y).
+    let item = review_definition_item(
+        ".Bl -hang -width 4n\n.It Xo\n.No \"\\zX\\p\"\n.No \"\\p Y\"\n.Xc\n.No BODY\n.El\n",
+    );
+    assert_eq!(inline_text(&item.terms[0]), "X\nY", "{item:#?}");
+    assert!(
+        item.description.iter().all(|block| match block {
+            Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
+                !inline_text(children).starts_with('Y')
+            }
+            _ => true,
+        }),
+        "Y owns its term row, not the body: {item:#?}"
+    );
+}
+
+#[test]
+fn empty_operand_blank_after_retreat_wipes_the_remainder() {
+    // The exact source passed fixed CVS -Tascii/-Tutf8/-Tlint. The empty
+    // operand's term_word("") blank survives the retreat (only Y's own
+    // separator blank is eaten), leaving a blank under the armed marker:
+    // the next pass rejects with nbr=0 and the unprinted remainder dies
+    // (term.c:143-146 with 233-237). X's accepted pass already ended its
+    // row (term.c:220); BODY starts the next one.
+    let item = review_definition_item(
+        ".Bl -hang -width 4n\n.It Xo\n.No \"\\zX\\p\"\n.No \"\\p\"\n.No \"\"\n.No Y\n.Xc\n.No BODY\n.El\n",
+    );
+    assert_eq!(inline_text(&item.terms[0]), "X", "{item:#?}");
+    assert!(
+        item.description.iter().all(|block| match block {
+            Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
+                !inline_text(children).starts_with('Y')
+            }
+            _ => true,
+        }),
+        "the wiped remainder never prints: {item:#?}"
+    );
+}

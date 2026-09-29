@@ -147,6 +147,17 @@ impl ZeroAdvanceState {
         self.machine.has_pending()
     }
 
+    /// The pending glyph's plain text and total width, for the native
+    /// field buffer feed: a completed `\z` glyph already occupies one
+    /// buffer cell (`term.c::encode1`) while its IR projection waits.
+    pub(in crate::mandoc) fn printable_pending_glyph_text(&self) -> Option<(String, usize)> {
+        self.machine.pending_ref().map(|glyph| {
+            let text = mant_ir::inline_plain_text(std::slice::from_ref(glyph));
+            let width = mant_ir::geometry::text_width(&text);
+            (text, width)
+        })
+    }
+
     pub(in crate::mandoc) fn has_printable_pending_glyph(&self) -> bool {
         self.machine.pending_ref().is_some_and(|glyph| {
             mant_ir::inline_plain_text(std::slice::from_ref(glyph))

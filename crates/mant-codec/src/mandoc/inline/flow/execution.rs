@@ -375,6 +375,13 @@ impl InlineBuilder {
         if !generated_word {
             return;
         }
+        if let Some(definition) = &mut self.execution.definition {
+            // mdoc_term.c:760-767 emits `\ ` for the generated inset or
+            // diagnostic gap: non-breaking cells of the native field.
+            for _ in 0..count {
+                definition.field_buffer.push_non_breaking_blank();
+            }
+        }
         self.note_produced_formatter_cell(count > 0);
         self.tighten_next_boundary();
         self.begin_word_projection(true);

@@ -13,6 +13,9 @@ use super::{
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(super) struct DefinitionOutcome(u8);
 
+// The booleans are independent native registers (fed flags and latch
+// carries), not alternative states of one machine.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Clone, Default)]
 pub(super) struct DefinitionFieldState {
     pub(super) pending_indent: Option<usize>,
@@ -26,6 +29,20 @@ pub(super) struct DefinitionFieldState {
     /// BODY words and must be committed at the item post drain
     /// (mdoc_term.c:939-945), the only `term_newln()` this field ever sees.
     pub(super) run_in_continuation: bool,
+    /// The native input buffer of this field, fed in source order at each
+    /// formatter word (term.c's `tcol->buf`); pass decisions at flush time
+    /// come from it instead of streaming heuristics.
+    pub(super) field_buffer: super::field_buffer::FieldBuffer,
+    /// (cell index, IR node count) at each fed word's start, mapping
+    /// buffer positions to output ranges for wipes.
+    pub(super) field_word_anchors: Vec<(usize, usize)>,
+    /// The still-pending `\z` glyph has already entered the field buffer;
+    /// it must not re-enter while IR resolution lags behind the native
+    /// `encode1()` write.
+    pub(super) pending_glyph_fed: bool,
+    /// A word's trailing `\p` deferred into the field (no in-operand
+    /// blank): its `'\n'` cell still has to enter the native buffer.
+    pub(super) trailing_marker_unfed: bool,
     pub(super) outcome: DefinitionOutcome,
     pub(super) no_break: Option<NoBreakField>,
     // A positive term_vspace() ends the HANG device row. The next author
@@ -602,6 +619,13 @@ impl InlineBuilder {
                 };
             }
         }
+        // term.c:233-237: the committed flush ends the field; the input
+        // buffer restarts empty for whatever follows this row.
+        if let Some(definition) = &mut self.execution.definition {
+            definition.field_buffer.clear();
+            definition.field_word_anchors.clear();
+            definition.pending_glyph_fed = false;
+        }
         overruns
     }
 
@@ -714,6 +738,16 @@ impl InlineBuilder {
     }
 
     pub(in crate::mandoc) fn note_hang_break_before_graph(&mut self, accepted_prefix: usize) {
+        if let Some(definition) = &mut self.execution.definition
+            && definition.field_buffer.backbefore_armed()
+        {
+            // term.c:901-908: the completed \z glyph's TERMP_BACKBEFORE
+            // retreat eats the blank directly before the next graph, so
+            // that blank never enters the buffer and this marker's pass
+            // cannot reject on it. The row still closes after the accepted
+            // prefix (term.c:220); only the wipe is spurious.
+            return;
+        }
         if let Some(definition) = &mut self.execution.definition {
             definition.suffix_discarded_seen = true;
             let row = &mut definition.hang_row;
@@ -723,7 +757,101 @@ impl InlineBuilder {
         }
     }
 
+    /// Predict `term_flushln()`'s pass loop over the fed buffer: whether any
+    /// pass would reject with nbr==0 (term.c:143-146), and the resume
+    /// position where the unprinted remainder begins. Dry-runs a clone so
+    /// the live buffer keeps its own col until a real flush.
+    fn buffer_flush_rejection(&self) -> Option<(usize, bool)> {
+        let definition = self.execution.definition.as_ref()?;
+        if definition.field_buffer.is_empty()
+            || !definition
+                .field_buffer
+                .cells()
+                .iter()
+                .any(|cell| matches!(cell, super::field_buffer::FieldCell::BreakMarker))
+        {
+            // Only marker-driven rejections change decisions here; fields
+            // of plain blanks keep their existing accounting.
+            return None;
+        }
+        let mut simulation = definition.field_buffer.clone();
+        let mut accepted_any_pass = false;
+        loop {
+            match simulation.fill_pass(usize::MAX / 2) {
+                None if !accepted_any_pass => {
+                    // The field rejected from its very first pass: the
+                    // word-level accounting already owns this shape (an
+                    // armed \p met a separator before any graph). Only
+                    // multi-pass chains — an accepted prefix followed by a
+                    // rejected remainder — change decisions here.
+                    return None;
+                }
+                None => return Some((simulation.resume_offset(), accepted_any_pass)),
+                Some(pass) => {
+                    accepted_any_pass = true;
+                    simulation.advance_past(pass.accepted_end);
+                    simulation.consume_break_blanks();
+                    // term.c:177-198: the loop exits when only ignorable
+                    // cells (blanks, markers) remain, WITHOUT running
+                    // another pass; a trailing armed marker cannot reject
+                    // after the last accepted slice.
+                    if simulation.resume_offset() >= simulation.cells().len()
+                        || simulation.only_ignorable_remainder(false)
+                    {
+                        return None;
+                    }
+                }
+            }
+        }
+    }
+
     pub(in crate::mandoc) fn discard_unprinted_definition_field_output(&mut self) {
+        if !self
+            .execution
+            .definition
+            .as_ref()
+            .is_some_and(|definition| definition.hang_row.field_discarded)
+            && let Some((rejection_resume, accepted_any_pass)) = self.buffer_flush_rejection()
+        {
+            // The pass loop rejects from the fed buffer (term.c:143-146):
+            // everything from the rejected resume position is unprinted.
+            // Map that buffer position to the IR range of the word that
+            // starts there.
+            let definition = self.execution.definition.as_mut().unwrap();
+            definition.hang_row.field_discarded = true;
+            definition.suffix_discarded_seen = true;
+            if accepted_any_pass {
+                // term.c:220: every accepted pass before the rejected one
+                // ended its device row; only the final pass consults the
+                // HANG/NOBREAK tail rule (250-253).
+                definition.hang_row.accepted_prefix_before_rejection = true;
+            } else {
+                // The rejected field never occupied the device row
+                // (term.c:233-237 resets col/lastcol): term_newln() at the
+                // settling request stays a no-op and the row stays open.
+                self.execution.formatter_column = FormatterColumn::Origin;
+                self.execution.word_end_break = WordEndBreak::Clear;
+                self.execution.pending_breakable_spaces = 0;
+                self.execution.trailing_output = TrailingOutput::None;
+            }
+            definition.field_buffer.wipe_remainder();
+            let start = definition
+                .field_word_anchors
+                .iter()
+                .find(|(cell_index, _)| *cell_index >= rejection_resume)
+                .map_or_else(
+                    || {
+                        definition
+                            .field_word_anchors
+                            .last()
+                            .map_or(0, |(_, ir)| *ir)
+                    },
+                    |(_, ir)| *ir,
+                );
+            if let Some(author) = &mut self.execution.author_execution {
+                author.field_output_start = start;
+            }
+        }
         let Some((start, exited_field)) = self
             .execution
             .author_execution
@@ -764,6 +892,9 @@ impl InlineBuilder {
         // when term_fill() returns nbr=0. The rejected field can still own a
         // completed \z glyph that has not entered the IR suffix yet.
         self.execution.zero_advance.discard_at_row_end();
+        if let Some(definition) = &mut self.execution.definition {
+            definition.field_buffer.clear_backtracking();
+        }
         self.execution.last_visible_character = last_visible_character(&self.nodes);
         if exited_field {
             // A TAG .br may have already ended NOBREAK, but subsequent words
@@ -1675,4 +1806,15 @@ fn retain_unprinted_field_targets(inlines: &mut Vec<Inline>) {
             !children.is_empty()
         }
     });
+}
+
+impl InlineBuilder {
+    /// Record that a word's trailing `\p` stays deferred in the field: the
+    /// decoder never emits its IR break, but `term.c::bufferc()` wrote the
+    /// `'\\n'` cell (term.c:657-658). The word accounting consumes it.
+    pub(in crate::mandoc) fn note_field_trailing_marker(&mut self) {
+        if let Some(definition) = &mut self.execution.definition {
+            definition.trailing_marker_unfed = true;
+        }
+    }
 }

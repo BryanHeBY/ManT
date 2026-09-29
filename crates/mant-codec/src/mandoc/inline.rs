@@ -426,6 +426,9 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
     // blank/control words into a printed line. Keep that marker in the
     // active field until a visible word or term_flushln() decides its fate.
     let deferred_hang_break = pending_word_end_break && !has_glyph && builder.in_definition_field();
+    if deferred_hang_break {
+        builder.note_field_trailing_marker();
+    }
     let execution = font::parse_roff_text_with_zero_advance(
         source,
         &mut builder.execution.font,

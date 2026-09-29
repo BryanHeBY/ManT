@@ -698,7 +698,7 @@ impl InlineBuilder {
             needs_boundary_space(self.execution.last_visible_character, incoming_first)
         };
         let (accepted_word_prefix, accepted_row_break) = if word {
-            self.record_hang_word(incoming, add_space, boundary)
+            self.record_hang_word(incoming, add_space, boundary, empty_word)
         } else {
             (None, false)
         };
@@ -752,11 +752,15 @@ impl InlineBuilder {
         self.execution.empty_word = empty_word;
     }
 
+    // Word accounting plus the native buffer feed; the length is the price
+    // of keeping term.c's word-level and cell-level records side by side.
+    #[allow(clippy::too_many_lines)]
     fn record_hang_word(
         &mut self,
         incoming: &[Inline],
         add_space: bool,
         boundary: PendingBoundary,
+        empty_word: bool,
     ) -> (Option<usize>, bool) {
         if self.execution.definition.is_none() || self.execution.author_execution.is_none() {
             return (None, false);
@@ -816,6 +820,44 @@ impl InlineBuilder {
         } else {
             usize::from(native_word_space && !definition.hang_row.suppress_next_auto_space)
         };
+        // Feed the native input buffer in source order (term.c's one flat
+        // `tcol->buf`): the word's separator, a completed `\z` glyph that
+        // is still pending in IR, then this word's cells with marker and
+        // blank positions taken from the emitted IR itself.
+        let anchor_ir_start = self.nodes.len();
+        definition
+            .field_word_anchors
+            .push((definition.field_buffer.cells().len(), anchor_ir_start));
+        if definition.trailing_marker_unfed {
+            // The PREVIOUS word's trailing \p deferred into the field:
+            // its '\n' cell precedes this word's separator (term.c writes
+            // it during that word's term_word(), term.c:657-658).
+            definition.field_buffer.push_break_marker();
+            definition.trailing_marker_unfed = false;
+        }
+        if empty_word {
+            // term_word("") runs its head blank only (term.c:574-576): one
+            // ordinary cell, never two.
+            definition.field_buffer.push_separator_blank();
+        } else if separator > 0 {
+            definition.field_buffer.push_separator_blank();
+        }
+        match self.execution.zero_advance.printable_pending_glyph_text() {
+            Some((text, width)) if !definition.pending_glyph_fed => {
+                let first = text.chars().next().unwrap_or(' ');
+                definition.field_buffer.push_graph(first, width);
+                definition.field_buffer.arm_backbefore();
+                definition.pending_glyph_fed = true;
+            }
+            Some((_, _)) => {}
+            None => definition.pending_glyph_fed = false,
+        }
+        feed_field_inline(&mut definition.field_buffer, incoming);
+        if self.execution.word_end_break == WordEndBreak::Pending {
+            // This word's own trailing \p returned as the pending
+            // word-end break; its '\n' cell follows the word's cells.
+            definition.field_buffer.push_break_marker();
+        }
         let accepted_prior_field = !definition.hang_row.field_discarded
             && separator > 0
             && definition.hang_row.field_pending_word_end_break
@@ -1506,5 +1548,39 @@ mod tests {
             builder.nodes.as_slice(),
             [Inline::Text { value }, Inline::LineBreak, Inline::Anchor { .. }] if value == "prefix"
         ));
+    }
+}
+
+/// Feed one projected word's IR into the native field buffer, preserving
+/// cell order: a marker's `LineBreak` becomes the `\p` cell, text blanks
+/// become breakable blanks, and every graph keeps its display width.
+fn feed_field_inline(buffer: &mut super::field_buffer::FieldBuffer, nodes: &[Inline]) {
+    for node in nodes {
+        match node {
+            Inline::LineBreak => buffer.push_break_marker(),
+            Inline::Text { value } | Inline::Code { value } => {
+                feed_field_text(buffer, value);
+            }
+            Inline::Strong { children } | Inline::Emphasis { children } => {
+                feed_field_inline(buffer, children);
+            }
+            // Links own navigation metadata: an empty-label link keeps the
+            // URI as an IR fallback that never reaches term_word(), so its
+            // cells must not enter the native field buffer.
+            _ => {}
+        }
+    }
+}
+
+fn feed_field_text(buffer: &mut super::field_buffer::FieldBuffer, value: &str) {
+    for character in value.chars() {
+        if character == '\n' {
+            buffer.push_break_marker();
+        } else if super::super::is_formatter_word_blank(character) {
+            buffer.push_separator_blank();
+        } else {
+            let width = mant_ir::geometry::text_width(&character.to_string());
+            buffer.push_graph(character, width);
+        }
     }
 }

@@ -6,6 +6,7 @@ use mant_ir::{first_visible_character, has_printable_character, last_visible_cha
 
 mod definition;
 mod execution;
+mod field_buffer;
 use definition::DefinitionFieldState;
 mod native_field;
 mod no_fill;
