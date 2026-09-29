@@ -263,6 +263,9 @@ impl InlineBuilder {
             let row_indent = self.take_definition_row_indent();
             self.nodes.push(Inline::line_break_indented(row_indent));
             self.execution.last_visible_character = Some('\n');
+            if std::env::var_os("MANT_DBG_D1").is_some() {
+                eprintln!("hard_break PUSHED lb");
+            }
         }
         self.execution.final_word_join = Some(false);
         if let Some(definition) = &mut self.execution.definition {
@@ -648,6 +651,21 @@ impl InlineBuilder {
     ) {
         if incoming.is_empty() && !word {
             return;
+        }
+        if std::env::var_os("MANT_DBG_D1").is_some() {
+            eprintln!(
+                "append word={word} nodes_tail={:?}",
+                self.nodes
+                    .iter()
+                    .rev()
+                    .take(3)
+                    .map(|n| match n {
+                        Inline::Text { value } => format!("T({value:?})"),
+                        Inline::LineBreak { .. } => "LB".to_owned(),
+                        other => format!("{other:?}"),
+                    })
+                    .collect::<Vec<_>>()
+            );
         }
         let incoming_first = first_visible_character(incoming);
         let incoming_last = last_visible_character(incoming);
@@ -1348,6 +1366,19 @@ impl InlineBuilder {
 
     fn drain_ir_nodes(&mut self) -> Vec<Inline> {
         let mut nodes = std::mem::take(&mut self.nodes);
+        if std::env::var_os("MANT_DBG_D1").is_some() {
+            eprintln!(
+                "drain nodes={:?}",
+                nodes
+                    .iter()
+                    .map(|n| match n {
+                        Inline::Text { value } => format!("T({value:?})"),
+                        Inline::LineBreak { .. } => "LB".to_owned(),
+                        other => format!("{other:?}"),
+                    })
+                    .collect::<Vec<_>>()
+            );
+        }
         join_authored_links(&mut nodes);
         nodes
     }

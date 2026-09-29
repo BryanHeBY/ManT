@@ -113,16 +113,41 @@ impl InlineBuilder {
                     false,
                 );
                 // mdoc_term.c:1084-1085 with term.c:474-480, 250-253: the
-                // split marker's term_newln() flushed the field; without
-                // HANG the tail rule ends the row (a -diag head never
-                // shortens rmargin, mdoc_term.c:872, so vfield is 0 and
-                // the rule fires whenever the field showed content).
+                // split marker's term_newln() flushed the field; whether
+                // the row ends is the tail rule alone — HANG keeps it, a
+                // NoBreak field keeps it only within its vfield (a -diag
+                // head never shortens rmargin, mdoc_term.c:872, so its
+                // vfield is 0 and the rule fires on any content; a tag
+                // field that fits keeps the next author word on the row).
                 let field_showed_content = self
                     .nodes
                     .get(field_output_start..)
                     .is_some_and(mant_ir::has_printable_character);
-                if !flags.contains(super::native_field::FieldFlag::Hang) && field_showed_content {
-                    self.hard_break();
+                // vbr counts printed width only: the field's trailspace
+                // is the predicate's own addend (row_continues adds
+                // flags.trailspace()), so strip any already-materialized
+                // trailing blanks from the measurement.
+                let field_width = self
+                    .nodes
+                    .get(field_output_start..)
+                    .map(|field| {
+                        mant_ir::geometry::text_width(
+                            crate::mandoc::inline::plain_text(field).trim_end(),
+                        )
+                    })
+                    .unwrap_or_default();
+                // A -diag field carries u16::MAX as its width because
+                // mdoc_term.c:872 never shortens rmargin for it; its real
+                // vfield is the ambient margin at the field's column,
+                // effectively zero against any printed content.
+                let vfield = if field_width_columns == u16::MAX {
+                    0
+                } else {
+                    usize::from(field_width_columns)
+                };
+                let continues = super::native_field::row_continues(flags, field_width, vfield);
+                if field_showed_content && !continues {
+                    self.force_output_line_break();
                 }
                 if !flags.wraps()
                     && let Some(definition) = &mut self.execution.definition

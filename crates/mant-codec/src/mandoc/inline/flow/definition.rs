@@ -2110,7 +2110,7 @@ impl InlineBuilder {
         std::mem::replace(&mut definition.row.indent_columns, 0)
     }
 
-    fn force_output_line_break(&mut self) {
+    pub(in crate::mandoc) fn force_output_line_break(&mut self) {
         // Consume the pending row indent even when a break already sits at
         // the tail: the boundary moved the upstream row origin regardless
         // (roff_term.c:73-75), and a leaked indent would misplace a later
