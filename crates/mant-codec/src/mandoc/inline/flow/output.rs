@@ -678,6 +678,18 @@ impl InlineBuilder {
             && incoming_first.is_some_and(char::is_whitespace))
             || self.execution.trailing_output == TrailingOutput::FixedBlank;
         let concat_next_word = std::mem::take(&mut self.execution.concat_next_word);
+        if concat_next_word {
+            self.execution.concat_consumed_for_body = true;
+            // TERMP_NOSPACE suppresses every form of the pending auto
+            // blank, not only the character-driven one: the deferred
+            // field separator must not materialize, and trailing
+            // breakable padding a field flush already emitted is
+            // unprinted input (term.c:205-207), not content.
+            self.execution.pending_field_spaces = 0;
+            self.execution.pending_breakable_spaces = 0;
+            trim_trailing_breakable_spaces(&mut self.nodes, usize::MAX);
+            self.execution.last_visible_character = last_visible_character(&self.nodes);
+        }
         let add_space = if concat_next_word {
             false
         } else if empty_word

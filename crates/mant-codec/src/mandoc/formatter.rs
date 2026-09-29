@@ -51,11 +51,17 @@ pub(super) struct FormatterState {
 }
 
 #[derive(Clone, Copy, Debug)]
+// Independent observations of one BODY's native execution, not states.
+#[allow(clippy::struct_excessive_bools)]
 pub(super) struct DefinitionBodyObservation {
     before_visible: bool,
     pending_head_row: bool,
     placement_breaks: bool,
     source_continues_after_run_in: Option<bool>,
+    /// The BODY's first visible word printed under `TERMP_NOSPACE` (the
+    /// request's `roff_term_pre_br()` left it, `roff_term.c:75-78`): no
+    /// separator exists between the head and the body column.
+    first_word_concatenated: bool,
 }
 
 impl DefinitionBodyObservation {
@@ -65,6 +71,10 @@ impl DefinitionBodyObservation {
 
     pub(super) const fn source_continues_after_run_in(self) -> Option<bool> {
         self.source_continues_after_run_in
+    }
+
+    pub(super) const fn first_word_concatenated(self) -> bool {
+        self.first_word_concatenated
     }
 }
 
@@ -115,11 +125,13 @@ impl std::ops::DerefMut for FormatterState {
 
 impl FormatterState {
     pub(super) fn begin_definition_body(&mut self, shares_pending_head_row: bool) {
+        self.execution.concat_consumed_for_body = false;
         self.definition_bodies.push(DefinitionBodyObservation {
             before_visible: true,
             pending_head_row: shares_pending_head_row,
             placement_breaks: false,
             source_continues_after_run_in: None,
+            first_word_concatenated: false,
         });
     }
 
@@ -167,10 +179,16 @@ impl FormatterState {
         // A nested list or definition is also visible content in every
         // enclosing BODY. Do not let an outer pending head row consume a
         // later control-only row after the nested content has appeared.
-        for body in &mut self.definition_bodies {
+        let concatenated = self.execution.concat_consumed_for_body;
+        let last = self.definition_bodies.len().saturating_sub(1);
+        for (index, body) in self.definition_bodies.iter_mut().enumerate() {
             body.before_visible = false;
             body.pending_head_row = false;
+            if concatenated && index == last {
+                body.first_word_concatenated = true;
+            }
         }
+        self.execution.concat_consumed_for_body = false;
     }
 
     pub(super) fn consume_definition_head_row(&mut self) -> bool {
@@ -287,6 +305,13 @@ impl FormatterState {
         builder.discard_unprinted_definition_field_output();
         builder.settle_provisional_definition_break();
         let definition_field_exited = builder.definition_field_exited();
+        if !definition_field_exited && builder.cleared_field_filled_capacity() {
+            // term.c:250-253 with 205-207: the HANG head ended at or past
+            // the field's own right margin with NOBREAK cleared, so the
+            // trailspace roff_term_pre_br() zeroed never separated the
+            // body word (the reference prints `afterwardstail text`).
+            builder.note_concat_next_word();
+        }
         let definition_body_gap_consumed = builder.definition_body_gap_consumed();
         let definition_term_breaks = builder.take_definition_term_breaks();
         let (output, mut execution) = builder.finish_formatter_line(preserve_rows);

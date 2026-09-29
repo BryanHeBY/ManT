@@ -701,6 +701,44 @@ impl InlineBuilder {
             .then(|| mant_ir::geometry::text_width(&text))
     }
 
+    /// Arm the next word's `TERMP_NOSPACE` concatenation.
+    pub(in crate::mandoc) fn note_concat_next_word(&mut self) {
+        self.execution.concat_next_word = true;
+    }
+
+    /// A HANG head that filled its capacity while a request had cleared
+    /// `TERMP_NOBREAK` reaches the body column with no trailspace
+    /// (term.c:250-253 with 205-207): the body's first word concatenates.
+    pub(in crate::mandoc) fn cleared_field_filled_capacity(&self) -> bool {
+        self.execution.definition.as_ref().is_some_and(|state| {
+            let capacity = usize::from(state.cleared_field_capacity_columns);
+            if !state.no_break_cleared || capacity == 0 {
+                return false;
+            }
+            // Only the FINAL pass decides (term.c:362-366 accepted it as
+            // the row term_flushln() leaves open): rows a width pass
+            // already ended do not reach the body column. A pass that
+            // exactly meets the capacity only proves the body column when
+            // a wrap resumed there — an unsplit operand exactly filling
+            // the field may still hide a zero-width `\:` break whose
+            // remainder upstream keeps short (term.c:294 with 395-398),
+            // and that decision stays with the final-row arithmetic.
+            let mut simulation = state.field_buffer.clone();
+            let mut last_width = 0;
+            let mut final_pass_started_at_boundary = false;
+            while let Some(pass) = simulation.fill_pass(capacity) {
+                last_width = pass.accepted_width;
+                final_pass_started_at_boundary = simulation.resume_offset() > 0;
+                simulation.advance_past(pass.accepted_end);
+                simulation.consume_break_blanks();
+                if simulation.resume_offset() >= simulation.cells().len() {
+                    break;
+                }
+            }
+            last_width > capacity || (last_width == capacity && final_pass_started_at_boundary)
+        })
+    }
+
     pub(in crate::mandoc) fn definition_field_exited(&self) -> bool {
         self.execution
             .definition
@@ -1144,6 +1182,11 @@ impl InlineBuilder {
     /// `print_mdoc_node()` performs that boundary in addition to the request's
     /// own `roff_term_pre_br()` dispatch.
     pub(in crate::mandoc) fn fill_mode_boundary(&mut self) {
+        // The request's roff_term_pre_br() sets TERMP_NOSPACE after its
+        // term_newln() (roff_term.c:75-78): the first word after `.nf`/
+        // `.fi` concatenates onto the current row with no auto blank —
+        // the reference prints `body linetail text` after `.fi`.
+        self.execution.concat_next_word = true;
         if let Some(field) = self.take_no_break_field() {
             // print_mdoc_node() runs this fill-mode boundary in addition to
             // the request's own roff_term_pre_br() (roff_term.c:45-58).
@@ -1387,6 +1430,13 @@ impl InlineBuilder {
                         flags,
                     };
                 }
+            }
+            // term.c:233-237: the committed flush ends the field; the
+            // input buffer restarts empty for whatever follows this row.
+            if let Some(definition) = &mut self.execution.definition {
+                definition.field_buffer.clear();
+                definition.field_word_anchors.clear();
+                definition.pending_glyph_fed = false;
             }
         } else {
             self.hard_break();
@@ -1816,18 +1866,10 @@ impl InlineBuilder {
         if field.style == DefinitionFieldStyle::Hang {
             let had_cell = self.has_formatter_cell();
             let definition = self.definition_state_mut();
-            // term.c:250-253 with 205-207: a HANG head that filled its
-            // whole capacity while a request had cleared `TERMP_NOBREAK`
-            // reaches the body column with no trailspace left (pre_br
-            // zeroed it), so the body word concatenates directly — the
-            // reference prints `afterwardstail text` on one row.
-            let field_full = definition.no_break_cleared
-                && field.field_width >= usize::from(field.field_capacity_columns);
             if had_cell || definition.hang_row.viscol > 0 {
                 definition.hang_row.flush(usize::from(hang_gap_cells));
             }
             definition.hang_row.field_offset = field.body_width;
-            self.execution.concat_next_word = field_full;
         }
         if consume_body_gap {
             self.execution

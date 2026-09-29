@@ -266,6 +266,12 @@ pub(super) fn definition_item(
     if flow.shares_pending_term_row && observed.placement_breaks() {
         geometry.placement = crate::mandoc::layout::TermPlacement::Stacked;
     }
+    if observed.first_word_concatenated() {
+        // TERMP_NOSPACE at the body's first word leaves no separator cell:
+        // the body column starts at the head's end (term.c:250-253 with
+        // roff_term.c:75-78), so the layout carries no minimum gap.
+        geometry.gap = 0;
+    }
     if matches!(description.first(), Some(Block::Preformatted { .. }))
         && !observed
             .source_continues_after_run_in()

@@ -344,15 +344,6 @@ impl InlineBuilder {
             // termp_it_pre() until the BODY post term_newln()); continue it
             // with its original configuration.
             let mut state = field.state;
-            // term.c:250-253 with 205-207: a HANG head that filled its
-            // capacity while a request had cleared TERMP_NOBREAK reaches
-            // the body column with no trailspace (the request zeroed it),
-            // so the first BODY word concatenates directly.
-            if state.no_break_cleared
-                && state.hang_row.viscol >= usize::from(field.field_width_columns)
-            {
-                self.execution.concat_next_word = true;
-            }
             state.run_in_continuation = true;
             self.execution.definition = Some(state);
             if let Some(author) = &mut self.execution.author_execution {

@@ -121,6 +121,9 @@ pub(in crate::mandoc) struct InlineExecutionState {
     /// like the `TERMP_NOSPACE` left by the request's own `term_newln()`
     /// (`roff_term.c:78`).
     pub(in crate::mandoc) concat_next_word: bool,
+    /// The most recent word consumed `concat_next_word` while a definition
+    /// BODY was waiting for its first visible content.
+    pub(in crate::mandoc) concat_consumed_for_body: bool,
     pub(in crate::mandoc) scope_posts: crate::mandoc::containers::ScopePostState,
 }
 
@@ -687,6 +690,7 @@ impl InlineExecutionState {
             observe_no_fill_source_lines: SourceLineObservation::Disabled,
             no_fill_word_active: false,
             concat_next_word: false,
+            concat_consumed_for_body: false,
             scope_posts: crate::mandoc::containers::ScopePostState::default(),
         }
     }
