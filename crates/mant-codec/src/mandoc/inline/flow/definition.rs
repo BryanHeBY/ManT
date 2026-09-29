@@ -38,6 +38,22 @@ pub(super) struct DefinitionFieldState {
     /// `term_fill()` targets `vfield` instead of the page margin
     /// (term.c:134-136): head words wrap at the field's own width.
     pub(super) no_break_cleared: bool,
+    /// Row indent (columns relative to the field origin) a fill-mode
+    /// boundary left behind: the request's BRIND moved the upstream offset
+    /// to the field's right margin and the roff node escapes the save/
+    /// restore (roff_term.c:73-75; mdoc_term.c:393-397), so the row the
+    /// next break starts carries it until a document node boundary
+    /// restores the authored geometry (mdoc_term.c:329-330, 437-439).
+    pub(super) row_indent_columns: u16,
+    /// Horizontal jump (columns) the next word takes on the open HANG row:
+    /// the request's `vbl = offset - viscol` fill (term.c:113-114 with
+    /// 223-230; the row stays open because HANG survives the request,
+    /// `roff_term.c:76`). Consumed by the word's append before its boundary.
+    pub(super) pending_jump_spaces: usize,
+    /// Node index of the emitted jump fill and the node count once the
+    /// word carrying it finished, for the retraction below.
+    pub(super) pending_jump_node: Option<usize>,
+    pub(super) pending_jump_word_end: Option<usize>,
     /// The head field's content capacity `rmargin - offset`, latched for
     /// `no_break_cleared` sessions: the request that cleared NOBREAK may
     /// also degrade the author effect to `Line`, but the remaining head
@@ -394,7 +410,7 @@ impl InlineBuilder {
         if let Some(field) = self.take_no_break_field() {
             let capacity = field.field_capacity_columns;
             self.note_field_control_cleared_no_break(true, capacity);
-            self.settle_no_break_field_line(field);
+            self.settle_no_break_field_line(field, 0);
             return true;
         }
         let Some((start, gap, body, field_width_columns, flags)) = self
@@ -668,6 +684,21 @@ impl InlineBuilder {
             definition.field_buffer.clear();
             definition.field_word_anchors.clear();
             definition.pending_glyph_fed = false;
+            // Retract a jump fill whose word never got a follow-up row
+            // event inside the head: upstream prints that word only after
+            // the head close restored the offset (mdoc_term.c:437-439), so
+            // its `vbl` is zero and the jump must not stand.
+            if let Some(jump_node) = definition.pending_jump_node.take() {
+                definition.pending_jump_word_end = None;
+                let follow_up_word = self.nodes[jump_node + 1..]
+                    .iter()
+                    .any(|node| mant_ir::has_printable_character(std::slice::from_ref(node)));
+                if !follow_up_word
+                    && let Some(Inline::Text { value }) = self.nodes.get_mut(jump_node)
+                {
+                    value.clear();
+                }
+            }
         }
         overruns
     }
@@ -1215,7 +1246,7 @@ impl InlineBuilder {
             // the request's own roff_term_pre_br() (roff_term.c:45-58).
             let capacity = field.field_capacity_columns;
             self.note_field_control_cleared_no_break(true, capacity);
-            self.settle_no_break_field_line(field);
+            self.settle_no_break_field_line(field, capacity);
             self.execution
                 .definition
                 .as_mut()
@@ -1264,10 +1295,40 @@ impl InlineBuilder {
             return;
         }
         if flags.wraps() {
+            // roff_term.c:73-75: the request's BRIND moved the row origin to
+            // the field's right margin and the roff node escapes the
+            // save/restore (mdoc_term.c:393-397). The word already flushed
+            // this field, so the pending-indent arm cannot carry it; the
+            // break itself does.
+            let row_indent = if flags.contains(FieldFlag::Brind) {
+                field_width_columns
+            } else {
+                0
+            };
             self.hard_break();
+            if row_indent > 0
+                && let Some(Inline::LineBreak { indent_columns }) = self.nodes.last_mut()
+            {
+                *indent_columns = row_indent;
+            }
             self.definition_state_mut().pending_indent = Some(usize::from(body));
         } else {
             let width = mant_ir::geometry::text_width(&super::super::plain_text(field));
+            if flags.contains(FieldFlag::Hang) {
+                // HANG kept the row open through the boundary
+                // (roff_term.c:76): the following word jumps to the
+                // field's right margin via `vbl = offset - viscol`
+                // (term.c:113-114), not through a break.
+                let used = self
+                    .execution
+                    .definition
+                    .as_ref()
+                    .map_or(0, |state| state.hang_row.viscol);
+                let jump = usize::from(field_width_columns).saturating_sub(used.max(width));
+                if jump > 0 {
+                    self.definition_state_mut().pending_jump_spaces = jump;
+                }
+            }
             self.append_fixed_cells(usize::from(body).saturating_sub(width));
         }
         self.execution
@@ -1502,7 +1563,7 @@ impl InlineBuilder {
             // roff_term_pre_sp() skips term_vspace() for zero rows, then runs
             // roff_term_pre_br(). HANG's term_flushln() retains the same
             // physical row; only a positive vertical request ends it.
-            self.settle_no_break_field_line(field);
+            self.settle_no_break_field_line(field, 0);
             self.execution.final_word_join = Some(false);
             return;
         }
@@ -1854,10 +1915,20 @@ impl InlineBuilder {
         resumed_has_cell
     }
 
-    fn settle_no_break_field_line(&mut self, field: NoBreakField) {
+    fn settle_no_break_field_line(&mut self, field: NoBreakField, row_indent: u16) {
+        // Sample before the restore: its flush settles a pending
+        // zero-advance glyph and thereby closes the row (mdoc_term.c:1085).
+        let zero_pending = self.execution.zero_advance.has_pending_glyph();
         let resumed_visible = self.restore_no_break_field_projection(field);
         match field.style {
             DefinitionFieldStyle::Tag => {
+                // roff_term.c:73-75: a fill-mode boundary (`.nf`/`.fi`, the
+                // same pre_br dispatch, roff_term.c:52) moves the row origin
+                // to the field's right margin; the `.br` family already
+                // materializes it through the pending-indent arm below.
+                if row_indent > 0 {
+                    self.definition_state_mut().row_indent_columns = row_indent;
+                }
                 self.force_output_line_break();
                 if !resumed_visible {
                     self.definition_state_mut().pending_indent = Some(field.body_width);
@@ -1870,7 +1941,28 @@ impl InlineBuilder {
                     .mark_field_exited();
             }
             DefinitionFieldStyle::Hang => {
-                if !resumed_visible {
+                // A pending zero-advance glyph settles through the
+                // boundary's term_newln() and closes the row
+                // (mdoc_term.c:1085), so no jump remains.
+                let row_open = self.execution.definition.as_ref().is_some_and(|state| {
+                    state.hang_row.viscol > 0
+                        || state.field_buffer.cells().iter().any(|cell| {
+                            matches!(
+                                cell,
+                                super::field_buffer::FieldCell::Graph { .. }
+                                    | super::field_buffer::FieldCell::NonBreakingBlank
+                            )
+                        })
+                }) && !zero_pending;
+                if row_open && row_indent > 0 {
+                    // HANG kept the row open (roff_term.c:76 clears NOBREAK
+                    // and BRIND only), so the next word does not break: it
+                    // jumps to the field's right margin through the same
+                    // `vbl = offset - viscol` fill (term.c:113-114).
+                    let state = self.definition_state_mut();
+                    let used = state.hang_row.viscol;
+                    state.pending_jump_spaces = (usize::from(row_indent)).saturating_sub(used);
+                } else if !resumed_visible {
                     self.definition_state_mut().pending_indent =
                         Some(field.body_width.saturating_sub(field.field_width).max(1));
                 }
@@ -1920,12 +2012,27 @@ impl InlineBuilder {
         self.execution.final_word_join = Some(false);
     }
 
+    /// Take the row indent a fill-mode boundary left behind. The indent
+    /// lives for one row break: the document node boundary upstream
+    /// restores the authored geometry (mdoc_term.c:329-330, 437-439).
+    pub(in crate::mandoc) fn take_definition_row_indent(&mut self) -> u16 {
+        let Some(definition) = &mut self.execution.definition else {
+            return 0;
+        };
+        std::mem::replace(&mut definition.row_indent_columns, 0)
+    }
+
     fn force_output_line_break(&mut self) {
+        // Consume the pending row indent even when a break already sits at
+        // the tail: the boundary moved the upstream row origin regardless
+        // (roff_term.c:73-75), and a leaked indent would misplace a later
+        // row.
+        let row_indent = self.take_definition_row_indent();
         if matches!(self.nodes.last(), Some(Inline::LineBreak { .. })) {
             return;
         }
         self.flush_zero_advance();
-        self.nodes.push(Inline::line_break());
+        self.nodes.push(Inline::line_break_indented(row_indent));
         self.execution.last_visible_character = Some('\n');
         self.execution.trailing_output = TrailingOutput::None;
         self.execution.boundary = PendingBoundary::Ordinary;

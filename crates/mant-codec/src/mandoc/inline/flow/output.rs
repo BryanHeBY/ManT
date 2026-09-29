@@ -260,7 +260,8 @@ impl InlineBuilder {
         if (exited_discarded_buffer && !exited_definition_row)
             || !matches!(self.nodes.last(), Some(Inline::LineBreak { .. }))
         {
-            self.nodes.push(Inline::line_break());
+            let row_indent = self.take_definition_row_indent();
+            self.nodes.push(Inline::line_break_indented(row_indent));
             self.execution.last_visible_character = Some('\n');
         }
         self.execution.final_word_join = Some(false);
@@ -677,6 +678,9 @@ impl InlineBuilder {
         let fixed_blank_boundary = (incoming_starts_with_fixed_blank
             && incoming_first.is_some_and(char::is_whitespace))
             || self.execution.trailing_output == TrailingOutput::FixedBlank;
+        let jump_spaces = self.execution.definition.as_mut().map_or(0, |definition| {
+            std::mem::take(&mut definition.pending_jump_spaces)
+        });
         let concat_next_word = std::mem::take(&mut self.execution.concat_next_word);
         let concat_flush_source = std::mem::take(&mut self.execution.concat_flush_source);
         if concat_next_word {
@@ -691,6 +695,17 @@ impl InlineBuilder {
             self.execution.pending_breakable_spaces = 0;
             trim_trailing_breakable_spaces(&mut self.nodes, usize::MAX);
             self.execution.last_visible_character = last_visible_character(&self.nodes);
+        }
+        if jump_spaces > 0 {
+            // Emit after the NOSPACE arm's trims: the jump fill is the
+            // upstream `vbl` pad (term.c:113-114), not a breakable blank.
+            self.nodes.push(Inline::Text {
+                value: " ".repeat(jump_spaces),
+            });
+            if let Some(definition) = &mut self.execution.definition {
+                definition.pending_jump_node = Some(self.nodes.len() - 1);
+                definition.pending_jump_word_end = Some(self.nodes.len());
+            }
         }
         let add_space = if concat_next_word {
             false
@@ -729,7 +744,8 @@ impl InlineBuilder {
             if !matches!(self.nodes.last(), Some(Inline::LineBreak { .. }))
                 && !matches!(incoming.first(), Some(Inline::LineBreak { .. }))
             {
-                self.nodes.push(Inline::line_break());
+                let row_indent = self.take_definition_row_indent();
+                self.nodes.push(Inline::line_break_indented(row_indent));
             }
         } else {
             self.append_boundary_spacing(boundary, add_space, word, empty_word);
@@ -944,7 +960,23 @@ impl InlineBuilder {
             && anchor_count > 0
             && definition.cleared_field_capacity_columns > 0
             && {
-                let vtarget = usize::from(definition.cleared_field_capacity_columns);
+                // term.c:113-116,124-125: the pass target subtracts the row
+                // the head already used — the flushed prefix at `viscol`
+                // plus its trailing separator cell — and the floor
+                // `minbl = trailspace` (term.c:236; the hang head runs with
+                // trailspace 1, mdoc_term.c:804-805).
+                let prefix_used = if definition.hang_row.viscol > 0 {
+                    definition.hang_row.viscol + 1
+                } else {
+                    0
+                };
+                let first_vtarget = usize::from(definition.cleared_field_capacity_columns)
+                    .saturating_sub(1)
+                    .saturating_sub(prefix_used);
+                // Continuation rows restart at the field offset with the
+                // request-cleared trailspace (roff_term.c:77): no minbl, no
+                // prefix, so the plain capacity (term.c:124-125, 229-230).
+                let rest_vtarget = usize::from(definition.cleared_field_capacity_columns);
                 {
                     let word_anchor = definition.field_word_anchors[anchor_count - 1].0;
                     let word_first_cell = word_anchor
@@ -953,7 +985,12 @@ impl InlineBuilder {
                     let word_end = definition.field_buffer.cells().len();
                     let mut simulation = definition.field_buffer.clone();
                     let mut closes_before = false;
-                    while let Some(pass) = simulation.fill_pass(vtarget) {
+                    let mut first_pass = true;
+                    while let Some(pass) = simulation.fill_pass(if first_pass {
+                        first_vtarget
+                    } else {
+                        rest_vtarget
+                    }) {
                         let accepted_end = pass.accepted_end;
                         simulation.advance_past(accepted_end);
                         simulation.consume_break_blanks();
@@ -966,6 +1003,7 @@ impl InlineBuilder {
                         if boundary >= word_end {
                             break;
                         }
+                        first_pass = false;
                     }
                     closes_before
                 }

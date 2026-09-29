@@ -35,6 +35,7 @@ crates/libmandoc-rs/vendor/**/*.o
 crates/libmandoc-rs/vendor/**/*.d
 crates/libmandoc-rs/vendor/**/config.h
 crates/libmandoc-rs/vendor/**/config.sed
+crates/libmandoc-rs/vendor/**/config.log*
 crates/libmandoc-rs/vendor/**/Makefile.local
 crates/libmandoc-rs/vendor/**/*.edited
 crates/libmandoc-rs/vendor/**/mandoc
