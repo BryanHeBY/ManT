@@ -52,11 +52,92 @@ struct ScopePosts {
     ended: HashSet<u32>,
     function_suffix: HashMap<u32, bool>,
     structural_payload: HashSet<u32>,
-    font_scopes: Vec<(u32, FontScope)>,
-    body_fonts: Vec<(u32, FontScope)>,
-    active_bodies: HashSet<u32>,
+    fonts: FontFrames,
     display_fill: HashMap<u32, bool>,
     indexed: bool,
+}
+
+/// One mark/restore record for every font checkpoint, the analog of the
+/// upstream single formatter font chain (`termp->fontq` in `term.c`, the
+/// `metaf` tag scopes in `html.c`): BODY entries and nested scope opens
+/// push frames carrying the saved scope.
+///
+/// The two frame kinds keep CVS's two distinct close rules on one record:
+/// closing a scope truncates every scope frame above its mark, exactly like
+/// `print_tagq()` closing opened tags, while an explicitly ended BODY
+/// removes exactly its own frame wherever it sits (`mdoc_term.c` retains
+/// each BODY's `prev_font` and later closes an inner BODY against its own
+/// checkpoint). Because each close only ever matches its own kind, the
+/// interleaved record behaves as the two former independent stacks.
+#[derive(Default)]
+struct FontFrames {
+    frames: Vec<FontFrame>,
+    /// Open BODY ids; a nested or repeated BODY never re-checkpoints.
+    active_bodies: HashSet<u32>,
+}
+
+#[derive(Clone, Copy)]
+struct FontFrame {
+    body: u32,
+    kind: FontFrameKind,
+    saved: FontScope,
+}
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum FontFrameKind {
+    /// A BODY entry checkpoint; one per open BODY id.
+    Body,
+    /// A nested font scope open; several may share one BODY.
+    Scope,
+}
+
+impl FontFrames {
+    fn enter_body(&mut self, body: u32, saved: FontScope) {
+        if self.active_bodies.insert(body) {
+            self.frames.push(FontFrame {
+                body,
+                kind: FontFrameKind::Body,
+                saved,
+            });
+        }
+    }
+
+    fn exit_body(&mut self, body: u32) -> Option<FontScope> {
+        let index = self
+            .frames
+            .iter()
+            .rposition(|frame| frame.body == body && frame.kind == FontFrameKind::Body)?;
+        let saved = self.frames.remove(index).saved;
+        self.active_bodies.remove(&body);
+        Some(saved)
+    }
+
+    fn enter_scope(&mut self, body: u32, saved: FontScope) {
+        self.frames.push(FontFrame {
+            body,
+            kind: FontFrameKind::Scope,
+            saved,
+        });
+    }
+
+    fn exit_scope(&mut self, body: u32) -> Option<FontScope> {
+        let mark = self
+            .frames
+            .iter()
+            .rposition(|frame| frame.body == body && frame.kind == FontFrameKind::Scope)?;
+        let saved = self.frames[mark].saved;
+        // mdoc_term.c::print_mdoc_node() pops to the original BODY's
+        // prev_font, including any crossed scopes above that BODY. BODY
+        // frames stay open wherever the walk opened them; each kind's close
+        // only ever matches its own kind, so the shared record behaves as
+        // the two former independent stacks.
+        for frame in self.frames.split_off(mark) {
+            if frame.kind == FontFrameKind::Body {
+                self.frames.push(frame);
+            }
+        }
+        Some(saved)
+    }
 }
 
 impl ScopePostState {
@@ -108,49 +189,19 @@ impl ScopePostState {
     }
 
     pub(super) fn enter_font(&self, body_id: u32, saved: FontScope) {
-        self.0.borrow_mut().font_scopes.push((body_id, saved));
+        self.0.borrow_mut().fonts.enter_scope(body_id, saved);
     }
 
     pub(super) fn exit_font(&self, body_id: u32) -> Option<FontScope> {
-        let mut posts = self.0.borrow_mut();
-        let index = posts
-            .font_scopes
-            .iter()
-            .rposition(|(id, _)| *id == body_id)?;
-        let saved = posts.font_scopes[index].1;
-        // mdoc_term.c::print_mdoc_node() pops to the original BODY's
-        // prev_font, including any crossed scopes above that BODY.
-        posts.font_scopes.truncate(index);
-        Some(saved)
+        self.0.borrow_mut().fonts.exit_scope(body_id)
     }
 
     pub(super) fn enter_body(&self, body_id: u32, saved: FontScope) {
-        let mut posts = self.0.borrow_mut();
-        if posts.active_bodies.insert(body_id) {
-            posts.body_fonts.push((body_id, saved));
-        }
+        self.0.borrow_mut().fonts.enter_body(body_id, saved);
     }
 
     pub(super) fn exit_body(&self, body_id: u32) -> Option<FontScope> {
-        let mut posts = self.0.borrow_mut();
-        let index = if posts
-            .body_fonts
-            .last()
-            .is_some_and(|(id, _)| *id == body_id)
-        {
-            posts.body_fonts.len() - 1
-        } else {
-            posts
-                .body_fonts
-                .iter()
-                .rposition(|(id, _)| *id == body_id)?
-        };
-        // An explicit end may close an outer BODY while another BODY remains
-        // open in the parser tree.  CVS retains each BODY's prev_font and
-        // later closes that inner BODY against its own checkpoint.
-        let (_, saved) = posts.body_fonts.remove(index);
-        posts.active_bodies.remove(&body_id);
-        Some(saved)
+        self.0.borrow_mut().fonts.exit_body(body_id)
     }
 
     pub(super) fn enter_display_fill(&self, body_id: u32, inbound: bool) {

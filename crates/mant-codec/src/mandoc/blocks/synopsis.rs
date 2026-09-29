@@ -1,7 +1,7 @@
 //! Declaration geometry selected by the native SYNOPSIS flags.
 use super::{
-    Block, Inline, InlineBuilder, LoweringContext, Node, NodeKind, first_part_children, layout,
-    lower_blocks_with_spacing, source_span,
+    Block, Inline, InlineBuilder, LoweringContext, Node, NodeKind, ScopeFlow, first_part_children,
+    layout, lower_scope, source_span,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -158,13 +158,12 @@ pub(super) fn lower_synopsis_head(
             .font
             .select(crate::mandoc::roff_escape::RoffFont::Regular);
     }
-    let mut nested = lower_blocks_with_spacing(
+    let mut nested = lower_scope(
         first_part_children(node, NodeKind::Body),
         context,
-        indent_columns,
         paragraph_distance,
-        spacing_enabled,
         formatter,
+        ScopeFlow::filled(indent_columns, spacing_enabled),
     );
     if node.macro_name.as_deref() == Some("SY") {
         // BODY post and BLOCK post both execute the man(7) font reset.

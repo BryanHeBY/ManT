@@ -1,8 +1,9 @@
+use super::definition::PendingFieldGapOrigin;
 use super::{
     AuthorBreakEffect, AuthorExecution, FormatterColumn, Inline, InlineBuilder,
-    InlineExecutionState, KeepPhase, PendingBoundary, PendingFieldGapOrigin, PreservedInlineState,
-    SourceFragmentState, SourceLineObservation, SpacingMode, TrailingOutput, WordEndBreak,
-    last_visible_character, trim_trailing_breakable_spaces, updated_spacing,
+    InlineExecutionState, KeepPhase, PendingBoundary, PreservedInlineState, SourceFragmentState,
+    SourceLineObservation, SpacingMode, TrailingOutput, WordEndBreak, last_visible_character,
+    trim_trailing_breakable_spaces, updated_spacing,
 };
 
 impl InlineBuilder {
@@ -87,9 +88,9 @@ impl InlineBuilder {
             AuthorBreakEffect::Field {
                 gap_cells,
                 body_width_columns,
-                wraps,
+                flags,
             } => {
-                if !wraps
+                if flags.contains(super::native_field::FieldFlag::Hang)
                     && let Some(definition) = &mut self.execution.definition
                     && definition.vertical_started_row
                 {
@@ -105,10 +106,12 @@ impl InlineBuilder {
                     field_output_start,
                     gap_cells,
                     body_width_columns,
-                    wraps,
+                    flags,
                     false,
                 );
-                if !wraps && let Some(definition) = &mut self.execution.definition {
+                if !flags.wraps()
+                    && let Some(definition) = &mut self.execution.definition
+                {
                     // termp_an_pre() called term_newln(): its NOSPACE flag
                     // suppresses term_word()'s automatic blank before the
                     // next author glyph. minbl from the flushed field stays.

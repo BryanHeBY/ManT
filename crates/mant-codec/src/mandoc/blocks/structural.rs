@@ -1,10 +1,10 @@
 //! Structural payload dispatch; state and output remain caller-owned.
 use super::{
     Block, DisplayKind, LoweringContext, ManDefinitionState, ManListState, Node, NodeKind,
-    TableEmbedding, add_leading_spacing, append_relative_continuation, append_table_row,
-    first_part_children, layout, lower_blocks_with_spacing, lower_inline_nodes,
-    lower_man_definition_block, lower_mdoc_list, lower_synopsis_head, part_child_groups,
-    plain_text, preformatted_blocks, set_block_spacing, source_span,
+    ScopeFlow, TableEmbedding, add_leading_spacing, append_relative_continuation, append_table_row,
+    first_part_children, layout, lower_inline_nodes, lower_man_definition_block, lower_mdoc_list,
+    lower_scope, lower_synopsis_head, part_child_groups, plain_text, preformatted_blocks,
+    set_block_spacing, source_span,
 };
 
 pub(super) struct StructuralLowerer<'a, 'source, 'state> {
@@ -208,18 +208,20 @@ impl StructuralLowerer<'_, '_, '_> {
             Some("Bd") if node.display_kind == Some(DisplayKind::Filled) => {
                 let has_predecessor = self.has_paragraph_predecessor();
                 let spacing_before = u16::from(has_predecessor && !node.compact);
-                let nested = super::lower_blocks_with_body_post_row_end(
+                let nested = super::lower_scope(
                     first_part_children(node, NodeKind::Body),
                     self.context,
-                    self.context.offset_indent(
-                        node,
-                        self.indent_columns,
-                        self.context.display_offset(node),
-                    ),
                     self.paragraph_distance,
-                    self.spacing_enabled,
-                    has_predecessor,
                     self.formatter,
+                    super::ScopeFlow::body_post_row_end(
+                        self.context.offset_indent(
+                            node,
+                            self.indent_columns,
+                            self.context.display_offset(node),
+                        ),
+                        self.spacing_enabled,
+                        has_predecessor,
+                    ),
                 );
                 extend_blocks_with_spacing(self.output, nested, spacing_before, node);
             }
@@ -299,23 +301,21 @@ fn lower_structural_fallback(
         context.warn_unhandled_structural_parts(node);
     }
     if bodies.is_empty() {
-        output.extend(lower_blocks_with_spacing(
+        output.extend(lower_scope(
             node.children.as_slice(),
             context,
-            indent_columns,
             paragraph_distance,
-            spacing_enabled,
             formatter,
+            ScopeFlow::filled(indent_columns, spacing_enabled),
         ));
     } else {
         for body in bodies {
-            output.extend(lower_blocks_with_spacing(
+            output.extend(lower_scope(
                 body,
                 context,
-                indent_columns,
                 paragraph_distance,
-                spacing_enabled,
                 formatter,
+                ScopeFlow::filled(indent_columns, spacing_enabled),
             ));
         }
     }

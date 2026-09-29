@@ -1,5 +1,5 @@
 //! Shared definition content, source ownership, and head construction.
-use super::super::lower_blocks_with_predecessor_and_run_in;
+use super::super::{FormatterRowBoundary, ScopeFlow, lower_scope};
 use super::{
     Block, DefinitionItem, Inline, InlineBuilder, LoweringContext, Node, NodeKind,
     first_part_children, is_inline_equation, is_inline_equation_quote_artifact, source_span,
@@ -24,7 +24,13 @@ pub(super) enum DefinitionHeadFlow {
     },
     /// CVS inset and diagnostic lists execute HEAD, their generated separator
     /// cells, and BODY in one formatter stream instead of flushing the head.
-    RunIn { cells: u8, style: RunInHeadStyle },
+    /// The flags are the upstream HEAD field flags (`termp_it_pre()`); inset
+    /// sets none, diagnostic sets NOBREAK|BRIND without HANG.
+    RunIn {
+        cells: u8,
+        style: RunInHeadStyle,
+        flags: crate::mandoc::inline::FieldFlags,
+    },
 }
 
 impl Default for DefinitionHeadFlow {
@@ -62,7 +68,14 @@ impl DefinitionHeadFlow {
             Self::Detached {
                 author_break_effect,
             } => author_break_effect,
-            Self::RunIn { .. } => crate::mandoc::inline::AuthorBreakEffect::Line,
+            Self::RunIn { cells, flags, .. } => crate::mandoc::inline::AuthorBreakEffect::Field {
+                gap_cells: cells,
+                // Neither inset nor diagnostic shortens the right margin
+                // (termp_it_pre default arm), so no width-based overrun can
+                // fire; the field decisions come from the flags alone.
+                body_width_columns: u16::MAX,
+                flags,
+            },
         }
     }
 
@@ -149,6 +162,9 @@ pub(super) fn definition_item(
     if closed_head_row {
         // The last explicit HEAD break becomes the term/BODY separation.
         // Earlier breaks, including extra sp rows, remain inside the term.
+        // Heads whose in-word `\p` or armed trailing marker closed the
+        // native row follow the same term_flushln() tail rule
+        // (term.c:250-252).
         geometry.placement = crate::mandoc::layout::TermPlacement::Stacked;
     }
     if flow.head.generated_cells().is_some() {
@@ -174,27 +190,28 @@ pub(super) fn definition_item(
             && !definition_field_exited
             && !closed_head_scope,
     );
+    let spacing_enabled = formatter.spacing_enabled();
     let mut description = if let Some(run_in) = run_in_execution {
-        lower_blocks_with_predecessor_and_run_in(
+        lower_scope(
             body,
             context,
-            body_origin,
             paragraph_distance,
-            formatter.spacing_enabled(),
-            flow.paragraph_predecessor,
             formatter,
-            Some((run_in.state, run_in.surviving_cells, run_in.generated_word)),
-            super::super::FormatterRowBoundary::Settle,
+            ScopeFlow {
+                indent_columns: body_origin,
+                spacing_enabled,
+                paragraph_predecessor: flow.paragraph_predecessor,
+                run_in: Some((run_in.state, run_in.surviving_cells, run_in.generated_word)),
+                row_boundary: FormatterRowBoundary::Settle,
+            },
         )
     } else {
-        super::super::lower_blocks_with_body_post_row_end(
+        lower_scope(
             body,
             context,
-            body_origin,
             paragraph_distance,
-            formatter.spacing_enabled(),
-            flow.paragraph_predecessor,
             formatter,
+            ScopeFlow::body_post_row_end(body_origin, spacing_enabled, flow.paragraph_predecessor),
         )
     };
     carry_invisible_head_row(node, &terms, closed_head_row, &mut description);
@@ -299,6 +316,33 @@ fn take_closed_head_row(terms: &mut [Vec<Inline>]) -> bool {
     }
     term.remove(last_content);
     true
+}
+
+/// A HEAD whose authored `\\p` markers closed rows inside the term has no
+/// HANG protection left at the final pass: `term_flushln()`'s tail rule
+/// (term.c:250-252) closes the row, so BODY starts its own row. A real
+/// `term_fill()` pass requires printable content on both sides of the
+/// break; author-split rows break before their first printed word.
+fn marker_split_field_exited(head: DefinitionHeadFlow, terms: &[Vec<Inline>]) -> bool {
+    let Some(term) = terms.last() else {
+        return false;
+    };
+    let split_between_words = term.iter().enumerate().any(|(index, node)| {
+        node == &Inline::LineBreak
+            && term[..index]
+                .iter()
+                .any(|before| mant_ir::has_printable_character(std::slice::from_ref(before)))
+            && term[index + 1..]
+                .iter()
+                .any(|after| mant_ir::has_printable_character(std::slice::from_ref(after)))
+    });
+    split_between_words
+        && matches!(
+            head,
+            DefinitionHeadFlow::Detached {
+                author_break_effect: crate::mandoc::inline::AuthorBreakEffect::Field { flags, .. },
+            } if !flags.contains(crate::mandoc::inline::FieldFlag::Hang)
+        )
 }
 
 fn invisible_closed_head_row(terms: &[Vec<Inline>]) -> bool {
@@ -491,13 +535,14 @@ fn definition_head_anchor(node: &Node) -> Option<String> {
     targets::part_target(node, NodeKind::Head)
 }
 
+/// Whether any nested node is an empty TEXT: its `NODE_LINE` runs
+/// `term_newln()` mid-HEAD even though it prints nothing.
+fn has_empty_text_child(node: &Node) -> bool {
+    (node.kind == NodeKind::Text && node.text.as_deref() == Some(""))
+        || node.children.iter().any(has_empty_text_child)
+}
+
 /// Return only document content from a definition macro's mixed-purpose head.
-///
-/// This follows mandoc's own HTML and terminal renderers: `.IP` prints its
-/// first head node and treats later arguments as layout, while `.TP`/`.TQ`
-/// print only nodes beginning on the following input line. The distinction is
-/// structural; inspecting strings such as `96u` would incorrectly remove a
-/// numeric term while still leaking non-numeric width expressions.
 pub(super) fn visible_definition_head(node: &Node) -> &[Node] {
     let head = first_part_children(node, NodeKind::Head);
     match node.macro_name.as_deref() {

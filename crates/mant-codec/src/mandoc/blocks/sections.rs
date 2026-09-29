@@ -1,7 +1,7 @@
 //! Section/root ownership and source-ordered heading reconstruction.
 use super::{
-    Block, LoweringContext, Node, NodeKind, Section, first_part_children,
-    lower_blocks_through_row_end, section_spacing, source_span, update_paragraph_distance,
+    Block, LoweringContext, Node, NodeKind, ScopeFlow, Section, first_part_children, lower_scope,
+    section_spacing, source_span, update_paragraph_distance,
 };
 use crate::mandoc::inline::authored_section_phrase;
 
@@ -25,13 +25,16 @@ pub(in crate::mandoc) fn lower_document_structure(
         if !is_section(node, true) && !is_section(node, false) {
             continue;
         }
-        root_blocks.extend(lower_blocks_through_row_end(
+        let spacing_enabled = formatter.spacing_enabled();
+        root_blocks.extend(lower_scope(
             &root.children[root_start..index],
             context,
-            crate::mandoc::layout::SourceIndent::default(),
             &mut root_paragraph_distance,
-            formatter.spacing_enabled(),
             &mut formatter,
+            ScopeFlow::settled(
+                crate::mandoc::layout::SourceIndent::default(),
+                spacing_enabled,
+            ),
         ));
         root_start = index + 1;
         let has_preceding_content = sections.last().is_some_and(section_has_body);
@@ -50,13 +53,16 @@ pub(in crate::mandoc) fn lower_document_structure(
             true,
         ));
     }
-    root_blocks.extend(lower_blocks_through_row_end(
+    let spacing_enabled = formatter.spacing_enabled();
+    root_blocks.extend(lower_scope(
         &root.children[root_start..],
         context,
-        crate::mandoc::layout::SourceIndent::default(),
         &mut root_paragraph_distance,
-        formatter.spacing_enabled(),
         &mut formatter,
+        ScopeFlow::settled(
+            crate::mandoc::layout::SourceIndent::default(),
+            spacing_enabled,
+        ),
     ));
     (root_blocks, sections)
 }
@@ -93,16 +99,19 @@ fn lower_section(
     if top_level && section_context == crate::mandoc::source_context::MdocSectionContext::Authors {
         formatter.enter_authors_section();
     }
-    let blocks = lower_blocks_through_row_end(
+    let spacing_enabled = formatter.spacing_enabled();
+    let blocks = lower_scope(
         &body[..first_subsection],
         context,
-        crate::mandoc::layout::SourceIndent::default(),
         paragraph_distance,
-        formatter.spacing_enabled(),
         formatter,
+        ScopeFlow::settled(
+            crate::mandoc::layout::SourceIndent::default(),
+            spacing_enabled,
+        ),
     );
-    let mut children = Vec::new();
     let mut has_preceding_content = !blocks.is_empty();
+    let mut children = Vec::new();
     for child in &body[first_subsection..] {
         update_paragraph_distance(child, paragraph_distance);
         if !is_section(child, false) {

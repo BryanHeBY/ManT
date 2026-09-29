@@ -1,7 +1,8 @@
 //! State-only requests execute before printable fallback and never leak operands.
 use super::{
-    Block, BlockState, LoweringContext, Node, NodeKind, is_section, lower_inline_nodes, plain_text,
-    source_span, update_paragraph_distance, vertical_space_delta,
+    Block, BlockState, LoweringContext, Node, NodeKind, is_section, lower_inline_nodes,
+    lower_inline_nodes_with_font_state, plain_text, source_span, update_paragraph_distance,
+    vertical_space_delta,
 };
 
 /// A read-only request classification, not a replayable formatter effect.
@@ -120,6 +121,21 @@ impl super::BlockLowerer<'_, '_> {
             return true;
         }
         false
+    }
+
+    /// `.ft` selects fonts without printable block output of its own; it is
+    /// the roff-request analog of upstream `roff_html.c::roff_html_pre_ft`.
+    pub(super) fn consume_font_request(&mut self, node: &Node) -> bool {
+        if node.macro_name.as_deref() != Some("ft") {
+            return false;
+        }
+        lower_inline_nodes_with_font_state(
+            std::slice::from_ref(node),
+            self.context.default_name,
+            self.state.spacing_enabled(),
+            &mut self.state.formatter.font,
+        );
+        true
     }
 }
 

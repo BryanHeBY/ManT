@@ -1,17 +1,14 @@
-//! One source-order block driver over the copied mandoc tree.
-//!
-//! Routing order is observable: font requests precede containers and controls;
-//! executed spacing precedes no-fill fallback; synopsis/filled handling follows
-//! literal flush; structural output receives pending targets only after it is
-//! emitted. Subdomains execute a node once and return, never replay its macros.
+//! Block-scope ownership: the lowering state, its single entry, and the
+//! macro-family subdomains, mirroring the upstream split between the html
+//! formatter core (`html.c`) and per-dialect dispatch (`mdoc_html.c`,
+//! `man_html.c`, `roff_html.c`). The one source-order node walk and its
+//! observable routing order live in [`walker`].
 
 use libmandoc_rs::{DisplayKind, Node, NodeKind};
 use mant_ir::{Block, Inline, Section};
 
 use super::{
-    LoweringContext,
-    controls::FormatterBoundary,
-    first_part_children,
+    LoweringContext, first_part_children,
     inline::{
         FilledBoundary, InlineBuilder, append_inline_node_with_next, is_enclosure_macro,
         lower_inline_nodes, lower_inline_nodes_with_font_state, plain_text,
@@ -45,10 +42,12 @@ mod flow;
 mod man_links;
 mod man_nofill;
 use flow::BlockState;
-use man_nofill::no_fill_boundary;
 mod lists;
+mod man_macros;
+mod mdoc_macros;
 mod preformatted;
 mod tables;
+mod walker;
 
 use lists::man::{
     adjacent_ip_run,
@@ -60,133 +59,104 @@ use lists::{
 use preformatted::preformatted_blocks;
 use tables::{TableEmbedding, TableEmbeddingPlan, append_table_row};
 
-fn lower_blocks_with_spacing(
-    nodes: &[Node],
-    context: &LoweringContext<'_>,
-    indent_columns: crate::mandoc::layout::SourceIndent,
-    paragraph_distance: &mut u16,
-    spacing_enabled: bool,
-    formatter: &mut crate::mandoc::formatter::FormatterState,
-) -> Vec<Block> {
-    lower_blocks_with_predecessor(
-        nodes,
-        context,
-        indent_columns,
-        paragraph_distance,
-        spacing_enabled,
-        false,
-        formatter,
-    )
+/// Everything one block-scope entry varies. Fields replace the positional
+/// parameter permutations of the former `lower_blocks_*` wrapper family,
+/// mirroring upstream's single walker signature (nodes, immutable context,
+/// mutable formatter): flow facts belong to one entry, not to arity.
+pub(super) struct ScopeFlow {
+    /// Base `.in` indent for this scope.
+    pub(super) indent_columns: crate::mandoc::layout::SourceIndent,
+    pub(super) spacing_enabled: bool,
+    /// A source sibling already produced output before this scope.
+    pub(super) paragraph_predecessor: bool,
+    /// Carried inline execution from a finished HEAD row into this body.
+    pub(super) run_in: Option<(crate::mandoc::inline::PreservedInlineState, usize, bool)>,
+    /// Whether returning from this scope settles the active formatter row.
+    pub(super) row_boundary: FormatterRowBoundary,
 }
 
-/// A document or section body has a real terminal row boundary at its end.
-/// Nested output owners return their active formatter row to the caller.
-fn lower_blocks_through_row_end(
-    nodes: &[Node],
-    context: &LoweringContext<'_>,
-    indent_columns: crate::mandoc::layout::SourceIndent,
-    paragraph_distance: &mut u16,
-    spacing_enabled: bool,
-    formatter: &mut crate::mandoc::formatter::FormatterState,
-) -> Vec<Block> {
-    lower_blocks_with_predecessor_and_run_in(
-        nodes,
-        context,
-        indent_columns,
-        paragraph_distance,
-        spacing_enabled,
-        false,
-        formatter,
-        None,
-        FormatterRowBoundary::Settle,
-    )
+impl ScopeFlow {
+    /// Ordinary filled scope; the caller keeps its active formatter row.
+    pub(super) const fn filled(
+        indent_columns: crate::mandoc::layout::SourceIndent,
+        spacing_enabled: bool,
+    ) -> Self {
+        Self {
+            indent_columns,
+            spacing_enabled,
+            paragraph_predecessor: false,
+            run_in: None,
+            row_boundary: FormatterRowBoundary::Preserve,
+        }
+    }
+
+    /// A document or section body has a real terminal row boundary at its
+    /// end: nested output owners return their active formatter row to the
+    /// caller.
+    pub(super) const fn settled(
+        indent_columns: crate::mandoc::layout::SourceIndent,
+        spacing_enabled: bool,
+    ) -> Self {
+        Self {
+            indent_columns,
+            spacing_enabled,
+            paragraph_predecessor: false,
+            run_in: None,
+            row_boundary: FormatterRowBoundary::Settle,
+        }
+    }
+
+    /// The owning macro's BODY post calls `term_newln()` (or
+    /// `term_flushln()`); keep that distinct from an IR output-owner return
+    /// without such a post. A detached structural body keeps its source
+    /// predecessor: an empty child output buffer is not evidence that the
+    /// body immediately follows a section heading.
+    pub(super) const fn body_post_row_end(
+        indent_columns: crate::mandoc::layout::SourceIndent,
+        spacing_enabled: bool,
+        paragraph_predecessor: bool,
+    ) -> Self {
+        Self {
+            indent_columns,
+            spacing_enabled,
+            paragraph_predecessor,
+            run_in: None,
+            row_boundary: FormatterRowBoundary::Settle,
+        }
+    }
 }
 
-/// Lower a detached structural body without discarding its predecessor.
-/// Native display spacing walks through first-child containers to find an
-/// earlier source sibling. An empty child output buffer is not evidence that
-/// the body immediately follows a section heading.
-fn lower_blocks_with_predecessor(
+/// Lower one node list through a fresh output owner and return its blocks.
+pub(super) fn lower_scope(
     nodes: &[Node],
     context: &LoweringContext<'_>,
-    indent_columns: crate::mandoc::layout::SourceIndent,
     paragraph_distance: &mut u16,
-    spacing_enabled: bool,
-    paragraph_predecessor: bool,
     formatter: &mut crate::mandoc::formatter::FormatterState,
-) -> Vec<Block> {
-    lower_blocks_with_predecessor_and_run_in(
-        nodes,
-        context,
-        indent_columns,
-        paragraph_distance,
-        spacing_enabled,
-        paragraph_predecessor,
-        formatter,
-        None,
-        FormatterRowBoundary::Preserve,
-    )
-}
-
-/// The owning macro's BODY post calls `term_newln()` (or `term_flushln()`).
-/// Keep this distinct from an IR output-owner return without such a post.
-fn lower_blocks_with_body_post_row_end(
-    nodes: &[Node],
-    context: &LoweringContext<'_>,
-    indent_columns: crate::mandoc::layout::SourceIndent,
-    paragraph_distance: &mut u16,
-    spacing_enabled: bool,
-    paragraph_predecessor: bool,
-    formatter: &mut crate::mandoc::formatter::FormatterState,
-) -> Vec<Block> {
-    lower_blocks_with_predecessor_and_run_in(
-        nodes,
-        context,
-        indent_columns,
-        paragraph_distance,
-        spacing_enabled,
-        paragraph_predecessor,
-        formatter,
-        None,
-        FormatterRowBoundary::Settle,
-    )
-}
-
-#[allow(clippy::too_many_arguments)]
-fn lower_blocks_with_predecessor_and_run_in(
-    nodes: &[Node],
-    context: &LoweringContext<'_>,
-    indent_columns: crate::mandoc::layout::SourceIndent,
-    paragraph_distance: &mut u16,
-    spacing_enabled: bool,
-    paragraph_predecessor: bool,
-    formatter: &mut crate::mandoc::formatter::FormatterState,
-    run_in: Option<(crate::mandoc::inline::PreservedInlineState, usize, bool)>,
-    row_boundary: FormatterRowBoundary,
+    flow: ScopeFlow,
 ) -> Vec<Block> {
     let mut lowerer = BlockLowerer::new(
         context,
-        indent_columns,
+        flow.indent_columns,
         paragraph_distance,
-        spacing_enabled,
+        flow.spacing_enabled,
         Vec::new(),
         std::mem::take(formatter),
     );
-    if let Some((execution, generated_cells, generated_word)) = run_in {
+    if let Some((execution, generated_cells, generated_word)) = flow.run_in {
         lowerer
             .state
             .inherit_run_in_execution(execution, generated_cells, generated_word);
     }
-    lowerer.paragraph_predecessor = paragraph_predecessor;
+    lowerer.paragraph_predecessor = flow.paragraph_predecessor;
     lowerer.push_nodes(nodes);
-    lowerer.finish_into(formatter, row_boundary)
+    lowerer.finish_into(formatter, flow.row_boundary)
 }
 
 const DEFAULT_MAN_TAG_WIDTH: i32 = 7;
 
 /// A Rust output-owner return does not by itself end a CVS formatter row.
 #[derive(Clone, Copy, Eq, PartialEq)]
-enum FormatterRowBoundary {
+pub(super) enum FormatterRowBoundary {
     Preserve,
     Settle,
 }
@@ -268,378 +238,6 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         self.push_nodes_with_reference_posts(nodes, false);
     }
 
-    /// Bibliography fields use the same source execution path as surrounding
-    /// text. CVS `termp____post()` writes punctuation after each direct Rs
-    /// field; the Rs wrapper itself has no post text or formatter row break.
-    fn push_nodes_with_reference_posts(&mut self, nodes: &[Node], reference_body: bool) {
-        let table_plan = TableEmbeddingPlan::new(nodes, self.context);
-        let mut synopsis_previous = None;
-        let mut has_native_sibling = false;
-        let mut previous_native_is_sy = false;
-        for (index, node) in nodes.iter().enumerate() {
-            let source_predecessor = has_native_sibling || self.man_source_predecessor;
-            let previous_is_sy = previous_native_is_sy;
-            if !is_native_transparent_sibling(node) {
-                has_native_sibling = true;
-                previous_native_is_sy = node.macro_name.as_deref() == Some("SY");
-            }
-            if is_inline_equation_quote_artifact(nodes, index) {
-                continue;
-            }
-            if follows_inline_equation_punctuation(nodes, index) {
-                self.state.tighten_next_boundary();
-            }
-            self.observe_source_fill_mode(node);
-            // Both print_man_node() and print_mdoc_node() execute NODE_LINE
-            // before visiting a text node or dispatching any request. This
-            // source event is independent of the request's own line effect.
-            let source_line_entered = self.enter_no_fill_source_line(node);
-            self.prepare_node_execution(node);
-            let author_pre = reference_body && reference_author_conjunction(nodes, index);
-            if author_pre {
-                self.push_generated_container_event(
-                    node,
-                    crate::mandoc::containers::Event::Glyph("and".to_owned()),
-                );
-            }
-            self.push(
-                node,
-                nodes.get(index + 1),
-                table_plan.embedding(index),
-                synopsis_previous,
-                adjacent_ip_run(nodes, index),
-                NodeSourceContext {
-                    line_entered: source_line_entered,
-                    predecessor: source_predecessor,
-                    previous_is_sy,
-                },
-            );
-            if reference_body && let Some(punctuation) = reference_field_post(nodes, index) {
-                self.push_generated_container_event(node, crate::mandoc::containers::Event::Tight);
-                self.push_generated_container_event(
-                    node,
-                    crate::mandoc::containers::Event::Glyph(punctuation.to_owned()),
-                );
-                self.push_generated_container_event(
-                    node,
-                    crate::mandoc::containers::Event::Release,
-                );
-            }
-            // Source execution, not visible output, owns the predecessor fact.
-            if self.context.macro_set == libmandoc_rs::MacroSet::Mdoc
-                && super::adjacency::is_logical_sibling(node)
-            {
-                self.paragraph_predecessor = true;
-            }
-            if !synopsis::transparent_synopsis_predecessor(node) {
-                synopsis_previous = Some(node);
-            }
-        }
-    }
-
-    fn push_bibliography(&mut self, node: &Node) {
-        // CVS termp_rs_pre() calls term_vspace only for a non-first Rs in
-        // SEE ALSO. This is an executed pre boundary, before BODY fields.
-        if node.section == libmandoc_rs::NormalizedSection::SeeAlso && self.paragraph_predecessor {
-            self.settle_no_fill_inline();
-            self.state.flush_preformatted();
-            let lines = self.state.resolve_vertical_space(1);
-            self.state.flush_paragraph_for_line_request();
-            self.state.output.push(Block::VerticalSpace {
-                lines,
-                source: source_span(node),
-            });
-        }
-        let Some(body) = node
-            .children
-            .iter()
-            .find(|child| child.kind == NodeKind::Body)
-        else {
-            return;
-        };
-        let posts = self.context.scope_posts.clone();
-        posts.enter_body(body.id, self.state.formatter.font.checkpoint());
-        self.push_nodes_with_reference_posts(&body.children, true);
-        if let Some(saved) = posts.exit_body(body.id) {
-            self.state.formatter.font.pop_scope(saved);
-        }
-    }
-
-    fn push_man_paragraph(&mut self, node: &Node, source_predecessor: bool) {
-        // man_term.c::pre_PP() closes the preceding row and enters BODY, but
-        // PP/P/LP have no post handler. Keep BODY in this same output and
-        // execution owner so a following UR/MT post can finish its last word.
-        self.state.flush_preformatted();
-        self.state.flush_paragraph();
-        self.state
-            .set_source_indent(self.indent_columns.macro_origin());
-        self.man_list_state.reset();
-        self.definition_hanging_width =
-            crate::mandoc::layout::Distance::cells(DEFAULT_MAN_TAG_WIDTH);
-        self.state.request_man_paragraph_spacing(
-            *self.paragraph_distance,
-            source_predecessor,
-            source_span(node),
-        );
-        // The BLOCK pre ran at node entry. Its empty HEAD and its BODY still
-        // pass through print_man_node(), whose generic pre/post font changes
-        // are independent of pre_PP's absent macro-specific post handler.
-        self.state.formatter.font.man_text_boundary(); // HEAD pre
-        self.state.formatter.font.man_text_boundary(); // HEAD post
-        self.state.formatter.font.man_text_boundary(); // BODY pre
-        let inherited = std::mem::take(&mut self.man_source_predecessor);
-        self.push_nodes(first_part_children(node, NodeKind::Body));
-        self.man_source_predecessor = inherited;
-        self.state.formatter.font.man_text_boundary(); // BODY post
-        self.state.formatter.font.man_text_boundary(); // BLOCK post
-        self.state.materialize_idle_spacing();
-    }
-
-    fn prepare_man_synopsis_spacing(&mut self, node: &Node, source: NodeSourceContext) {
-        if node.macro_name.as_deref() != Some("SY") {
-            return;
-        }
-        self.state.flush_preformatted();
-        self.state.flush_paragraph();
-        if source.previous_is_sy {
-            return;
-        }
-        // man_term.c::pre_SY() calls print_bvspace() unless the direct
-        // previous native sibling is another SY. The first SY in an RS
-        // chain uses the same source-predecessor rule.
-        self.state.request_man_paragraph_spacing(
-            *self.paragraph_distance,
-            source.predecessor,
-            source_span(node),
-        );
-    }
-
-    fn consume_font_request(&mut self, node: &Node) -> bool {
-        if node.macro_name.as_deref() != Some("ft") {
-            return false;
-        }
-        lower_inline_nodes_with_font_state(
-            std::slice::from_ref(node),
-            self.context.default_name,
-            self.state.spacing_enabled(),
-            &mut self.state.formatter.font,
-        );
-        true
-    }
-
-    fn observe_source_fill_mode(&mut self, node: &Node) {
-        let was_no_fill = self.state.formatter.no_fill;
-        match node.macro_name.as_deref() {
-            Some("nf") => self.state.formatter.no_fill = true,
-            Some("fi") => self.state.formatter.no_fill = false,
-            _ if self.display_fill == Some(DisplayFillMode::NodeFlags) => {
-                self.state.formatter.no_fill = node.flags.no_fill;
-            }
-            _ if self.display_fill == Some(DisplayFillMode::SingleLine) => {}
-            _ if node.flags.no_fill => self.state.formatter.no_fill = true,
-            _ if node.scope_end.is_none() && participates_in_inline_flow(node) => {
-                self.state.formatter.no_fill = false;
-            }
-            _ => {}
-        }
-        if was_no_fill && !self.state.formatter.no_fill {
-            self.state.formatter.clear_trailing_literal_row();
-        }
-    }
-
-    fn push(
-        &mut self,
-        node: &Node,
-        next: Option<&Node>,
-        table_embedding: Option<&TableEmbedding>,
-        synopsis_previous: Option<&Node>,
-        ip_run: Option<lists::man::IpRun>,
-        source: NodeSourceContext,
-    ) {
-        if self.consume_font_request(node) {
-            return;
-        }
-        self.prepare_man_synopsis_spacing(node, source);
-        // The container callback returns child execution to this same driver.
-        if self.push_container(node) || self.consume_control_or_empty_block(node) {
-            return;
-        }
-        if self.push_no_fill_synopsis(node) {
-            return;
-        }
-        let structural_targets = targets::structural_targets(node);
-        if self.push_executed_spacing(node) {
-            self.state
-                .queue_targets(structural_targets, source_span(node));
-            return;
-        }
-        // A retained Pp executes term_vspace even when native no-fill flags
-        // would otherwise route it through inline-only word lowering.
-        if node.macro_name.as_deref() == Some("Pp") {
-            self.state.flush_preformatted();
-            let lines = self.state.resolve_vertical_space(1);
-            self.state.flush_paragraph_for_line_request();
-            self.state
-                .queue_targets(structural_targets, source_span(node));
-            // CVS termp_pp_pre() executes term_vspace() even for the first
-            // child of a compact Bd BODY. A detached display starts with an
-            // empty IR sink, but that does not cancel the authored request.
-            if self.paragraph_predecessor
-                || !self.state.output.is_empty()
-                || self.display_fill.is_some()
-            {
-                self.state.output.push(Block::VerticalSpace {
-                    lines,
-                    source: source_span(node),
-                });
-            }
-            return;
-        }
-        let single_line_literal =
-            self.display_fill == Some(DisplayFillMode::SingleLine) && self.state.formatter.no_fill;
-        if self.push_no_fill_lines(node, next, source.line_entered, single_line_literal) {
-            self.state
-                .queue_targets(structural_targets, source_span(node));
-            return;
-        }
-        if node.macro_name.as_deref() == Some("Rs") {
-            self.push_bibliography(node);
-            return;
-        }
-        if matches!(node.macro_name.as_deref(), Some("UR" | "MT")) {
-            // man_term.c::print_man_node() observes this source line before
-            // pre_UR(), but pre_UR() itself does not close a formatter row.
-            // Keep the active literal sink and pending \c/\z for BODY text.
-            self.push_man_link(node);
-            return;
-        }
-        if matches!(node.macro_name.as_deref(), Some("PP" | "P" | "LP")) {
-            self.push_man_paragraph(node, source.predecessor);
-            return;
-        }
-        self.state.flush_preformatted();
-        if self.push_mdoc_synopsis_declaration(node, synopsis_previous) {
-            return;
-        }
-        if node.flags.delimiter_close
-            && participates_in_inline_flow(node)
-            && self.state.paragraph_is_empty()
-        {
-            let tail = lower_inline_nodes(std::slice::from_ref(node), self.context.default_name);
-            if append_to_last_inline_block(&mut self.state.output, &tail) {
-                return;
-            }
-        }
-        if node.macro_name.as_deref() == Some("br") {
-            self.state.hard_break();
-        } else if participates_in_inline_flow(node) {
-            self.push_inline_node(node, next);
-        } else {
-            self.state.flush_paragraph();
-            let output_start = self.state.output.len();
-            let spacing_enabled = self.state.spacing_enabled();
-            StructuralLowerer {
-                context: self.context,
-                indent_columns: if restores_macro_indent(node) {
-                    self.indent_columns.macro_origin()
-                } else {
-                    self.state.source_indent()
-                },
-                paragraph_distance: self.paragraph_distance,
-                output: &mut self.state.output,
-                paragraph_predecessor: self.paragraph_predecessor,
-                man_source_predecessor: source.predecessor,
-                definition_hanging_width: &mut self.definition_hanging_width,
-                man_list_state: &mut self.man_list_state,
-                ip_run,
-                spacing_enabled,
-                formatter: &mut self.state.formatter,
-            }
-            .push(node, table_embedding);
-            if restores_macro_indent(node) {
-                self.state
-                    .set_source_indent(self.indent_columns.macro_origin());
-            }
-            self.state
-                .queue_targets(structural_targets, source_span(node));
-            self.state.attach_pending_to_structural_output(output_start);
-        }
-    }
-
-    fn prepare_node_execution(&mut self, node: &Node) {
-        let formatter_control = super::controls::formatter_control(node.macro_name.as_deref());
-        if formatter_control.is_some_and(|control| control.boundary == FormatterBoundary::Line) {
-            // This is the actual request dispatch, after HEAD execution and
-            // before BODY output. The definition checkpoint records it once.
-            self.state.formatter.note_definition_boundary();
-        }
-        let single_line_literal =
-            self.display_fill == Some(DisplayFillMode::SingleLine) && self.state.formatter.no_fill;
-        match no_fill_boundary(node, single_line_literal) {
-            FormatterBoundary::None => {}
-            FormatterBoundary::Line => {
-                self.state.formatter.clear_trailing_literal_row();
-                self.settle_no_fill_inline();
-                if formatter_control.is_some() && self.state.formatter.no_fill {
-                    // roff_term_pre_br()/term_newln() end the literal owner's
-                    // row even after \c; the request's handler may still
-                    // apply geometry or spacing afterward.
-                    self.state.end_literal_execution_line();
-                }
-                if formatter_control.is_some_and(|control| {
-                    !control.specialized
-                        || control.settle_before_handler && !self.state.formatter.no_fill
-                }) {
-                    // The request's native term_newln() precedes its other
-                    // effects. Close the shared execution row here even when
-                    // a later handler owns payload or geometry (notably ce,
-                    // rj, and in); otherwise a pending \z reaches BODY text.
-                    self.state.hard_break();
-                }
-            }
-            FormatterBoundary::NoBreak => {
-                if self.state.has_formatter_cell()
-                    || self
-                        .state
-                        .formatter
-                        .no_fill_inline
-                        .has_pending_formatter_cell(&self.state.formatter.execution)
-                {
-                    let nodes = self
-                        .state
-                        .formatter
-                        .no_fill_inline
-                        .take_no_break_cell(&mut self.state.formatter.execution);
-                    self.state.no_break_formatter_flush(nodes);
-                }
-            }
-        }
-        if node.macro_name.as_deref() == Some("SY") {
-            // man_term.c::print_man_node() replaces the active slot when SY
-            // BLOCK enters; it does not clear the font stack or fontlast.
-            self.state.formatter.font.man_text_boundary();
-        } else if matches!(
-            node.macro_name.as_deref(),
-            Some("PP" | "P" | "LP" | "HP" | "IP" | "TP" | "TQ" | "RS")
-        ) {
-            // This is the BLOCK pre transition, not a fresh font stack.
-            // print_man_node() preserves the independent previous register.
-            self.state.formatter.font.man_text_boundary();
-        }
-    }
-
-    fn enter_no_fill_source_line(&mut self, node: &Node) -> bool {
-        if !self.state.formatter.no_fill || !node.flags.no_fill || !node.flags.line_start {
-            return false;
-        }
-        self.resume_no_fill_row();
-        if !self.state.formatter.no_fill_inline.continues_source_line() {
-            self.settle_no_fill_inline();
-            self.state.begin_no_fill_source_line();
-        }
-        true
-    }
-
     fn settle_no_fill_inline(&mut self) {
         let nodes = self
             .state
@@ -669,7 +267,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
 /// `roff_node_prev()` skips comments, `NODE_NOPRT`, and roff tokens without
 /// rendered structure. Keep paragraph predecessor facts tied to that source
 /// traversal rather than to IR blocks or raw child indices.
-fn is_native_transparent_sibling(node: &Node) -> bool {
+pub(super) fn is_native_transparent_sibling(node: &Node) -> bool {
     node.kind == NodeKind::Comment
         || node.flags.no_print
         || matches!(
@@ -691,73 +289,9 @@ fn is_native_transparent_sibling(node: &Node) -> bool {
         )
 }
 
-fn is_reference_field(node: &Node) -> bool {
-    matches!(
-        node.macro_name.as_deref(),
-        Some(
-            "%A" | "%B"
-                | "%C"
-                | "%D"
-                | "%I"
-                | "%J"
-                | "%N"
-                | "%O"
-                | "%P"
-                | "%Q"
-                | "%R"
-                | "%T"
-                | "%U"
-                | "%V"
-        )
-    )
-}
-
-/// `roff.c::roff_node_prev()/next()` skip comments, NOPRT nodes and the
-/// formatter's transparent requests before bibliography pre/post handlers
-/// inspect neighboring fields.
-fn next_reference_sibling(nodes: &[Node], index: usize) -> Option<usize> {
-    ((index + 1)..nodes.len()).find(|&next| super::adjacency::is_logical_sibling(&nodes[next]))
-}
-
-fn previous_reference_sibling(nodes: &[Node], index: usize) -> Option<usize> {
-    (0..index)
-        .rev()
-        .find(|&previous| super::adjacency::is_logical_sibling(&nodes[previous]))
-}
-
-/// CVS `mdoc_term.c::termp__a_pre()` adds `and` before the final author.
-fn reference_author_conjunction(nodes: &[Node], index: usize) -> bool {
-    nodes[index].macro_name.as_deref() == Some("%A")
-        && previous_reference_sibling(nodes, index)
-            .is_some_and(|previous| nodes[previous].macro_name.as_deref() == Some("%A"))
-        && next_reference_sibling(nodes, index)
-            .is_none_or(|next| nodes[next].macro_name.as_deref() != Some("%A"))
-}
-
-/// CVS `mdoc_term.c::termp____post()` omits the first comma for exactly two
-/// adjacent authors, then uses a period only after the final Rs field.
-fn reference_field_post(nodes: &[Node], index: usize) -> Option<&'static str> {
-    let node = &nodes[index];
-    if !is_reference_field(node) {
-        return None;
-    }
-    let next = next_reference_sibling(nodes, index);
-    if node.macro_name.as_deref() == Some("%A")
-        && next.is_some_and(|next| nodes[next].macro_name.as_deref() == Some("%A"))
-        && next
-            .and_then(|next| next_reference_sibling(nodes, next))
-            .is_none_or(|after| nodes[after].macro_name.as_deref() != Some("%A"))
-        && previous_reference_sibling(nodes, index)
-            .is_none_or(|previous| nodes[previous].macro_name.as_deref() != Some("%A"))
-    {
-        return None;
-    }
-    Some(if next.is_none() { "." } else { "," })
-}
-
 /// These man macros explicitly assign the formatter's macro base. Passive
 /// structures such as tables and equations inherit the current `.in` position.
-fn restores_macro_indent(node: &Node) -> bool {
+pub(super) fn restores_macro_indent(node: &Node) -> bool {
     matches!(
         node.macro_name.as_deref(),
         Some("PP" | "P" | "LP" | "HP" | "TP" | "TQ" | "IP" | "RS" | "SY")

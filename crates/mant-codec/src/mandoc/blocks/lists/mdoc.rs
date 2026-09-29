@@ -3,8 +3,8 @@
 use super::{
     AstTableAlignment, AstTableCell, Block, DefinitionFlow, DefinitionHeadFlow, DefinitionItem,
     DefinitionListStyle, Inline, ListItem, ListKind, LoweringContext, Node, NodeKind,
-    NormalizedListKind, RunInHeadStyle, TableRow, definition_item, first_part_children, layout,
-    lower_blocks_with_body_post_row_end, ordinal_sequence, part_child_groups, source_span, targets,
+    NormalizedListKind, RunInHeadStyle, ScopeFlow, TableRow, definition_item, first_part_children,
+    layout, lower_scope, ordinal_sequence, part_child_groups, source_span, targets,
 };
 
 pub(in crate::mandoc::blocks) fn lower_mdoc_list(
@@ -154,14 +154,21 @@ fn lower_mdoc_plain_list(
                     formatter.spacing_enabled(),
                     formatter,
                 );
-                let mut blocks = lower_blocks_with_body_post_row_end(
+                let spacing_enabled = formatter.spacing_enabled();
+                let mut blocks = lower_scope(
                     first_part_children(item.node, NodeKind::Body),
                     context,
-                    body_origin,
                     paragraph_distance,
-                    formatter.spacing_enabled(),
-                    item_body_predecessor(kind == ListKind::Plain, index, paragraph_predecessor),
                     formatter,
+                    ScopeFlow::body_post_row_end(
+                        body_origin,
+                        spacing_enabled,
+                        item_body_predecessor(
+                            kind == ListKind::Plain,
+                            index,
+                            paragraph_predecessor,
+                        ),
+                    ),
                 );
                 attach_item_targets(&mut blocks, &item, layout(body_origin));
                 mant_ir::geometry::rebase_roots(&mut blocks, body_columns, marker_width);
@@ -301,23 +308,32 @@ fn lower_mdoc_definition_item(
                 Some(DefinitionListStyle::Inset) => DefinitionHeadFlow::RunIn {
                     cells: u8::from(!head.is_empty()),
                     style: RunInHeadStyle::Plain,
+                    // mdoc_term.c:795-797: inset sets no pad/break flags.
+                    flags: crate::mandoc::inline::FieldFlags::inset(),
                 },
                 Some(DefinitionListStyle::Diagnostic) => DefinitionHeadFlow::RunIn {
                     cells: 2,
                     style: RunInHeadStyle::Strong,
+                    // mdoc_term.c:827-831: NOBREAK|BRIND, no HANG.
+                    flags: crate::mandoc::inline::FieldFlags::diag(),
                 },
                 Some(DefinitionListStyle::Tag) => DefinitionHeadFlow::Detached {
                     author_break_effect: crate::mandoc::inline::AuthorBreakEffect::Field {
                         gap_cells: 2,
                         body_width_columns: geometry.body_columns(),
-                        wraps: true,
+                        // mdoc_term.c:805-814: NOBREAK|BRTRSP|BRIND, plus
+                        // HANG exactly when the item has no BODY.
+                        flags: crate::mandoc::inline::FieldFlags::tag(
+                            first_part_children(item.node, NodeKind::Body).is_empty(),
+                        ),
                     },
                 },
                 Some(DefinitionListStyle::Hang) => DefinitionHeadFlow::Detached {
                     author_break_effect: crate::mandoc::inline::AuthorBreakEffect::Field {
                         gap_cells: 1,
                         body_width_columns: geometry.body_columns(),
-                        wraps: false,
+                        // mdoc_term.c:800-804: NOBREAK|BRIND|HANG.
+                        flags: crate::mandoc::inline::FieldFlags::hang(),
                     },
                 },
                 _ => DefinitionHeadFlow::Detached {
@@ -490,20 +506,25 @@ fn lower_mdoc_column_list(
                 formatter,
             );
             let mut cells = part_child_groups(item.node, NodeKind::Body)
-                .map(|body| AstTableCell {
-                    kind: mant_ir::TableCellKind::Text,
-                    blocks: lower_blocks_with_body_post_row_end(
-                        body,
-                        context,
-                        cell_indent.content_origin(),
-                        paragraph_distance,
-                        formatter.spacing_enabled(),
-                        item_body_predecessor(false, 0, false),
-                        formatter,
-                    ),
-                    column_span: 1,
-                    row_span: 1,
-                    alignment: Some(AstTableAlignment::Left),
+                .map(|body| {
+                    let spacing_enabled = formatter.spacing_enabled();
+                    AstTableCell {
+                        kind: mant_ir::TableCellKind::Text,
+                        blocks: lower_scope(
+                            body,
+                            context,
+                            paragraph_distance,
+                            formatter,
+                            ScopeFlow::body_post_row_end(
+                                cell_indent.content_origin(),
+                                spacing_enabled,
+                                item_body_predecessor(false, 0, false),
+                            ),
+                        ),
+                        column_span: 1,
+                        row_span: 1,
+                        alignment: Some(AstTableAlignment::Left),
+                    }
                 })
                 .collect::<Vec<_>>();
             if let Some(cell) = cells.first_mut() {

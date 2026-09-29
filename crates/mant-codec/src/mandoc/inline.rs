@@ -14,8 +14,8 @@ pub(super) use links::append_man_link;
 mod scopes;
 mod source_fragment;
 pub(in crate::mandoc) use flow::{
-    AuthorBreakEffect, InlineExecutionState, NoFillInlineState, PreservedInlineState,
-    lower_no_fill_fragment_with_formatter,
+    AuthorBreakEffect, FieldFlag, FieldFlags, InlineExecutionState, NoFillInlineState,
+    PreservedInlineState, lower_no_fill_fragment_with_formatter,
 };
 pub(super) use flow::{FilledBoundary, FontScope, FontState, InlineBuilder};
 mod source;
@@ -432,6 +432,7 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
         &mut builder.execution.zero_advance,
         pending_word_end_break && !deferred_hang_break,
     );
+    builder.ensure_definition_field_session();
     if let Some(prefix) = execution.break_before_graph_prefix
         && builder.in_definition_field()
     {
