@@ -316,6 +316,10 @@ impl FormatterState {
         // an explicit .br. Do not export IR from a HANG field for which
         // term_fill() never produced a printable device slice.
         builder.discard_unprinted_definition_field_output();
+        // The item post's flush prints a still-buffered jump word only
+        // after the element restore zeroed the offset (mdoc_term.c:437-
+        // 439): its fill collapses.
+        builder.retract_head_close_jump();
         builder.settle_provisional_definition_break();
         let definition_field_exited = builder.definition_field_exited();
         // An armed request NOSPACE (`roff_term.c:78`) already owns the

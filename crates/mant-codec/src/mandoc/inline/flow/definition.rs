@@ -13,6 +13,90 @@ use super::{
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(super) struct DefinitionOutcome(u8);
 
+/// Row geometry a control request left behind in a definition head.
+///
+/// Upstream, the request's `roff_term_pre_br()` moves the device row
+/// origin (`offset <- rmargin`, roff_term.c:73-75) and the roff node
+/// escapes the document save/restore (mdoc_term.c:393-397), so the
+/// geometry lives until the next document node boundary restores the
+/// authored values (mdoc_term.c:329-330, 437-439). A HANG row stays open
+/// through the request (`roff_term.c:76`), so the next word prints
+/// through `vbl = offset - viscol` (term.c:113-114) - a horizontal jump -
+/// and upstream defers that word's flush until either a later input-row
+/// event prints it (the jump stands) or the head close does, after the
+/// restore (the jump collapses). This machine models that lifetime
+/// instead of scanning output nodes after the fact.
+#[derive(Clone, Debug, Default)]
+pub(super) struct HeadRowState {
+    /// Indent (columns relative to the field origin) the row a break
+    /// starts carries - the tag path's row origin after the request.
+    pub(super) indent_columns: u16,
+    /// Row offset (`rmargin` relative to the field origin) a request
+    /// armed for the open HANG row: the fill at print time is
+    /// `offset - viscol` (term.c:113-114), computed when the carrying
+    /// word emits, because viscol keeps advancing until then.
+    armed_offset_columns: u16,
+    /// An emitted jump awaiting its word's print timing.
+    pending: Option<PendingRowJump>,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct PendingRowJump {
+    /// Node index of the emitted fill text.
+    node: usize,
+    /// The word carrying the fill finished appending.
+    word_closed: bool,
+}
+
+impl HeadRowState {
+    /// Arm the request-moved row offset for the next word on the open
+    /// row.
+    pub(super) fn arm_jump(&mut self, offset_columns: u16) {
+        self.armed_offset_columns = offset_columns;
+    }
+
+    /// Emit the armed jump as `offset - viscol` fill at `node`, carried
+    /// by the word currently appending.
+    pub(super) fn emit_armed(&mut self, node: usize, viscol: u16) -> u16 {
+        let columns = self.armed_offset_columns.saturating_sub(viscol);
+        self.armed_offset_columns = 0;
+        if columns > 0 {
+            self.pending = Some(PendingRowJump {
+                node,
+                word_closed: false,
+            });
+        }
+        columns
+    }
+
+    /// The word carrying an emitted jump finished appending.
+    pub(super) fn close_word(&mut self) {
+        if let Some(pending) = &mut self.pending {
+            pending.word_closed = true;
+        }
+    }
+
+    /// A later word arrived inside the head: upstream's `term_newln()`
+    /// flush prints the carrying word before the restore, so the jump
+    /// stands. Returns the fill to keep.
+    pub(super) fn commit_on_later_word(&mut self) {
+        if self
+            .pending
+            .as_ref()
+            .is_some_and(|pending| pending.word_closed)
+        {
+            self.pending = None;
+        }
+    }
+
+    /// The head closed with a jump still uncommitted: upstream prints the
+    /// buffered word only after the restore zeroed the offset, so the
+    /// jump collapses. Returns the node whose fill retracts.
+    pub(super) fn retract_on_head_close(&mut self) -> Option<usize> {
+        self.pending.take().map(|pending| pending.node)
+    }
+}
+
 // The booleans are independent native registers (fed flags and latch
 // carries), not alternative states of one machine.
 #[allow(clippy::struct_excessive_bools)]
@@ -38,22 +122,10 @@ pub(super) struct DefinitionFieldState {
     /// `term_fill()` targets `vfield` instead of the page margin
     /// (term.c:134-136): head words wrap at the field's own width.
     pub(super) no_break_cleared: bool,
-    /// Row indent (columns relative to the field origin) a fill-mode
-    /// boundary left behind: the request's BRIND moved the upstream offset
-    /// to the field's right margin and the roff node escapes the save/
-    /// restore (roff_term.c:73-75; mdoc_term.c:393-397), so the row the
-    /// next break starts carries it until a document node boundary
-    /// restores the authored geometry (mdoc_term.c:329-330, 437-439).
-    pub(super) row_indent_columns: u16,
-    /// Horizontal jump (columns) the next word takes on the open HANG row:
-    /// the request's `vbl = offset - viscol` fill (term.c:113-114 with
-    /// 223-230; the row stays open because HANG survives the request,
-    /// `roff_term.c:76`). Consumed by the word's append before its boundary.
-    pub(super) pending_jump_spaces: usize,
-    /// Node index of the emitted jump fill and the node count once the
-    /// word carrying it finished, for the retraction below.
-    pub(super) pending_jump_node: Option<usize>,
-    pub(super) pending_jump_word_end: Option<usize>,
+    /// Row geometry a control request left behind: the indent a break's
+    /// row carries and the jump a word emits onto the open HANG row, with
+    /// the print-deferral lifetime upstream gives them.
+    pub(super) row: HeadRowState,
     /// The head field's content capacity `rmargin - offset`, latched for
     /// `no_break_cleared` sessions: the request that cleared NOBREAK may
     /// also degrade the author effect to `Line`, but the remaining head
@@ -684,20 +756,19 @@ impl InlineBuilder {
             definition.field_buffer.clear();
             definition.field_word_anchors.clear();
             definition.pending_glyph_fed = false;
-            // Retract a jump fill whose word never got a follow-up row
-            // event inside the head: upstream prints that word only after
-            // the head close restored the offset (mdoc_term.c:437-439), so
-            // its `vbl` is zero and the jump must not stand.
-            if let Some(jump_node) = definition.pending_jump_node.take() {
-                definition.pending_jump_word_end = None;
-                let follow_up_word = self.nodes[jump_node + 1..]
-                    .iter()
-                    .any(|node| mant_ir::has_printable_character(std::slice::from_ref(node)));
-                if !follow_up_word
+            // A mid-field flush is a row event (upstream's `term_newln`
+            // printing the buffered word before the restore,
+            // mdoc_term.c:1084-1085): the jump stands. Only the field's
+            // final flush - past the restore (mdoc_term.c:437-439) -
+            // collapses it.
+            if exit_field {
+                if let Some(jump_node) = definition.row.retract_on_head_close()
                     && let Some(Inline::Text { value }) = self.nodes.get_mut(jump_node)
                 {
                     value.clear();
                 }
+            } else {
+                definition.row.commit_on_later_word();
             }
         }
         overruns
@@ -759,6 +830,14 @@ impl InlineBuilder {
     /// (term.c:250-253 with 205-207): the body's first word concatenates.
     pub(in crate::mandoc) fn cleared_field_filled_capacity(&self) -> bool {
         self.execution.definition.as_ref().is_some_and(|state| {
+            // roff.c::post_hyph() marks a source hyphen ASCII_HYPH and
+            // term.c::term_fill() may wrap after it; a discretionary break
+            // in the final field leaves the same soft-wrap uncertainty as
+            // `\:` (term.c:287-300 shares the arm), so the filled rule
+            // cannot prove the body column.
+            if state.hang_row.field_discretionary_break {
+                return false;
+            }
             let capacity = usize::from(state.cleared_field_capacity_columns);
             if !state.no_break_cleared || capacity == 0 {
                 return false;
@@ -1316,20 +1395,18 @@ impl InlineBuilder {
             let width = mant_ir::geometry::text_width(&super::super::plain_text(field));
             if flags.contains(FieldFlag::Hang) {
                 // HANG kept the row open through the boundary
-                // (roff_term.c:76): the following word jumps to the
-                // field's right margin via `vbl = offset - viscol`
-                // (term.c:113-114), not through a break.
-                let used = self
-                    .execution
-                    .definition
-                    .as_ref()
-                    .map_or(0, |state| state.hang_row.viscol);
-                let jump = usize::from(field_width_columns).saturating_sub(used.max(width));
-                if jump > 0 {
-                    self.definition_state_mut().pending_jump_spaces = jump;
-                }
+                // (roff_term.c:76): the following word aligns through
+                // `vbl = offset - viscol` at its print (term.c:113-114).
+                // Upstream has no `body - width` fixed padding on this
+                // row — a deferred print past the element restore zeroes
+                // the offset (mdoc_term.c:437-439) and the fill collapses,
+                // which the armed-offset state machine carries.
+                self.definition_state_mut()
+                    .row
+                    .arm_jump(field_width_columns);
+            } else {
+                self.append_fixed_cells(usize::from(body).saturating_sub(width));
             }
-            self.append_fixed_cells(usize::from(body).saturating_sub(width));
         }
         self.execution
             .definition
@@ -1927,7 +2004,7 @@ impl InlineBuilder {
                 // to the field's right margin; the `.br` family already
                 // materializes it through the pending-indent arm below.
                 if row_indent > 0 {
-                    self.definition_state_mut().row_indent_columns = row_indent;
+                    self.definition_state_mut().row.indent_columns = row_indent;
                 }
                 self.force_output_line_break();
                 if !resumed_visible {
@@ -1960,8 +2037,7 @@ impl InlineBuilder {
                     // jumps to the field's right margin through the same
                     // `vbl = offset - viscol` fill (term.c:113-114).
                     let state = self.definition_state_mut();
-                    let used = state.hang_row.viscol;
-                    state.pending_jump_spaces = (usize::from(row_indent)).saturating_sub(used);
+                    state.row.arm_jump(row_indent);
                 } else if !resumed_visible {
                     self.definition_state_mut().pending_indent =
                         Some(field.body_width.saturating_sub(field.field_width).max(1));
@@ -2012,6 +2088,18 @@ impl InlineBuilder {
         self.execution.final_word_join = Some(false);
     }
 
+    /// Collapse a jump still uncommitted at the item post: the element
+    /// restore already zeroed the offset (mdoc_term.c:437-439), so the
+    /// buffered word prints with `vbl = 0`.
+    pub(in crate::mandoc) fn retract_head_close_jump(&mut self) {
+        if let Some(definition) = &mut self.execution.definition
+            && let Some(jump_node) = definition.row.retract_on_head_close()
+            && let Some(Inline::Text { value }) = self.nodes.get_mut(jump_node)
+        {
+            value.clear();
+        }
+    }
+
     /// Take the row indent a fill-mode boundary left behind. The indent
     /// lives for one row break: the document node boundary upstream
     /// restores the authored geometry (mdoc_term.c:329-330, 437-439).
@@ -2019,7 +2107,7 @@ impl InlineBuilder {
         let Some(definition) = &mut self.execution.definition else {
             return 0;
         };
-        std::mem::replace(&mut definition.row_indent_columns, 0)
+        std::mem::replace(&mut definition.row.indent_columns, 0)
     }
 
     fn force_output_line_break(&mut self) {

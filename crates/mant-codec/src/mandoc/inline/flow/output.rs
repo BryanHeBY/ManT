@@ -678,9 +678,12 @@ impl InlineBuilder {
         let fixed_blank_boundary = (incoming_starts_with_fixed_blank
             && incoming_first.is_some_and(char::is_whitespace))
             || self.execution.trailing_output == TrailingOutput::FixedBlank;
-        let jump_spaces = self.execution.definition.as_mut().map_or(0, |definition| {
-            std::mem::take(&mut definition.pending_jump_spaces)
-        });
+        // A later word committing an earlier jump's flush is a row event
+        // (term_newln before the restore, mdoc_term.c:1084-1085): commit
+        // any pending jump before this word emits its own.
+        if let Some(definition) = &mut self.execution.definition {
+            definition.row.commit_on_later_word();
+        }
         let concat_next_word = std::mem::take(&mut self.execution.concat_next_word);
         let concat_flush_source = std::mem::take(&mut self.execution.concat_flush_source);
         if concat_next_word {
@@ -696,15 +699,17 @@ impl InlineBuilder {
             trim_trailing_breakable_spaces(&mut self.nodes, usize::MAX);
             self.execution.last_visible_character = last_visible_character(&self.nodes);
         }
-        if jump_spaces > 0 {
+        if let Some(definition) = &mut self.execution.definition {
             // Emit after the NOSPACE arm's trims: the jump fill is the
             // upstream `vbl` pad (term.c:113-114), not a breakable blank.
-            self.nodes.push(Inline::Text {
-                value: " ".repeat(jump_spaces),
-            });
-            if let Some(definition) = &mut self.execution.definition {
-                definition.pending_jump_node = Some(self.nodes.len() - 1);
-                definition.pending_jump_word_end = Some(self.nodes.len());
+            // The amount is `offset - viscol` at print time, exactly as
+            // upstream computes it when the carrying word flushes.
+            let viscol = u16::try_from(definition.hang_row.viscol).unwrap_or(u16::MAX);
+            let fill = definition.row.emit_armed(self.nodes.len(), viscol);
+            if fill > 0 {
+                self.nodes.push(Inline::Text {
+                    value: " ".repeat(usize::from(fill)),
+                });
             }
         }
         let add_space = if concat_next_word {
@@ -754,6 +759,9 @@ impl InlineBuilder {
         match split_word {
             Some(split) => self.nodes.extend(split),
             None => self.nodes.append(incoming),
+        }
+        if let Some(definition) = &mut self.execution.definition {
+            definition.row.close_word();
         }
         if let Some(prefix) = accepted_word_prefix
             && let Some(author) = &mut self.execution.author_execution

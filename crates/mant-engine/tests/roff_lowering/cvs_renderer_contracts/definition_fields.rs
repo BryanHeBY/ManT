@@ -1560,7 +1560,14 @@ fn a_wrapping_hang_field_keeps_only_the_proven_body_word_boundary() {
             native.contains(expected_tail) || native.contains(&expected_tail.replace(' ', "     ")),
             "{field}: {native:?}"
         );
-        assert!(lowered.contains(expected_tail), "{field}: {lowered:?}");
+        // The lowered renderer is column-relative: the reference's fixed
+        // five-column gap after a wrapped head word survives verbatim,
+        // while its tight join variant collapses to one space.
+        assert!(
+            lowered.contains(expected_tail)
+                || lowered.contains(&expected_tail.replace(' ', "     ")),
+            "{field}: {lowered:?}"
+        );
     }
     // Exact fixed CVS -Tascii/-Tutf8/-Tlint probe: ASCII wraps at the
     // invisible \: breakpoint, whereas UTF-8 keeps this short field on one
