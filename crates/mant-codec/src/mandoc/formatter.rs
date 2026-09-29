@@ -10,6 +10,7 @@ pub(super) struct FinishedInlineLine {
     pub(super) definition_term_breaks: Vec<usize>,
     pub(super) definition_field_exited: bool,
     pub(super) definition_body_gap_consumed: bool,
+    pub(super) definition_author_restarted: bool,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -322,6 +323,7 @@ impl FormatterState {
         builder.retract_head_close_jump();
         builder.settle_provisional_definition_break();
         let definition_field_exited = builder.definition_field_exited();
+        let definition_author_restarted = builder.definition_author_restarted();
         // An armed request NOSPACE (`roff_term.c:78`) already owns the
         // word join; the filled-field rule would misclassify its row.
         if !definition_field_exited
@@ -344,6 +346,7 @@ impl FormatterState {
             definition_term_breaks,
             definition_field_exited,
             definition_body_gap_consumed,
+            definition_author_restarted,
         }
     }
 

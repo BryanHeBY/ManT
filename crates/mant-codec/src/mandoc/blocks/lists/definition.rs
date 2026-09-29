@@ -121,6 +121,7 @@ pub(super) fn definition_item(
         run_in_execution,
         definition_field_exited,
         definition_body_gap_consumed,
+        author_restarted,
         term_breaks,
     ) = lower_definition_head(head, &displaced_equations, context, flow, formatter);
     // TERMP_NONEWLINE survives the HEAD output drain. It is the execution
@@ -183,7 +184,7 @@ pub(super) fn definition_item(
     // term_newln() mid-HEAD (NODE_LINE); that flush prints its prefix, and
     // a field without NOBREAK or HANG (inset) closes the row before BODY.
     let closed_head_row = take_closed_head_row(&mut terms)
-        || marker_split_field_exited(flow.head, &terms)
+        || (marker_split_field_exited(flow.head, &terms) && !author_restarted)
         || empty_text_closes_run_in;
     if closed_head_row {
         // The last explicit HEAD break becomes the term/BODY separation.
@@ -384,6 +385,12 @@ fn marker_split_field_exited(head: DefinitionHeadFlow, terms: &[Vec<Inline>]) ->
     let Some(term) = terms.last() else {
         return false;
     };
+    let no_hang = match head {
+        DefinitionHeadFlow::Detached {
+            author_break_effect: crate::mandoc::inline::AuthorBreakEffect::Field { flags, .. },
+        } => !flags.contains(crate::mandoc::inline::FieldFlag::Hang),
+        _ => return false,
+    };
     let split_between_words = term.iter().enumerate().any(|(index, node)| {
         matches!(node, Inline::LineBreak { .. })
             && term[..index]
@@ -393,13 +400,7 @@ fn marker_split_field_exited(head: DefinitionHeadFlow, terms: &[Vec<Inline>]) ->
                 .iter()
                 .any(|after| mant_ir::has_printable_character(std::slice::from_ref(after)))
     });
-    split_between_words
-        && matches!(
-            head,
-            DefinitionHeadFlow::Detached {
-                author_break_effect: crate::mandoc::inline::AuthorBreakEffect::Field { flags, .. },
-            } if !flags.contains(crate::mandoc::inline::FieldFlag::Hang)
-        )
+    split_between_words && no_hang
 }
 
 fn invisible_closed_head_row(terms: &[Vec<Inline>]) -> bool {
@@ -436,7 +437,14 @@ fn lower_definition_head(
     context: &LoweringContext<'_>,
     flow: DefinitionFlow,
     formatter: &mut crate::mandoc::formatter::FormatterState,
-) -> (Vec<Inline>, Option<RunInExecution>, bool, bool, Vec<usize>) {
+) -> (
+    Vec<Inline>,
+    Option<RunInExecution>,
+    bool,
+    bool,
+    bool,
+    Vec<usize>,
+) {
     let groups = std::iter::once(head).chain(
         displaced_equations
             .iter()
@@ -491,6 +499,7 @@ fn lower_definition_head(
             }),
             false,
             false,
+            false,
             term_breaks,
         );
     }
@@ -498,9 +507,10 @@ fn lower_definition_head(
     let mut term_builder = InlineBuilder::with_spacing(flow.spacing_enabled);
     let mut definition_field_exited = false;
     let mut definition_body_gap_consumed = false;
+    let mut definition_author_restarted = false;
     let mut term_breaks = Vec::new();
     for (index, group) in groups.enumerate() {
-        let (lowered, field_exited, body_gap_consumed, breaks) = context
+        let (lowered, field_exited, body_gap_consumed, author_restarted, breaks) = context
             .lower_inline_with_author_break_preserving_rows(
                 group,
                 flow.spacing_enabled,
@@ -515,12 +525,14 @@ fn lower_definition_head(
         term_builder.append(lowered);
         definition_field_exited |= field_exited;
         definition_body_gap_consumed |= body_gap_consumed;
+        definition_author_restarted |= author_restarted;
     }
     (
         term_builder.finish_preserving_rows(),
         None,
         definition_field_exited,
         definition_body_gap_consumed,
+        definition_author_restarted,
         term_breaks,
     )
 }

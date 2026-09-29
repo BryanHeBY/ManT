@@ -1089,6 +1089,32 @@ fn colon_breakpoint_wraps_the_head_row_like_the_reference() {
 }
 
 #[test]
+fn author_split_restarts_an_overrun_tag_field() {
+    // Fixed CVS -Tascii: an author split that overruns the tag field ends
+    // its row (term.c:250-253 through mdoc_term.c:1084-1085), but the
+    // field restarts — NOBREAK and BRIND survive until the item post — so
+    // the next author word is the restarted field's first word and BODY
+    // shares ITS row (`LONGTEXT A` / `Bob     BODY`), not a fresh block.
+    let item = review_definition_item(
+        ".Bl -tag -width 6n\n.It Xo\n.No LONGTEXT\n.No A\n.An -split\n.An Bob\n.Xc\n.No BODY\n.El\n",
+    );
+    assert_eq!(
+        item.layout.head_body_relation,
+        HeadBodyRelation::RunIn,
+        "{item:#?}"
+    );
+    let rows = item
+        .terms
+        .last()
+        .map(|term| {
+            term.split(|node| matches!(node, Inline::LineBreak { .. }))
+                .count()
+        })
+        .unwrap_or_default();
+    assert_eq!(rows, 2, "{item:#?}");
+}
+
+#[test]
 fn head_body_relation_classifies_shared_rows() {
     // Expectations classify rows the fixed CVS reference printed for the
     // oracle matrix families (`/tmp/fix/oramatrix` c/f/m rows):

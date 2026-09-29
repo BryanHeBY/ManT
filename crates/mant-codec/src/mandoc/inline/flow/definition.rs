@@ -377,6 +377,18 @@ impl InlineBuilder {
 impl DefinitionOutcome {
     const FIELD_EXITED: u8 = 1;
     const BODY_GAP_CONSUMED: u8 = 2;
+    const AUTHOR_RESTARTED: u8 = 4;
+
+    /// An author-split row end that restarts the field: the next author
+    /// word is the restarted field's first word, so the head did not exit
+    /// (mdoc_term.c:1084-1085 keeps NOBREAK and BRIND until the item post).
+    pub(super) fn mark_field_restarted(&mut self) {
+        self.0 |= Self::AUTHOR_RESTARTED;
+    }
+
+    pub(super) fn is_field_restarted(self) -> bool {
+        self.0 & Self::AUTHOR_RESTARTED != 0
+    }
 
     pub(super) fn mark_field_exited(&mut self) {
         self.0 |= Self::FIELD_EXITED;
@@ -869,6 +881,15 @@ impl InlineBuilder {
             }
             last_width > capacity || (last_width == capacity && final_pass_started_at_boundary)
         })
+    }
+
+    /// Whether an author-split row end restarted the head field (its
+    /// breaks do not close the head before BODY).
+    pub(in crate::mandoc) fn definition_author_restarted(&self) -> bool {
+        self.execution
+            .definition
+            .as_ref()
+            .is_some_and(|state| state.outcome.is_field_restarted())
     }
 
     pub(in crate::mandoc) fn definition_field_exited(&self) -> bool {

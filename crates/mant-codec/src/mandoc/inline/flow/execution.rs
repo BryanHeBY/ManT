@@ -148,6 +148,9 @@ impl InlineBuilder {
                 let continues = super::native_field::row_continues(flags, field_width, vfield);
                 if field_showed_content && !continues {
                     self.force_output_line_break();
+                    if let Some(definition) = &mut self.execution.definition {
+                        definition.outcome.mark_field_restarted();
+                    }
                 }
                 if !flags.wraps()
                     && let Some(definition) = &mut self.execution.definition
