@@ -1,8 +1,8 @@
 //! List markers, definition heads, and their shared content/anchor ownership.
 use super::super::inline::{shifted_reference_marks, spans_scalars};
 use super::super::{
-    Block, ListKind, LogicalLine, Span, Style, StyledInlineLine, inline_anchor_rows, shifted_links,
-    spans_width, theme,
+    Block, ListKind, LogicalLine, Span, Style, StyledInlineLine, WrapMode, inline_anchor_rows,
+    shifted_links, spans_width, theme,
 };
 use super::DocumentBuilder;
 use mant_ir::geometry::{compose_origin, coordinate, marker_run_in_gap, padding};
@@ -204,6 +204,15 @@ impl DocumentBuilder<'_> {
             ));
             let mut description_lines =
                 self.styled_inlines(children, Style::default().fg(theme::TEXT));
+            // A run-in literal keeps its authored spacing: the shared row and
+            // its continuations wrap as characters, never as words.
+            let literal_inline =
+                matches!(item.description.first(), Some(Block::Preformatted { .. }));
+            let wrap_mode = if literal_inline {
+                WrapMode::Character
+            } else {
+                WrapMode::Word
+            };
             let first = description_lines
                 .first_mut()
                 .map_or_else(StyledInlineLine::default, std::mem::take);
@@ -216,6 +225,7 @@ impl DocumentBuilder<'_> {
             term_spans.extend(first.spans);
             self.push(
                 LogicalLine::hanging(padding(indent), padding(continuation_indent), term_spans)
+                    .wrap_mode(wrap_mode)
                     .with_links(term_links)
                     .with_reference_marks(term_marks),
             );
@@ -226,6 +236,7 @@ impl DocumentBuilder<'_> {
                         padding(continuation_indent),
                         line.spans,
                     )
+                    .wrap_mode(wrap_mode)
                     .with_links(line.links)
                     .with_reference_marks(line.reference_marks),
                 );
