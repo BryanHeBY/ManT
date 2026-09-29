@@ -28,3 +28,14 @@ __pycache__/
 # Cargo workspace output. Cargo.lock remains tracked for reproducible builds.
 target/
 fuzz/target/
+
+# Vendor CVS source is pinned read-only; in-tree reference builds are debris
+# (gdb probes must build in a scratch copy, never in the vendor tree).
+crates/libmandoc-rs/vendor/**/*.o
+crates/libmandoc-rs/vendor/**/*.d
+crates/libmandoc-rs/vendor/**/config.h
+crates/libmandoc-rs/vendor/**/config.sed
+crates/libmandoc-rs/vendor/**/Makefile.local
+crates/libmandoc-rs/vendor/**/*.edited
+crates/libmandoc-rs/vendor/**/mandoc
+crates/libmandoc-rs/vendor/**/demandoc
