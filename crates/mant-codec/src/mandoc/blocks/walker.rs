@@ -178,6 +178,14 @@ impl BlockLowerer<'_, '_> {
             self.state.hard_break();
         } else if participates_in_inline_flow(node) {
             self.push_inline_node(node, next);
+            // mdoc_term.c::termp_fd_post (1261-1265) ends the formatter row
+            // after `.Fd` in every section. Outside SYNOPSIS the declaration
+            // boundary machinery does not own that newline, so the inline
+            // flow must break here. `.Cd` has no post handler upstream
+            // (mdoc_term.c:142) and never breaks.
+            if node.macro_name.as_deref() == Some("Fd") && !node.flags.synopsis_pretty {
+                self.state.hard_break();
+            }
         } else {
             self.state.flush_paragraph();
             let output_start = self.state.output.len();

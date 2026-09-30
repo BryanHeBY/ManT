@@ -91,9 +91,13 @@ fn append_scope_children(builder: &mut InlineBuilder, node: &Node, name: Option<
             },
             coalesce_font_runs,
         ),
-        Some("Cm" | "Ic" | "Sy" | "Ms") => builder.with_font_scope(Font::Strong, |builder| {
-            append_inline_nodes(builder, children, name);
-        }),
+        // mdoc_term.c routes Cd and Fd through termp_fd_pre = termp_bold_pre
+        // (dispatch lines 142/149): unconditional Strong in every section.
+        Some("Cm" | "Ic" | "Sy" | "Ms" | "Cd" | "Fd") => {
+            builder.with_font_scope(Font::Strong, |builder| {
+                append_inline_nodes(builder, children, name);
+            })
+        }
         Some("Ar" | "Pa" | "Em" | "Va" | "Vt" | "Ft" | "Fa" | "Ad" | "Fr") => builder
             .with_font_scope(Font::Emphasis, |builder| {
                 append_inline_nodes(builder, children, name);
@@ -116,9 +120,15 @@ fn append_scope_children(builder: &mut InlineBuilder, node: &Node, name: Option<
             );
         }
         Some("Nd") => {
-            builder.append_text("— ");
+            // mdoc_term.c::termp_nd_pre() prints `\(en` (U+2013), not an em
+            // dash; the trailing blank is TERMP_SENTENCE spacing upstream.
+            builder.append_text(&format!("{} ", super::catalog_glyph("en")));
             append_inline_nodes(builder, children, name);
         }
+        // mdoc_html.c::mdoc__x_pre() enriches these fields with typed
+        // external targets while the visible terminal word is unchanged.
+        Some("%U") => super::links::append_reference_field_link(builder, children, name, false),
+        Some("%R") => super::links::append_reference_field_link(builder, children, name, true),
         Some("%T") if node.reference_quotes_title => append_quoted_title(builder, children, name),
         // mdoc_term.c maps these reference fields through termp_under_pre();
         // quoted %T takes the separate branch above when a journal is present.

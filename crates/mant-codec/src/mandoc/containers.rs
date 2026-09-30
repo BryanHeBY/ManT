@@ -569,8 +569,16 @@ fn resolved_enclosure_marks(node: &Node) -> Option<(Option<String>, Option<Strin
             if name == "En" {
                 Some((None, None))
             } else {
-                enclosure_marks(name)
-                    .map(|(opening, closing)| (Some(opening.to_owned()), Some(closing.to_owned())))
+                enclosure_marks(name).map(|(opening, closing)| {
+                    // mdoc_term.c::termp_quote_pre/post (1600-1603, 1658-1661)
+                    // print ASCII angle brackets when the enclosure's sole
+                    // child is an `.Mt`; every other child shape takes the
+                    // device glyph pair from the character catalog.
+                    if matches!(name, "Aq" | "Ao") && sole_mt_child(node) {
+                        return (Some("<".to_owned()), Some(">".to_owned()));
+                    }
+                    (Some(opening), Some(closing))
+                })
             }
         },
         |enclosure| {
@@ -583,6 +591,12 @@ fn resolved_enclosure_marks(node: &Node) -> Option<(Option<String>, Option<Strin
             ))
         },
     )
+}
+
+fn sole_mt_child(node: &Node) -> bool {
+    super::inline::inline_children(node)
+        .first()
+        .is_some_and(|child| child.macro_name.as_deref() == Some("Mt"))
 }
 
 fn emit_enclosure_post<'a>(close: Option<&str>, emit: &mut impl FnMut(Event<'a>)) {

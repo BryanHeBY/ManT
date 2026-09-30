@@ -378,7 +378,7 @@ fn preserves_mdoc_name_and_function_punctuation_by_context() {
     };
     assert_eq!(
         inline_text(name),
-        "function-punctuation — test generated punctuation"
+        "function-punctuation – test generated punctuation"
     );
 
     let synopsis = document.sections[1]
