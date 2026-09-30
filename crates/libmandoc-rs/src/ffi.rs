@@ -106,6 +106,8 @@ mod tests {
                 compact,
                 offset,
                 width,
+                cols,
+                ncols,
                 enclosure_open,
                 enclosure_close,
                 equation,
@@ -252,6 +254,23 @@ emphasis
         }
     }
 
+    #[test]
+    fn column_declarations_transfer_once_in_order_after_parser_release() {
+        let path = CString::new("column-owned.1").unwrap();
+        let source = b".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\n.Bl -column one \"\\(em\"\n.It A Ta B\n.El\n.Bl -item\n.It C\n.El\n";
+        let parsed = parse_buffer(&path, source, None, false, InputFormat::Auto, None).unwrap();
+        let mut pending = vec![&parsed.document.root];
+        let mut columns = Vec::new();
+        while let Some(node) = pending.pop() {
+            if !node.columns.is_empty() {
+                assert_eq!(node.kind, crate::NodeKind::Block);
+                columns.push(node.columns.clone());
+            }
+            pending.extend(&node.children);
+        }
+        assert_eq!(columns, [vec!["one".to_owned(), "\\(em".to_owned()]]);
+    }
+
     fn assert_owned_transfer(label: &str, source: &[u8]) {
         let path = CString::new(label).expect("fixture labels contain no NUL bytes");
         // `parse_buffer` destroys its private native parser handle before it
@@ -277,11 +296,7 @@ emphasis
             + node.tag.as_ref().map_or(0, String::len)
             + node.offset.as_ref().map_or(0, String::len)
             + node.width.as_ref().map_or(0, String::len)
-            + node
-                .columns
-                .iter()
-                .map(|column| column.len())
-                .sum::<usize>()
+            + node.columns.iter().map(String::len).sum::<usize>()
             + node
                 .equation
                 .as_ref()

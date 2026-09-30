@@ -1159,7 +1159,8 @@ snapshot_normalized_data(struct mant_mandoc_node_view *view,
 		view->compact = source->norm->Bl.comp;
 		view->offset = source->norm->Bl.offs;
 		view->width = source->norm->Bl.width;
-		if (source->norm->Bl.type == LIST_column) {
+		if (source->norm->Bl.type == LIST_column &&
+		    source->type == ROFFT_BLOCK) {
 			view->cols = source->norm->Bl.cols;
 			view->ncols = source->norm->Bl.ncols;
 		}
@@ -1358,6 +1359,8 @@ mant_mandoc_node_view_offsets(size_t *count)
 		offsetof(struct mant_mandoc_node_view, compact),
 		offsetof(struct mant_mandoc_node_view, offset),
 		offsetof(struct mant_mandoc_node_view, width),
+		offsetof(struct mant_mandoc_node_view, cols),
+		offsetof(struct mant_mandoc_node_view, ncols),
 		offsetof(struct mant_mandoc_node_view, enclosure_open),
 		offsetof(struct mant_mandoc_node_view, enclosure_close),
 		offsetof(struct mant_mandoc_node_view, equation),

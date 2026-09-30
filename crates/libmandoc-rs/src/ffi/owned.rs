@@ -641,15 +641,48 @@ unsafe fn copy_column_strings(
     count: usize,
     transfer_budget: &mut TransferBudget,
 ) -> Result<Vec<String>, String> {
-    let mut columns = Vec::new();
-    if pointer.is_null() {
-        return Ok(columns);
+    if count == 0 {
+        return Ok(Vec::new());
     }
+    if pointer.is_null() {
+        return Err("libmandoc returned null columns with a nonzero count".to_owned());
+    }
+    if !pointer.is_aligned() {
+        return Err("libmandoc returned misaligned column pointers".to_owned());
+    }
+    let pointer_bytes = count
+        .checked_mul(std::mem::size_of::<*const c_char>())
+        .filter(|bytes| *bytes <= usize::try_from(isize::MAX).unwrap_or(usize::MAX))
+        .ok_or_else(|| "libmandoc column pointer range overflowed".to_owned())?;
+    let owned_bytes = count
+        .checked_mul(std::mem::size_of::<String>())
+        .ok_or_else(|| "libmandoc column allocation overflowed".to_owned())?;
+    if count > MAX_OWNED_SYNTAX_ITEMS.saturating_sub(transfer_budget.items)
+        || owned_bytes > MAX_OWNED_SYNTAX_BYTES.saturating_sub(transfer_budget.bytes)
+        || pointer_bytes > MAX_OWNED_SYNTAX_BYTES
+    {
+        return Err("owned column transfer exceeded its cumulative node/byte budget".to_owned());
+    }
+    // Reserve the complete pointer/count transfer before allocating or walking
+    // borrowed storage. Parser-owned entries remain valid for this call only.
+    transfer_budget.items += count;
+    transfer_budget.bytes += owned_bytes;
+    let mut columns = Vec::with_capacity(count);
     for index in 0..count {
-        let value = unsafe { checked_string(*pointer.add(index))? }
-            .ok_or_else(|| "libmandoc returned a null column string".to_owned())?;
-        transfer_budget.charge(std::mem::size_of::<String>().saturating_add(value.len()))?;
-        columns.push(value);
+        let value = unsafe { *pointer.add(index) };
+        if value.is_null() {
+            return Err("libmandoc returned a null column string".to_owned());
+        }
+        let bytes = unsafe { CStr::from_ptr(value) }.to_bytes();
+        if bytes.len() > MAX_OWNED_SYNTAX_BYTES.saturating_sub(transfer_budget.bytes) {
+            return Err("owned column strings exceeded the cumulative byte budget".to_owned());
+        }
+        transfer_budget.bytes += bytes.len();
+        columns.push(
+            std::str::from_utf8(bytes)
+                .map_err(|_| "libmandoc returned a non-UTF-8 column string")?
+                .to_owned(),
+        );
     }
     Ok(columns)
 }
@@ -743,6 +776,37 @@ unsafe fn copy_table_rule_cells(
 mod tests {
     use super::*;
     use std::ffi::CString;
+
+    #[test]
+    fn column_pointer_count_is_validated_before_allocation_or_dereference() {
+        let mut budget = TransferBudget::default();
+        assert!(
+            unsafe { copy_column_strings(std::ptr::null(), 0, &mut budget) }
+                .unwrap()
+                .is_empty()
+        );
+        assert!(unsafe { copy_column_strings(std::ptr::null(), 1, &mut budget) }.is_err());
+        let invalid = std::ptr::NonNull::<*const c_char>::dangling().as_ptr();
+        let misaligned = invalid.with_addr(invalid.addr().wrapping_add(1));
+        assert!(unsafe { copy_column_strings(misaligned, 1, &mut budget) }.is_err());
+        for count in [usize::MAX, MAX_OWNED_SYNTAX_ITEMS + 1] {
+            assert!(unsafe { copy_column_strings(invalid, count, &mut budget) }.is_err());
+        }
+        let strings = [
+            CString::new("first").unwrap(),
+            CString::new("\\(em").unwrap(),
+        ];
+        let pointers = strings.iter().map(|s| s.as_ptr()).collect::<Vec<_>>();
+        assert_eq!(
+            unsafe { copy_column_strings(pointers.as_ptr(), 2, &mut budget) }.unwrap(),
+            ["first", "\\(em"]
+        );
+        drop(strings);
+        let null_entry = [std::ptr::null()];
+        assert!(unsafe { copy_column_strings(null_entry.as_ptr(), 1, &mut budget) }.is_err());
+        budget.bytes = MAX_OWNED_SYNTAX_BYTES;
+        assert!(unsafe { copy_column_strings(invalid, 1, &mut budget) }.is_err());
+    }
 
     #[test]
     fn native_marker_values_and_visible_translation_follow_the_pinned_header() {
