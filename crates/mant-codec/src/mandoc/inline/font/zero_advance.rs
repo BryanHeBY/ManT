@@ -159,10 +159,18 @@ impl ZeroAdvanceState {
         self.fragment_started_pending = false;
         self.resolved_preexisting = false;
         if self.machine.is_armed() {
-            None
-        } else {
-            self.take_pending()
+            return None;
         }
+        let mut glyph = self.take_pending()?;
+        if !self.held.is_empty() {
+            // The held bytes behind the glyph survive the boundary: the
+            // next word's automatic separator is the cell its retreat
+            // consumes (term.c:901-908), so the word joins directly
+            // after the survivors instead of after a fresh blank.
+            let survivors = self.held.drain(..).collect::<String>();
+            glyph.push(Inline::Text { value: survivors });
+        }
+        Some(glyph)
     }
 
     /// A pending zero-advance glyph is visible formatter state even before a
