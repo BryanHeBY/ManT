@@ -437,13 +437,21 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
     // this operand's internal blanks. Do not replay that older marker in
     // the new TEXT projection: the field's ordered cell consumer decides
     // its row boundary (term.c:573-580,287-306).
-    let field_authoritative = builder.in_definition_field();
+    // The plain flush unit owns the same pass arithmetic as a definition
+    // field (term.c runs one term_fill() over tcol->buf regardless of
+    // authorship), so its marker blank defers to the shared cell consumer
+    // instead of the ordinary-flow wipe decision here. No-fill fragments
+    // retire their rows outside the builder (the IR drains through the
+    // block owner), so the text executor keeps its own wipe arm there;
+    // isolated tbl words keep it through their hardcoded flags.
+    let field_authoritative =
+        record_native_cells && !builder.execution.no_fill_word_active;
     let execution = font::parse_roff_text_with_zero_advance(
         source,
         &mut builder.execution.font,
         !node.flags.no_fill,
         &mut builder.execution.zero_advance,
-        pending_word_end_break && !record_native_cells,
+        pending_word_end_break && !field_authoritative,
         record_native_cells,
         field_authoritative,
     );
@@ -623,16 +631,31 @@ pub(super) fn is_enclosure_macro(macro_name: Option<&str>) -> bool {
         || matches!(macro_name, Some("Eo" | "En"))
 }
 
-pub(super) fn enclosure_marks(name: &str) -> Option<(&'static str, &'static str)> {
+pub(super) fn enclosure_marks(name: &str) -> Option<(String, String)> {
+    let glyph = |name: &str| catalog_glyph(name).to_string();
     match name {
-        "Op" | "Oo" | "Bq" | "Bo" => Some(("[", "]")),
-        "Dq" | "Do" => Some(("“", "”")),
-        "Qq" | "Qo" => Some(("\"", "\"")),
-        "Sq" | "So" | "Ql" => Some(("‘", "’")),
-        "Pq" | "Po" => Some(("(", ")")),
-        "Brq" | "Bro" => Some(("{", "}")),
-        "Aq" | "Ao" => Some(("<", ">")),
+        "Op" | "Oo" | "Bq" | "Bo" => Some(("[".to_owned(), "]".to_owned())),
+        // mdoc_term.c::termp_quote_pre/post emit these through the
+        // device-independent character catalog, never literal Unicode.
+        "Dq" | "Do" => Some((glyph("lq"), glyph("rq"))),
+        "Qq" | "Qo" => Some(("\"".to_owned(), "\"".to_owned())),
+        "Sq" | "So" | "Ql" => Some((glyph("oq"), glyph("cq"))),
+        "Pq" | "Po" => Some(("(".to_owned(), ")".to_owned())),
+        "Brq" | "Bro" => Some(("{".to_owned(), "}".to_owned())),
+        "Aq" | "Ao" => Some((glyph("la"), glyph("ra"))),
         _ => None,
+    }
+}
+
+/// Resolve a formatter-generated glyph through the pinned character catalog
+/// (vendor `chars.c`), mirroring upstream `term_word(p, "\\(name")`.
+///
+/// Only names that are stable in the pinned catalog may be requested; an
+/// unknown name is a programming error, not an authored-input condition.
+pub(super) fn catalog_glyph(name: &str) -> char {
+    match libmandoc_rs::special_character(name) {
+        Some(libmandoc_rs::SpecialCharacter::Visible(character)) => character,
+        _ => panic!("pinned character catalog lost the generated glyph \\({name})"),
     }
 }
 
@@ -678,7 +701,13 @@ fn text_node(value: &str) -> Vec<Inline> {
 }
 
 fn needs_boundary_space(left: Option<char>, right: Option<char>) -> bool {
-    matches!((left, right), (Some(left), Some(right)) if !left.is_whitespace() && !right.is_whitespace())
+    // A non-breaking space is word content (chars.c NBRSP), not a
+    // collapsible blank: term_word() still writes its automatic separator
+    // around it (term.c:573-576).
+    fn content_side(character: char) -> bool {
+        !character.is_whitespace() || character == '\u{a0}'
+    }
+    matches!((left, right), (Some(left), Some(right)) if content_side(left) && content_side(right))
 }
 
 fn push_text(nodes: &mut Vec<Inline>, value: String) {

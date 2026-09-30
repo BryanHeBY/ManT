@@ -141,6 +141,19 @@ pub(in crate::mandoc) struct InlineExecutionState {
     /// unprinted remainder of the unit is wiped. Words appended while
     /// set contribute no projection until the next real row retirement.
     pub(in crate::mandoc) wipe_remainder: bool,
+    /// The plain-flow native flush unit: the same ordered cell buffer the
+    /// definition-field path feeds (`tcol->buf`, term.c). Ordinary paragraphs
+    /// have no author field, but their `term_fill()` pass arithmetic —
+    /// marker breaks, blank consumption, and the `nbr == 0` rejection
+    /// (term.c:143-146 with 233-237) — runs over exactly this buffer.
+    pub(in crate::mandoc) flush_unit: field_buffer::FieldBuffer,
+    /// Word anchors of the plain flush unit (cell start, IR marker, content
+    /// start), mirroring `DefinitionFieldState::field_word_anchors`.
+    pub(in crate::mandoc) flush_unit_anchors: Vec<(usize, String, usize)>,
+    /// IR index where the plain flush unit's unprinted suffix starts; the
+    /// rejection interval trim operates from here (the plain analogue of
+    /// `AuthorExecution::field_output_start`).
+    pub(in crate::mandoc) flush_unit_output_start: usize,
     /// A zero-width graph (`\&`, NBRZW recovery) occupied the current row;
     /// it arms `graph` in `term_fill()` without printing (term.c:349).
     pub(in crate::mandoc) row_zero_graph: bool,
@@ -747,6 +760,9 @@ impl InlineExecutionState {
             row_zero_graph: false,
             native_word_writes: None,
             native_word_boundary: None,
+            flush_unit: field_buffer::FieldBuffer::default(),
+            flush_unit_anchors: Vec::new(),
+            flush_unit_output_start: 0,
             concat_next_word: false,
             concat_flush_source: false,
             concat_consumed_for_body: false,

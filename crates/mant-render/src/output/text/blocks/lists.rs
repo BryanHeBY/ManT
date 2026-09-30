@@ -100,6 +100,7 @@ impl BlockRenderer<'_> {
                 origin,
                 i32::from(last_rows.last().map_or(0, |(_, indent)| *indent)),
             );
+            let term_row_count = last_rows.len();
             let last = last_rows
                 .into_iter()
                 .map(|(row, row_indent)| {
@@ -108,18 +109,34 @@ impl BlockRenderer<'_> {
                 .collect::<Vec<_>>()
                 .join("\n");
             let last_width = mant_ir::geometry::definition_run_in_width(&item.terms).unwrap_or(0);
+            // A run-in head that already wrapped past its first row has
+            // consumed the hang indent (term.c: the offset only locates a
+            // single-row head); the body then continues after one blank.
+            let head_wrapped = matches!(
+                item.layout.head_body_relation,
+                mant_ir::HeadBodyRelation::RunIn
+            ) && term_row_count > 1;
             let mut lines = self.inline_rows(children, TextRole::Body).into_iter();
             let first_line = lines.next().unwrap_or_default();
-            let first_origin = compose_origin(
-                compose_origin(body_origin, layout.indent_columns),
-                i32::from(first_line.1),
-            )
-            .max(compose_origin(
-                term_origin,
-                coordinate(
-                    last_width.saturating_add(usize::from(item.layout.min_term_gap_columns)),
-                ),
-            ));
+            let first_origin = if head_wrapped {
+                compose_origin(
+                    term_origin,
+                    coordinate(
+                        last_width.saturating_add(usize::from(item.layout.min_term_gap_columns)),
+                    ),
+                )
+            } else {
+                compose_origin(
+                    compose_origin(body_origin, layout.indent_columns),
+                    i32::from(first_line.1),
+                )
+                .max(compose_origin(
+                    term_origin,
+                    coordinate(
+                        last_width.saturating_add(usize::from(item.layout.min_term_gap_columns)),
+                    ),
+                ))
+            };
             let mut output = terms
                 .into_iter()
                 .flat_map(|term: Vec<(String, u16)>| {

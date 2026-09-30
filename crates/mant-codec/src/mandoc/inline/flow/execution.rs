@@ -539,6 +539,7 @@ impl super::InlineExecutionState {
                 definition.field_buffer.configure_tabs(&self.tab_stops);
                 definition.projected_passes = 0;
             }
+            self.flush_unit.configure_tabs(&self.tab_stops);
         }
     }
 
@@ -548,6 +549,7 @@ impl super::InlineExecutionState {
             definition.field_buffer.configure_tabs(&self.tab_stops);
             definition.projected_passes = 0;
         }
+        self.flush_unit.configure_tabs(&self.tab_stops);
     }
 
     pub(in crate::mandoc) fn set_literal_tabs(&mut self) {
@@ -556,6 +558,7 @@ impl super::InlineExecutionState {
             definition.field_buffer.configure_tabs(&self.tab_stops);
             definition.projected_passes = 0;
         }
+        self.flush_unit.configure_tabs(&self.tab_stops);
     }
 }
 

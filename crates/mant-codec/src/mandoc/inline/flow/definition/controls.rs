@@ -476,6 +476,129 @@ impl InlineBuilder {
         self.finish_rejected_field_state(owner_boundary, no_break_flush)
     }
 
+    /// The plain-flow analogue of `project_definition_field_receipt()`
+    /// (term_flushln over the shared `tcol->buf`, term.c:233-237 reached
+    /// through 143-146): a definitively rejected flush unit dies at its
+    /// retirement boundary - the unprinted suffix is trimmed from IR back
+    /// to the accepted prefix and the zero-advance register is discarded.
+    /// Returns whether the retirement ended a native row.
+    pub(in crate::mandoc) fn retire_plain_flush_unit(&mut self) -> bool {
+        Self::retire_plain_flush_unit_at(&mut self.execution, &mut self.nodes)
+    }
+
+    /// Execution-state form shared with the no-fill row finisher, which
+    /// retires the same native buffer without a live builder.
+    pub(in crate::mandoc) fn retire_plain_flush_unit_at(
+        execution: &mut super::super::InlineExecutionState,
+        nodes: &mut Vec<Inline>,
+    ) -> bool {
+        if execution.definition.is_some() || execution.flush_unit.is_empty() {
+            return false;
+        }
+        // BRNEVER-shaped (term.c:134,143-144): responsive reflow owns the
+        // device width, so a plain pass only ever ends at authored markers.
+        use super::super::field_buffer::{FieldCell, FillTargets, FlushReceipt};
+        let targets = FillTargets {
+            first: usize::MAX / 2,
+            rest: usize::MAX / 2,
+            unbounded: true,
+        };
+        let receipt = execution.flush_unit.flush_receipt(targets, false);
+        let FlushReceipt::Rejected {
+            passes,
+            rejected_from,
+            definitive,
+        } = receipt
+        else {
+            // The flushed row prints the whole unit; nothing is unprinted.
+            Self::clear_plain_flush_unit_at(execution, nodes);
+            return false;
+        };
+        if !definitive {
+            // term_flushln() still reset the buffer (term.c:235-237); a
+            // non-definitive stop leaves no unprinted suffix to trim.
+            Self::clear_plain_flush_unit_at(execution, nodes);
+            return false;
+        }
+        let anchors = execution.flush_unit_anchors.clone();
+        let anchor = anchors
+            .iter()
+            .rev()
+            .find(|(cell, _, _)| *cell <= rejected_from)
+            .cloned();
+        let (marker, prefix_cells) = anchor.map_or((None, 0), |(_, marker, content)| {
+            // Each accepted pass owns a separate range; the blanks consumed
+            // between passes cannot extend the accepted prefix.
+            let mut pass_start = 0;
+            let mut length = 0;
+            for pass in &passes {
+                let start = content.max(pass_start);
+                if start < pass.end {
+                    length += execution.flush_unit.projection_length(start, pass.end);
+                }
+                pass_start = pass.end;
+                while matches!(
+                    execution.flush_unit.cells().get(pass_start),
+                    Some(FieldCell::BreakableBlank)
+                ) {
+                    pass_start += 1;
+                }
+            }
+            (Some(marker), length)
+        });
+        let accepted_owned_prefix =
+            !passes.is_empty() && anchors.iter().any(|(cell, _, _)| *cell < rejected_from);
+        let start = execution.flush_unit_output_start.min(nodes.len());
+        let mut pending_output = nodes.split_off(start);
+        let owned = marker.as_deref().is_some_and(|marker| {
+            crate::mandoc::inline::flow::output::split::retain_native_field_prefix(
+                &mut pending_output,
+                marker,
+                prefix_cells,
+            )
+        });
+        if !owned {
+            retain_unprinted_field_targets(&mut pending_output);
+        }
+        nodes.extend(pending_output);
+        if accepted_owned_prefix
+            && !crate::mandoc::inline::flow::output::ends_with_executed_line_break(&nodes)
+        {
+            // term_flushln() ended the last accepted pass before discovering
+            // nbr=0; the retirement boundary must expose that native event.
+            nodes.push(Inline::line_break());
+        }
+        // term.c::term_flushln() clears both backtracking flags; a rejected
+        // unit dies whole, including a still-buffered `\z` glyph.
+        execution.zero_advance.discard_at_row_end();
+        Self::clear_plain_flush_unit_at(execution, nodes);
+        true
+    }
+
+    /// term_flushln() clears the consumed buffer at every retirement
+    /// (term.c:235-237); the next word starts a fresh flush unit whose
+    /// output interval begins at the current IR end.
+    /// Row-boundary reset for flows whose marker semantics live in the text
+    /// executor: only the native buffer dies with the row (term.c:235-237).
+    pub(in crate::mandoc) fn clear_plain_flush_unit_for_row(
+        execution: &mut super::super::InlineExecutionState,
+    ) {
+        execution.flush_unit.clear();
+        execution.flush_unit.set_tab_offset(0);
+        execution.flush_unit_anchors.clear();
+        execution.flush_unit_output_start = 0;
+    }
+
+    pub(in crate::mandoc::inline::flow) fn clear_plain_flush_unit_at(
+        execution: &mut super::super::InlineExecutionState,
+        nodes: &[Inline],
+    ) {
+        execution.flush_unit.clear();
+        execution.flush_unit.set_tab_offset(0);
+        execution.flush_unit_anchors.clear();
+        execution.flush_unit_output_start = nodes.len();
+    }
+
     fn project_accepted_field_passes(&mut self, passes: &[super::super::field_buffer::FillPass]) {
         use std::collections::BTreeMap;
         let state = self.execution.definition.as_mut().expect("native field");
@@ -635,12 +758,21 @@ impl InlineBuilder {
             })
     }
 
-    pub(in crate::mandoc) fn pending_definition_break_has_no_graph(&self) -> bool {
-        self.in_definition_field()
-            && self
+    /// A pending `\p` breaks through a graphless pass in whichever native
+    /// buffer owns the current word (term.c:143-146): the definition field
+    /// when an author session holds it, otherwise the plain flush unit.
+    /// No-fill words keep the text executor's own decision path.
+    pub(in crate::mandoc) fn pending_flush_break_has_no_graph(&self) -> bool {
+        if self.in_definition_field() {
+            return self
+                .execution
                 .definition
                 .as_ref()
-                .is_some_and(|state| state.field_buffer.pending_pass_is_graphless())
+                .is_some_and(|state| state.field_buffer.pending_pass_is_graphless());
+        }
+        !self.execution.no_fill_word_active
+            && !self.execution.flush_unit.is_empty()
+            && self.execution.flush_unit.pending_pass_is_graphless()
     }
 
     pub(in crate::mandoc) fn in_definition_field(&self) -> bool {
@@ -649,15 +781,13 @@ impl InlineBuilder {
 
     /// Field ownership is already known from the author effect even when
     /// its lazily created session has not reached `ensure_definition_field`.
-    /// Ordinary paragraphs and isolated tbl words need no field ledger.
-    pub(in crate::mandoc) fn records_native_field_cells(&self) -> bool {
-        self.execution
-            .author_execution
-            .as_ref()
-            .is_some_and(|author| {
-                self.execution.definition.is_some()
-                    || matches!(author.break_effect, AuthorBreakEffect::Field { .. })
-            })
+    /// Ordinary paragraphs record into the plain flush unit instead
+    /// (`InlineExecutionState::flush_unit`): every formatter word buffers
+    /// into the same native `tcol->buf` (term.c), so the shared pass
+    /// consumer must see them all. Isolated tbl words keep their own
+    /// geometry path and never consult this register.
+    pub(in crate::mandoc) const fn records_native_field_cells(&self) -> bool {
+        true
     }
 
     /// A head field configured with `AuthorBreakEffect::Field` IS a

@@ -39,6 +39,12 @@ impl NoFillInlineState {
         if !self.active {
             return;
         }
+        // term_newln() resets the plain unit's shared native buffer with the
+        // row (term.c:233-237). No-fill marker decisions stay with the text
+        // executor's own wipe arm (`field_authoritative` is false there), so
+        // this boundary only clears the buffer - a stale marker must not
+        // poison the next literal row's pass arithmetic.
+        crate::mandoc::inline::InlineBuilder::clear_plain_flush_unit_for_row(execution);
         // CVS term_newln() flushes only an occupied cell. A bare BACKAFTER
         // request survives an empty row and can affect the first word after
         // .fi; a buffered glyph is committed before this row ends.

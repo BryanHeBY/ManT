@@ -174,15 +174,19 @@ impl InlineBuilder {
         } else {
             self.append_boundary_spacing(boundary, add_space, word, empty_word);
         }
-        if word
-            && self.execution.author_execution.is_some()
-            && let Some(marker) = self
-                .execution
+        // Plain words anchor into the same native flush unit the field
+        // path uses; the marker routes by session exactly like the cell
+        // recording in `record_native_word`.
+        let native_anchor_marker = if self.in_definition_field() {
+            self.execution
                 .definition
                 .as_ref()
                 .and_then(|state| state.field_word_anchors.last())
-                .map(|(_, marker, _)| marker.clone())
-        {
+        } else {
+            self.execution.flush_unit_anchors.last()
+        }
+        .map(|(_, marker, _)| marker.clone());
+        if word && let Some(marker) = native_anchor_marker {
             self.nodes.push(Inline::anchor(marker));
         }
         let starts_output_row =

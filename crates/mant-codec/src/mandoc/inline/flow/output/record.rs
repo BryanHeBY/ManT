@@ -14,7 +14,11 @@ impl InlineBuilder {
             .take()
             .unwrap_or(boundary);
         if self.execution.definition.is_none() || self.execution.author_execution.is_none() {
-            return (0, None);
+            // Plain flow shares the field's ordered cell consumer: the
+            // paragraph is a degenerate flush unit (term.c runs one
+            // term_fill() over `tcol->buf` regardless of authorship), so
+            // its words take the same marker/pass/rejection arithmetic.
+            return self.record_plain_unit_word(incoming, native_boundary, native_writes);
         }
         let Some(definition) = &mut self.execution.definition else {
             return (0, None);
@@ -75,6 +79,61 @@ impl InlineBuilder {
         self.record_authored_native_passes(incoming)
     }
 
+    /// Plain-flow word recording: the paragraph's flush unit takes the same
+    /// `term_word()` cell sequence (separator, writes, anchor) as a field.
+    /// It has no hang-row geometry; only the marker pass loop can act.
+    fn record_plain_unit_word(
+        &mut self,
+        incoming: &[Inline],
+        native_boundary: PendingBoundary,
+        native_writes: Option<Vec<super::super::field_buffer::FieldWrite>>,
+    ) -> (usize, Option<Vec<Inline>>) {
+        let native_word_start = self.execution.flush_unit.cells().len();
+        self.execution.flush_unit.begin_word(
+            native_boundary.is_native_tight(),
+            self.execution.spacing.enabled() || native_boundary == PendingBoundary::Preserved,
+            native_boundary == PendingBoundary::Kept,
+        );
+        if self.execution.no_fill_word_active {
+            // No-fill fragments retire rows outside the builder and keep
+            // the text executor's own marker decisions
+            // (`field_authoritative` is false there): buffer the cells for
+            // upstream parity, but neither anchors nor the shared pass
+            // loop may act on them.
+            self.execution
+                .flush_unit
+                .apply_writes(&native_writes.unwrap_or_default());
+            return (0, None);
+        }
+        let anchor_ir_start = format!(
+            "{}{}-{}",
+            super::INTERNAL_FIELD_WORD,
+            self.execution.execution_epoch,
+            native_word_start
+        );
+        let receipt = self
+            .execution
+            .flush_unit
+            .apply_writes(&native_writes.unwrap_or_default());
+        self.execution
+            .flush_unit_anchors
+            .push((native_word_start, anchor_ir_start, receipt.first_content_cell));
+        // The plain unit is a BRNEVER-shaped degenerate field (term.c:134,
+        // 143-144): responsive reflow owns width, so passes only ever end
+        // at authored markers and never at a device-width guess.
+        let targets = super::super::field_buffer::FillTargets {
+            first: usize::MAX / 2,
+            rest: usize::MAX / 2,
+            unbounded: true,
+        };
+        let mut buffer = std::mem::take(&mut self.execution.flush_unit);
+        let mut anchors = std::mem::take(&mut self.execution.flush_unit_anchors);
+        let result = self.native_unit_passes(incoming, &mut buffer, &mut anchors, targets);
+        self.execution.flush_unit = buffer;
+        self.execution.flush_unit_anchors = anchors;
+        result
+    }
+
     fn record_authored_native_passes(
         &mut self,
         incoming: &[Inline],
@@ -85,47 +144,67 @@ impl InlineBuilder {
         let Some(targets) = self.native_field_targets(false, None) else {
             return (0, None);
         };
-        let definition = self.execution.definition.as_mut().expect("native field");
-        let anchor_count = definition.field_word_anchors.len();
+        let Some(definition) = self.execution.definition.as_mut() else {
+            return (0, None);
+        };
+        let mut buffer = std::mem::take(&mut definition.field_buffer);
+        let mut anchors = std::mem::take(&mut definition.field_word_anchors);
+        let result = self.native_unit_passes(incoming, &mut buffer, &mut anchors, targets);
+        let Some(definition) = self.execution.definition.as_mut() else {
+            return result;
+        };
+        definition.field_buffer = buffer;
+        definition.field_word_anchors = anchors;
+        result
+    }
+
+    /// The shared incremental pass loop (definition fields and plain flush
+    /// units alike): commit only authored-marker passes, and report the row
+    /// boundary positions relative to the word just recorded.
+    fn native_unit_passes(
+        &mut self,
+        incoming: &[Inline],
+        buffer: &mut super::super::field_buffer::FieldBuffer,
+        anchors: &mut [(usize, String, usize)],
+        targets: super::super::field_buffer::FillTargets,
+    ) -> (usize, Option<Vec<Inline>>) {
+        let anchor_count = anchors.len();
         let mut inside_splits = Vec::new();
         let mut closes_before = 0;
         if anchor_count > 0
-            && !definition.field_buffer.word_scan_deferred()
-            && definition.field_buffer.has_pending_break_markers()
+            && !buffer.word_scan_deferred()
+            && buffer.has_pending_break_markers()
         {
-            let word_first_cell = definition.field_word_anchors[anchor_count - 1].2;
-            let word_end = definition.field_buffer.cells().len();
+            let word_first_cell = anchors[anchor_count - 1].2;
+            let word_end = buffer.cells().len();
             let mut ir_row_breaks = super::line_break_count(incoming);
-            let mut first_pass = !definition.field_buffer.has_committed_pass();
-            while let Some(pass) = definition
-                .field_buffer
-                .fill_pass_units(targets.scan(first_pass))
-            {
-                if !definition
-                    .field_buffer
-                    .has_non_ignorable_after(pass.end, false)
-                {
+            let mut first_pass = !buffer.has_committed_pass();
+            while let Some(pass) = buffer.fill_pass_units(targets.scan(first_pass)) {
+                if !buffer.has_non_ignorable_after(pass.end, false) {
                     break;
                 }
-                let pass_start = definition.field_buffer.resume_offset();
+                let pass_start = buffer.resume_offset();
                 let mut boundary = pass.end;
                 while matches!(
-                    definition.field_buffer.cells().get(boundary),
+                    buffer.cells().get(boundary),
                     Some(super::super::field_buffer::FieldCell::BreakableBlank)
                 ) {
                     boundary += 1;
                 }
-                let authored = definition.field_buffer.cells()[pass_start..boundary]
-                    .iter()
-                    .any(|cell| matches!(cell, super::super::field_buffer::FieldCell::BreakMarker));
+                // An unbounded target can never stop at a device-width
+                // guess (term.c:134,143-144): every accepted pass there is
+                // marker-driven, even when the marker sits exactly at the
+                // resumed boundary (term.c:294-295 restarts at it).
+                let authored = targets.unbounded
+                    || buffer.cells()[pass_start..boundary].iter().any(|cell| {
+                        matches!(cell, super::super::field_buffer::FieldCell::BreakMarker)
+                    });
                 if !authored {
                     // This pass only guessed a device width break. Do not
                     // commit its cursor or IR; the real flush owns it.
                     break;
                 }
-                definition
-                    .field_buffer
-                    .commit_pass(pass, targets.actual(first_pass));
+                buffer.commit_pass(pass, targets.actual(first_pass));
                 let represented_in_ir = ir_row_breaks > 0;
                 if represented_in_ir {
                     ir_row_breaks -= 1;
@@ -133,11 +212,8 @@ impl InlineBuilder {
                 if boundary <= word_first_cell {
                     closes_before += usize::from(!represented_in_ir);
                 } else if boundary < word_end && !represented_in_ir {
-                    inside_splits.push(
-                        definition
-                            .field_buffer
-                            .projection_length(word_first_cell, boundary),
-                    );
+                    inside_splits
+                        .push(buffer.projection_length(word_first_cell, boundary));
                 }
                 if boundary >= word_end {
                     break;

@@ -365,6 +365,12 @@ impl InlineBuilder {
         }
         // The first .mc flush is not yet a NoBreakField, but it still runs
         // term_fill() before changing NOBREAK/NOSPACE.
+        // The plain unit dies with this flush as well (term.c:233-237):
+        // `roff_term_pre_mc()` resets `tcol->buf` under NOBREAK, so a
+        // pending marker cannot reject the next source word.
+        if self.execution.definition.is_none() && !self.execution.flush_unit.is_empty() {
+            Self::clear_plain_flush_unit_at(&mut self.execution, &mut self.nodes);
+        }
         let row_ends = self.discard_unprinted_definition_field_output_no_break();
         if self.no_break_definition_field() {
             return;

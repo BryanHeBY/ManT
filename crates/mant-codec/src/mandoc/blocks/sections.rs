@@ -37,7 +37,8 @@ pub(in crate::mandoc) fn lower_document_structure(
             ),
         ));
         root_start = index + 1;
-        let has_preceding_content = sections.last().is_some_and(section_has_body);
+        let has_preceding_content = sections.last().is_some_and(section_has_body)
+            || root_blocks.iter().any(block_has_visible_content);
         let spacing_before_lines = section_spacing(
             node,
             sections.is_empty(),
@@ -175,6 +176,13 @@ fn native_mdoc_section_context(node: &Node) -> crate::mandoc::source_context::Md
 
 fn section_has_body(section: &Section) -> bool {
     !section.blocks.is_empty() || section.children.iter().any(section_has_body)
+}
+
+/// Content lowered before any section (for example roff text straight
+/// after `.TH`) occupies the same visible flow: a following `SH` owes the
+/// paragraph-distance row over it just as over a peer section's body.
+fn block_has_visible_content(block: &Block) -> bool {
+    !matches!(block, Block::VerticalSpace { .. })
 }
 
 pub(super) fn is_section(node: &Node, top_level: bool) -> bool {

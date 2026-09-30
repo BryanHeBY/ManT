@@ -195,7 +195,9 @@ impl InlineBuilder {
     pub(in crate::mandoc) fn hard_break(&mut self) {
         let had_native_buffer = self.definition.as_ref().is_some_and(|state| {
             state.field_buffer.resume_offset() < state.field_buffer.cells().len()
-        });
+        }) || (self.execution.definition.is_none()
+            && self.execution.flush_unit.resume_offset()
+                < self.execution.flush_unit.cells().len());
         let exited_discarded_buffer = self.discarded_exited_definition_buffer();
         let exited_definition_row = self
             .execution
@@ -211,7 +213,9 @@ impl InlineBuilder {
                             matches!(execution.break_effect, super::AuthorBreakEffect::Line)
                         })
             });
-        self.discard_unprinted_definition_field_output();
+        // term_newln() flushes the plain flush unit through the same
+        // term_flushln(): a definitive rejection ends its own row here.
+        let plain_flush_rejection = self.retire_plain_flush_unit();
         if !self.execution.has_printable_content {
             self.execution.leading_line_boundary = super::LeadingLineBoundary::BeforeVisibleWord;
         }
@@ -222,7 +226,7 @@ impl InlineBuilder {
         // buffer: term_newln() flushed it (lastcol > 0), term_flushln()
         // reset the buffer (term.c:233-237), and the nbr == 0 pass ended
         // its own row (term.c:250-253). The rejection must retire here.
-        let retiring_rejection = self.execution.wipe_remainder;
+        let retiring_rejection = self.execution.wipe_remainder || plain_flush_rejection;
         if !self.has_formatter_cell()
             && !had_native_buffer
             && !exited_definition_row
@@ -307,6 +311,15 @@ impl InlineBuilder {
             definition.field_buffer.clear();
             definition.field_buffer.set_tab_offset(0);
             definition.field_word_anchors.clear();
+        }
+        if self.execution.definition.is_none() {
+            // term_flushln() resets the plain unit with the same row
+            // (term.c:233-237): the next word starts a fresh buffer whose
+            // output interval begins after this committed row.
+            self.execution.flush_unit.clear();
+            self.execution.flush_unit.set_tab_offset(0);
+            self.execution.flush_unit_anchors.clear();
+            self.execution.flush_unit_output_start = self.nodes.len();
         }
         if let Some(author) = &mut self.execution.author_execution {
             // term_flushln() commits its accepted prefix before it starts
@@ -502,7 +515,7 @@ impl InlineBuilder {
         }
         if next_is_visible
             && next_has_glyph
-            && !self.pending_definition_break_has_no_graph()
+            && !self.pending_flush_break_has_no_graph()
             && !self.execution.boundary.is_nonbreaking()
             && self.execution.word_end_break == WordEndBreak::Pending
             && (self.execution.spacing.enabled()
@@ -517,30 +530,15 @@ impl InlineBuilder {
                 // the glyph and join the incoming word at that position.
                 self.append_projected(glyph);
                 self.execution.boundary = PendingBoundary::Tight;
-            } else if !self.in_definition_field() {
-                if self.execution.no_fill_word_active || self.current_row_has_graph() {
-                    self.hard_break();
-                    if std::mem::take(&mut self.execution.word_end_break_separated) {
-                        // The accepted prefix closed its own row, but the
-                        // marker's pass restarts at the marker cell itself
-                        // (the breakable blank before it kept `graph` down
-                        // and nbr at the earlier blank): the next word's
-                        // automatic separator stops that pass with
-                        // `nbr == 0` and the unprinted remainder dies with
-                        // the row reset (term.c:143-146 with 233-237).
-                        self.execution.wipe_remainder = true;
-                    }
-                } else {
-                    // The marker meets the word's own separator blank with
-                    // no graph in the flush unit: term_fill() stops the pass
-                    // with `nbr == 0` (term.c:143-146) and the unprinted
-                    // remainder dies with the row reset (term.c:233-237).
-                    // No row is committed: whitespace-only input prints
-                    // nothing (term.c:145-146).
-                    self.execution.word_end_break = WordEndBreak::Clear;
-                    self.execution.word_end_break_separated = false;
-                    self.execution.wipe_remainder = true;
-                }
+            } else if !self.in_definition_field()
+                && !self.execution.flush_unit.has_pending_break_markers()
+                && self.current_row_has_graph()
+            {
+                // The marker sits in a retired owner (a drained TAG field
+                // or scope): the plain unit cannot see it, but its blank
+                // still ends the occupied row (term.c:294-295). The pass
+                // loop owns every other plain rejection.
+                self.hard_break();
             }
         }
         if continued_word && !self.execution.boundary.is_tight() {
@@ -990,6 +988,11 @@ impl InlineBuilder {
         if let Some(field) = &mut state.definition_field {
             field.state.field_word_anchors.clear();
         }
+        // The plain flush unit carries across the scope return like the
+        // preserved field's cells, but its IR anchors and output interval
+        // belong to the drained owner and cannot cross it.
+        self.execution.flush_unit_anchors.clear();
+        self.execution.flush_unit_output_start = 0;
         // The output owner ended, but CVS term_word() still sees the same
         // physical row and word separator after an inset/diag HEAD. Keep its
         // registers, retiring only offsets into the drained node vector.
@@ -999,6 +1002,15 @@ impl InlineBuilder {
 
     fn finish_nodes(&mut self) -> Vec<Inline> {
         self.execution.word_end_break = WordEndBreak::Clear;
+        // The paragraph terminator is a term_newln() over the plain flush
+        // unit: trim any definitively rejected unprinted suffix before the
+        // segment is drained, then reset the unit with its row.
+        self.retire_plain_flush_unit();
+        if self.execution.definition.is_none() {
+            self.execution.flush_unit.clear();
+            self.execution.flush_unit_anchors.clear();
+            self.execution.flush_unit_output_start = 0;
+        }
         trim_output_terminators(&mut self.nodes);
         self.drain_ir_nodes()
     }
