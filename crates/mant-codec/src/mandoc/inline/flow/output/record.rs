@@ -163,6 +163,7 @@ impl InlineBuilder {
     /// The shared incremental pass loop (definition fields and plain flush
     /// units alike): commit only authored-marker passes, and report the row
     /// boundary positions relative to the word just recorded.
+    #[allow(clippy::unused_self)] // shared by builder methods; state arrives by argument
     fn native_unit_passes(
         &mut self,
         incoming: &[Inline],

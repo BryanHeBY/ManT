@@ -192,6 +192,7 @@ impl InlineBuilder {
 
     /// Preserve a formatter-requested line boundary without creating empty
     /// leading, repeated, or trailing rows around the paragraph.
+    #[allow(clippy::too_many_lines)] // term_newln(): one native row boundary, one execution order
     pub(in crate::mandoc) fn hard_break(&mut self) {
         let had_native_buffer = self.definition.as_ref().is_some_and(|state| {
             state.field_buffer.resume_offset() < state.field_buffer.cells().len()
@@ -483,7 +484,7 @@ impl InlineBuilder {
     }
 
     /// An empty or control-only formatter word still updates registers, but
-    /// it cannot by itself make `term_fill()` print after a pending \p.
+    #[allow(clippy::too_many_lines)] // term_word(): full pre-decode register dance
     pub(in crate::mandoc) fn begin_word_projection_with_break(
         &mut self,
         next_is_visible: bool,
@@ -514,6 +515,30 @@ impl InlineBuilder {
         }
         if next_is_visible
             && next_has_glyph
+            && !self.execution.boundary.is_nonbreaking()
+            && self.execution.word_end_break == WordEndBreak::Pending
+            && (self.execution.spacing.enabled()
+                || matches!(
+                    self.execution.boundary,
+                    PendingBoundary::Preserved | PendingBoundary::Continued
+                ))
+            && !self.in_definition_field()
+            && self.execution.flush_unit.has_pending_break_markers()
+            && !self
+                .execution
+                .flush_unit
+                .has_non_ignorable_after(self.execution.flush_unit.resume_offset(), false)
+            && self.current_row_has_graph()
+        {
+            // A `.mc` no-break flush resets the native buffer (term.c:233-
+            // 237), so the marker's unit holds no printable cell and its
+            // pass can never accept a row. CVS loses the following word at
+            // this edge; ManT keeps it on the row this blank ends
+            // (term.c:294-295) as the content-preserving deviation.
+            self.hard_break();
+        }
+        if next_is_visible
+            && next_has_glyph
             && !self.pending_flush_break_has_no_graph()
             && !self.execution.boundary.is_nonbreaking()
             && self.execution.word_end_break == WordEndBreak::Pending
@@ -530,13 +555,20 @@ impl InlineBuilder {
                 self.append_projected(glyph);
                 self.execution.boundary = PendingBoundary::Tight;
             } else if !self.in_definition_field()
-                && !self.execution.has_printable_content
+                && (!self.execution.has_printable_content
+                    || (self.execution.flush_unit.has_pending_break_markers()
+                        && !self.execution.flush_unit.has_non_ignorable_after(
+                            self.execution.flush_unit.resume_offset(),
+                            false,
+                        )))
                 && self.current_row_has_graph()
             {
                 // The marker sits in a retired owner (a drained TAG field
-                // or scope): the plain unit cannot see it, but its blank
-                // still ends the occupied row (term.c:294-295). The pass
-                // loop owns every other plain rejection.
+                // or scope), or its unit holds no printable cell at all
+                // (a `.mc` no-break flush reset the buffer): the shared
+                // pass loop can never accept a row there, but the blank
+                // still ends the occupied row (term.c:294-295) and ManT
+                // keeps the following word's content.
                 self.hard_break();
             }
         }
@@ -1002,15 +1034,19 @@ impl InlineBuilder {
     fn finish_nodes(&mut self) -> Vec<Inline> {
         self.execution.word_end_break = WordEndBreak::Clear;
         // The paragraph terminator is a term_newln() over the plain flush
-        // unit: trim any definitively rejected unprinted suffix before the
-        // segment is drained, then reset the unit with its row.
-        self.retire_plain_flush_unit();
+        // unit: consume the unit's full receipt before the segment drains -
+        // a definitively rejected suffix is trimmed, and its nbr == 0 pass
+        // still ended a native row (term.c:143-146 with 233-237 and
+        // 250-253). That row event must survive the terminator trim: the
+        // empty row precedes whatever the next flow emits.
+        let retired_rejected_row = self.retire_plain_flush_unit();
         if self.execution.definition.is_none() {
             self.execution.flush_unit.clear();
             self.execution.flush_unit_anchors.clear();
             self.execution.flush_unit_output_start = 0;
         }
         trim_output_terminators(&mut self.nodes);
+        let _ = retired_rejected_row;
         self.drain_ir_nodes()
     }
 

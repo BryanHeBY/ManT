@@ -375,12 +375,14 @@ impl InlineBuilder {
         let Some(targets) = self.native_field_targets(no_break_flush, None) else {
             return false;
         };
+
         let Some(receipt) = self.execution.definition.as_ref().and_then(|state| {
             (!state.field_buffer.is_empty())
                 .then(|| state.field_buffer.flush_receipt(targets, false))
         }) else {
             return false;
         };
+
         if let FlushReceipt::Accepted { passes } = &receipt {
             if !owner_boundary {
                 self.project_accepted_field_passes(passes);
@@ -477,7 +479,7 @@ impl InlineBuilder {
     }
 
     /// The plain-flow analogue of `project_definition_field_receipt()`
-    /// (term_flushln over the shared `tcol->buf`, term.c:233-237 reached
+    /// (`term_flushln` over the shared `tcol->buf`, term.c:233-237 reached
     /// through 143-146): a definitively rejected flush unit dies at its
     /// retirement boundary - the unprinted suffix is trimmed from IR back
     /// to the accepted prefix and the zero-advance register is discarded.
@@ -492,18 +494,44 @@ impl InlineBuilder {
         execution: &mut super::super::InlineExecutionState,
         nodes: &mut Vec<Inline>,
     ) -> bool {
-        if execution.definition.is_some() || execution.flush_unit.is_empty() {
+        use super::super::field_buffer::{FieldCell, FillTargets, FlushReceipt};
+        // An author-less definition session has no field geometry: its
+        // buffer is the same native `tcol->buf` as the plain unit (term.c
+        // runs one term_fill() regardless of authorship) and retires with
+        // the same receipt. Borrow whichever buffer is live.
+        let authorless_definition =
+            execution.definition.is_some() && execution.author_execution.is_none();
+        if execution.definition.is_some() && !authorless_definition {
             return false;
+        }
+        let buffer;
+        let anchors;
+        let output_start;
+        if authorless_definition {
+            let definition = execution.definition.as_mut().expect("session");
+            buffer = std::mem::take(&mut definition.field_buffer);
+            anchors = std::mem::take(&mut definition.field_word_anchors);
+            output_start = execution.flush_unit_output_start.min(nodes.len());
+            if buffer.is_empty() {
+                Self::clear_authorless_definition_at(execution, nodes);
+                return false;
+            }
+        } else {
+            if execution.flush_unit.is_empty() {
+                return false;
+            }
+            buffer = std::mem::take(&mut execution.flush_unit);
+            anchors = std::mem::take(&mut execution.flush_unit_anchors);
+            output_start = execution.flush_unit_output_start.min(nodes.len());
         }
         // BRNEVER-shaped (term.c:134,143-144): responsive reflow owns the
         // device width, so a plain pass only ever ends at authored markers.
-        use super::super::field_buffer::{FieldCell, FillTargets, FlushReceipt};
         let targets = FillTargets {
             first: usize::MAX / 2,
             rest: usize::MAX / 2,
             unbounded: true,
         };
-        let receipt = execution.flush_unit.flush_receipt(targets, false);
+        let receipt = buffer.flush_receipt(targets, false);
         let FlushReceipt::Rejected {
             passes,
             rejected_from,
@@ -511,16 +539,16 @@ impl InlineBuilder {
         } = receipt
         else {
             // The flushed row prints the whole unit; nothing is unprinted.
-            Self::clear_plain_flush_unit_at(execution, nodes);
+            Self::restore_retired_buffer(execution, nodes, authorless_definition, buffer, anchors);
             return false;
         };
         if !definitive {
             // term_flushln() still reset the buffer (term.c:235-237); a
             // non-definitive stop leaves no unprinted suffix to trim.
-            Self::clear_plain_flush_unit_at(execution, nodes);
+            Self::restore_retired_buffer(execution, nodes, authorless_definition, buffer, anchors);
             return false;
         }
-        let anchors = execution.flush_unit_anchors.clone();
+
         let anchor = anchors
             .iter()
             .rev()
@@ -534,11 +562,11 @@ impl InlineBuilder {
             for pass in &passes {
                 let start = content.max(pass_start);
                 if start < pass.end {
-                    length += execution.flush_unit.projection_length(start, pass.end);
+                    length += buffer.projection_length(start, pass.end);
                 }
                 pass_start = pass.end;
                 while matches!(
-                    execution.flush_unit.cells().get(pass_start),
+                    buffer.cells().get(pass_start),
                     Some(FieldCell::BreakableBlank)
                 ) {
                     pass_start += 1;
@@ -548,8 +576,7 @@ impl InlineBuilder {
         });
         let accepted_owned_prefix =
             !passes.is_empty() && anchors.iter().any(|(cell, _, _)| *cell < rejected_from);
-        let start = execution.flush_unit_output_start.min(nodes.len());
-        let mut pending_output = nodes.split_off(start);
+        let mut pending_output = nodes.split_off(output_start);
         let owned = marker.as_deref().is_some_and(|marker| {
             crate::mandoc::inline::flow::output::split::retain_native_field_prefix(
                 &mut pending_output,
@@ -562,7 +589,7 @@ impl InlineBuilder {
         }
         nodes.extend(pending_output);
         if accepted_owned_prefix
-            && !crate::mandoc::inline::flow::output::ends_with_executed_line_break(&nodes)
+            && !crate::mandoc::inline::flow::output::ends_with_executed_line_break(nodes)
         {
             // term_flushln() ended the last accepted pass before discovering
             // nbr=0; the retirement boundary must expose that native event.
@@ -571,12 +598,18 @@ impl InlineBuilder {
         // term.c::term_flushln() clears both backtracking flags; a rejected
         // unit dies whole, including a still-buffered `\z` glyph.
         execution.zero_advance.discard_at_row_end();
-        Self::clear_plain_flush_unit_at(execution, nodes);
+        drop(buffer);
+        drop(anchors);
+        if authorless_definition {
+            Self::clear_authorless_definition_at(execution, nodes);
+        } else {
+            Self::clear_plain_flush_unit_at(execution, nodes);
+        }
         true
     }
 
-    /// term_flushln() clears the consumed buffer at every retirement
-    /// (term.c:235-237); the next word starts a fresh flush unit whose
+    /// `term_flushln()` clears the consumed buffer at every retirement
+    /// (`term.c`:235-237); the next word starts a fresh flush unit whose
     /// output interval begins at the current IR end.
     /// Row-boundary reset for flows whose marker semantics live in the text
     /// executor: only the native buffer dies with the row (term.c:235-237).
@@ -595,6 +628,39 @@ impl InlineBuilder {
     ) {
         execution.flush_unit.clear();
         execution.flush_unit.set_tab_offset(0);
+        execution.flush_unit_anchors.clear();
+        execution.flush_unit_output_start = nodes.len();
+    }
+
+    /// Drop a borrowed retirement buffer after its receipt was consumed:
+    /// term.c:235-237 clears it either way; the borrowed form must not
+    /// re-enter the session.
+    fn restore_retired_buffer(
+        execution: &mut super::super::InlineExecutionState,
+        nodes: &mut [Inline],
+        authorless_definition: bool,
+        buffer: super::super::field_buffer::FieldBuffer,
+        anchors: Vec<(usize, String, usize)>,
+    ) {
+        drop(anchors);
+        drop(buffer);
+        if authorless_definition {
+            Self::clear_authorless_definition_at(execution, nodes);
+        } else {
+            Self::clear_plain_flush_unit_at(execution, nodes);
+        }
+    }
+
+    fn clear_authorless_definition_at(
+        execution: &mut super::super::InlineExecutionState,
+        nodes: &[Inline],
+    ) {
+        if let Some(definition) = &mut execution.definition {
+            definition.field_buffer.clear();
+            definition.field_buffer.set_tab_offset(0);
+            definition.field_word_anchors.clear();
+        }
+        execution.flush_unit.clear();
         execution.flush_unit_anchors.clear();
         execution.flush_unit_output_start = nodes.len();
     }
@@ -786,6 +852,7 @@ impl InlineBuilder {
     /// into the same native `tcol->buf` (term.c), so the shared pass
     /// consumer must see them all. Isolated tbl words keep their own
     /// geometry path and never consult this register.
+    #[allow(clippy::unused_self)] // a formatter-register query by name
     pub(in crate::mandoc) const fn records_native_field_cells(&self) -> bool {
         true
     }

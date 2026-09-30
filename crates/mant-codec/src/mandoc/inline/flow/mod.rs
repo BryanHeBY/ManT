@@ -146,14 +146,14 @@ pub(in crate::mandoc) struct InlineExecutionState {
     /// have no author field, but their `term_fill()` pass arithmetic —
     /// marker breaks, blank consumption, and the `nbr == 0` rejection
     /// (term.c:143-146 with 233-237) — runs over exactly this buffer.
-    pub(super) flush_unit: field_buffer::FieldBuffer,
+    pub(in crate::mandoc::inline) flush_unit: field_buffer::FieldBuffer,
     /// Word anchors of the plain flush unit (cell start, IR marker, content
     /// start), mirroring `DefinitionFieldState::field_word_anchors`.
-    pub(in crate::mandoc) flush_unit_anchors: Vec<(usize, String, usize)>,
+    pub(in crate::mandoc::inline) flush_unit_anchors: Vec<(usize, String, usize)>,
     /// IR index where the plain flush unit's unprinted suffix starts; the
     /// rejection interval trim operates from here (the plain analogue of
     /// `AuthorExecution::field_output_start`).
-    pub(in crate::mandoc) flush_unit_output_start: usize,
+    pub(in crate::mandoc::inline) flush_unit_output_start: usize,
     /// A zero-width graph (`\&`, NBRZW recovery) occupied the current row;
     /// it arms `graph` in `term_fill()` without printing (term.c:349).
     pub(in crate::mandoc) row_zero_graph: bool,

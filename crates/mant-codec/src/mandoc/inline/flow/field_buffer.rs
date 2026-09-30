@@ -208,7 +208,7 @@ enum WordScanPolicy {
 /// The unflushed input field of `term.c::term_flushln()`, kept across the
 /// words of one native field.
 #[derive(Clone, Debug, Default)]
-pub(super) struct FieldBuffer {
+pub(in crate::mandoc::inline) struct FieldBuffer {
     cells: Vec<FieldCell>,
     tabs: Arc<TabStops>,
     /// Persistent tcol->taboff; each pass starts with this reference.
