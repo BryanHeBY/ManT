@@ -391,7 +391,7 @@ fn no_fill_hang_source_line_and_explicit_br_keep_distinct_field_gaps() {
 }
 
 #[test]
-fn run_in_fixed_cells_keep_completed_head_glyph_in_its_term() {
+fn run_in_fixed_cells_fold_completed_head_glyph_under_generated_cells() {
     // Fixed CVS mdoc_term.c::termp_it_pre() sends inset/diag cells through
     // term_word("\\ ") / term_word("\\ \\ "). On this UTF-8 device the
     // generated cell executes encode1(U+00A0) and consumes the pending HEAD

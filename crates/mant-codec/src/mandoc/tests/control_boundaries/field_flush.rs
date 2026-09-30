@@ -149,7 +149,8 @@ fn final_hang_field_reestablishes_body_word_gap() {
 
 #[test]
 fn final_hang_field_only_consumes_a_proven_body_gap() {
-    // All exact fields passed fixed CVS -Tascii/-Tutf8/-Tlint.
+    // All exact fields passed fixed CVS -Tutf8 (the `YYYYY\:Z` entry sits on
+    // the device fork: ascii wraps at ASCII_BREAK and proves gap 1, chars.c:53).
     // term.c::term_fill() may break a field at ordinary spaces after .br;
     // cumulative field width is not the final native row column. An
     // indivisible last word spanning the BODY origin still proves no gap.
