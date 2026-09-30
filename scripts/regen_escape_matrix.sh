@@ -7,11 +7,12 @@
 # column (chars.c:47-53 with term.c:620-634). Expectations must come from
 # this run, never by hand. The normalization is implemented in python3 so
 # the NBSP/dash byte rules behave identically on every platform's sed. It
-# mirrors normalize_mant in crates/mant-engine/tests/roff_lowering/
-# escape_matrix.rs: every body row and every blank row between body rows is
-# preserved, and only mandoc's page furniture (the name(1) title/header
-# rows, the footer OS and date rows, and the page-edge blanks framing
-# them) is dropped.
+# mirrors normalize in crates/mant-engine/tests/roff_lowering/
+# escape_matrix.rs (reference side, footed page): page furniture drops by
+# position window, never by content — row 0 (plus an optional wrapped
+# center line) is the header, the trailing non-blank block is the footer,
+# and the page-edge blanks framing them go too. Every body row and every
+# blank row between body rows is preserved.
 set -euo pipefail
 REF="${MANT_REFERENCE:-target/mandoc-migration/reference/mandoc}"
 [ -x "$REF" ] || { echo "reference binary not found: $REF" >&2; exit 1; }
@@ -43,17 +44,7 @@ PREFLIGHT
 for source in crates/mant-engine/tests/roff_lowering/escape_matrix/cases/*.1; do
   name=$(basename "$source" .1)
   "$REF" -Tutf8 "$source" | python3 -c '
-import re
 import sys
-
-FURNITURE_OS_WORDS = {
-    "Linux", "macOS", "Darwin", "Apple", "Ubuntu", "Debian",
-    "NetBSD", "FreeBSD", "OpenBSD", "AT&T", "GNU",
-}
-FURNITURE_MONTHS = {
-    "January", "February", "March", "April", "May", "June", "July",
-    "August", "September", "October", "November", "December",
-}
 
 
 def section_token(token):
@@ -64,29 +55,6 @@ def section_token(token):
         return False
     inner = token[open_ + 1:-1]
     return bool(inner) and inner.isascii() and inner[0].isdigit() and inner.isalnum()
-
-
-def title_row(row):
-    tokens = row.split(" ")
-    if not section_token(tokens[0]):
-        return False
-    return len(tokens) == 1 or section_token(tokens[-1])
-
-
-def os_row(row):
-    return row.split(" ")[0] in FURNITURE_OS_WORDS
-
-
-def date_row(row):
-    tokens = row.split(" ")
-    if len(tokens) < 2 or not section_token(tokens[-1]):
-        return False
-    body = tokens[:-1]
-    if any(re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", token) for token in body):
-        return True
-    return any(token in FURNITURE_MONTHS for token in body) and any(
-        re.fullmatch(r"[0-9]{4}", token) for token in body
-    )
 
 
 rows = []
@@ -103,16 +71,21 @@ for line in sys.stdin.read().splitlines():
             projected.append("-")
         else:
             projected.append(ch)
-    row = " ".join("".join(projected).split())
-    # Drop only page furniture; body and blank rows are the pinned content.
-    if title_row(row) or os_row(row) or date_row(row):
-        continue
-    rows.append(row)
-# Page-edge blank rows frame the furniture (the reference emits one blank
-# after the header and one before the footer via term_vspace); blank rows
-# between body rows are paragraph structure and stay.
+    rows.append(" ".join("".join(projected).split()))
+
+# Furniture drops by position window, never by content. Row 0 is always
+# the header; a non-blank row 1 without a section token is the wrapped
+# center line of a two-line header. The reference always foots the page,
+# so the trailing non-blank block is the footer (1-3 rows) framed by
+# page-edge blanks; body rows and paragraph blanks are pinned content.
+if rows:
+    rows.pop(0)
+if rows and rows[0] != "" and not any(section_token(t) for t in rows[0].split(" ")):
+    rows.pop(0)
 while rows and rows[0] == "":
     rows.pop(0)
+while rows and rows[-1] != "":
+    rows.pop()
 while rows and rows[-1] == "":
     rows.pop()
 sys.stdout.write("\n".join(rows) + ("\n" if rows else ""))

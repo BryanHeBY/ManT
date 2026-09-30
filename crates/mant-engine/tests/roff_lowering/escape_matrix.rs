@@ -13,9 +13,11 @@
 //! `definition_matrix` (recorded `-Tascii`), this matrix MUST stay UTF-8:
 //! its cases sit exactly on the device fork. Row grouping preserves every
 //! body row — section heads included — and every blank row between body
-//! rows, so a lost or stray paragraph row fails the matrix. Only
-//! `mandoc`'s page furniture goes: the `name(1)` title/header rows, the
-//! footer OS and date rows, and the page-edge blank rows framing them.
+//! rows, so a lost or stray paragraph row fails the matrix. Page
+//! furniture goes by position window, never by content: row 0 (plus an
+//! optional wrapped center line) is the header, the trailing non-blank
+//! block is the footer, and the page-edge blanks frame them both — so no
+//! body row, however date- or OS-shaped, can be mistaken for either.
 
 use std::fmt::Write as _;
 
@@ -23,20 +25,6 @@ const CASES: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/tests/roff_lowering/escape_matrix/cases"
 );
-
-/// The footer's left-corner operating-system words (`mandoc` prints the
-/// `.Os` default from `uname` when the macro is bare).
-const FURNITURE_OS_WORDS: [&str; 11] = [
-    "Linux", "macOS", "Darwin", "Apple", "Ubuntu", "Debian", "NetBSD", "FreeBSD",
-    "OpenBSD", "AT&T", "GNU",
-];
-
-/// Month names `mandoc`'s footer date line carries for `%B`-style `.Dd`
-/// dates (ISO dates are matched structurally instead).
-const FURNITURE_MONTHS: [&str; 12] = [
-    "January", "February", "March", "April", "May", "June", "July", "August", "September",
-    "October", "November", "December",
-];
 
 /// `true` for the `name(section)` tokens that headline page furniture:
 /// the reference's `name(1) … name(1)` header and `date … name(1)` footer
@@ -56,59 +44,30 @@ fn is_section_token(token: &str) -> bool {
         && inner.bytes().all(|byte| byte.is_ascii_alphanumeric())
 }
 
-/// The reference's header row (`name(1) … name(1)`) and this renderer's
-/// bare `name(1)` label row.
-fn is_title_row(row: &str) -> bool {
-    let mut tokens = row.split(' ');
-    match tokens.next() {
-        Some(first) if is_section_token(first) => {
-            tokens.next_back().is_none_or(is_section_token)
-        }
-        _ => false,
-    }
-}
-
-/// The footer's operating-system corner row.
-fn is_os_row(row: &str) -> bool {
+/// The page head both renderers always lay down before any body row —
+/// the reference's header (single line, wrapped two-line form, or the
+/// metadata-default `UNTITLED LOCAL UNTITLED` / `() ()` degenerate
+/// corners) and this renderer's `name(1)` label row. Only a debug
+/// tripwire for the head window: recall is positional, never lexical.
+fn is_page_head(row: &str) -> bool {
     row.split(' ')
-        .next()
-        .is_some_and(|first| FURNITURE_OS_WORDS.contains(&first))
-}
-
-/// The footer's date corner: `September 30, 2026 name(1)` or
-/// `2026-09-30 name(1)` for ISO `.Dd` dates.
-fn is_date_row(row: &str) -> bool {
-    let tokens: Vec<&str> = row.split(' ').collect();
-    let [.., last] = tokens.as_slice() else {
-        return false;
-    };
-    if !is_section_token(last) {
-        return false;
-    }
-    let body = &tokens[..tokens.len() - 1];
-    body.iter().any(|token| {
-        let bytes = token.as_bytes();
-        matches!(bytes, [y0, y1, y2, y3, b'-', m0, m1, b'-', d0, d1] if [
-            *y0, *y1, *y2, *y3, *m0, *m1, *d0, *d1,
-        ]
-        .iter()
-        .all(|byte| byte.is_ascii_digit()))
-    }) || (body.iter().any(|token| FURNITURE_MONTHS.contains(token))
-        && body
-            .iter()
-            .any(|token| token.len() == 4 && token.bytes().all(|byte| byte.is_ascii_digit())))
+        .any(|token| is_section_token(token) || token == "()")
+        || row.starts_with("UNTITLED")
 }
 
 /// The probe's row-grouping normalization: overstrike projection and
-/// inline-whitespace collapse, then drop only the page furniture — the
-/// `name(1)` title/header rows, the footer OS and date rows, and the
-/// page-edge blank rows that frame them. Body rows and blank rows between
-/// body rows are paragraph structure and stay pinned: losing a body row,
-/// losing or adding a blank row, or rendering a body-bearing page empty
-/// all fail. The page-edge trim is symmetric because the header/footer
-/// `term_vspace` blanks belong to the furniture, not the body, and this
-/// single-device renderer lays out its own title-to-body gap.
-fn normalize_mant(output: &str) -> Vec<String> {
+/// inline-whitespace collapse, then the position-window furniture drop.
+/// The head window takes row 0 — both renderers always lay the header or
+/// label down there — plus an optional non-blank row 1, the wrapped
+/// center line of a two-line reference header, and the page-edge blanks
+/// that follow. The tail window adapts per device: the reference always
+/// foots the page, so a `has_footer` page loses its trailing non-blank
+/// block (the 1–3 row footer) and the blanks framing it, while this
+/// footerless renderer only trims trailing blanks. Body rows and blank
+/// rows between body rows are paragraph structure and stay pinned:
+/// losing a body row, losing or adding a blank row, or rendering a
+/// body-bearing page empty all fail.
+fn normalize(output: &str, has_footer: bool) -> Vec<String> {
     let mut projected = String::with_capacity(output.len());
     for character in output.chars() {
         if character == '\u{8}' {
@@ -128,15 +87,40 @@ fn normalize_mant(output: &str) -> Vec<String> {
     let mut rows: Vec<String> = projected
         .lines()
         .map(|line| line.split_whitespace().collect::<Vec<_>>().join(" "))
-        .filter(|row| !is_title_row(row) && !is_os_row(row) && !is_date_row(row))
         .collect();
-    while rows.first().is_some_and(|row| row.is_empty()) {
+    // Row 0 is furniture on the faith of the layout invariant; the debug
+    // tripwire keeps that faith observable.
+    if let Some(head) = rows.first() {
+        debug_assert!(is_page_head(head), "row 0 is not page furniture: {head:?}");
         rows.remove(0);
     }
-    while rows.last().is_some_and(|row| row.is_empty()) {
+    // A non-blank row 1 without a section token is the wrapped center of
+    // a two-line header; this renderer's row 1 is always the title-gap
+    // blank, so the branch stays dormant on that side.
+    if rows
+        .first()
+        .is_some_and(|row| !row.is_empty() && !row.split(' ').any(is_section_token))
+    {
+        rows.remove(0);
+    }
+    while rows.first().is_some_and(String::is_empty) {
+        rows.remove(0);
+    }
+    if has_footer {
+        while rows.last().is_some_and(|row| !row.is_empty()) {
+            rows.pop();
+        }
+    }
+    while rows.last().is_some_and(String::is_empty) {
         rows.pop();
     }
     rows
+}
+
+/// This renderer lays out no footer, so only the head window and the
+/// page-edge blanks go; the trailing body block always stays.
+fn normalize_mant(output: &str) -> Vec<String> {
+    normalize(output, false)
 }
 
 #[test]
@@ -154,19 +138,92 @@ fn row_grouping_keeps_body_and_blank_rows_and_drops_only_furniture() {
         "                              September 30, 2026                       T(1)\n",
     );
     assert_eq!(
-        normalize_mant(page),
+        normalize(page, true),
         ["NAME", "t - probe", "", "DESCRIPTION", "A"],
-        "body rows, section heads, and the paragraph blank stay; the header, its blank, the footer blank, the OS row, and the date row go"
+        "body rows, section heads, and the paragraph blank stay; the head window, the page-edge blanks, and the footer block go"
     );
-    // ISO `.Dd` dates are furniture too.
-    assert_eq!(normalize_mant("2026-09-30  x(1)"), Vec::<String>::new());
-    // The renderer's own `name(1)` label row strips like the header, and
-    // its title-gap blanks are page-edge layout, not paragraph structure.
+    // A long name wraps the header into a corner line plus a center
+    // line; the head window takes both.
+    let long = "t".repeat(60);
+    let wrapped =
+        format!("{long}(1)\n             General Commands Manual\n\nBODY ROW\n\n{long}(1)\n");
+    assert_eq!(normalize(&wrapped, true), ["BODY ROW"]);
+    // Metadata defaults are still furniture by position: the `UNTITLED`
+    // header and the dateless `()` footer corner.
+    assert_eq!(
+        normalize("UNTITLED  LOCAL  UNTITLED\n\nBODY\n\n()\n", true),
+        ["BODY"]
+    );
+    // An all-furniture page (empty body) groups to nothing.
+    assert_eq!(
+        normalize(
+            concat!(
+                "E(1)                    General Commands Manual                    E(1)\n",
+                "\n",
+                "Linux 6.18.40.1-microsoft-standard-WSL2\n",
+                "                                             E(1)\n",
+            ),
+            true
+        ),
+        Vec::<String>::new()
+    );
+    // Adversarial body rows are content, never furniture: recall is
+    // positional, so date-shaped, OS-shaped, and `printf(3)` rows inside
+    // the body survive verbatim instead of matching a furniture glossary.
+    let extreme = concat!(
+        "X(1)                    General Commands Manual                    X(1)\n",
+        "\n",
+        "Linux commands begin the body here.\n",
+        "\n",
+        "Mid body references printf(3) and a Linux command.\n",
+        "\n",
+        "A date-shaped body row: 2026-09-30 2026-09-30 printf(3)\n",
+        "\n",
+        "GNU ends near the tail.\n",
+        "\n",
+        "printf(3)\n",
+        "\n",
+        "Linux 6.18.40.1-microsoft-standard-WSL2\n",
+        "                              September 30, 2026                       X(1)\n",
+    );
+    assert_eq!(
+        normalize(extreme, true),
+        [
+            "Linux commands begin the body here.",
+            "",
+            "Mid body references printf(3) and a Linux command.",
+            "",
+            "A date-shaped body row: 2026-09-30 2026-09-30 printf(3)",
+            "",
+            "GNU ends near the tail.",
+            "",
+            "printf(3)",
+        ],
+        "the head window and the footer block go; every body row and paragraph blank stays"
+    );
+    // This renderer's own shape: the label row and its title-gap blanks
+    // are page-edge layout, and with no footer the trailing body block
+    // stays put.
     assert_eq!(normalize_mant("x(1)\n\n\nS\nX"), ["S", "X"]);
-    // A body row that merely ends in a section token is content.
-    assert_eq!(normalize_mant("see x(1)"), ["see x(1)"]);
+    assert_eq!(
+        normalize_mant("x(1)\n\nLinux command row\n\n2026-09-30 x(1)\n\nprintf(3)\n"),
+        ["Linux command row", "", "2026-09-30 x(1)", "", "printf(3)"]
+    );
+    // Whatever row 0 carries goes with the head window — even a date
+    // corner — while the same text inside the body is content.
+    assert_eq!(normalize_mant("2026-09-30  x(1)"), Vec::<String>::new());
+    assert_eq!(
+        normalize(
+            "D(1)  General Commands Manual  D(1)\n\n2026-09-30 x(1)\n\n()\n",
+            true
+        ),
+        ["2026-09-30 x(1)"]
+    );
     // Losing or adding a paragraph blank changes the pinned rows.
-    assert_ne!(normalize_mant("S\n\nX"), normalize_mant("S\nX"));
+    assert_ne!(
+        normalize_mant("x(1)\n\nS\n\nX"),
+        normalize_mant("x(1)\n\nS\nX")
+    );
 }
 
 #[test]
