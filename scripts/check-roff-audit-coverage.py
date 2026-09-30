@@ -7,8 +7,10 @@ renderer-layout audit needs only identities whose fidelity comparison reached
 a comparable ``clean`` or ``review`` result; it may also contain independent
 layout sweeps. Checked-in fixtures form a second, reproducible baseline shared
 by the structure and projection ledgers. The mandoc reference route must replay
-the complete historical fidelity baseline, cover every comparable result in
-its own layout ledger, and include every checked-in fixture in both ledgers.
+the complete historical fidelity baseline and cover every comparable result
+in its own layout ledger. New fixtures can instead use a separate paired
+ledger bound to the currently registered pristine CVS renderer; that fixture
+supplement never replaces or relabels the historical distribution baseline.
 The independent zero-width target and semantic-entry precision routes must
 cover every checked-in fixture, but their distribution sweeps do not have to
 mirror the visible-fidelity sample.
@@ -18,14 +20,18 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import re
+import shutil
 import sys
+import tempfile
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Iterable, Sequence
 
-from roff_audit_common import discover_pages, relative_label, source_digest
+import mandoc_oracle
+from roff_audit_common import discover_pages, manual_section, relative_label, source_digest
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -39,6 +45,8 @@ DEFAULT_TARGET_DB = ROFF_ROOT / "TARGET_AUDIT.csv"
 DEFAULT_SEMANTIC_DB = ROFF_ROOT / "SEMANTIC_AUDIT.csv"
 DEFAULT_MANDOC_FIDELITY_DB = ROFF_ROOT / "MANDOC_FIDELITY_AUDIT.csv"
 DEFAULT_MANDOC_LAYOUT_DB = ROFF_ROOT / "MANDOC_LAYOUT_AUDIT.csv"
+DEFAULT_CVS_FIXTURE_FIDELITY_DB = ROFF_ROOT / "MANDOC_CVS_FIXTURE_FIDELITY_AUDIT.csv"
+DEFAULT_CVS_FIXTURE_LAYOUT_DB = ROFF_ROOT / "MANDOC_CVS_FIXTURE_LAYOUT_AUDIT.csv"
 DEFAULT_DEVIATION_DB = ROFF_ROOT / "REFERENCE_RENDERER_DEVIATIONS.csv"
 
 IDENTITY_FIELDS = ["corpus", "path", "section", "source_sha256"]
@@ -108,6 +116,8 @@ class Coverage:
     mandoc_fidelity: frozenset[Identity]
     mandoc_comparable: frozenset[Identity]
     mandoc_layout: frozenset[Identity]
+    cvs_fixture_fidelity: frozenset[Identity]
+    cvs_fixture_layout: frozenset[Identity]
     current_mandoc_deviations: int
     fixture_inventory: frozenset[Identity]
     pending: tuple[tuple[str, frozenset[Identity]], ...]
@@ -138,6 +148,16 @@ def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
         "--mandoc-fidelity-db", type=Path, default=DEFAULT_MANDOC_FIDELITY_DB
     )
     parser.add_argument("--mandoc-layout-db", type=Path, default=DEFAULT_MANDOC_LAYOUT_DB)
+    parser.add_argument(
+        "--cvs-fixture-fidelity-db", type=Path,
+        default=DEFAULT_CVS_FIXTURE_FIDELITY_DB,
+        help="fixture-only content ledger for the active pristine CVS oracle",
+    )
+    parser.add_argument(
+        "--cvs-fixture-layout-db", type=Path,
+        default=DEFAULT_CVS_FIXTURE_LAYOUT_DB,
+        help="matching fixture-only layout ledger for the active CVS oracle",
+    )
     parser.add_argument("--deviation-db", type=Path, default=DEFAULT_DEVIATION_DB)
     parser.add_argument("--self-check", action="store_true", help=argparse.SUPPRESS)
     return parser.parse_args(argv)
@@ -201,6 +221,108 @@ def mandoc_renderer_identity(
     if identity[0] != "mandoc" or not identity[1]:
         raise ValueError(f"invalid mandoc renderer identity in {path}")
     return identity
+
+
+def active_fixture_renderer(root: Path = ROOT) -> tuple[str, str]:
+    """Verify tracked trust records without requiring a local oracle binary.
+
+    Actual audit execution still performs binary/archive/build preflight.
+    Coverage only binds recorded rows to an active registration and this
+    checkout's locked source and recipe; it does not claim another render.
+    """
+    try:
+        registry = json.loads((root / mandoc_oracle.REGISTRY).read_text())
+        mandoc_oracle.exact_keys(registry, {"schema", "attestations"}, "oracle registry")
+        if (registry["schema"] != "mant.mandoc-oracle-registry/v1"
+                or not isinstance(registry["attestations"], dict)
+                or any(not isinstance(record, dict) for record in registry["attestations"].values())):
+            raise ValueError("unsupported oracle registry")
+        active = [
+            (identity, record)
+            for identity, record in registry["attestations"].items()
+            if record.get("status") == "active"
+        ]
+        if len(active) != 1:
+            raise ValueError("fixture supplement requires exactly one active CVS oracle")
+        identity, registration = active[0]
+        mandoc_oracle.exact_keys(
+            registration, {"path", "sha256", "status"}, "oracle registration"
+        )
+        path = mandoc_oracle.validate_hash_record(
+            root, {key: registration[key] for key in ("path", "sha256")},
+            "registered attestation",
+        )
+        attestation = json.loads(path.read_text())
+        mandoc_oracle.exact_keys(attestation, {
+            "schema", "identity", "source", "recipe", "toolchain", "platform",
+            "buildEvidence", "artifact", "profiles",
+        }, "fixture oracle attestation")
+        mandoc_oracle.exact_keys(attestation["source"], {
+            "lock", "manifest", "archive", "inventory", "pristine",
+        }, "fixture oracle source")
+        profiles = attestation["profiles"]
+        if (attestation["schema"] != mandoc_oracle.SCHEMA
+                or attestation["identity"] != identity
+                or not isinstance(profiles, list)
+                or any(not isinstance(profile, str) for profile in profiles)
+                or len(set(profiles)) != len(profiles)
+                or set(profiles) - mandoc_oracle.PROFILES
+                or "utf8" not in profiles
+                or attestation["source"]["pristine"] is not True):
+            raise ValueError("fixture supplement requires a pristine UTF-8 CVS attestation")
+        for key, expected in (
+            ("lock", "crates/libmandoc-rs/upstream/SOURCE"),
+            ("manifest", "crates/libmandoc-rs/upstream/FILES"),
+            ("inventory", "crates/libmandoc-rs/upstream/CVS_INVENTORY.json"),
+        ):
+            record = attestation["source"][key]
+            if record["path"] != expected:
+                raise ValueError(f"fixture oracle {key} is not the current locked source")
+            mandoc_oracle.validate_hash_record(root, record, f"oracle {key}")
+        source_lock = dict(
+            line.strip().split(" = ", 1)
+            for line in (root / attestation["source"]["lock"]["path"]).read_text().splitlines()
+            if " = " in line and not line.lstrip().startswith("#")
+        )
+        archive = attestation["source"]["archive"]
+        mandoc_oracle.exact_keys(archive, {"path", "sha256"}, "oracle archive")
+        mandoc_oracle.repository_path(root, archive["path"], "oracle archive")
+        if (archive["sha256"] != source_lock["archive_sha256"]
+                or Path(archive["path"]).name != source_lock["archive"]):
+            raise ValueError("fixture oracle archive does not match the current source lock")
+        recipe = attestation["recipe"]["file"]
+        if recipe["path"] != "crates/libmandoc-rs/upstream/oracle/recipe.json":
+            raise ValueError("fixture oracle recipe is not the current locked recipe")
+        mandoc_oracle.validate_hash_record(root, recipe, "oracle recipe")
+        return "mandoc", identity
+    except (OSError, KeyError, TypeError, json.JSONDecodeError) as error:
+        raise ValueError(f"invalid fixture oracle trust records: {error}") from error
+
+
+def validate_fixture_supplement(
+    fidelity_path: Path,
+    layout_path: Path,
+    fidelity_rows: list[dict[str, str]],
+    layout_rows: list[dict[str, str]],
+    fixtures: frozenset[Identity],
+    renderer: tuple[str, str],
+) -> None:
+    """A supplement proves only paired comparisons of exact checkout fixtures."""
+    for path, rows in ((fidelity_path, fidelity_rows), (layout_path, layout_rows)):
+        if mandoc_renderer_identity(path, rows) != renderer:
+            raise ValueError(f"fixture supplement does not use the active CVS oracle: {path}")
+        for number, row in enumerate(rows, 2):
+            identity = Identity(row["corpus"], row["path"], row["source_sha256"])
+            if identity not in fixtures:
+                raise ValueError(f"supplement source is not an exact checked-in fixture at {path}:{number}")
+            if row["section"] != manual_section(Path(identity.path)):
+                raise ValueError(f"supplement has a mismatched fixture section at {path}:{number}")
+            if row["scan_status"] not in {"clean", "review"}:
+                raise ValueError(f"supplement comparison did not complete at {path}:{number}")
+    if identities(fidelity_rows) != identities(layout_rows):
+        raise ValueError("CVS fixture fidelity and layout supplements must cover the same sources")
+    if any(row["layout_schema"] != CURRENT_LAYOUT_SCHEMA for row in layout_rows):
+        raise ValueError("CVS fixture supplement requires the current layout schema")
 
 
 def read_deviation_rows(path: Path) -> list[dict[str, str]]:
@@ -296,6 +418,7 @@ def fixture_identities() -> frozenset[Identity]:
 
 
 def load_coverage(arguments: argparse.Namespace) -> Coverage:
+    fixtures = fixture_identities()
     fidelity_rows = read_rows(
         arguments.fidelity_db,
         FIDELITY_FIELDS,
@@ -342,6 +465,26 @@ def load_coverage(arguments: argparse.Namespace) -> Coverage:
         {"clean", "review", "hard-failure"},
         "layout_schema",
     )
+    cvs_fixture_fidelity_rows = read_rows(
+        arguments.cvs_fixture_fidelity_db,
+        MANDOC_FIDELITY_FIELDS,
+        {"clean", "review", "hard-failure", "skipped"},
+    )
+    cvs_fixture_layout_rows = read_rows(
+        arguments.cvs_fixture_layout_db,
+        MANDOC_LAYOUT_FIELDS,
+        {"clean", "review", "hard-failure"},
+        "layout_schema",
+    )
+    cvs_fixture_renderer = active_fixture_renderer()
+    validate_fixture_supplement(
+        arguments.cvs_fixture_fidelity_db,
+        arguments.cvs_fixture_layout_db,
+        cvs_fixture_fidelity_rows,
+        cvs_fixture_layout_rows,
+        fixtures,
+        cvs_fixture_renderer,
+    )
     deviation_rows = read_deviation_rows(arguments.deviation_db)
     mandoc_fidelity_renderer = mandoc_renderer_identity(
         arguments.mandoc_fidelity_db, mandoc_fidelity_rows
@@ -358,6 +501,12 @@ def load_coverage(arguments: argparse.Namespace) -> Coverage:
         deviation_rows,
         mandoc_fidelity_rows,
         mandoc_fidelity_renderer,
+    )
+    current_mandoc_deviations += validate_current_mandoc_deviations(
+        arguments.deviation_db,
+        deviation_rows,
+        cvs_fixture_fidelity_rows,
+        cvs_fixture_renderer,
     )
     fidelity = identities(fidelity_rows)
     comparable = identities(
@@ -414,10 +563,12 @@ def load_coverage(arguments: argparse.Namespace) -> Coverage:
             ("structure", current_structure, fidelity),
             ("projection", current_projection, fidelity),
             ("layout", current_layout, comparable),
-            ("target", current_target, fixture_identities()),
-            ("semantic", current_semantic, fixture_identities()),
+            ("target", current_target, fixtures),
+            ("semantic", current_semantic, fixtures),
             ("mandoc-fidelity", mandoc_fidelity_rows, mandoc_fidelity),
             ("mandoc-layout", current_mandoc_layout, mandoc_comparable),
+            ("cvs-fixture-fidelity", cvs_fixture_fidelity_rows, fixtures),
+            ("cvs-fixture-layout", cvs_fixture_layout_rows, fixtures),
         )
     )
     pending = tuple(
@@ -434,6 +585,8 @@ def load_coverage(arguments: argparse.Namespace) -> Coverage:
             ("semantic", current_semantic),
             ("mandoc-fidelity", mandoc_fidelity_rows),
             ("mandoc-layout", current_mandoc_layout),
+            ("cvs-fixture-fidelity", cvs_fixture_fidelity_rows),
+            ("cvs-fixture-layout", cvs_fixture_layout_rows),
         )
     )
     return Coverage(
@@ -451,8 +604,10 @@ def load_coverage(arguments: argparse.Namespace) -> Coverage:
         mandoc_fidelity=mandoc_fidelity,
         mandoc_comparable=mandoc_comparable,
         mandoc_layout=identities(current_mandoc_layout),
+        cvs_fixture_fidelity=identities(cvs_fixture_fidelity_rows),
+        cvs_fixture_layout=identities(cvs_fixture_layout_rows),
         current_mandoc_deviations=current_mandoc_deviations,
-        fixture_inventory=fixture_identities(),
+        fixture_inventory=fixtures,
         pending=pending,
         summaries=summaries,
     )
@@ -472,8 +627,9 @@ def missing_sets(coverage: Coverage) -> dict[str, frozenset[Identity]]:
         "mandoc-layout/comparable-mandoc-fidelity": coverage.mandoc_comparable
         - coverage.mandoc_layout,
         "mandoc-fidelity/fixtures": coverage.fixture_inventory
-        - coverage.mandoc_fidelity,
-        "mandoc-layout/fixtures": coverage.fixture_inventory - coverage.mandoc_layout,
+        - coverage.mandoc_fidelity - coverage.cvs_fixture_fidelity,
+        "mandoc-layout/fixtures": coverage.fixture_inventory
+        - coverage.mandoc_layout - coverage.cvs_fixture_layout,
         "mandoc-fidelity/unexpected": coverage.mandoc_fidelity
         - coverage.fidelity
         - coverage.fixture_inventory,
@@ -515,8 +671,74 @@ def validate_current_profile_schemas() -> None:
                 raise ValueError(f"coverage schema {expected} disagrees with {path}")
 
 
+def self_check_fixture_trust_records() -> None:
+    """Mutate tracked trust inputs, never an actual oracle or vendor source."""
+    target = ROOT / "target"
+    target.mkdir(exist_ok=True)
+    registry = json.loads((ROOT / mandoc_oracle.REGISTRY).read_text())
+    identity, registration = next(
+        (identity, record) for identity, record in registry["attestations"].items()
+        if record["status"] == "active"
+    )
+    attestation = json.loads((ROOT / registration["path"]).read_text())
+    tracked = [
+        mandoc_oracle.REGISTRY, registration["path"],
+        *[attestation["source"][key]["path"] for key in ("lock", "manifest", "inventory")],
+        attestation["recipe"]["file"]["path"],
+    ]
+    with tempfile.TemporaryDirectory(prefix="roff-coverage-trust-", dir=target) as scratch:
+        root = Path(scratch)
+        for relative in tracked:
+            destination = root / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(ROOT / relative, destination)
+        assert active_fixture_renderer(root) == ("mandoc", identity)
+        for relative in tracked:
+            path = root / relative
+            original = path.read_bytes()
+            path.write_bytes(original + b"\nmodified\n")
+            try:
+                active_fixture_renderer(root)
+            except ValueError:
+                pass
+            else:
+                raise AssertionError(f"modified oracle trust input accepted: {relative}")
+            path.write_bytes(original)
+        historical_registry = json.loads(json.dumps(registry))
+        historical_registry["attestations"][identity]["status"] = "historical"
+        (root / mandoc_oracle.REGISTRY).write_text(json.dumps(historical_registry))
+        try:
+            active_fixture_renderer(root)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("a historical oracle supplied current fixture coverage")
+        (root / mandoc_oracle.REGISTRY).write_text(json.dumps(registry))
+        # Rehashing a newly registered record cannot excuse non-pristine,
+        # mismatched, or unsupported source metadata.
+        for label, changed in (
+            ("non-pristine", {**attestation, "source": {**attestation["source"], "pristine": False}}),
+            ("different identity", {**attestation, "identity": "different"}),
+            ("no UTF-8 authorization", {**attestation, "profiles": ["ascii"]}),
+            ("unknown profile", {**attestation, "profiles": ["utf8", "unknown"]}),
+            ("different archive", {**attestation, "source": {**attestation["source"], "archive": {**attestation["source"]["archive"], "sha256": "0" * 64}}}),
+        ):
+            path = root / registration["path"]
+            path.write_text(json.dumps(changed))
+            changed_registry = json.loads(json.dumps(registry))
+            changed_registry["attestations"][identity]["sha256"] = mandoc_oracle.sha256(path)
+            (root / mandoc_oracle.REGISTRY).write_text(json.dumps(changed_registry))
+            try:
+                active_fixture_renderer(root)
+            except ValueError:
+                pass
+            else:
+                raise AssertionError(f"fixture oracle accepted {label}")
+
+
 def self_check() -> None:
     validate_current_profile_schemas()
+    self_check_fixture_trust_records()
     a = Identity("alpha", "man/man1/a.1", "a" * 64)
     b = Identity("alpha", "man/man1/b.1", "b" * 64)
     fixture = Identity("fixtures", "real/a.1", "c" * 64)
@@ -531,6 +753,8 @@ def self_check() -> None:
         mandoc_fidelity=frozenset({a, b, fixture}),
         mandoc_comparable=frozenset({a, fixture}),
         mandoc_layout=frozenset({a, fixture}),
+        cvs_fixture_fidelity=frozenset(),
+        cvs_fixture_layout=frozenset(),
         current_mandoc_deviations=0,
         fixture_inventory=frozenset({fixture}),
         pending=(("mandoc-fidelity", frozenset()),),
@@ -548,6 +772,8 @@ def self_check() -> None:
         mandoc_fidelity=frozenset({a}),
         mandoc_comparable=frozenset({a}),
         mandoc_layout=frozenset(),
+        cvs_fixture_fidelity=frozenset(),
+        cvs_fixture_layout=frozenset(),
         current_mandoc_deviations=0,
         fixture_inventory=aligned.fixture_inventory,
         pending=(("mandoc-fidelity", frozenset({a})),),
@@ -566,6 +792,52 @@ def self_check() -> None:
     assert missing["mandoc-fidelity/fixtures"] == frozenset({fixture})
     assert missing["mandoc-layout/fixtures"] == frozenset({fixture})
     assert missing["pending/mandoc-fidelity"] == frozenset({a})
+
+    supplemented = replace(
+        incomplete,
+        cvs_fixture_fidelity=frozenset({fixture}),
+        cvs_fixture_layout=frozenset({fixture}),
+    )
+    supplemented_missing = missing_sets(supplemented)
+    assert not supplemented_missing["mandoc-fidelity/fixtures"]
+    assert not supplemented_missing["mandoc-layout/fixtures"]
+    assert supplemented_missing["mandoc-fidelity/historical-fidelity"] == frozenset({b})
+
+    renderer = active_fixture_renderer()
+    fixture_row = {
+        "reference_kind": renderer[0], "reference_id": renderer[1],
+        "corpus": fixture.corpus, "path": fixture.path, "section": "1",
+        "source_sha256": fixture.digest, "scan_status": "clean",
+        "review_status": "not-required", "note": "",
+    }
+    fixture_layout_row = {**fixture_row, "layout_schema": CURRENT_LAYOUT_SCHEMA}
+    validate_fixture_supplement(
+        Path("fixture-content.csv"), Path("fixture-layout.csv"),
+        [fixture_row], [fixture_layout_row], frozenset({fixture}), renderer,
+    )
+    for label, content, layout in (
+        ("unregistered renderer", [{**fixture_row, "reference_id": "unregistered"}], [fixture_layout_row]),
+        ("different layout renderer", [fixture_row], [{**fixture_layout_row, "reference_id": "historical"}]),
+        ("missing layout source", [fixture_row], []),
+        ("missing content source", [], [fixture_layout_row]),
+        ("stale source digest", [{**fixture_row, "source_sha256": "d" * 64}], [fixture_layout_row]),
+        ("distribution supplement", [{**fixture_row, "corpus": "distribution"}], [fixture_layout_row]),
+        ("wrong source section", [{**fixture_row, "section": "2"}], [fixture_layout_row]),
+        ("old layout schema", [fixture_row], [{**fixture_layout_row, "layout_schema": "mant.roff-layout-audit/v1"}]),
+        ("skipped comparison", [{**fixture_row, "scan_status": "skipped"}], [fixture_layout_row]),
+        ("failed comparison", [fixture_row], [{**fixture_layout_row, "scan_status": "hard-failure"}]),
+    ):
+        try:
+            validate_fixture_supplement(
+                Path("fixture-content.csv"), Path("fixture-layout.csv"),
+                content, layout, frozenset({fixture}), renderer,
+            )
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"fixture supplement accepted {label}")
+    unresolved = replace(supplemented, pending=(("cvs-fixture-fidelity", frozenset({fixture})),))
+    assert missing_sets(unresolved)["pending/cvs-fixture-fidelity"] == frozenset({fixture})
 
     mandoc_fidelity = {
         "corpus": a.corpus,

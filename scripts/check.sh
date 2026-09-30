@@ -31,6 +31,8 @@ run() {
 }
 
 run "check Rust formatting" cargo fmt --all --check
+run "lint Rust workspace" \
+  env CARGO_INCREMENTAL=0 cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
 run "check Unix installer syntax" sh -n scripts/install.sh
 run "check manual packaging script syntax" bash -n scripts/package-manuals.sh
 run "check protocol snapshot script syntax" bash -n scripts/update-protocol-schema-snapshot.sh
@@ -59,6 +61,7 @@ run "check roff CommonMark projection audit" \
 run "check roff renderer-layout audit" python3 scripts/audit-roff-layout.py --self-check
 run "check roff target-conservation audit" python3 scripts/audit-roff-targets.py --self-check
 run "check roff semantic-entry audit" python3 scripts/audit-roff-semantics.py --self-check
+run "test roff audit coverage admission" python3 scripts/check-roff-audit-coverage.py --self-check
 run "check roff audit coverage contract" python3 scripts/check-roff-audit-coverage.py
 run "test Rust workspace" cargo test --locked --workspace
 run "test Markdown-only codec" cargo test --locked --package mant-codec --no-default-features
@@ -104,8 +107,6 @@ run "check read-only engine feature boundary" \
   cargo check --locked --package mant-engine --no-default-features
 run "build docs.rs documentation" \
   env RUSTDOCFLAGS=-Dwarnings cargo doc --locked --workspace --all-features --no-deps
-run "lint Rust workspace" \
-  env CARGO_INCREMENTAL=0 cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
 run "compile fuzz targets" \
   cargo check --locked --manifest-path fuzz/Cargo.toml --bins
 

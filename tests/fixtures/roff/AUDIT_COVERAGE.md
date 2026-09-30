@@ -18,17 +18,23 @@ index keyed by immutable `(corpus, path, decompressed-source SHA-256)` identity:
   baseline; local distribution corpora remain development and release-time
   evidence;
 - `MANDOC_FIDELITY_AUDIT.csv` must contain every historical fidelity identity
-  plus every checked-in fixture under one explicit mandoc renderer identity;
-  and
+  under one explicit historical mandoc renderer identity;
 - `MANDOC_LAYOUT_AUDIT.csv` must cover every comparable mandoc-fidelity
-  identity and every checked-in fixture under the same renderer identity.
+  identity under that same historical renderer identity; and
+- every checked-in fixture must have paired mandoc content and layout
+  evidence, either in those historical ledgers or in the separate
+  `MANDOC_CVS_FIXTURE_FIDELITY_AUDIT.csv` and
+  `MANDOC_CVS_FIXTURE_LAYOUT_AUDIT.csv` supplements.
 
 The original structure, projection, and groff-layout ledgers may contain a
 deliberate superset. Source-pattern sweeps, host-only equation probes, complete
 release scans, and renderer-specific layout studies do not need to be copied
 into unrelated ledgers merely to make row counts equal. The aligned mandoc
 ledgers are narrower by design: content is exactly historical fidelity plus
-fixtures, and layout is exactly the comparable mandoc content set.
+fixtures already compared with that renderer, and layout is exactly the
+comparable historical mandoc content set. Adding a fixture does not authorize
+claiming that an unavailable historical renderer ran on its bytes, changing
+the old renderer identity, or discarding the fixture from the inventory.
 `TARGET_AUDIT.csv` is also independent: its distribution rows record complete
 or targeted zero-width destination sweeps rather than replaying the historical
 visible-fidelity sample. Only its checked-in fixture coverage, schema, source
@@ -48,9 +54,46 @@ eligibility. Explicit TP bullet eligibility, styled parameter separators,
 prose false-head exclusions and private native-witness lifecycle remain covered
 by the synthetic native-declaration regressions; Term counts are not failures.
 
+## Current CVS fixture supplements
+
+The paired CVS supplements record actual comparisons for newly admitted
+checkout fixtures without rewriting distribution evidence from a different
+mandoc release. They use the existing mandoc CSV headers, including explicit
+`reference_kind` and `reference_id`; the layout supplement uses the current
+layout schema. Each supplement must contain exactly the same source identities
+and sections. Every source must match the decompressed SHA-256 and section of
+an actual checked-in fixture under corpus `fixtures`. Only completed `clean`
+or `review` comparisons qualify, and unresolved `pending` reviews still fail
+the gate. A failed or skipped comparison cannot supply missing fixture coverage.
+
+The renderer must be the single active pristine CVS registration in
+`crates/libmandoc-rs/upstream/oracle/registry.json`. Coverage verifies the
+registered attestation hash, UTF-8 authorization, and its current tracked
+SOURCE, FILES, CVS inventory and build-recipe hashes, including the pristine
+archive identity recorded in SOURCE. This inexpensive static
+check does not require a local reference executable or claim another render.
+The actual fidelity/layout audit commands must still pass complete oracle
+preflight, including the binary and pristine archive, before writing rows.
+
+Supplement identities are merged only for the two checked-in-fixture coverage
+checks. They cannot fill holes in the historical distribution baseline. A
+source copied from a distribution remains inadmissible until it is a licensed,
+identified checkout fixture; renaming its corpus without matching actual bytes
+does not grant coverage. Existing historical rows and their renderer identities
+retain their original meaning. When the active oracle changes, replay the
+bounded supplement against the new registered renderer before replacing its
+identity; historical distribution ledgers are not relabeled as new evidence.
+
+The coverage CLI accepts `--cvs-fixture-fidelity-db` and
+`--cvs-fixture-layout-db` for explicit ledger paths. Their defaults are the two
+tracked supplements above. `--self-check` tests missing pairs, stale source
+hashes, renderer mismatches, distribution rows, section/schema errors,
+incomplete comparisons, pending reviews, and mutation of oracle trust records.
+
 `REFERENCE_RENDERER_DEVIATIONS.csv` is a curated conclusion index, not a
-coverage route. Even so, rows naming the current mandoc renderer are validated
-against the matching mandoc-fidelity source hash, section, renderer command,
+coverage route. Even so, rows naming either the historical ledger's mandoc
+renderer or the active CVS supplement renderer are validated against their
+respective mandoc-fidelity source hash, section, renderer command,
 and completed human disposition so the curated index cannot silently drift
 from its detailed evidence. The accepted source conclusions are either a
 reviewed `false-positive` comparison or `confirmed-fixed` evidence with a

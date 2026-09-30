@@ -1,0 +1,2 @@
+reference_kind,reference_id,corpus,path,section,source_sha256,layout_schema,scan_status,review_status,note
+mandoc,cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930,fixtures,real/literal-definition-gap.1,1,003a34d49eb1d8f6e5f5943c04157d2239db1fd46b101c3236ab5203757efae3,mant.roff-layout-audit/v3,clean,not-required,

@@ -12433,6 +12433,7 @@ fixtures,real/fedora44/gcc.1.zst,1,531ca21b660c1fbd294218e921d834adfaccd61c6f400
 fixtures,real/fedora44/git.1.zst,1,2ee1c5dd84a69dfc91d84840e943e7df0ee06b86bf27eb4bb9369c415f3351c1,mant.roff-projection-profile/v3,clean,not-required,
 fixtures,real/fedora44/sh.1.zst,1,a3de526eb64c1f066d50899fa6ba2a7e63eb77b977aa881c67599d89978debf1,mant.roff-projection-profile/v3,clean,not-required,
 fixtures,real/fedora44/tar.1.zst,1,3a85ebdd1601114e7c8c1dfa35726f8394d59412887242ffc6ef49ec021017ee,mant.roff-projection-profile/v3,clean,not-required,
+fixtures,real/literal-definition-gap.1,1,003a34d49eb1d8f6e5f5943c04157d2239db1fd46b101c3236ab5203757efae3,mant.roff-projection-profile/v3,clean,not-required,
 fixtures,real/mant-audit/equation-contexts.7,7,61b65f6ac3608d549fb47dd5a8e0e298561dcc9bf8569998a9ca12bdf8f124d0,mant.roff-projection-profile/v3,clean,not-required,
 fixtures,real/mant-audit/lowering-bk-table.1,1,ab46e6b7a7ab8411bf35319e915d715e6612fcb5a69f6e2d8cff510bcb4bd0fc,mant.roff-projection-profile/v3,clean,not-required,
 fixtures,real/mant-audit/lowering-display-spacing.1,1,0bc76dd138469d18e239fa571f1a4591642b7fb1e875a133759e98e2c88958db,mant.roff-projection-profile/v3,clean,not-required,

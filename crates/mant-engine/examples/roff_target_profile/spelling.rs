@@ -58,7 +58,11 @@ fn next_spelling_event(characters: &mut std::str::Chars<'_>) -> Option<SpellingE
     match characters.next()? {
         // ManT does not turn zero-width or sub-column spacing hints into name
         // characters. These are not the word separators handled below.
-        '&' | '^' | '|' => Some(SpellingEvent::Nonprinting),
+        // Exact trailing/interior source cases verified with the pristine
+        // CVS tree/ASCII/UTF-8/HTML/lint backends. ESCAPE_NOSPACE changes
+        // layout only (term.c:660-665, html.c:576-579); tag_move_id() can
+        // still preserve that raw escape on the It owner (tag.c:248-284).
+        '&' | '^' | '|' | 'c' => Some(SpellingEvent::Nonprinting),
         'e' | '\\' => Some(SpellingEvent::Visible('\\')),
         '-' => Some(SpellingEvent::Visible('-')),
         ' ' | '~' | '0' => Some(SpellingEvent::Visible(' ')),
@@ -125,6 +129,20 @@ mod tests {
         }
         assert_eq!(first_source_token(r"\&\ "), None);
         assert_eq!(first_source_token(r"name\"), None);
+    }
+
+    #[test]
+    fn continuation_controls_do_not_hide_automatic_target_obligations() {
+        // Full extended-HEAD inputs ran through the five pristine CVS
+        // backends before these assertions. Recovery is deliberately one
+        // pass: literal \\ec remains a backslash followed by c.
+        for (raw, visible) in [(r"X\c", "X"), (r"X\cY", "XY"), (r"X\ec", r"X\c")] {
+            assert_eq!(automatic_target_spelling(raw).as_deref(), Some(visible));
+            assert_eq!(first_source_token(raw), Some(raw));
+        }
+        for raw in [r"X\zY\c", r"X\h'2m'\c", r"X\c\"] {
+            assert_eq!(automatic_target_spelling(raw), None, "{raw}");
+        }
     }
 
     #[test]
