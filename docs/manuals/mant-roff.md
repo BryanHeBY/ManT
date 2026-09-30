@@ -205,6 +205,13 @@ width would reject them; this is the frozen content-preserving difference
 from CVS terminal output. An explicit `\p` in the current field still uses the
 ordered CVS acceptance rule. Actual field targets continue to control Tab
 origin and row geometry when the responsive reading scan preserves words.
+The content-preserving principle generalizes beyond that HANG case: whenever
+only device width would reject buffered words, the lowering keeps the source
+text in the IR instead of dropping it. Three families that once leaked around
+this rule — enclosure closers from `.Op`-style macros crossing a wipe, a
+`.mc` suffix after a TAG overrun, and marker-only word fragments — now retire
+through the shared execution receipts and no longer retain content; the HANG
+overrun retention above remains the only frozen deviation of this class.
 HANG source-line flushes retain `trailspace` until the
 next formatter word; an intervening `br` clears it with BRIND instead of
 printing an extra separator. Definition HEAD ownership follows actual
