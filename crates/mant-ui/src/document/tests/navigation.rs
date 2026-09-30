@@ -400,6 +400,7 @@ fn table_anchors_follow_their_cell_content_through_wrapping_and_stacking() {
         alignment: None,
     };
     let table = |cells| Block::Table {
+        column_widths: Vec::new(),
         rows: vec![TableRow {
             kind: mant_ir::TableRowKind::Data,
             cells,

@@ -434,6 +434,9 @@ pub struct Node {
     pub offset: Option<String>,
     /// Normalized mdoc(7) list width, including its roff scale suffix.
     pub width: Option<String>,
+    /// Declared `Bl -column` width strings, in column order. Empty for every
+    /// other list kind; `Bl.cols`/`Bl.ncols` in the native tree.
+    pub columns: Vec<String>,
     /// Cells copied from a tbl(7) row represented by this node.
     pub table_cells: Vec<TableCell>,
     /// Owned native eqn(7) expression carried by this node.

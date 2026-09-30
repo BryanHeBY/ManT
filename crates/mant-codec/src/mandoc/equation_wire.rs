@@ -482,6 +482,7 @@ mod tests {
                     source: None,
                 },
                 Block::Table {
+                    column_widths: Vec::new(),
                     rows: vec![TableRow {
                         kind: TableRowKind::Data,
                         cells: vec![TableCell {

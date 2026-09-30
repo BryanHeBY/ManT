@@ -52,6 +52,8 @@ pub(super) struct CNodeView {
     pub(super) compact: i32,
     pub(super) offset: *const c_char,
     pub(super) width: *const c_char,
+    pub(super) cols: *const *const c_char,
+    pub(super) ncols: usize,
     pub(super) enclosure_open: *const c_char,
     pub(super) enclosure_close: *const c_char,
     pub(super) equation: *const CEquationBox,

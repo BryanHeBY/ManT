@@ -278,6 +278,11 @@ emphasis
             + node.offset.as_ref().map_or(0, String::len)
             + node.width.as_ref().map_or(0, String::len)
             + node
+                .columns
+                .iter()
+                .map(|column| column.len())
+                .sum::<usize>()
+            + node
                 .equation
                 .as_ref()
                 .map_or(0, |equation| equation.readable_text().len())

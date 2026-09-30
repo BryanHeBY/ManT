@@ -51,6 +51,8 @@ struct mant_mandoc_node_view {
 	int			 compact;
 	const char		*offset;
 	const char		*width;
+	const char *const	*cols;
+	size_t			 ncols;
 	const char		*enclosure_open;
 	const char		*enclosure_close;
 	const struct mant_mandoc_eqn_box *equation;

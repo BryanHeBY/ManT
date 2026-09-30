@@ -121,6 +121,7 @@ mod tests {
         assert!(table_requires_origin_preserving_stack(&positive, -2));
         for (indent, continuation) in [(-2, 0), (3, -2)] {
             let nested = rows(Block::Table {
+                column_widths: Vec::new(),
                 rows: rows(paragraph(indent, continuation)),
                 layout: LayoutHint::default(),
                 source: None,
@@ -148,6 +149,7 @@ mod tests {
             4096
         ));
         let nested = rows(Block::Table {
+            column_widths: Vec::new(),
             rows: rows(paragraph(4, 0)),
             layout: LayoutHint {
                 indent_columns: 3,

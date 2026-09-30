@@ -572,7 +572,17 @@ fn lower_mdoc_column_list(
         })
         .filter(|row| !row.cells.is_empty())
         .collect();
+    // mdoc_term.c::termp_bl_pre (701-733) derives every column's offset from
+    // the declared `Bl -column` width strings, not from rendered content.
+    // The dcol gap (4/3/1 by declared column count) is applied by the
+    // consumer so the stored widths stay the author's own declaration.
+    let column_widths = node
+        .columns
+        .iter()
+        .map(|declared| declared.chars().count().min(u16::MAX as usize) as u16)
+        .collect();
     Block::Table {
+        column_widths,
         rows,
         layout: layout(indent_columns),
         source: source_span(node),

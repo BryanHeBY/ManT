@@ -128,6 +128,7 @@ pub(super) fn append_table_row(
         rows.push(row);
     } else {
         output.push(Block::Table {
+            column_widths: Vec::new(),
             rows: vec![row],
             layout: layout(indent_columns),
             source: source_span(node),

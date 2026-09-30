@@ -229,6 +229,7 @@ fn parse_table(
         }
     }
     Block::Table {
+        column_widths: Vec::new(),
         rows,
         layout: LayoutHint::default(),
         source: Some(source.span(&(start_range.start..end))),

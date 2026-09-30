@@ -362,6 +362,7 @@ mod tests {
     fn signed_stacked_tables_share_the_gap_budget_with_their_parent() {
         for (origin, expected) in [(-2, true), (2, false)] {
             let table = Block::Table {
+                column_widths: Vec::new(),
                 rows: vec![TableRow {
                     kind: crate::TableRowKind::Data,
                     cells: vec![TableCell {

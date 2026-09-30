@@ -1159,6 +1159,10 @@ snapshot_normalized_data(struct mant_mandoc_node_view *view,
 		view->compact = source->norm->Bl.comp;
 		view->offset = source->norm->Bl.offs;
 		view->width = source->norm->Bl.width;
+		if (source->norm->Bl.type == LIST_column) {
+			view->cols = source->norm->Bl.cols;
+			view->ncols = source->norm->Bl.ncols;
+		}
 		switch (source->norm->Bl.type) {
 		case LIST_bullet:
 			view->list_kind = MANT_MANDOC_LIST_BULLET;

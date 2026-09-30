@@ -97,6 +97,12 @@ pub enum Block {
     Table {
         /// Logical rows in source order.
         rows: Vec<TableRow>,
+        /// Declared per-column widths in terminal cells, when the source
+        /// fixes them (`.Bl -column` argument widths plus the upstream
+        /// inter-column gap). Empty lets renderers derive widths from
+        /// content, matching tables whose source declares none.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        column_widths: Vec<u16>,
         /// Source-derived indentation and vertical spacing.
         #[serde(default, skip_serializing_if = "LayoutHint::is_empty")]
         layout: LayoutHint,

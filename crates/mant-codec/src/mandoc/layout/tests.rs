@@ -33,6 +33,7 @@ fn node(kind: NodeKind, text: Option<&str>, offset: Option<&str>) -> Node {
         compact: false,
         offset: offset.map(ToOwned::to_owned),
         width: None,
+        columns: Vec::new(),
         table_cells: Vec::new(),
         equation: None,
         children: Vec::new(),

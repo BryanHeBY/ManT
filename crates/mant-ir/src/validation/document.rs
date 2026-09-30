@@ -643,6 +643,7 @@ mod tests {
                 source: None,
             },
             Block::Table {
+                column_widths: Vec::new(),
                 rows: vec![TableRow {
                     kind: crate::TableRowKind::Data,
                     cells: vec![TableCell {
@@ -679,6 +680,7 @@ mod tests {
     #[test]
     fn rejects_rule_rows_with_data_or_without_layout_strengths() {
         let blocks = vec![Block::Table {
+            column_widths: Vec::new(),
             rows: vec![
                 TableRow {
                     kind: crate::TableRowKind::HorizontalRule,

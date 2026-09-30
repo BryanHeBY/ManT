@@ -3,7 +3,7 @@
 use super::flow::Flow;
 use super::indent_lines;
 use crate::presentation::{
-    EntryStyleMap, InlinePresentation, TextPresentation, TextRole, visit_inline_text,
+    EntryStyleMap, InlinePresentation, TextPresentation, TextRole, visit_inline_text_for_terminal,
 };
 use mant_ir::geometry::{compose_origin, coordinate, marker_run_in_gap, padding, text_width};
 use mant_ir::{Block, DefinitionItem, Inline, ListItem, ListKind, Section, TableCell};
@@ -53,7 +53,9 @@ impl BlockRenderer<'_> {
         if let Some(locations) = self.locations {
             locations.visit_inline(children, role, append);
         } else {
-            visit_inline_text(children, names, |inline, _, value| {
+            // Terminal projection follows mdoc_term.c::termp_lk_pre(): a
+            // label-replaced external link still shows `label: uri`.
+            visit_inline_text_for_terminal(children, names, |inline, _, value| {
                 append(
                     TextPresentation {
                         role,
@@ -157,9 +159,14 @@ impl BlockRenderer<'_> {
                     compose_origin(base_indent, layout.indent_columns),
                 );
             }
-            Block::Table { rows, layout, .. } => {
+            Block::Table {
+                rows,
+                column_widths,
+                layout,
+                ..
+            } => {
                 let origin = compose_origin(base_indent, layout.indent_columns);
-                return self.table_flow(rows, origin);
+                return self.table_flow(rows, column_widths, origin);
             }
             Block::Equation { value, layout, .. }
             | Block::Unsupported {
@@ -250,7 +257,10 @@ impl BlockRenderer<'_> {
         self.render_blocks(&cell.blocks, 0)
     }
 
-    fn table_flow(&self, rows: &[mant_ir::TableRow], origin: i32) -> Flow {
+    fn table_flow(&self, rows: &[mant_ir::TableRow], column_widths: &[u16], origin: i32) -> Flow {
+        if !column_widths.is_empty() {
+            return self.declared_column_flow(rows, column_widths, origin);
+        }
         if mant_ir::geometry::table_requires_origin_preserving_stack(rows, origin) {
             return self.stacked_table_flow(rows, origin);
         }
@@ -267,6 +277,78 @@ impl BlockRenderer<'_> {
             flow
         } else {
             Flow::text(indent_lines(&value, padding(origin)))
+        }
+    }
+
+    /// Fixed-width projection of a declared `Bl -column` table, mirroring
+    /// `mdoc_term.c::termp_bl_pre` (701-733): column `i` starts at the sum of
+    /// the earlier declared widths plus the dcol gap (4/3/1 blanks for
+    /// fewer than/exactly/more than five declared columns), and columns past
+    /// the declaration fall back to the default width of 10.
+    fn declared_column_flow(
+        &self,
+        rows: &[mant_ir::TableRow],
+        column_widths: &[u16],
+        origin: i32,
+    ) -> Flow {
+        let dcol: u16 = match column_widths.len() {
+            count if count < 5 => 4,
+            5 => 3,
+            _ => 1,
+        };
+        let default_width = 10_u16;
+        let mut offsets: Vec<u16> = Vec::with_capacity(column_widths.len());
+        let mut offset = 0_u16;
+        for declared in column_widths {
+            offsets.push(offset);
+            offset = offset.saturating_add(*declared + dcol);
+        }
+        let mut lines = Vec::new();
+        for row in rows {
+            if !matches!(row.kind, mant_ir::TableRowKind::Data) {
+                continue;
+            }
+            let cells: Vec<Vec<String>> = row
+                .cells
+                .iter()
+                .map(|cell| {
+                    self.cell_text(cell)
+                        .lines()
+                        .map(str::to_owned)
+                        .collect::<Vec<_>>()
+                })
+                .collect();
+            let depth = cells.iter().map(Vec::len).max().unwrap_or(0);
+            for line_index in 0..depth {
+                let mut line = String::new();
+                for (index, cell_lines) in cells.iter().enumerate() {
+                    let Some(cell_line) = cell_lines.get(line_index) else {
+                        continue;
+                    };
+                    // Columns past the declaration continue the upstream
+                    // accumulation with the default width of 10.
+                    let start = if index < offsets.len() {
+                        offsets[index]
+                    } else {
+                        offsets.last().map_or(0, |last| {
+                            last.saturating_add(
+                                (index - offsets.len() + 1) as u16 * (default_width + dcol),
+                            )
+                        })
+                    };
+                    let start = start as usize;
+                    if line.len() < start {
+                        line.push_str(&" ".repeat(start - line.len()));
+                    }
+                    line.push_str(cell_line);
+                }
+                lines.push(line);
+            }
+        }
+        if lines.is_empty() {
+            Flow::default()
+        } else {
+            Flow::text(indent_lines(&lines.join("\n"), padding(origin)))
         }
     }
 
@@ -404,6 +486,7 @@ mod tests {
                 alignment: None,
             };
             let table = Block::Table {
+                column_widths: Vec::new(),
                 rows: vec![mant_ir::TableRow {
                     kind: mant_ir::TableRowKind::Data,
                     cells: vec![cell("FIRST"), cell("SECOND")],
@@ -425,6 +508,7 @@ mod tests {
         }
         let nested = plain_list(
             vec![Block::Table {
+                column_widths: Vec::new(),
                 rows: vec![mant_ir::TableRow {
                     kind: mant_ir::TableRowKind::Data,
                     cells: vec![TableCell {
@@ -448,6 +532,7 @@ mod tests {
             format!("{}NESTED", " ".repeat(4096))
         );
         let table = Block::Table {
+            column_widths: Vec::new(),
             rows: vec![mant_ir::TableRow {
                 kind: mant_ir::TableRowKind::Data,
                 cells: ["FIRST", "SECOND"]
@@ -476,6 +561,7 @@ mod tests {
     fn stacked_tables_preserve_partial_whole_layout_rules_and_empty_rows() {
         let renderer = super::super::plain_renderer();
         let table = Block::Table {
+            column_widths: Vec::new(),
             rows: vec![
                 mant_ir::TableRow {
                     kind: mant_ir::TableRowKind::Data,
@@ -554,6 +640,7 @@ mod tests {
     fn table_cells_preserve_formatter_generated_line_breaks() {
         let renderer = super::super::plain_renderer();
         let table = Block::Table {
+            column_widths: Vec::new(),
             rows: vec![mant_ir::TableRow {
                 kind: mant_ir::TableRowKind::Data,
                 cells: vec![TableCell {
@@ -604,6 +691,7 @@ mod tests {
             ),
         ] {
             let table = Block::Table {
+                column_widths: Vec::new(),
                 rows: vec![mant_ir::TableRow {
                     kind: mant_ir::TableRowKind::Data,
                     cells: vec![TableCell {
@@ -629,6 +717,7 @@ mod tests {
     fn an_empty_table_row_remains_a_physical_row() {
         let renderer = super::super::plain_renderer();
         let table = Block::Table {
+            column_widths: Vec::new(),
             rows: vec![mant_ir::TableRow {
                 kind: mant_ir::TableRowKind::Data,
                 cells: vec![TableCell {
@@ -746,6 +835,7 @@ mod tests {
                         source: None,
                     },
                     Block::Table {
+                        column_widths: Vec::new(),
                         rows: vec![mant_ir::TableRow {
                             kind: mant_ir::TableRowKind::Data,
                             cells: vec![TableCell {

@@ -611,6 +611,7 @@ mod tests {
             compact: false,
             offset: None,
             width: None,
+            columns: Vec::new(),
             table_cells: Vec::new(),
             equation: None,
             children,

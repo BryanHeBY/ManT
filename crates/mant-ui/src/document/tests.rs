@@ -89,6 +89,7 @@ fn geometry_bundle() -> ResolvedContent {
             source: None,
         },
         Block::Table {
+            column_widths: Vec::new(),
             rows: vec![TableRow {
                 kind: mant_ir::TableRowKind::Data,
                 cells: vec![
@@ -372,6 +373,7 @@ fn horizontal_spans_align_the_following_cell_with_later_rows() {
         alignment: None,
     };
     bundle.document.as_mut().unwrap().sections[0].blocks = vec![Block::Table {
+        column_widths: Vec::new(),
         rows: vec![
             TableRow {
                 kind: mant_ir::TableRowKind::Data,

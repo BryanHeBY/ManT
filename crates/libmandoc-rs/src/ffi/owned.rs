@@ -596,6 +596,7 @@ unsafe fn copy_node_shallow(
         compact: view.compact != 0,
         offset: unsafe { checked_string(view.offset) }?,
         width: unsafe { checked_string(view.width) }?,
+        columns: unsafe { copy_column_strings(view.cols, view.ncols, transfer_budget) }?,
         table_cells: unsafe { copy_table_cells(document, view.table_cells, transfer_budget) }?,
         equation: unsafe { copy_equation(document, view.equation, 0, equation_budget) }?,
         children: Vec::new(),
@@ -632,6 +633,25 @@ fn ends_with_no_space_escape(text: &str) -> bool {
         .count()
         % 2
         == 0
+}
+
+/// Copy the declared `Bl -column` width strings, if this node owns any.
+unsafe fn copy_column_strings(
+    pointer: *const *const c_char,
+    count: usize,
+    transfer_budget: &mut TransferBudget,
+) -> Result<Vec<String>, String> {
+    let mut columns = Vec::new();
+    if pointer.is_null() {
+        return Ok(columns);
+    }
+    for index in 0..count {
+        let value = unsafe { checked_string(*pointer.add(index))? }
+            .ok_or_else(|| "libmandoc returned a null column string".to_owned())?;
+        transfer_budget.charge(std::mem::size_of::<String>().saturating_add(value.len()))?;
+        columns.push(value);
+    }
+    Ok(columns)
 }
 
 unsafe fn copy_table_cells(
