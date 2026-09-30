@@ -471,7 +471,7 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
         builder.note_provisional_definition_break();
     }
     if execution.pending_word_end_break {
-        builder.request_word_end_break();
+        builder.request_word_end_break(execution.pending_word_end_break_separated);
     } else if record_native_cells {
         builder.retain_buffered_field_word_end_break();
     }

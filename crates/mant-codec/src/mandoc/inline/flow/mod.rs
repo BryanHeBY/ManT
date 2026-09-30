@@ -79,6 +79,11 @@ pub(in crate::mandoc) struct InlineExecutionState {
     pending_field_spaces: usize,
     pending_line_indent: usize,
     word_end_break: WordEndBreak,
+    /// The pending `\p` was separated from the last graph by a breakable
+    /// blank: the restarted pass rejects at the next word's automatic
+    /// separator (term.c:143-146) even after the accepted prefix closed its
+    /// own row.
+    word_end_break_separated: bool,
     /// An executed line request before the first visible word of this IR
     /// segment. Definition BODY checkpoints consume this source-order fact.
     leading_line_boundary: LeadingLineBoundary,
@@ -712,6 +717,7 @@ impl InlineExecutionState {
             pending_field_spaces: 0,
             pending_line_indent: 0,
             word_end_break: WordEndBreak::Clear,
+            word_end_break_separated: false,
             leading_line_boundary: LeadingLineBoundary::None,
             vertical_space_debt: 0,
             completed_vertical_rows: 0,

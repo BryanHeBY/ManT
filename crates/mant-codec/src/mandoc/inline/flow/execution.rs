@@ -184,7 +184,8 @@ impl InlineBuilder {
         }
     }
 
-    pub(in crate::mandoc) fn request_word_end_break(&mut self) {
+    pub(in crate::mandoc) fn request_word_end_break(&mut self, separated_from_graph: bool) {
+        self.execution.word_end_break_separated = separated_from_graph;
         if let Some(definition) = &mut self.execution.definition {
             definition.hang_row.field_pending_word_end_break = true;
         }

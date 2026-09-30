@@ -117,6 +117,7 @@ impl InlineBuilder {
             {
                 let word_first_cell = definition.field_word_anchors[anchor_count - 1].2;
                 let word_end = definition.field_buffer.cells().len();
+                let mut ir_row_breaks = super::line_break_count(incoming);
                 let mut closes_before = 0;
                 let mut first_pass = !definition.field_buffer.has_committed_pass();
                 while let Some(pass) = definition.field_buffer.fill_pass(if first_pass {
@@ -133,11 +134,36 @@ impl InlineBuilder {
                     {
                         break;
                     }
+                    let pass_start = definition.field_buffer.resume_offset();
                     definition.field_buffer.commit_pass(pass);
                     let boundary = definition.field_buffer.resume_offset();
+                    // A stop armed by a `\p` marker inside this pass is
+                    // already represented in the word's IR: the text
+                    // executor resolves the marker's line break at the
+                    // same surviving blank term_fill() stopped at (the
+                    // consumed cells are markers and break blanks, and
+                    // `suppress_break_whitespace` kept them out of the
+                    // projection). Re-inserting a boundary there would
+                    // split the word one grapheme in. Only a stop with no
+                    // marker in its pass range — a width overrun against
+                    // the field capacity — still needs a mapped split,
+                    // and only a trailing marker with no in-word break
+                    // still needs a row close before the word.
+                    let has_marker = definition.field_buffer.cells()[pass_start..boundary]
+                        .iter()
+                        .any(|cell| {
+                            matches!(cell, super::super::field_buffer::FieldCell::BreakMarker)
+                        });
+                    let represented_in_ir = has_marker && ir_row_breaks > 0;
+                    if represented_in_ir {
+                        ir_row_breaks -= 1;
+                    }
                     if boundary <= word_first_cell {
-                        closes_before += 1;
-                    } else if boundary > word_first_cell && boundary < word_end {
+                        closes_before += usize::from(!represented_in_ir);
+                    } else if boundary > word_first_cell
+                        && boundary < word_end
+                        && !represented_in_ir
+                    {
                         let projected_boundary = definition
                             .field_buffer
                             .projection_length(word_first_cell, boundary);

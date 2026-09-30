@@ -517,6 +517,16 @@ impl InlineBuilder {
             } else if !self.in_definition_field() {
                 if self.execution.no_fill_word_active || self.current_row_has_graph() {
                     self.hard_break();
+                    if std::mem::take(&mut self.execution.word_end_break_separated) {
+                        // The accepted prefix closed its own row, but the
+                        // marker's pass restarts at the marker cell itself
+                        // (the breakable blank before it kept `graph` down
+                        // and nbr at the earlier blank): the next word's
+                        // automatic separator stops that pass with
+                        // `nbr == 0` and the unprinted remainder dies with
+                        // the row reset (term.c:143-146 with 233-237).
+                        self.execution.wipe_remainder = true;
+                    }
                 } else {
                     // The marker meets the word's own separator blank with
                     // no graph in the flush unit: term_fill() stops the pass
@@ -525,6 +535,7 @@ impl InlineBuilder {
                     // No row is committed: whitespace-only input prints
                     // nothing (term.c:145-146).
                     self.execution.word_end_break = WordEndBreak::Clear;
+                    self.execution.word_end_break_separated = false;
                     self.execution.wipe_remainder = true;
                 }
             }
@@ -561,7 +572,6 @@ impl InlineBuilder {
             self.execution.keep.phase = KeepPhase::Keep;
         }
         if marker_blank_before_graph
-            && !self.in_definition_field()
             && self.execution.zero_advance.has_pending_glyph()
             && !self.execution.boundary.is_nonbreaking()
             && (self.execution.spacing.enabled()

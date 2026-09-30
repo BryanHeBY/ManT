@@ -37,6 +37,10 @@ pub(in crate::mandoc) struct TextExecution {
     pub(in crate::mandoc) source_continuation: Option<bool>,
     pub(in crate::mandoc) pending_word_end_break: bool,
     pub(in crate::mandoc) trailing_output: TrailingOutput,
+    /// The trailing `\p` marker was separated from the last graph by a
+    /// breakable blank: its restarted pass rejects at the next word's
+    /// automatic separator (term.c:143-146).
+    pub(in crate::mandoc) pending_word_end_break_separated: bool,
     /// A `\p` marker met a surviving breakable blank before this flush unit
     /// recorded any graph: the remainder of the unit is unprinted input
     /// (term.c:143-146 with 233-237).
@@ -74,6 +78,9 @@ struct TextEventState {
     /// flag): at a marker's break blank it selects the tail-acceptance arm
     /// (term.c:362-366) over the nbr==0 rejection.
     graph_since_blank: bool,
+    /// Any source cell (graph or blank) passed through this fragment; a
+    /// marker-only fragment carries no adjacency fact of its own.
+    saw_source_cell: bool,
     /// A `\p` marker met a surviving breakable blank: `term_fill()` stopped
     /// the pass with `nbr == 0` (term.c:143-146) and `term_flushln()` wiped
     /// the unprinted remainder of the flush unit (term.c:233-237).
@@ -89,6 +96,7 @@ impl TextEventState {
             suppress_break_whitespace: false,
             graph_seen: false,
             last_breakable_blank: false,
+            saw_source_cell: false,
             trailing_breakable_blanks: 0,
             graph_since_blank: false,
             break_started_after_blank: false,
@@ -198,6 +206,7 @@ fn append_text_event(
         state.graph_seen |= graph;
         state.graph_since_break |= state.pending_word_end_break && graph;
         state.graph_since_blank = graph;
+        state.saw_source_cell = true;
         state.last_breakable_blank = is_formatter_word_blank(character);
         state.trailing_breakable_blanks = if state.last_breakable_blank {
             state.trailing_breakable_blanks.saturating_add(1)
@@ -458,6 +467,9 @@ fn execute_formatter_word_events(
         zero_advance,
         explicit_line_continuation,
         text_state.pending_word_end_break,
+        text_state.pending_word_end_break
+            && text_state.saw_source_cell
+            && !text_state.graph_since_blank,
         text_state.wiped,
         text_state.zero_graph_seen,
         native_writes,
@@ -530,13 +542,14 @@ fn append_empty_destination(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::fn_params_excessive_bools)]
 fn finish_text_execution(
     events: &[FormatterWordEvent],
     output: Vec<Inline>,
     zero_advance: &mut ZeroAdvanceState,
     source_continuation: Option<bool>,
     pending_word_end_break: bool,
+    pending_word_end_break_separated: bool,
     definitive_reject: bool,
     word_zero_graph: bool,
     native_writes: Vec<super::super::flow::field_buffer::FieldWrite>,
@@ -560,6 +573,7 @@ fn finish_text_execution(
         joins_preceding_node: zero_advance.take_preceding_join(),
         source_continuation,
         pending_word_end_break,
+        pending_word_end_break_separated,
         definitive_reject,
         word_zero_graph,
         trailing_output,
