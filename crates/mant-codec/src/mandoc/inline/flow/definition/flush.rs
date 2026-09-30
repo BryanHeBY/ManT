@@ -335,6 +335,14 @@ impl InlineBuilder {
             .and_then(|state| state.no_break)
             .is_some_and(|field| self.execution.execution_epoch != field.resumed_execution_epoch);
         if !self.has_formatter_cell() && !executed_field_word {
+            // A definitive rejection still occupied the native buffer:
+            // `.mc` ran `term_newln()` -> `term_flushln()` whose reset
+            // (term.c:233-237) retired the rejected unit before NOBREAK
+            // changed, so the wipe state dies at this boundary too.
+            if self.execution.wipe_remainder {
+                self.execution.zero_advance.discard_at_row_end();
+                self.execution.wipe_remainder = false;
+            }
             return;
         }
         if let Some(field) = self.take_no_break_field() {
@@ -430,10 +438,18 @@ impl InlineBuilder {
         }
         if !resumed_has_cell {
             // Whitespace-only and zero-width formatter words make
-            // `term_flushln()` run, but `term_fill()` commits no field.
+            // `term_flushln()` run, but `term_fill()` commits no field:
+            // the pass rejects with `nbr == 0` (term.c:143-146) and the
+            // reset drops the whole unprinted remainder (term.c:233-237).
+            // A pending `\p` marker cell must not survive that rejection
+            // to arm a row break under the next word.
+            let definition = self.definition_state_mut();
+            if definition.field_buffer.only_ignorable_remainder(false) {
+                definition.field_buffer.clear();
+                definition.field_word_anchors.clear();
+            }
             // Restore the one separator that was waiting for the next real
             // field instead of consuming it or manufacturing a second one.
-            field.output_end_before_separator = self.nodes.len();
             self.append_field_separator(field.separator_cells);
             self.execution.boundary = PendingBoundary::CommittedField;
             field.resumed_output_start = self.nodes.len();
