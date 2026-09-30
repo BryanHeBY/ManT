@@ -104,6 +104,13 @@ fn lowered_terminal(source: &str) -> String {
     mant_render::render_query_text(&query)
 }
 
+fn lowered_document(source: &str) -> Document {
+    mant_loader::load_roff_bytes(source.as_bytes())
+        .expect("lower the same pinned CVS contract through ManT")
+        .document
+        .expect("document")
+}
+
 fn without_line_indentation(output: &str) -> String {
     output
         .lines()
@@ -134,5 +141,7 @@ mod definition_fields;
 mod formatter_boundaries;
 #[path = "cvs_renderer_contracts/identity.rs"]
 mod identity;
+#[path = "cvs_renderer_contracts/macro_gaps.rs"]
+mod macro_gaps;
 #[path = "cvs_renderer_contracts/matrix.rs"]
 mod matrix;
