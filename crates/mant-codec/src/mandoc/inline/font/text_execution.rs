@@ -133,7 +133,9 @@ fn append_text_event(
                 // cannot stop at the eaten blank and defers the break to
                 // the next surviving blank (term.c:294-295).
                 zero_advance.flush(output, buffer, font, link);
-                if zero_advance.take_marker_blank_separator() || zero_advance.take_held_blank() {
+                let held = zero_advance.take_held();
+                buffer.push_str(&held);
+                if zero_advance.take_marker_blank_separator() {
                     buffer.push(' ');
                 }
                 state.suppress_break_whitespace = true;

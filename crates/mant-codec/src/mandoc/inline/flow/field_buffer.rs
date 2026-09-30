@@ -414,9 +414,17 @@ impl FieldBuffer {
         if self.backbefore_armed {
             self.backbefore_armed = false;
             match self.cells.last() {
-                Some(FieldCell::BreakableBlank) => {
+                // A literal tab occupies a buffer byte exactly like a
+                // blank (term.c:944-964) and the retreat pops it the same
+                // way (`buf[col-1] == '\t'`, term.c:901-904). It never
+                // registered in `blank_positions`, so leave that ledger
+                // untouched. A NonBreakingBlank buffers ASCII_NBRSP, a
+                // different byte, and keeps the `'\b'` arm below.
+                Some(FieldCell::Tab | FieldCell::BreakableBlank) => {
                     self.invalidate_projection_scan(self.cells.len().saturating_sub(1));
-                    self.blank_positions.pop();
+                    if matches!(self.cells.last(), Some(FieldCell::BreakableBlank)) {
+                        self.blank_positions.pop();
+                    }
                     self.cells.pop();
                     self.projection_prefix.pop();
                     self.pending_projection_graph = None;

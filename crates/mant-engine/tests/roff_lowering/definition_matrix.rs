@@ -13,7 +13,7 @@
 //! expectations only with that script, never by hand.
 //!
 //! There is deliberately no `\:` case here: `\:` sits exactly on the
-//! ascii/UTF-8 device fork (chars.c:53 — ASCII_BREAK byte versus NBRZW),
+//! ascii/UTF-8 device fork (chars.c:53 — `ASCII_BREAK` byte versus `NBRZW`),
 //! and this matrix is recorded `-Tascii`. The UTF-8 side of that fork and
 //! the rest of the escape semantics live in `escape_matrix`, recorded
 //! `-Tutf8` by `scripts/regen_escape_matrix.sh`.

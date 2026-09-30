@@ -40,10 +40,14 @@ impl PlainTextProjection {
                     self.output.extend(glyph);
                 }
                 self.output.push(character);
+            } else if self.zero_advance.is_armed()
+                && (is_formatter_word_blank(character) || character == '\t')
+            {
+                self.output.push(character);
             } else if self.zero_advance.is_armed() {
                 let _ = self.zero_advance.project_glyph(character.to_string());
             } else if self.zero_advance.has_pending() {
-                if is_formatter_word_blank(character) {
+                if is_formatter_word_blank(character) || character == '\t' {
                     if let Some(glyph) = self.zero_advance.take_pending() {
                         self.output.extend(glyph);
                     }

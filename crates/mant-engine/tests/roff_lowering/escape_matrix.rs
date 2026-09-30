@@ -2,7 +2,7 @@
 //!
 //! Wave-1 regression corpus: native write receipts (`\z` BACKBEFORE retreat
 //! over a word separator, term.c:901-908), single-device UTF-8 escape
-//! semantics (`\:` buffers ASCII_NBRZW, chars.c:53 with term.c:631-632;
+//! semantics (`\:` buffers `ASCII_NBRZW`, chars.c:53 with term.c:631-632;
 //! `\!`/`\?`/`\r` leave no footprint, roff_escape.c:156-160), the `\p`
 //! pass rejections (term.c:143-146 with 233-237), and the generated run-in
 //! cell overstrike order (term.c:901-908 through encode1(U+00A0)).
@@ -279,7 +279,7 @@ fn escape_matrix_rows_match_the_pinned_utf8_reference() {
         }
     }
     assert_eq!(
-        total, 65,
+        total, 80,
         "case set changed; regen via scripts/regen_escape_matrix.sh"
     );
     assert!(

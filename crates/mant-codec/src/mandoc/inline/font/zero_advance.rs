@@ -19,10 +19,12 @@ pub(in crate::mandoc) struct ZeroAdvanceState {
     /// retreat consumes: the cross-word separator survives in the native
     /// buffer (term.c:573-576 with 901-908) and must print after the glyph.
     marker_blank_separator: bool,
-    /// A blank passed the pending glyph and stays buffered upstream until
-    /// the next graph's retreat (term.c:901-908) or a `\p` marker decides
-    /// whether it survives.
-    held_blank: bool,
+    /// Non-graph bytes (' ' and '\t') that passed the pending glyph and
+    /// stay buffered upstream until the next graph's retreat decides, by
+    /// the last-byte rule (term.c:901-908), which single one dies. Order
+    /// matters: `\zA <TAB>X` prints `A X` while `\zA<TAB> X` keeps the
+    /// tab geometry and drops the blank.
+    held: Vec<char>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -35,7 +37,7 @@ impl ZeroAdvanceState {
     pub(in crate::mandoc) const fn new() -> Self {
         Self {
             marker_blank_separator: false,
-            held_blank: false,
+            held: Vec::new(),
             machine: ZeroAdvanceMachine::new(),
             fragment_started_pending: false,
             resolved_preexisting: false,
@@ -65,7 +67,7 @@ impl ZeroAdvanceState {
     pub(in crate::mandoc) fn reset_projection(&mut self, bare_armed: bool) {
         self.note_pending_replaced();
         self.machine.clear();
-        self.held_blank = false;
+        self.held.clear();
         self.fragment_started_pending = false;
         self.resolved_preexisting = false;
         self.inherit_armed(bare_armed);
@@ -138,11 +140,11 @@ impl ZeroAdvanceState {
         self.marker_blank_separator = false;
     }
 
-    /// A blank is buffered behind the pending glyph when a `\p` marker
+    /// Blanks buffered behind the pending glyph when a `\p` marker
     /// arrives: the next graph's retreat lands on the marker's own blank,
-    /// so this held one survives and prints after the settled glyph.
-    pub(super) fn take_held_blank(&mut self) -> bool {
-        std::mem::take(&mut self.held_blank)
+    /// so the held bytes survive and print after the settled glyph.
+    pub(super) fn take_held(&mut self) -> String {
+        self.held.drain(..).collect()
     }
 
     pub(in crate::mandoc) fn take_armed(&mut self) -> bool {
@@ -191,7 +193,7 @@ impl ZeroAdvanceState {
     pub(in crate::mandoc) fn discard_at_row_end(&mut self) {
         self.note_pending_replaced();
         self.machine.clear();
-        self.held_blank = false;
+        self.held.clear();
         self.fragment_started_pending = false;
         self.resolved_preexisting = false;
     }
@@ -223,7 +225,7 @@ impl ZeroAdvanceState {
     pub(in crate::mandoc) fn discard_hidden_pending_glyph(&mut self) {
         self.note_pending_replaced();
         self.machine.discard_pending();
-        self.held_blank = false;
+        self.held.clear();
         self.fragment_started_pending = false;
         self.resolved_preexisting = false;
     }
@@ -257,6 +259,14 @@ impl ZeroAdvanceState {
                 if let Some(glyph) = self.take_pending() {
                     output.extend(glyph);
                 }
+                buffer.push(character);
+                continue;
+            }
+            if self.machine.is_armed() && (is_formatter_word_blank(character) || character == '\t')
+            {
+                // encode()'s non-graph branch buffers the tab directly
+                // (term.c:944-964); the arm survives it.
+                self.flush_recoveries(output, &mut buffer, font, None);
                 buffer.push(character);
                 continue;
             }
@@ -302,24 +312,31 @@ impl ZeroAdvanceState {
                 continue;
             }
             if self.machine.has_pending() {
-                if is_formatter_word_blank(character) {
-                    // Hold the blank instead of consuming it: upstream
-                    // keeps it buffered, and only the next graph's
-                    // BACKBEFORE retreat decides whether it dies
-                    // (term.c:901-908).  A `\p` marker between the two
-                    // redirects the retreat onto the marker's own blank,
-                    // and this one survives.
-                    self.held_blank = true;
+                if is_formatter_word_blank(character) || character == '\t' {
+                    // Hold the non-graph byte instead of consuming it:
+                    // upstream's encode() writes blanks and tabs straight
+                    // into the buffer (term.c:944-964) without touching
+                    // the backtracking flags, so only the next graph's
+                    // BACKBEFORE retreat decides, by the last-byte rule
+                    // (term.c:901-908), which single held byte dies.  A
+                    // `\p` marker between the two redirects the retreat
+                    // onto the marker's own blank, and these survive.
+                    self.held.push(character);
                     continue;
                 }
-                if self.held_blank {
-                    // This graph's retreat ate the held blank (col--): the
-                    // completed zero-advance glyph prints before it, glued.
-                    // Any later `\z` still converts at this graph's
-                    // encode1() tail (term.c:924-926), so the graph itself
-                    // may become the next deferred target.
-                    self.held_blank = false;
+                if !self.held.is_empty() {
+                    // This graph's retreat ate the last held byte (col--):
+                    // the completed zero-advance glyph prints before the
+                    // survivors, glued.  Any later `\z` still converts at
+                    // this graph's encode1() tail (term.c:924-926), so the
+                    // graph itself may become the next deferred target.
+                    self.held.pop();
+                    let survivors = self.held.drain(..).collect::<String>();
                     self.flush(output, buffer, font, link);
+                    if !survivors.is_empty() {
+                        self.flush_recoveries(output, buffer, font, link);
+                        buffer.push_str(&survivors);
+                    }
                     if self.machine.is_armed() {
                         let _ = self.project_glyph(styled_link(character.to_string(), font, link));
                         continue;
@@ -341,11 +358,12 @@ impl ZeroAdvanceState {
                 continue;
             }
             if self.machine.is_armed() {
-                if is_formatter_word_blank(character) {
-                    // A word blank is buffered through encode()'s
-                    // non-graph branch (term.c:944-952); it never runs
-                    // encode1(), so TERMP_BACKAFTER survives it and the
-                    // arm only converts at the next graph (924-926).
+                if is_formatter_word_blank(character) || character == '\t' {
+                    // A word blank — and likewise a literal tab — is
+                    // buffered through encode()'s non-graph branch
+                    // (term.c:944-964); it never runs encode1(), so
+                    // TERMP_BACKAFTER survives it and the arm only
+                    // converts at the next graph (924-926).
                     self.flush_recoveries(output, buffer, font, link);
                     buffer.push(character);
                     continue;
@@ -380,6 +398,26 @@ impl ZeroAdvanceState {
         font: Font,
         link: Option<&str>,
     ) {
+        if !self.held.is_empty() {
+            // A graph event (an escaped Unicode space is `encode1()`
+            // output, term.c:886-927) retreats by the last-byte rule just
+            // like an ordinary graph: the pending glyph settles before the
+            // surviving held bytes instead of being replaced.
+            self.held.pop();
+            let survivors = self.held.drain(..).collect::<String>();
+            self.flush(output, buffer, font, link);
+            if !survivors.is_empty() {
+                self.flush_recoveries(output, buffer, font, link);
+                buffer.push_str(&survivors);
+            }
+            if self.machine.is_armed() {
+                let _ = self.project_glyph(styled_link(value.to_owned(), font, link));
+                return;
+            }
+            self.flush_recoveries(output, buffer, font, link);
+            buffer.push_str(value);
+            return;
+        }
         let Some((_, replaced)) = self.project_glyph(styled_link(value.to_owned(), font, link))
         else {
             return;
@@ -430,7 +468,7 @@ impl ZeroAdvanceState {
         self.machine.clear();
         // A blank still held at the drain is trailing whitespace;
         // term_field() never prints it (term.c:389-398).
-        self.held_blank = false;
+        self.held.clear();
     }
 
     pub(super) fn take_preceding_join(&mut self) -> bool {
