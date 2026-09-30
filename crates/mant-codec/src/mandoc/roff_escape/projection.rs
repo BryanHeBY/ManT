@@ -22,7 +22,7 @@ impl PlainTextProjection {
         for character in value.chars() {
             if self.pending_word_end_break && is_formatter_word_blank(character) {
                 if let Some(glyph) = self.zero_advance.resolve_word_boundary() {
-                    self.output.push_str(&glyph);
+                    self.output.extend(glyph);
                     self.suppress_break_whitespace = true;
                     continue;
                 }
@@ -37,7 +37,7 @@ impl PlainTextProjection {
             self.suppress_break_whitespace = false;
             if matches!(character, '\n' | '\r') {
                 if let Some(glyph) = self.zero_advance.take_pending() {
-                    self.output.push_str(&glyph);
+                    self.output.extend(glyph);
                 }
                 self.output.push(character);
             } else if self.zero_advance.is_armed() {
@@ -45,7 +45,7 @@ impl PlainTextProjection {
             } else if self.zero_advance.has_pending() {
                 if is_formatter_word_blank(character) {
                     if let Some(glyph) = self.zero_advance.take_pending() {
-                        self.output.push_str(&glyph);
+                        self.output.extend(glyph);
                     }
                     continue;
                 }
@@ -53,10 +53,12 @@ impl PlainTextProjection {
                 else {
                     continue;
                 };
+                self.output.extend(self.zero_advance.take_recoveries());
                 self.output.push_str(&character);
             } else if let Some((character, _)) =
                 self.zero_advance.project_glyph(character.to_string())
             {
+                self.output.extend(self.zero_advance.take_recoveries());
                 self.output.push_str(&character);
             }
         }
@@ -65,6 +67,7 @@ impl PlainTextProjection {
     fn append_glyph(&mut self, value: String) {
         self.suppress_break_whitespace = false;
         if let Some((value, _)) = self.zero_advance.project_glyph(value) {
+            self.output.extend(self.zero_advance.take_recoveries());
             self.output.push_str(&value);
         }
     }
@@ -80,6 +83,7 @@ impl PlainTextProjection {
             RoffInlineEvent::FallbackGlyph(value) => {
                 if let Some((value, _)) = self.zero_advance.project_fallback(value) {
                     self.suppress_break_whitespace = false;
+                    self.output.extend(self.zero_advance.take_recoveries());
                     self.output.push_str(&value);
                 }
             }
@@ -104,7 +108,7 @@ impl PlainTextProjection {
 
     fn finish(mut self) -> String {
         if let Some(glyph) = self.zero_advance.take_pending() {
-            self.output.push_str(&glyph);
+            self.output.extend(glyph);
         }
         self.output
     }

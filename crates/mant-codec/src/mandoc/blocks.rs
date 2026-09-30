@@ -63,19 +63,28 @@ use tables::{TableEmbedding, TableEmbeddingPlan, append_table_row};
 /// parameter permutations of the former `lower_blocks_*` wrapper family,
 /// mirroring upstream's single walker signature (nodes, immutable context,
 /// mutable formatter): flow facts belong to one entry, not to arity.
-pub(super) struct ScopeFlow {
+pub(super) struct ScopeFlow<'node> {
     /// Base `.in` indent for this scope.
     pub(super) indent_columns: crate::mandoc::layout::SourceIndent,
     pub(super) spacing_enabled: bool,
     /// A source sibling already produced output before this scope.
     pub(super) paragraph_predecessor: bool,
     /// Carried inline execution from a finished HEAD row into this body.
-    pub(super) run_in: Option<(crate::mandoc::inline::PreservedInlineState, usize, bool)>,
+    pub(super) run_in: Option<RunInBody<'node>>,
     /// Whether returning from this scope settles the active formatter row.
     pub(super) row_boundary: FormatterRowBoundary,
 }
 
-impl ScopeFlow {
+pub(super) struct RunInBody<'node> {
+    pub(super) execution: crate::mandoc::inline::PreservedInlineState,
+    pub(super) generated_cells: usize,
+    /// Native pre-handler writes, before compact HEAD/BODY ownership splits.
+    pub(super) native_generated_cells: usize,
+    pub(super) generated_word: bool,
+    pub(super) entry: Option<&'node Node>,
+}
+
+impl ScopeFlow<'_> {
     /// Ordinary filled scope; the caller keeps its active formatter row.
     pub(super) const fn filled(
         indent_columns: crate::mandoc::layout::SourceIndent,
@@ -132,7 +141,7 @@ pub(super) fn lower_scope(
     context: &LoweringContext<'_>,
     paragraph_distance: &mut u16,
     formatter: &mut crate::mandoc::formatter::FormatterState,
-    flow: ScopeFlow,
+    flow: ScopeFlow<'_>,
 ) -> Vec<Block> {
     let mut lowerer = BlockLowerer::new(
         context,
@@ -142,10 +151,14 @@ pub(super) fn lower_scope(
         Vec::new(),
         std::mem::take(formatter),
     );
-    if let Some((execution, generated_cells, generated_word)) = flow.run_in {
-        lowerer
-            .state
-            .inherit_run_in_execution(execution, generated_cells, generated_word);
+    if let Some(run_in) = flow.run_in {
+        lowerer.state.inherit_run_in_execution(
+            run_in.execution,
+            run_in.generated_cells,
+            run_in.native_generated_cells,
+            run_in.generated_word,
+            run_in.entry,
+        );
     }
     lowerer.paragraph_predecessor = flow.paragraph_predecessor;
     lowerer.push_nodes(nodes);
@@ -258,7 +271,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         if row_boundary == FormatterRowBoundary::Settle {
             self.settle_no_fill_inline();
         }
-        let blocks = self.state.finish_with_formatter(formatter);
+        let blocks = self.state.finish_with_formatter(formatter, row_boundary);
         self.context.check_gap_bounds(&blocks);
         blocks
     }

@@ -249,12 +249,38 @@ impl<'a> LocatedStyles<'a> {
         role: TextRole,
         decorate: &dyn Fn(TextPresentation, &str) -> String,
     ) -> String {
+        let mut output = String::new();
+        let mut row_indent = 0;
+        self.visit_inline(nodes, role, |style, text| {
+            let decorated = decorate(style, text);
+            for (index, piece) in decorated.split('\n').enumerate() {
+                if index > 0 {
+                    output.push('\n');
+                    row_indent = style.inline.line_break_indent.unwrap_or(0);
+                }
+                if !piece.is_empty() {
+                    output.push_str(&" ".repeat(mant_ir::geometry::padding(i32::from(row_indent))));
+                    row_indent = 0;
+                    output.push_str(piece);
+                }
+            }
+        });
+        output
+    }
+
+    /// Decorate source-owned pieces before any row padding is added. Match
+    /// coordinates count authored scalars, including one per hard break.
+    pub(super) fn visit_inline(
+        &self,
+        nodes: &[Inline],
+        role: TextRole,
+        mut emit: impl FnMut(TextPresentation, &str),
+    ) {
         let spans = self
             .roots
             .get(&key(ExplanationTextRoot::Inline(nodes)))
             .map_or(&[][..], Vec::as_slice);
         let mut cursor = 0;
-        let mut output = String::new();
         visit_inline_text(nodes, self.names.ranges(nodes), |inline, _, text| {
             pieces(
                 text,
@@ -265,10 +291,9 @@ impl<'a> LocatedStyles<'a> {
                     inline,
                     matched: false,
                 },
-                &mut |style, value| output.push_str(&decorate(style, value)),
+                &mut emit,
             );
         });
-        output
     }
 
     pub(super) fn text(

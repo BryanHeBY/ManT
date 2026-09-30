@@ -74,13 +74,16 @@ Paragraph `continuationIndentColumns` is an additional signed displacement from 
 
 Block `spacingBeforeLines` is already resolved by the producer: zero means a tight boundary, including when omitted from JSON. It is not an invitation for a frontend to supply paragraph spacing. Independent `VerticalSpace` requests add to that boundary, including repeated equal requests; one source request must have only one IR consumption point. Empty anchors and transparent containers do not reset the boundary. Presentation bounds each accumulated gap at 4096 rows, independently of literal blank lines inside text. Native lowering reports `manual.vertical-spacing-limit` when this loses requested spacing. Definition-item optional spacing is different: absence inherits list compactness, while explicit zero suppresses that default.
 
-A definition description starts at its resolved `layout.bodyIndentColumns` relative to the label origin (generic default: four cells), before applying each child's layout. `minTermGapColumns` controls minimum separation after a run-in label (default: one). `DefinitionItem::inline_description()` identifies the first paragraph that may share the term's line: explicit leading spacing or a non-paragraph block prevents that presentation. The first line clears the displayed label; hard and wrapped continuation lines, later paragraphs, nested blocks and code use the structural body origin, not the label's width. Separate source term roots retain their original lines rather than acquiring invented commas. Native continuation normalization, plain text, and the TUI share this distinction. Markdown expresses ownership through its own block syntax rather than terminal-column geometry. Inferring a semantic definition from separate source paragraphs preserves their line boundary; it does not authorize run-in presentation.
+A definition description starts at its resolved `layout.bodyIndentColumns` relative to the label origin (generic default: four cells), before applying each child's layout. `minTermGapColumns` controls minimum separation after a run-in label (default: one). `DefinitionItem::inline_description()` identifies the first paragraph or literal fragment that may share the term's line when the producer records a shared row; explicit leading spacing prevents that presentation. A literal fragment shares the row only with native continuation evidence, so ordinary no-fill input remains on separate lines. The first line clears the displayed label; hard and wrapped continuation lines, later paragraphs, nested blocks and code use the structural body origin, not the label's width. Separate source term roots retain their original lines rather than acquiring invented commas. Native continuation normalization, plain text, and the TUI share this distinction. Markdown expresses definition ownership through its own block syntax. Inferring a semantic definition from separate source paragraphs preserves their line boundary; it does not authorize run-in presentation.
 
 `DefinitionItem.layout: DefinitionLayout` groups these item-level choices:
-`inlineTerm` defaults to false; optional `spacingBeforeLines` defaults to
+`headBodyRelation` defaults to `separate`; `run-in`, `joined-no-space`, and
+`flush-at-body` share the first body row, with the resolved origin and minimum
+gap carrying their fixed-width placement. Consumers use this relation for row
+structure and do not infer it again from measured label width. Optional `spacingBeforeLines` defaults to
 inheriting list compactness. Explicit zero spacing is preserved and does not
 mean inheritance. Missing layout and `{}` have the same default; `layout:null`,
-unknown fields, and the former top-level `inlineTerm`/`spacingBeforeLines` fields
+unknown fields, the former `layout.inlineTerm`, and the former top-level `inlineTerm`/`spacingBeforeLines` fields
 are rejected. Canonical output omits empty layout but retains
 `"layout":{"spacingBeforeLines":0}`. Semantic annotation never changes layout.
 
@@ -167,7 +170,18 @@ The inline union contains:
 | `equation` | Parsed equation in its original position between neighboring text |
 | `link` | Visible children plus a typed destination |
 | `anchor` | Zero-width document-local destination |
-| `line-break` | Explicit break inside one flow |
+| `line-break` | Explicit break inside one flow, optionally with the following row's resolved `indentColumns` |
+
+`line-break.indentColumns` is a nonnegative display-cell displacement from
+the containing inline root's origin, after that root's paragraph continuation
+geometry. It defaults to zero and is omitted at zero. It describes one resolved
+hard row; consumers compose its origin before bounding visible padding and
+carry that origin through any visual wrapping of that row. Text, explain and
+TUI use the same hint. Markdown phrasing uses non-breaking entities for these
+layout cells, while fenced content uses spaces. Source text, semantic names,
+link ranges, and explanation coordinates do not gain those padding scalars:
+the structural break still counts as one source scalar. Unknown fields, null,
+negative, fractional, or values above 65535 are rejected.
 
 Links use a closed `LinkTarget` union rather than stringly typed URLs:
 

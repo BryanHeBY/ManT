@@ -11,28 +11,49 @@ fn inset_mid_word_marker_wipes_body_first_text() {
         ".Bl -inset\n.It Xo\n.No \"alpha \\p beta\"\n.Xc\n.No tail text\n.El\n",
     );
     assert_eq!(inline_text(&item.terms[0]), "alpha", "{item:#?}");
+    let [
+        Block::Paragraph { children, .. },
+        Block::VerticalSpace { lines: 1, .. },
+    ] = &item.description[..]
+    else {
+        panic!("expected only the rejected field's retained target: {item:#?}");
+    };
     assert!(
-        item.description.is_empty(),
-        "the shared buffer's body text never prints: {item:#?}"
+        matches!(children.as_slice(), [Inline::Anchor { id, .. }] if id.as_str() == "tail"),
+        "only navigation identity survives; no BODY text or row prints: {item:#?}"
+    );
+    assert!(
+        !item.layout.inline_term(),
+        "accepted prefix's row ended: {item:#?}"
     );
 }
 
 #[test]
-fn inset_empty_text_after_marker_closes_its_row() {
-    // The exact sources passed fixed CVS -Tascii/-Tutf8/-Tlint. The
-    // generated inset separator is a non-breaking space (term.c:347-350),
-    // so an armed trailing \p alone keeps the field row open for the
-    // joining BODY; a separate empty TEXT runs term_newln() mid-HEAD
-    // (NODE_LINE), and a field without NOBREAK or HANG closes there
-    // (term.c:250-252). DIAG keeps NOBREAK and its shared row.
+fn inset_empty_operand_after_marker_breaks_when_the_body_consumes_its_field() {
+    // The exact inset source passed fixed CVS -Tascii/-Tutf8/-Tlint.
+    // Its empty No operand has no NODE_LINE and runs term_word(), not
+    // term_vspace() (mdoc_term.c:354-378). The automatic blank after \p
+    // is consumed only when the shared field reaches its BODY flush;
+    // term_fill():287-306 then closes alpha before tail text. That real
+    // boundary belongs to BODY output, not a predicted HEAD layout break.
+    // The generated NBSP without an intervening empty operand is a graph
+    // (term.c:347-350), so the armed-only case keeps its shared field.
     let inset = review_definition_item(
         ".Bl -inset\n.It Xo\n.No alpha\\p\n.No \"\"\n.Xc\n.No tail text\n.El\n",
     );
     assert_eq!(inline_text(&inset.terms[0]), "alpha", "{inset:#?}");
     assert!(
-        !inset.layout.inline_term(),
-        "inset body must start its own row: {inset:#?}"
+        inset.layout.inline_term(),
+        "HEAD leaves the raw field live: {inset:#?}"
     );
+    let [Block::Paragraph { children, .. }] = &inset.description[..] else {
+        panic!("expected shared BODY field output: {inset:#?}");
+    };
+    assert!(
+        matches!(children.first(), Some(Inline::LineBreak { .. })),
+        "BODY owns the executed marker boundary: {inset:#?}"
+    );
+    assert_eq!(inline_text(children), "\n tail text", "{inset:#?}");
     let diag = review_definition_item(
         ".Bl -diag\n.It Xo\n.No alpha\\p\n.No \"\"\n.Xc\n.No tail text\n.El\n",
     );
@@ -55,21 +76,33 @@ fn inset_separate_marker_text_wipes_body_first_text() {
     // armed field before any new graph: term.c:287-299 with 349-360 make
     // that pass reject, and the buffer wipe (term.c:144-146 with 235)
     // discards the suffix together with the run-in BODY text that still
-    // shared the buffer. This latches at the `word()` accounting site,
-    // unlike the single-TEXT case above.
+    // shared the buffer. The native receipt decides this interval exactly
+    // as it does for the single-TEXT case above; no BODY-wide latch remains.
     let item = review_definition_item(
         ".Bl -inset\n.It Xo\n.No one\n.No \\p\n.No two\n.Xc\n.No tail text\n.El\n",
     );
     assert_eq!(inline_text(&item.terms[0]), "one", "{item:#?}");
+    let [
+        Block::Paragraph { children, .. },
+        Block::VerticalSpace { lines: 1, .. },
+    ] = &item.description[..]
+    else {
+        panic!("expected only the rejected field's retained target: {item:#?}");
+    };
     assert!(
-        item.description.is_empty(),
-        "the shared buffer's body text never prints: {item:#?}"
+        matches!(children.as_slice(), [Inline::Anchor { id, .. }] if id.as_str() == "tail"),
+        "only navigation identity survives; no BODY text or row prints: {item:#?}"
+    );
+    assert!(
+        !item.layout.inline_term(),
+        "accepted prefix's row ended: {item:#?}"
     );
 }
 
 #[test]
 fn diag_literal_head_marker_wipes_field_suffix() {
-    // The exact source passed fixed CVS -Tascii/-Tutf8/-Tlint. Under
+    // The exact source passed fixed CVS -Tascii/-Tutf8. Lint reports the
+    // deliberate unmatched Xc: under
     // -diag the It HEAD does not parse extension blocks, so `.It Xo`
     // keeps the literal word "Xo" as its head (mdoc_macro.c:1112-1119)
     // and the extension's BODY words execute inside the still-open
@@ -78,7 +111,9 @@ fn diag_literal_head_marker_wipes_field_suffix() {
     // term_newln() closes (mdoc_term.c:939-945). The marker's rejected
     // pass therefore wipes the unprinted suffix (term.c:144-146 with
     // 235): the accepted prefix prints on the head row and the joining
-    // body text never does. CVS output: one row `Xo  alpha`.
+    // body text never does. CVS prints `Xo  alpha` followed by one blank
+    // row: BRIND makes the rejected pass vfield=0, and trailspace=1
+    // still executes the independent term_flushln()250-253 tail endline.
     let item = review_definition_item(
         ".Bl -diag\n.It Xo\n.No \"alpha \\p beta\"\n.Xc\n.No tail text\n.El\n",
     );
@@ -87,8 +122,12 @@ fn diag_literal_head_marker_wipes_field_suffix() {
         item.layout.inline_term(),
         "diag NOBREAK keeps the head row: {item:#?}"
     );
-    let [Block::Paragraph { children, .. }] = &item.description[..] else {
-        panic!("expected one run-in paragraph: {item:#?}");
+    let [
+        Block::Paragraph { children, .. },
+        Block::VerticalSpace { lines: 1, .. },
+    ] = &item.description[..]
+    else {
+        panic!("expected accepted run-in prefix and native tail row: {item:#?}");
     };
     assert_eq!(inline_text(children), "  alpha", "{item:#?}");
 }

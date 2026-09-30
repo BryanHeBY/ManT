@@ -18,6 +18,8 @@ pub(super) enum Event<'a> {
     At(&'a Node, bool),
     /// An executed wrapper boundary whose children are emitted separately.
     BeginNode(&'a Node),
+    /// Return after this node's post; geometry restores after font/post.
+    EndNode(&'a Node),
     /// A validated native target attached to the current text destination.
     Anchor(String, Option<mant_ir::SourceSpan>),
     /// A formatter flush boundary, distinct from an extra blank row.
@@ -221,6 +223,10 @@ pub(super) trait ContainerSink<'a> {
     fn source_node(&mut self, node: &'a Node, starts_line: bool);
     fn event(&mut self, event: Event<'a>);
     fn restore_fill(&mut self, _fill: bool) {}
+    fn geometry_checkpoint(&self, _node: &Node) -> Option<u16> {
+        None
+    }
+    fn restore_geometry(&mut self, _checkpoint: Option<u16>) {}
 }
 
 pub(super) fn drive<'a>(
@@ -229,12 +235,28 @@ pub(super) fn drive<'a>(
     sink: &mut impl ContainerSink<'a>,
 ) -> bool {
     let mut local_font = None;
+    let mut geometry = Vec::new();
     walk(node, posts, |event| match event {
         Event::At(source, starts_line) => {
             if source.kind == NodeKind::Body {
                 posts.enter_body(source.id, sink.font().checkpoint());
             }
             sink.source_node(source, starts_line);
+            if !geometry.iter().any(|(id, _)| *id == source.id) {
+                geometry.push((source.id, sink.geometry_checkpoint(source)));
+            }
+        }
+        Event::BeginNode(source) => {
+            if !geometry.iter().any(|(id, _)| *id == source.id) {
+                sink.event(Event::BeginNode(source));
+                geometry.push((source.id, sink.geometry_checkpoint(source)));
+            }
+        }
+        Event::EndNode(source) => {
+            if let Some(index) = geometry.iter().rposition(|(id, _)| *id == source.id) {
+                let (_, checkpoint) = geometry.remove(index);
+                sink.restore_geometry(checkpoint);
+            }
         }
         Event::RestoreBody(body_id) => {
             if let Some(saved) = posts.exit_body(body_id) {
@@ -299,6 +321,7 @@ pub(super) fn walk<'a>(
     }
     emit(Event::At(node, true));
     if walk_scope_end(node, posts, &mut emit) {
+        emit(Event::EndNode(node));
         return true;
     }
     match node.macro_name.as_deref() {
@@ -325,6 +348,7 @@ pub(super) fn walk<'a>(
         }
         _ => return false,
     }
+    emit(Event::EndNode(node));
     true
 }
 
@@ -343,6 +367,7 @@ fn emit_font_or_keep<'a>(node: &'a Node, emit: &mut impl FnMut(Event<'a>)) {
         emit(Event::At(body, false));
         emit(Event::Children(&body.children));
         emit(Event::RestoreBody(body.id));
+        emit(Event::EndNode(body));
     }
     if node.macro_name.as_deref() == Some("Bk") {
         emit(Event::ExitKeep);
@@ -381,6 +406,7 @@ fn emit_enclosure<'a>(
             }
             emit_enclosure_post(close.as_deref(), emit);
         }
+        emit(Event::EndNode(body));
         for child in node
             .children
             .iter()
@@ -483,6 +509,7 @@ fn emit_structural_function<'a>(
         emit(Event::EnterFont(RoffFont::Strong, None));
         emit(Event::Children(&part.children));
         emit(Event::ExitFont(None));
+        emit(Event::EndNode(part));
     }
     if let Some(part) = body_part {
         emit(Event::At(part, false));
@@ -499,6 +526,9 @@ fn emit_structural_function<'a>(
         }
         emit(Event::Tight);
         emit(Event::Glyph(if synopsis { ");" } else { ")" }.to_owned()));
+    }
+    if let Some(part) = body_part {
+        emit(Event::EndNode(part));
     }
 }
 
@@ -639,6 +669,9 @@ fn authored_enclosure<'a>(
                 emit(Event::Children(&child.children));
             }
             _ => emit(Event::Children(&node.children[index..=index])),
+        }
+        if matches!(child.kind, NodeKind::Head | NodeKind::Body | NodeKind::Tail) {
+            emit(Event::EndNode(child));
         }
     }
 }

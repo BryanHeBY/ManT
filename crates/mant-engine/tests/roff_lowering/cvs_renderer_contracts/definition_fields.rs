@@ -45,7 +45,8 @@ fn one_authored_link_keeps_one_identity_across_committed_and_rejected_fields() {
     let prefix =
         ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n";
     for style in ["tag", "hang"] {
-        for (label, expected) in [(r"X\p Y", "X\nY"), (r#"X\p "\p Y""#, "X\n")] {
+        for (label, expected, rejected) in [(r"X\p Y", "X\nY", false), (r#"X\p "\p Y""#, "X", true)]
+        {
             let source = format!(
                 "{prefix}.Bl -{style} -width 4n\n.It Xo\n.Lk https://example.com {label}\n.Xc\n.No BODY\n.El\n"
             );
@@ -63,7 +64,56 @@ fn one_authored_link_keeps_one_identity_across_committed_and_rejected_fields() {
                 })
                 .collect::<Vec<_>>();
             assert_eq!(links.len(), 1, "{style} {label}: {item:?}");
-            assert_eq!(inline_text(links[0]), expected, "{style} {label}: {item:?}");
+            // A closed last row can be represented by Separate layout
+            // rather than by a trailing break inside the source Link. Row
+            // ownership is verified by the rendered contract below.
+            assert_eq!(
+                inline_text(links[0]).trim_end_matches('\n'),
+                expected,
+                "{style} {label}: {item:?}"
+            );
+            let expected_rows = match (style, rejected) {
+                ("tag", false) => vec!["X", "Y", "BODY"],
+                ("tag", true) => vec!["X", "", "BODY"],
+                (_, false) => vec!["X", "Y BODY"],
+                (_, true) => vec!["X", "BODY"],
+            };
+            let rows = |value: &str| {
+                let mut rows = value
+                    .split_once("DESCRIPTION\n")
+                    .unwrap()
+                    .1
+                    .lines()
+                    // Compact IR keeps URI identity, not its device suffix.
+                    .map(|row| row.replace(": https://example.com", ""))
+                    .map(|row| row.split_whitespace().collect::<Vec<_>>().join(" "))
+                    .collect::<Vec<_>>();
+                let end = rows
+                    .iter()
+                    .position(|row| row.split_whitespace().any(|word| word == "BODY"))
+                    .expect("retained BODY");
+                rows.truncate(end + 1);
+                rows
+            };
+            // Exact pristine source runs precede these assertions.
+            // term_flushln()220 ends each accepted pass; BRIND's new
+            // vfield=0 makes the non-HANG tail250-253 end another row even
+            // after nbr=0. HANG suppresses that final device endline.
+            assert_eq!(rows(&native), expected_rows, "native {style} {label}");
+            assert_eq!(
+                rows(&lowered_terminal(&source)),
+                expected_rows,
+                "lowered {style} {label}"
+            );
+            assert_eq!(
+                item.layout.head_body_relation,
+                if style == "hang" && !rejected {
+                    mant_ir::HeadBodyRelation::RunIn
+                } else {
+                    mant_ir::HeadBodyRelation::Separate
+                },
+                "{style} {label}"
+            );
         }
     }
 
@@ -1749,8 +1799,25 @@ fn discarded_tag_head_buffer_preserves_prior_rows_and_waits_for_real_flush() {
     let long_tag = ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It Xo XXXXXX\n.br\n.No \\p\n.No Y\n.br\n.Xc\n.No BODY\n.El\n";
     let native = native_terminal(long_tag);
     let lowered = lowered_terminal(long_tag);
-    assert!(native.contains("XXXXXX\n\n"), "native: {native:?}");
-    assert!(lowered.contains("XXXXXX\n\n"), "lowered: {lowered:?}");
+    // Exact pristine source run retains one physical blank row. The IR
+    // may attach a line-origin hint to it; padding does not make it another
+    // row or printable word (term.c::term_flushln(), roff_term_pre_br()).
+    let rows = |value: &str| {
+        value
+            .split_once("DESCRIPTION\n")
+            .unwrap()
+            .1
+            .lines()
+            .take(3)
+            .map(|row| row.trim().to_owned())
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(rows(&native), ["XXXXXX", "", "BODY"], "native: {native:?}");
+    assert_eq!(
+        rows(&lowered),
+        ["XXXXXX", "", "BODY"],
+        "lowered: {lowered:?}"
+    );
 }
 
 #[test]

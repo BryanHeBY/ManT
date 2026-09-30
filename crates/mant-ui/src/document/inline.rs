@@ -219,6 +219,11 @@ fn append_inline(
         } else {
             append_text(text, source_style(style, source, target), lines);
         }
+        if let Some(indent) = source.line_break_indent {
+            // An authored structural break carries the resolved origin of
+            // its following row. Keep it out of the text's scalar ranges.
+            lines.last_mut().expect("break starts a row").indent_columns = indent;
+        }
         if let Some(target) = target.and_then(|target| local_link_target(target, current_address)) {
             record_link(lines, first_line, first_scalar, &target);
         }

@@ -17,6 +17,7 @@ pub(in crate::mandoc) fn parse_roff_text_with_state(
         recognize_generated_references,
         &mut zero_advance,
         false,
+        false,
     );
     let mut output = execution.output;
     if execution.pending_word_end_break {
@@ -28,12 +29,11 @@ pub(in crate::mandoc) fn parse_roff_text_with_state(
 
 pub(in crate::mandoc) struct TextExecution {
     pub(in crate::mandoc) output: Vec<Inline>,
+    /// Native writes in decode order; semantic wrappers never supply cells.
+    pub(in crate::mandoc) native_writes: Vec<super::super::flow::field_buffer::FieldWrite>,
     pub(in crate::mandoc) joins_preceding_node: bool,
     pub(in crate::mandoc) source_continuation: Option<bool>,
     pub(in crate::mandoc) pending_word_end_break: bool,
-    /// A formatter blank followed `\p` before this word supplied a graph.
-    /// The HANG field owner combines this with graphs from earlier words.
-    pub(in crate::mandoc) break_before_graph_prefix: Option<usize>,
     pub(in crate::mandoc) trailing_output: TrailingOutput,
     /// Graph counts (from the word's start) at which a zero-width
     /// breakpoint `\:` executed (term.c:287-300, `ASCII_BREAK`).
@@ -59,7 +59,6 @@ struct TextEventState {
     pending_word_end_break: bool,
     suppress_break_whitespace: bool,
     graph_seen: bool,
-    break_before_graph_prefix: Option<usize>,
     last_breakable_blank: bool,
     trailing_breakable_blanks: usize,
     break_started_after_blank: bool,
@@ -78,7 +77,6 @@ impl TextEventState {
             pending_word_end_break,
             suppress_break_whitespace: false,
             graph_seen: false,
-            break_before_graph_prefix: None,
             last_breakable_blank: false,
             trailing_breakable_blanks: 0,
             break_started_after_blank: false,
@@ -124,14 +122,6 @@ fn append_text_event(
                     state.break_trailing_blanks,
                 );
             }
-            if !state.graph_seen || rejected_after_accepted_blank {
-                // term_fill() commits a graph before an earlier ordinary
-                // blank, then restarts from that blank. If \p follows it,
-                // the next pass can reject the suffix with nbr=0. Keep the
-                // accepted line break with the prefix, not the rejected text.
-                let prefix = output.len() + usize::from(state.graph_seen);
-                state.break_before_graph_prefix.get_or_insert(prefix);
-            }
             output.push(Inline::line_break());
             state.pending_word_end_break = false;
             state.suppress_break_whitespace = true;
@@ -175,6 +165,7 @@ pub(in crate::mandoc) fn parse_roff_text_with_zero_advance(
     recognize_generated_references: bool,
     zero_advance: &mut ZeroAdvanceState,
     pending_word_end_break: bool,
+    record_native_cells: bool,
 ) -> TextExecution {
     let events = decode(source)
         .into_iter()
@@ -186,6 +177,7 @@ pub(in crate::mandoc) fn parse_roff_text_with_zero_advance(
         recognize_generated_references,
         zero_advance,
         pending_word_end_break,
+        record_native_cells,
     )
 }
 
@@ -195,6 +187,7 @@ pub(in crate::mandoc) fn parse_formatter_word_parts_with_zero_advance(
     recognize_generated_references: bool,
     zero_advance: &mut ZeroAdvanceState,
     pending_word_end_break: bool,
+    record_native_cells: bool,
 ) -> TextExecution {
     let events = parts
         .iter()
@@ -214,6 +207,7 @@ pub(in crate::mandoc) fn parse_formatter_word_parts_with_zero_advance(
         recognize_generated_references,
         zero_advance,
         pending_word_end_break,
+        record_native_cells,
     )
 }
 
@@ -225,14 +219,23 @@ fn execute_formatter_word_events(
     recognize_generated_references: bool,
     zero_advance: &mut ZeroAdvanceState,
     pending_word_end_break: bool,
+    record_native_cells: bool,
 ) -> TextExecution {
     let (mut output, mut buffer) = (Vec::new(), String::new());
     let mut font = state.display_current();
     let mut link: Option<String> = None;
     let mut explicit_line_continuation = None;
     let mut text_state = TextEventState::new(pending_word_end_break);
+    let mut native_writes = Vec::new();
     zero_advance.begin_fragment();
     for (index, event) in events.iter().enumerate() {
+        if record_native_cells {
+            record_native_event(
+                event,
+                &mut native_writes,
+                zero_advance.fallback_is_projected(),
+            );
+        }
         match event {
             FormatterWordEvent::Code(value) => {
                 append_code_event(
@@ -269,17 +272,18 @@ fn execute_formatter_word_events(
                 text_state.last_breakable_blank = false;
                 text_state.trailing_breakable_blanks = 0;
                 text_state.graph_count += 1;
-                zero_advance.append_glyph(value, &mut buffer, font, link.as_deref());
+                zero_advance.append_glyph(value, &mut output, &mut buffer, font, link.as_deref());
             }
             FormatterWordEvent::Source(RoffInlineEvent::FallbackGlyph(value)) => {
-                if zero_advance.append_fallback_glyph(value, &mut buffer, font, link.as_deref()) {
-                    text_state.suppress_break_whitespace = false;
-                    text_state.graph_seen = true;
-                    text_state.graph_since_break |= text_state.pending_word_end_break;
-                    text_state.last_breakable_blank = false;
-                    text_state.trailing_breakable_blanks = 0;
-                    text_state.graph_count += 1;
-                }
+                zero_advance.append_fallback_glyph(value, &mut buffer, font, link.as_deref());
+                // Native recovery is still a zero-width graph even when its
+                // source spelling has no semantic contribution after \z.
+                text_state.suppress_break_whitespace = false;
+                text_state.graph_seen = true;
+                text_state.graph_since_break |= text_state.pending_word_end_break;
+                text_state.last_breakable_blank = false;
+                text_state.trailing_breakable_blanks = 0;
+                text_state.graph_count += 1;
             }
             FormatterWordEvent::Source(RoffInlineEvent::DeviceName) => {
                 text_state.suppress_break_whitespace = false;
@@ -357,9 +361,63 @@ fn execute_formatter_word_events(
         zero_advance,
         explicit_line_continuation,
         text_state.pending_word_end_break,
-        text_state.break_before_graph_prefix,
         zero_break_prefixes,
+        native_writes,
     )
+}
+
+/// `term.c::term_word()` buffers controls and invisible cells before
+/// `term_field()` projects printable output. Record these facts independently
+/// of the semantic IR and the zero-advance presentation machine.
+fn record_native_event(
+    event: &FormatterWordEvent,
+    writes: &mut Vec<super::super::flow::field_buffer::FieldWrite>,
+    fallback_projected: bool,
+) {
+    use super::super::flow::field_buffer::{FieldCell, FieldWrite};
+    match event {
+        FormatterWordEvent::Code(value)
+        | FormatterWordEvent::Source(
+            RoffInlineEvent::Text(value)
+            | RoffInlineEvent::Glyph(value)
+            | RoffInlineEvent::Overstrike {
+                terminal: Some(value),
+                ..
+            },
+        ) => FieldWrite::append_literal(writes, value),
+        FormatterWordEvent::Source(RoffInlineEvent::FallbackGlyph(value)) => {
+            writes.push(FieldWrite::RecoveryGlyph {
+                projected_scalars: if fallback_projected {
+                    value.chars().count()
+                } else {
+                    0
+                },
+            });
+        }
+        FormatterWordEvent::Source(RoffInlineEvent::DeviceName) => {
+            FieldWrite::append_literal(writes, "utf8");
+        }
+        FormatterWordEvent::Source(RoffInlineEvent::ZeroAdvance) => {
+            writes.push(FieldWrite::ArmBackafter);
+        }
+        FormatterWordEvent::Source(RoffInlineEvent::NoSpace) => {
+            writes.push(FieldWrite::CancelBackafter);
+        }
+        FormatterWordEvent::Source(RoffInlineEvent::LineBreak) => {
+            writes.push(FieldWrite::Cell(FieldCell::BreakMarker));
+        }
+        FormatterWordEvent::Source(RoffInlineEvent::ZeroWidthGlyph) => {
+            writes.push(FieldWrite::Cell(FieldCell::ZeroWidthGraph));
+        }
+        FormatterWordEvent::Source(RoffInlineEvent::EmptyDestination) => {
+            FieldWrite::append_literal(writes, "<>");
+        }
+        FormatterWordEvent::Source(RoffInlineEvent::Presentation {
+            kind: crate::mandoc::roff_escape::PresentationKind::Spacing,
+            ..
+        }) => writes.push(FieldWrite::Cell(FieldCell::Breakpoint)),
+        FormatterWordEvent::Source(_) => {}
+    }
 }
 
 fn append_empty_destination(
@@ -384,8 +442,8 @@ fn finish_text_execution(
     zero_advance: &mut ZeroAdvanceState,
     source_continuation: Option<bool>,
     pending_word_end_break: bool,
-    break_before_graph_prefix: Option<usize>,
     zero_break_prefixes: Vec<usize>,
+    native_writes: Vec<super::super::flow::field_buffer::FieldWrite>,
 ) -> TextExecution {
     let trailing_output = match mant_ir::last_visible_character(&output) {
         None | Some('\n') => TrailingOutput::None,
@@ -402,10 +460,10 @@ fn finish_text_execution(
     };
     TextExecution {
         output,
+        native_writes,
         joins_preceding_node: zero_advance.take_preceding_join(),
         source_continuation,
         pending_word_end_break,
-        break_before_graph_prefix,
         trailing_output,
         zero_break_prefixes,
     }
@@ -501,4 +559,58 @@ fn promote_sphinx_manual_reference(
         children: vec![styled_segment(display, font)],
     });
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn field_recording_does_not_select_another_text_executor() {
+        // The exact recording-mode.roff input passed pristine CVS ASCII,
+        // UTF-8 and lint. term_word() buffers X, ESCAPE_BREAK and
+        // ASCII_NBRZW in order; recording is independent of presentation.
+        let run = |record| {
+            let mut font = FontState::new();
+            let mut zero = ZeroAdvanceState::new();
+            parse_roff_text_with_zero_advance("X\\p\\&", &mut font, false, &mut zero, false, record)
+        };
+        let ordinary = run(false);
+        let field = run(true);
+        assert_eq!(ordinary.output, field.output);
+        assert_eq!(
+            ordinary.pending_word_end_break,
+            field.pending_word_end_break
+        );
+        assert_eq!(ordinary.source_continuation, field.source_continuation);
+        assert!(ordinary.native_writes.is_empty());
+        assert_eq!(field.native_writes.len(), 3);
+    }
+
+    #[test]
+    fn unknown_recovery_preserves_source_order_without_consuming_zero_advance() {
+        // Exact complete roff fixtures first verified with pristine CVS.
+        // term.c:620-638 writes NBRZW directly; the following encode1 glyph
+        // alone consumes BACKAFTER/BACKBEFORE. Recovery spelling remains
+        // visible under ManT's reading contract and retains its source style.
+        for (source, expected) in [
+            (r"\z\[unknownname]YZ", "Z"),
+            (r"\z\N'256'YZ", "Z"),
+            (r"\zX\[unknownname]", r"X\[unknownname]"),
+            (r"\zX\[unknownname]Y", r"\[unknownname]Y"),
+            (r"\zX\[unknownname]\[u03B1]", "\\[unknownname]α"),
+            (r"\zX\[unknownname] Y", r"X\[unknownname]Y"),
+            (r"X\[unknownname]Y", r"X\[unknownname]Y"),
+        ] {
+            let output = parse_roff_text_with_state(source, &mut FontState::new(), false);
+            assert_eq!(mant_ir::inline_plain_text(&output), expected, "{source}");
+        }
+        let output =
+            parse_roff_text_with_state(r"\zX\[unknownname]\fBY", &mut FontState::new(), false);
+        assert_eq!(mant_ir::inline_plain_text(&output), r"\[unknownname]Y");
+        assert!(matches!(output.last(), Some(Inline::Strong { children })
+            if mant_ir::inline_plain_text(children) == "Y"));
+        assert!(matches!(output.first(), Some(Inline::Text { value })
+            if value == r"\[unknownname]"));
+    }
 }

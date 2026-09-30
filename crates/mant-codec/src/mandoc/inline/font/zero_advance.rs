@@ -82,13 +82,10 @@ impl ZeroAdvanceState {
     }
 
     fn project_fallback(&mut self, glyph: Inline) -> Option<(Inline, bool)> {
-        if self.machine.has_pending() && !self.machine.is_armed() {
-            self.note_pending_replaced();
-        }
         self.machine.project_fallback(glyph)
     }
 
-    fn take_pending(&mut self) -> Option<Inline> {
+    fn take_pending(&mut self) -> Option<Vec<Inline>> {
         let glyph = self.machine.take_pending();
         if glyph.is_some() {
             self.note_pending_emitted();
@@ -122,7 +119,7 @@ impl ZeroAdvanceState {
     /// boundary. CVS `term_word()` writes that virtual blank before the next
     /// glyph; the blank consumes the backtracking position, so the glyph
     /// survives and the next word joins it without a visible space.
-    pub(in crate::mandoc) fn resolve_at_word_boundary(&mut self) -> Option<Inline> {
+    pub(in crate::mandoc) fn resolve_at_word_boundary(&mut self) -> Option<Vec<Inline>> {
         self.fragment_started_pending = false;
         self.resolved_preexisting = false;
         if self.machine.is_armed() {
@@ -145,17 +142,6 @@ impl ZeroAdvanceState {
     /// when another `\z` has already armed BACKAFTER for the next glyph.
     pub(in crate::mandoc) const fn has_buffered_glyph(&self) -> bool {
         self.machine.has_pending()
-    }
-
-    /// The pending glyph's plain text and total width, for the native
-    /// field buffer feed: a completed `\z` glyph already occupies one
-    /// buffer cell (`term.c::encode1`) while its IR projection waits.
-    pub(in crate::mandoc) fn printable_pending_glyph_text(&self) -> Option<(String, usize)> {
-        self.machine.pending_ref().map(|glyph| {
-            let text = mant_ir::inline_plain_text(std::slice::from_ref(glyph));
-            let width = mant_ir::geometry::text_width(&text);
-            (text, width)
-        })
     }
 
     pub(in crate::mandoc) fn has_printable_pending_glyph(&self) -> bool {
@@ -189,6 +175,7 @@ impl ZeroAdvanceState {
     ) {
         for _ in 0..count {
             if let Some((cell, _)) = self.project_glyph(styled_segment(" ".to_owned(), font)) {
+                output.extend(self.machine.take_recoveries());
                 output.push(cell);
             }
         }
@@ -232,7 +219,7 @@ impl ZeroAdvanceState {
             if matches!(character, '\n' | '\r') {
                 flush_segment(output, &mut buffer, font, None);
                 if let Some(glyph) = self.take_pending() {
-                    output.push(glyph);
+                    output.extend(glyph);
                 }
                 buffer.push(character);
                 continue;
@@ -245,7 +232,7 @@ impl ZeroAdvanceState {
                 if is_formatter_word_blank(character) {
                     flush_segment(output, &mut buffer, font, None);
                     if let Some(glyph) = self.take_pending() {
-                        output.push(glyph);
+                        output.extend(glyph);
                     }
                     continue;
                 }
@@ -258,6 +245,7 @@ impl ZeroAdvanceState {
                     self.resolved_preexisting = true;
                 }
             }
+            self.flush_recoveries(output, &mut buffer, font, None);
             buffer.push(character);
         }
         flush_segment(output, &mut buffer, font, None);
@@ -299,13 +287,29 @@ impl ZeroAdvanceState {
                     self.resolved_preexisting = true;
                 }
             }
+            self.flush_recoveries(output, buffer, font, link);
             buffer.push(character);
+        }
+    }
+
+    fn flush_recoveries(
+        &mut self,
+        output: &mut Vec<Inline>,
+        buffer: &mut String,
+        font: Font,
+        link: Option<&str>,
+    ) {
+        let recoveries = self.machine.take_recoveries();
+        if !recoveries.is_empty() {
+            flush_segment(output, buffer, font, link);
+            output.extend(recoveries);
         }
     }
 
     pub(super) fn append_glyph(
         &mut self,
         value: &str,
+        output: &mut Vec<Inline>,
         buffer: &mut String,
         font: Font,
         link: Option<&str>,
@@ -317,10 +321,8 @@ impl ZeroAdvanceState {
         if replaced && self.fragment_started_pending {
             self.resolved_preexisting = true;
         }
+        self.flush_recoveries(output, buffer, font, link);
         buffer.push_str(value);
-        // A fallback spelling is one roff glyph even though it takes several
-        // Unicode scalar values to present. Do not let a following source
-        // character overstrike its interior.
     }
 
     pub(super) fn append_fallback_glyph(
@@ -329,18 +331,14 @@ impl ZeroAdvanceState {
         buffer: &mut String,
         font: Font,
         link: Option<&str>,
-    ) -> bool {
-        let Some((_, replaced)) = self.project_fallback(styled_link(value.to_owned(), font, link))
-        else {
-            return false;
-        };
-        if replaced && self.fragment_started_pending {
-            self.resolved_preexisting = true;
-        }
-        if !value.is_empty() {
+    ) {
+        if let Some((_, _)) = self.project_fallback(styled_link(value.to_owned(), font, link)) {
             buffer.push_str(value);
         }
-        true
+    }
+
+    pub(super) const fn fallback_is_projected(&self) -> bool {
+        !self.machine.is_armed()
     }
 
     pub(super) fn flush(
@@ -355,13 +353,13 @@ impl ZeroAdvanceState {
             if self.fragment_started_pending {
                 self.resolved_preexisting = true;
             }
-            output.push(glyph);
+            output.extend(glyph);
         }
     }
 
     pub(in crate::mandoc) fn finish_into(&mut self, output: &mut Vec<Inline>) {
         if let Some(glyph) = self.take_pending() {
-            output.push(glyph);
+            output.extend(glyph);
         }
         self.machine.clear();
     }

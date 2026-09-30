@@ -416,12 +416,42 @@ impl BlockState {
         &mut self,
         state: crate::mandoc::inline::PreservedInlineState,
         generated_cells: usize,
+        native_generated_cells: usize,
         generated_word: bool,
+        entry: Option<&libmandoc_rs::Node>,
     ) {
         self.paragraph
             .inherit_preserved_execution(&mut self.formatter, state);
-        self.paragraph
-            .append_run_in_cells(&mut self.formatter, generated_cells, generated_word);
+        if let Some(entry) = entry {
+            // print_mdoc_node() enters the actual It BODY before its pre
+            // emits the run-in separator. Explicitly closed extended heads
+            // give this BODY NODE_LINE; ordinary Bq does not. Observe these
+            // facts now, never infer them from a later child or topology.
+            let closes_head = entry.flags.no_fill
+                && entry.flags.line_start
+                && !self.formatter.execution.source_row_continues();
+            if entry.flags.line_start {
+                self.formatter.note_definition_source_line();
+            }
+            self.paragraph
+                .with_inline_builder(&mut self.formatter, |builder| {
+                    builder.observe_no_fill_source_lines(true);
+                    builder.begin_executed_node(entry);
+                    builder.observe_no_fill_source_lines(false);
+                });
+            if closes_head {
+                if self.formatter.consume_definition_head_row() {
+                    self.paragraph.consume_invisible_head_row();
+                }
+                self.formatter.settle_definition_head_rows();
+            }
+        }
+        self.paragraph.append_run_in_cells(
+            &mut self.formatter,
+            generated_cells,
+            native_generated_cells,
+            generated_word,
+        );
         self.formatter.note_definition_run_in_executed();
     }
 
@@ -564,7 +594,7 @@ impl BlockState {
 
     #[cfg(test)]
     pub(super) fn finish(mut self) -> Vec<Block> {
-        self.settle();
+        self.settle(super::FormatterRowBoundary::Settle);
         self.output
     }
 
@@ -573,13 +603,21 @@ impl BlockState {
     pub(super) fn finish_with_formatter(
         mut self,
         formatter: &mut crate::mandoc::formatter::FormatterState,
+        row_boundary: super::FormatterRowBoundary,
     ) -> Vec<Block> {
-        self.settle();
+        self.settle(row_boundary);
         *formatter = self.formatter;
         self.output
     }
 
-    fn settle(&mut self) {
+    fn settle(&mut self, row_boundary: super::FormatterRowBoundary) {
+        if row_boundary == super::FormatterRowBoundary::Settle {
+            // The caller identified a native BODY post, not an IR owner
+            // return. mdoc_term.c::termp_it_post() executes term_newln()
+            // for inset/diag BODY here before retiring the field flags.
+            self.paragraph
+                .with_inline_builder(&mut self.formatter, InlineBuilder::finish_run_in_field_row);
+        }
         self.flush_preformatted();
         self.flush_paragraph();
         if let Some((lines, source)) = self.pending_spacing.take() {

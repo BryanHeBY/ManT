@@ -119,6 +119,7 @@ pub(in crate::mandoc) fn function_argument(
     // CVS mdoc_html.c::mdoc_fa_pre() iterates each direct Fo argument and
     // inserts commas between its operands and before a following Fa sibling.
     builder.begin_executed_node(argument);
+    let geometry = builder.definition_geometry_checkpoint(argument);
     if let Some(anchor) = navigation_anchor(argument) {
         builder.append(vec![anchor]);
     }
@@ -139,6 +140,7 @@ pub(in crate::mandoc) fn function_argument(
             builder.append_text(",");
         }
     }
+    builder.restore_definition_geometry(geometry);
 }
 
 pub(super) fn manual_reference(builder: &mut InlineBuilder, node: &Node, name: Option<&str>) {

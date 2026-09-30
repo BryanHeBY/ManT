@@ -59,7 +59,11 @@ pub(super) fn flatten_inline(children: &[Inline]) -> String {
                 output.push_str(&flatten_inline(children));
             }
             Inline::Anchor { .. } => {}
-            Inline::LineBreak { .. } => output.push('\n'),
+            Inline::LineBreak { indent_columns } => {
+                output.push('\n');
+                output
+                    .push_str(&" ".repeat(mant_ir::geometry::padding(i32::from(*indent_columns))));
+            }
         }
     }
     output
@@ -263,7 +267,15 @@ fn render_inline_raw(nodes: &[Inline], options: MarkdownOptions, manual_links: b
                 pieces.push(InlinePiece::plain(html_anchors(id, fragment_aliases)));
             }
             Inline::Anchor { .. } => {}
-            Inline::LineBreak { .. } => pieces.push(InlinePiece::plain("\n".to_owned())),
+            Inline::LineBreak { indent_columns } => {
+                // CommonMark collapses ordinary leading spaces or treats
+                // them as a code block. These cells are resolved row layout,
+                // not authored source text, so use non-breaking entities.
+                pieces.push(InlinePiece::plain(format!(
+                    "\n{}",
+                    "&#160;".repeat(mant_ir::geometry::padding(i32::from(*indent_columns)))
+                )));
+            }
         }
         index += 1;
     }
@@ -621,6 +633,27 @@ fn longest_backtick_run(value: &str) -> usize {
 #[cfg(test)]
 mod tests {
     use super::escape_plain_text;
+
+    #[test]
+    fn markdown_row_padding_is_preserved_without_becoming_source_text() {
+        let nodes = vec![
+            mant_ir::Inline::Text {
+                value: "Alpha".into(),
+            },
+            mant_ir::Inline::line_break_indented(3),
+            mant_ir::Inline::Strong {
+                children: vec![mant_ir::Inline::Text {
+                    value: "Beta".into(),
+                }],
+            },
+        ];
+        assert_eq!(super::flatten_inline(&nodes), "Alpha\n   Beta");
+        assert_eq!(
+            super::render_inline(&nodes, super::MarkdownOptions::default()),
+            "Alpha  \n&#160;&#160;&#160;**Beta**"
+        );
+        assert_eq!(mant_ir::inline_plain_text(&nodes), "Alpha\nBeta");
+    }
 
     #[test]
     fn plain_text_escapes_only_delimiter_capable_underscores() {

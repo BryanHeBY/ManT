@@ -273,7 +273,7 @@ impl<'a> LoweringContext<'a> {
         builder.observe_no_fill_source_lines(false);
         let surviving_cells = generated_cells
             - usize::from(generated_cells > 0 && builder.settle_head_glyph_before_run_in_cells());
-        builder.discard_unprinted_definition_field_output();
+        builder.project_definition_owner_prefix();
         builder.settle_provisional_definition_break();
         if let Some(saved_font) = saved_font {
             builder.font.pop_scope(saved_font);
@@ -335,6 +335,7 @@ impl<'a> LoweringContext<'a> {
             self.macro_set == MacroSet::Mdoc,
             &mut zero_advance,
             false,
+            false,
         );
         let mut output = execution.output;
         if execution.pending_word_end_break {
@@ -364,6 +365,7 @@ impl<'a> LoweringContext<'a> {
             &mut formatter.font,
             self.macro_set == MacroSet::Mdoc,
             &mut zero_advance,
+            false,
             false,
         );
         let mut output = execution.output;

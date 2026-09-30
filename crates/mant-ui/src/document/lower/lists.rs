@@ -60,14 +60,12 @@ impl DocumentBuilder<'_> {
                         )),
                 );
                 for line in inline_lines.into_iter().skip(1) {
+                    let row_origin =
+                        compose_origin(continuation_indent, i32::from(line.indent_columns));
                     self.push(
-                        LogicalLine::hanging(
-                            padding(continuation_indent),
-                            padding(continuation_indent),
-                            line.spans,
-                        )
-                        .with_links(line.links)
-                        .with_reference_marks(line.reference_marks),
+                        LogicalLine::hanging(padding(row_origin), padding(row_origin), line.spans)
+                            .with_links(line.links)
+                            .with_reference_marks(line.reference_marks),
                     );
                 }
                 self.blocks(
@@ -163,19 +161,17 @@ impl DocumentBuilder<'_> {
         } else {
             head_lines.len()
         };
-        for (id, row) in head_targets {
-            self.anchors
-                .entry(id)
-                .or_insert(self.lines.len() + row.min(last_target_row));
-        }
+        self.register_definition_head_targets(head_targets, last_target_row);
         let last = head_lines.pop().unwrap_or_default();
         for line in head_lines {
+            let row_origin = compose_origin(indent, i32::from(line.indent_columns));
             self.push(
-                LogicalLine::hanging(padding(indent), padding(indent), line.spans)
+                LogicalLine::hanging(padding(row_origin), padding(row_origin), line.spans)
                     .with_links(line.links)
                     .with_reference_marks(line.reference_marks),
             );
         }
+        let term_origin = compose_origin(indent, i32::from(last.indent_columns));
         let mut term_spans = last.spans;
         let mut term_links = last.links;
         let mut term_marks = last.reference_marks;
@@ -186,24 +182,28 @@ impl DocumentBuilder<'_> {
             for (id, row) in inline_anchor_rows(children) {
                 self.anchors.entry(id).or_insert(self.lines.len() + row);
             }
+            let mut description_lines =
+                self.styled_inlines(children, Style::default().fg(theme::TEXT));
+            let first_row_indent = description_lines
+                .first()
+                .map_or(0, |line| line.indent_columns);
             let first_indent = compose_origin(block_origin, layout.indent_columns);
             let continuation_indent =
                 compose_origin(first_indent, layout.continuation_indent_columns);
-            let description_indent = first_indent.max(compose_origin(
-                indent,
-                coordinate(
-                    term_width.saturating_add(usize::from(item.layout.min_term_gap_columns)),
-                ),
-            ));
+            let description_indent =
+                compose_origin(first_indent, i32::from(first_row_indent)).max(compose_origin(
+                    term_origin,
+                    coordinate(
+                        term_width.saturating_add(usize::from(item.layout.min_term_gap_columns)),
+                    ),
+                ));
             term_spans.push(Span::raw(
                 " ".repeat(
                     padding(description_indent)
-                        .saturating_sub(padding(indent).saturating_add(term_width))
+                        .saturating_sub(padding(term_origin).saturating_add(term_width))
                         .max(usize::from(item.layout.min_term_gap_columns)),
                 ),
             ));
-            let mut description_lines =
-                self.styled_inlines(children, Style::default().fg(theme::TEXT));
             // A run-in literal keeps its authored spacing: the shared row and
             // its continuations wrap as characters, never as words.
             let literal_inline =
@@ -224,31 +224,45 @@ impl DocumentBuilder<'_> {
             ));
             term_spans.extend(first.spans);
             self.push(
-                LogicalLine::hanging(padding(indent), padding(continuation_indent), term_spans)
-                    .wrap_mode(wrap_mode)
-                    .with_links(term_links)
-                    .with_reference_marks(term_marks),
+                LogicalLine::hanging(
+                    padding(term_origin),
+                    padding(continuation_indent),
+                    term_spans,
+                )
+                .wrap_mode(wrap_mode)
+                .with_links(term_links)
+                .with_reference_marks(term_marks),
             );
             for line in description_lines.into_iter().skip(1) {
+                let row_origin =
+                    compose_origin(continuation_indent, i32::from(line.indent_columns));
                 self.push(
-                    LogicalLine::hanging(
-                        padding(continuation_indent),
-                        padding(continuation_indent),
-                        line.spans,
-                    )
-                    .wrap_mode(wrap_mode)
-                    .with_links(line.links)
-                    .with_reference_marks(line.reference_marks),
+                    LogicalLine::hanging(padding(row_origin), padding(row_origin), line.spans)
+                        .wrap_mode(wrap_mode)
+                        .with_links(line.links)
+                        .with_reference_marks(line.reference_marks),
                 );
             }
             self.blocks(&item.description[1..], block_origin);
         } else {
             self.push(
-                LogicalLine::hanging(padding(indent), padding(indent), term_spans)
+                LogicalLine::hanging(padding(term_origin), padding(term_origin), term_spans)
                     .with_links(term_links)
                     .with_reference_marks(term_marks),
             );
             self.blocks(&item.description, block_origin);
+        }
+    }
+
+    fn register_definition_head_targets(
+        &mut self,
+        targets: Vec<(String, usize)>,
+        last_target_row: usize,
+    ) {
+        for (id, row) in targets {
+            self.anchors
+                .entry(id)
+                .or_insert(self.lines.len() + row.min(last_target_row));
         }
     }
 }

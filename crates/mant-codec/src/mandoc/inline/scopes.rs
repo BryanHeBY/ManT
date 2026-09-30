@@ -109,6 +109,14 @@ impl<'node> crate::mandoc::containers::ContainerSink<'node> for InlineContainerS
         &mut self.builder.font
     }
 
+    fn geometry_checkpoint(&self, node: &Node) -> Option<u16> {
+        self.builder.definition_geometry_checkpoint(node)
+    }
+
+    fn restore_geometry(&mut self, checkpoint: Option<u16>) {
+        self.builder.restore_definition_geometry(checkpoint);
+    }
+
     fn source_node(&mut self, node: &'node Node, starts_line: bool) {
         // The caller entered the root before scope dispatch.  Direct Fo Fa
         // operands enter in function_argument(); all other nested source

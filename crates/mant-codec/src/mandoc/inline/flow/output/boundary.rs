@@ -62,21 +62,7 @@ impl InlineBuilder {
         if incoming.is_empty() && !word {
             return;
         }
-        if std::env::var_os("MANT_DBG_D1").is_some() {
-            eprintln!(
-                "append word={word} nodes_tail={:?}",
-                self.nodes
-                    .iter()
-                    .rev()
-                    .take(3)
-                    .map(|n| match n {
-                        Inline::Text { value } => format!("T({value:?})"),
-                        Inline::LineBreak { .. } => "LB".to_owned(),
-                        other => format!("{other:?}"),
-                    })
-                    .collect::<Vec<_>>()
-            );
-        }
+
         let incoming_first = first_visible_character(incoming);
         let incoming_last = last_visible_character(incoming);
         let incoming_has_printable = has_printable_character(incoming);
@@ -106,12 +92,6 @@ impl InlineBuilder {
         let fixed_blank_boundary = (incoming_starts_with_fixed_blank
             && incoming_first.is_some_and(char::is_whitespace))
             || self.execution.trailing_output == TrailingOutput::FixedBlank;
-        // A later word committing an earlier jump's flush is a row event
-        // (term_newln before the restore, mdoc_term.c:1084-1085): commit
-        // any pending jump before this word emits its own.
-        if let Some(definition) = &mut self.execution.definition {
-            definition.row.commit_on_later_word();
-        }
         let concat_next_word = std::mem::take(&mut self.execution.concat_next_word);
         let concat_flush_source = std::mem::take(&mut self.execution.concat_flush_source);
         if concat_next_word {
@@ -165,38 +145,45 @@ impl InlineBuilder {
         } else {
             needs_boundary_space(self.execution.last_visible_character, incoming_first)
         };
-        let (accepted_word_prefix, accepted_row_break, split_word) = if word {
-            self.record_hang_word(incoming, add_space, boundary, empty_word)
+        let (accepted_row_break, split_word) = if word {
+            self.record_hang_word(incoming, boundary)
         } else {
-            (None, false, None)
+            (0, None)
         };
-        if accepted_row_break {
+        if accepted_row_break > 0 {
             // A consumed \p separator closes the already accepted prefix.
             // Its blank is part of the break, not a new formatter word cell.
             self.execution.pending_breakable_spaces = 0;
-            if !matches!(self.nodes.last(), Some(Inline::LineBreak { .. }))
-                && !matches!(incoming.first(), Some(Inline::LineBreak { .. }))
-            {
+            trim_trailing_breakable_spaces(&mut self.nodes, usize::MAX);
+            for _ in 0..accepted_row_break {
                 let row_indent = self.take_definition_row_indent();
                 self.nodes.push(Inline::line_break_indented(row_indent));
             }
         } else {
             self.append_boundary_spacing(boundary, add_space, word, empty_word);
         }
-        let word_output_start = self.nodes.len();
+        if word
+            && self.execution.author_execution.is_some()
+            && let Some(marker) = self
+                .execution
+                .definition
+                .as_ref()
+                .and_then(|state| state.field_word_anchors.last())
+                .map(|(_, marker, _)| marker.clone())
+        {
+            self.nodes.push(Inline::anchor(marker));
+        }
+        let starts_output_row =
+            incoming_has_line_break || split_word.is_some() || accepted_row_break > 0;
         match split_word {
             Some(split) => self.nodes.extend(split),
             None => self.nodes.append(incoming),
         }
+        if starts_output_row {
+            self.note_definition_output_row();
+        }
         if let Some(definition) = &mut self.execution.definition {
             definition.row.close_word();
-        }
-        if let Some(prefix) = accepted_word_prefix
-            && let Some(author) = &mut self.execution.author_execution
-        {
-            // This TEXT can contain both an accepted \p prefix and a later
-            // rejected field. A following flush may delete only the suffix.
-            author.field_output_start = word_output_start.saturating_add(prefix);
         }
         if incoming_last.is_some() {
             self.execution.last_visible_character = incoming_last;

@@ -89,7 +89,7 @@ fn mark(nodes: &[Inline], cursor: &mut usize, spans: &[Span], strong: bool) -> V
             }),
             Inline::LineBreak { .. } => {
                 *cursor += 1;
-                output.push(Inline::line_break());
+                output.push(node.clone());
             }
             Inline::Anchor { .. } => output.push(node.clone()),
         }
@@ -100,6 +100,74 @@ fn mark(nodes: &[Inline], cursor: &mut usize, spans: &[Span], strong: bool) -> V
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn located_rows_keep_padding_outside_source_match_coordinates() {
+        let blocks = vec![mant_ir::Block::Paragraph {
+            children: vec![
+                Inline::Text {
+                    value: "Alpha".into(),
+                },
+                Inline::line_break_indented(6),
+                Inline::Link {
+                    target: mant_ir::LinkTarget::Section {
+                        id: "destination".into(),
+                    },
+                    title: None,
+                    children: vec![Inline::Text {
+                        value: "Beta".into(),
+                    }],
+                },
+                Inline::line_break(),
+                Inline::Text {
+                    value: "Gamma".into(),
+                },
+            ],
+            layout: mant_ir::LayoutHint::default(),
+            source: None,
+        }];
+        let mant_ir::Block::Paragraph { children, .. } = &blocks[0] else {
+            unreachable!()
+        };
+        let mut styles = LocatedStyles::default();
+        styles.roots.insert(
+            key(ExplanationTextRoot::Inline(children)),
+            vec![Span {
+                chars: 6..10,
+                kind: None,
+                matched: true,
+            }],
+        );
+        let text = crate::output::text::render_located_blocks(&blocks, &styles, &|p, text| {
+            if p.matched {
+                text.to_uppercase()
+            } else {
+                text.into()
+            }
+        });
+        assert_eq!(text, "Alpha\n      BETA\nGamma");
+        assert_eq!(
+            styles.inline(children, crate::presentation::TextRole::Body, &|p, text| {
+                if p.matched {
+                    text.to_uppercase()
+                } else {
+                    text.into()
+                }
+            }),
+            text
+        );
+        let markdown = styles.markdown_inline(
+            children,
+            mant_codec::encode::MarkdownFragmentOptions {
+                preserve_anchors: true,
+            },
+        );
+        assert_eq!(
+            markdown,
+            "Alpha  \n&#160;&#160;&#160;&#160;&#160;&#160;[**Beta**](#destination)  \nGamma"
+        );
+        assert_eq!(mant_ir::inline_scalar_len(children), 16);
+    }
 
     #[test]
     fn projection_borrows_unmarked_roots_without_copying_inline_content() {

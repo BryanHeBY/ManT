@@ -120,6 +120,12 @@ handler; these transitions update the previous-font register used by `\fP`.
 
 `br` inside a flow becomes an immediate inline line break. The `\p` escape instead requests a break at the next ordinary word boundary; it crosses tight `Ns` joins and non-breaking spaces, and repeated requests before that boundary are idempotent. A following `\c` can continue the current formatter word but does not cancel that pending word-end break. This `\p\c` ordering follows the pinned mandoc CVS formatter; GNU troff can diagnose or project such non-portable combinations differently. `sp` becomes explicit vertical space. Filled source lines normally join with spaces; an indented input line and no-fill input preserve line boundaries. No-fill rows follow executed AST events: executed empty-row events are retained, including leading and trailing rows, and independent `sp` requests accumulate. Skipped conditions and uncalled macro definitions do not contribute rows. Leading empty literal rows follow mandoc's terminal behavior; groff may suppress them in no-space contexts. A final unescaped `\c` suppresses the next implicit space or line break and joins the next input line directly. Word spacing and physical-line continuation remain independent: a generated or explicitly empty formatter word consumes the latter even when it adds no visible glyph.
 
+Inside a definition field, `\p` remains an ordered native buffer cell until
+`term_fill()` consumes its actual word separator. A preceding operand's marker
+is not decoded again against the next TEXT's internal spaces. This keeps the
+same line result when validation represents several words in one TEXT or as
+separate operands, including diagnostic BODY text and suppressed separators.
+
 An empty macro parameter is not automatically a physical blank line: ManT follows mandoc's macro-set-specific word behavior, preserving zero-width row glyphs such as `\&` separately from pure font state. A groff `\z` operand is an overstrike glyph with no advance: ManT consumes its complete control spelling and retains a final literal glyph when no later glyph can cover it. Executed `fi`/`nf` inside `SY` or a display switch the actual content mode; a filled run resumes ordinary source-word and indented-line handling. Explicit argument and enclosure wrapper boundaries remain observable even when their child text shares one macro call-site line number.
 
 An empty native TEXT node follows the pinned CVS text visitor: man uses
@@ -192,21 +198,44 @@ wrapper may span that boundary: its accepted and pending slices stay separate
 during field execution, then return as one semantic link in the IR. HANG
 source-line flushes retain `trailspace` until the
 next formatter word; an intervening `br` clears it with BRIND instead of
-printing an extra separator. In no-fill extended definition HEADs, closing
-an explicit nested block also ends the old `It` ownership before BODY begins;
-a subsequent invisible BODY row is therefore new output.
+printing an extra separator. Definition HEAD ownership follows actual
+physical-line execution: closing a formatting scope alone does not prove
+that its row ended. A subsequent invisible BODY row belongs to a new row
+only after the shared formatter has closed the HEAD's row.
 An inset item with no HEAD child generates no separator word at all, so that
 case does not consume formatter word state.
 Definition HEAD/BODY placement uses the executed physical row after generated
 inset/diagnostic words and zero-row controls have run. An ordinary block such
-as `Bq` is not evidence that the HEAD row closed; native `NODE_BROKEN` records
-an explicit scope close, while `\c` can keep the row active across that close.
+as `Bq` is not evidence that the HEAD row closed; neither native
+`NODE_BROKEN` nor a future BODY `.nf` decides its physical line. A `\c`
+continuation can keep the row active across a scope close.
+The `It` BODY wrapper enters through its own `NODE_LINE`/`NODE_NOFILL`
+event before the inset/diagnostic pre-handler generates its separator word.
+This execution point decides the row handoff using the current continuation
+register; later BODY requests cannot retroactively change that decision.
 The first literal BODY block may share the HEAD line only when that execution
 still leaves the line open. `sp 0`, `ce 0`, and `rj 0` call `term_newln()` but
 can leave a HANG row open, whereas an inset BODY's generated spacing word
 consumes `\c` before the next no-fill source line.
 
-Field consumption follows `term_fill()`'s accepted byte prefix. A `\p` after
+Definition row origins are resolved when the native field actually flushes.
+`mdoc_term.c::print_mdoc_node()` processes a no-fill source-line event before
+saving a node's offset and margin; roff requests return before the normal
+geometry restore, while non-text mdoc nodes restore their entry offset after
+children and post. A later source-line event can therefore print a buffered
+word at the request's changed offset, while an outer scope return can restore
+the original offset before the final word prints. Previously submitted rows
+retain their origin. The resulting `LineBreak.indentColumns` crosses JSON
+and is consumed by text, explain, Markdown, TUI, and visual selection copying;
+these layout cells never enter original-text or link scalar coordinates.
+These hints cover the selected list-field and roff-request offsets with their
+source-line flush and node-restoration lifetimes. Other device geometry keeps
+the existing responsive projection: for example, the additional four-column
+SYNOPSIS `Fo` BODY margin from `termp_fo_pre()` is not a portable row-origin
+promise. Explicit hard lines, body order, and executed boundaries remain required
+reading content across these layouts.
+
+Field consumption follows `term_fill()`'s accepted native-cell prefix. A `\p` after
 an ordinary breakable blank can start the next pass before any graph, causing
 that pass and its later suffix to be rejected; `X\p Y` and `X \p Y` therefore
 have different accepted text. Styling and link wrappers do not commit a
@@ -217,6 +246,25 @@ acceptance step before it starts the next field, so a `\p`-rejected suffix
 cannot be revived by its output wrapper. Later `br`, `sp`, and aligned-line
 requests drain that new field through the same acceptance step before they
 change row ownership.
+
+The field buffer records native writes while each source or generated word
+executes, including `\&` cells and glyphs still waiting for `\z` resolution.
+An explicit flush result distinguishes an accepted field, a rejected first
+pass, and an accepted prefix followed by rejection. Rejection applies only
+to that field's remaining output owners; a real flush ends its identity, so
+it cannot erase a later BODY paragraph. Semantic styles, hidden destinations
+and HEAD/BODY ownership splits do not replace these native content facts.
+The reading contract uses UTF-8 glyph execution: escaped fixed spaces and
+Unicode zero-width characters pass through `encode1()`, while a KEEP word
+separator and `\&` use internal buffered cells. The ASCII profile can differ
+when `\z` interacts with such characters. Pending fields are scanned
+incrementally rather than replaying their complete history at each word.
+
+An empty mdoc operand such as `.No ""` has no `NODE_LINE` and still executes
+an ordinary formatter word; its presence in HEAD does not by itself close
+that row. An empty source TEXT with `NODE_LINE` executes vertical space.
+Pending `\p` markers consume actual word separators, so the corresponding
+hard break can belong to BODY when the shared HEAD field is finally flushed.
 
 Display offsets use terminal-column unit conversion. Unsupported or excessive
 offsets use the default indentation; cumulative indentation is capped at 4096
@@ -587,6 +635,15 @@ escaping is minimal but lossless: intraword underscores such as the one in
 Color, point size, vertical or non-literal motion, drawing, register, string, device, and postprocessor escape operands are consumed so control syntax cannot leak into prose. Their presentation effect is omitted. Overstrike `\o` is the exception: ManT retains the surviving glyph from mandoc's bounded one-cell terminal projection, including its trailing blank/tab trim, without reproducing device geometry or decoration. Link identity continues to follow the separate HTML-compatible source projection. A positive literal relative horizontal motion retains one space as a text-mode approximation, including before a `\c` line join; negative, absolute, register-based, and compound motions remain presentation-only. Known zero-width spacing and formatter controls remain zero width. An otherwise undefined one-character escape follows roff's visible-trigger fallback after terminal-control filtering.
 
 The zero-advance `\z` escape consumes complete control operands and never exposes a partial glyph spelling. Its two formatter stages—waiting for a glyph and waiting for a later glyph to overstrike the completed glyph—are retained independently across adjacent source text, style operands, inline macro arguments, and formatter-generated syntax such as `OP` brackets. An ordinary filled-word boundary consumes the latter backtracking position without adding a visible blank; real line and cell boundaries settle any remaining glyph. Following the pinned mandoc CVS formatter, a following `\c` cancels only a still-unconsumed `\z`; after a zero-advance glyph has already been produced, a trailing `\c` remains a valid source-line continuation and the next glyph may overstrike it. GNU troff diagnoses or projects some of these non-portable `\z`/`\c` combinations differently. A final literal glyph remains visible when no later glyph can overstrike it; otherwise the linear projection omits the overstruck glyph.
+
+Unknown named characters and unsupported numbered characters retain their
+source spelling as semantic recovery. That spelling is not a formatter
+operand: pinned `term.c::term_word()` buffers `ASCII_NBRZW` for these escapes
+without invoking `encode1()`, so neither stage of `\z` is consumed. A spelling
+encountered while waiting for the next glyph stays hidden; a spelling after
+a completed zero-advance glyph retains source order whether that glyph
+survives or is later overstruck. Native field acceptance uses the zero-width
+cell, while output ownership records the recovery spelling separately.
 
 Decoded text is never interpreted a second time as roff syntax. In particular, literal font-escape spellings authored with `\e` or `\[rs]` remain visible even when their letters resemble the currently selected font.
 

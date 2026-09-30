@@ -17,6 +17,8 @@ impl InlineBuilder {
         flags: FieldFlags,
         exit_field: bool,
     ) -> bool {
+        self.commit_definition_row_origin();
+        self.discard_unprinted_definition_field_output();
         let had_marker_passes = self
             .execution
             .definition
@@ -84,13 +86,6 @@ impl InlineBuilder {
             return false;
         }
         self.flush_zero_advance();
-        if native_field_discarded {
-            let mut field = self
-                .nodes
-                .split_off(field_output_start.min(self.nodes.len()));
-            retain_unprinted_field_targets(&mut field);
-            self.nodes.extend(field);
-        }
         let field = self.nodes.get(field_output_start..).unwrap_or_default();
         // term_fill() returns nbr=0 for a HANG field containing only \p,
         // ordinary breakable blanks, or invisible controls. Its IR padding
@@ -233,7 +228,6 @@ impl InlineBuilder {
         if let Some(definition) = &mut self.execution.definition {
             definition.field_buffer.clear();
             definition.field_word_anchors.clear();
-            definition.pending_glyph_fed = false;
             // A mid-field flush is a row event (upstream's `term_newln`
             // printing the buffered word before the restore,
             // mdoc_term.c:1084-1085): the jump stands. Only the field's
@@ -246,7 +240,7 @@ impl InlineBuilder {
                     value.clear();
                 }
             } else {
-                definition.row.commit_on_later_word();
+                definition.row.commit_on_source_flush();
             }
         }
         overruns
@@ -268,72 +262,20 @@ impl InlineBuilder {
         }
     }
 
-    pub(in crate::mandoc) fn note_hang_break_before_graph(&mut self, accepted_prefix: usize) {
-        if let Some(definition) = &mut self.execution.definition
-            && definition.field_buffer.backbefore_armed()
-        {
-            // term.c:901-908: the completed \z glyph's TERMP_BACKBEFORE
-            // retreat eats the blank directly before the next graph, so
-            // that blank never enters the buffer and this marker's pass
-            // cannot reject on it. The row still closes after the accepted
-            // prefix (term.c:220); only the wipe is spurious.
-            return;
-        }
-        if let Some(definition) = &mut self.execution.definition {
-            definition.suffix_discarded_seen = true;
-            let row = &mut definition.hang_row;
-            row.field_discarded = true;
-            row.field_break_before_graph_prefix = Some(accepted_prefix);
-            row.field_unproven_break = true;
-        }
-    }
-
-    /// Predict `term_flushln()`'s pass loop over the fed buffer: whether any
-    /// pass would reject with nbr==0 (term.c:143-146), and the resume
-    /// position where the unprinted remainder begins. Dry-runs a clone so
-    /// the live buffer keeps its own col until a real flush.
-    pub(super) fn buffer_flush_rejection(&self) -> Option<(usize, bool)> {
+    /// All field acceptance decisions come from the native cells, including
+    /// a first-pass nbr=0. No old word-level flag can override this result.
+    pub(super) fn native_field_flush_receipt(
+        &self,
+    ) -> Option<super::super::field_buffer::FlushReceipt> {
         let definition = self.execution.definition.as_ref()?;
-        if definition.field_buffer.is_empty()
-            || !definition
-                .field_buffer
-                .cells()
-                .iter()
-                .any(|cell| matches!(cell, super::super::field_buffer::FieldCell::BreakMarker))
-        {
-            // Only marker-driven rejections change decisions here; fields
-            // of plain blanks keep their existing accounting.
-            return None;
-        }
-        let mut simulation = definition.field_buffer.clone();
-        let mut accepted_any_pass = false;
-        loop {
-            match simulation.fill_pass(usize::MAX / 2) {
-                None if !accepted_any_pass => {
-                    // The field rejected from its very first pass: the
-                    // word-level accounting already owns this shape (an
-                    // armed \p met a separator before any graph). Only
-                    // multi-pass chains — an accepted prefix followed by a
-                    // rejected remainder — change decisions here.
-                    return None;
-                }
-                None => return Some((simulation.resume_offset(), accepted_any_pass)),
-                Some(pass) => {
-                    accepted_any_pass = true;
-                    simulation.advance_past(pass.accepted_end);
-                    simulation.consume_break_blanks();
-                    // term.c:177-198: the loop exits when only ignorable
-                    // cells (blanks, markers) remain, WITHOUT running
-                    // another pass; a trailing armed marker cannot reject
-                    // after the last accepted slice.
-                    if simulation.resume_offset() >= simulation.cells().len()
-                        || simulation.only_ignorable_remainder(false)
-                    {
-                        return None;
-                    }
-                }
-            }
-        }
+        (!definition.field_buffer.is_empty()).then(|| {
+            let target = if definition.no_break_cleared && !self.execution.no_fill_word_active {
+                usize::from(definition.cleared_field_capacity_columns).max(1)
+            } else {
+                usize::MAX / 2
+            };
+            definition.field_buffer.flush_receipt(target, false)
+        })
     }
 
     pub(super) fn vertical_space_in_definition_field(&mut self, field: NoBreakField, rows: usize) {
@@ -438,12 +380,13 @@ impl InlineBuilder {
     /// `.mc` must not fall back to the ordinary one-cell path merely because
     /// `AuthorBreakEffect` changed after the first flush.
     pub(super) fn continue_no_break_definition_field(&mut self, mut field: NoBreakField) {
+        let native = self.native_field_device_with_resume(true, Some(field));
         let resumed_has_cell = self.restore_no_break_field_projection(field);
-        if field.style == DefinitionFieldStyle::Hang {
-            self.definition_state_mut()
-                .hang_row
-                .flush(field.trailspace_cells);
-            self.definition_state_mut().hang_row.margin_flush_seen = true;
+        if let Some(native) = &native {
+            let row = &mut self.definition_state_mut().hang_row;
+            row.flush(field.trailspace_cells);
+            row.viscol = native.viscol;
+            row.margin_flush_seen = true;
         }
         if !resumed_has_cell {
             // Whitespace-only and zero-width formatter words make
@@ -452,7 +395,7 @@ impl InlineBuilder {
             // field instead of consuming it or manufacturing a second one.
             field.output_end_before_separator = self.nodes.len();
             self.append_field_separator(field.separator_cells);
-            self.execution.boundary = PendingBoundary::Tight;
+            self.execution.boundary = PendingBoundary::CommittedField;
             field.resumed_output_start = self.nodes.len();
             field.resumed_execution_epoch = self.execution.execution_epoch;
             self.definition_state_mut().no_break = Some(field);
@@ -468,10 +411,18 @@ impl InlineBuilder {
             .nodes
             .get(field.resumed_output_start..)
             .unwrap_or_default();
-        let resumed_width =
-            mant_ir::geometry::text_width(&super::super::super::plain_text(resumed));
-        let row_width = self.current_formatter_row_width();
-        let overrun = row_width.saturating_add(field.trailspace_cells) > field.body_width;
+        let resumed_width = native.as_ref().map_or_else(
+            || mant_ir::geometry::text_width(&super::super::super::plain_text(resumed)),
+            |field| field.width,
+        );
+        let overrun = native.as_ref().map_or_else(
+            || {
+                self.current_formatter_row_width()
+                    .saturating_add(field.trailspace_cells)
+                    > field.body_width
+            },
+            |field| field.overruns,
+        );
         let output_end_before_separator = self.nodes.len();
 
         let separator_cells = if field.style == DefinitionFieldStyle::Tag && overrun {
@@ -491,7 +442,7 @@ impl InlineBuilder {
         } else {
             self.append_field_separator(separator_cells);
         }
-        self.execution.boundary = PendingBoundary::Tight;
+        self.execution.boundary = PendingBoundary::CommittedField;
 
         field.output_end_before_separator = output_end_before_separator;
         field.resumed_output_start = self.nodes.len();
@@ -556,14 +507,23 @@ impl InlineBuilder {
         else {
             return false;
         };
+        let native = self.native_field_device(true);
         self.flush_zero_advance();
         let field = self.nodes.get(start..).unwrap_or_default();
-        let width = mant_ir::geometry::text_width(&super::super::super::plain_text(field));
-        if !flags.wraps() {
-            self.definition_state_mut().hang_row.flush(usize::from(gap));
-            self.definition_state_mut().hang_row.margin_flush_seen = true;
+        let width = native.as_ref().map_or_else(
+            || mant_ir::geometry::text_width(&super::super::super::plain_text(field)),
+            |field| field.width,
+        );
+        if let Some(native) = &native {
+            let row = &mut self.definition_state_mut().hang_row;
+            row.flush(usize::from(gap));
+            row.viscol = native.viscol;
+            row.margin_flush_seen = true;
         }
-        let overrun = width.saturating_add(usize::from(gap)) > usize::from(body);
+        let overrun = native.as_ref().map_or(
+            width.saturating_add(usize::from(gap)) > usize::from(body),
+            |field| field.overruns,
+        );
         let output_end_before_separator = self.nodes.len();
         if flags.wraps() {
             if overrun {
@@ -571,10 +531,10 @@ impl InlineBuilder {
                 // Clearing NOSPACE leaves a pending boundary for the next
                 // term_word(), not an occupied row before HEAD post.
                 self.execution.pending_field_spaces = 1;
-                self.execution.boundary = PendingBoundary::Tight;
+                self.execution.boundary = PendingBoundary::CommittedField;
             } else {
                 self.append_field_separator(usize::from(gap).saturating_add(1));
-                self.execution.boundary = PendingBoundary::Tight;
+                self.execution.boundary = PendingBoundary::CommittedField;
             }
             self.execution
                 .definition
@@ -624,6 +584,7 @@ impl InlineBuilder {
         self.execution.word_end_break = WordEndBreak::Clear;
         self.execution.formatter_column = FormatterColumn::Origin;
         self.execution.final_word_join = Some(false);
+        self.retire_consumed_native_field();
         true
     }
 
@@ -640,20 +601,14 @@ impl InlineBuilder {
             // the output owner or reset field flags.
             self.discard_unprinted_definition_field_output();
         }
-        let field = self
-            .execution
+        // A request consumes this buffer, not the item's BODY lifetime.
+        // roff_term.c::roff_term_pre_mc() can leave viscol occupied, and
+        // later words may arm BACKAFTER in a fresh buffer. The BODY post
+        // still executes its own conditional term_newln().
+        self.execution
             .definition
             .as_mut()
-            .and_then(|state| state.no_break.take());
-        if field.is_some()
-            && let Some(state) = &mut self.execution.definition
-        {
-            // This request itself ran term_flushln() for the field, so the
-            // item post drain no longer owes the run-in continuation a
-            // separate decision.
-            state.run_in_continuation = false;
-        }
-        field
+            .and_then(|state| state.no_break.take())
     }
 
     pub(super) fn restore_no_break_field_projection(&mut self, field: NoBreakField) -> bool {
@@ -662,6 +617,7 @@ impl InlineBuilder {
         // this path therefore executes a real `term_flushln()`: settle a
         // completed zero-advance glyph and, critically, clear a bare
         // BACKAFTER request before the next word runs.
+        let native = self.native_field_device_with_resume(false, Some(field));
         self.flush_zero_advance();
         let resumed = self
             .nodes
@@ -693,6 +649,12 @@ impl InlineBuilder {
         }
         self.execution.pending_breakable_spaces = 0;
         self.execution.pending_field_spaces = 0;
+        if let Some(native) = native {
+            let row = &mut self.definition_state_mut().hang_row;
+            row.flush(field.trailspace_cells);
+            row.viscol = native.viscol;
+        }
+        self.retire_consumed_native_field();
         resumed_has_cell
     }
 

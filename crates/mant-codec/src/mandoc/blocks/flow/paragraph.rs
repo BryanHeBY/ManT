@@ -112,10 +112,11 @@ impl ParagraphFlow {
         &mut self,
         formatter: &mut FormatterState,
         count: usize,
+        native_count: usize,
         generated_word: bool,
     ) {
         self.with_inline_builder(formatter, |builder| {
-            builder.append_run_in_cells(count, generated_word);
+            builder.append_run_in_cells(count, native_count, generated_word);
         });
     }
 

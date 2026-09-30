@@ -16,6 +16,9 @@ pub(in crate::mandoc::inline::flow) struct HeadRowState {
     /// Indent (columns relative to the field origin) the row a break
     /// starts carries - the tag path's row origin after the request.
     pub(in crate::mandoc::inline::flow) indent_columns: u16,
+    /// This output owner has a following-row hint awaiting its first flush.
+    /// This is an IR target, not native row occupancy or field acceptance.
+    origin_pending: bool,
     /// Row offset (`rmargin` relative to the field origin) a request
     /// armed for the open HANG row: the fill at print time is
     /// `offset - viscol` (term.c:113-114), computed when the carrying
@@ -34,6 +37,18 @@ struct PendingRowJump {
 }
 
 impl HeadRowState {
+    pub(in crate::mandoc::inline::flow) fn note_row_origin(&mut self) {
+        self.origin_pending = true;
+    }
+
+    pub(in crate::mandoc::inline::flow) const fn has_pending_origin(&self) -> bool {
+        self.origin_pending
+    }
+
+    pub(in crate::mandoc::inline::flow) fn retire_row_origin(&mut self) {
+        self.origin_pending = false;
+    }
+
     /// Arm the request-moved row offset for the next word on the open
     /// row.
     pub(in crate::mandoc::inline::flow) fn arm_jump(&mut self, offset_columns: u16) {
@@ -61,10 +76,10 @@ impl HeadRowState {
         }
     }
 
-    /// A later word arrived inside the head: upstream's `term_newln()`
-    /// flush prints the carrying word before the restore, so the jump
-    /// stands. Returns the fill to keep.
-    pub(in crate::mandoc::inline::flow) fn commit_on_later_word(&mut self) {
+    /// A source-row flush prints the carrying word before the enclosing
+    /// node restores its offset. Commit the emitted jump at that execution
+    /// boundary; another word arriving alone does not commit it.
+    pub(in crate::mandoc::inline::flow) fn commit_on_source_flush(&mut self) {
         if self
             .pending
             .as_ref()
@@ -99,7 +114,7 @@ mod head_row_state_tests {
         row.arm_jump(14);
         assert_eq!(row.emit_armed(0, 8), 6);
         row.close_word();
-        row.commit_on_later_word();
+        row.commit_on_source_flush();
         assert_eq!(row.retract_on_head_close(), None);
     }
 

@@ -56,17 +56,35 @@ pub(in crate::mandoc::inline) fn styled_segment(value: String, font: Font) -> In
 /// run, without wrapping font overrides in an additional, additive style.
 pub(in crate::mandoc::inline) fn coalesce_font_runs(nodes: Vec<Inline>) -> Vec<Inline> {
     let mut output: Vec<Inline> = Vec::new();
+    let mut owners = Vec::new();
     for node in nodes {
+        if matches!(&node, Inline::Anchor { id, .. }
+            if id.as_str().starts_with(super::super::flow::INTERNAL_FIELD_WORD))
+        {
+            owners.push(node);
+            continue;
+        }
         match (output.last_mut(), node) {
             (Some(Inline::Strong { children: previous }), Inline::Strong { mut children })
             | (Some(Inline::Emphasis { children: previous }), Inline::Emphasis { mut children }) => {
+                // termp_fl_pre() keeps its generated prefix and children in
+                // one font run. Private field owners are transparent to this
+                // requested coalescing, but stay in source order inside the
+                // run until native acceptance and rejection are complete.
+                previous.append(&mut owners);
                 previous.append(&mut children);
             }
-            (Some(Inline::Text { value: previous }), Inline::Text { value }) => {
+            (Some(Inline::Text { value: previous }), Inline::Text { value })
+                if owners.is_empty() =>
+            {
                 previous.push_str(&value);
             }
-            (_, node) => output.push(node),
+            (_, node) => {
+                output.append(&mut owners);
+                output.push(node);
+            }
         }
     }
+    output.append(&mut owners);
     output
 }

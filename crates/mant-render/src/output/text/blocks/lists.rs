@@ -96,29 +96,39 @@ impl BlockRenderer<'_> {
         ) && let Some((children, layout)) = item.inline_description()
             && let Some(last_rows) = terms.pop()
         {
+            let term_origin = compose_origin(
+                origin,
+                i32::from(last_rows.last().map_or(0, |(_, indent)| *indent)),
+            );
             let last = last_rows
                 .into_iter()
                 .map(|(row, row_indent)| {
-                    indent_lines(&row, padding(origin) + usize::from(row_indent))
+                    indent_lines(&row, padding(compose_origin(origin, i32::from(row_indent))))
                 })
                 .collect::<Vec<_>>()
                 .join("\n");
             let last_width = mant_ir::geometry::definition_run_in_width(&item.terms).unwrap_or(0);
-            let first_origin =
-                compose_origin(body_origin, layout.indent_columns).max(compose_origin(
-                    origin,
-                    coordinate(
-                        last_width.saturating_add(usize::from(item.layout.min_term_gap_columns)),
-                    ),
-                ));
-            let body = self.inline_text(children, TextRole::Body);
-            let mut lines = body.split('\n');
+            let mut lines = self.inline_rows(children, TextRole::Body).into_iter();
+            let first_line = lines.next().unwrap_or_default();
+            let first_origin = compose_origin(
+                compose_origin(body_origin, layout.indent_columns),
+                i32::from(first_line.1),
+            )
+            .max(compose_origin(
+                term_origin,
+                coordinate(
+                    last_width.saturating_add(usize::from(item.layout.min_term_gap_columns)),
+                ),
+            ));
             let mut output = terms
                 .into_iter()
                 .flat_map(|term: Vec<(String, u16)>| {
                     term.into_iter()
                         .map(|(row, row_indent)| {
-                            indent_lines(&row, padding(origin) + usize::from(row_indent))
+                            indent_lines(
+                                &row,
+                                padding(compose_origin(origin, i32::from(row_indent))),
+                            )
                         })
                         .collect::<Vec<_>>()
                 })
@@ -128,17 +138,20 @@ impl BlockRenderer<'_> {
                 last,
                 " ".repeat(
                     padding(first_origin)
-                        .saturating_sub(padding(origin).saturating_add(last_width))
+                        .saturating_sub(padding(term_origin).saturating_add(last_width))
                         .max(usize::from(item.layout.min_term_gap_columns))
                 ),
-                lines.next().unwrap_or_default()
+                first_line.0
             ));
-            output.extend(lines.map(|line| {
+            output.extend(lines.map(|(line, row_indent)| {
                 indent_lines(
-                    line,
+                    &line,
                     padding(compose_origin(
-                        compose_origin(body_origin, layout.indent_columns),
-                        layout.continuation_indent_columns,
+                        compose_origin(
+                            compose_origin(body_origin, layout.indent_columns),
+                            layout.continuation_indent_columns,
+                        ),
+                        i32::from(row_indent),
                     )),
                 )
             }));
@@ -155,7 +168,7 @@ impl BlockRenderer<'_> {
             .flat_map(|term| {
                 term.into_iter()
                     .map(|(row, row_indent)| {
-                        indent_lines(&row, padding(origin) + usize::from(row_indent))
+                        indent_lines(&row, padding(compose_origin(origin, i32::from(row_indent))))
                     })
                     .collect::<Vec<_>>()
             })

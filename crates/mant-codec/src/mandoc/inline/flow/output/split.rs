@@ -10,7 +10,7 @@ pub(super) fn split_word_at_row_boundaries(
     boundaries.sort_unstable();
     boundaries.dedup();
     let mut output = Vec::with_capacity(incoming.len() + boundaries.len());
-    let mut next_boundary = boundaries.first().copied();
+    let mut next_boundary = 0;
     split_nodes_at_boundaries(
         incoming,
         &mut 0,
@@ -26,7 +26,7 @@ pub(super) fn split_word_at_row_boundaries(
 fn split_nodes_at_boundaries(
     nodes: &[Inline],
     cell: &mut usize,
-    next_boundary: &mut Option<usize>,
+    next_boundary: &mut usize,
     boundaries: &[usize],
     output: &mut Vec<Inline>,
 ) {
@@ -36,7 +36,7 @@ fn split_nodes_at_boundaries(
                 split_text_at_boundaries(value, node, cell, next_boundary, boundaries, output);
             }
             Inline::LineBreak { .. } => {
-                output.push(Inline::line_break());
+                output.push(node.clone());
                 *cell += 1;
                 advance_boundary(cell, next_boundary, boundaries);
             }
@@ -60,6 +60,22 @@ fn split_nodes_at_boundaries(
                     )),
                 });
             }
+            Inline::Link {
+                target,
+                title,
+                children,
+            } => {
+                output.push(Inline::Link {
+                    target: target.clone(),
+                    title: title.clone(),
+                    children: split_nodes_at_boundaries_owned(
+                        children,
+                        cell,
+                        next_boundary,
+                        boundaries,
+                    ),
+                });
+            }
             other => output.push(other.clone()),
         }
     }
@@ -68,7 +84,7 @@ fn split_nodes_at_boundaries(
 fn split_nodes_at_boundaries_owned(
     nodes: &[Inline],
     cell: &mut usize,
-    next_boundary: &mut Option<usize>,
+    next_boundary: &mut usize,
     boundaries: &[usize],
 ) -> Vec<Inline> {
     let mut output = Vec::with_capacity(nodes.len());
@@ -80,9 +96,56 @@ fn split_text_at_boundaries(
     value: &str,
     node: &Inline,
     cell: &mut usize,
-    next_boundary: &mut Option<usize>,
+    next_boundary: &mut usize,
     boundaries: &[usize],
     output: &mut Vec<Inline>,
+) {
+    split_text_with_blank_run(
+        value,
+        node,
+        cell,
+        next_boundary,
+        boundaries,
+        output,
+        &mut BlankRun::default(),
+    );
+}
+
+/// A blank run belongs to the current operand, not to each scalar visited
+/// while projecting it. Keep its end until the cursor leaves that run.
+#[derive(Default)]
+struct BlankRun {
+    end: usize,
+    #[cfg(test)]
+    inspected_cells: usize,
+}
+
+impl BlankRun {
+    fn end_from(&mut self, chars: &[char], start: usize) -> usize {
+        if start >= self.end {
+            self.end = start;
+            while self.end < chars.len()
+                && super::super::super::is_formatter_word_blank(chars[self.end])
+            {
+                #[cfg(test)]
+                {
+                    self.inspected_cells += 1;
+                }
+                self.end += 1;
+            }
+        }
+        self.end
+    }
+}
+
+fn split_text_with_blank_run(
+    value: &str,
+    node: &Inline,
+    cell: &mut usize,
+    next_boundary: &mut usize,
+    boundaries: &[usize],
+    output: &mut Vec<Inline>,
+    blank_run: &mut BlankRun,
 ) {
     let chars: Vec<char> = value.chars().collect();
     let mut index = 0;
@@ -93,7 +156,7 @@ fn split_text_at_boundaries(
         // word-tail candidate an overrun cut at (353-354): the row ends
         // here and the graph starts the next one. The breakpoint itself
         // never prints (term.c:396-398).
-        if *next_boundary == Some(*cell) {
+        if boundaries.get(*next_boundary) == Some(cell) {
             push_split_text(&mut run, node, output);
             output.push(Inline::line_break());
             advance_boundary(cell, next_boundary, boundaries);
@@ -108,18 +171,18 @@ fn split_text_at_boundaries(
             continue;
         }
         if super::super::super::is_formatter_word_blank(character) {
-            // Measure the whole blank run. When its end lands on the next
+            // Measure this blank run once. term.c:205-207 consumes a run
+            // only at the accepted pass boundary; a later boundary must
+            // preserve the same blanks in source order, without rescanning
+            // their suffix at every scalar. When its end lands on the next
             // row boundary, the run is the break's consumed separator
             // (term.c:205-207): the accepted row ends here and the word
             // continues on the next device row.
-            let mut end = index;
-            while end < chars.len() && super::super::super::is_formatter_word_blank(chars[end]) {
-                end += 1;
-            }
-            if *next_boundary == Some(*cell + (end - index)) {
+            let end = blank_run.end_from(&chars, index);
+            if boundaries.get(*next_boundary) == Some(&(*cell + (end - index))) {
                 while run
                     .chars()
-                    .last()
+                    .next_back()
                     .is_some_and(super::super::super::is_formatter_word_blank)
                 {
                     run.pop();
@@ -139,12 +202,9 @@ fn split_text_at_boundaries(
     push_split_text(&mut run, node, output);
 }
 
-fn advance_boundary(cell: &mut usize, next_boundary: &mut Option<usize>, boundaries: &[usize]) {
-    if *next_boundary == Some(*cell) {
-        *next_boundary = boundaries
-            .iter()
-            .copied()
-            .find(|&boundary| boundary > *cell);
+fn advance_boundary(cell: &mut usize, next_boundary: &mut usize, boundaries: &[usize]) {
+    if boundaries.get(*next_boundary) == Some(cell) {
+        *next_boundary += 1;
     }
 }
 
@@ -156,5 +216,130 @@ fn push_split_text(run: &mut String, node: &Inline, output: &mut Vec<Inline>) {
     match node {
         Inline::Code { .. } => output.push(Inline::Code { value: text }),
         _ => output.push(Inline::Text { value: text }),
+    }
+}
+
+/// Locate a stable native-word marker through semantic wrappers. All output
+/// preceding it is committed; the receipt owns only the following interval.
+/// Link targets and authored anchors are identities and survive rejection.
+pub(in crate::mandoc::inline::flow) fn retain_native_field_prefix(
+    nodes: &mut Vec<Inline>,
+    marker: &str,
+    limit: usize,
+) -> bool {
+    fn retain(nodes: &mut Vec<Inline>, marker: &str, found: &mut bool, remaining: &mut usize) {
+        nodes.retain_mut(|node| {
+            if let Inline::Anchor { id, .. } = node {
+                if id.as_str() == marker {
+                    *found = true;
+                }
+                return true;
+            }
+            match node {
+                Inline::Strong { children }
+                | Inline::Emphasis { children }
+                | Inline::Link { children, .. } => {
+                    retain(children, marker, found, remaining);
+                    !children.is_empty() || matches!(node, Inline::Link { .. })
+                }
+                _ if !*found => true,
+                Inline::Text { value } | Inline::Code { value } => {
+                    let count = value.chars().count();
+                    if count > *remaining {
+                        let end = value
+                            .char_indices()
+                            .nth(*remaining)
+                            .map_or(value.len(), |(byte, _)| byte);
+                        value.truncate(end);
+                    }
+                    *remaining = remaining.saturating_sub(count);
+                    !value.is_empty()
+                }
+                Inline::LineBreak { .. } => {
+                    if *remaining == 0 {
+                        false
+                    } else {
+                        *remaining -= 1;
+                        true
+                    }
+                }
+                Inline::Equation { value, .. } => {
+                    let keep = *remaining > 0;
+                    *remaining = remaining.saturating_sub(value.chars().count());
+                    keep
+                }
+                Inline::Anchor { .. } => unreachable!(),
+            }
+        });
+    }
+    let mut remaining = limit;
+    let mut found = false;
+    retain(nodes, marker, &mut found, &mut remaining);
+    found
+}
+
+#[cfg(test)]
+mod blank_run_tests {
+    use crate::mandoc::inline::plain_text;
+
+    use super::{BlankRun, Inline, split_text_with_blank_run, split_word_at_row_boundaries};
+
+    #[test]
+    fn later_boundary_inspects_each_blank_once() {
+        // Exact pristine CVS -Tascii/-Tutf8/-Tlint was run before this
+        // assertion for HANG `.No "X                Y\p Z"`: the first
+        // blanks stay before Y; only the accepted boundary before Z consumes
+        // its separator. term.c:205-207,263-367 decides those boundaries.
+        // This tests projection work, independently of device soft wrapping.
+        for count in [1_024, 2_048, 4_096, 8_192] {
+            let value = format!("X{}Y Z", " ".repeat(count));
+            let node = Inline::Text {
+                value: value.clone(),
+            };
+            let mut blank_run = BlankRun::default();
+            let mut output = Vec::new();
+            let mut cell = 0;
+            let mut boundary = 0;
+            split_text_with_blank_run(
+                &value,
+                &node,
+                &mut cell,
+                &mut boundary,
+                &[count + 3],
+                &mut output,
+                &mut blank_run,
+            );
+            assert_eq!(plain_text(&output), format!("X{}Y\nZ", " ".repeat(count)));
+            assert_eq!(blank_run.inspected_cells, count + 1);
+            assert_eq!(cell, count + 4);
+            assert_eq!(boundary, 1);
+        }
+    }
+
+    #[test]
+    fn accepted_run_end_consumes_only_that_separator() {
+        // Exact CVS profiles for HANG `.br` then `.No "X                Y Z"`
+        // preserve X / Y Z on separate rows. term.c:205-207 consumes only
+        // the blank run at the accepted boundary, retaining the later blank.
+        let node = Inline::Text {
+            value: "X                Y Z".to_owned(),
+        };
+        let output = split_word_at_row_boundaries(&[node], &mut vec![17]);
+        assert_eq!(plain_text(&output), "X\nY Z");
+    }
+
+    #[test]
+    fn multiple_run_boundaries_preserve_style_and_source_order() {
+        // Exact CVS profiles for `.Sy "X\p    Y\p        Z"` preserve
+        // three styled rows. term.c:205-207 consumes each breaking run;
+        // wrapping accepted projection in Strong cannot change its order.
+        let source = Inline::Strong {
+            children: vec![Inline::Text {
+                value: "X    Y        Z".to_owned(),
+            }],
+        };
+        let output = split_word_at_row_boundaries(&[source], &mut vec![14, 5]);
+        assert_eq!(plain_text(&output), "X\nY\nZ");
+        assert!(matches!(&output[..], [Inline::Strong { .. }]));
     }
 }

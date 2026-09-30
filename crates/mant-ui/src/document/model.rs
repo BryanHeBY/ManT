@@ -150,6 +150,9 @@ impl LogicalTableCell {
 
 #[derive(Debug, Clone, Default)]
 pub(super) struct StyledInlineLine {
+    /// Presentation origin of this hard row, relative to its inline root.
+    /// Padding stays outside source scalar, link, and reference coordinates.
+    pub(super) indent_columns: u16,
     pub(super) spans: Vec<Span<'static>>,
     pub(super) links: Vec<LogicalLinkRange>,
     pub(super) reference_marks: Vec<ReferenceMark>,

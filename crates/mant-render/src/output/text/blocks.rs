@@ -26,31 +26,18 @@ impl BlockRenderer<'_> {
     /// row's indent (a cleared-BRIND request moved the upstream offset,
     /// roff_term.c:73-75); wrapped text rows inherit the current indent.
     pub(super) fn inline_rows(&self, children: &[Inline], role: TextRole) -> Vec<(String, u16)> {
-        if self.locations.is_some() {
-            // The located renderer has no column model; the flat projection
-            // folds request indents away.
-            let text = self.inline_text(children, role);
-            return text.split('\n').map(|row| (row.to_owned(), 0)).collect();
-        }
         let mut rows: Vec<(String, u16)> = vec![(String::new(), 0)];
         let mut next_indent = 0_u16;
         let names = self
             .names
             .as_ref()
             .map_or(&[][..], |map| map.ranges(children));
-        visit_inline_text(children, names, |inline, _, value| {
-            let decorated = &(self.decorate)(
-                TextPresentation {
-                    role,
-                    inline,
-                    matched: false,
-                },
-                value,
-            );
+        let mut append = |presentation: TextPresentation, value: &str| {
+            let decorated = &(self.decorate)(presentation, value);
             if let InlinePresentation {
                 line_break_indent: Some(indent),
                 ..
-            } = inline
+            } = presentation.inline
             {
                 next_indent = indent;
             }
@@ -62,30 +49,30 @@ impl BlockRenderer<'_> {
                 }
                 rows.last_mut().expect("open row").0.push_str(piece);
             }
-        });
+        };
+        if let Some(locations) = self.locations {
+            locations.visit_inline(children, role, append);
+        } else {
+            visit_inline_text(children, names, |inline, _, value| {
+                append(
+                    TextPresentation {
+                        role,
+                        inline,
+                        matched: false,
+                    },
+                    value,
+                );
+            });
+        }
         rows
     }
 
     pub(super) fn inline_text(&self, children: &[Inline], role: TextRole) -> String {
-        if let Some(locations) = self.locations {
-            return locations.inline(children, role, self.decorate);
-        }
-        let mut text = String::new();
-        let names = self
-            .names
-            .as_ref()
-            .map_or(&[][..], |map| map.ranges(children));
-        visit_inline_text(children, names, |inline, _, value| {
-            text.push_str(&(self.decorate)(
-                TextPresentation {
-                    role,
-                    inline,
-                    matched: false,
-                },
-                value,
-            ));
-        });
-        text
+        self.inline_rows(children, role)
+            .into_iter()
+            .map(|(row, indent)| indent_lines(&row, padding(i32::from(indent))))
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 
     pub(super) fn sections_flow(&self, sections: &[Section], depth: usize) -> Flow {
@@ -137,59 +124,13 @@ impl BlockRenderer<'_> {
     }
 
     fn render_block(&self, block: &Block, base_indent: i32) -> Flow {
-        // Literal newlines and whitespace are content, not layout requests.
-        // They must survive even when the entire block contains only blanks.
-        if let Block::Preformatted {
-            children, layout, ..
-        } = block
-        {
-            if !mant_ir::geometry::has_literal_rows(children) {
-                return Flow::default();
-            }
-            return Flow::literal(indent_lines(
-                &self.inline_text(children, TextRole::Body),
-                padding(compose_origin(base_indent, layout.indent_columns)),
-            ));
-        }
-        if let Block::Paragraph {
-            children, layout, ..
-        } = block
-        {
-            let value = self.inline_text(children, TextRole::Body);
-            if value.trim().is_empty() {
-                return Flow::default();
-            }
-            let first_origin = compose_origin(base_indent, layout.indent_columns);
-            return Flow::text(
-                value
-                    // A leading inline break can be formatter output from an
-                    // empty word containing `\p`; unlike a trailing line
-                    // terminator it is observable vertical content.
-                    .trim_end_matches('\n')
-                    .split('\n')
-                    .enumerate()
-                    .map(|(index, line)| {
-                        let origin = if index == 0 {
-                            first_origin
-                        } else {
-                            compose_origin(first_origin, layout.continuation_indent_columns)
-                        };
-                        format!("{}{line}", " ".repeat(padding(origin)))
-                    })
-                    .collect::<Vec<_>>()
-                    .join("\n"),
-            );
-        }
         let (value, layout_indent) = match block {
             Block::Paragraph {
                 children, layout, ..
-            }
-            | Block::Preformatted {
+            } => return self.paragraph_flow(children, layout, base_indent),
+            Block::Preformatted {
                 children, layout, ..
-            } => (
-                self.inline_text(children, TextRole::Body),
-                layout.indent_columns,
-            ),
+            } => return self.preformatted_flow(children, layout, base_indent),
             Block::List {
                 kind,
                 items,
@@ -238,6 +179,62 @@ impl BlockRenderer<'_> {
             Block::ThematicBreak { .. } => ("---".to_owned(), 0),
         };
         Self::nonliteral_leaf(&value, compose_origin(base_indent, layout_indent))
+    }
+
+    fn preformatted_flow(
+        &self,
+        children: &[mant_ir::Inline],
+        layout: &mant_ir::LayoutHint,
+        base_indent: i32,
+    ) -> Flow {
+        // Literal newlines and whitespace are content, not layout requests.
+        // They survive even when the entire block contains only blanks.
+        if !mant_ir::geometry::has_literal_rows(children) {
+            return Flow::default();
+        }
+        let origin = compose_origin(base_indent, layout.indent_columns);
+        Flow::literal(
+            self.inline_rows(children, TextRole::Body)
+                .into_iter()
+                .map(|(row, indent)| {
+                    indent_lines(&row, padding(compose_origin(origin, i32::from(indent))))
+                })
+                .collect::<Vec<_>>()
+                .join("\n"),
+        )
+    }
+
+    fn paragraph_flow(
+        &self,
+        children: &[mant_ir::Inline],
+        layout: &mant_ir::LayoutHint,
+        base_indent: i32,
+    ) -> Flow {
+        let mut rows = self.inline_rows(children, TextRole::Body);
+        if rows.iter().all(|(row, _)| row.trim().is_empty()) {
+            return Flow::default();
+        }
+        while rows.last().is_some_and(|(row, _)| row.is_empty()) {
+            rows.pop();
+        }
+        let first_origin = compose_origin(base_indent, layout.indent_columns);
+        Flow::text(
+            rows.into_iter()
+                .enumerate()
+                .map(|(index, (line, indent))| {
+                    let origin = if index == 0 {
+                        first_origin
+                    } else {
+                        compose_origin(first_origin, layout.continuation_indent_columns)
+                    };
+                    format!(
+                        "{}{line}",
+                        " ".repeat(padding(compose_origin(origin, i32::from(indent))))
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("\n"),
+        )
     }
 
     fn nonliteral_leaf(value: &str, origin: i32) -> Flow {
@@ -322,6 +319,44 @@ impl BlockRenderer<'_> {
 mod tests {
     use super::*;
     use mant_ir::LayoutHint;
+
+    #[test]
+    fn hard_row_origins_compose_for_paragraph_and_literal_rows() {
+        let renderer = super::super::plain_renderer();
+        let children = vec![
+            Inline::Text {
+                value: "Alpha".into(),
+            },
+            Inline::line_break_indented(6),
+            Inline::Strong {
+                children: vec![Inline::Text {
+                    value: "Beta".into(),
+                }],
+            },
+            Inline::line_break(),
+            Inline::Text {
+                value: "Gamma".into(),
+            },
+        ];
+        for block in [
+            Block::Paragraph {
+                children: children.clone(),
+                layout: LayoutHint::default(),
+                source: None,
+            },
+            Block::Preformatted {
+                children,
+                language: None,
+                layout: LayoutHint::default(),
+                source: None,
+            },
+        ] {
+            assert_eq!(
+                renderer.render_blocks(&[block], -2),
+                "Alpha\n    Beta\nGamma"
+            );
+        }
+    }
 
     #[test]
     fn literal_whitespace_is_content_even_at_indented_and_document_edges() {

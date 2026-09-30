@@ -1167,20 +1167,20 @@
         ]
       },
       "DefinitionLayout": {
-        "description": "Definition-item presentation. Missing spacing inherits list compactness;\nexplicit zero spacing is a distinct, preserved source request.",
+        "description": "Definition-item presentation. Missing spacing inherits list compactness;\nexplicit zero spacing is a distinct, preserved source request.\n\nThe semantic source of truth is [`HeadBodyRelation`]; the column-valued\nfields are pre-resolved hints for fixed-width terminal presentation and\nmust not drive structure decisions in other renderers.",
         "type": "object",
         "properties": {
           "bodyIndentColumns": {
-            "description": "Description content origin relative to the label origin. Hard and\nwrapped continuation lines use this origin even if a long run-in head\nforces the first description text further right. The generic default\nis four cells; source producers resolve their own widths explicitly.",
+            "description": "Description content origin relative to the label origin. Hard and\nwrapped continuation lines use this origin even if a long run-in head\nforces the first description text further right. A pre-resolved\nfixed-width hint (mandoc `offset`, term.c:134-136); the generic\ndefault is four cells.",
             "type": "integer",
             "format": "int32"
           },
-          "inlineTerm": {
-            "description": "Render the term on the same line as the first description line (a man(7)\nhanging tag that fits the indent) instead of on its own line. Decided\nonce during lowering so every renderer lays the item out identically.",
-            "type": "boolean"
+          "headBodyRelation": {
+            "description": "How the head and the first body row relate. Producers decide this\nonce during lowering from source execution; renderers must derive\ntheir row structure from it instead of re-measuring columns.",
+            "$ref": "#/$defs/HeadBodyRelation"
           },
           "minTermGapColumns": {
-            "description": "Minimum separation after a run-in term, independent of body origin.",
+            "description": "Minimum separation after a run-in term, independent of body origin.\nA pre-resolved fixed-width hint (mandoc `trailspace`, mdoc_term.c:801-812).",
             "type": "integer",
             "format": "uint16",
             "maximum": 65535,
@@ -2165,6 +2165,31 @@
         "description": "Exact source-authored fragment spelling for one local navigation target.\n\nA fragment alias is not a [`NodeId`]: formats such as mdoc deliberately\npermit stable external destinations containing uppercase letters or\npunctuation. Producers retain that spelling here while assigning the\ntarget a separate normalized internal identity. Shared validation rejects\nempty, whitespace-containing, and control-containing aliases.",
         "type": "string"
       },
+      "HeadBodyRelation": {
+        "description": "Row relationship between a definition head and its first body row.",
+        "oneOf": [
+          {
+            "description": "The body starts on its own row at the description indent (tag-style\nand over-long heads; mdoc `tag`/`diag`, man TP past the tag width).",
+            "type": "string",
+            "const": "separate"
+          },
+          {
+            "description": "The body shares the head's row behind a minimum separator (mdoc\n`hang`, man TP/HP inside the tag width).",
+            "type": "string",
+            "const": "run-in"
+          },
+          {
+            "description": "The body shares the head's row with no separator: a request cleared\n`TERMP_NOBREAK` and armed `TERMP_NOSPACE` (`roff_term.c:75-78`), so\nthe first body word prints against the last head cell.",
+            "type": "string",
+            "const": "joined-no-space"
+          },
+          {
+            "description": "The body shares the head's row starting at the description column\nbecause the cleared field filled its capacity (term.c:250-253 with\n205-207): the first body column is the further of the head's end\nand the description indent.",
+            "type": "string",
+            "const": "flush-at-body"
+          }
+        ]
+      },
       "Heading": {
         "description": "One visible heading with the same inline vocabulary as document prose.",
         "type": "object",
@@ -2374,9 +2399,16 @@
             ]
           },
           {
-            "description": "Hard line break that renderers must preserve.",
+            "description": "Hard line break that renderers must preserve.\n\n`indent_columns` is the following row's indent relative to the\ncontaining block's origin - a fixed-width hint for the row a\nrequest started at (mandoc's cleared-BRIND `offset <- rmargin`,\nroff_term.c:73-75; a `.ti` one-row override, roff_term.c:267-273).\nZero keeps the block origin. The producer resolves the following\nhard row's origin when its field flushes, after applying any source\nscope restores (mdoc_term.c:329-330, 437-439). Consumers compose this\nhint for that row without adding padding to source coordinates.",
             "type": "object",
             "properties": {
+              "indentColumns": {
+                "description": "Columns the following row indents to.",
+                "type": "integer",
+                "format": "uint16",
+                "maximum": 65535,
+                "minimum": 0
+              },
               "type": {
                 "type": "string",
                 "const": "line-break"
@@ -4165,20 +4197,20 @@
         ]
       },
       "DefinitionLayout": {
-        "description": "Definition-item presentation. Missing spacing inherits list compactness;\nexplicit zero spacing is a distinct, preserved source request.",
+        "description": "Definition-item presentation. Missing spacing inherits list compactness;\nexplicit zero spacing is a distinct, preserved source request.\n\nThe semantic source of truth is [`HeadBodyRelation`]; the column-valued\nfields are pre-resolved hints for fixed-width terminal presentation and\nmust not drive structure decisions in other renderers.",
         "type": "object",
         "properties": {
           "bodyIndentColumns": {
-            "description": "Description content origin relative to the label origin. Hard and\nwrapped continuation lines use this origin even if a long run-in head\nforces the first description text further right. The generic default\nis four cells; source producers resolve their own widths explicitly.",
+            "description": "Description content origin relative to the label origin. Hard and\nwrapped continuation lines use this origin even if a long run-in head\nforces the first description text further right. A pre-resolved\nfixed-width hint (mandoc `offset`, term.c:134-136); the generic\ndefault is four cells.",
             "type": "integer",
             "format": "int32"
           },
-          "inlineTerm": {
-            "description": "Render the term on the same line as the first description line (a man(7)\nhanging tag that fits the indent) instead of on its own line. Decided\nonce during lowering so every renderer lays the item out identically.",
-            "type": "boolean"
+          "headBodyRelation": {
+            "description": "How the head and the first body row relate. Producers decide this\nonce during lowering from source execution; renderers must derive\ntheir row structure from it instead of re-measuring columns.",
+            "$ref": "#/$defs/HeadBodyRelation"
           },
           "minTermGapColumns": {
-            "description": "Minimum separation after a run-in term, independent of body origin.",
+            "description": "Minimum separation after a run-in term, independent of body origin.\nA pre-resolved fixed-width hint (mandoc `trailspace`, mdoc_term.c:801-812).",
             "type": "integer",
             "format": "uint16",
             "maximum": 65535,
@@ -6007,6 +6039,31 @@
         "description": "Exact source-authored fragment spelling for one local navigation target.\n\nA fragment alias is not a [`NodeId`]: formats such as mdoc deliberately\npermit stable external destinations containing uppercase letters or\npunctuation. Producers retain that spelling here while assigning the\ntarget a separate normalized internal identity. Shared validation rejects\nempty, whitespace-containing, and control-containing aliases.",
         "type": "string"
       },
+      "HeadBodyRelation": {
+        "description": "Row relationship between a definition head and its first body row.",
+        "oneOf": [
+          {
+            "description": "The body starts on its own row at the description indent (tag-style\nand over-long heads; mdoc `tag`/`diag`, man TP past the tag width).",
+            "type": "string",
+            "const": "separate"
+          },
+          {
+            "description": "The body shares the head's row behind a minimum separator (mdoc\n`hang`, man TP/HP inside the tag width).",
+            "type": "string",
+            "const": "run-in"
+          },
+          {
+            "description": "The body shares the head's row with no separator: a request cleared\n`TERMP_NOBREAK` and armed `TERMP_NOSPACE` (`roff_term.c:75-78`), so\nthe first body word prints against the last head cell.",
+            "type": "string",
+            "const": "joined-no-space"
+          },
+          {
+            "description": "The body shares the head's row starting at the description column\nbecause the cleared field filled its capacity (term.c:250-253 with\n205-207): the first body column is the further of the head's end\nand the description indent.",
+            "type": "string",
+            "const": "flush-at-body"
+          }
+        ]
+      },
       "Inline": {
         "description": "Inline content shared by prose, terms, and styled preformatted runs.",
         "oneOf": [
@@ -6188,9 +6245,16 @@
             ]
           },
           {
-            "description": "Hard line break that renderers must preserve.",
+            "description": "Hard line break that renderers must preserve.\n\n`indent_columns` is the following row's indent relative to the\ncontaining block's origin - a fixed-width hint for the row a\nrequest started at (mandoc's cleared-BRIND `offset <- rmargin`,\nroff_term.c:73-75; a `.ti` one-row override, roff_term.c:267-273).\nZero keeps the block origin. The producer resolves the following\nhard row's origin when its field flushes, after applying any source\nscope restores (mdoc_term.c:329-330, 437-439). Consumers compose this\nhint for that row without adding padding to source coordinates.",
             "type": "object",
             "properties": {
+              "indentColumns": {
+                "description": "Columns the following row indents to.",
+                "type": "integer",
+                "format": "uint16",
+                "maximum": 65535,
+                "minimum": 0
+              },
               "type": {
                 "type": "string",
                 "const": "line-break"
@@ -10045,20 +10109,20 @@
         ]
       },
       "DefinitionLayout": {
-        "description": "Definition-item presentation. Missing spacing inherits list compactness;\nexplicit zero spacing is a distinct, preserved source request.",
+        "description": "Definition-item presentation. Missing spacing inherits list compactness;\nexplicit zero spacing is a distinct, preserved source request.\n\nThe semantic source of truth is [`HeadBodyRelation`]; the column-valued\nfields are pre-resolved hints for fixed-width terminal presentation and\nmust not drive structure decisions in other renderers.",
         "type": "object",
         "properties": {
           "bodyIndentColumns": {
-            "description": "Description content origin relative to the label origin. Hard and\nwrapped continuation lines use this origin even if a long run-in head\nforces the first description text further right. The generic default\nis four cells; source producers resolve their own widths explicitly.",
+            "description": "Description content origin relative to the label origin. Hard and\nwrapped continuation lines use this origin even if a long run-in head\nforces the first description text further right. A pre-resolved\nfixed-width hint (mandoc `offset`, term.c:134-136); the generic\ndefault is four cells.",
             "type": "integer",
             "format": "int32"
           },
-          "inlineTerm": {
-            "description": "Render the term on the same line as the first description line (a man(7)\nhanging tag that fits the indent) instead of on its own line. Decided\nonce during lowering so every renderer lays the item out identically.",
-            "type": "boolean"
+          "headBodyRelation": {
+            "description": "How the head and the first body row relate. Producers decide this\nonce during lowering from source execution; renderers must derive\ntheir row structure from it instead of re-measuring columns.",
+            "$ref": "#/$defs/HeadBodyRelation"
           },
           "minTermGapColumns": {
-            "description": "Minimum separation after a run-in term, independent of body origin.",
+            "description": "Minimum separation after a run-in term, independent of body origin.\nA pre-resolved fixed-width hint (mandoc `trailspace`, mdoc_term.c:801-812).",
             "type": "integer",
             "format": "uint16",
             "maximum": 65535,
@@ -10997,6 +11061,31 @@
         "description": "Exact source-authored fragment spelling for one local navigation target.\n\nA fragment alias is not a [`NodeId`]: formats such as mdoc deliberately\npermit stable external destinations containing uppercase letters or\npunctuation. Producers retain that spelling here while assigning the\ntarget a separate normalized internal identity. Shared validation rejects\nempty, whitespace-containing, and control-containing aliases.",
         "type": "string"
       },
+      "HeadBodyRelation": {
+        "description": "Row relationship between a definition head and its first body row.",
+        "oneOf": [
+          {
+            "description": "The body starts on its own row at the description indent (tag-style\nand over-long heads; mdoc `tag`/`diag`, man TP past the tag width).",
+            "type": "string",
+            "const": "separate"
+          },
+          {
+            "description": "The body shares the head's row behind a minimum separator (mdoc\n`hang`, man TP/HP inside the tag width).",
+            "type": "string",
+            "const": "run-in"
+          },
+          {
+            "description": "The body shares the head's row with no separator: a request cleared\n`TERMP_NOBREAK` and armed `TERMP_NOSPACE` (`roff_term.c:75-78`), so\nthe first body word prints against the last head cell.",
+            "type": "string",
+            "const": "joined-no-space"
+          },
+          {
+            "description": "The body shares the head's row starting at the description column\nbecause the cleared field filled its capacity (term.c:250-253 with\n205-207): the first body column is the further of the head's end\nand the description indent.",
+            "type": "string",
+            "const": "flush-at-body"
+          }
+        ]
+      },
       "Heading": {
         "description": "One visible heading with the same inline vocabulary as document prose.",
         "type": "object",
@@ -11206,9 +11295,16 @@
             ]
           },
           {
-            "description": "Hard line break that renderers must preserve.",
+            "description": "Hard line break that renderers must preserve.\n\n`indent_columns` is the following row's indent relative to the\ncontaining block's origin - a fixed-width hint for the row a\nrequest started at (mandoc's cleared-BRIND `offset <- rmargin`,\nroff_term.c:73-75; a `.ti` one-row override, roff_term.c:267-273).\nZero keeps the block origin. The producer resolves the following\nhard row's origin when its field flushes, after applying any source\nscope restores (mdoc_term.c:329-330, 437-439). Consumers compose this\nhint for that row without adding padding to source coordinates.",
             "type": "object",
             "properties": {
+              "indentColumns": {
+                "description": "Columns the following row indents to.",
+                "type": "integer",
+                "format": "uint16",
+                "maximum": 65535,
+                "minimum": 0
+              },
               "type": {
                 "type": "string",
                 "const": "line-break"
@@ -13447,20 +13543,20 @@
         ]
       },
       "DefinitionLayout": {
-        "description": "Definition-item presentation. Missing spacing inherits list compactness;\nexplicit zero spacing is a distinct, preserved source request.",
+        "description": "Definition-item presentation. Missing spacing inherits list compactness;\nexplicit zero spacing is a distinct, preserved source request.\n\nThe semantic source of truth is [`HeadBodyRelation`]; the column-valued\nfields are pre-resolved hints for fixed-width terminal presentation and\nmust not drive structure decisions in other renderers.",
         "type": "object",
         "properties": {
           "bodyIndentColumns": {
-            "description": "Description content origin relative to the label origin. Hard and\nwrapped continuation lines use this origin even if a long run-in head\nforces the first description text further right. The generic default\nis four cells; source producers resolve their own widths explicitly.",
+            "description": "Description content origin relative to the label origin. Hard and\nwrapped continuation lines use this origin even if a long run-in head\nforces the first description text further right. A pre-resolved\nfixed-width hint (mandoc `offset`, term.c:134-136); the generic\ndefault is four cells.",
             "type": "integer",
             "format": "int32"
           },
-          "inlineTerm": {
-            "description": "Render the term on the same line as the first description line (a man(7)\nhanging tag that fits the indent) instead of on its own line. Decided\nonce during lowering so every renderer lays the item out identically.",
-            "type": "boolean"
+          "headBodyRelation": {
+            "description": "How the head and the first body row relate. Producers decide this\nonce during lowering from source execution; renderers must derive\ntheir row structure from it instead of re-measuring columns.",
+            "$ref": "#/$defs/HeadBodyRelation"
           },
           "minTermGapColumns": {
-            "description": "Minimum separation after a run-in term, independent of body origin.",
+            "description": "Minimum separation after a run-in term, independent of body origin.\nA pre-resolved fixed-width hint (mandoc `trailspace`, mdoc_term.c:801-812).",
             "type": "integer",
             "format": "uint16",
             "maximum": 65535,
@@ -15441,6 +15537,31 @@
         "description": "Exact source-authored fragment spelling for one local navigation target.\n\nA fragment alias is not a [`NodeId`]: formats such as mdoc deliberately\npermit stable external destinations containing uppercase letters or\npunctuation. Producers retain that spelling here while assigning the\ntarget a separate normalized internal identity. Shared validation rejects\nempty, whitespace-containing, and control-containing aliases.",
         "type": "string"
       },
+      "HeadBodyRelation": {
+        "description": "Row relationship between a definition head and its first body row.",
+        "oneOf": [
+          {
+            "description": "The body starts on its own row at the description indent (tag-style\nand over-long heads; mdoc `tag`/`diag`, man TP past the tag width).",
+            "type": "string",
+            "const": "separate"
+          },
+          {
+            "description": "The body shares the head's row behind a minimum separator (mdoc\n`hang`, man TP/HP inside the tag width).",
+            "type": "string",
+            "const": "run-in"
+          },
+          {
+            "description": "The body shares the head's row with no separator: a request cleared\n`TERMP_NOBREAK` and armed `TERMP_NOSPACE` (`roff_term.c:75-78`), so\nthe first body word prints against the last head cell.",
+            "type": "string",
+            "const": "joined-no-space"
+          },
+          {
+            "description": "The body shares the head's row starting at the description column\nbecause the cleared field filled its capacity (term.c:250-253 with\n205-207): the first body column is the further of the head's end\nand the description indent.",
+            "type": "string",
+            "const": "flush-at-body"
+          }
+        ]
+      },
       "Inline": {
         "description": "Inline content shared by prose, terms, and styled preformatted runs.",
         "oneOf": [
@@ -15622,9 +15743,16 @@
             ]
           },
           {
-            "description": "Hard line break that renderers must preserve.",
+            "description": "Hard line break that renderers must preserve.\n\n`indent_columns` is the following row's indent relative to the\ncontaining block's origin - a fixed-width hint for the row a\nrequest started at (mandoc's cleared-BRIND `offset <- rmargin`,\nroff_term.c:73-75; a `.ti` one-row override, roff_term.c:267-273).\nZero keeps the block origin. The producer resolves the following\nhard row's origin when its field flushes, after applying any source\nscope restores (mdoc_term.c:329-330, 437-439). Consumers compose this\nhint for that row without adding padding to source coordinates.",
             "type": "object",
             "properties": {
+              "indentColumns": {
+                "description": "Columns the following row indents to.",
+                "type": "integer",
+                "format": "uint16",
+                "maximum": 65535,
+                "minimum": 0
+              },
               "type": {
                 "type": "string",
                 "const": "line-break"

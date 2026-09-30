@@ -130,6 +130,8 @@ fn inline_text(children: &[Inline]) -> String {
         .collect()
 }
 
+#[path = "roff_lowering/definition_execution_rows.rs"]
+mod definition_execution_rows;
 #[path = "roff_lowering/definition_matrix.rs"]
 mod definition_matrix;
 #[path = "roff_lowering/entries.rs"]

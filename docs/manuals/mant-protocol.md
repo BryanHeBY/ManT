@@ -976,7 +976,7 @@ Definition-owner example:
     {
       "terms": [[{"type":"code","value":"--exclude PATTERN"}]],
       "description": [{"type":"paragraph","children":[{"type":"text","value":"Skip matching paths."}]}],
-      "layout": {"inlineTerm":true,"spacingBeforeLines":0},
+      "layout": {"headBodyRelation":"run-in","spacingBeforeLines":0},
       "entry": {
         "id":"option-exclude",
         "kind":{"kind":"parameter","parameterKind":"option"},
@@ -1014,11 +1014,17 @@ Missing/empty facts `forms` means unrecorded; null forms are invalid shape.
 Shape-valid but out-of-bounds references stay in the tree with semantic
 validation diagnostics. They never transfer a child's content to its parent.
 
-Definition `layout.inlineTerm` indicates that the term and first description
-line fit the same row. Missing/empty layout uses the default; null layout is
+Definition `layout.headBodyRelation` records the source-executed row relation:
+`separate` is the default; `run-in`, `joined-no-space`, and `flush-at-body`
+share the first description row. The resolved body origin and minimum term
+gap provide fixed-width hints; consumers do not reclassify the relation from
+rendered width. A first literal fragment shares a row only when the producer
+records continued execution, and explicit leading spacing prevents sharing.
+Missing/empty layout uses the default; null layout is
 rejected. `layout.spacingBeforeLines` missing/null inherits list compactness;
 explicit zero is retained. The item-level hints are distinct from block-level
-indentation and spacing.
+indentation and spacing. The unreleased v0.12 contract uses this relation
+in place of `layout.inlineTerm`; that old field is rejected.
 
 Rejected pre-convergence shapes: item `identity`, facts' flat `role` or semantic
 `aliases`, and item-level `inlineTerm` / `spacingBeforeLines`. They are rejected
@@ -1037,7 +1043,19 @@ Inline nodes are tagged by `type`:
 | `code` | `value` | Inline or preformatted code fragment |
 | `link` | `target`, optional `title`, `children` | Typed destination described below |
 | `anchor` | `id`, optional `fragmentAliases` | Zero-width normalized destination plus exact source fragments |
-| `line-break` | None | Explicit hard break |
+| `line-break` | optional `indentColumns` | Explicit hard break; compose the following row's resolved display-cell indent with its containing origin |
+
+`line-break.indentColumns` defaults to zero and is omitted at zero. Its closed
+unsigned range is 0 through 65535; null and unknown fields are rejected. This
+is a presentation hint for the following hard row, including its visual wraps.
+Ordinary text, located explain rendering, Markdown and TUI preserve it. The
+padding does not change source or query match coordinates, which still count
+the hard break as one scalar, or the semantic identity of its text and links.
+
+For example, `[{"type":"text","value":"Alpha"},
+{"type":"line-break","indentColumns":6},
+{"type":"text","value":"Beta"}]` displays the second row six cells past
+the inline root's origin while retaining the source text `Alpha\nBeta`.
 
 Every `link.target` is tagged by `kind`: `external { uri }`,
 `email { address }`, `document { name, fragment? }`,

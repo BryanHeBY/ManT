@@ -108,6 +108,8 @@ pub(super) enum RoffInlineEvent {
 pub(super) struct ZeroAdvanceMachine<T> {
     armed: bool,
     pending: Option<T>,
+    recoveries: Vec<T>,
+    recoveries_before_pending: usize,
 }
 
 impl<T> ZeroAdvanceMachine<T> {
@@ -115,6 +117,8 @@ impl<T> ZeroAdvanceMachine<T> {
         Self {
             armed: false,
             pending: None,
+            recoveries: Vec::new(),
+            recoveries_before_pending: 0,
         }
     }
 
@@ -139,6 +143,9 @@ impl<T> ZeroAdvanceMachine<T> {
     }
 
     pub(super) fn project_glyph(&mut self, glyph: T) -> Option<(T, bool)> {
+        if self.pending.is_some() {
+            self.recoveries_before_pending = self.recoveries.len();
+        }
         if self.armed {
             self.armed = false;
             self.pending = Some(glyph);
@@ -148,29 +155,48 @@ impl<T> ZeroAdvanceMachine<T> {
         Some((glyph, replaced_pending))
     }
 
+    /// Unknown SPECIAL/invalid NUMBERED uses `bufferc(ASCII_NBRZW)`, not
+    /// `encode1()`: its recovery spelling cannot consume either backtracking
+    /// flag (term.c:610-638). Defer only spelling following a pending glyph,
+    /// so source order remains stable when that native glyph later survives
+    /// or is overstruck. The queue contains this unresolved suffix only.
     pub(super) fn project_fallback(&mut self, glyph: T) -> Option<(T, bool)> {
-        if self.cancel_armed() {
+        if self.armed {
             return None;
         }
-        let replaced_pending = self.pending.take().is_some();
-        Some((glyph, replaced_pending))
+        if self.pending.is_some() {
+            self.recoveries.push(glyph);
+            return None;
+        }
+        Some((glyph, false))
     }
 
-    pub(super) fn resolve_word_boundary(&mut self) -> Option<T> {
-        (!self.armed).then(|| self.pending.take()).flatten()
+    pub(super) fn take_recoveries(&mut self) -> Vec<T> {
+        self.recoveries_before_pending = 0;
+        std::mem::take(&mut self.recoveries)
     }
 
-    pub(super) fn take_pending(&mut self) -> Option<T> {
-        self.pending.take()
+    pub(super) fn resolve_word_boundary(&mut self) -> Option<Vec<T>> {
+        (!self.armed).then(|| self.take_pending()).flatten()
+    }
+
+    pub(super) fn take_pending(&mut self) -> Option<Vec<T>> {
+        let glyph = self.pending.take()?;
+        let position = self.recoveries_before_pending;
+        let mut output = self.take_recoveries();
+        output.insert(position, glyph);
+        Some(output)
     }
 
     pub(super) fn discard_pending(&mut self) {
         self.pending = None;
+        self.recoveries.clear();
+        self.recoveries_before_pending = 0;
     }
 
     pub(super) fn clear(&mut self) {
         self.armed = false;
-        self.pending = None;
+        self.discard_pending();
     }
 }
 

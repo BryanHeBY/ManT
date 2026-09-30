@@ -1,3 +1,18 @@
+// Copyright (c) 2010-2022, 2025, 2026 Ingo Schwarze <schwarze@openbsd.org>
+// Copyright (c) 2008, 2009, 2010, 2011 Kristaps Dzonsons <kristaps@bsd.lv>
+//
+// Permission to use, copy, modify, and distribute this software for any
+// purpose with or without fee is hereby granted, provided that the above
+// copyright notice and this permission notice appear in all copies.
+//
+// THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHORS DISCLAIM ALL WARRANTIES
+// WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+// MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR
+// ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+// WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+// ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+// OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
 use super::super::native_field::{FieldFlag, FieldFlags};
 use super::super::{
     AuthorBreakEffect, FormatterColumn, Inline, InlineBuilder, PendingBoundary, TrailingOutput,
@@ -5,6 +20,15 @@ use super::super::{
 };
 use super::flush::retain_unprinted_field_targets;
 use super::state::{DefinitionFieldStyle, HangRowTransition, NoBreakField, PendingFieldGapOrigin};
+
+/// Device facts of one real `term_flushln()`, independent of its semantic
+/// owner or of whether a Link/style wrapper contains the printed glyphs.
+pub(super) struct NativeFieldDevice {
+    pub(super) width: usize,
+    pub(super) viscol: usize,
+    pub(super) ends_row: bool,
+    pub(super) overruns: bool,
+}
 
 impl InlineBuilder {
     /// Every definition HEAD eventually reaches `term_fill()`, including
@@ -18,6 +42,10 @@ impl InlineBuilder {
     /// `term_newln()` flushes an active `NOBREAK` definition field. `BRIND` may
     /// start a new row when a tag overruns its width; HANG keeps that row.
     pub(in crate::mandoc) fn no_fill_source_line(&mut self) {
+        self.commit_definition_row_origin();
+        if let Some(definition) = &mut self.execution.definition {
+            definition.row.commit_on_source_flush();
+        }
         let field = self
             .execution
             .author_execution
@@ -61,6 +89,7 @@ impl InlineBuilder {
     /// has settled that field.  A plain `hard_break()` loses BRIND geometry,
     /// so `.br`, `.ti`, and the break phase of `.sp` must use this entrypoint.
     pub(in crate::mandoc) fn control_line_break(&mut self) -> bool {
+        self.commit_definition_row_origin();
         if let Some(field) = self.take_no_break_field() {
             let capacity = field.field_capacity_columns;
             self.note_field_control_cleared_no_break(true, capacity);
@@ -201,10 +230,121 @@ impl InlineBuilder {
     }
 
     pub(in crate::mandoc) fn definition_field_exited(&self) -> bool {
-        self.execution
-            .definition
-            .as_ref()
-            .is_some_and(|state| state.outcome.field_exited())
+        self.execution.definition.as_ref().is_some_and(|state| {
+            state.outcome.field_exited()
+                || matches!(
+                    self.execution
+                        .author_execution
+                        .as_ref()
+                        .map(|author| author.break_effect),
+                    Some(AuthorBreakEffect::Field { .. })
+                ) && self
+                    .native_field_device(false)
+                    .is_some_and(|field| field.ends_row)
+        })
+    }
+
+    /// Execute the numeric pass/print/tail rules from term.c:113-253 and
+    /// term_field():374-444. Semantic recovery and hidden URI projection
+    /// cannot establish native width or device occupancy.
+    pub(super) fn native_field_device(&self, force_no_break: bool) -> Option<NativeFieldDevice> {
+        self.native_field_device_with_resume(force_no_break, None)
+    }
+
+    pub(super) fn native_field_device_with_resume(
+        &self,
+        force_no_break: bool,
+        resumed: Option<NoBreakField>,
+    ) -> Option<NativeFieldDevice> {
+        use super::super::field_buffer::{FieldCell, FlushReceipt};
+        let state = self.execution.definition.as_ref()?;
+        let receipt = if force_no_break {
+            (!state.field_buffer.is_empty())
+                .then(|| state.field_buffer.flush_receipt(usize::MAX / 2, false))?
+        } else {
+            self.native_field_flush_receipt()?
+        };
+        let (passes, rejected) = match &receipt {
+            FlushReceipt::Accepted { passes } => (passes, false),
+            FlushReceipt::Rejected { passes, .. } => (passes, true),
+        };
+        let (flags, rmargin, trailspace) =
+            match self.execution.author_execution.as_ref()?.break_effect {
+                AuthorBreakEffect::Field {
+                    flags,
+                    body_width_columns,
+                    gap_cells,
+                    ..
+                } => (
+                    flags,
+                    usize::from(body_width_columns),
+                    usize::from(gap_cells),
+                ),
+                AuthorBreakEffect::Line => match state.no_break.or(resumed) {
+                    Some(field) => (
+                        match field.style {
+                            DefinitionFieldStyle::Tag => FieldFlags::tag(false),
+                            DefinitionFieldStyle::Hang => FieldFlags::hang(),
+                        },
+                        field.body_width,
+                        field.trailspace_cells,
+                    ),
+                    None => (
+                        FieldFlags::inset(),
+                        usize::from(state.cleared_field_capacity_columns),
+                        0,
+                    ),
+                },
+            };
+        let row = &state.hang_row;
+        let mut viscol = row.viscol;
+        let mut vbl = row.field_offset.saturating_sub(viscol).max(row.minbl);
+        let mut start = 0;
+        let mut vfield = rmargin.saturating_sub(viscol.saturating_add(vbl));
+        let mut width = 0;
+        for (index, pass) in passes.iter().enumerate() {
+            vfield = rmargin.saturating_sub(viscol.saturating_add(vbl));
+            width = pass.accepted_width;
+            if let Some(printed) = state.field_buffer.printed_columns(start, pass.accepted_end) {
+                viscol = viscol.saturating_add(vbl).saturating_add(printed);
+            }
+            start = pass.accepted_end;
+            while matches!(
+                state.field_buffer.cells().get(start),
+                Some(FieldCell::BreakableBlank)
+            ) {
+                start += 1;
+            }
+            if index + 1 < passes.len() || rejected {
+                // A genuine remaining field executes loop endline(), then
+                // BRIND selects its right-margin origin for the next pass.
+                viscol = 0;
+                vbl = if flags.contains(FieldFlag::Brind) {
+                    rmargin
+                } else {
+                    row.field_offset
+                };
+            }
+        }
+        if rejected {
+            width = 0;
+            vfield = rmargin.saturating_sub(viscol.saturating_add(vbl));
+        }
+        let no_break = force_no_break
+            || flags.contains(FieldFlag::NoBreak) && !state.no_break_cleared
+                // It HEAD post clears NOBREAK before the shared buffer's
+                // BODY executes (mdoc_term.c:961-963). Ownership transfer
+                // preserves the cells, not the HEAD's temporary flags.
+                && !state.run_in_continuation
+                && matches!(self.execution.author_execution.as_ref()?.break_effect, AuthorBreakEffect::Field { .. });
+        let overruns = width.saturating_add(trailspace) > vfield;
+        let ends_row = !flags.contains(FieldFlag::Hang) && (!no_break || overruns);
+        Some(NativeFieldDevice {
+            width,
+            viscol: if ends_row { 0 } else { viscol },
+            ends_row,
+            overruns,
+        })
     }
 
     pub(in crate::mandoc) fn definition_body_gap_consumed(&self) -> bool {
@@ -258,88 +398,124 @@ impl InlineBuilder {
         }
     }
 
-    pub(in crate::mandoc) fn note_hang_native_graph(&mut self) {
-        if let Some(definition) = &mut self.execution.definition
-            && !definition.hang_row.field_discarded
-        {
-            definition.hang_row.field_native_graph = true;
-        }
+    pub(in crate::mandoc) fn discard_unprinted_definition_field_output(&mut self) -> bool {
+        self.project_definition_field_receipt(false)
     }
 
-    /// `term.c::term_fill()` stops at a breakable blank after `\p`. When the
-    /// field has not supplied a graph yet, even later words in that field are
-    /// never printed. The text decoder reports this event inside one word;
-    /// `HangNativeRow::word()` handles the same event across words.
-    /// Snapshot the pass state a source word's decode begins in. See
-    /// `HangNativeRow::field_armed_at_word_start`.
-    pub(in crate::mandoc) fn note_hang_word_decode_start(&mut self) {
-        if let Some(definition) = &mut self.execution.definition {
-            let row = &mut definition.hang_row;
-            row.field_armed_at_word_start = row.field_pending_word_end_break;
-            row.field_native_graph_at_word_start = row.field_native_graph;
-        }
+    pub(in crate::mandoc) fn project_definition_owner_prefix(&mut self) {
+        self.project_definition_field_receipt(true);
     }
 
-    pub(in crate::mandoc) fn discard_unprinted_definition_field_output(&mut self) {
-        if !self
-            .execution
-            .definition
-            .as_ref()
-            .is_some_and(|definition| definition.hang_row.field_discarded)
-            && let Some((rejection_resume, accepted_any_pass)) = self.buffer_flush_rejection()
-        {
-            // The pass loop rejects from the fed buffer (term.c:143-146):
-            // everything from the rejected resume position is unprinted.
-            // Map that buffer position to the IR range of the word that
-            // starts there.
-            let definition = self.execution.definition.as_mut().unwrap();
-            definition.hang_row.field_discarded = true;
-            definition.suffix_discarded_seen = true;
-            if accepted_any_pass {
-                // term.c:220: every accepted pass before the rejected one
-                // ended its device row; only the final pass consults the
-                // HANG/NOBREAK tail rule (250-253).
-                definition.hang_row.accepted_prefix_before_rejection = true;
-            } else {
-                // The rejected field never occupied the device row
-                // (term.c:233-237 resets col/lastcol): term_newln() at the
-                // settling request stays a no-op and the row stays open.
-                self.execution.formatter_column = FormatterColumn::Origin;
-                self.execution.word_end_break = WordEndBreak::Clear;
-                self.execution.pending_breakable_spaces = 0;
-                self.execution.trailing_output = TrailingOutput::None;
+    /// Returns the ordinary field tail's native row end owed by this real
+    /// flush. It runs even on first-pass rejection and is independent of
+    /// any accepted-pass endline. Owner drains do not execute that tail.
+    fn project_definition_field_receipt(&mut self, owner_boundary: bool) -> bool {
+        use super::super::field_buffer::FlushReceipt;
+        let Some(receipt) = self.native_field_flush_receipt() else {
+            return false;
+        };
+        let definition = self.execution.definition.as_mut().expect("native field");
+        let (passes, rejected_from) = match receipt {
+            FlushReceipt::Accepted { passes } => {
+                debug_assert!(!passes.is_empty());
+                definition.hang_row.field_discarded = false;
+                return false;
             }
-            definition.field_buffer.wipe_remainder();
-            let start = definition
+            FlushReceipt::Rejected {
+                passes,
+                rejected_from,
+                definitive,
+            } => {
+                if owner_boundary && !definitive {
+                    return false;
+                }
+                (passes, rejected_from)
+            }
+        };
+        definition.hang_row.field_discarded = true;
+        let anchor = definition
+            .field_word_anchors
+            .iter()
+            .rev()
+            .find(|(cell, _, _)| *cell <= rejected_from)
+            .cloned();
+        let (marker, prefix_cells) = anchor.map_or((None, 0), |(_, marker, content)| {
+            // Each accepted pass owns a separate range. The blanks consumed
+            // between passes have no semantic scalar and cannot extend the
+            // accepted owner into a later rejected suffix.
+            let mut pass_start = 0;
+            let mut length = 0;
+            for pass in &passes {
+                let start = content.max(pass_start);
+                if start < pass.accepted_end {
+                    length += definition
+                        .field_buffer
+                        .projection_length(start, pass.accepted_end);
+                }
+                pass_start = pass.accepted_end;
+                while matches!(
+                    definition.field_buffer.cells().get(pass_start),
+                    Some(super::super::field_buffer::FieldCell::BreakableBlank)
+                ) {
+                    pass_start += 1;
+                }
+            }
+            (Some(marker), length)
+        });
+        let accepted_owned_prefix = !passes.is_empty()
+            && definition
                 .field_word_anchors
                 .iter()
-                .find(|(cell_index, _)| *cell_index >= rejection_resume)
-                .map_or_else(
-                    || {
-                        definition
-                            .field_word_anchors
-                            .last()
-                            .map_or(0, |(_, ir)| *ir)
-                    },
-                    |(_, ir)| *ir,
-                );
-            if let Some(author) = &mut self.execution.author_execution {
-                author.field_output_start = start;
-            }
+                .any(|(cell, _, _)| *cell < rejected_from);
+        definition.hang_row.accepted_prefix_before_rejection = accepted_owned_prefix;
+        let current_field_start = self
+            .execution
+            .author_execution
+            .as_ref()
+            .map_or(0, |author| author.field_output_start)
+            .min(self.nodes.len());
+        let mut pending_output = self.nodes.split_off(current_field_start);
+        let owned = marker.as_deref().is_some_and(|marker| {
+            super::super::output::split::retain_native_field_prefix(
+                &mut pending_output,
+                marker,
+                prefix_cells,
+            )
+        });
+        if !owned {
+            // A detached or hidden owner can have an explicitly empty
+            // projection. It never grants acceptance to the new owner's
+            // current field; its rejected interval still has an identity.
+            retain_unprinted_field_targets(&mut pending_output);
         }
-        let Some((start, exited_field)) = self
+        self.nodes.extend(pending_output);
+        if accepted_owned_prefix
+            && !super::super::output::ends_with_executed_line_break(&self.nodes)
+        {
+            // term_flushln() ended the last accepted pass before discovering
+            // nbr=0. The semantic owner must expose that exact native event,
+            // including when its cells came from an overstrike projection.
+            self.nodes.push(Inline::line_break());
+            self.note_definition_output_row();
+        }
+        if let Some(author) = &mut self.execution.author_execution {
+            author.field_output_start = self.nodes.len();
+        }
+        self.finish_rejected_field_state(owner_boundary)
+    }
+
+    /// Retire only the rejected native buffer's registers after its exact
+    /// output interval was projected. The ordinary field tail is a separate
+    /// device event and is returned to the actual flush caller.
+    fn finish_rejected_field_state(&mut self, owner_boundary: bool) -> bool {
+        let Some(exited_field) = self
             .execution
             .author_execution
             .as_ref()
             .filter(|_| self.execution.definition.is_some())
-            .map(|execution| {
-                (
-                    execution.field_output_start,
-                    matches!(execution.break_effect, AuthorBreakEffect::Line),
-                )
-            })
+            .map(|execution| matches!(execution.break_effect, AuthorBreakEffect::Line))
         else {
-            return;
+            return false;
         };
         if !self
             .execution
@@ -347,21 +523,7 @@ impl InlineBuilder {
             .as_ref()
             .is_some_and(|state| state.hang_row.field_discarded)
         {
-            return;
-        }
-        let mut field = self.nodes.split_off(start.min(self.nodes.len()));
-        retain_unprinted_field_targets(&mut field);
-        self.nodes.extend(field);
-        if self
-            .execution
-            .definition
-            .as_ref()
-            .is_some_and(|state| state.hang_row.accepted_prefix_before_rejection)
-            && !matches!(self.nodes.last(), Some(Inline::LineBreak { .. }))
-        {
-            // A prior term_fill() pass printed its accepted prefix; a later
-            // nbr=0 discards only the suffix and ends that device line.
-            self.nodes.push(Inline::line_break());
+            return false;
         }
         // term.c::term_flushln() clears both BACKAFTER and BACKBEFORE even
         // when term_fill() returns nbr=0. The rejected field can still own a
@@ -383,6 +545,12 @@ impl InlineBuilder {
                 execution.field_output_start = self.nodes.len();
             }
         }
+        // The same numeric tail rule handles accepted and rejected final
+        // passes; an IR owner drain executes neither device endline.
+        let flags_end_row = self
+            .native_field_device(false)
+            .is_some_and(|field| field.ends_row);
+        !owner_boundary && flags_end_row
     }
 
     pub(in crate::mandoc) fn discarded_exited_definition_buffer(&self) -> bool {
@@ -403,15 +571,27 @@ impl InlineBuilder {
 
     pub(in crate::mandoc) fn pending_definition_break_has_no_graph(&self) -> bool {
         self.in_definition_field()
-            && self.execution.definition.as_ref().is_some_and(|state| {
-                state.hang_row.field_discarded
-                    || (state.hang_row.field_pending_word_end_break
-                        && !state.hang_row.field_native_graph)
-            })
+            && self
+                .definition
+                .as_ref()
+                .is_some_and(|state| state.field_buffer.pending_pass_is_graphless())
     }
 
     pub(in crate::mandoc) fn in_definition_field(&self) -> bool {
         self.execution.definition.is_some() && self.execution.author_execution.is_some()
+    }
+
+    /// Field ownership is already known from the author effect even when
+    /// its lazily created session has not reached `ensure_definition_field`.
+    /// Ordinary paragraphs and isolated tbl words need no field ledger.
+    pub(in crate::mandoc) fn records_native_field_cells(&self) -> bool {
+        self.execution
+            .author_execution
+            .as_ref()
+            .is_some_and(|author| {
+                self.execution.definition.is_some()
+                    || matches!(author.break_effect, AuthorBreakEffect::Field { .. })
+            })
     }
 
     /// A head field configured with `AuthorBreakEffect::Field` IS a
@@ -429,11 +609,17 @@ impl InlineBuilder {
         }
     }
 
-    pub(in crate::mandoc) fn consumed_pending_hang_word_end_break(&self) -> bool {
-        self.execution
+    /// Preserve only a marker still present in the native unconsumed
+    /// suffix. This register restoration writes no new formatter cell.
+    pub(in crate::mandoc) fn retain_buffered_field_word_end_break(&mut self) {
+        if self
+            .execution
             .definition
             .as_ref()
-            .is_some_and(|state| state.hang_row.consumed_pending_word_end_break)
+            .is_some_and(|state| state.field_buffer.has_pending_break_markers())
+        {
+            self.execution.word_end_break = WordEndBreak::Pending;
+        }
     }
 
     pub(in crate::mandoc) fn note_provisional_definition_break(&mut self) {
@@ -575,6 +761,7 @@ impl InlineBuilder {
     /// `print_mdoc_node()` performs that boundary in addition to the request's
     /// own `roff_term_pre_br()` dispatch.
     pub(in crate::mandoc) fn fill_mode_boundary(&mut self) {
+        self.commit_definition_row_origin();
         // The request's roff_term_pre_br() sets TERMP_NOSPACE after its
         // term_newln() (roff_term.c:75-78): the first word after `.nf`/
         // `.fi` concatenates onto the current row with no auto blank —
@@ -651,6 +838,7 @@ impl InlineBuilder {
             {
                 *indent_columns = row_indent;
             }
+            self.definition_state_mut().row.indent_columns = row_indent;
             self.definition_state_mut().pending_indent = Some(usize::from(body));
         } else {
             let width = mant_ir::geometry::text_width(&super::super::super::plain_text(field));
@@ -858,7 +1046,6 @@ impl InlineBuilder {
             if let Some(definition) = &mut self.execution.definition {
                 definition.field_buffer.clear();
                 definition.field_word_anchors.clear();
-                definition.pending_glyph_fed = false;
             }
         } else {
             self.hard_break();
@@ -891,6 +1078,16 @@ impl InlineBuilder {
             // a HANG term_newln(), the next word starts a new device row.
             definition.hang_row.endline();
             definition.vertical_started_row = true;
+        }
+    }
+
+    /// A real `term_flushln()` commits this input field irreversibly. Keep
+    /// device viscol/minbl and the enclosing BODY lifetime, but retire its
+    /// cells and projection ranges before another formatter word executes.
+    pub(super) fn retire_consumed_native_field(&mut self) {
+        if let Some(state) = &mut self.execution.definition {
+            state.field_buffer.clear_consumed_field();
+            state.field_word_anchors.clear();
         }
     }
 
@@ -932,6 +1129,7 @@ impl InlineBuilder {
         self.execution.formatter_column = FormatterColumn::Origin;
         self.execution.empty_word = false;
         self.execution.final_word_join = Some(false);
+        self.retire_consumed_native_field();
     }
 
     /// Collapse a jump still uncommitted at the item post: the element
@@ -946,14 +1144,82 @@ impl InlineBuilder {
         }
     }
 
-    /// Take the row indent a fill-mode boundary left behind. The indent
-    /// lives for one row break: the document node boundary upstream
-    /// restores the authored geometry (mdoc_term.c:329-330, 437-439).
+    /// The row origin survives each flush until a document scope restores it.
+    /// CVS `mdoc_term.c::print_mdoc_node()` saves offset after the source-line
+    /// event and restores it at non-roff node exit (329, 393-397, 437-439).
     pub(in crate::mandoc) fn take_definition_row_indent(&mut self) -> u16 {
-        let Some(definition) = &mut self.execution.definition else {
-            return 0;
-        };
-        std::mem::replace(&mut definition.row.indent_columns, 0)
+        self.execution
+            .definition
+            .as_ref()
+            .map_or(0, |definition| definition.row.indent_columns)
+    }
+
+    pub(in crate::mandoc) fn definition_geometry_checkpoint(
+        &self,
+        node: &libmandoc_rs::Node,
+    ) -> Option<u16> {
+        // Roff requests return before the geometry restore. Text restores
+        // rmargin only; this ledger records the offset relevant to reading.
+        if self.execution.macro_set != libmandoc_rs::MacroSet::Mdoc
+            || node.kind == libmandoc_rs::NodeKind::Text
+            || node
+                .macro_name
+                .as_deref()
+                .is_some_and(|name| name.as_bytes().first().is_some_and(u8::is_ascii_lowercase))
+        {
+            return None;
+        }
+        self.execution
+            .definition
+            .as_ref()
+            .map(|definition| definition.row.indent_columns)
+    }
+
+    pub(in crate::mandoc) fn restore_definition_geometry(&mut self, checkpoint: Option<u16>) {
+        if let Some(origin) = checkpoint
+            && let Some(definition) = &mut self.execution.definition
+        {
+            definition.row.indent_columns = origin;
+        }
+    }
+
+    /// Assign origin when the buffered row actually prints. The last word
+    /// can print after its enclosing scope restored offset, while earlier
+    /// rows have already been committed by source-line events.
+    pub(in crate::mandoc) fn commit_definition_row_origin(&mut self) {
+        fn set_last_break(nodes: &mut [Inline], origin: u16) -> bool {
+            for node in nodes.iter_mut().rev() {
+                match node {
+                    Inline::LineBreak { indent_columns } => {
+                        *indent_columns = origin;
+                        return true;
+                    }
+                    Inline::Strong { children }
+                    | Inline::Emphasis { children }
+                    | Inline::Link { children, .. } => {
+                        if set_last_break(children, origin) {
+                            return true;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            false
+        }
+        if self.has_formatter_cell()
+            && let Some(definition) = &self.execution.definition
+            && definition.row.has_pending_origin()
+            && definition.field_buffer.resume_offset() < definition.field_buffer.cells().len()
+        {
+            set_last_break(&mut self.nodes, definition.row.indent_columns);
+            self.definition_state_mut().row.retire_row_origin();
+        }
+    }
+
+    pub(in crate::mandoc) fn note_definition_output_row(&mut self) {
+        if let Some(definition) = &mut self.execution.definition {
+            definition.row.note_row_origin();
+        }
     }
 
     pub(in crate::mandoc) fn force_output_line_break(&mut self) {
@@ -967,11 +1233,41 @@ impl InlineBuilder {
         }
         self.flush_zero_advance();
         self.nodes.push(Inline::line_break_indented(row_indent));
+        self.note_definition_output_row();
         self.execution.last_visible_character = Some('\n');
         self.execution.trailing_output = TrailingOutput::None;
         self.execution.boundary = PendingBoundary::Ordinary;
         self.execution.pending_breakable_spaces = 0;
         self.execution.pending_field_spaces = 0;
         self.execution.formatter_column = FormatterColumn::Origin;
+    }
+}
+
+#[cfg(test)]
+mod recording_tests {
+    use super::*;
+
+    #[test]
+    fn native_recording_uses_the_field_owner_before_lazy_reentry() {
+        let mut builder = InlineBuilder::with_spacing(true);
+        assert!(!builder.records_native_field_cells());
+        builder.inherit_author_execution_with_effect(
+            crate::mandoc::formatter::AuthorFlow::default(),
+            false,
+            AuthorBreakEffect::Field {
+                gap_cells: 1,
+                body_width_columns: 6,
+                field_width_columns: 4,
+                flags: FieldFlags::hang(),
+            },
+        );
+        builder.execution.definition = None;
+        assert!(!builder.in_definition_field());
+        assert!(
+            builder.records_native_field_cells(),
+            "field owner precedes the lazy ledger"
+        );
+        builder.ensure_definition_field_session();
+        assert!(builder.in_definition_field());
     }
 }

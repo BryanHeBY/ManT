@@ -1,5 +1,5 @@
 //! Shared definition content, source ownership, and head construction.
-use super::super::{FormatterRowBoundary, ScopeFlow, lower_scope};
+use super::super::{FormatterRowBoundary, RunInBody, ScopeFlow, lower_scope};
 use super::{
     Block, DefinitionItem, Inline, InlineBuilder, LoweringContext, Node, NodeKind,
     first_part_children, is_inline_equation, is_inline_equation_quote_artifact, source_span,
@@ -121,24 +121,12 @@ pub(super) fn definition_item(
         run_in_execution,
         definition_field_exited,
         definition_body_gap_consumed,
-        author_restarted,
+        _author_restarted,
         term_breaks,
     ) = lower_definition_head(head, &displaced_equations, context, flow, formatter);
     // TERMP_NONEWLINE survives the HEAD output drain. It is the execution
     // evidence that the first no-fill BODY row still belongs on that line.
     let head_source_continues = formatter.execution.source_row_continues();
-    // mdoc_macro.c::blk_exp_close() marks the original block BROKEN when a
-    // later explicit end closes its formatting scope. The terminal renderer
-    // never reads that flag (no NODE_BROKEN reference in mdoc_term.c or
-    // term.c); it only witnesses the row through executed requests. The
-    // body's `.br` closes the head row once (roff_term_pre_br term_newln);
-    // a SECOND row appears only in no-fill mode, where print_mdoc_node()
-    // runs another term_newln() at the next NODE_LINE
-    // (mdoc_term.c:314-317 with 361-369). Fill mode joins the open row
-    // instead (mdoc.c:238-250 cancels the continuation there).
-    let closed_head_scope = (formatter.no_fill || body.iter().any(node_entered_no_fill))
-        && head.iter().any(native_broken_head_scope)
-        && !head_source_continues;
     if man_node {
         formatter.font.man_text_boundary(); // HEAD post
         formatter.font.man_text_boundary(); // BODY pre
@@ -167,25 +155,10 @@ pub(super) fn definition_item(
         }
         terms[0].insert(0, Inline::anchor_at(id, source_span(node)));
     }
-    let empty_text_closes_run_in = flow.head.generated_cells().is_some()
-        && head.iter().any(has_empty_text_child)
-        && terms
-            .last()
-            .is_some_and(|term| mant_ir::has_printable_character(term))
-        && matches!(
-            flow.head,
-            DefinitionHeadFlow::RunIn { flags, .. }
-                if !flags.contains(crate::mandoc::inline::FieldFlag::Hang)
-                    && !flags.contains(crate::mandoc::inline::FieldFlag::NoBreak)
-        );
-    // term.c:250-252 with 347-350: the generated body separator is a
-    // non-breaking space, so an armed trailing `\p` alone keeps the field
-    // (and the joining BODY) on one row. A separate empty TEXT node runs
-    // term_newln() mid-HEAD (NODE_LINE); that flush prints its prefix, and
-    // a field without NOBREAK or HANG (inset) closes the row before BODY.
-    let closed_head_row = take_closed_head_row(&mut terms)
-        || (marker_split_field_exited(flow.head, &terms) && !author_restarted)
-        || empty_text_closes_run_in;
+    // Only an executed line boundary can close the HEAD row. An empty
+    // operand without NODE_LINE still runs term_word(), not term_vspace()
+    // (mdoc_term.c:354-378); later BODY words consume that same raw field.
+    let closed_head_row = take_closed_head_row(&mut terms);
     if closed_head_row {
         // The last explicit HEAD break becomes the term/BODY separation.
         // Earlier breaks, including extra sp rows, remain inside the term.
@@ -214,14 +187,9 @@ pub(super) fn definition_item(
         flow.shares_pending_term_row
             && rendered_head_row
             && !closed_head_row
-            && !definition_field_exited
-            && !closed_head_scope,
+            && !definition_field_exited,
     );
     let spacing_enabled = formatter.spacing_enabled();
-    // Compute before the run-in state is moved into the body scope below.
-    let discarded_run_in_suffix = run_in_execution
-        .as_ref()
-        .is_some_and(|run_in| run_in.state.definition_suffix_discarded);
     let mut description = if let Some(run_in) = run_in_execution {
         lower_scope(
             body,
@@ -232,7 +200,18 @@ pub(super) fn definition_item(
                 indent_columns: body_origin,
                 spacing_enabled,
                 paragraph_predecessor: flow.paragraph_predecessor,
-                run_in: Some((run_in.state, run_in.surviving_cells, run_in.generated_word)),
+                run_in: Some(RunInBody {
+                    execution: run_in.state,
+                    generated_cells: run_in.surviving_cells,
+                    native_generated_cells: usize::from(
+                        flow.head.generated_cells().unwrap_or_default(),
+                    ),
+                    generated_word: run_in.generated_word,
+                    entry: node
+                        .children
+                        .iter()
+                        .find(|part| part.kind == NodeKind::Body && part.scope_end.is_none()),
+                }),
                 row_boundary: FormatterRowBoundary::Settle,
             },
         )
@@ -245,13 +224,6 @@ pub(super) fn definition_item(
             ScopeFlow::body_post_row_end(body_origin, spacing_enabled, flow.paragraph_predecessor),
         )
     };
-    // term_flushln() clears the whole unflushed buffer when a pass rejects
-    // (term.c:144-146 with 235): for a run-in HEAD whose in-word `\p`
-    // discarded the suffix, the late flush still holds the generated
-    // separator and the first BODY text, so that content never prints.
-    if discarded_run_in_suffix && matches!(description.first(), Some(Block::Paragraph { .. })) {
-        description.remove(0);
-    }
     carry_invisible_head_row(node, &terms, closed_head_row, &mut description);
     if node.macro_name.as_deref() == Some("IP") {
         // man_term.c::post_IP() can complete an empty HEAD word even though
@@ -315,18 +287,6 @@ pub(super) fn definition_item(
     item
 }
 
-fn native_broken_head_scope(node: &Node) -> bool {
-    (node.kind == NodeKind::Block && node.flags.broken)
-        || node.children.iter().any(native_broken_head_scope)
-}
-
-/// The extra no-fill row decision needs the fill mode the BODY's first
-/// executed word runs in; an `.nf` inside the HEAD does not survive the
-/// head session's state snapshot, so read it from the parsed nodes.
-fn node_entered_no_fill(node: &Node) -> bool {
-    node.flags.no_fill || node.children.iter().any(node_entered_no_fill)
-}
-
 fn only_breakable_head_padding(inline: &Inline) -> bool {
     match inline {
         Inline::Anchor { .. } | Inline::LineBreak { .. } => true,
@@ -360,47 +320,39 @@ fn clear_breakable_head_padding(term: &mut Vec<Inline>) {
 }
 
 fn take_closed_head_row(terms: &mut [Vec<Inline>]) -> bool {
+    // Semantic wrappers cannot change term_newln()/endline() output. Move
+    // exactly one final executed boundary into the structural HEAD/BODY
+    // relation, preserving earlier blank rows and every authored target.
+    // Pinned mdoc_term.c::termp_it_post(), term.c::term_flushln().
+    fn take_boundary(nodes: &mut Vec<Inline>) -> Option<bool> {
+        let mut index = nodes.len();
+        while index > 0 {
+            index -= 1;
+            match &mut nodes[index] {
+                Inline::Anchor { .. } => {}
+                Inline::LineBreak { .. } => {
+                    nodes.remove(index);
+                    return Some(true);
+                }
+                Inline::Strong { children }
+                | Inline::Emphasis { children }
+                | Inline::Link { children, .. } => {
+                    if let Some(closed) = take_boundary(children) {
+                        return Some(closed);
+                    }
+                }
+                // Even an empty Text can represent a newly occupied native
+                // cell. It is not identity metadata to skip over.
+                _ => return Some(false),
+            }
+        }
+        None
+    }
+
     let Some(term) = terms.last_mut() else {
         return false;
     };
-    let Some(last_content) = term
-        .iter()
-        .rposition(|inline| !matches!(inline, Inline::Anchor { .. }))
-    else {
-        return false;
-    };
-    if !matches!(term[last_content], Inline::LineBreak { .. }) {
-        return false;
-    }
-    term.remove(last_content);
-    true
-}
-
-/// A HEAD whose authored `\\p` markers closed rows inside the term has no
-/// HANG protection left at the final pass: `term_flushln()`'s tail rule
-/// (term.c:250-252) closes the row, so BODY starts its own row. A real
-/// `term_fill()` pass requires printable content on both sides of the
-/// break; author-split rows break before their first printed word.
-fn marker_split_field_exited(head: DefinitionHeadFlow, terms: &[Vec<Inline>]) -> bool {
-    let Some(term) = terms.last() else {
-        return false;
-    };
-    let no_hang = match head {
-        DefinitionHeadFlow::Detached {
-            author_break_effect: crate::mandoc::inline::AuthorBreakEffect::Field { flags, .. },
-        } => !flags.contains(crate::mandoc::inline::FieldFlag::Hang),
-        _ => return false,
-    };
-    let split_between_words = term.iter().enumerate().any(|(index, node)| {
-        matches!(node, Inline::LineBreak { .. })
-            && term[..index]
-                .iter()
-                .any(|before| mant_ir::has_printable_character(std::slice::from_ref(before)))
-            && term[index + 1..]
-                .iter()
-                .any(|after| mant_ir::has_printable_character(std::slice::from_ref(after)))
-    });
-    split_between_words && no_hang
+    take_boundary(term) == Some(true)
 }
 
 fn invisible_closed_head_row(terms: &[Vec<Inline>]) -> bool {
@@ -627,13 +579,6 @@ pub(super) fn split_definition_terms(
 /// inline child, so it has to be copied before lowering discards that wrapper.
 fn definition_head_anchor(node: &Node) -> Option<String> {
     targets::part_target(node, NodeKind::Head)
-}
-
-/// Whether any nested node is an empty TEXT: its `NODE_LINE` runs
-/// `term_newln()` mid-HEAD even though it prints nothing.
-fn has_empty_text_child(node: &Node) -> bool {
-    (node.kind == NodeKind::Text && node.text.as_deref() == Some(""))
-        || node.children.iter().any(has_empty_text_child)
 }
 
 /// Return only document content from a definition macro's mixed-purpose head.

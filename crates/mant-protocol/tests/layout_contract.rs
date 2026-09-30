@@ -4,7 +4,7 @@ use mant_ir::LayoutHint;
 fn definition_body_geometry_round_trips_independently_of_run_in_policy() {
     use mant_ir::DefinitionLayout;
     let layout: DefinitionLayout = serde_json::from_value(serde_json::json!({
-        "inlineTerm": true, "bodyIndentColumns": -2, "minTermGapColumns": 2,
+        "headBodyRelation": "run-in", "bodyIndentColumns": -2, "minTermGapColumns": 2,
         "spacingBeforeLines": 0
     }))
     .unwrap();
@@ -22,9 +22,68 @@ fn definition_body_geometry_round_trips_independently_of_run_in_policy() {
         serde_json::json!({"bodyIndentColumns": null}),
         serde_json::json!({"minTermGapColumns": -1}),
         serde_json::json!({"sourceWidth": "7n"}),
+        serde_json::json!({"inlineTerm": true}),
+        serde_json::json!({"headBodyRelation": "unknown"}),
     ] {
         assert!(serde_json::from_value::<DefinitionLayout>(invalid).is_err());
     }
+}
+
+#[test]
+fn definition_rows_round_trip_through_actual_v0_12_query_json() {
+    for relation in ["separate", "run-in", "joined-no-space", "flush-at-body"] {
+        let input = serde_json::json!({
+            "schema":"mant.query/v0.12", "label":"rows",
+            "document":{
+                "schema":"mant.document/v0.12",
+                "producer":{"name":"test","version":"0"},
+                "source":{"format":"mdoc"}, "meta":{}, "sections":[],
+                "blocks":[{"type":"definition-list","items":[{
+                    "layout":{"headBodyRelation":relation},
+                    "terms":[[{"type":"strong","children":[
+                        {"type":"text","value":"Alpha"},
+                        {"type":"line-break","indentColumns":6},
+                        {"type":"link","target":{"kind":"external","uri":"https://example.org"},
+                         "children":[{"type":"text","value":"Beta"}]}
+                    ]}]],
+                    "description":[]
+                }]}]
+            }
+        });
+        let query: mant_protocol::QueryBundle =
+            serde_json::from_str(&input.to_string()).expect("current query contract");
+        let serialized = serde_json::to_string(&query).expect("query JSON");
+        let restored: mant_protocol::QueryBundle =
+            serde_json::from_str(&serialized).expect("real JSON round trip");
+        let serialized: serde_json::Value = serde_json::to_value(restored).unwrap();
+        assert_eq!(serialized["schema"], "mant.query/v0.12");
+        let item = &serialized["document"]["blocks"][0]["items"][0];
+        assert_eq!(
+            item["layout"]
+                .get("headBodyRelation")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("separate"),
+            relation
+        );
+        assert!(item["layout"].get("inlineTerm").is_none());
+        assert_eq!(item["terms"][0][0]["children"][1]["indentColumns"], 6);
+    }
+    for input in [
+        r#"{"type":"line-break","indentColumns":null}"#,
+        r#"{"type":"line-break","indentColumns":-1}"#,
+        r#"{"type":"line-break","indentColumns":65536}"#,
+        r#"{"type":"line-break","indentColumns":1.5}"#,
+        r#"{"type":"line-break","offset":6}"#,
+    ] {
+        assert!(
+            serde_json::from_str::<mant_ir::Inline>(input).is_err(),
+            "{input}"
+        );
+    }
+    assert_eq!(
+        serde_json::to_string(&mant_ir::Inline::line_break()).unwrap(),
+        r#"{"type":"line-break"}"#
+    );
 }
 
 #[test]

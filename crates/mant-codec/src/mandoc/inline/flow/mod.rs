@@ -6,12 +6,13 @@ use mant_ir::{first_visible_character, has_printable_character, last_visible_cha
 
 mod definition;
 mod execution;
-mod field_buffer;
+pub(in crate::mandoc) mod field_buffer;
 use definition::DefinitionFieldState;
 mod native_field;
 mod no_fill;
 pub(in crate::mandoc) use native_field::{FieldFlag, FieldFlags};
 mod output;
+pub(in crate::mandoc::inline) use output::INTERNAL_FIELD_WORD;
 
 pub(in crate::mandoc) use no_fill::{NoFillInlineState, lower_no_fill_fragment_with_formatter};
 
@@ -61,7 +62,7 @@ enum CellProduction {
 // The formatter registers are independent native flags, not a state chart.
 #[allow(clippy::struct_excessive_bools)]
 pub(in crate::mandoc) struct InlineExecutionState {
-    boundary: PendingBoundary,
+    pub(in crate::mandoc) boundary: PendingBoundary,
     spacing: SpacingMode,
     last_visible_character: Option<char>,
     has_printable_content: bool,
@@ -123,6 +124,8 @@ pub(in crate::mandoc) struct InlineExecutionState {
     /// Graph counts (word-relative) at which `\:` executed in the word
     /// currently being appended; cleared once its cells are buffered.
     pub(in crate::mandoc) word_zero_break_prefixes: Vec<usize>,
+    pub(in crate::mandoc) native_word_writes: Option<Vec<field_buffer::FieldWrite>>,
+    pub(in crate::mandoc) native_word_boundary: Option<PendingBoundary>,
     pub(in crate::mandoc) concat_next_word: bool,
     /// Whether `concat_next_word` was armed by a filled cleared field
     /// (term.c:250-253) rather than the request's `TERMP_NOSPACE`
@@ -195,6 +198,7 @@ pub(in crate::mandoc) struct OutputTransaction {
 #[derive(Clone)]
 struct OutputRollback {
     node_count: usize,
+    native_field_position: Option<(u64, usize)>,
     last_visible_character: Option<char>,
     has_printable_content: bool,
     trailing_output: TrailingOutput,
@@ -220,10 +224,6 @@ struct InboundExecution {
 pub(in crate::mandoc) struct PreservedInlineState {
     pub(in crate::mandoc) zero_advance: ZeroAdvanceState,
     pub(in crate::mandoc) word_end_break: bool,
-    /// Latched: a pass of the run-in HEAD field rejected and the buffer
-    /// wipe (term.c:144-146 with 235) discarded its suffix. The BODY's
-    /// first text shared that buffer and never prints.
-    pub(in crate::mandoc) definition_suffix_discarded: bool,
     /// A HEAD field still open at the ownership split (NOBREAK run-in
     /// heads, `mdoc_term.c::termp_it_pre()`). The BODY session continues
     /// this field instead of starting an unconfigured stream.
@@ -450,6 +450,10 @@ mod font_state_tests {
 pub(in crate::mandoc) enum PendingBoundary {
     Ordinary,
     Tight,
+    /// A committed device field already projects its separator. The next
+    /// IR word joins that padding, but native MC cleared NOSPACE and still
+    /// buffers `term_word()`'s automatic blank (roff_term.c:147-151).
+    CommittedField,
     PrefixJoin,
     Preserved,
     Continued,
@@ -458,6 +462,10 @@ pub(in crate::mandoc) enum PendingBoundary {
 
 impl PendingBoundary {
     const fn is_tight(self) -> bool {
+        matches!(self, Self::Tight | Self::PrefixJoin | Self::CommittedField)
+    }
+
+    const fn is_native_tight(self) -> bool {
         matches!(self, Self::Tight | Self::PrefixJoin)
     }
 
@@ -648,7 +656,31 @@ impl InlineBuilder {
     }
 
     pub(in crate::mandoc) fn take_definition_term_breaks(&mut self) -> Vec<usize> {
+        // The native ownership ledger is private. Resolve the row markers
+        // against the returned IR after private word anchors are removed.
+        let private_positions: Vec<usize> = self
+            .nodes
+            .iter()
+            .enumerate()
+            .filter_map(|(index, node)| {
+                matches!(node,
+                Inline::Anchor { id, .. } if id.as_str().starts_with("\0mant:field-"))
+                .then_some(index)
+            })
+            .collect();
+        let mut private_cursor = 0;
         std::mem::take(&mut self.definition_term_breaks)
+            .into_iter()
+            .map(|index| {
+                while private_positions
+                    .get(private_cursor)
+                    .is_some_and(|&marker| marker < index)
+                {
+                    private_cursor += 1;
+                }
+                index.saturating_sub(private_cursor)
+            })
+            .collect()
     }
 
     pub(in crate::mandoc) fn into_parts(self) -> (Vec<Inline>, InlineExecutionState) {
@@ -659,15 +691,6 @@ impl InlineBuilder {
 impl InlineExecutionState {
     pub(in crate::mandoc) fn source_row_continues(&self) -> bool {
         self.final_source_continuation.unwrap_or(false)
-    }
-
-    /// Whether any pass of the active definition field rejected and had
-    /// its suffix wiped (`term_fill()` nbr=0 after a printed prefix); the
-    /// fact is latched for the field's whole lifetime.
-    pub(in crate::mandoc) fn definition_suffix_discarded(&self) -> bool {
-        self.definition
-            .as_ref()
-            .is_some_and(|state| state.suffix_discarded_seen)
     }
 
     pub(in crate::mandoc) fn with_spacing(spacing_enabled: bool) -> Self {
@@ -701,6 +724,8 @@ impl InlineExecutionState {
             observe_no_fill_source_lines: SourceLineObservation::Disabled,
             no_fill_word_active: false,
             word_zero_break_prefixes: Vec::new(),
+            native_word_writes: None,
+            native_word_boundary: None,
             concat_next_word: false,
             concat_flush_source: false,
             concat_consumed_for_body: false,

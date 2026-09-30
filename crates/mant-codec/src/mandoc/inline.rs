@@ -181,7 +181,9 @@ pub(super) fn append_inline_node_with_next(
         builder.tighten_next_boundary();
     }
     builder.begin_executed_node(node);
+    let geometry = builder.definition_geometry_checkpoint(node);
     if execute_author_pre(builder, node) {
+        builder.restore_definition_geometry(geometry);
         return;
     }
     let begins_visible_word = node_emits_visible_output(node, default_name);
@@ -297,6 +299,7 @@ pub(super) fn append_inline_node_with_next(
         _ => scopes::append(builder, node, default_name),
     }
     finish_inline_node_execution(builder, node, next, final_word_join_before);
+    builder.restore_definition_geometry(geometry);
 }
 
 fn execute_author_pre(builder: &mut InlineBuilder, node: &Node) -> bool {
@@ -421,33 +424,26 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
         RoffInlineEvent::DeviceName | RoffInlineEvent::Overstrike { .. } => true,
         _ => false,
     });
-    builder.note_hang_word_decode_start();
+    builder.native_word_boundary = Some(builder.execution.boundary);
     builder.begin_word_projection_with_break(true, !builder.in_definition_field() || has_glyph);
     let pending_word_end_break = builder.take_word_end_break();
-    // In a HANG field, term.c::term_fill() does not turn \p followed only by
-    // blank/control words into a printed line. Keep that marker in the
-    // active field until a visible word or term_flushln() decides its fate.
-    let deferred_hang_break = pending_word_end_break && !has_glyph && builder.in_definition_field();
-    if deferred_hang_break {
-        builder.note_field_trailing_marker();
-    }
+    let record_native_cells = builder.records_native_field_cells();
+    // term_word() stores a previous operand's \p in the native buffer.
+    // Its actual automatic separator is consumed by term_fill(), before
+    // this operand's internal blanks. Do not replay that older marker in
+    // the new TEXT projection: the field's ordered cell consumer decides
+    // its row boundary (term.c:573-580,287-306).
     let execution = font::parse_roff_text_with_zero_advance(
         source,
         &mut builder.execution.font,
         !node.flags.no_fill,
         &mut builder.execution.zero_advance,
-        pending_word_end_break && !deferred_hang_break,
+        pending_word_end_break && !record_native_cells,
+        record_native_cells,
     );
     builder.ensure_definition_field_session();
+    builder.native_word_writes = record_native_cells.then_some(execution.native_writes);
     builder.note_word_zero_break_prefixes(&execution.zero_break_prefixes);
-    if let Some(prefix) = execution.break_before_graph_prefix
-        && builder.in_definition_field()
-    {
-        // term.c::term_fill() sees the decoded events in source order. A
-        // single quoted TEXT can contain both \p and the blank that prevents
-        // the field from printing, before any later Y glyph is considered.
-        builder.note_hang_break_before_graph(prefix);
-    }
     // mdoc_term gives an empty text node a vertical row only when the text
     // itself begins an input line. An empty No/Em argument does not, whereas
     // a buffered zero-width glyph (for example \&) still occupies that row.
@@ -457,12 +453,6 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
         || events
             .iter()
             .any(|event| matches!(event, RoffInlineEvent::ZeroWidthGlyph));
-    if builder.zero_advance.has_printable_pending_glyph() {
-        // term.c::encode1() has already written this graph to the native
-        // field, even though its zero-advance IR glyph is still pending.
-        // A later empty word must not turn that field into nbr=0.
-        builder.note_hang_native_graph();
-    }
     if execution.joins_preceding_node {
         builder.tighten_next_boundary();
         builder.note_zero_advance_join();
@@ -477,19 +467,10 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
     if provisional_definition_break {
         builder.note_provisional_definition_break();
     }
-    if events
-        .iter()
-        .any(|event| matches!(event, RoffInlineEvent::ZeroWidthGlyph))
-    {
-        // term_fill() treats ASCII_NBRZW as graph even though its IR glyph
-        // is invisible. Record it after this word's leading separator has
-        // executed, before a same-word \p is left pending.
-        builder.note_hang_native_graph();
-    }
-    if (deferred_hang_break && !builder.consumed_pending_hang_word_end_break())
-        || execution.pending_word_end_break
-    {
+    if execution.pending_word_end_break {
         builder.request_word_end_break();
+    } else if record_native_cells {
+        builder.retain_buffered_field_word_end_break();
     }
     let continues_line = execution
         .source_continuation

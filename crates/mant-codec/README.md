@@ -62,9 +62,34 @@ newlines through nested flow composition, sharing cell/marker/gap rules with
 the UI through `mant-ir::geometry`. Zero block spacing is tight, not a
 frontend default; each source request has one consumption point.
 
+Definition fields record native cells as the text executor decodes them,
+before text is styled, linked, or compacted. The pinned CVS `term_fill()`
+consumer decides accepted source intervals and rejected suffixes; semantic
+output does not reconstruct native graph or buffer occupancy. Stable private
+owner markers carry those intervals through inline wrappers and are removed
+at the IR drain. A real flush commits its accepted prefix permanently and
+ends the rejected field; draining a HEAD owner alone preserves the live
+field for BODY execution. A pending glyph, an invisible native graph, a
+generated gap, and an already completed physical row are separate facts.
+
+The live field scanner resumes at its unconsumed suffix. Projection offsets
+and native blank positions are indexed, so appending words or repeated
+word-end breaks does not clone and rescan cumulative field history. Unicode
+escaped spaces use the frozen UTF-8 `encode1()` execution path; the direct
+buffered blank used for automatic KEEP spacing remains distinct. A generated
+HEAD/BODY gap executes its full native count even when its semantic column
+was already assigned to HEAD.
+
 Complete corpus regressions live in the repository integration tests, outside
 the published `src/**` source set. Packaged unit tests remain self-contained.
 Target and topology audits complement these exact text/font/line assertions;
 a clean target ledger alone does not establish rendering fidelity.
 
 The authoritative format contracts are [mant-markdown(7)](https://github.com/BryanHeBY/ManT/blob/dev/docs/manuals/mant-markdown.md), [mant-roff(7)](https://github.com/BryanHeBY/ManT/blob/dev/docs/manuals/mant-roff.md), and [mant-ir(7)](https://github.com/BryanHeBY/ManT/blob/dev/docs/manuals/mant-ir.md).
+
+The private roff field buffer in
+`src/mandoc/inline/flow/field_buffer.rs` and the native field device
+calculation in `src/mandoc/inline/flow/definition/controls.rs` derive from
+the pinned CVS mandoc `term.c` and carry its original ISC copyright and
+permission notice.
+The remaining `ManT` codec code uses the repository license.

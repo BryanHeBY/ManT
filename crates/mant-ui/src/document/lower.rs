@@ -261,22 +261,14 @@ impl DocumentBuilder<'_> {
             Block::Paragraph {
                 children, layout, ..
             } => {
-                let start = self.lines.len();
-                self.inline_lines(
+                let origin = compose_origin(base_indent, layout.indent_columns);
+                self.inline_lines_with_geometry(
                     children,
-                    compose_origin(base_indent, layout.indent_columns),
+                    origin,
+                    compose_origin(origin, layout.continuation_indent_columns),
                     Style::default().fg(theme::TEXT),
+                    LineSurface::Normal,
                 );
-                let continuation = padding(compose_origin(
-                    compose_origin(base_indent, layout.indent_columns),
-                    layout.continuation_indent_columns,
-                ));
-                for (index, line) in self.lines[start..].iter_mut().enumerate() {
-                    line.continuation_indent = continuation;
-                    if index > 0 {
-                        line.indent = continuation;
-                    }
-                }
             }
             Block::Preformatted {
                 children, layout, ..
@@ -379,6 +371,17 @@ impl DocumentBuilder<'_> {
         base_style: Style,
         surface: LineSurface,
     ) {
+        self.inline_lines_with_geometry(nodes, indent, indent, base_style, surface);
+    }
+
+    fn inline_lines_with_geometry(
+        &mut self,
+        nodes: &[Inline],
+        indent: i32,
+        continuation: i32,
+        base_style: Style,
+        surface: LineSurface,
+    ) {
         let targets = inline_anchor_rows(nodes);
         let lines = styled_reference_inline_lines(
             nodes,
@@ -404,9 +407,10 @@ impl DocumentBuilder<'_> {
         for (id, row) in targets {
             self.anchors.entry(id).or_insert(self.lines.len() + row);
         }
-        self.push_styled_lines(
+        self.push_styled_lines_with_geometry(
             lines,
             indent,
+            continuation,
             surface,
             if surface == LineSurface::Code {
                 WrapMode::Character
@@ -423,10 +427,23 @@ impl DocumentBuilder<'_> {
         surface: LineSurface,
         wrap_mode: WrapMode,
     ) {
-        for line in lines {
+        self.push_styled_lines_with_geometry(lines, indent, indent, surface, wrap_mode);
+    }
+
+    fn push_styled_lines_with_geometry(
+        &mut self,
+        lines: Vec<super::StyledInlineLine>,
+        indent: i32,
+        continuation: i32,
+        surface: LineSurface,
+        wrap_mode: WrapMode,
+    ) {
+        for (index, line) in lines.into_iter().enumerate() {
+            let row_indent = i32::from(line.indent_columns);
+            let origin = compose_origin(if index == 0 { indent } else { continuation }, row_indent);
             self.push(LogicalLine {
-                indent: padding(indent),
-                continuation_indent: padding(indent),
+                indent: padding(origin),
+                continuation_indent: padding(compose_origin(continuation, row_indent)),
                 spans: line.spans,
                 surface,
                 wrap_mode,

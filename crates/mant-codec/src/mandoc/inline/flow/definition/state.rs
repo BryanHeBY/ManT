@@ -9,11 +9,6 @@ pub(in crate::mandoc::inline::flow) struct DefinitionOutcome(u8);
 #[derive(Clone, Default)]
 pub(in crate::mandoc::inline::flow) struct DefinitionFieldState {
     pub(in crate::mandoc::inline::flow) pending_indent: Option<usize>,
-    /// Latched: some pass rejected and the buffer wipe (term.c:144-146
-    /// with 235) discarded its suffix. Unlike `hang_row.field_discarded`
-    /// this fact survives later flushes; a run-in BODY reads it to know
-    /// its first text shared the wiped buffer.
-    pub(in crate::mandoc::inline::flow) suffix_discarded_seen: bool,
     /// True only for a NOBREAK field carried across the HEAD/BODY ownership
     /// split (`PreservedDefinitionField`): its rejection is decided by the
     /// BODY words and must be committed at the item post drain
@@ -41,16 +36,9 @@ pub(in crate::mandoc::inline::flow) struct DefinitionFieldState {
     /// formatter word (term.c's `tcol->buf`); pass decisions at flush time
     /// come from it instead of streaming heuristics.
     pub(in crate::mandoc::inline::flow) field_buffer: super::super::field_buffer::FieldBuffer,
-    /// (cell index, IR node count) at each fed word's start, mapping
-    /// buffer positions to output ranges for wipes.
-    pub(in crate::mandoc::inline::flow) field_word_anchors: Vec<(usize, usize)>,
-    /// The still-pending `\z` glyph has already entered the field buffer;
-    /// it must not re-enter while IR resolution lags behind the native
-    /// `encode1()` write.
-    pub(in crate::mandoc::inline::flow) pending_glyph_fed: bool,
-    /// A word's trailing `\p` deferred into the field (no in-operand
-    /// blank): its `'\n'` cell still has to enter the native buffer.
-    pub(in crate::mandoc::inline::flow) trailing_marker_unfed: bool,
+    /// Native word start, stable private owner marker, and content start.
+    /// Markers retain ownership through style/link wrapping and compaction.
+    pub(in crate::mandoc::inline::flow) field_word_anchors: Vec<(usize, String, usize)>,
     pub(in crate::mandoc::inline::flow) outcome: DefinitionOutcome,
     pub(in crate::mandoc::inline::flow) no_break: Option<NoBreakField>,
     // A positive term_vspace() ends the HANG device row. The next author
@@ -70,10 +58,7 @@ pub(in crate::mandoc::inline::flow) struct DefinitionFieldState {
 /// the `PreservedInlineState` seam.
 pub(in crate::mandoc) struct PreservedDefinitionField {
     pub(in crate::mandoc::inline::flow) state: DefinitionFieldState,
-    pub(in crate::mandoc::inline::flow) gap_cells: u8,
-    pub(in crate::mandoc::inline::flow) body_width_columns: u16,
-    pub(in crate::mandoc::inline::flow) field_width_columns: u16,
-    pub(in crate::mandoc::inline::flow) flags: super::super::native_field::FieldFlags,
+    pub(in crate::mandoc::inline::flow) author_effect: super::super::AuthorBreakEffect,
 }
 #[derive(Clone, Copy, Default, Eq, PartialEq)]
 pub(in crate::mandoc::inline::flow) enum PendingFieldGapOrigin {
@@ -101,29 +86,13 @@ pub(in crate::mandoc::inline::flow) struct HangNativeRow {
     pub(in crate::mandoc::inline::flow) field_discretionary_break: bool,
     pub(in crate::mandoc::inline::flow) field_unproven_break: bool,
     pub(in crate::mandoc::inline::flow) field_pending_word_end_break: bool,
-    // term_fill() returns nbr=0 if \p precedes the field's first graph and
-    // the next formatter word adds a separator. No part of that field prints.
-    pub(in crate::mandoc::inline::flow) field_native_graph: bool,
-    // A \p followed by a blank before this word supplied a graph. The
-    // pending field must retain only the prefix accepted by term_fill().
-    pub(in crate::mandoc::inline::flow) field_break_before_graph_prefix: Option<usize>,
     pub(in crate::mandoc::inline::flow) accepted_prefix_before_rejection: bool,
-    pub(in crate::mandoc::inline::flow) last_word_started_with_separator: bool,
-    pub(in crate::mandoc::inline::flow) last_word_supplied_graph: bool,
-    pub(in crate::mandoc::inline::flow) consumed_pending_word_end_break: bool,
     pub(in crate::mandoc::inline::flow) provisional_trailing_break: Option<usize>,
     pub(in crate::mandoc::inline::flow) field_discarded: bool,
     pub(in crate::mandoc::inline::flow) field_last_unbreakable_width: usize,
     pub(in crate::mandoc::inline::flow) transition: HangRowTransition,
     pub(in crate::mandoc::inline::flow) suppress_next_auto_space: bool,
     pub(in crate::mandoc::inline::flow) margin_flush_seen: bool,
-    // Snapshot taken when a source word's decode begins: a \p armed by an
-    // EARLIER word starts this word's term_fill() pass at a blank (term.c
-    // resumes right after that word's '\n' buffer cell). When that armed
-    // pass had accepted no graph yet, the very first blank rejects the pass
-    // (nbr=0, term.c:293-295) and this whole word is unprinted buffer.
-    pub(in crate::mandoc::inline::flow) field_armed_at_word_start: bool,
-    pub(in crate::mandoc::inline::flow) field_native_graph_at_word_start: bool,
 }
 
 #[derive(Clone, Copy, Default, Eq, PartialEq)]
@@ -142,15 +111,8 @@ impl HangNativeRow {
         trailing_spaces: usize,
         printable: bool,
     ) {
-        self.last_word_started_with_separator = separator > 0;
-        self.last_word_supplied_graph = printable;
-        self.consumed_pending_word_end_break = separator > 0 && self.field_pending_word_end_break;
         if separator > 0 && self.field_pending_word_end_break {
             self.field_unproven_break = true;
-            self.field_discarded |= !self.field_native_graph;
-            // term_fill() starts again after its accepted prefix; a graph
-            // from that prefix cannot make the following field printable.
-            self.field_native_graph = false;
         }
         if separator > 0 {
             self.field_pending_word_end_break = false;
@@ -165,9 +127,6 @@ impl HangNativeRow {
                 .saturating_add(width);
             self.trailing_breakable = 0;
             self.field_printable = true;
-            // A term_fill() pass that already returned nbr=0 cannot make
-            // later bytes in that rejected field into an accepted prefix.
-            self.field_native_graph = !self.field_discarded;
             // Callers with a pending glyph have one indivisible formatter
             // word. Source words refine this to their final component.
             self.field_last_unbreakable_width = width;
@@ -205,17 +164,10 @@ impl HangNativeRow {
         self.field_discretionary_break = false;
         self.field_unproven_break = false;
         self.field_pending_word_end_break = false;
-        self.field_native_graph = false;
-        self.field_break_before_graph_prefix = None;
         self.accepted_prefix_before_rejection = false;
-        self.last_word_started_with_separator = false;
-        self.last_word_supplied_graph = false;
-        self.consumed_pending_word_end_break = false;
         self.provisional_trailing_break = None;
         self.field_discarded = false;
         self.field_last_unbreakable_width = 0;
-        self.field_armed_at_word_start = false;
-        self.field_native_graph_at_word_start = false;
         self.minbl = trailspace;
         self.transition = HangRowTransition::Flushed;
     }
@@ -230,17 +182,10 @@ impl HangNativeRow {
         self.field_discretionary_break = false;
         self.field_unproven_break = false;
         self.field_pending_word_end_break = false;
-        self.field_native_graph = false;
-        self.field_break_before_graph_prefix = None;
         self.accepted_prefix_before_rejection = false;
-        self.last_word_started_with_separator = false;
-        self.last_word_supplied_graph = false;
-        self.consumed_pending_word_end_break = false;
         self.provisional_trailing_break = None;
         self.field_discarded = false;
         self.field_last_unbreakable_width = 0;
-        self.field_armed_at_word_start = false;
-        self.field_native_graph_at_word_start = false;
         self.transition = HangRowTransition::Flushed;
     }
 
@@ -338,14 +283,4 @@ pub(in crate::mandoc::inline::flow) struct NoBreakField {
 pub(super) enum DefinitionFieldStyle {
     Tag,
     Hang,
-}
-impl InlineBuilder {
-    /// Record that a word's trailing `\p` stays deferred in the field: the
-    /// decoder never emits its IR break, but `term.c::bufferc()` wrote the
-    /// `'\\n'` cell (term.c:657-658). The word accounting consumes it.
-    pub(in crate::mandoc) fn note_field_trailing_marker(&mut self) {
-        if let Some(definition) = &mut self.execution.definition {
-            definition.trailing_marker_unfed = true;
-        }
-    }
 }

@@ -1,18 +1,17 @@
 use super::{
-    AuthorBreakEffect, FilledBoundary, Font, FormatterColumn, InboundExecution, Inline,
-    InlineBuilder, KeepPhase, OutputRollback, OutputTransaction, PendingBoundary,
-    PreservedInlineState, TrailingOutput, WordEndBreak, has_printable_character,
-    last_visible_character,
+    FilledBoundary, Font, FormatterColumn, InboundExecution, Inline, InlineBuilder, KeepPhase,
+    OutputRollback, OutputTransaction, PendingBoundary, PreservedInlineState, TrailingOutput,
+    WordEndBreak, has_printable_character, last_visible_character,
 };
 
 // A private boundary carried only while one authored Link spans two native
 // term_flushln() fields. It is removed before any IR owner is returned.
 const INTERNAL_LINK_SPLIT: &str = "\0mant:field-link-split";
+pub(in crate::mandoc::inline) const INTERNAL_FIELD_WORD: &str = "\0mant:field-word:";
 
 mod boundary;
-mod feed;
 mod record;
-mod split;
+pub(in crate::mandoc::inline::flow) mod split;
 
 impl InlineBuilder {
     pub(in crate::mandoc) fn node_count(&self) -> usize {
@@ -27,6 +26,10 @@ impl InlineBuilder {
         OutputTransaction {
             rollback: OutputRollback {
                 node_count: self.nodes.len(),
+                native_field_position: self
+                    .definition
+                    .as_ref()
+                    .map(|state| state.field_buffer.position()),
                 last_visible_character: self.execution.last_visible_character,
                 has_printable_content: self.execution.has_printable_content,
                 trailing_output: self.execution.trailing_output,
@@ -66,6 +69,11 @@ impl InlineBuilder {
 
     fn rollback_compacted_output(&mut self, rollback: &OutputRollback) {
         self.nodes.truncate(rollback.node_count);
+        if let Some(definition) = &mut self.definition
+            && let Some(position) = rollback.native_field_position
+        {
+            definition.field_buffer.hide_projection_since(position);
+        }
         if let Some(author) = &mut self.execution.author_execution {
             author.field_output_start = author.field_output_start.min(self.nodes.len());
         }
@@ -121,6 +129,11 @@ impl InlineBuilder {
     ) {
         let output = self.nodes.split_off(transaction.rollback.node_count);
         let retained = retained_replacement_layout(output);
+        if let Some(definition) = &mut self.definition
+            && let Some(position) = transaction.rollback.native_field_position
+        {
+            definition.field_buffer.hide_projection_since(position);
+        }
         let boundary_materialized =
             has_printable_character(&retained) || line_break_count(&retained) > 0;
         let inbound_continued = transaction.inbound.boundary.is_tight()
@@ -179,6 +192,9 @@ impl InlineBuilder {
     /// Preserve a formatter-requested line boundary without creating empty
     /// leading, repeated, or trailing rows around the paragraph.
     pub(in crate::mandoc) fn hard_break(&mut self) {
+        let had_native_buffer = self.definition.as_ref().is_some_and(|state| {
+            state.field_buffer.resume_offset() < state.field_buffer.cells().len()
+        });
         let exited_discarded_buffer = self.discarded_exited_definition_buffer();
         let exited_definition_row = self
             .execution
@@ -201,7 +217,11 @@ impl InlineBuilder {
         // term_newln() flushes only an occupied terminal cell. A completed
         // `\zX` glyph and a buffered `\p` both advanced the native buffer;
         // a bare armed `\z` did not and remains ordered before the next word.
-        if !self.has_formatter_cell() && !exited_definition_row && !exited_discarded_buffer {
+        if !self.has_formatter_cell()
+            && !had_native_buffer
+            && !exited_definition_row
+            && !exited_discarded_buffer
+        {
             if self.external_head_row_pending {
                 // term_newln() still flushes the detached native tag row.
                 // term_flushln() clears a bare \\z before the next BODY word.
@@ -234,7 +254,8 @@ impl InlineBuilder {
             .rev()
             .take_while(|node| !matches!(node, Inline::LineBreak { .. }))
             .any(|node| has_printable_character(std::slice::from_ref(node)));
-        if (self.execution.formatter_column == FormatterColumn::Advanced
+        if (had_native_buffer
+            || self.execution.formatter_column == FormatterColumn::Advanced
             || (self.execution.word_end_break == WordEndBreak::Pending
                 && matches!(self.nodes.last(), Some(Inline::LineBreak { .. }))))
             && !current_row_has_printable
@@ -258,10 +279,8 @@ impl InlineBuilder {
         {
             let row_indent = self.take_definition_row_indent();
             self.nodes.push(Inline::line_break_indented(row_indent));
+            self.note_definition_output_row();
             self.execution.last_visible_character = Some('\n');
-            if std::env::var_os("MANT_DBG_D1").is_some() {
-                eprintln!("hard_break PUSHED lb");
-            }
         }
         self.execution.final_word_join = Some(false);
         if let Some(definition) = &mut self.execution.definition {
@@ -269,6 +288,8 @@ impl InlineBuilder {
             // the HEAD is still in its TAG field. Otherwise an overrun tag
             // leaves stale viscol for a later discarded buffer.
             definition.hang_row.endline();
+            definition.field_buffer.clear();
+            definition.field_word_anchors.clear();
         }
         if let Some(author) = &mut self.execution.author_execution {
             // term_flushln() commits its accepted prefix before it starts
@@ -322,6 +343,8 @@ impl InlineBuilder {
     }
 
     pub(in crate::mandoc) fn execute_empty_word(&mut self) {
+        self.execution.native_word_boundary = Some(self.execution.boundary);
+        self.execution.native_word_writes = Some(Vec::new());
         self.begin_word_projection(true);
         self.append_word(Vec::new());
     }
@@ -329,6 +352,7 @@ impl InlineBuilder {
     /// Generated glyphs use the effective font just like authored text, but
     /// are not reparsed as roff source (names can contain literal escapes).
     pub(in crate::mandoc) fn append_text(&mut self, value: &str) {
+        self.execution.native_word_boundary = Some(self.execution.boundary);
         self.begin_word_projection(!value.is_empty());
         self.append_prepared_text(value);
     }
@@ -337,12 +361,19 @@ impl InlineBuilder {
     /// output owner. A pending `\z` glyph may become visible at this word's
     /// implicit boundary and still belongs to the preceding authored owner.
     pub(in crate::mandoc) fn prepare_generated_word(&mut self) {
+        self.execution.native_word_boundary = Some(self.execution.boundary);
         self.begin_word_projection(true);
     }
 
     /// Complete a generated word whose native pre-boundary was entered by
     /// `prepare_generated_word()` before an IR wrapper was attached.
     pub(in crate::mandoc) fn append_prepared_text(&mut self, value: &str) {
+        self.execution
+            .native_word_boundary
+            .get_or_insert(self.execution.boundary);
+        self.execution.native_word_writes = self
+            .records_native_field_cells()
+            .then(|| super::field_buffer::FieldWrite::literal(value));
         // term_word() wrote these cells even when bare BACKAFTER buffers its
         // sole glyph. The next physical row boundary must still flush it.
         self.note_produced_formatter_cell(!value.is_empty());
@@ -384,6 +415,10 @@ impl InlineBuilder {
     /// `\p` handling, and closes physical source continuation before the next
     /// source node. CVS uses this path for the generated `BSD` child of `.Bx`.
     pub(in crate::mandoc) fn append_generated_word(&mut self, value: &str) {
+        self.execution.native_word_boundary = Some(self.execution.boundary);
+        self.execution.native_word_writes = self
+            .records_native_field_cells()
+            .then(|| super::field_buffer::FieldWrite::literal(value));
         self.note_produced_formatter_cell(!value.is_empty());
         self.begin_word_projection(!value.is_empty());
         let mut projected = Vec::new();
@@ -433,7 +468,7 @@ impl InlineBuilder {
                 // CVS writes TERMP_KEEP's implicit NBRSP before the next
                 // glyph. It settles BACKBEFORE without becoming visible, so
                 // retain the glyph and join the incoming formatter word.
-                self.append_projected(vec![glyph]);
+                self.append_projected(glyph);
                 self.execution.boundary = PendingBoundary::Tight;
             }
         }
@@ -452,9 +487,9 @@ impl InlineBuilder {
                 // The formatter's automatic word blank settles BACKBEFORE
                 // before a buffered `\\p` can become a line boundary.  Keep
                 // the glyph and join the incoming word at that position.
-                self.append_projected(vec![glyph]);
+                self.append_projected(glyph);
                 self.execution.boundary = PendingBoundary::Tight;
-            } else {
+            } else if !self.in_definition_field() {
                 self.hard_break();
             }
         }
@@ -478,7 +513,7 @@ impl InlineBuilder {
                     || matches!(self.execution.boundary, PendingBoundary::Preserved))
             {
                 if let Some(glyph) = self.execution.zero_advance.resolve_at_word_boundary() {
-                    self.append_projected(vec![glyph]);
+                    self.append_projected(glyph);
                 } else {
                     self.append_projected(vec![Inline::Text {
                         value: " ".to_owned(),
@@ -501,7 +536,7 @@ impl InlineBuilder {
         let Some(glyph) = self.execution.zero_advance.resolve_at_word_boundary() else {
             return;
         };
-        self.append_projected(vec![glyph]);
+        self.append_projected(glyph);
         self.execution.boundary = PendingBoundary::Tight;
     }
 
@@ -707,20 +742,6 @@ impl InlineBuilder {
         }
         let completed_invisible_row =
             invisible_formatter_cell && matches!(self.nodes.last(), Some(Inline::LineBreak { .. }));
-        // The item post term_newln() (mdoc_term.c:939-945) flushes a
-        // run-in NOBREAK field carried across the HEAD/BODY split before
-        // this owner drains; term_fill() has already decided that field's
-        // rejection, so commit the wipe while the field still owns its
-        // output range. Fresh `.mc` NoBreakField sessions own their own
-        // earlier lifecycle and are not decided here.
-        if self
-            .execution
-            .definition
-            .as_ref()
-            .is_some_and(|definition| definition.run_in_continuation)
-        {
-            self.discard_unprinted_definition_field_output();
-        }
         let mut children = self.finish_nodes();
         if completed_invisible_row {
             children.push(Inline::line_break());
@@ -748,12 +769,18 @@ impl InlineBuilder {
         mut self,
         preserve_rows: bool,
     ) -> (Vec<Inline>, super::InlineExecutionState) {
+        self.commit_definition_row_origin();
+        let native_tail_end = self.discard_unprinted_definition_field_output();
         let surviving_armed = if self.has_formatter_cell() {
             false
         } else {
             self.execution.zero_advance.take_armed()
         };
         self.flush_zero_advance();
+        if native_tail_end {
+            self.nodes.push(Inline::line_break());
+            self.note_definition_output_row();
+        }
         let output = if preserve_rows {
             self.execution.word_end_break = WordEndBreak::Clear;
             self.drain_ir_nodes()
@@ -762,6 +789,49 @@ impl InlineBuilder {
         };
         self.execution.reset_paragraph_segment(surviving_armed);
         (output, self.execution)
+    }
+
+    /// Execute the native BODY post selected by `FormatterRowBoundary::Settle`.
+    /// An IR paragraph drain or a Preserve return must not invoke this.
+    pub(in crate::mandoc) fn finish_run_in_field_row(&mut self) {
+        if !self
+            .execution
+            .definition
+            .as_ref()
+            .is_some_and(|state| state.run_in_continuation)
+        {
+            return;
+        }
+        // term_newln()477-480 calls term_flushln() only for a buffered cell
+        // or an occupied device row. A bare BACKAFTER is neither: retiring
+        // this field owner must leave it live for the next formatter word.
+        let flushes_buffer =
+            self.has_formatter_cell()
+                || self.execution.definition.as_ref().is_some_and(|state| {
+                    !state.field_buffer.is_empty() || state.hang_row.viscol > 0
+                });
+        if flushes_buffer {
+            self.commit_definition_row_origin();
+            self.flush_zero_advance();
+            let extra_row_end = self.discard_unprinted_definition_field_output();
+            self.execution.completed_vertical_rows = self
+                .execution
+                .completed_vertical_rows
+                .saturating_add(u16::from(extra_row_end));
+        }
+        if let Some(state) = &mut self.execution.definition {
+            state.field_buffer.clear();
+            state.field_word_anchors.clear();
+            state.run_in_continuation = false;
+        }
+        // term_flushln()235-237 clears the consumed buffer for every field,
+        // including NOBREAK fields whose device row remains open. That old
+        // buffer is not a new invisible cell owned by the draining BODY.
+        if flushes_buffer {
+            self.execution.formatter_column = FormatterColumn::Origin;
+            self.execution.word_end_break = WordEndBreak::Clear;
+            self.execution.zero_advance.discard_at_row_end();
+        }
     }
 
     /// Return an inner scope without forcing a pending `\\z` glyph to become
@@ -775,42 +845,36 @@ impl InlineBuilder {
         PreservedInlineState,
         super::InlineExecutionState,
     ) {
+        self.commit_definition_row_origin();
+        self.project_definition_owner_prefix();
+        if let Some(definition) = &mut self.execution.definition {
+            definition.row.retire_row_origin();
+            definition.field_buffer.detach_projection_owner();
+        }
         let formatter_cell_occupied = self.has_formatter_cell();
-        let definition_suffix_discarded = self.execution.definition_suffix_discarded();
         // term.c keeps one NOBREAK field active across the whole list item
         // (mdoc_term.c::termp_it_pre() through the item's BODY post). When
         // the HEAD session ends while that field is still configured, carry
         // it instead of retiring it with the drained output owner.
-        let definition_field = match (
-            self.execution
-                .author_execution
-                .as_ref()
-                .map(|author| author.break_effect),
-            self.execution.definition.take(),
-        ) {
-            (
-                Some(AuthorBreakEffect::Field {
-                    gap_cells,
-                    body_width_columns,
-                    field_width_columns,
-                    flags,
-                }),
-                Some(state),
-            ) => Some(super::definition::PreservedDefinitionField {
-                state,
-                gap_cells,
-                body_width_columns,
-                field_width_columns,
-                flags,
-            }),
-            // Every other field dies with the drained owner below, exactly
-            // as retire_output_owner() has always done.
-            _ => None,
-        };
-        let state = PreservedInlineState {
+        let definition_field = self
+            .execution
+            .definition
+            .take()
+            .zip(
+                self.execution
+                    .author_execution
+                    .as_ref()
+                    .map(|author| author.break_effect),
+            )
+            .map(
+                |(state, author_effect)| super::definition::PreservedDefinitionField {
+                    state,
+                    author_effect,
+                },
+            );
+        let mut state = PreservedInlineState {
             zero_advance: std::mem::take(&mut self.execution.zero_advance),
             word_end_break: self.execution.word_end_break == WordEndBreak::Pending,
-            definition_suffix_discarded,
             definition_field,
             source_continuation: self.execution.final_source_continuation,
             formatter_cell_occupied,
@@ -823,6 +887,9 @@ impl InlineBuilder {
         // keep that break in the detached term so the BODY cannot run in.
         self.execution.word_end_break = WordEndBreak::Clear;
         let output = self.drain_ir_nodes();
+        if let Some(field) = &mut state.definition_field {
+            field.state.field_word_anchors.clear();
+        }
         // The output owner ended, but CVS term_word() still sees the same
         // physical row and word separator after an inset/diag HEAD. Keep its
         // registers, retiring only offsets into the drained node vector.
@@ -832,28 +899,18 @@ impl InlineBuilder {
 
     fn finish_nodes(&mut self) -> Vec<Inline> {
         self.execution.word_end_break = WordEndBreak::Clear;
-        while matches!(self.nodes.last(), Some(Inline::LineBreak { .. })) {
-            self.nodes.pop();
-        }
+        trim_output_terminators(&mut self.nodes);
         self.drain_ir_nodes()
     }
 
     fn drain_ir_nodes(&mut self) -> Vec<Inline> {
-        let mut nodes = std::mem::take(&mut self.nodes);
-        if std::env::var_os("MANT_DBG_D1").is_some() {
-            eprintln!(
-                "drain nodes={:?}",
-                nodes
-                    .iter()
-                    .map(|n| match n {
-                        Inline::Text { value } => format!("T({value:?})"),
-                        Inline::LineBreak { .. } => "LB".to_owned(),
-                        other => format!("{other:?}"),
-                    })
-                    .collect::<Vec<_>>()
-            );
+        if let Some(definition) = &mut self.execution.definition {
+            definition.row.retire_row_origin();
         }
+        let mut nodes = std::mem::take(&mut self.nodes);
+
         join_authored_links(&mut nodes);
+        strip_native_projection_markers(&mut nodes);
         nodes
     }
 
@@ -904,6 +961,9 @@ impl InlineBuilder {
             self.execution.last_visible_character = Some('\n');
             self.execution.trailing_output = TrailingOutput::None;
         }
+        if line_break_count(&retained) > 0 {
+            self.note_definition_output_row();
+        }
         self.nodes.extend(retained);
     }
 
@@ -913,6 +973,7 @@ impl InlineBuilder {
         }
         self.nodes
             .extend(std::iter::repeat_n(Inline::line_break(), count));
+        self.note_definition_output_row();
         self.execution.last_visible_character = Some('\n');
         self.execution.formatter_column = FormatterColumn::Origin;
         self.execution.empty_word = false;
@@ -921,6 +982,67 @@ impl InlineBuilder {
         self.execution.pending_field_spaces = 0;
     }
 }
+/// Semantic identity/styling does not hide the physical output row end.
+/// An empty Text is an occupied row witness and deliberately stops the scan.
+pub(in crate::mandoc::inline::flow) fn ends_with_executed_line_break(nodes: &[Inline]) -> bool {
+    fn ending(nodes: &[Inline]) -> Option<bool> {
+        for node in nodes.iter().rev() {
+            match node {
+                Inline::Anchor { .. } => {}
+                Inline::LineBreak { .. } => return Some(true),
+                Inline::Strong { children }
+                | Inline::Emphasis { children }
+                | Inline::Link { children, .. } => {
+                    if let Some(result) = ending(children) {
+                        return Some(result);
+                    }
+                }
+                _ => return Some(false),
+            }
+        }
+        None
+    }
+    ending(nodes) == Some(true)
+}
+
+/// Paragraph terminators are transparent to metadata and styling. Actual
+/// vertical output has already transferred to its completed-row owner.
+fn trim_output_terminators(nodes: &mut Vec<Inline>) -> bool {
+    let mut trimming = true;
+    let mut retained = Vec::with_capacity(nodes.len());
+    for mut node in nodes.drain(..).rev() {
+        if trimming {
+            match &mut node {
+                Inline::Anchor { .. } => {}
+                Inline::LineBreak { .. } => continue,
+                Inline::Strong { children }
+                | Inline::Emphasis { children }
+                | Inline::Link { children, .. } => trimming = trim_output_terminators(children),
+                Inline::Text { .. } | Inline::Code { .. } | Inline::Equation { .. } => {
+                    trimming = false;
+                }
+            }
+        }
+        retained.push(node);
+    }
+    retained.reverse();
+    *nodes = retained;
+    trimming
+}
+
+fn strip_native_projection_markers(nodes: &mut Vec<Inline>) {
+    nodes.retain_mut(|node| match node {
+        Inline::Anchor { id, .. } => !id.as_str().starts_with(INTERNAL_FIELD_WORD),
+        Inline::Strong { children }
+        | Inline::Emphasis { children }
+        | Inline::Link { children, .. } => {
+            strip_native_projection_markers(children);
+            true
+        }
+        _ => true,
+    });
+}
+
 fn has_non_whitespace_glyph(nodes: &[Inline]) -> bool {
     let mut found = false;
     mant_ir::visit_inline_plain_text(nodes, |text| {
@@ -1102,8 +1224,7 @@ fn retained_hidden_layout(nodes: &[Inline]) -> Vec<Inline> {
     let mut retained = Vec::new();
     for node in nodes {
         match node {
-            Inline::Anchor { .. } => retained.push(node.clone()),
-            Inline::LineBreak { .. } => retained.push(Inline::line_break()),
+            Inline::Anchor { .. } | Inline::LineBreak { .. } => retained.push(node.clone()),
             Inline::Strong { children }
             | Inline::Emphasis { children }
             | Inline::Link { children, .. } => retained.extend(retained_hidden_layout(children)),
@@ -1130,42 +1251,34 @@ fn retained_replacement_layout(nodes: Vec<Inline>) -> Vec<Inline> {
         })
     }
 
-    let mut retained = Vec::new();
-    let mut before_first_glyph = true;
-    for node in nodes {
-        match node {
-            Inline::LineBreak { .. } => {
-                retained.push(Inline::line_break());
-                before_first_glyph = true;
-            }
-            Inline::Anchor { .. } => retained.push(node),
-            Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. }
-                if before_first_glyph =>
-            {
-                if let Some(prefix) = leading_whitespace(&value) {
-                    retained.push(prefix);
+    fn retain(nodes: Vec<Inline>, before_first_glyph: &mut bool, retained: &mut Vec<Inline>) {
+        for node in nodes {
+            match node {
+                Inline::LineBreak { .. } => {
+                    retained.push(node);
+                    *before_first_glyph = true;
                 }
-                if value.chars().any(|character| !character.is_whitespace()) {
-                    before_first_glyph = false;
+                Inline::Anchor { .. } => retained.push(node),
+                Inline::Text { value }
+                | Inline::Code { value }
+                | Inline::Equation { value, .. } => {
+                    if *before_first_glyph {
+                        if let Some(prefix) = leading_whitespace(&value) {
+                            retained.push(prefix);
+                        }
+                        if value.chars().any(|character| !character.is_whitespace()) {
+                            *before_first_glyph = false;
+                        }
+                    }
                 }
+                Inline::Strong { children }
+                | Inline::Emphasis { children }
+                | Inline::Link { children, .. } => retain(children, before_first_glyph, retained),
             }
-            Inline::Strong { children }
-            | Inline::Emphasis { children }
-            | Inline::Link { children, .. }
-                if before_first_glyph =>
-            {
-                if has_printable_character(&children) {
-                    before_first_glyph = false;
-                }
-            }
-            Inline::Text { .. }
-            | Inline::Code { .. }
-            | Inline::Equation { .. }
-            | Inline::Strong { .. }
-            | Inline::Emphasis { .. }
-            | Inline::Link { .. } => {}
         }
     }
+    let mut retained = Vec::new();
+    retain(nodes, &mut true, &mut retained);
     retained
 }
 #[cfg(test)]
@@ -1176,13 +1289,34 @@ mod tests {
     fn retained_layout_summary_ignores_trailing_anchor() {
         let mut builder = InlineBuilder::with_spacing(true);
         builder.append_text("prefix");
-        builder.append_retained_layout(vec![Inline::line_break(), Inline::anchor("mark")]);
+        builder
+            .append_retained_layout(vec![Inline::line_break_indented(6), Inline::anchor("mark")]);
 
         assert_eq!(builder.last_visible_character, Some('\n'));
         assert_eq!(builder.trailing_output, TrailingOutput::None);
         assert!(matches!(
             builder.nodes.as_slice(),
-            [Inline::Text { value }, Inline::LineBreak { .. }, Inline::Anchor { .. }] if value == "prefix"
+            [Inline::Text { value }, Inline::LineBreak { indent_columns: 6 }, Inline::Anchor { .. }] if value == "prefix"
         ));
+    }
+
+    #[test]
+    fn replacement_layout_keeps_execution_boundaries_through_styles() {
+        // Macro compaction replaces glyphs, not already-executed row ends
+        // or owner markers. The style is metadata over that same range.
+        let retained = retained_replacement_layout(vec![Inline::Strong {
+            children: vec![
+                Inline::anchor(format!("{INTERNAL_FIELD_WORD}1-0")),
+                Inline::Text {
+                    value: "hidden".to_owned(),
+                },
+                Inline::line_break_indented(6),
+                Inline::Text {
+                    value: "  next".to_owned(),
+                },
+            ],
+        }]);
+        assert!(matches!(retained.as_slice(), [Inline::Anchor { .. },
+            Inline::LineBreak { indent_columns: 6 }, Inline::Text { value }] if value == "  "));
     }
 }

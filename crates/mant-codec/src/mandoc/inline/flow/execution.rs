@@ -186,19 +186,6 @@ impl InlineBuilder {
 
     pub(in crate::mandoc) fn request_word_end_break(&mut self) {
         if let Some(definition) = &mut self.execution.definition {
-            if definition.hang_row.last_word_started_with_separator
-                && !definition.hang_row.last_word_supplied_graph
-                && definition.hang_row.field_native_graph
-            {
-                // term_fill() already recorded the graph before this empty
-                // formatter word's separator. A subsequent \p belongs to
-                // the new, graphless consumption pass.
-                definition.hang_row.accepted_prefix_before_rejection = true;
-                definition.hang_row.field_native_graph = false;
-                if let Some(author) = &mut self.execution.author_execution {
-                    author.field_output_start = self.nodes.len();
-                }
-            }
             definition.hang_row.field_pending_word_end_break = true;
         }
         // CVS ESCAPE_BREAK buffers a newline cell even when the decoded word
@@ -404,12 +391,7 @@ impl InlineBuilder {
             state.run_in_continuation = true;
             self.execution.definition = Some(state);
             if let Some(author) = &mut self.execution.author_execution {
-                author.break_effect = AuthorBreakEffect::Field {
-                    gap_cells: field.gap_cells,
-                    body_width_columns: field.body_width_columns,
-                    field_width_columns: field.field_width_columns,
-                    flags: field.flags,
-                };
+                author.break_effect = field.author_effect;
                 author.field_output_start = 0;
             }
         }
@@ -430,25 +412,31 @@ impl InlineBuilder {
             .zero_advance
             .resolve_at_word_boundary()
             .expect("completed BACKBEFORE glyph");
-        self.append_projected(vec![glyph]);
+        self.append_projected(glyph);
         true
     }
 
     /// Execute the generated no-break word between an mdoc inset/diagnostic
     /// head and body.  Its `term_word()` transition still runs when the only
     /// fixed cell was consumed by a completed HEAD glyph.
-    pub(in crate::mandoc) fn append_run_in_cells(&mut self, count: usize, generated_word: bool) {
+    pub(in crate::mandoc) fn append_run_in_cells(
+        &mut self,
+        count: usize,
+        native_count: usize,
+        generated_word: bool,
+    ) {
         if !generated_word {
             return;
         }
-        if let Some(definition) = &mut self.execution.definition {
-            // mdoc_term.c:760-767 emits `\ ` for the generated inset or
-            // diagnostic gap: non-breaking cells of the native field.
-            for _ in 0..count {
-                definition.field_buffer.push_non_breaking_blank();
-            }
-        }
-        self.note_produced_formatter_cell(count > 0);
+        self.execution.native_word_writes = Some(
+            (0..native_count)
+                .map(|index| super::field_buffer::FieldWrite::OwnedBlank {
+                    projected: index >= native_count.saturating_sub(count),
+                })
+                .collect(),
+        );
+        self.execution.native_word_boundary = Some(PendingBoundary::Tight);
+        self.note_produced_formatter_cell(native_count > 0);
         self.tighten_next_boundary();
         self.begin_word_projection(true);
         if count > 0 {
@@ -460,6 +448,8 @@ impl InlineBuilder {
             );
             self.append_word(projected);
             self.execution.trailing_output = TrailingOutput::FixedBlank;
+        } else {
+            self.append_word(Vec::new());
         }
         // CVS sets TERMP_NOSPACE again before executing BODY children.
         self.tighten_next_boundary();

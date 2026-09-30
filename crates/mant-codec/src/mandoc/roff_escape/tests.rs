@@ -322,7 +322,10 @@ fn visible_projection_applies_zero_advance_to_composite_formatter_glyphs() {
     assert_eq!(visible_text(r"A\z\o'BC'D"), "AD");
     assert_eq!(visible_text(r"A\z\*[.T]D"), "Atf8D");
     assert_eq!(visible_text(r"A\zX\z\c"), "AX");
-    assert_eq!(visible_text(r"A\zX\[future-glyph]"), r"A\[future-glyph]");
+    // Exact pristine CVS fixture preserves native X: unknown SPECIAL
+    // bufferc(NBRZW) never consumes BACKBEFORE (term.c:620-638). ManT
+    // additionally retains the authored unknown spelling as recovery.
+    assert_eq!(visible_text(r"A\zX\[future-glyph]"), r"AX\[future-glyph]");
     assert_eq!(visible_text(r"A\zX\p"), "AX");
     assert_eq!(visible_text(r"A\pB C"), "AB\nC");
     assert_eq!(visible_text(r"A\pB   C"), "AB\nC");
@@ -347,4 +350,24 @@ fn copy_mode_escape_chains_are_decoded_iteratively() {
 fn masks_terminal_controls_in_source_and_undefined_escapes() {
     assert_eq!(visible_text("before\u{1b}[2Jafter"), "before [2Jafter");
     assert_eq!(visible_text("before\\\u{7}after"), "before after");
+}
+
+#[test]
+fn unknown_recovery_spelling_does_not_consume_native_backtracking() {
+    // Every complete .TH fixture was run with pristine CVS -Tascii/-Tutf8
+    // before these assertions. term.c:610-638 buffers ASCII_NBRZW for an
+    // unknown SPECIAL/invalid NUMBERED without encode1's flag transition.
+    // Known glyph results follow that run; source spelling is ManT's
+    // established semantic recovery, not another native formatter glyph.
+    for (source, expected) in [
+        (r"\z\[unknownname]YZ", "Z"),
+        (r"\z\N'256'YZ", "Z"),
+        (r"\zX\[unknownname]", r"X\[unknownname]"),
+        (r"\zX\[unknownname]Y", r"\[unknownname]Y"),
+        (r"\zX\[unknownname]\[u03B1]", "\\[unknownname]α"),
+        (r"\zX\[unknownname] Y", r"X\[unknownname]Y"),
+        (r"X\[unknownname]Y", r"X\[unknownname]Y"),
+    ] {
+        assert_eq!(visible_text(source), expected, "{source}");
+    }
 }
