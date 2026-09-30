@@ -40,7 +40,10 @@ fn lowers_documented_mdoc_delimiters_and_common_roff_characters() {
         "‘single’",
         "(parenthesized)",
         "{braced}",
-        "<angled>",
+        // Word child → catalog \(la/\(ra glyphs; the sole-.Mt ASCII
+        // exception of mdoc_term.c::termp_quote_pre (1600-1603) does not
+        // apply (pristine oracle: `.Aq angled` renders `⟨angled⟩`).
+        "⟨angled⟩",
         "[multi value]",
     ] {
         assert!(

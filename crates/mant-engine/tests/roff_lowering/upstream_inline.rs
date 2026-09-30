@@ -201,7 +201,8 @@ fn enclosure_parts_have_one_owner_even_when_empty_or_reparented() {
         (".Op", "[]"),
         (".Pq", "()"),
         (".Oo\n.Oc", "[]"),
-        (".Aq", "<>"),
+        // No child → catalog \(la/\(ra glyphs (pristine oracle: `.Aq` → `⟨⟩`).
+        (".Aq", "⟨⟩"),
         (".Brq", "{}"),
         (".Eo (\nhello\n.Ec )", "(hello)"),
         (".Eo ( hello Ec )", "(hello)"),

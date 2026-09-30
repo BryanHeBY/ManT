@@ -86,3 +86,41 @@ fn zero_advance_crosses_leading_scopes_generated_prefixes_and_link_labels() {
         }
     }
 }
+
+#[test]
+fn quote_enclosure_angle_marks_follow_the_sole_mt_child_topology() {
+    // mdoc_term.c::termp_quote_pre/post (1600-1603, 1658-1661) print the
+    // ASCII pair only when the enclosure's child list is exactly one `.Mt`
+    // element (`n->child != NULL && n->child->next == NULL &&
+    // n->child->tok == MDOC_Mt`); every other child shape takes the \(la
+    // and \(ra catalog glyphs. The decision rides the parsed child
+    // topology, never a "@" substring test: `.Mt` swallows the remaining
+    // arguments on its line, so extra words stay inside the single `.Mt`
+    // child. Expected marks verified with the pristine reference binary
+    // (-Tutf8 -Owidth=78).
+    let cases = [
+        ("plain-word", ".Aq Word", "⟨Word⟩"),
+        ("word-with-at", ".Aq a@b", "⟨a@b⟩"),
+        ("single-mt", ".Aq Mt test@example.com", "<test@example.com>"),
+        ("mt-without-at", ".Aq Mt ab", "<ab>"),
+        ("multiple-mt", ".Aq Mt a@b Mt c@d", "⟨a@b c@d⟩"),
+        ("mt-then-no", ".Aq Mt a@b No plain", "⟨a@b plain⟩"),
+        ("explicit-ao-sole-mt", ".Ao Mt a@b\n.Ac", "<a@b>"),
+        ("explicit-ao-mt-then-no", ".Ao Mt a@b No x\n.Ac", "⟨a@b x⟩"),
+    ];
+    for (label, body, expected) in cases {
+        let source = format!(".Dd September 28, 2026\n.Dt QUOTE 1\n.Os\n.Sh DESCRIPTION\n{body}\n");
+        let document = parse_manual_bytes(
+            std::path::Path::new(&format!("quote-{label}.1")),
+            source.as_bytes(),
+        )
+        .expect("parse quote enclosure fixture");
+        let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!(
+                "{label}: expected one paragraph: {:#?}",
+                document.sections[0].blocks
+            );
+        };
+        assert_eq!(inline_text(children), expected, "{label}: {children:?}");
+    }
+}

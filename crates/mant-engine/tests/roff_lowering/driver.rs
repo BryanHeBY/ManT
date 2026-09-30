@@ -38,7 +38,10 @@ fn driver_nested_containers_inherit_only_executed_spacing_state() {
     // The first boundary survives `.Sm off`; later arguments concatenate.
     // Leaving the structural child inherits that state without replaying it.
     assert!(
-        text.contains("LEFT RIGHTNEXT") && text.contains(">TAIL END"),
+        // Structural `.Ao` wraps a `.Bl` list child, not a sole `.Mt`, so
+        // termp_quote_pre takes the \(la/\(ra catalog glyphs (pristine
+        // oracle renders the closer as `⟩ TAIL`).
+        text.contains("LEFT RIGHTNEXT") && text.contains("⟩TAIL END"),
         "{text}"
     );
     // `.No` explicitly selects normal font even inside the emphasis scope.

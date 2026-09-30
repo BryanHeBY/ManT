@@ -594,9 +594,12 @@ fn resolved_enclosure_marks(node: &Node) -> Option<(Option<String>, Option<Strin
 }
 
 fn sole_mt_child(node: &Node) -> bool {
-    super::inline::inline_children(node)
-        .first()
-        .is_some_and(|child| child.macro_name.as_deref() == Some("Mt"))
+    // termp_quote_pre accepts exactly one `.Mt` child; any sibling — a
+    // second `.Mt`, a `.No`, … — falls back to the catalog glyph pair.
+    match super::inline::inline_children(node) {
+        [only] => only.macro_name.as_deref() == Some("Mt"),
+        _ => false,
+    }
 }
 
 fn emit_enclosure_post<'a>(close: Option<&str>, emit: &mut impl FnMut(Event<'a>)) {

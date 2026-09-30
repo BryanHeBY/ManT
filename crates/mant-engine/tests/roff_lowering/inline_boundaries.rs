@@ -118,7 +118,9 @@ fn generated_closers_consume_internal_boundaries_but_not_external_ones() {
         ("Qo", "Qc", "\"", "\""),
         ("Do", "Dc", "“", "”"),
         ("So", "Sc", "‘", "’"),
-        ("Ao", "Ac", "<", ">"),
+        // Text `b` child → catalog \(la/\(ra glyphs, not the sole-.Mt ASCII
+        // exception (pristine oracle: `.No a Ao b Ns Ac c` → `a ⟨b⟩ c`).
+        ("Ao", "Ac", "⟨", "⟩"),
     ] {
         for inner in ["b Ns", "Pf b", "Em b Ns"] {
             for input in variants(&format!(".No a {open} {inner} {close} c")) {
@@ -309,7 +311,10 @@ fn preserves_explicit_mdoc_function_and_enclosure_structure() {
     };
     assert_eq!(
         inline_text(children),
-        "<angle> [bracket] “double” (parenthesized) \"quoted\" ‘single’ {braced} \
+        // Word child → catalog \(la/\(ra glyphs; the sole-.Mt ASCII
+        // exception of mdoc_term.c::termp_quote_pre (1600-1603) does not
+        // apply (pristine oracle: `.Ao`/`angle`/`.Ac` renders `⟨angle⟩`).
+        "⟨angle⟩ [bracket] “double” (parenthesized) \"quoted\" ‘single’ {braced} \
          [optional] <<generic>> [[custom]]"
     );
     assert_eq!(document.diagnostics.len(), 2);
