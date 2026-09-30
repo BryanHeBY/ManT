@@ -6,7 +6,12 @@
 # overstrike order, `\p` pass rejections) are only observable on the UTF-8
 # column (chars.c:47-53 with term.c:620-634). Expectations must come from
 # this run, never by hand. The normalization is implemented in python3 so
-# the NBSP/dash byte rules behave identically on every platform's sed.
+# the NBSP/dash byte rules behave identically on every platform's sed. It
+# mirrors normalize_mant in crates/mant-engine/tests/roff_lowering/
+# escape_matrix.rs: every body row and every blank row between body rows is
+# preserved, and only mandoc's page furniture (the name(1) title/header
+# rows, the footer OS and date rows, and the page-edge blanks framing
+# them) is dropped.
 set -euo pipefail
 REF="${MANT_REFERENCE:-target/mandoc-migration/reference/mandoc}"
 [ -x "$REF" ] || { echo "reference binary not found: $REF" >&2; exit 1; }
@@ -38,12 +43,51 @@ PREFLIGHT
 for source in crates/mant-engine/tests/roff_lowering/escape_matrix/cases/*.1; do
   name=$(basename "$source" .1)
   "$REF" -Tutf8 "$source" | python3 -c '
+import re
 import sys
 
-FURNITURE_FIRST_WORD = {
+FURNITURE_OS_WORDS = {
     "Linux", "macOS", "Darwin", "Apple", "Ubuntu", "Debian",
     "NetBSD", "FreeBSD", "OpenBSD", "AT&T", "GNU",
 }
+FURNITURE_MONTHS = {
+    "January", "February", "March", "April", "May", "June", "July",
+    "August", "September", "October", "November", "December",
+}
+
+
+def section_token(token):
+    if not token.endswith(")"):
+        return False
+    open_ = token.rfind("(")
+    if open_ == -1:
+        return False
+    inner = token[open_ + 1:-1]
+    return bool(inner) and inner.isascii() and inner[0].isdigit() and inner.isalnum()
+
+
+def title_row(row):
+    tokens = row.split(" ")
+    if not section_token(tokens[0]):
+        return False
+    return len(tokens) == 1 or section_token(tokens[-1])
+
+
+def os_row(row):
+    return row.split(" ")[0] in FURNITURE_OS_WORDS
+
+
+def date_row(row):
+    tokens = row.split(" ")
+    if len(tokens) < 2 or not section_token(tokens[-1]):
+        return False
+    body = tokens[:-1]
+    if any(re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", token) for token in body):
+        return True
+    return any(token in FURNITURE_MONTHS for token in body) and any(
+        re.fullmatch(r"[0-9]{4}", token) for token in body
+    )
+
 
 rows = []
 for line in sys.stdin.read().splitlines():
@@ -60,19 +104,17 @@ for line in sys.stdin.read().splitlines():
         else:
             projected.append(ch)
     row = " ".join("".join(projected).split())
-    if not row or row.endswith("(1)"):
-        continue
-    # Section heads are single all-caps words; short or spaced all-caps
-    # rows are content on this corpus (e.g. `X`, `A X`).
-    if len(row) >= 3 and row.isascii() and row.isupper() and " " not in row:
-        continue
-    first = row.split(" ")[0]
-    if first in FURNITURE_FIRST_WORD:
-        continue
-    head = first[:10]
-    if len(head) == 10 and head[:4].isdigit() and head[4] == "-" and head[5:7].isdigit():
+    # Drop only page furniture; body and blank rows are the pinned content.
+    if title_row(row) or os_row(row) or date_row(row):
         continue
     rows.append(row)
+# Page-edge blank rows frame the furniture (the reference emits one blank
+# after the header and one before the footer via term_vspace); blank rows
+# between body rows are paragraph structure and stay.
+while rows and rows[0] == "":
+    rows.pop(0)
+while rows and rows[-1] == "":
+    rows.pop()
 sys.stdout.write("\n".join(rows) + ("\n" if rows else ""))
 ' > "crates/mant-engine/tests/roff_lowering/escape_matrix/cases/$name.expected"
 done
