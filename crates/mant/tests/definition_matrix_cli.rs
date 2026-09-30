@@ -35,21 +35,45 @@ impl Drop for ScratchManroot {
     }
 }
 
-/// Row-grouping projection (the retired probe shell's normalization):
-/// collapse internal whitespace, drop blank rows and page furniture a
-/// fixed-width device adds — the observable is which words share a row.
+/// The CLI and library renderer have one label row and no footer. Remove
+/// that first row by position, then collapse horizontal whitespace and drop
+/// blank rows: the observable is which body words share a physical row.
+/// Body text never becomes page furniture because of its spelling.
 fn row_groups(output: &str) -> Vec<String> {
     output
         .lines()
+        .skip(1)
         .map(|line| line.split_whitespace().collect::<Vec<_>>().join(" "))
-        .filter(|line| {
-            !line.is_empty()
-                && !line.ends_with("(1)")
-                && !line
-                    .chars()
-                    .all(|character| character.is_ascii_uppercase() || character == ' ')
-        })
+        .filter(|line| !line.is_empty())
         .collect()
+}
+
+#[test]
+fn row_groups_preserves_body_text_that_resembles_page_furniture() {
+    // This is the footerless renderer's position contract, matching the
+    // engine definition matrix. No roff behavior is inferred from word shape.
+    let output = concat!(
+        "arbitrary first-row label\n",
+        "\n",
+        "OPTIONS\n",
+        "  BODY(1)\n",
+        "printf(3)\n",
+        "Linux commands begin the body here.\n",
+        "\n",
+        "2026-09-30 printf(3)\n",
+        "September 30, 2026\n",
+    );
+    assert_eq!(
+        row_groups(output),
+        [
+            "OPTIONS",
+            "BODY(1)",
+            "printf(3)",
+            "Linux commands begin the body here.",
+            "2026-09-30 printf(3)",
+            "September 30, 2026",
+        ]
+    );
 }
 
 fn library_rendering(source: &str) -> String {
@@ -124,17 +148,13 @@ fn cli_matrix_rows_match_a_snapshot_sample() {
             .env("MANT_MANPATH", &scratch.path)
             .output()
             .expect("run the mant process");
-        let rows: Vec<String> = String::from_utf8_lossy(&output.stdout)
-            .lines()
-            .map(|line| line.split_whitespace().collect::<Vec<_>>().join(" "))
-            .filter(|line| {
-                !line.is_empty()
-                    && !line.ends_with("(1)")
-                    && !line
-                        .chars()
-                        .all(|character| character.is_ascii_uppercase() || character == ' ')
-            })
-            .collect();
+        assert!(
+            output.status.success(),
+            "{name}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let process_text = String::from_utf8(output.stdout).expect("process output");
+        let rows = row_groups(&process_text);
         let expected: Vec<String> = std::fs::read_to_string(&expected_path)
             .expect("snapshot")
             .lines()
