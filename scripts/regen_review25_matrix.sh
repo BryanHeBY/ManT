@@ -143,7 +143,7 @@ case("aq08_p", ".Aq \\p Mt user@host\n")
 case("aq08_c", ".Aq \\c Mt user@host\n")
 
 # --------------------------------------------------------------- MP (§25.4)
-# Fd macro-post family (NF05; NF-POST pending).
+# Fd macro-post family (NF05; NF-POST shared execution contract).
 case("mp01", ".Fd XSHARED\n.No B\n")
 case("mp02", ".nf\n.Fd \"A\\c\"\n.No B\n.fi\n")
 case("mp03", ".Bd -literal\n.Fd \"A\\c\"\n.No B\n.Ed\n")

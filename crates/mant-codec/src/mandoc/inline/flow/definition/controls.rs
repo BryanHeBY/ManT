@@ -784,18 +784,6 @@ impl InlineBuilder {
         self.execution.definition.is_some() && self.execution.author_execution.is_some()
     }
 
-    /// Field ownership is already known from the author effect even when
-    /// its lazily created session has not reached `ensure_definition_field`.
-    /// Ordinary paragraphs record into the plain flush unit instead
-    /// (`InlineExecutionState::flush_unit`): every formatter word buffers
-    /// into the same native `tcol->buf` (term.c), so the shared pass
-    /// consumer must see them all. Isolated tbl words keep their own
-    /// geometry path and never consult this register.
-    #[allow(clippy::unused_self)] // a formatter-register query by name
-    pub(in crate::mandoc) const fn records_native_field_cells(&self) -> bool {
-        true
-    }
-
     /// A head field configured with `AuthorBreakEffect::Field` IS a
     /// definition field, even when a paragraph drain retired the lazily
     /// created session state. Re-establish it so marker bookkeeping
@@ -1572,12 +1560,8 @@ mod recording_tests {
     use super::*;
 
     #[test]
-    fn native_recording_uses_the_field_owner_before_lazy_reentry() {
+    fn definition_field_session_reenters_after_owner_handoff() {
         let mut builder = InlineBuilder::with_spacing(true);
-        assert!(
-            builder.records_native_field_cells(),
-            "plain words record native cells too"
-        );
         builder.inherit_author_execution_with_effect(
             crate::mandoc::formatter::AuthorFlow::default(),
             false,
@@ -1590,10 +1574,6 @@ mod recording_tests {
         );
         builder.execution.definition = None;
         assert!(!builder.in_definition_field());
-        assert!(
-            builder.records_native_field_cells(),
-            "field owner precedes the lazy ledger"
-        );
         builder.ensure_definition_field_session();
         assert!(builder.in_definition_field());
     }

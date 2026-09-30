@@ -442,7 +442,6 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
         starts_with_break_marker_blank(&events),
     );
     let pending_word_end_break = builder.take_word_end_break();
-    let record_native_cells = builder.records_native_field_cells();
     // term_word() stores a previous operand's \p in the native buffer.
     // Its actual automatic separator is consumed by term_fill(), before
     // this operand's internal blanks. Do not replay that older marker in
@@ -455,18 +454,18 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
     // retire their rows outside the builder (the IR drains through the
     // block owner), so the text executor keeps its own wipe arm there;
     // isolated tbl words keep it through their hardcoded flags.
-    let field_authoritative = record_native_cells && !builder.execution.no_fill_word_active;
+    let field_authoritative = !builder.execution.no_fill_word_active;
     let execution = font::parse_roff_text_with_zero_advance(
         source,
         &mut builder.execution.font,
         !node.flags.no_fill,
         &mut builder.execution.zero_advance,
         pending_word_end_break && !field_authoritative,
-        record_native_cells,
+        true,
         field_authoritative,
     );
     builder.ensure_definition_field_session();
-    builder.native_word_writes = record_native_cells.then_some(execution.native_writes);
+    builder.native_word_writes = Some(execution.native_writes);
     // mdoc_term gives an empty text node a vertical row only when the text
     // itself begins an input line. An empty No/Em argument does not, whereas
     // a buffered zero-width glyph (for example \&) still occupies that row.
@@ -498,7 +497,7 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
     }
     if execution.pending_word_end_break {
         builder.request_word_end_break(execution.pending_word_end_break_separated);
-    } else if record_native_cells {
+    } else {
         builder.retain_buffered_field_word_end_break();
     }
     let continues_line = execution
