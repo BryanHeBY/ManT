@@ -196,8 +196,7 @@ impl InlineBuilder {
         let had_native_buffer = self.definition.as_ref().is_some_and(|state| {
             state.field_buffer.resume_offset() < state.field_buffer.cells().len()
         }) || (self.execution.definition.is_none()
-            && self.execution.flush_unit.resume_offset()
-                < self.execution.flush_unit.cells().len());
+            && self.execution.flush_unit.resume_offset() < self.execution.flush_unit.cells().len());
         let exited_discarded_buffer = self.discarded_exited_definition_buffer();
         let exited_definition_row = self
             .execution
@@ -531,7 +530,7 @@ impl InlineBuilder {
                 self.append_projected(glyph);
                 self.execution.boundary = PendingBoundary::Tight;
             } else if !self.in_definition_field()
-                && !self.execution.flush_unit.has_pending_break_markers()
+                && !self.execution.has_printable_content
                 && self.current_row_has_graph()
             {
                 // The marker sits in a retired owner (a drained TAG field

@@ -444,8 +444,7 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
     // retire their rows outside the builder (the IR drains through the
     // block owner), so the text executor keeps its own wipe arm there;
     // isolated tbl words keep it through their hardcoded flags.
-    let field_authoritative =
-        record_native_cells && !builder.execution.no_fill_word_active;
+    let field_authoritative = record_native_cells && !builder.execution.no_fill_word_active;
     let execution = font::parse_roff_text_with_zero_advance(
         source,
         &mut builder.execution.font,
@@ -701,13 +700,16 @@ fn text_node(value: &str) -> Vec<Inline> {
 }
 
 fn needs_boundary_space(left: Option<char>, right: Option<char>) -> bool {
-    // A non-breaking space is word content (chars.c NBRSP), not a
-    // collapsible blank: term_word() still writes its automatic separator
-    // around it (term.c:573-576).
-    fn content_side(character: char) -> bool {
-        !character.is_whitespace() || character == '\u{a0}'
-    }
-    matches!((left, right), (Some(left), Some(right)) if content_side(left) && content_side(right))
+    // A non-breaking space is word content on the incoming side (chars.c
+    // NBRSP): term_word() still writes its automatic separator before it
+    // (term.c:573-576). A trailing NBRSP already separated the previous
+    // word, so no second boundary blank follows it.
+    matches!(
+        (left, right),
+        (Some(left), Some(right))
+            if !left.is_whitespace()
+                && (!right.is_whitespace() || right == '\u{a0}')
+    )
 }
 
 fn push_text(nodes: &mut Vec<Inline>, value: String) {

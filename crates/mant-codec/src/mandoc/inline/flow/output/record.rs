@@ -115,9 +115,11 @@ impl InlineBuilder {
             .execution
             .flush_unit
             .apply_writes(&native_writes.unwrap_or_default());
-        self.execution
-            .flush_unit_anchors
-            .push((native_word_start, anchor_ir_start, receipt.first_content_cell));
+        self.execution.flush_unit_anchors.push((
+            native_word_start,
+            anchor_ir_start,
+            receipt.first_content_cell,
+        ));
         // The plain unit is a BRNEVER-shaped degenerate field (term.c:134,
         // 143-144): responsive reflow owns width, so passes only ever end
         // at authored markers and never at a device-width guess.
@@ -171,10 +173,7 @@ impl InlineBuilder {
         let anchor_count = anchors.len();
         let mut inside_splits = Vec::new();
         let mut closes_before = 0;
-        if anchor_count > 0
-            && !buffer.word_scan_deferred()
-            && buffer.has_pending_break_markers()
-        {
+        if anchor_count > 0 && !buffer.word_scan_deferred() && buffer.has_pending_break_markers() {
             let word_first_cell = anchors[anchor_count - 1].2;
             let word_end = buffer.cells().len();
             let mut ir_row_breaks = super::line_break_count(incoming);
@@ -212,8 +211,7 @@ impl InlineBuilder {
                 if boundary <= word_first_cell {
                     closes_before += usize::from(!represented_in_ir);
                 } else if boundary < word_end && !represented_in_ir {
-                    inside_splits
-                        .push(buffer.projection_length(word_first_cell, boundary));
+                    inside_splits.push(buffer.projection_length(word_first_cell, boundary));
                 }
                 if boundary >= word_end {
                     break;
