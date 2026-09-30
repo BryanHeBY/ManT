@@ -36,6 +36,15 @@ OUT = Path("crates/mant-engine/tests/roff_lowering/shared_execution_matrix/cases
 
 HEAD = ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\n"
 TAIL = "\n.Sh NEXT\n.No END\n"
+# Full-recording template (matrix A/C): keeps the NAME section so the
+# `.Nd` dash row is part of the pin, and a `.br` + After + NEXT tail
+# (review section 2). Tails never start with a blank source line — a
+# blank line is itself a paragraph break in roff.
+MDOC_HEAD = (
+    ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n"
+    ".Sh DESCRIPTION\n"
+)
+A_TAIL = ".br\n.No After\n.Sh NEXT\n.No END\n"
 
 
 def project(line):
@@ -71,14 +80,8 @@ def normalize(text):
     return "\n".join(lines) + "\n"
 
 
-def case(name, body):
-    source = HEAD + body + TAIL
-    path = OUT / f"{name}.1"
-    path.write_text(source)
-    rendered = subprocess.run(
-        [REF, "-Tutf8", "-Owidth=78", str(path)],
-        capture_output=True, text=True, check=True).stdout
-    (OUT / f"{name}.expected").write_text(normalize(rendered))
+def case(name, body, tail=TAIL):
+    source = HEAD + body + tail
 
 
 # Matrix B: generated glyphs against pending \z state (review section 3).
@@ -111,5 +114,86 @@ for kind, width in [("inset", ""), ("diag", ""), ("tag", " -width 4n"),
                       ("z", r"\z"), ("zs", r"\z ")]:
         case(f"g_{kind}_{tag}",
              f'.Bl -{kind}{width}\n.It "{head}"\n.No BodyWord\n.El')
+
+
+def mdoc_case(name, body, tail=A_TAIL):
+    source = MDOC_HEAD + body + tail
+    path = OUT / f"{name}.1"
+    path.write_text(source)
+    rendered = subprocess.run(
+        [REF, "-Tutf8", "-Owidth=78", str(path)],
+        capture_output=True, text=True, check=True).stdout
+    (OUT / f"{name}.expected").write_text(normalize(rendered))
+
+
+# Matrix A: 16 accept/reject/cross-word sequences x 7 contexts (review
+# section 2). `_text` skips the empty-operand sequences (a13/a14).
+A = {
+    "a01": ["X", r"\p", "Tail"],
+    "a02": [r"\zX\p", r"\p Y", "Tail"],
+    "a03": [r"\p", r"\zX\p", "Tail"],
+    "a04": [r"\zX", r"\p", "Tail"],
+    "a05": [r"X\p Y", "Tail"],
+    "a06": [r"X \p Y", "Tail"],
+    "a07": [r"\p X", "Tail"],
+    "a08": [r"\zX \p Y", "Tail"],
+    "a09": [r"\p\& Y", "Tail"],
+    "a10": [r"\p\:Y", "Tail"],
+    "a11": ["X", r"\p", r"\&", "Tail"],
+    "a12": [r"\p", r"\zX", "Tail"],
+    "a13": [r"X\p", "", "Tail"],
+    "a14": [r"\p", "", "Tail"],
+    "a15": [r"\zX\p", r"\p Y", r"\p Z", "Tail"],
+    "a16": ["X", r"\p\~Y", "Tail"],
+}
+for aid, seq in A.items():
+    nos = "\n".join(f'.No "{a}"' for a in seq) + "\n"
+    mdoc_case(f"{aid}_no", nos)                      # independent .No
+    if aid not in ("a13", "a14"):                    # raw TEXT
+        mdoc_case(f"{aid}_text", "\n".join(seq) + "\n")
+    mdoc_case(f"{aid}_same",                         # one source line
+              "." + " ".join(f'No "{a}"' for a in seq) + "\n")
+    mdoc_case(f"{aid}_nf", ".nf\n" + nos)            # no-fill
+    for ctx, flags in (("tag", "-tag -width 4n"), ("hang", "-hang -width 4n"),
+                       ("inset", "-inset")):         # extended HEAD
+        mdoc_case(f"{aid}_{ctx}",
+                  f".Bl {flags}\n.It Xo\n{nos}.Xc\n.No BodyWord\n.El\n")
+
+# man raw TEXT forms (review section 2): own headers, no mdoc tail.
+for name, body in (
+    ("man1", "\\zX\\p\n\\p Y\nTail\n"),
+    ("man2", "X\n\\p\nTail\n.br\nAfter\n"),
+):
+    source = ".TH TEST 1\n.SH DESCRIPTION\n" + body + "\n.SH NEXT\nEND\n"
+    (OUT / f"{name}.1").write_text(source)
+    rendered = subprocess.run(
+        [REF, "-Tutf8", "-Owidth=78", str(OUT / f"{name}.1")],
+        capture_output=True, text=True, check=True).stdout
+    (OUT / f"{name}.expected").write_text(normalize(rendered))
+
+# Matrix C: control boundaries x three initial buffer states (review
+# section 5): no cells, bare armed \z, cells already written.
+CONTROLS = [None, ".ft B", ".ta 4n 8n", ".Tg marker", ".br", ".sp 0",
+            ".sp 1", ".sp -1", ".mc", ".Pp", ".nf", ".ti 2n"]
+CTL_IDS = ["none", "ft", "ta", "tg", "br", "sp0", "sp1", "spm1",
+           "mc", "pp", "nf", "ti"]
+STATES = [("s0", []), ("s1", ['.No "\\z"']),
+          ("s2", ['.No X', '.No "\\p"'])]
+for st, prelude in STATES:
+    for cid, line in zip(CTL_IDS, CONTROLS):
+        parts = list(prelude)
+        if line:
+            parts.append(line)
+        parts += [".No Tail", ".br", ".No After"]
+        mdoc_case(f"c_{st}_{cid}", "\n".join(parts) + "\n")
+
+# RF01-07 minimal repros (external review section 3-9): sources are the
+# checked-in reviewed cases; expectations are always re-recorded from the
+# oracle, never edited to match ManT.
+for path in sorted(OUT.glob("rf*.1")):
+    rendered = subprocess.run(
+        [REF, "-Tutf8", "-Owidth=78", str(path)],
+        capture_output=True, text=True, check=True).stdout
+    (OUT / f"{path.stem}.expected").write_text(normalize(rendered))
 print("regenerated", len(list(OUT.glob("*.1"))), "cases")
 REGEN
