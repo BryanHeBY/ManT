@@ -84,6 +84,7 @@ pub(in crate::mandoc::blocks) fn lower_mdoc_list(
         );
     }
     context.lower_inline_with_spacing(trailing_controls, formatter.spacing_enabled(), formatter);
+    crate::mandoc::inline::display_tabs::exit_post(&mut formatter.execution, node);
     block
 }
 
@@ -207,6 +208,7 @@ fn lower_mdoc_definition_list(
             body: width,
             placement: TermPlacement::RunIn,
             gap: 1,
+            native_head_field_units: Some(width.nonnegative_basic_units()),
             head_field_columns,
             relation_override: None,
         },
@@ -214,6 +216,7 @@ fn lower_mdoc_definition_list(
             body: Distance::default(),
             placement: TermPlacement::RunIn,
             gap: 1,
+            native_head_field_units: None,
             head_field_columns: 0,
             relation_override: None,
         },
@@ -221,6 +224,7 @@ fn lower_mdoc_definition_list(
             body: Distance::default(),
             placement: TermPlacement::RunIn,
             gap: 2,
+            native_head_field_units: None,
             head_field_columns: 0,
             relation_override: None,
         },
@@ -228,6 +232,7 @@ fn lower_mdoc_definition_list(
             body: Distance::default(),
             placement: TermPlacement::Stacked,
             gap: 0,
+            native_head_field_units: None,
             head_field_columns: 0,
             relation_override: None,
         },
@@ -235,6 +240,7 @@ fn lower_mdoc_definition_list(
             body: width,
             placement: TermPlacement::Fit,
             gap: 2,
+            native_head_field_units: Some(width.nonnegative_basic_units()),
             head_field_columns,
             relation_override: None,
         },

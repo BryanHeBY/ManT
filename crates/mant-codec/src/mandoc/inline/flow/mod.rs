@@ -5,10 +5,14 @@ use mant_ir::Inline;
 use mant_ir::{first_visible_character, has_printable_character, last_visible_character};
 
 mod definition;
+pub(in crate::mandoc) use definition::DefinitionGeometryCheckpoint;
 mod execution;
 pub(in crate::mandoc) mod field_buffer;
 use definition::DefinitionFieldState;
 mod native_field;
+mod tab_stops;
+use std::sync::Arc;
+use tab_stops::TabStops;
 mod no_fill;
 pub(in crate::mandoc) use native_field::{FieldFlag, FieldFlags};
 mod output;
@@ -113,6 +117,9 @@ pub(in crate::mandoc) struct InlineExecutionState {
     /// Native tag/hang field geometry exists only in a definition head.
     /// Ordinary paragraphs keep word and row events without field widths.
     definition: Option<DefinitionFieldState>,
+    /// Active terminal tab settings persist across output owners and fields.
+    tab_stops: Arc<TabStops>,
+    last_tab_source_node: Option<u32>,
     last_executed_source_line: Option<u32>,
     /// Detached definition HEADs use the same `NODE_LINE` entry rule as the
     /// block driver while their output is collected in a term field.
@@ -731,6 +738,8 @@ impl InlineExecutionState {
             execution_epoch: 0,
             author_execution: None,
             definition: None,
+            tab_stops: Arc::new(TabStops::default()),
+            last_tab_source_node: None,
             last_executed_source_line: None,
             observe_no_fill_source_lines: SourceLineObservation::Disabled,
             no_fill_word_active: false,

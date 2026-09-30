@@ -350,12 +350,14 @@ fn collect_ast_structure(
         match node.macro_name.as_deref() {
             Some("Bd" | "D1" | "Dl")
                 if node.macro_name.as_deref() != Some("Bd")
-                    || node.display_kind == Some(DisplayKind::Literal)
-                        && node
-                            .children
-                            .iter()
-                            .filter(|part| part.kind == NodeKind::Body)
-                            .any(has_visible_text) =>
+                    || matches!(
+                        node.display_kind,
+                        Some(DisplayKind::Literal | DisplayKind::Unfilled)
+                    ) && node
+                        .children
+                        .iter()
+                        .filter(|part| part.kind == NodeKind::Body)
+                        .any(has_visible_text) =>
             {
                 profile.literal_displays += 1;
             }

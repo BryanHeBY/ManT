@@ -112,6 +112,30 @@ fn merged_man_lists_keep_each_resolved_gap_without_a_container_copy() {
 }
 
 #[test]
+fn serialized_man_heads_distinguish_nonprinting_words_from_empty_text() {
+    // These five exact sources ran on pristine CVS before the assertions.
+    // pre_IP/pre_TP set NOBREAK for their HEAD (man_term.c:525-668): NBRZW
+    // cannot prove a row close. A genuinely empty TEXT instead executes
+    // term_vspace() at print_man_node() (man_term.c:946-953).
+    for (head, rows) in [
+        (".TP 4\n\\&", 0),
+        (".TP 4\n.B \\&", 0),
+        (".IP \"\\&\" 4", 0),
+        (".IP \"\" 4", 1),
+        (".TP 4\n.B \"\"", 1),
+    ] {
+        let source =
+            format!(".TH BOUNDARY 1\n.SH OPTIONS\n.PD 0\n.IP --owner 12\nFIRST\n{head}\nSECOND\n");
+        let query = load_roff_bytes(source.as_bytes()).unwrap();
+        let json = serde_json::to_string(&mant_protocol::QueryBundle::from(&query)).unwrap();
+        let decoded: mant_protocol::QueryBundle = serde_json::from_str(&json).unwrap();
+        let text = render_query_text(&decoded.into());
+        assert_eq!(blank_rows_before(&text, "SECOND"), rows, "{source}\n{text}");
+        assert!(text.contains("FIRST"), "{text}");
+    }
+}
+
+#[test]
 fn headless_continuations_keep_pd_and_body_space_as_independent_requests() {
     for pd in [0, 1] {
         for space in [0, 2] {

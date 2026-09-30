@@ -311,6 +311,7 @@ fn display_kind(value: i32) -> Result<Option<DisplayKind>, String> {
         0 => Ok(None),
         1 => Ok(Some(DisplayKind::Literal)),
         2 => Ok(Some(DisplayKind::Filled)),
+        3 => Ok(Some(DisplayKind::Unfilled)),
         _ => Err("libmandoc returned an unknown display kind".to_owned()),
     }
 }

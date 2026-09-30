@@ -37,6 +37,15 @@ mod glyphs;
 #[path = "roff_lowering/inline_boundaries.rs"]
 mod inline_boundaries;
 
+#[path = "roff_lowering/native_field_lifecycle.rs"]
+mod native_field_lifecycle;
+#[path = "roff_lowering/native_fractional_margin.rs"]
+mod native_fractional_margin;
+#[path = "roff_lowering/native_nested_list_tabs.rs"]
+mod native_nested_list_tabs;
+#[path = "roff_lowering/tab_display_lifecycle.rs"]
+mod tab_display_lifecycle;
+
 #[path = "roff_lowering/upstream_inline.rs"]
 mod upstream_inline;
 #[path = "roff_lowering/upstream_tables.rs"]

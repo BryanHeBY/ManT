@@ -99,6 +99,23 @@ impl FieldFlags {
         self.bits & flag.bit() != 0
     }
 
+    pub(in crate::mandoc) const fn without(self, flag: FieldFlag) -> Self {
+        Self {
+            bits: self.bits & !flag.bit(),
+            trailspace: self.trailspace,
+        }
+    }
+
+    /// An It pre ORs its pad/break bits into the live formatter flags, but
+    /// can replace trailspace independently (mdoc_term.c:789-831). Nested
+    /// list HEADs must retain the surrounding field's other active bits.
+    pub(in crate::mandoc) const fn combine(self, added: Self, trailspace: u8) -> Self {
+        Self {
+            bits: self.bits | added.bits,
+            trailspace,
+        }
+    }
+
     /// `TERMP_NOBREAK` without `TERMP_HANG`: the wrappable-field view.
     pub(in crate::mandoc) const fn wraps(self) -> bool {
         self.contains(FieldFlag::NoBreak) && !self.contains(FieldFlag::Hang)

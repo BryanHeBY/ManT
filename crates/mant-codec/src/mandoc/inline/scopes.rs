@@ -17,6 +17,9 @@ pub(super) fn append(builder: &mut InlineBuilder, node: &Node, name: Option<&str
     if node.flags.no_print || node.kind == NodeKind::Comment {
         return;
     }
+    if append_structural_scope(builder, node, name) {
+        return;
+    }
     // Atomic reconstructions own their generated punctuation (references,
     // function declarations, etc.); their output cannot carry a guessed tail
     // effect. Transparent and styled scopes below share the caller's flow.
@@ -35,6 +38,36 @@ pub(super) fn append(builder: &mut InlineBuilder, node: &Node, name: Option<&str
     if crate::mandoc::containers::drive(node, &posts, &mut sink) {
         return;
     }
+    append_scope_children(builder, node, name);
+}
+
+fn append_structural_scope(builder: &mut InlineBuilder, node: &Node, name: Option<&str>) -> bool {
+    if node.kind == NodeKind::Block
+        && node.macro_name.as_deref() == Some("Bl")
+        && node.list_kind.is_some()
+        && (node.list_kind == Some(libmandoc_rs::NormalizedListKind::Column)
+            || builder.has_definition_list_execution())
+    {
+        if node.list_kind == Some(libmandoc_rs::NormalizedListKind::Column) {
+            append_column_list(builder, node, name);
+        } else {
+            append_nested_list(builder, node, name);
+        }
+        return true;
+    }
+    if node.kind == NodeKind::Block
+        && matches!(node.macro_name.as_deref(), Some("D1" | "Dl" | "Bd"))
+    {
+        if let Some(anchor) = navigation_anchor(node) {
+            builder.append(vec![anchor]);
+        }
+        append_display(builder, node, name);
+        return true;
+    }
+    false
+}
+
+fn append_scope_children(builder: &mut InlineBuilder, node: &Node, name: Option<&str>) {
     let children = inline_children(node);
     match node.macro_name.as_deref() {
         Some("Fn" | "Fo") => super::generated::function(builder, node, name),
@@ -98,6 +131,316 @@ pub(super) fn append(builder: &mut InlineBuilder, node: &Node, name: Option<&str
     }
 }
 
+fn append_column_list(builder: &mut InlineBuilder, node: &Node, name: Option<&str>) {
+    // Bl BLOCK pre owns an ordinary term_newln(); its HEAD is not printed
+    // (mdoc_term.c::termp_bl_pre,1129-1136). Keep this execution in the
+    // caller's state instead of treating a structural HEAD child as text.
+    builder.no_fill_source_line();
+    let in_head = builder.has_definition_head();
+    let saved = builder.enter_nested_list_scope(true);
+    let Some(body) = node
+        .children
+        .iter()
+        .find(|child| child.kind == NodeKind::Body)
+    else {
+        builder.exit_nested_list_scope(saved, false);
+        return;
+    };
+    builder.begin_executed_node(body);
+    let mut first_item = true;
+    for item in &body.children {
+        if item.kind != NodeKind::Block || item.macro_name.as_deref() != Some("It") {
+            append_inline_nodes(builder, std::slice::from_ref(item), name);
+            continue;
+        }
+        builder.begin_executed_node(item);
+        builder.no_fill_source_line();
+        // print_bvspace() stops at the enclosing non-item It ancestor. Only
+        // the first column item adds this row; later column items suppress
+        // inter-item vspace (mdoc_term.c:583-628).
+        if first_item && !node.compact && in_head {
+            builder.native_vertical_space(1);
+        }
+        first_item = false;
+        if let Some(head) = item
+            .children
+            .iter()
+            .find(|part| part.kind == NodeKind::Head)
+        {
+            builder.begin_executed_node(head);
+            builder.enter_nested_column_part(true);
+        }
+        let parts: Vec<_> = item
+            .children
+            .iter()
+            .filter(|part| part.kind == NodeKind::Body)
+            .collect();
+        for (index, part) in parts.iter().enumerate() {
+            builder.begin_executed_node(part);
+            builder.enter_nested_column_part(index + 1 == parts.len());
+            let posts = builder.scope_posts.clone();
+            posts.enter_body(part.id, builder.font.checkpoint());
+            append_inline_nodes(builder, &part.children, name);
+            if let Some(font) = posts.exit_body(part.id) {
+                builder.font.pop_scope(font);
+            }
+            builder.finish_nested_column_part();
+        }
+    }
+    // Bl BLOCK post calls term_newln() before resetting the default stops.
+    builder.no_fill_source_line();
+    super::display_tabs::exit_post(&mut builder.execution, node);
+    builder.exit_nested_list_scope(saved, !first_item);
+}
+
+fn nested_list_distance(text: &str) -> crate::mandoc::layout::Distance {
+    use crate::mandoc::layout::Distance;
+    // a2width() treats an unscaled token as a printed width sample, not
+    // as an implicit EN distance (mdoc_term.c:566-577). This reads a layout
+    // fact; it never executes these sample escapes in the live formatter.
+    if let Some((number, unit)) = text
+        .trim()
+        .split_at_checked(text.trim().len().saturating_sub(1))
+        && matches!(
+            unit,
+            "n" | "m" | "u" | "c" | "f" | "i" | "M" | "P" | "v" | "p"
+        )
+        && number.parse::<f64>().is_ok()
+    {
+        return Distance::parse(text).unwrap_or_default();
+    }
+    let visible = super::plain_text(&super::parse_roff_text(text));
+    Distance::cells(mant_ir::geometry::coordinate(
+        mant_ir::geometry::text_width(&visible),
+    ))
+}
+
+struct NestedListGeometry {
+    kind: libmandoc_rs::NormalizedListKind,
+    style: Option<libmandoc_rs::DefinitionListStyle>,
+    head_width_units: usize,
+    body_width_units: usize,
+    offset_units: i32,
+    flush_head: bool,
+}
+
+impl NestedListGeometry {
+    fn from_node(node: &Node) -> Self {
+        use crate::mandoc::layout::Distance;
+        use libmandoc_rs::{DefinitionListStyle, NormalizedListKind};
+
+        let kind = node.list_kind.unwrap_or(NormalizedListKind::Definition);
+        let style = node.definition_list_style;
+        let sized = matches!(
+            kind,
+            NormalizedListKind::Bullet | NormalizedListKind::Dash | NormalizedListKind::Ordered
+        ) || matches!(
+            style,
+            Some(DefinitionListStyle::Tag | DefinitionListStyle::Hang)
+        );
+        let default_width = if matches!(
+            style,
+            Some(DefinitionListStyle::Tag | DefinitionListStyle::Hang)
+        ) {
+            8
+        } else if sized {
+            2
+        } else {
+            0
+        };
+        let width = node
+            .width
+            .as_deref()
+            .map_or(Distance::cells(default_width), |width| {
+                nested_list_distance(width).add(Distance::cells(2)).0
+            });
+        let head_width_units = width.nonnegative_basic_units();
+        Self {
+            kind,
+            style,
+            head_width_units,
+            body_width_units: if sized { head_width_units } else { 0 },
+            offset_units: node
+                .offset
+                .as_deref()
+                .map_or(0, |offset| nested_list_distance(offset).basic_units()),
+            flush_head: kind != NormalizedListKind::Plain
+                && !matches!(
+                    style,
+                    Some(DefinitionListStyle::Inset | DefinitionListStyle::Diagnostic)
+                ),
+        }
+    }
+}
+
+fn append_nested_list_head(
+    builder: &mut InlineBuilder,
+    head: &Node,
+    geometry: &NestedListGeometry,
+    ordinal: usize,
+    name: Option<&str>,
+) {
+    use libmandoc_rs::{DefinitionListStyle, NormalizedListKind};
+
+    let font = builder.font.checkpoint();
+    match geometry.kind {
+        NormalizedListKind::Bullet => {
+            // termp_it_pre() feeds decoded \[bu] through term_word;
+            // append_text accepts a decoded generated word.
+            builder.with_font_scope(Font::Strong, |builder| builder.append_text("•"));
+        }
+        NormalizedListKind::Dash => {
+            builder.with_font_scope(Font::Strong, |builder| builder.append_text("-"));
+        }
+        NormalizedListKind::Ordered => builder.append_text(&format!("{ordinal}.")),
+        NormalizedListKind::Plain => {}
+        _ if geometry.style == Some(DefinitionListStyle::Diagnostic) => {
+            builder.with_font_scope(Font::Strong, |builder| {
+                append_inline_nodes(builder, &head.children, name);
+            });
+        }
+        _ => append_inline_nodes(builder, &head.children, name),
+    }
+    builder.font.pop_scope(font);
+}
+
+fn append_nested_list(builder: &mut InlineBuilder, node: &Node, name: Option<&str>) {
+    use libmandoc_rs::DefinitionListStyle;
+
+    // Bl BLOCK pre, It BLOCK pre, each HEAD/BODY post, and Bl BLOCK post
+    // are native execution phases even when their output belongs to an
+    // outer definition term (mdoc_term.c:583-963,1129-1151). Keep the same
+    // builder, field buffer, and source-entry dispatcher for all children.
+    builder.no_fill_source_line();
+    let saved = builder.enter_nested_list_scope(false);
+    let geometry = NestedListGeometry::from_node(node);
+    let Some(body) = node
+        .children
+        .iter()
+        .find(|part| part.kind == NodeKind::Body)
+    else {
+        builder.exit_nested_list_scope(saved, false);
+        return;
+    };
+    builder.begin_executed_node(body);
+    let mut item_count = 0usize;
+    let mut previous_body_empty = false;
+    for item in &body.children {
+        if item.kind != NodeKind::Block || item.macro_name.as_deref() != Some("It") {
+            append_inline_nodes(builder, std::slice::from_ref(item), name);
+            continue;
+        }
+        builder.begin_executed_node(item);
+        builder.no_fill_source_line();
+        // First nested It reaches the enclosing non-item It ancestor. On
+        // later items only bodyless diag suppresses inter-item vspace;
+        // compact and negative .sp debt use the shared vertical executor.
+        if !(node.compact
+            || item_count > 0
+                && geometry.style == Some(DefinitionListStyle::Diagnostic)
+                && previous_body_empty)
+        {
+            builder.native_vertical_space(1);
+        }
+        item_count = item_count.saturating_add(1);
+        let head = item
+            .children
+            .iter()
+            .find(|part| part.kind == NodeKind::Head);
+        let parts: Vec<_> = item
+            .children
+            .iter()
+            .filter(|part| part.kind == NodeKind::Body)
+            .collect();
+        let body_empty = parts.iter().all(|part| part.children.is_empty());
+        if let Some(head) = head {
+            builder.begin_executed_node(head);
+            builder.enter_nested_list_head(
+                geometry.kind,
+                geometry.style,
+                geometry.head_width_units,
+                geometry.offset_units,
+                body_empty,
+            );
+            append_nested_list_head(builder, head, &geometry, item_count, name);
+            builder.finish_nested_list_head(geometry.flush_head);
+            builder.restore_nested_list_geometry(saved);
+        }
+        for part in parts {
+            builder.begin_executed_node(part);
+            let fixed_cells = match geometry.style {
+                Some(DefinitionListStyle::Inset)
+                    if head.is_some_and(|head| !head.children.is_empty()) =>
+                {
+                    1
+                }
+                Some(DefinitionListStyle::Diagnostic) => 2,
+                _ => 0,
+            };
+            builder.enter_nested_list_body(
+                saved,
+                geometry.body_width_units,
+                geometry.offset_units,
+                fixed_cells,
+            );
+            let posts = builder.scope_posts.clone();
+            posts.enter_body(part.id, builder.font.checkpoint());
+            append_inline_nodes(builder, &part.children, name);
+            if let Some(font) = posts.exit_body(part.id) {
+                builder.font.pop_scope(font);
+            }
+            builder.no_fill_source_line();
+            builder.restore_nested_list_geometry(saved);
+        }
+        previous_body_empty = body_empty;
+    }
+    builder.no_fill_source_line();
+    super::display_tabs::exit_post(&mut builder.execution, node);
+    builder.exit_nested_list_scope(saved, item_count > 0);
+}
+
+fn append_display(builder: &mut InlineBuilder, node: &Node, name: Option<&str>) {
+    // D1/Dl pre and Bd's print_bvspace() both execute term_newln() before
+    // changing tab configuration (mdoc_term.c:589,1328,1436). This is the
+    // ordinary newline, not roff_pre_br(): temporary BRIND flags survive.
+    builder.no_fill_source_line();
+    if node.macro_name.as_deref() == Some("Bd") && !node.compact && builder.has_definition_head() {
+        // print_bvspace() reaches the enclosing non-item It even when Bd
+        // is its first HEAD child (mdoc_term.c:600-618). Its term_vspace()
+        // is independent of roff .sp: keep BRIND/NOBREAK and consume any
+        // negative vertical-space debt before asserting an output row.
+        builder.native_vertical_space(1);
+    }
+    super::display_tabs::enter_pre(&mut builder.execution, node);
+    let Some(body) = node
+        .children
+        .iter()
+        .find(|child| child.kind == NodeKind::Body && child.scope_end.is_none())
+    else {
+        return;
+    };
+    let posts = builder.scope_posts.clone();
+    posts.enter_body(body.id, builder.font.checkpoint());
+    if node.macro_name.as_deref() == Some("Bd") {
+        posts.enter_display_fill(body.id, node.flags.no_fill);
+    }
+    builder.begin_executed_node(body);
+    super::display_tabs::enter_pre(&mut builder.execution, body);
+    append_inline_nodes(builder, &body.children, name);
+    if let Some(saved) = posts.exit_body(body.id) {
+        builder.font.pop_scope(saved);
+    }
+    if !posts.ended(body.id) {
+        // Bd BODY post and D1/Dl BLOCK post call term_newln(), exactly
+        // once for the original scope (mdoc_term.c:1131,1482).
+        builder.no_fill_source_line();
+        posts.finish(body.id);
+    }
+    if node.macro_name.as_deref() == Some("Bd") {
+        posts.exit_display_fill(body.id);
+    }
+}
+
 struct InlineContainerSink<'a> {
     builder: &'a mut InlineBuilder,
     name: Option<&'a str>,
@@ -109,12 +452,20 @@ impl<'node> crate::mandoc::containers::ContainerSink<'node> for InlineContainerS
         &mut self.builder.font
     }
 
-    fn geometry_checkpoint(&self, node: &Node) -> Option<u16> {
+    fn geometry_checkpoint(&self, node: &Node) -> Option<super::DefinitionGeometryCheckpoint> {
         self.builder.definition_geometry_checkpoint(node)
     }
 
-    fn restore_geometry(&mut self, checkpoint: Option<u16>) {
+    fn restore_geometry(&mut self, checkpoint: Option<super::DefinitionGeometryCheckpoint>) {
         self.builder.restore_definition_geometry(checkpoint);
+    }
+
+    fn restore_fill(&mut self, _fill: bool) {
+        // An explicit .Ed restores the original display at its source
+        // marker, before subsequent children execute. Inline execution
+        // derives their fill flags from AST nodes; its post still owes the
+        // same term_newln() as a normal return (mdoc_term.c:1474-1486).
+        self.builder.no_fill_source_line();
     }
 
     fn source_node(&mut self, node: &'node Node, starts_line: bool) {

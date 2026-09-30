@@ -1,4 +1,5 @@
 use super::super::Inline;
+
 /// Split a formatter word at the row boundaries its field passes decided
 /// (term.c:220 with 205-207): each boundary is a cell offset inside the
 /// word's content; the breakable blanks immediately before it were
@@ -92,7 +93,7 @@ fn split_nodes_at_boundaries_owned(
     output
 }
 
-fn split_text_at_boundaries(
+pub(super) fn split_text_at_boundaries(
     value: &str,
     node: &Inline,
     cell: &mut usize,
@@ -202,7 +203,7 @@ fn split_text_with_blank_run(
     push_split_text(&mut run, node, output);
 }
 
-fn advance_boundary(cell: &mut usize, next_boundary: &mut usize, boundaries: &[usize]) {
+pub(super) fn advance_boundary(cell: &mut usize, next_boundary: &mut usize, boundaries: &[usize]) {
     if boundaries.get(*next_boundary) == Some(cell) {
         *next_boundary += 1;
     }

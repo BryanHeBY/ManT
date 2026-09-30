@@ -45,6 +45,14 @@ impl Distance {
         Self(value.saturating_mul(UNITS_PER_CELL).clamp(-LIMIT, LIMIT))
     }
 
+    pub(in crate::mandoc) const fn basic_units(self) -> i32 {
+        self.0
+    }
+
+    pub(in crate::mandoc) fn nonnegative_basic_units(self) -> usize {
+        usize::try_from(self.0.max(0)).unwrap_or_default()
+    }
+
     /// Compose source positions without premature cell rounding. The bool
     /// reports bounding so the producer can issue its source diagnostic.
     pub(in crate::mandoc) fn add(self, other: Self) -> (Self, bool) {

@@ -146,11 +146,10 @@ fn empty_head_sp_keeps_its_blank_rows() {
     let item = review_definition_item(
         ".Bl -tag -width 4n\n.It Xo\n.sp\n.No after space\n.Xc\n.No tail text\n.El\n",
     );
-    let term = inline_text(&item.terms[0]);
-    assert!(
-        term.starts_with("\n\n") && term.contains("after\nspace"),
-        "the requested blank row must precede the wrapped head words: {item:#?}"
-    );
+    // A repeated exact reference run also verifies the count: an empty
+    // buffer makes term_newln() a no-op (term.c:475-480), so there is one
+    // initial vertical row, not a second conditional close to project.
+    assert_eq!(inline_text(&item.terms[0]), "\nafter\nspace", "{item:#?}");
 }
 
 #[test]
@@ -165,7 +164,7 @@ fn cleared_no_break_field_wraps_hang_head_words_at_the_field_width() {
     let item = review_definition_item(
         ".Bl -hang -width 4n\n.It Xo\n.sp\n.No after space\n.Xc\n.No tail text\n.El\n",
     );
-    assert_eq!(inline_text(&item.terms[0]), "\n\nafter\nspace", "{item:#?}");
+    assert_eq!(inline_text(&item.terms[0]), "\nafter\nspace", "{item:#?}");
     assert!(
         item.layout.inline_term(),
         "hang body stays on the last wrapped head row: {item:#?}"

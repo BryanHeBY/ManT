@@ -21,6 +21,12 @@ pub(in crate::mandoc) struct DefinitionGeometry {
     /// `rmargin = offset + width`). Zero means the style sets no field
     /// width (inset/diagnostic/overhang keep the page right margin).
     pub(in crate::mandoc) head_field_columns: u16,
+    /// Exact native HEAD capacity before character-column rounding. The
+    /// character device keeps `a2width() + term_len(p, 2)` in basic units
+    /// (mdoc_term.c:735-747,846-856); `term_flushln()`'s half-EN tolerance
+    /// must compare against that distance (term.c:250-253). `None` keeps
+    /// the existing device margin for styles without a measured HEAD.
+    pub(in crate::mandoc) native_head_field_units: Option<usize>,
     /// Execution-proven head/body row relation overriding the static
     /// placement decision (`.nf`/`.fi` NOSPACE joins and filled cleared
     /// fields). `None` keeps the placement-derived relation.

@@ -1,3 +1,13 @@
+/// Saved geometry at a native document-node entry. Row ownership and
+/// device position survive output drains; only a source scope restores them.
+#[derive(Clone, Copy)]
+pub(in crate::mandoc) struct DefinitionGeometryCheckpoint {
+    pub(in crate::mandoc::inline::flow) indent_columns: u16,
+    pub(in crate::mandoc::inline::flow) field_offset: usize,
+    pub(in crate::mandoc::inline::flow) field_offset_units: usize,
+    pub(in crate::mandoc::inline::flow) margin_override: Option<usize>,
+}
+
 /// Row geometry a control request left behind in a definition head.
 ///
 /// Upstream, the request's `roff_term_pre_br()` moves the device row

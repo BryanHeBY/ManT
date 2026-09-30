@@ -5,6 +5,7 @@ use mant_ir::Inline;
 
 pub(crate) use mant_ir::{inline_plain_text as plain_text, terms_fit_inline};
 
+pub(in crate::mandoc) mod display_tabs;
 mod flow;
 mod font;
 mod generated;
@@ -14,8 +15,8 @@ pub(super) use links::append_man_link;
 mod scopes;
 mod source_fragment;
 pub(in crate::mandoc) use flow::{
-    AuthorBreakEffect, FieldFlag, FieldFlags, InlineExecutionState, NoFillInlineState,
-    PreservedInlineState, lower_no_fill_fragment_with_formatter,
+    AuthorBreakEffect, DefinitionGeometryCheckpoint, FieldFlag, FieldFlags, InlineExecutionState,
+    NoFillInlineState, PreservedInlineState, lower_no_fill_fragment_with_formatter,
 };
 pub(super) use flow::{FilledBoundary, FontScope, FontState, InlineBuilder};
 mod source;
@@ -166,10 +167,6 @@ pub(super) fn append_inline_node_with_next(
         append_text_node(builder, node);
         return;
     }
-    // A macro node can start the next formatter word just as a text node can.
-    // Resolve a preceding `\\z` glyph before entering a styled or atomic
-    // scope, otherwise the scope's private builder has no knowledge of the
-    // surrounding word boundary and may overprint/drop the glyph.
     let final_word_join_before = builder.final_word_join_state();
     if node.scope_end.is_some()
         && node.macro_name.as_deref() == Some("Eo")
@@ -186,22 +183,24 @@ pub(super) fn append_inline_node_with_next(
         builder.restore_definition_geometry(geometry);
         return;
     }
-    let begins_visible_word = node_emits_visible_output(node, default_name);
-    // A container may have visible descendants without emitting a glyph at
-    // its own pre phase. Let the actual child word decide whether a pending
-    // \p can break the line; otherwise a whitespace-only child is mistaken
-    // for printed content before term_fill() sees the field.
-    let generates_break_glyph = is_enclosure_macro(node.macro_name.as_deref())
-        || matches!(node.macro_name.as_deref(), Some("Fl" | "Nd" | "OP"))
-        || (node.macro_name.as_deref() == Some("Nm")
-            && node.kind == NodeKind::Block
-            && node.children.is_empty()
-            && default_name.is_some());
-    builder.begin_word_projection_with_break(
-        begins_visible_word,
-        !builder.in_definition_field() || generates_break_glyph,
-        node_starts_with_break_marker_blank(node),
-    );
+    // Native node entry and macro pre are not term_word(): print_mdoc_node()
+    // runs pre before its children (mdoc_term.c:398-407), and only an actual
+    // word clears skipvsp (term.c:573-589). In particular Bd's print_bvspace,
+    // D1/Dl's newline, font scopes, and transparent Xo wrappers must execute
+    // before any later operand changes word registers. TEXT and generated
+    // words already enter through their own formatter-word methods below.
+    if prepares_semantic_output_owner(node) {
+        // Retain the existing ownership preparation for compact semantic
+        // wrappers: a pending preceding glyph must remain outside the new
+        // Link/Code/replacement owner. This preparation is not evidence that
+        // native macro pre executed a word. Separating that owner checkpoint
+        // from the actual first operand is a distinct wrapper change.
+        builder.begin_word_projection_with_break(
+            node_emits_visible_output(node, default_name),
+            !builder.in_definition_field(),
+            node_starts_with_break_marker_blank(node),
+        );
+    }
     if node.flags.delimiter_close {
         builder.tighten_next_boundary();
     }
@@ -341,13 +340,12 @@ fn finish_inline_node_execution(
     }
 }
 
-/// Whether an executable inline node introduces a formatter glyph.
+/// Whether an executable inline node contains formatter glyph payload.
 ///
-/// This is deliberately a small semantic preflight, not a second renderer:
-/// it tells the shared output stream whether the node may consume a pending
-/// word boundary before a nested scope lowers it.  Control-only requests and
-/// targets must remain transparent; generated prefixes such as `.Fl` and
-/// `.Nd` are visible even with no text child.
+/// This preflight classifies payload; it does not prove that native macro
+/// pre calls `term_word()`. Control-only requests and targets remain
+/// transparent; generated prefixes such as `.Fl` and `.Nd` are visible even
+/// with no text child.
 pub(super) fn node_emits_visible_output(node: &Node, default_name: Option<&str>) -> bool {
     if node.flags.no_print || node.kind == NodeKind::Comment {
         return false;
@@ -379,6 +377,16 @@ pub(super) fn node_emits_visible_output(node: &Node, default_name: Option<&str>)
             .iter()
             .any(|child| node_emits_visible_output(child, default_name)),
     }
+}
+
+/// Semantic transforms capture an output suffix before their first operand.
+/// Plain font scopes and containers merely execute their child stream and
+/// have no such replacement owner to prepare at macro entry.
+fn prepares_semantic_output_owner(node: &Node) -> bool {
+    matches!(
+        node.macro_name.as_deref(),
+        Some("Lk" | "Mt" | "Sx" | "In" | "Bx" | "Xr" | "MR")
+    )
 }
 
 fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
@@ -534,11 +542,6 @@ pub(super) fn append_inline_nodes(
     default_name: Option<&str>,
 ) {
     for (index, node) in nodes.iter().enumerate() {
-        if node.macro_name.as_deref() == Some("Sm") {
-            let setting = plain_text(&lower_inline_nodes(&node.children, default_name));
-            builder.set_spacing(setting.trim());
-            continue;
-        }
         // mandoc joins the final pair in a contiguous mdoc bibliography
         // author run with "and". The conjunction is formatter-generated, so
         // it is not a child of either `%A` node and must be restored while the

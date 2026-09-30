@@ -28,6 +28,11 @@ semantic lowering belongs to `mant-codec`. Both are ManT Apache-2.0 crates,
 not copies of the upstream parser. Their opt-in `roff` features select the
 separately attributed `libmandoc-rs` dependency; the product engine enables that
 support by default. Neither package redistributes a second vendored tree.
+The codec's private field-buffer/device and tab-stop helpers adapt the
+pinned mandoc `term.c` and `term_tab.c` execution rules; its shared display
+and list phases also adapt `mdoc_term.c`/`man_term.c`. Their source headers
+retain the applicable ISC copyright and permission notices; the package's
+README identifies these modules separately from its Apache-2.0 code.
 `mant-query` is also ManT Apache-2.0 code: it queries existing IR and uses the
 codec's canonical Markdown artifacts with native features disabled. It does
 not contain or enable another native parser copy.

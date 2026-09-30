@@ -8,6 +8,12 @@ pub(in crate::mandoc::inline::flow) struct DefinitionOutcome(u8);
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Clone, Default)]
 pub(in crate::mandoc::inline::flow) struct DefinitionFieldState {
+    /// A roff break moves rmargin to the responsive page margin until a
+    /// document node restores its saved geometry (mdoc_term.c:329,437-439).
+    pub(in crate::mandoc::inline::flow) margin_override: Option<usize>,
+    pub(in crate::mandoc::inline::flow) native_margin_units: Option<usize>,
+    pub(in crate::mandoc::inline::flow) field_offset_units: usize,
+    pub(in crate::mandoc::inline::flow) projected_passes: usize,
     pub(in crate::mandoc::inline::flow) pending_indent: Option<usize>,
     /// True only for a NOBREAK field carried across the HEAD/BODY ownership
     /// split (`PreservedDefinitionField`): its rejection is decided by the
@@ -214,8 +220,15 @@ impl InlineBuilder {
     pub(in crate::mandoc::inline::flow) fn definition_state_mut(
         &mut self,
     ) -> &mut DefinitionFieldState {
-        self.definition
-            .get_or_insert_with(DefinitionFieldState::default)
+        let tabs = self.execution.tab_stops.clone();
+        let state = self
+            .execution
+            .definition
+            .get_or_insert_with(DefinitionFieldState::default);
+        if state.field_buffer.configure_tabs(&tabs) {
+            state.projected_passes = 0;
+        }
+        state
     }
 
     pub(in crate::mandoc::inline::flow) fn pending_definition_indent(&self) -> Option<usize> {

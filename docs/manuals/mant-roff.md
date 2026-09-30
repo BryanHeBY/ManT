@@ -151,6 +151,10 @@ cell is not projected again by the paragraph's empty-word fallback.
 Native `term_newln()` and `term_flushln()` can close a physical row without
 consuming `TERMP_NONEWLINE`. Accordingly, `\c` survives source empty TEXT,
 line requests, and IR paragraph/literal drains until a formatter word executes.
+An explicit `.sp` first closes an occupied native row and then asserts its
+requested vertical rows. With an empty field, the conditional close emits
+nothing: it does not add another blank row. A bare `\z` remains armed there;
+a buffered `\zX` is occupied content and is settled by the close.
 In mdoc definition items, generated `-diag` and `-inset` padding is a formatter
 word but does not count as visible BODY content. The pending HEAD row settles
 when the current BODY node executes an actual glyph; zero-width cells, empty
@@ -195,8 +199,13 @@ glyph appears; a bare `\z` supplies no graph. Each `term_flushln()` commits
 only its accepted prefix, so a later field discarded by `term_fill()` cannot
 remove already printed text, including styled text or a link label. A semantic
 wrapper may span that boundary: its accepted and pending slices stay separate
-during field execution, then return as one semantic link in the IR. HANG
-source-line flushes retain `trailspace` until the
+during field execution, then return as one semantic link in the IR.
+HANG retains source words after an overrun margin flush when only device
+width would reject them; this is the frozen content-preserving difference
+from CVS terminal output. An explicit `\p` in the current field still uses the
+ordered CVS acceptance rule. Actual field targets continue to control Tab
+origin and row geometry when the responsive reading scan preserves words.
+HANG source-line flushes retain `trailspace` until the
 next formatter word; an intervening `br` clears it with BRIND instead of
 printing an extra separator. Definition HEAD ownership follows actual
 physical-line execution: closing a formatting scope alone does not prove
@@ -259,6 +268,44 @@ Unicode zero-width characters pass through `encode1()`, while a KEEP word
 separator and `\&` use internal buffered cells. The ASCII profile can differ
 when `\z` interacts with such characters. Pending fields are scanned
 incrementally rather than replaying their complete history at each word.
+Every accepted or rejected real flush retires its native cells and output
+owners together. Its captured device result is handed forward once; it is
+not recomputed using the position that the same flush just advanced.
+An IR drain alone neither retires that buffer nor clears its row registers.
+
+Literal Tab cells use the current `.ta` stops, including relative stops and
+periodic `T` definitions. Configuration survives output-owner changes.
+A filled `.ta` changes stops without flushing its existing buffer: pending
+scan widths are invalidated, while fields already retired stay committed.
+Automatic width-pass boundaries are projected at the real flush, using its
+current configuration. Authored hard breaks keep their word ownership;
+they cannot be reinterpreted as a split at a later scalar. HEAD/BODY joins
+use the final physical column from that same device receipt, not a second
+scan against an earlier width or the historical sum of projected text.
+Filled source-line entries insert the native Tab reference once per executed
+node; source coordinates identify provenance rather than event identity.
+Field bounds, Tab origin, and the half-EN overrun tolerance remain in basic
+units until the device decision. Deferred blank segments round individually
+when a glyph prints, following the character device's advance rule.
+mdoc section BODY entries, `D1`/`Dl` BLOCK entries and column-list completion
+install the default five-column stops; man `DT` performs its own reset.
+A literal `Bd` BODY installs eight-column stops, while an unfilled `Bd`
+preserves the current configuration. Display completion does not restore a
+previous stop set. Pending input is flushed before such a reset.
+Display and transparent-container entry do not execute a future child's
+formatter word: negative vertical-space debt survives until the actual word
+or vertical-space request consumes it.
+Fill-mode requests consume accepted or rejected pending content before
+changing field flags, so a cached zero-advance glyph cannot reappear after
+the rejected field ends.
+A no-fill BODY source-line close also supersedes any earlier HEAD-column
+or next-word spacing decision. Only an executed source continuation can
+keep its first literal row beside the HEAD.
+Lists nested in a definition HEAD execute the same `Bl`/`It` phases for
+column, run-in, measured-label and generated-marker styles. Their HEAD/BODY
+words share the active field and font state. Native item post clears its
+flags before the next item; returning to the outer HEAD restores local
+geometry, without restoring flags that the item already cleared.
 
 An empty mdoc operand such as `.No ""` has no `NODE_LINE` and still executes
 an ordinary formatter word; its presence in HEAD does not by itself close
@@ -568,7 +615,7 @@ Requests with direct lowering behavior are:
 | `hy`, `nh` | Hyphenation state omitted |
 | `ne` | Page-layout reservation omitted |
 | `nr` | Register request omitted after upstream evaluation |
-| `ta` | Tab-stop state omitted |
+| `ta` | Updates shared tab stops used by native field acceptance and line joins; exact device columns remain a view concern |
 | `ll`, `po` | Device line length and page origin omitted; reader width/origin policy remains in charge |
 | `mc` | Margin-character decoration omitted; its no-break formatter flush is retained |
 | `ti` | Device temporary indentation omitted; its preceding line boundary is retained |
@@ -624,7 +671,7 @@ Font names map as follows:
 
 Continuous man text retains font state across source line breaks. A font macro establishes its initial font without overriding later escapes inside its operands; ordinary man paragraph/font scopes reset to regular, while `SM` retains the current font. These rules also apply to inline-only table recovery.
 
-For man request ordering, the reading IR follows the pinned terminal formatter: `.br` and device-only requests such as `.ta` execute without resetting the current `.ft` font, and a later `\fP` restores the previous selection. The pinned HTML formatter resets Roman before request dispatch, so it can show different style runs for this sequence. The request operands remain hidden in both projections.
+For man request ordering, the reading IR follows the pinned terminal formatter: requests such as `.br` and `.ta` execute without resetting the current `.ft` font, and a later `\fP` restores the previous selection. The pinned HTML formatter resets Roman before request dispatch, so it can show different style runs for this sequence. The request operands remain hidden in both projections.
 
 Adjacent runs with the same effective style are one semantic span in Markdown
 output. For example, `\fB\-\fP\fB\-emulate\fP` becomes

@@ -229,6 +229,7 @@ impl InlineBuilder {
     }
 
     pub(in crate::mandoc) fn begin_executed_node(&mut self, node: &libmandoc_rs::Node) {
+        self.execution.enter_tab_source_node(node);
         // mdoc_term.c:314-318: a NODE_NOFILL node prints its whole subtree
         // under TERMP_BRNEVER, whose term_fill() target is infinite
         // (term.c:143-144) — no pass can end a device row. roff.c:957-958
@@ -245,6 +246,9 @@ impl InlineBuilder {
             // A repeated event on an empty formatter cell is a no-op.
             self.no_fill_source_line();
         }
+        // NODE_LINE settles the previous field under its old settings;
+        // roff_term_pre_ta() then changes stops for the subsequent field.
+        self.execution.execute_tab_configuration(node);
         if node.line != 0 {
             self.execution.last_executed_source_line = Some(node.line);
         }
@@ -500,6 +504,58 @@ impl InlineBuilder {
             _ => PendingBoundary::Ordinary,
         };
         self.execution.spacing = SpacingMode::from(updated);
+    }
+}
+
+impl super::InlineExecutionState {
+    pub(in crate::mandoc) fn enter_tab_source_node(&mut self, node: &libmandoc_rs::Node) {
+        // A source node routed from block to inline execution is still one
+        // entry event. Use stable AST identity, never a source coordinate.
+        if node.id != 0 && self.last_tab_source_node == Some(node.id) {
+            return;
+        }
+        self.last_tab_source_node = (node.id != 0).then_some(node.id);
+        if !node.flags.no_fill
+            && node.flags.line_start
+            && let Some(definition) = &mut self.definition
+        {
+            // Both normal node drivers insert ASCII_TABREF on filled
+            // NODE_LINE, before any handler including state-only requests
+            // (mdoc_term.c:321; man_term.c:929; term.c:873-878).
+            definition.field_buffer.note_tab_reference();
+        }
+    }
+
+    pub(in crate::mandoc) fn execute_tab_configuration(&mut self, node: &libmandoc_rs::Node) {
+        if node.macro_name.as_deref() == Some("DT") && !node.flags.no_print {
+            self.reset_default_tabs();
+        } else if node.macro_name.as_deref() == Some("ta") && !node.flags.no_print {
+            self.tab_stops = super::Arc::new(super::TabStops::from_arguments(
+                node.children
+                    .iter()
+                    .filter_map(libmandoc_rs::Node::decoder_text),
+            ));
+            if let Some(definition) = &mut self.definition {
+                definition.field_buffer.configure_tabs(&self.tab_stops);
+                definition.projected_passes = 0;
+            }
+        }
+    }
+
+    pub(in crate::mandoc) fn reset_default_tabs(&mut self) {
+        self.tab_stops = super::Arc::new(super::TabStops::default());
+        if let Some(definition) = &mut self.definition {
+            definition.field_buffer.configure_tabs(&self.tab_stops);
+            definition.projected_passes = 0;
+        }
+    }
+
+    pub(in crate::mandoc) fn set_literal_tabs(&mut self) {
+        self.tab_stops = super::Arc::new(super::TabStops::literal());
+        if let Some(definition) = &mut self.definition {
+            definition.field_buffer.configure_tabs(&self.tab_stops);
+            definition.projected_passes = 0;
+        }
     }
 }
 

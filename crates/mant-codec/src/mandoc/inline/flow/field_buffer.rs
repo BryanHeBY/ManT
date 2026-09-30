@@ -31,6 +31,12 @@
 /// overflow early return 350-351, tail acceptance 362-366); `term_field()`
 /// 374-444; `encode1()` BACKBEFORE retreat 901-908 (blank: `col--`,
 /// otherwise buffer `'\b'`); `term_word()` separator blanks 573-576.
+use std::sync::Arc;
+
+use super::tab_stops::TabStops;
+
+const EN: usize = 24;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(in crate::mandoc) enum FieldCell {
     /// One printable graph with its terminal width.
@@ -45,13 +51,16 @@ pub(in crate::mandoc) enum FieldCell {
     /// arms its LOCAL `breakline` from it (304-306); `term_field` skips it.
     BreakMarker,
     /// A literal tab in the word (`bufferc('\t')` through `encode()`,
-    /// term.c:946-958). `term_fill` advances to the next periodic tab stop
+    /// term.c:946-958). `term_fill` advances to the next configured tab stop
     /// and counts it as a graph (term.c:337); the `term_flushln()` tail
     /// scan skips it while `TERMP_BRTRSP` moves `vbr` to the next stop
     /// (term.c:179-182). The periodic stops come from
     /// `term_tab_set(p, "T"); term_tab_set(p, ".5i")` (mdoc_term.c:257-259,
     /// man_term.c:160-162): 120 basic units, 24 per character cell.
     Tab,
+    /// Source-row reference inserted by `term_tab_ref()` (term.c:873-878).
+    /// It changes the local tab origin, not text or graph occupancy.
+    TabReference,
     /// `ASCII_NBRZW`: a native buffer cell and graph with zero width.
     ZeroWidthGraph,
     /// A zero-width breakpoint `\:` on the ascii device (`ASCII_BREAK`,
@@ -135,9 +144,44 @@ pub(super) struct WordWriteReceipt {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) struct FillPass {
     /// term.c `nbr`: buffer index ENDING the accepted slice (exclusive).
-    pub(super) accepted_end: usize,
-    /// term.c `vbr`: visual width of the accepted slice.
-    pub(super) accepted_width: usize,
+    pub(super) end: usize,
+    /// term.c `vbr`, rounded to character columns for IR layout.
+    pub(super) width: usize,
+    /// Preserve the device's basic units until field-fit decisions finish.
+    pub(super) units: usize,
+}
+
+impl FillPass {
+    fn new(accepted_end: usize, accepted_units: usize) -> Self {
+        Self {
+            end: accepted_end,
+            width: columns(accepted_units),
+            units: accepted_units,
+        }
+    }
+}
+
+/// Actual first and continuation field bounds in basic units at one flush checkpoint.
+/// BRNEVER widens only the scanner bound, not the tab-reference advance.
+#[derive(Clone, Copy)]
+pub(super) struct FillTargets {
+    pub(super) first: usize,
+    pub(super) rest: usize,
+    pub(super) unbounded: bool,
+}
+
+impl FillTargets {
+    pub(super) fn actual(self, first: bool) -> usize {
+        if first { self.first } else { self.rest }
+    }
+
+    pub(super) fn scan(self, first: bool) -> usize {
+        if self.unbounded {
+            usize::MAX / 2
+        } else {
+            self.actual(first)
+        }
+    }
 }
 
 /// The complete pass-loop decision. Rejection of the first pass is
@@ -154,11 +198,24 @@ pub(super) enum FlushReceipt {
     },
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+enum WordScanPolicy {
+    #[default]
+    Incremental,
+    AwaitFlush,
+}
+
 /// The unflushed input field of `term.c::term_flushln()`, kept across the
 /// words of one native field.
 #[derive(Clone, Debug, Default)]
 pub(super) struct FieldBuffer {
     cells: Vec<FieldCell>,
+    tabs: Arc<TabStops>,
+    /// Persistent tcol->taboff; each pass starts with this reference.
+    tab_offset: i64,
+    /// Offset after the established scan prefix's passes; the initial offset
+    /// above remains available for the complete device receipt.
+    pass_tab_offset: i64,
     generation: u64,
     /// Scalar ownership attached to each native write. Replaced zero-advance
     /// graphs remain native graph cells but contribute no projected glyph.
@@ -172,6 +229,10 @@ pub(super) struct FieldBuffer {
     backbefore_armed: bool,
     backafter_armed: bool,
     committed_passes: Vec<FillPass>,
+    /// A configuration change invalidated pending width scans. Subsequent
+    /// words only append cells until the real flush runs one fresh scan.
+    /// Repeated .ta/word pairs must not replay their growing field history.
+    word_scan: WordScanPolicy,
     last_break_marker: Option<usize>,
     word_space_ready: bool,
     significant_positions: Vec<usize>,
@@ -194,6 +255,7 @@ struct FillRegisters {
     vis: usize,
     breakline: bool,
     graph: bool,
+    tab_offset: i64,
 }
 
 #[derive(Clone, Debug)]
@@ -232,6 +294,7 @@ impl FieldBuffer {
             FieldCell::BreakableBlank => self.blank_positions.push(self.cells.len()),
             FieldCell::BreakMarker
             | FieldCell::Tab
+            | FieldCell::TabReference
             | FieldCell::ZeroWidthGraph
             | FieldCell::Breakpoint => {}
             _ => self.significant_positions.push(self.cells.len()),
@@ -293,6 +356,13 @@ impl FieldBuffer {
             .is_some_and(|marker| marker >= self.resume)
     }
 
+    /// A committed scan prefix is still part of this field until a real
+    /// flush retires its cells. An explicit marker's field policy therefore
+    /// survives scanning past it, but never survives field retirement.
+    pub(super) fn has_break_markers(&self) -> bool {
+        self.last_break_marker.is_some()
+    }
+
     /// The live pass scanner, rather than projected glyph booleans, proves
     /// whether a pending break's current native interval supplied graph.
     pub(super) fn pending_pass_is_graphless(&self) -> bool {
@@ -307,6 +377,48 @@ impl FieldBuffer {
         self.cells.is_empty()
     }
 
+    pub(super) fn configure_tabs(&mut self, tabs: &Arc<TabStops>) -> bool {
+        if !Arc::ptr_eq(&self.tabs, tabs) {
+            self.tabs = tabs.clone();
+            // roff_term_pre_ta() changes stops without printing the buffer.
+            // Word-time scan prefixes are provisional until term_flushln():
+            // their widths must be reconsidered under the new stops. Truly
+            // printed fields have already been retired and have no cells.
+            self.scan = None;
+            self.resume = 0;
+            self.committed_passes.clear();
+            self.pass_tab_offset = self.tab_offset;
+            if !self.cells.is_empty() {
+                self.word_scan = WordScanPolicy::AwaitFlush;
+            }
+            return true;
+        }
+        false
+    }
+
+    pub(super) const fn word_scan_deferred(&self) -> bool {
+        matches!(self.word_scan, WordScanPolicy::AwaitFlush)
+    }
+
+    pub(super) fn note_tab_reference(&mut self) {
+        // A source row only inserts TABREF after native buffer writes.
+        if !self.cells.is_empty() {
+            self.push_cell(FieldCell::TabReference);
+        }
+    }
+
+    pub(super) const fn tab_offset(&self) -> i64 {
+        self.tab_offset
+    }
+
+    pub(super) fn set_tab_offset(&mut self, offset: i64) {
+        if self.tab_offset != offset || self.pass_tab_offset != offset {
+            self.tab_offset = offset;
+            self.pass_tab_offset = offset;
+            self.scan = None;
+        }
+    }
+
     /// term.c:233-237: the row ends and the buffer restarts empty (used
     /// both by the accepted-exit and by the nbr==0 wipe).
     pub(super) fn clear(&mut self) {
@@ -318,12 +430,14 @@ impl FieldBuffer {
         self.backbefore_armed = false;
         self.backafter_armed = false;
         self.committed_passes.clear();
+        self.word_scan = WordScanPolicy::Incremental;
         self.last_break_marker = None;
         self.word_space_ready = false;
         self.word_first_content = None;
         self.significant_positions.clear();
         self.blank_positions.clear();
         self.scan = None;
+        self.pass_tab_offset = self.tab_offset;
     }
 
     /// `term_flushln()`235-237 consumes the input field without resetting
@@ -469,18 +583,25 @@ impl FieldBuffer {
     ///
     /// Returns `None` for the nbr=0 rejection (143-146): nothing in this
     /// slice may print and the caller wipes the remainder. Otherwise the
-    /// accepted slice is `cells[..accepted_end]`; the breaking blank (if
+    /// accepted slice is `cells[..end]`; the breaking blank (if
     /// any) sits at `accepted_end` and is consumed separately by
     /// [`Self::consume_break_blanks`] (term.c:205-207).
     /// Continue a pass from its last inspected cell. Appending a word does
     /// not restart `term_fill()` over the cumulative field. The last word is
     /// provisional; only a real stop commits nbr. BACKBEFORE can rewrite the
     /// final blank, so keep the checkpoint immediately before that cell.
-    #[allow(clippy::too_many_lines)]
+    #[cfg(test)]
     pub(super) fn fill_pass(&mut self, vtarget: usize) -> Option<FillPass> {
+        self.fill_pass_units(vtarget.saturating_mul(EN))
+    }
+
+    pub(super) fn fill_pass_units(&mut self, vtarget: usize) -> Option<FillPass> {
+        // term_fill() compares basic units with half an EN of tolerance.
+        let vtarget = vtarget.saturating_add(EN / 2);
         if self.scan.as_ref().is_none_or(|scan| scan.target != vtarget) {
             let registers = FillRegisters {
                 index: self.resume,
+                tab_offset: self.pass_tab_offset,
                 ..FillRegisters::default()
             };
             self.scan = Some(FillScanner {
@@ -507,15 +628,15 @@ impl FieldBuffer {
                     let width =
                         ic.checked_sub(1)
                             .map_or(0, |previous| match self.cells[previous] {
-                                FieldCell::Graph { width, .. } => width,
-                                FieldCell::NonBreakingBlank | FieldCell::BreakableBlank => 1,
+                                FieldCell::Graph { width, .. } => width.saturating_mul(EN),
+                                FieldCell::NonBreakingBlank | FieldCell::BreakableBlank => EN,
                                 _ => 0,
                             });
                     registers.vis = registers.vis.saturating_sub(width);
                 }
                 FieldCell::BreakableBlank | FieldCell::Breakpoint => {
                     let vn = registers.vis
-                        + usize::from(matches!(self.cells[ic], FieldCell::BreakableBlank));
+                        + EN * usize::from(matches!(self.cells[ic], FieldCell::BreakableBlank));
                     if registers.breakline || vn > vtarget {
                         let result = finish_pass(*registers, vtarget);
                         scan.stopped = Some(PassStop::from(result));
@@ -535,32 +656,27 @@ impl FieldBuffer {
                         FieldCell::Graph { width, .. } => width,
                         _ => 1,
                     };
-                    registers.vis += width;
+                    registers.vis += width.saturating_mul(EN);
                     registers.graph = true;
                     if registers.vis > vtarget && registers.nbr > 0 {
-                        let result = Some(FillPass {
-                            accepted_end: registers.nbr,
-                            accepted_width: registers.vbr,
-                        });
+                        let result = Some(FillPass::new(registers.nbr, registers.vbr));
                         scan.stopped = Some(PassStop::from(result));
                         return result;
                     }
                 }
                 FieldCell::Tab => {
-                    // term.c:332-338: a literal tab advances to the next
-                    // periodic stop (taboff is zero outside tbl) and is a
-                    // graph for both the break candidate and the tail
-                    // acceptance.
-                    registers.vis = tab_next_stop(registers.vis);
+                    // term.c:327-338: TABREF and the persistent tcol offset
+                    // determine the origin under the current .ta settings.
+                    registers.vis = advance_tab(&self.tabs, registers.vis, registers.tab_offset);
                     registers.graph = true;
                     if registers.vis > vtarget && registers.nbr > 0 {
-                        let result = Some(FillPass {
-                            accepted_end: registers.nbr,
-                            accepted_width: registers.vbr,
-                        });
+                        let result = Some(FillPass::new(registers.nbr, registers.vbr));
                         scan.stopped = Some(PassStop::from(result));
                         return result;
                     }
+                }
+                FieldCell::TabReference => {
+                    registers.tab_offset = -signed(registers.vis).saturating_add(signed(EN));
                 }
             }
             registers.index += 1;
@@ -582,11 +698,12 @@ impl FieldBuffer {
         }
     }
 
-    pub(super) fn flush_receipt(&self, target: usize, brtrsp: bool) -> FlushReceipt {
+    pub(super) fn flush_receipt(&self, targets: FillTargets, brtrsp: bool) -> FlushReceipt {
         let mut scan = self.clone();
         let mut passes = self.committed_passes.clone();
         loop {
-            let Some(pass) = scan.fill_pass(target) else {
+            let first = passes.is_empty();
+            let Some(pass) = scan.fill_pass_units(targets.scan(first)) else {
                 return FlushReceipt::Rejected {
                     passes,
                     rejected_from: scan.resume_offset(),
@@ -597,7 +714,9 @@ impl FieldBuffer {
                 };
             };
             passes.push(pass);
-            scan.advance_past(pass.accepted_end);
+            // term.c:165-168 advances the reference after each printed pass.
+            scan.advance_tab_offset(pass.units, targets.actual(first));
+            scan.advance_past(pass.end);
             // term_flushln() tests the remaining buffer before consuming
             // ordinary blanks at a genuine continuation boundary.
             if scan.resume_offset() >= scan.cells.len() || scan.only_ignorable_remainder(brtrsp) {
@@ -610,29 +729,55 @@ impl FieldBuffer {
     /// `term_field()`374-444 prints buffered padding only when a real
     /// encoded glyph follows it. Internal NBRZW and recovery spellings do
     /// not advance the device; Unicode whitespace glyphs do.
-    pub(super) fn printed_columns(&self, start: usize, end: usize) -> Option<usize> {
+    pub(super) fn printed_columns(
+        &self,
+        start: usize,
+        end: usize,
+        mut tab_offset: i64,
+        initial_padding: usize,
+    ) -> Option<usize> {
         let mut column = 0usize;
+        let mut pending_units = initial_padding;
+        let mut device_columns = 0usize;
         let mut printed = None;
         for index in start..end.min(self.cells.len()) {
             match self.cells[index] {
-                FieldCell::BreakableBlank | FieldCell::NonBreakingBlank => column += 1,
+                FieldCell::BreakableBlank | FieldCell::NonBreakingBlank => {
+                    column += EN;
+                    pending_units += EN;
+                }
                 FieldCell::Graph { width, .. } => {
-                    column += width;
-                    printed = Some(column);
+                    // term_field() advances deferred blanks before EACH
+                    // graph. ascii_advance() rounds that individual advance
+                    // with half-EN tolerance, capped at 256 EN; rounding the
+                    // complete field instead changes later vfield decisions
+                    // after fractional tabs (term_ascii.c:279-299).
+                    device_columns += columns(pending_units.min(256 * EN)) + width;
+                    pending_units = 0;
+                    column += width.saturating_mul(EN);
+                    printed = Some(device_columns);
                 }
                 FieldCell::Backline => {
                     let width = match index.checked_sub(1).and_then(|i| self.cells.get(i)) {
-                        Some(FieldCell::Graph { width, .. }) => *width,
-                        Some(FieldCell::BreakableBlank | FieldCell::NonBreakingBlank) => 1,
+                        Some(FieldCell::Graph { width, .. }) => width.saturating_mul(EN),
+                        Some(FieldCell::BreakableBlank | FieldCell::NonBreakingBlank) => EN,
                         _ => 0,
                     };
+                    device_columns = (device_columns + columns(pending_units.min(256 * EN)))
+                        .saturating_sub(columns(width));
+                    pending_units = 0;
                     column = column.saturating_sub(width);
-                    printed = Some(column);
+                    printed = Some(device_columns);
                 }
                 FieldCell::Tab => {
                     // term_field() treats a tab like deferred whitespace:
                     // the advance only flushes when a later graph prints.
-                    column = tab_next_stop(column);
+                    let next = advance_tab(&self.tabs, column, tab_offset);
+                    pending_units += next.saturating_sub(column);
+                    column = next;
+                }
+                FieldCell::TabReference => {
+                    tab_offset = -signed(column).saturating_add(signed(EN));
                 }
                 FieldCell::BreakMarker | FieldCell::ZeroWidthGraph | FieldCell::Breakpoint => {}
             }
@@ -652,17 +797,23 @@ impl FieldBuffer {
             .saturating_sub(self.projection_prefix.get(low).copied().unwrap_or(0))
     }
 
-    /// A pass with a genuine following field is irrevocable: later writes
-    /// only extend the unconsumed suffix. Do not rescan committed history.
-    pub(super) fn commit_pass(&mut self, pass: FillPass) {
+    /// A pass with a genuine following suffix is established for ordinary
+    /// appends. A changed Tab configuration invalidates these pending scans;
+    /// a real flush retires them. Neither operation re-feeds printed fields.
+    pub(super) fn commit_pass(&mut self, pass: FillPass, tab_target: usize) {
+        self.advance_tab_offset(pass.units, tab_target);
         self.committed_passes.push(pass);
         self.scan = None;
-        self.advance_past(pass.accepted_end);
+        self.advance_past(pass.end);
         self.consume_break_blanks();
     }
 
     pub(super) fn has_committed_pass(&self) -> bool {
         !self.committed_passes.is_empty()
+    }
+
+    pub(super) fn committed_pass_count(&self) -> usize {
+        self.committed_passes.len()
     }
 
     pub(super) fn has_non_ignorable_after(&self, position: usize, brtrsp: bool) -> bool {
@@ -708,8 +859,8 @@ impl FieldBuffer {
 
     /// term.c:177-196: the trailing ignorable-cell sweep `term_flushln()`
     /// runs after each printed pass. Starting from the last pass's
-    /// `accepted_end` with its `vbr`, blanks add one column and a tab jumps
-    /// to the next periodic stop while `TERMP_BRTRSP` is set; markers and
+    /// `accepted_end` with its `vbr`, blanks add one EN and a tab jumps
+    /// to the next configured stop while `TERMP_BRTRSP` is set; markers and
     /// zero-width cells never stop the sweep, everything else does. The
     /// result is the `vbr` the final row decision at term.c:250-253 sees.
     pub(super) fn brtrsp_tail_sweep(&self, from: usize, vbr: usize, brtrsp: bool) -> usize {
@@ -718,15 +869,18 @@ impl FieldBuffer {
             match cell {
                 FieldCell::BreakableBlank => {
                     if brtrsp {
-                        vbr += 1;
+                        vbr += EN;
                     }
                 }
                 FieldCell::Tab => {
                     if brtrsp {
-                        vbr = tab_next_stop(vbr);
+                        vbr = self.tabs.next_stop(vbr);
                     }
                 }
-                FieldCell::BreakMarker | FieldCell::ZeroWidthGraph | FieldCell::Breakpoint => {}
+                FieldCell::BreakMarker
+                | FieldCell::TabReference
+                | FieldCell::ZeroWidthGraph
+                | FieldCell::Breakpoint => {}
                 FieldCell::Graph { .. } | FieldCell::NonBreakingBlank | FieldCell::Backline => {
                     break;
                 }
@@ -742,6 +896,13 @@ impl FieldBuffer {
     pub(super) fn resume_offset(&self) -> usize {
         self.resume
     }
+
+    fn advance_tab_offset(&mut self, width: usize, target: usize) {
+        self.pass_tab_offset = self
+            .pass_tab_offset
+            .saturating_add(signed(width.min(target)))
+            .saturating_add(signed(EN));
+    }
 }
 
 fn finish_pass(registers: FillRegisters, target: usize) -> Option<FillPass> {
@@ -752,19 +913,21 @@ fn finish_pass(registers: FillRegisters, target: usize) -> Option<FillPass> {
         end = registers.index;
         width = registers.vis;
     }
-    (end > 0).then_some(FillPass {
-        accepted_end: end,
-        accepted_width: width,
-    })
+    (end > 0).then_some(FillPass::new(end, width))
 }
 
-/// `term_tab_next()` over the renderer's periodic stop list: the terminal
-/// backends install exactly one periodic stop of `.5i` (mdoc_term.c:257-259,
-/// man_term.c:160-162), i.e. 120 basic units at 24 units per character
-/// cell (term_ascii.c:208-215, term_utf8.c:198-206) — every fifth column.
-/// `taboff` is a tbl-only register (term.c:270-278) and stays zero here.
-fn tab_next_stop(previous: usize) -> usize {
-    (previous / 5 + 1) * 5
+fn columns(units: usize) -> usize {
+    units.saturating_add((EN - 1) / 2) / EN
+}
+
+fn signed(units: usize) -> i64 {
+    i64::try_from(units).unwrap_or(i64::MAX)
+}
+
+fn advance_tab(tabs: &TabStops, vis: usize, offset: i64) -> usize {
+    let origin = signed(vis).saturating_add(offset).max(0);
+    let next = tabs.next_stop(usize::try_from(origin).unwrap_or(usize::MAX));
+    usize::try_from(signed(next).saturating_sub(offset)).unwrap_or(0)
 }
 
 #[cfg(test)]
@@ -788,14 +951,14 @@ mod term_fill_contract_tests {
         let first = buffer
             .fill_pass(usize::MAX / 2)
             .expect("pass one accepts X");
-        assert_eq!(first.accepted_end, 2, "X + marker; blank breaks");
-        buffer.advance_past(first.accepted_end);
+        assert_eq!(first.end, 2, "X + marker; blank breaks");
+        buffer.advance_past(first.end);
         buffer.consume_break_blanks();
         let second = buffer
             .fill_pass(usize::MAX / 2)
             .expect("pass two accepts Y");
-        assert!(second.accepted_end >= 4);
-        assert_eq!(second.accepted_width, 1);
+        assert!(second.end >= 4);
+        assert_eq!(second.width, 1);
     }
 
     /// (b) of the pair: the empty operand's real blank survives after the
@@ -815,7 +978,7 @@ mod term_fill_contract_tests {
         let first = buffer
             .fill_pass(usize::MAX / 2)
             .expect("pass one accepts X");
-        buffer.advance_past(first.accepted_end);
+        buffer.advance_past(first.end);
         buffer.consume_break_blanks();
         assert!(
             buffer.fill_pass(usize::MAX / 2).is_none(),
@@ -849,8 +1012,8 @@ mod term_fill_contract_tests {
         buffer.push_separator_blank();
         buffer.push_graph('c', 1);
         let pass = buffer.fill_pass(2).expect("breaks inside the slice");
-        assert_eq!(pass.accepted_end, 1, "accepts `a`; blank consumed");
-        buffer.advance_past(pass.accepted_end);
+        assert_eq!(pass.end, 1, "accepts `a`; blank consumed");
+        buffer.advance_past(pass.end);
         buffer.consume_break_blanks();
         assert_eq!(buffer.resume_offset(), 2, "next pass starts at `b`");
     }
@@ -865,8 +1028,8 @@ mod term_fill_contract_tests {
         buffer.push_graph('a', 1);
         buffer.push_graph('b', 1);
         let pass = buffer.fill_pass(1).expect("whole word accepted");
-        assert_eq!(pass.accepted_end, 3);
-        assert_eq!(pass.accepted_width, 3, "the leading blank counts width");
+        assert_eq!(pass.end, 3);
+        assert_eq!(pass.width, 3, "the leading blank counts width");
     }
 
     /// A non-breaking blank counts width and never breaks
@@ -878,8 +1041,8 @@ mod term_fill_contract_tests {
         buffer.push_non_breaking_blank();
         buffer.push_graph('b', 1);
         let pass = buffer.fill_pass(1).expect("nbr does not stop the pass");
-        assert_eq!(pass.accepted_end, 3);
-        assert_eq!(pass.accepted_width, 3);
+        assert_eq!(pass.end, 3);
+        assert_eq!(pass.width, 3);
     }
 
     /// term.c:283-286 with 906: a BACKBEFORE retreat over a graph buffers
@@ -906,7 +1069,7 @@ mod term_fill_contract_tests {
             ][..]
         );
         let pass = buffer.fill_pass(usize::MAX / 2).expect("accepted");
-        assert_eq!(pass.accepted_width, 1, "overstrike keeps one column");
+        assert_eq!(pass.width, 1, "overstrike keeps one column");
     }
     #[test]
     fn source_cells_and_projection_ownership_are_independent() {
@@ -1006,12 +1169,12 @@ mod term_fill_contract_tests {
         buffer.push_graph('a', 1);
         let mut count = 0;
         while let Some(pass) = buffer.fill_pass(usize::MAX / 2) {
-            let _ = buffer.projection_length(0, pass.accepted_end);
+            let _ = buffer.projection_length(0, pass.end);
             count += 1;
-            if !buffer.has_non_ignorable_after(pass.accepted_end, false) {
+            if !buffer.has_non_ignorable_after(pass.end, false) {
                 break;
             }
-            buffer.commit_pass(pass);
+            buffer.commit_pass(pass, usize::MAX / 2);
         }
         assert_eq!(count, 8193);
         assert!(buffer.scan_work <= buffer.cells().len() * 2);
@@ -1030,7 +1193,7 @@ mod term_fill_contract_tests {
             buffer.push_separator_blank();
             buffer.push_break_marker();
             let pass = buffer.fill_pass(usize::MAX / 2).expect("X prefix");
-            assert!(!buffer.has_non_ignorable_after(pass.accepted_end, false));
+            assert!(!buffer.has_non_ignorable_after(pass.end, false));
         }
         assert!(buffer.scan_work <= buffer.cells().len() * 2);
     }
@@ -1072,7 +1235,7 @@ mod term_fill_contract_tests {
             projected_scalars: 14,
         }]);
         let pass = buffer.fill_pass(1).expect("native zero-width graph");
-        assert_eq!(pass.accepted_width, 0);
-        assert_eq!(buffer.projection_length(0, pass.accepted_end), 14);
+        assert_eq!(pass.width, 0);
+        assert_eq!(buffer.projection_length(0, pass.end), 14);
     }
 }

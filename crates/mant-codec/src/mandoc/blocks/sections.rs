@@ -91,6 +91,11 @@ fn lower_section(
     // consumers, this makes `.Sx` resolution independent of tree recursion.
     let (id, fragment_aliases) = context.section_identity_for(&authored_title, node);
     let body = first_part_children(node, NodeKind::Body);
+    // mdoc Sh/Ss BODY resets tabs after HEAD; man SH/SS does not
+    // (mdoc_term.c::termp_sh_pre/termp_ss_pre, man_term.c::pre_SH/pre_SS).
+    if context.macro_set == libmandoc_rs::MacroSet::Mdoc {
+        formatter.reset_default_tabs();
+    }
     let first_subsection = body
         .iter()
         .position(|child| is_section(child, false))

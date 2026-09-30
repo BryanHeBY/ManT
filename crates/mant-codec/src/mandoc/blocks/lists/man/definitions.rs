@@ -194,6 +194,7 @@ fn lower_man_item(
         indent_columns,
         paragraph_distance,
         crate::mandoc::layout::DefinitionGeometry {
+            native_head_field_units: None,
             body: *definition_hanging_width,
             placement: crate::mandoc::layout::TermPlacement::Fit,
             gap: 1,

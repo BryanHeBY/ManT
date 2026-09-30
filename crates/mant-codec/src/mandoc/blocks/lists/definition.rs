@@ -123,7 +123,14 @@ pub(super) fn definition_item(
         definition_body_gap_consumed,
         _author_restarted,
         term_breaks,
-    ) = lower_definition_head(head, &displaced_equations, context, flow, formatter);
+    ) = lower_definition_head(
+        head,
+        &displaced_equations,
+        context,
+        flow,
+        geometry.native_head_field_units,
+        formatter,
+    );
     // TERMP_NONEWLINE survives the HEAD output drain. It is the execution
     // evidence that the first no-fill BODY row still belongs on that line.
     let head_source_continues = formatter.execution.source_row_continues();
@@ -239,13 +246,16 @@ pub(super) fn definition_item(
     if flow.shares_pending_term_row && observed.placement_breaks() {
         geometry.placement = crate::mandoc::layout::TermPlacement::Stacked;
     }
-    if observed.first_word_flushed_at_body() {
+    // NOSPACE describes the next word, not the relation to a previous
+    // physical row. A closed HEAD stays separate even if pre_br left that
+    // register armed (roff_term.c:69-78, mdoc_term.c::termp_it_post()).
+    if !closed_head_row && !definition_field_exited && observed.first_word_flushed_at_body() {
         // The cleared field filled its capacity (term.c:250-253 with
         // 205-207): the body shares the head's row starting at the
         // description column, with no separator cell to count.
         geometry.relation_override = Some(mant_ir::HeadBodyRelation::FlushAtBody);
         geometry.gap = 0;
-    } else if observed.first_word_concatenated() {
+    } else if !closed_head_row && !definition_field_exited && observed.first_word_concatenated() {
         // TERMP_NOSPACE at the body's first word leaves no separator cell:
         // the body column starts at the head's end (roff_term.c:75-78),
         // so the layout carries no minimum gap.
@@ -259,7 +269,11 @@ pub(super) fn definition_item(
     {
         // A literal BODY can run in only when CVS kept the source row open
         // with \\c. Ordinary no-fill NODE_LINE starts a fresh physical row.
+        // That executed close also supersedes a provisional relation from
+        // the first word's NOSPACE/column state: a word register cannot join
+        // a row that print_mdoc_node() already ended (mdoc_term.c:314-318).
         geometry.placement = crate::mandoc::layout::TermPlacement::Stacked;
+        geometry.relation_override = None;
     }
     let layout = geometry.layout(indent_columns, body_origin, &terms);
     let mut item = DefinitionItem {
@@ -388,6 +402,7 @@ fn lower_definition_head(
     displaced_equations: &[&Node],
     context: &LoweringContext<'_>,
     flow: DefinitionFlow,
+    native_head_field_units: Option<usize>,
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> (
     Vec<Inline>,
@@ -468,6 +483,7 @@ fn lower_definition_head(
                 flow.spacing_enabled,
                 formatter,
                 flow.head.author_break_effect(),
+                native_head_field_units,
             );
         // Only the original HEAD can contain .Pp alternatives. Equations
         // displaced from it are later source operands, not term separators.

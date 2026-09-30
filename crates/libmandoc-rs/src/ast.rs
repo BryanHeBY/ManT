@@ -150,6 +150,8 @@ pub enum DefinitionListStyle {
 pub enum DisplayKind {
     /// Preserve input line breaks and horizontal whitespace.
     Literal,
+    /// Preserve source line breaks without changing the current tab stops.
+    Unfilled,
     /// Reflow content as filled prose.
     Filled,
 }

@@ -211,6 +211,8 @@ impl BlockLowerer<'_, '_> {
     }
 
     fn prepare_node_execution(&mut self, node: &Node) {
+        self.state.formatter.enter_tab_source_node(node);
+        self.state.formatter.execute_tab_configuration(node);
         let formatter_control = formatter_control(node.macro_name.as_deref());
         if formatter_control.is_some_and(|control| control.boundary == FormatterBoundary::Line) {
             // This is the actual request dispatch, after HEAD execution and
@@ -243,6 +245,10 @@ impl BlockLowerer<'_, '_> {
             }
             FormatterBoundary::NoBreak => {
                 if self.state.has_formatter_cell()
+                    // A rejected unit still occupies the native buffer until
+                    // term_flushln() retires it (term.c:233-237). It need not
+                    // have a visible or pending glyph in the output sink.
+                    || self.state.formatter.wipe_remainder
                     || self
                         .state
                         .formatter

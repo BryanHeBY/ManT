@@ -150,7 +150,8 @@ enum mant_mandoc_definition_list_style {
 enum mant_mandoc_display_kind {
 	MANT_MANDOC_DISPLAY_NONE = 0,
 	MANT_MANDOC_DISPLAY_LITERAL = 1,
-	MANT_MANDOC_DISPLAY_FILLED = 2
+	MANT_MANDOC_DISPLAY_FILLED = 2,
+	MANT_MANDOC_DISPLAY_UNFILLED = 3
 };
 
 enum mant_mandoc_font_kind {

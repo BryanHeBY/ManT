@@ -84,6 +84,121 @@ fn wipe_rejection_retires_across_explicit_row_breaks() {
 }
 
 #[test]
+fn rejected_units_retire_glyphs_and_word_state_at_real_flushes() {
+    // Every exact input below was run with the registered pristine CVS
+    // -Tutf8 and -Tlint before these assertions were added. term_fill()'s
+    // nbr=0 pass rejects the unit; term_flushln() resets its complete buffer
+    // and BACKBEFORE/BACKAFTER (term.c:143-146, 233-237), including a cached
+    // \zX. roff_term_pre_mc() runs that reset with NOBREAK, while .br ends
+    // the row. In no-fill, print_man_node()/print_mdoc_node() execute the
+    // next NODE_LINE first: X then belongs to a new, accepted unit, and a
+    // bare \z must still overstrike the A of AFTER.
+    for header in [
+        ".TH TEST 1\n.SH DESCRIPTION\n",
+        ".Dd September 30, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\n",
+    ] {
+        for no_fill in [false, true] {
+            for pending in ["", "\\zX\n", "\\z\n", "\\zX\\z\n", "\\zX\\z\\fB\n"] {
+                for request in [".br", ".mc"] {
+                    let source = format!(
+                        "{header}{}\\p Y\n{pending}{request}\nAFTER\n{}",
+                        if no_fill { ".nf\n" } else { "" },
+                        if no_fill { ".fi\n" } else { "" },
+                    );
+                    let expected = if no_fill {
+                        match pending {
+                            "\\zX\n" | "\\zX\\z\n" | "\\zX\\z\\fB\n" => {
+                                vec!["", "X", "AFTER"]
+                            }
+                            "\\z\n" => vec!["", "FTER"],
+                            _ => vec!["", "AFTER"],
+                        }
+                    } else if request == ".br" {
+                        vec!["", "AFTER"]
+                    } else {
+                        vec!["AFTER"]
+                    };
+                    assert_eq!(
+                        body_rows(&native_terminal(&source)),
+                        expected,
+                        "native: {source:?}"
+                    );
+                    assert_eq!(
+                        body_rows(&lowered_terminal(&source)),
+                        expected,
+                        "lowered: {source:?}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn non_rejected_zero_advance_state_survives_only_empty_flushes() {
+    // Exact sources verified with the registered CVS -Tutf8: encode1()
+    // writes \zX into the native buffer, so term_flushln() accepts X; a
+    // bare \z writes no cell, so both term_newln() and roff_term_pre_mc()
+    // leave BACKAFTER armed (term.c::encode1/term_newln, roff_term.c::pre_mc).
+    for (pending, request, expected) in [
+        ("\\zX", ".br", vec!["X", "AFTER"]),
+        ("\\zX", ".mc", vec!["X AFTER"]),
+        ("\\z", ".br", vec!["FTER"]),
+        ("\\z", ".mc", vec!["FTER"]),
+        ("A\\z", ".mc", vec!["A AFTER"]),
+        ("\\zX\\z", ".mc", vec!["X AFTER"]),
+    ] {
+        let source = format!(".TH TEST 1\n.SH DESCRIPTION\n{pending}\n{request}\nAFTER\n");
+        assert_eq!(
+            body_rows(&native_terminal(&source)),
+            expected,
+            "native: {source:?}"
+        );
+        assert_eq!(
+            body_rows(&lowered_terminal(&source)),
+            expected,
+            "lowered: {source:?}"
+        );
+    }
+}
+
+#[test]
+fn margin_flush_retires_accepted_run_in_cells_before_the_next_word() {
+    // These exact inset inputs passed the registered pristine CVS -Tutf8
+    // and -Tlint. Inset HEAD post leaves its buffer active; BODY's generated
+    // fixed blank is a graph even after \p (mdoc_term.c::termp_it_pre/post).
+    // .mc accepts that buffer under NOBREAK and clears it at term.c:233-237:
+    // the next BODY word must not re-feed its consumed break marker. Pin
+    // physical row membership here; normalize spacing inside each row
+    // because the run-in fixed blank's columns are device geometry.
+    for (head, expected) in [("\\p", vec!["BodyWord"]), ("X\\p", vec!["X BodyWord"])] {
+        let source = if head == "\\p" {
+            include_str!("../g2g3_matrix/cases/g2_v_mc_pX_noX.1").to_owned()
+        } else {
+            format!(
+                ".Dd September 30, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset\n.It Xo\n.No \"{head}\"\n.Xc\n.mc\n.No BodyWord\n.El\n"
+            )
+        };
+        let row_words = |output: &str| {
+            body_rows(output)
+                .into_iter()
+                .map(|row| row.split_whitespace().collect::<Vec<_>>().join(" "))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            row_words(&native_terminal(&source)),
+            expected,
+            "native: {source:?}"
+        );
+        assert_eq!(
+            row_words(&lowered_terminal(&source)),
+            expected,
+            "lowered: {source:?}"
+        );
+    }
+}
+
+#[test]
 fn marker_blank_separator_follows_the_written_separator_receipt() {
     // The surviving separator of the `ph` shape is the blank term_word()
     // actually wrote before the marker (term.c:573-580): `.Sm off` from the

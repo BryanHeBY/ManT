@@ -180,6 +180,7 @@ impl<'a> LoweringContext<'a> {
                 formatter,
                 author_break_effect,
                 false,
+                None,
             );
         (output, field_exited, body_gap_consumed, breaks)
     }
@@ -190,6 +191,7 @@ impl<'a> LoweringContext<'a> {
         spacing: bool,
         formatter: &mut formatter::FormatterState,
         author_break_effect: inline::AuthorBreakEffect,
+        native_head_field_units: Option<usize>,
     ) -> (Vec<mant_ir::Inline>, bool, bool, bool, Vec<usize>) {
         self.lower_inline_with_author_break_rows(
             nodes,
@@ -197,6 +199,7 @@ impl<'a> LoweringContext<'a> {
             formatter,
             author_break_effect,
             true,
+            native_head_field_units,
         )
     }
 
@@ -207,6 +210,7 @@ impl<'a> LoweringContext<'a> {
         formatter: &mut formatter::FormatterState,
         author_break_effect: inline::AuthorBreakEffect,
         preserve_rows: bool,
+        native_head_field_units: Option<usize>,
     ) -> (Vec<mant_ir::Inline>, bool, bool, bool, Vec<usize>) {
         let mut builder = formatter.begin_inline_session(
             spacing,
@@ -215,6 +219,9 @@ impl<'a> LoweringContext<'a> {
         );
         if preserve_rows {
             builder.begin_definition_head_consumption();
+            if let Some(units) = native_head_field_units {
+                builder.set_definition_native_margin(units);
+            }
         }
         builder.scope_posts = self.scope_posts.clone();
         // The HEAD can execute .nf after this session begins. Each entered

@@ -34,6 +34,9 @@ pub(super) fn preformatted_blocks(
         DisplayFillMode::SingleLine
     });
     lowerer.state.formatter.no_fill = true;
+    // The enclosing block driver already settled the former output row.
+    // Display pre handlers use the same execution state as inline HEADs.
+    crate::mandoc::inline::display_tabs::enter_pre(&mut lowerer.state.formatter.execution, node);
 
     let body_index = node
         .children
@@ -41,6 +44,10 @@ pub(super) fn preformatted_blocks(
         .position(|child| child.kind == NodeKind::Body);
     if let Some(index) = body_index {
         let body = &node.children[index];
+        crate::mandoc::inline::display_tabs::enter_pre(
+            &mut lowerer.state.formatter.execution,
+            body,
+        );
         context
             .scope_posts
             .enter_body(body.id, lowerer.state.formatter.font.checkpoint());

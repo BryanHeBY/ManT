@@ -206,6 +206,21 @@ route borrowed children to inline or structural consumers; physical-line cursors
 advance at executed words, independently of font wrappers. List controls execute
 in source order instead of being replayed by a second spacing scan.
 
+Definition fields record native cells at text execution, before semantic
+projection. One incremental buffer decides accepted passes and rejected
+suffixes; private output-owner markers map that decision through styles and
+links without granting them native width. A real flush hands forward its
+captured device position and retires its buffer once, while output drains
+keep live execution facts. Shared Tab configuration and basic-unit field
+bounds persist across those owners. Source scopes restore geometry at their
+native return point; a helper return is not a formatter line boundary.
+The selected reading contract preserves HANG words lost solely to margin
+overflow, while explicit word-end break rejection follows the pinned CVS.
+Nested list phases in a definition HEAD borrow that same field and word
+execution state. List pre/post and generated labels execute in source order;
+only their local geometry is saved. Item post clears the native list flags,
+so returning from a nested list cannot resurrect the outer HEAD's old flags.
+
 The native wrapper copies borrowed libmandoc nodes before freeing the parse
 session. It retains raw text sentinels beside printable text, table cell fonts,
 normalized section and reference quote decisions, and mdoc body-close targets.

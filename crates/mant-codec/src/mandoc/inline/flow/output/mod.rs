@@ -10,6 +10,7 @@ const INTERNAL_LINK_SPLIT: &str = "\0mant:field-link-split";
 pub(in crate::mandoc::inline) const INTERNAL_FIELD_WORD: &str = "\0mant:field-word:";
 
 mod boundary;
+pub(in crate::mandoc::inline::flow) mod native_passes;
 mod record;
 pub(in crate::mandoc::inline::flow) mod split;
 
@@ -234,6 +235,7 @@ impl InlineBuilder {
                 self.execution.zero_advance.discard_at_row_end();
                 self.external_head_row_pending = false;
             }
+            self.reset_native_tab_origin();
             return;
         }
         // term.c:143-146 with 233-237: a definitively rejected unit dies
@@ -303,6 +305,7 @@ impl InlineBuilder {
             // leaves stale viscol for a later discarded buffer.
             definition.hang_row.endline();
             definition.field_buffer.clear();
+            definition.field_buffer.set_tab_offset(0);
             definition.field_word_anchors.clear();
         }
         if let Some(author) = &mut self.execution.author_execution {
@@ -840,6 +843,21 @@ impl InlineBuilder {
         preserve_rows: bool,
     ) -> (Vec<Inline>, super::InlineExecutionState) {
         self.commit_definition_row_origin();
+        // The mdoc HEAD ledger has the list's actual pad/break flags, so
+        // its accepted NBRZW field can prove a physical close even without
+        // an IR glyph (term_fill():340-349, term_flushln():250-253).
+        // Man's detached HEAD uses its established pre/post contract:
+        // pre_IP/pre_TP set NOBREAK before post flush (man_term.c:525-668).
+        // Its ordinary-line scratch ledger is not evidence of that close.
+        let invisible_native_row_end = self.execution.macro_set == libmandoc_rs::MacroSet::Mdoc
+            && self
+                .execution
+                .definition
+                .as_ref()
+                .is_some_and(|state| !state.field_buffer.is_empty())
+            && self.native_field_row_ends()
+            && !has_printable_character(&self.nodes)
+            && !self.execution.zero_advance.has_buffered_glyph();
         let native_tail_end = self.discard_unprinted_definition_field_output();
         let surviving_armed = if self.has_formatter_cell() {
             false
@@ -847,7 +865,7 @@ impl InlineBuilder {
             self.execution.zero_advance.take_armed()
         };
         self.flush_zero_advance();
-        if native_tail_end {
+        if native_tail_end || invisible_native_row_end {
             self.nodes.push(Inline::line_break());
             self.note_definition_output_row();
         }
@@ -858,6 +876,7 @@ impl InlineBuilder {
             self.finish_nodes()
         };
         self.execution.reset_paragraph_segment(surviving_armed);
+        self.reset_native_tab_origin();
         (output, self.execution)
     }
 
@@ -881,13 +900,23 @@ impl InlineBuilder {
                     !state.field_buffer.is_empty() || state.hang_row.viscol > 0
                 });
         if flushes_buffer {
+            // A no-break flush may have committed HEAD glyphs while leaving
+            // their device row occupied (term.c:250-253). A graphless BODY
+            // tail closes that same represented row, rather than emitting a
+            // second blank row in the description's output owner.
+            let closes_represented_head = self.external_head_row_pending
+                && self
+                    .execution
+                    .definition
+                    .as_ref()
+                    .is_some_and(|state| state.hang_row.viscol > 0);
             self.commit_definition_row_origin();
             self.flush_zero_advance();
             let extra_row_end = self.discard_unprinted_definition_field_output();
             self.execution.completed_vertical_rows = self
                 .execution
                 .completed_vertical_rows
-                .saturating_add(u16::from(extra_row_end));
+                .saturating_add(u16::from(extra_row_end && !closes_represented_head));
         }
         if let Some(state) = &mut self.execution.definition {
             state.field_buffer.clear();
@@ -902,6 +931,7 @@ impl InlineBuilder {
             self.execution.word_end_break = WordEndBreak::Clear;
             self.execution.zero_advance.discard_at_row_end();
         }
+        self.reset_native_tab_origin();
     }
 
     /// Return an inner scope without forcing a pending `\\z` glyph to become
@@ -988,10 +1018,10 @@ impl InlineBuilder {
         // term.c:143-146 with 233-237: a definitively rejected unit dies
         // whole - including a `\z`-generated glyph still pending in the
         // zero-advance register, at every retirement site (hard break,
-        // paragraph drain, formatter-line finish). A bare armed `\z`
-        // wrote no cell and keeps its request alive, so it settles through
-        // the ordinary flush.
-        if self.execution.wipe_remainder && self.execution.zero_advance.has_pending_glyph() {
+        // paragraph drain, formatter-line finish). Cached glyph and newly
+        // armed BACKAFTER can coexist; rejection retires both. A bare \z
+        // in an independently empty, non-rejected buffer remains untouched.
+        if self.execution.wipe_remainder {
             self.execution.zero_advance.discard_at_row_end();
             return;
         }

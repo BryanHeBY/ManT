@@ -223,10 +223,17 @@ pub(super) trait ContainerSink<'a> {
     fn source_node(&mut self, node: &'a Node, starts_line: bool);
     fn event(&mut self, event: Event<'a>);
     fn restore_fill(&mut self, _fill: bool) {}
-    fn geometry_checkpoint(&self, _node: &Node) -> Option<u16> {
+    fn geometry_checkpoint(
+        &self,
+        _node: &Node,
+    ) -> Option<super::inline::DefinitionGeometryCheckpoint> {
         None
     }
-    fn restore_geometry(&mut self, _checkpoint: Option<u16>) {}
+    fn restore_geometry(
+        &mut self,
+        _checkpoint: Option<super::inline::DefinitionGeometryCheckpoint>,
+    ) {
+    }
 }
 
 pub(super) fn drive<'a>(
