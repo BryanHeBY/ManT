@@ -139,14 +139,17 @@ fn field_acceptance_preserves_native_zero_width_rows_and_new_body_fields() {
         ),
         (
             ".Bl -hang -width 4n\n.It Xo\n.Lk https://example.org \"X\\p Y\" \"\\p Z\"\n.Xc\n.No BodyWord\n.El\n",
-            vec!["X", "Y", "BodyWord"],
+            // termp_lk_pre() projects a descriptive label as
+            // `label: uri` (mdoc_term.c:1880-1930); the URI glyphs share
+            // the same field word stream as the label.
+            vec!["X", "Y: https://example.org", "BodyWord"],
         ),
         (
-            // The selected link projection keeps the destination as link
-            // metadata, rather than duplicating terminal's URI spelling.
-            // Its hidden native writes still reject Z from this field.
+            // The label projects as `label: uri` exactly like the pristine
+            // reference row for this input. Its hidden native writes still
+            // reject Z from this field.
             ".Bl -hang -width 4n\n.It Xo\n.Lk \"https://example.org\\p \\p\" X\n.No Z\n.Xc\n.No BodyWord\n.El\n",
-            vec!["X", "BodyWord"],
+            vec!["X: https://example.org", "BodyWord"],
         ),
         (
             // A loop endline after its accepted prefix and the !NOBREAK,

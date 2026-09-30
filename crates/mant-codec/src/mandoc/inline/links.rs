@@ -138,6 +138,43 @@ fn append_link_target_or_text(
     }
 }
 
+/// mdoc_html.c::mdoc__x_pre() (1553-1581): a `%U` field always carries its
+/// argument as an external target, and an `%R` field whose argument is
+/// exactly `RFC <digits>` expands to the rfc-editor URL. The visible word
+/// stays the authored argument; only the typed target is enriched.
+pub(super) fn append_reference_field_link(
+    builder: &mut InlineBuilder,
+    children: &[Node],
+    default_name: Option<&str>,
+    rfc_editor: bool,
+) {
+    let argument = children
+        .iter()
+        .filter_map(|child| child.text.as_deref())
+        .collect::<Vec<_>>()
+        .join(" ");
+    let address = if rfc_editor {
+        rfc_editor_url(&argument).unwrap_or_default()
+    } else {
+        argument.trim().to_owned()
+    };
+    if address.is_empty() {
+        append_inline_nodes(builder, children, default_name);
+    } else {
+        append_external_link(builder, &address, false, |builder| {
+            append_inline_nodes(builder, children, default_name);
+        });
+    }
+}
+
+/// The upstream HTML/markdown expansion rule: `RFC ` prefix plus a
+/// non-empty all-digit remainder becomes the canonical rfc-editor page.
+fn rfc_editor_url(argument: &str) -> Option<String> {
+    let digits = argument.strip_prefix("RFC ")?;
+    (!digits.is_empty() && digits.bytes().all(|byte| byte.is_ascii_digit()))
+        .then(|| format!("https://www.rfc-editor.org/rfc/rfc{digits}.html"))
+}
+
 /// Wrap newly executed visible content without interrupting the caller's
 /// formatter state. A link is an IR annotation around output, not an atomic
 /// source fragment: following `Ns`, `\\z`, font, and word-boundary events still
