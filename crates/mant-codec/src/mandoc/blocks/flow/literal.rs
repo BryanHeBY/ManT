@@ -26,20 +26,43 @@ enum TrailingRow {
 }
 
 impl LiteralFlow {
-    pub(super) fn node_count(&self) -> usize {
-        self.nodes.len()
+    pub(super) fn has_output(&self) -> bool {
+        !self.nodes.is_empty()
+    }
+
+    pub(super) fn with_inline_builder<R>(
+        &mut self,
+        formatter: &mut crate::mandoc::formatter::FormatterState,
+        operation: impl FnOnce(&mut crate::mandoc::inline::InlineBuilder) -> R,
+    ) -> R {
+        let result = formatter.with_output_builder(&mut self.nodes, operation);
+        if matches!(self.nodes.last(), Some(Inline::LineBreak { .. })) {
+            self.row_occupied = false;
+            self.formatter_column = FormatterColumn::Origin;
+        }
+        result
+    }
+
+    pub(super) fn insert_link_cursor(&mut self, marker: String) {
+        self.nodes.push(Inline::anchor(marker));
+    }
+
+    pub(super) fn discard_link_cursor(&mut self, marker: &str) {
+        super::super::man_links::remove_link_cursor(&mut self.nodes, marker);
     }
 
     pub(super) fn wrap_first_link(
         &mut self,
         target: &mant_ir::LinkTarget,
-        start: usize,
+        marker: &str,
+        started: &mut bool,
         skip_visible: &mut usize,
     ) -> bool {
         super::super::man_links::wrap_first_visible_inline(
             &mut self.nodes,
             target,
-            start,
+            marker,
+            started,
             skip_visible,
         )
     }

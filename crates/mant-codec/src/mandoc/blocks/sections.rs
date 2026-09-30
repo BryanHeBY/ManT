@@ -15,6 +15,7 @@ pub(in crate::mandoc) fn lower_document_structure(
     let mut root_blocks = Vec::new();
     let mut sections = Vec::new();
     let mut root_start = 0;
+    let mut previous_section_has_children = false;
     for (index, node) in root.children.iter().enumerate() {
         update_paragraph_distance(node, &mut paragraph_distance);
         // Accept both `.SH` and a `.SS` that appears directly at the document
@@ -37,8 +38,16 @@ pub(in crate::mandoc) fn lower_document_structure(
             ),
         ));
         root_start = index + 1;
-        let has_preceding_content = sections.last().is_some_and(section_has_body)
-            || root_blocks.iter().any(block_has_visible_content);
+        // mdoc_term.c::termp_sh_pre() tests the preceding Sh BODY's
+        // child pointer, including executed state-only nodes. An empty IR
+        // owner does not prove that the native section BODY was empty.
+        let has_preceding_content = if node.macro_name.as_deref() == Some("Sh") {
+            previous_section_has_children || root_blocks.iter().any(block_has_visible_content)
+        } else {
+            sections.last().is_some_and(section_has_body)
+                || root_blocks.iter().any(block_has_visible_content)
+        };
+        previous_section_has_children = !first_part_children(node, NodeKind::Body).is_empty();
         let spacing_before_lines = section_spacing(
             node,
             sections.is_empty(),

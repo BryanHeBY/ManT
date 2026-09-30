@@ -61,7 +61,7 @@ fn zero_advance_crosses_leading_scopes_generated_prefixes_and_link_labels() {
         (
             "link-label",
             b".Dd September 12, 2026\n.Dt ZERO-ADVANCE 1\n.Os\n.Sh DESCRIPTION\n.No A\\zX Lk https://example.org B\n".as_slice(),
-            "AXB",
+            "AXB: https://example.org",
         ),
     ];
     for (label, source, expected) in cases {
@@ -79,9 +79,9 @@ fn zero_advance_crosses_leading_scopes_generated_prefixes_and_link_labels() {
         assert_eq!(inline_text(children), expected, "{label}: {children:?}");
         if label == "link-label" {
             assert!(
-                matches!(children.as_slice(), [Inline::Text { value: prefix }, Inline::Text { value: glyph }, Inline::Link { .. }]
+                matches!(children.as_slice(), [Inline::Text { value: prefix }, Inline::Text { value: glyph }, Inline::Link { .. }, Inline::PortableDisplay { .. }]
                     if prefix == "A" && glyph == "X"),
-                "the pending glyph must precede the atomically lowered link: {children:?}"
+                "the pending glyph precedes the label; the native colon and URI execute after it: {children:?}"
             );
         }
     }

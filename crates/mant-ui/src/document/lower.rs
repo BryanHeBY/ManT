@@ -306,8 +306,17 @@ impl DocumentBuilder<'_> {
                     compose_origin(base_indent, layout.indent_columns),
                 );
             }
-            Block::Table { rows, layout, .. } => {
-                self.table(rows, compose_origin(base_indent, layout.indent_columns));
+            Block::Table {
+                rows,
+                column_widths,
+                layout,
+                ..
+            } => {
+                self.table(
+                    rows,
+                    column_widths,
+                    compose_origin(base_indent, layout.indent_columns),
+                );
             }
             Block::Equation { value, layout, .. } => {
                 self.plain_block_lines(

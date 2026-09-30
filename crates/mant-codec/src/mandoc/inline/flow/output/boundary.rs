@@ -157,10 +157,15 @@ impl InlineBuilder {
         } else {
             needs_boundary_space(self.execution.last_visible_character, incoming_first)
         };
-        let (accepted_row_break, split_word) = if word {
+        let super::record::WordPassProjection {
+            closes_before: accepted_row_break,
+            leading_cells,
+            native_separator,
+            split_word,
+        } = if word {
             self.record_hang_word(incoming, boundary)
         } else {
-            (0, None)
+            super::record::WordPassProjection::default()
         };
         if accepted_row_break > 0 {
             // A consumed \p separator closes the already accepted prefix.
@@ -171,8 +176,29 @@ impl InlineBuilder {
                 let row_indent = self.take_definition_row_indent();
                 self.nodes.push(Inline::line_break_indented(row_indent));
             }
+            if leading_cells > 0 {
+                push_text(&mut self.nodes, " ".repeat(leading_cells));
+            }
         } else {
-            self.append_boundary_spacing(boundary, add_space, word, empty_word);
+            // Literal rows preserve the actual buffered separator even
+            // after a zero-width or empty word. An IR-visible-character
+            // predicate cannot establish NOSPACE (term.c:573-589). Use the
+            // post-encode receipt: BACKBEFORE may already have consumed the
+            // blank. Filled responsive projection keeps its frozen padding
+            // policy; only authored no-fill rows expose these native cells.
+            let (spacing_boundary, add_space) = if word && self.execution.no_fill_word_active {
+                (
+                    if native_separator {
+                        PendingBoundary::Preserved
+                    } else {
+                        PendingBoundary::Tight
+                    },
+                    native_separator,
+                )
+            } else {
+                (boundary, add_space)
+            };
+            self.append_boundary_spacing(spacing_boundary, add_space, word, empty_word);
         }
         // Plain words anchor into the same native flush unit the field
         // path uses; the marker routes by session exactly like the cell

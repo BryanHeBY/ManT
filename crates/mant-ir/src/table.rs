@@ -1,5 +1,49 @@
 //! Sparse logical-column placement shared by table consumers.
-use crate::{TableCell, TableRow, TableRowKind, TableRuleCellKind};
+use crate::{Block, Inline, TableCell, TableCellKind, TableRow, TableRowKind, TableRuleCellKind};
+
+/// A navigation carrier has targets but no physical row payload.
+///
+/// Empty text, literal rows, hard breaks, vertical space and rules remain
+/// physical content. Only anchors and transparent emphasis wrappers inside
+/// paragraphs in one unspanned cell qualify. Multi-cell and spanning rows
+/// retain their physical topology; an ordinary empty data row does not qualify.
+#[must_use]
+pub fn table_row_is_navigation_only(row: &TableRow) -> bool {
+    fn anchors(nodes: &[Inline]) -> Option<usize> {
+        nodes.iter().try_fold(0_usize, |count, node| {
+            let added = match node {
+                Inline::Anchor { .. } => 1,
+                Inline::Strong { children } | Inline::Emphasis { children } => anchors(children)?,
+                _ => return None,
+            };
+            Some(count.saturating_add(added))
+        })
+    }
+    matches!(row.kind, TableRowKind::Data)
+        && row.cells.len() == 1
+        && row
+            .cells
+            .iter()
+            .try_fold(0_usize, |count, cell| {
+                if cell.kind != TableCellKind::Text || cell.column_span != 1 || cell.row_span != 1 {
+                    return None;
+                }
+                let cell_anchors = cell.blocks.iter().try_fold(0_usize, |count, block| {
+                    let Block::Paragraph {
+                        children, layout, ..
+                    } = block
+                    else {
+                        return None;
+                    };
+                    if layout.spacing_before_lines > 0 {
+                        return None;
+                    }
+                    anchors(children).map(|added| count.saturating_add(added))
+                })?;
+                (cell_anchors > 0).then_some(count.saturating_add(cell_anchors))
+            })
+            .is_some_and(|anchors| anchors > 0)
+}
 
 /// A cell and its zero-based logical starting column.
 #[derive(Clone, Copy, Debug)]
@@ -148,6 +192,81 @@ mod tests {
             row_span: rows,
             alignment: None,
         }
+    }
+
+    #[test]
+    fn navigation_rows_do_not_include_empty_physical_payloads() {
+        let text = |value: &str| Inline::Text {
+            value: value.into(),
+        };
+        let paragraph = |children| Block::Paragraph {
+            children,
+            layout: crate::LayoutHint::default(),
+            source: None,
+        };
+        let mut row = TableRow {
+            kind: TableRowKind::Data,
+            cells: vec![TableCell {
+                blocks: vec![paragraph(vec![Inline::Strong {
+                    children: vec![Inline::Emphasis {
+                        children: vec![Inline::anchor("target")],
+                    }],
+                }])],
+                ..cell(1, 1)
+            }],
+        };
+        assert!(table_row_is_navigation_only(&row));
+        let navigation = row.cells[0].clone();
+        row.cells.push(cell(1, 1));
+        assert!(!table_row_is_navigation_only(&row));
+        row.cells.reverse();
+        assert!(!table_row_is_navigation_only(&row));
+        row.cells = vec![navigation];
+        row.cells[0].column_span = 2;
+        assert!(!table_row_is_navigation_only(&row));
+        row.cells[0].column_span = 1;
+        row.cells[0].row_span = 2;
+        assert!(!table_row_is_navigation_only(&row));
+        row.cells[0].row_span = 1;
+        for blocks in [
+            vec![],
+            vec![paragraph(vec![])],
+            vec![paragraph(vec![Inline::anchor("target"), text("")])],
+            vec![paragraph(vec![Inline::anchor("target"), text(" ")])],
+            vec![paragraph(vec![
+                Inline::anchor("target"),
+                Inline::line_break(),
+            ])],
+            vec![Block::VerticalSpace {
+                lines: 1,
+                source: None,
+            }],
+            vec![Block::Preformatted {
+                children: vec![Inline::anchor("target"), text("\n")],
+                language: None,
+                layout: crate::LayoutHint::default(),
+                source: None,
+            }],
+            vec![Block::Paragraph {
+                children: vec![Inline::anchor("target")],
+                layout: crate::LayoutHint {
+                    spacing_before_lines: 1,
+                    ..Default::default()
+                },
+                source: None,
+            }],
+        ] {
+            row.cells[0].blocks = blocks;
+            assert!(!table_row_is_navigation_only(&row), "{row:#?}");
+        }
+        row.cells.clear();
+        assert!(!table_row_is_navigation_only(&row));
+        row.cells.push(TableCell {
+            kind: TableCellKind::HorizontalRule,
+            blocks: vec![paragraph(vec![Inline::anchor("target")])],
+            ..cell(1, 1)
+        });
+        assert!(!table_row_is_navigation_only(&row));
     }
 
     #[test]

@@ -1,19 +1,13 @@
 //! Man link labels are annotations over normally executed block content.
 use super::{Block, Inline, Node, NodeKind, first_part_children, source_span};
-use crate::mandoc::inline::{
-    InlineBuilder, append_inline_nodes, lower_inline_nodes_with_spacing, plain_text,
-};
+use crate::mandoc::inline::{InlineBuilder, append_inline_nodes, man_link_identity_text};
 use mant_ir::LinkTarget;
 
 impl super::BlockLowerer<'_, '_> {
     pub(super) fn push_man_link(&mut self, node: &Node) {
         let head = first_part_children(node, NodeKind::Head);
         let body = first_part_children(node, NodeKind::Body);
-        let target_text = plain_text(&lower_inline_nodes_with_spacing(
-            head,
-            self.context.default_name,
-            self.state.spacing_enabled(),
-        ));
+        let target_text = man_link_identity_text(head);
         let target = if node.macro_name.as_deref() == Some("MT") {
             LinkTarget::Email {
                 address: target_text.clone(),
@@ -27,7 +21,7 @@ impl super::BlockLowerer<'_, '_> {
         // The label can contain PP, IP, nested UR/MT, and fi/nf requests.
         // man_term.c::print_man_node() executes them with the ordinary node
         // driver; only the output annotation is specific to UR/MT.
-        let output_start = self.state.link_output_cursor();
+        let output_start = self.state.link_output_cursor(node.id);
         self.state
             .formatter
             .execution
@@ -55,8 +49,8 @@ impl super::BlockLowerer<'_, '_> {
             .zero_advance
             .end_output_owner();
         let head_is_label = body.is_empty() && !target_text.is_empty();
-        if !target_text.is_empty()
-            && !head_is_label
+        let cursor_executed = !target_text.is_empty() && !head_is_label;
+        if cursor_executed
             && !self
                 .state
                 .wrap_first_link_since(output_start, &target, prior_glyph_emitted)
@@ -70,7 +64,7 @@ impl super::BlockLowerer<'_, '_> {
             });
         }
         self.push_link_word(node, |builder| {
-            builder.append_prepared_text("⟨");
+            builder.append_prepared_text("<");
             builder.tighten_next_boundary();
             if head_is_label {
                 builder.append_scope(
@@ -87,8 +81,11 @@ impl super::BlockLowerer<'_, '_> {
                 append_inline_nodes(builder, head, self.context.default_name);
             }
             builder.tighten_next_boundary();
-            builder.append_text("⟩");
+            builder.append_text(">");
         });
+        if !cursor_executed {
+            self.state.discard_link_cursor(output_start);
+        }
         self.state.formatter.font.man_text_boundary(); // BLOCK post
     }
 
@@ -105,15 +102,28 @@ impl super::BlockLowerer<'_, '_> {
 pub(super) fn wrap_first_visible_inline(
     nodes: &mut Vec<Inline>,
     target: &LinkTarget,
-    start: usize,
+    marker: &str,
+    started: &mut bool,
     skip_visible: &mut usize,
 ) -> bool {
+    let start = if let Some(index) = nodes.iter().rposition(|node| is_link_cursor(node, marker)) {
+        nodes.remove(index);
+        *started = true;
+        index
+    } else if *started {
+        0
+    } else {
+        return false;
+    };
     let Some(first) = nodes
         .iter()
         .enumerate()
         .skip(start)
         .find_map(|(index, node)| {
-            if !mant_ir::has_printable_character(std::slice::from_ref(node)) {
+            if !mant_ir::inline_plain_text(std::slice::from_ref(node))
+                .chars()
+                .any(|ch| !ch.is_whitespace())
+            {
                 return None;
             }
             if *skip_visible > 0 {
@@ -154,37 +164,91 @@ pub(super) fn wrap_first_visible_inline(
 pub(super) fn wrap_first_visible_block(
     block: &mut Block,
     target: &LinkTarget,
-    start: usize,
+    marker: &str,
+    started: &mut bool,
     skip_visible: &mut usize,
 ) -> bool {
     match block {
         Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
-            wrap_first_visible_inline(children, target, start, skip_visible)
+            wrap_first_visible_inline(children, target, marker, started, skip_visible)
         }
         Block::List { items, .. } => items.iter_mut().any(|item| {
             item.blocks
                 .iter_mut()
-                .any(|block| wrap_first_visible_block(block, target, 0, skip_visible))
+                .any(|block| wrap_first_visible_block(block, target, marker, started, skip_visible))
         }),
         Block::DefinitionList { items, .. } => items.iter_mut().any(|item| {
             item.terms
                 .iter_mut()
-                .any(|term| wrap_first_visible_inline(term, target, 0, skip_visible))
-                || item
-                    .description
-                    .iter_mut()
-                    .any(|block| wrap_first_visible_block(block, target, 0, skip_visible))
+                .any(|term| wrap_first_visible_inline(term, target, marker, started, skip_visible))
+                || item.description.iter_mut().any(|block| {
+                    wrap_first_visible_block(block, target, marker, started, skip_visible)
+                })
         }),
         Block::Table { rows, .. } => rows.iter_mut().any(|row| {
             row.cells.iter_mut().any(|cell| {
-                cell.blocks
-                    .iter_mut()
-                    .any(|block| wrap_first_visible_block(block, target, 0, skip_visible))
+                cell.blocks.iter_mut().any(|block| {
+                    wrap_first_visible_block(block, target, marker, started, skip_visible)
+                })
             })
         }),
         Block::Equation { .. }
         | Block::VerticalSpace { .. }
         | Block::ThematicBreak { .. }
         | Block::Unsupported { .. } => false,
+    }
+}
+
+// One marker per active UR/MT scope. It cannot be authored by roff input
+// (NUL terminates native strings), never writes a formatter cell and dies
+// at that scope's exit. A suffix lookup avoids rescanning accumulated words.
+pub(super) fn link_cursor_marker(node_id: u32) -> String {
+    format!("\0mant:link-scope:{node_id}")
+}
+
+fn is_link_cursor(node: &Inline, marker: &str) -> bool {
+    matches!(node, Inline::Anchor { id, .. } if id.as_str() == marker)
+}
+
+pub(super) fn remove_link_cursor(nodes: &mut Vec<Inline>, marker: &str) -> bool {
+    let Some(index) = nodes.iter().rposition(|node| is_link_cursor(node, marker)) else {
+        return false;
+    };
+    nodes.remove(index);
+    true
+}
+
+pub(super) fn remove_link_cursor_block(block: &mut Block, marker: &str) -> bool {
+    match block {
+        Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
+            remove_link_cursor(children, marker) && children.is_empty()
+        }
+        Block::List { items, .. } => {
+            for item in items {
+                item.blocks
+                    .retain_mut(|block| !remove_link_cursor_block(block, marker));
+            }
+            false
+        }
+        Block::DefinitionList { items, .. } => {
+            for item in items {
+                for term in &mut item.terms {
+                    remove_link_cursor(term, marker);
+                }
+                item.description
+                    .retain_mut(|block| !remove_link_cursor_block(block, marker));
+            }
+            false
+        }
+        Block::Table { rows, .. } => {
+            for row in rows {
+                for cell in &mut row.cells {
+                    cell.blocks
+                        .retain_mut(|block| !remove_link_cursor_block(block, marker));
+                }
+            }
+            false
+        }
+        _ => false,
     }
 }

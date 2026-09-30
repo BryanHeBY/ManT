@@ -699,7 +699,7 @@ fn semantic_link_wrapper_does_not_own_a_closed_no_fill_row() {
                 "{open}/{middle}: {document:#?}"
             );
             assert!(
-                blocks.iter().any(|block| matches!(block, Block::Paragraph { children, .. } if inline_text(children).contains(&format!("⟨{target}⟩ after")))),
+                blocks.iter().any(|block| matches!(block, Block::Paragraph { children, .. } if inline_text(children).contains(&format!("<{target}> after")))),
                 "{open}/{middle}: {document:#?}"
             );
         }

@@ -137,19 +137,7 @@ impl BlockRenderer<'_> {
                     ),
                 ))
             };
-            let mut output = terms
-                .into_iter()
-                .flat_map(|term: Vec<(String, u16)>| {
-                    term.into_iter()
-                        .map(|(row, row_indent)| {
-                            indent_lines(
-                                &row,
-                                padding(compose_origin(origin, i32::from(row_indent))),
-                            )
-                        })
-                        .collect::<Vec<_>>()
-                })
-                .collect::<Vec<_>>();
+            let mut output = definition_term_rows(terms, origin);
             output.push(format!(
                 "{}{}{}",
                 last,
@@ -180,18 +168,20 @@ impl BlockRenderer<'_> {
         }
         // Rows keep their request-relative indents (a cleared-BRIND request
         // moved the upstream offset, roff_term.c:73-75).
-        let rows = terms
-            .into_iter()
-            .flat_map(|term| {
-                term.into_iter()
-                    .map(|(row, row_indent)| {
-                        indent_lines(&row, padding(compose_origin(origin, i32::from(row_indent))))
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .collect::<Vec<_>>();
+        let rows = definition_term_rows(terms, origin);
         let mut result = Flow::text(rows.join("\n"));
         result.extend(self.block_flow(&item.description, body_origin));
         result
     }
+}
+
+fn definition_term_rows(terms: Vec<Vec<(String, u16)>>, origin: i32) -> Vec<String> {
+    terms
+        .into_iter()
+        .flat_map(|term| {
+            term.into_iter().map(|(row, row_indent)| {
+                indent_lines(&row, padding(compose_origin(origin, i32::from(row_indent))))
+            })
+        })
+        .collect()
 }

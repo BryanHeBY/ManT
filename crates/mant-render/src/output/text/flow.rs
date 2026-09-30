@@ -17,6 +17,13 @@ impl Flow {
     pub(super) fn is_empty(&self) -> bool {
         self.parts.is_empty()
     }
+
+    pub(super) fn has_physical_rows(&self) -> bool {
+        self.parts.iter().any(|part| match part {
+            Part::Text(_) => true,
+            Part::Gap(rows) => *rows > 0,
+        })
+    }
     pub(super) fn text(value: String) -> Self {
         let mut result = Self::default();
         result.push_text(value);
@@ -44,6 +51,18 @@ impl Flow {
     }
 
     pub(super) fn finish(self, preceding_content: bool) -> String {
+        self.finish_with_cell_boundary(preceding_content, false).0
+    }
+
+    /// A rendered cell is split into physical rows before the following
+    /// content arrives. Completed trailing gap rows need their own final
+    /// delimiter; otherwise `split_terminator` would consume one as a mere
+    /// close of the preceding printed row.
+    pub(super) fn finish_cell(self) -> (String, bool) {
+        self.finish_with_cell_boundary(false, true)
+    }
+
+    fn finish_with_cell_boundary(self, preceding_content: bool, cell: bool) -> (String, bool) {
         let mut output = String::new();
         let mut gap = GapPlan::default();
         let mut has_content = preceding_content;
@@ -61,8 +80,12 @@ impl Flow {
                 }
             }
         }
-        output.push_str(&"\n".repeat(usize::from(gap.rows(0))));
-        output
+        let rows = gap.rows(0);
+        output.push_str(&"\n".repeat(usize::from(rows)));
+        if cell && has_content && rows > 0 {
+            output.push('\n');
+        }
+        (output, rows > 0)
     }
 }
 

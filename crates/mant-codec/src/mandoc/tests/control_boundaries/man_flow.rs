@@ -1,5 +1,10 @@
 use super::*;
 
+// The selected UTF-8 formatter preserves CVS's executed glyphs: mdoc Ao/Ac
+// select the Unicode angle glyphs, while man post_UR always calls term_word
+// with literal ASCII "<"/">" (man_term.c:896-908). These assertions were
+// rechecked against pristine ASCII/UTF-8/tree/lint before synchronizing them.
+
 #[test]
 fn definition_body_uses_continuation_after_generated_words_and_zero_row_requests() {
     // Each exact source passed fixed CVS -Tascii/-Tutf8/-Tlint. In
@@ -203,7 +208,7 @@ fn crossed_body_close_pops_font_stack_without_restoring_an_old_value() {
         "{document:#?}"
     );
     let strong = strong_document_text(&document);
-    assert!(strong.contains('>'), "{document:#?}");
+    assert!(strong.contains('⟩'), "{document:#?}");
     assert!(strong.contains("after"), "{document:#?}");
     assert!(strong.contains("tail"), "{document:#?}");
 }
@@ -264,7 +269,7 @@ fn man_links_execute_labels_in_the_surrounding_text_stream() {
                 })
                 .collect::<String>();
             assert!(
-                text.contains(&format!("label{separator}⟨{target}⟩")),
+                text.contains(&format!("label{separator}<{target}>")),
                 "{open} {label}: {document:#?}"
             );
         }
@@ -334,7 +339,7 @@ fn man_links_preserve_empty_body_identity_and_terminal_target() {
         })
         .collect::<String>();
     assert!(
-        text.contains("⟨https://example.com⟩ after"),
+        text.contains("<https://example.com> after"),
         "{document:#?}"
     );
     assert_eq!(
@@ -354,7 +359,7 @@ fn man_links_preserve_empty_body_identity_and_terminal_target() {
         })
         .collect::<String>();
     assert!(
-        text.contains("⟨https://example.com⟩ after"),
+        text.contains("<https://example.com> after"),
         "{document:#?}"
     );
     assert!(
@@ -419,8 +424,8 @@ fn man_link_entry_observes_no_fill_source_rows_without_ending_a_continuation() {
     // post_UR() supplies the first visible word, so it owns the same source
     // continuation decision as a real BODY label.
     for (prefix, expected) in [
-        ("prefix\\c", "prefix⟨https://example.com⟩"),
-        ("prefix", "prefix\n⟨https://example.com⟩"),
+        ("prefix\\c", "prefix<https://example.com>"),
+        ("prefix", "prefix\n<https://example.com>"),
     ] {
         let source = format!(
             ".TH TEST 1\n.SH DESCRIPTION\n.nf\n{prefix}\n.UR https://example.com\n.UE\n.fi\n"
@@ -471,14 +476,10 @@ fn generated_man_link_post_keeps_a_no_fill_word_end_break() {
                 })
                 .collect::<Vec<_>>()
                 .join("\n");
-            let boundary = if expected_break {
-                "label\n⟨"
-            } else {
-                "label⟨"
-            };
+            let boundary = if expected_break { "label\n<" } else { "label<" };
             assert!(rows.contains(boundary), "{open} {label}: {document:#?}");
             assert!(
-                rows.contains(&format!("⟨{target}⟩\nafter")),
+                rows.contains(&format!("<{target}>\nafter")),
                 "{document:#?}"
             );
         }
@@ -492,7 +493,7 @@ fn generated_man_link_post_keeps_a_no_fill_word_end_break() {
     let [Block::Preformatted { children, .. }] = document.sections[0].blocks.as_slice() else {
         panic!("unexpected bold no-fill blocks: {document:#?}");
     };
-    assert_eq!(inline_text(children), "label\n⟨x⟩\nafter");
+    assert_eq!(inline_text(children), "label\n<x>\nafter");
 }
 
 #[test]
@@ -524,9 +525,9 @@ fn man_paragraph_body_returns_its_live_word_to_the_enclosing_link_post() {
                     .collect::<Vec<_>>()
                     .join("\n");
                 let expected = if no_fill {
-                    format!("second⟨{target}⟩\nafter")
+                    format!("second<{target}>\nafter")
                 } else {
-                    format!("second⟨{target}⟩ after")
+                    format!("second<{target}> after")
                 };
                 assert!(
                     trailing.contains(&expected),
@@ -890,7 +891,7 @@ fn pending_zero_advance_label_glyph_keeps_link_ownership() {
                 _ => None,
             })
             .collect::<String>();
-        assert!(text.contains("⟨x⟩ after"), "{name}: {document:#?}");
+        assert!(text.contains("<x> after"), "{name}: {document:#?}");
     }
 }
 
@@ -955,9 +956,11 @@ fn pending_glyph_before_man_link_stays_outside_its_label() {
         "{document:#?}"
     );
 
-    // These exact BODY controls were checked with fixed CVS -Tascii/-Tlint.
-    // They flush or switch IR destinations while the incoming BACKBEFORE
-    // glyph is still outside UR's semantic label.
+    // These exact BODY controls were rechecked with pristine ASCII/UTF-8/
+    // HTML/tree/lint before the assertions below. man_PP_pre/man_IP_pre and
+    // the nf paragraph boundary close HTML's initial anchor before BODY's
+    // first glyph. Keep its target identity and the native X, but do not
+    // move the closed annotation onto that later output owner.
     for (name, body, retained) in [
         ("paragraph", ".PP\nlabel", "label"),
         ("definition", ".IP item 4\nbody", "item"),
@@ -972,11 +975,26 @@ fn pending_glyph_before_man_link_stays_outside_its_label() {
         let mut labels = Vec::new();
         Labels(&mut labels).visit_document(&document);
         assert_eq!(labels.len(), 1, "{name}: {document:#?}");
-        assert!(labels[0].contains(retained), "{name}: {document:#?}");
+        assert!(labels[0].is_empty(), "{name}: {document:#?}");
         assert!(!labels[0].contains('X'), "{name}: {document:#?}");
         assert!(
             projected_document_text(&document).contains('X'),
             "{name}: {document:#?}"
+        );
+        let visible = projected_document_text(&document);
+        let prior = visible.find('X').expect("prior glyph");
+        let body = visible.find(retained).expect("retained body");
+        let target = visible.find("<outer>").expect("generated terminal target");
+        let after = visible.find("after").expect("following body");
+        assert!(
+            prior < body && body < target && target < after,
+            "{name}: {visible:?}"
+        );
+        assert_eq!(
+            document_link_targets(&document),
+            [mant_ir::LinkTarget::External {
+                uri: "outer".into()
+            }]
         );
     }
 }
@@ -1098,7 +1116,7 @@ fn man_link_annotation_preserves_surrounding_paragraph() {
         .collect::<Vec<_>>();
     assert_eq!(paragraphs.len(), 1, "{document:#?}");
     assert!(
-        inline_text(paragraphs[0]).contains("prefix label ⟨https://example.com⟩ suffix"),
+        inline_text(paragraphs[0]).contains("prefix label <https://example.com> suffix"),
         "{document:#?}"
     );
     let labels = paragraphs[0]
@@ -1165,7 +1183,7 @@ fn no_fill_link_label_owns_pending_zero_advance_glyph() {
             .expect("literal link label");
         assert_eq!(link_label, label, "{name}: {document:#?}");
         assert!(
-            projected_document_text(&document).contains("⟨x⟩"),
+            projected_document_text(&document).contains("<x>"),
             "{name}: {document:#?}"
         );
     }
@@ -1288,9 +1306,9 @@ fn no_fill_end_marker_shares_scope_post_state() {
     let source = b".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\n.Ao\n.Dl marker\n.nf\n.Bo\ninside\n.Ac\nafter\n.Bc\n.fi\ntail\n";
     let document = parse_manual_bytes(std::path::Path::new("nofill-scope-post.1"), source).unwrap();
     let text = projected_document_text(&document);
-    assert_eq!(text.matches('>').count(), 1, "{text:?}");
+    assert_eq!(text.matches('⟩').count(), 1, "{text:?}");
     assert_eq!(text.matches(']').count(), 1, "{text:?}");
-    assert!(text.contains("inside\n>"), "{text:?}");
+    assert!(text.contains("inside\n⟩"), "{text:?}");
 
     // Exact crossed Fo/Fc input also checked with the same fixed oracle.
     // The temporary no-fill builder must mark the original Fo BODY ended
@@ -1318,7 +1336,7 @@ fn ordinary_no_fill_scopes_execute_each_authored_line() {
     // generated open and Eo's authored head each enter their own NODE_LINE;
     // ordinary text lines remain distinct before their respective posts.
     for (name, source, expected) in [
-        ("Ao", b".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\n.nf\n.Ao\nfirst\nsecond\n.Ac\n.fi\n".as_slice(), "<\nfirst\nsecond>"),
+        ("Ao", b".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\n.nf\n.Ao\nfirst\nsecond\n.Ac\n.fi\n".as_slice(), "⟨\nfirst\nsecond⟩"),
         ("Eo", b".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\n.nf\n.Eo OPEN\nfirst\nsecond\n.Ec CLOSE\n.fi\n".as_slice(), "OPEN\nfirst\nsecond\nCLOSE"),
     ] {
         let document = parse_manual_bytes(std::path::Path::new(name), source).unwrap();
@@ -1334,8 +1352,8 @@ fn generated_post_consumes_the_current_zero_advance_cell() {
     let source = b".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\n.nf\n.Ao\n.Dl marker\n\\zX\n.Ac\n.fi\n";
     let document = parse_manual_bytes(std::path::Path::new("nofill-post-zero.1"), source).unwrap();
     let text = projected_document_text(&document);
-    assert!(!text.contains("X>"), "{text:?}");
-    assert!(text.contains('>'), "{text:?}");
+    assert!(!text.contains("X⟩"), "{text:?}");
+    assert!(text.contains('⟩'), "{text:?}");
 
     // Exact reverse input checked with CVS -Tutf8. Eo's authored Ec tail is
     // a separate NODE_LINE, so X must be committed on its own row instead
@@ -1481,7 +1499,7 @@ fn crossed_display_end_does_not_undo_later_no_fill_request() {
     let source = b".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\n.Ao\n.Bd -literal\n.Bo\ninside\n.Ed\n.nf\nafter\n.Bc\n.Ac\n.fi\ntail\n";
     let document = parse_manual_bytes(std::path::Path::new("crossed-ed-nf.1"), source).unwrap();
     let blocks = &document.sections[0].blocks;
-    assert!(blocks.iter().any(|block| matches!(block, Block::Preformatted { children, .. } if inline_text(children).contains("after]>"))), "{blocks:#?}");
+    assert!(blocks.iter().any(|block| matches!(block, Block::Preformatted { children, .. } if inline_text(children).contains("after]⟩"))), "{blocks:#?}");
 }
 
 #[test]
@@ -1493,7 +1511,7 @@ fn generated_posts_follow_current_fill_after_fi_inside_an_old_no_fill_body() {
     let document = parse_manual_bytes(std::path::Path::new("angle-fill-return.1"), angle).unwrap();
     let blocks = &document.sections[0].blocks;
     assert!(blocks.iter().any(|block| matches!(block, Block::Preformatted { children, .. } if inline_text(children).contains("inside"))), "{blocks:#?}");
-    assert!(blocks.iter().any(|block| matches!(block, Block::Paragraph { children, .. } if inline_text(children).starts_with("after>"))), "{blocks:#?}");
+    assert!(blocks.iter().any(|block| matches!(block, Block::Paragraph { children, .. } if inline_text(children).starts_with("after⟩"))), "{blocks:#?}");
 
     let function = b".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\n.nf\n.Fo call\n.fi\n.Fa arg\n.Fc\ntail\n";
     let document =
@@ -1518,8 +1536,8 @@ fn nested_list_returns_fill_mode_before_parent_enclosure_post() {
         }))
     });
     assert!(list_has_filled_after, "{blocks:#?}");
-    assert!(blocks.iter().any(|block| matches!(block, Block::Paragraph { children, .. } if inline_text(children).contains('>'))), "{blocks:#?}");
-    assert!(!blocks.iter().any(|block| matches!(block, Block::Preformatted { children, .. } if inline_text(children).contains('>'))), "{blocks:#?}");
+    assert!(blocks.iter().any(|block| matches!(block, Block::Paragraph { children, .. } if inline_text(children).contains('⟩'))), "{blocks:#?}");
+    assert!(!blocks.iter().any(|block| matches!(block, Block::Preformatted { children, .. } if inline_text(children).contains('⟩'))), "{blocks:#?}");
 }
 
 #[test]
@@ -1531,7 +1549,7 @@ fn generated_no_fill_opening_consumes_its_own_source_line() {
     let document =
         parse_manual_bytes(std::path::Path::new("nofill-generated-line.1"), source).unwrap();
     let blocks = &document.sections[0].blocks;
-    assert!(blocks.iter().any(|block| matches!(block, Block::Preformatted { children, .. } if inline_text(children).contains("before\n<\ninside"))), "{blocks:#?}");
+    assert!(blocks.iter().any(|block| matches!(block, Block::Preformatted { children, .. } if inline_text(children).contains("before\n⟨\ninside"))), "{blocks:#?}");
 
     // Eo's first visible word comes from its HEAD child, which has no
     // NODE_LINE of its own in the fixed CVS tree. The Eo block owns it.
@@ -1556,8 +1574,8 @@ fn generated_no_fill_opening_consumes_its_own_source_line() {
     let document =
         parse_manual_bytes(std::path::Path::new("ao-generated-continuation.1"), source).unwrap();
     let text = projected_document_text(&document);
-    assert!(text.contains("inside>"), "{text:?}");
-    assert!(!text.contains("inside\n>"), "{text:?}");
+    assert!(text.contains("inside⟩"), "{text:?}");
+    assert!(!text.contains("inside\n⟩"), "{text:?}");
 }
 
 #[test]
@@ -1575,7 +1593,7 @@ fn empty_containers_still_execute_their_no_fill_source_line() {
     let document =
         parse_manual_bytes(std::path::Path::new("empty-bf-source-line.1"), empty_font).unwrap();
     let text = projected_document_text(&document);
-    assert!(text.contains("inside\n>"), "{text:?}");
+    assert!(text.contains("inside\n⟩"), "{text:?}");
 }
 
 #[test]
@@ -1586,7 +1604,7 @@ fn display_local_no_fill_does_not_change_parent_enclosure_channel() {
     let source = b".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\n.Ao\n.Bd -literal\n.nf\ninside\n.Ed\nnext\n.Ac\n";
     let document = parse_manual_bytes(std::path::Path::new("bd-local-nofill.1"), source).unwrap();
     let blocks = &document.sections[0].blocks;
-    assert!(blocks.iter().any(|block| matches!(block, Block::Paragraph { children, .. } if inline_text(children).contains("next>"))), "{blocks:#?}");
+    assert!(blocks.iter().any(|block| matches!(block, Block::Paragraph { children, .. } if inline_text(children).contains("next⟩"))), "{blocks:#?}");
 }
 
 #[test]
@@ -1629,7 +1647,7 @@ fn mdoc_explicit_body_end_executes_post_once_at_the_marker() {
         (
             "angle",
             ".Dd September 27, 2026\n.Dt CLOSE 1\n.Os\n.Sh DESCRIPTION\n.Ao\n.Bo\ninside\n.Ac\nafter-angle\n.Bc\ntail\n",
-            "<[inside> after-angle] tail",
+            "⟨[inside⟩ after-angle] tail",
         ),
         (
             "authored",
@@ -1813,8 +1831,8 @@ fn enclosure_post_crosses_detached_definition_list_without_duplication() {
     let document = parse_manual_bytes(std::path::Path::new("list-close.1"), source)
         .expect("lower cross-list explicit close");
     let text = projected_document_text(&document);
-    assert_eq!(text.matches('>').count(), 1, "{text:?}");
-    assert!(text.contains("inside> after-ac"), "{text:?}");
+    assert_eq!(text.matches('⟩').count(), 1, "{text:?}");
+    assert!(text.contains("inside⟩ after-ac"), "{text:?}");
     assert!(text.ends_with("tail"), "{text:?}");
 }
 
@@ -1827,8 +1845,8 @@ fn crossed_enclosure_and_ordinary_enclosure_post_in_detached_list() {
     let document = parse_manual_bytes(std::path::Path::new("nested-list-close.1"), source)
         .expect("lower crossed and normal nested posts");
     let text = projected_document_text(&document);
-    assert!(text.contains("[inside> after-angle]"), "{text:?}");
-    assert_eq!(text.matches('>').count(), 1, "{text:?}");
+    assert!(text.contains("[inside⟩ after-angle]"), "{text:?}");
+    assert_eq!(text.matches('⟩').count(), 1, "{text:?}");
     assert_eq!(text.matches(']').count(), 1, "{text:?}");
 }
 
@@ -2611,7 +2629,11 @@ fn mdoc_column_body_posts_keep_pending_glyphs_in_their_cells() {
     ] {
         // Exact inputs checked with fixed CVS -Tascii and -Tlint.  For
         // LIST_column, mdoc_term.c::termp_it_post() flushes each BODY's
-        // active formatter cell before the next one owns the row.
+        // active formatter cell before the next one owns the row. Non-last
+        // BODYs retain native trailspace=1 as minbl for the next field,
+        // rather than adding unprinted padding to the first semantic cell.
+        // Declared columns consume that geometry; no-fill never changes the
+        // cell's text executor (term.c:233-237, term_field():409-435).
         let manual = format!(
             ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd state probe\n.Sh DESCRIPTION\n.nf\n.Bl -column A B -compact\n{row}\n.El\nY\n.fi\n"
         );
@@ -2632,7 +2654,7 @@ fn mdoc_column_body_posts_keep_pending_glyphs_in_their_cells() {
         let cells = &rows[0].cells;
         assert_eq!(cells.len(), 2, "{label}: {cells:?}");
         for (cell, expected) in cells.iter().zip([first, second]) {
-            let [Block::Preformatted { children, .. }] = cell.blocks.as_slice() else {
+            let [Block::Paragraph { children, .. }] = cell.blocks.as_slice() else {
                 panic!("{label}: pending glyph left its cell: {cell:?}");
             };
             assert_eq!(inline_text(children), expected, "{label}: {children:?}");

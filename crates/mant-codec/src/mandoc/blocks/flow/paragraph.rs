@@ -10,20 +10,26 @@ pub(super) struct ParagraphFlow {
 }
 
 impl ParagraphFlow {
-    pub(super) fn node_count(&self) -> usize {
-        self.nodes.len()
+    pub(super) fn insert_link_cursor(&mut self, marker: String) {
+        self.nodes.push(Inline::anchor(marker));
+    }
+
+    pub(super) fn discard_link_cursor(&mut self, marker: &str) {
+        super::super::man_links::remove_link_cursor(&mut self.nodes, marker);
     }
 
     pub(super) fn wrap_first_link(
         &mut self,
         target: &mant_ir::LinkTarget,
-        start: usize,
+        marker: &str,
+        started: &mut bool,
         skip_visible: &mut usize,
     ) -> bool {
         super::super::man_links::wrap_first_visible_inline(
             &mut self.nodes,
             target,
-            start,
+            marker,
+            started,
             skip_visible,
         )
     }

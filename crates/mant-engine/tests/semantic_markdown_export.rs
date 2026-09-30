@@ -17,6 +17,7 @@ fn no_fill_function_target_survives_addressable_markdown_export() {
         MarkdownOptions {
             preserve_anchors: true,
             preserve_semantics: false,
+            native_text: false,
         },
     );
     assert_eq!(
@@ -42,6 +43,7 @@ fn literal_display_target_survives_addressable_markdown_export() {
         MarkdownOptions {
             preserve_anchors: true,
             preserve_semantics: false,
+            native_text: false,
         },
     );
     assert_eq!(
@@ -99,6 +101,7 @@ fn ordinary_declared_entries_reimport_names_groups_relations_and_domains() {
             MarkdownOptions {
                 preserve_anchors,
                 preserve_semantics: true,
+                native_text: false,
             },
         );
         assert!(markdown.contains("mant:entry"), "{markdown}");
@@ -251,6 +254,7 @@ fn metadata_representation_limits_are_shared_by_import_and_export() {
                 MarkdownOptions {
                     preserve_anchors,
                     preserve_semantics: true,
+                    native_text: false,
                 },
             );
             assert_eq!(
@@ -276,6 +280,7 @@ fn metadata_representation_limits_are_shared_by_import_and_export() {
                     MarkdownOptions {
                         preserve_anchors,
                         preserve_semantics: false,
+                        native_text: false,
                     },
                 );
                 assert_eq!(markdown, ordinary);

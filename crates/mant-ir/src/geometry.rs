@@ -10,6 +10,12 @@
 use std::collections::BTreeMap;
 use unicode_width::UnicodeWidthStr;
 
+mod columns;
+pub use columns::{
+    ColumnFieldWidth, ColumnPiece, DeclaredColumns, MAX_COLUMN_ADVANCE, MAX_DECLARED_COLUMNS,
+    declared_field_width,
+};
+
 mod table;
 pub use table::table_requires_origin_preserving_stack;
 
@@ -33,6 +39,7 @@ pub fn has_literal_rows(nodes: &[crate::Inline]) -> bool {
         | crate::Inline::LineBreak { .. } => true,
         crate::Inline::Strong { children }
         | crate::Inline::Emphasis { children }
+        | crate::Inline::PortableDisplay { children, .. }
         | crate::Inline::Link { children, .. } => has_literal_rows(children),
         crate::Inline::Anchor { .. } => false,
     })

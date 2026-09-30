@@ -19,7 +19,7 @@ pub use roles::{EntryTone, entry_tone};
 mod bindings;
 pub use bindings::{EntryStyleMap, InlineNameRange};
 mod inline;
-pub use inline::{InlinePresentation, visit_inline_text, visit_inline_text_for_terminal};
+pub use inline::{InlinePresentation, visit_inline_text};
 mod text;
 pub use text::{TextPresentation, TextRole};
 

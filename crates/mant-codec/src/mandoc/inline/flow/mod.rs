@@ -169,6 +169,9 @@ pub(in crate::mandoc) struct InlineExecutionState {
     /// (`term.c:250-253`) while a definition BODY waited for content.
     pub(in crate::mandoc) flush_consumed_for_body: bool,
     pub(in crate::mandoc) scope_posts: crate::mandoc::containers::ScopePostState,
+    /// A column list's native device state outlives its cell/display IR
+    /// owners. Only Bl return retires this scope, not a paragraph drain.
+    column_output_depth: usize,
 }
 
 impl std::ops::Deref for InlineBuilder {
@@ -211,40 +214,11 @@ pub(in crate::mandoc) enum AuthorBreakEffect {
     },
 }
 
-/// An output transaction around source that must execute before its compact
-/// presentation is chosen.
-#[derive(Clone)]
-pub(in crate::mandoc) struct OutputTransaction {
-    rollback: OutputRollback,
-    inbound: InboundExecution,
-}
-
-/// State owned by the compacted output rather than the continuing formatter.
-///
-/// This includes queued presentation cells that must be rematerialized by a
-/// fallback after the hidden spelling is removed.  Formatter registers not
-/// listed here remain live by construction and cannot be accidentally reset
-/// when a new execution field is added to [`InlineBuilder`].
-#[derive(Clone)]
-struct OutputRollback {
-    node_count: usize,
-    native_field_position: Option<(u64, usize)>,
-    last_visible_character: Option<char>,
-    has_printable_content: bool,
-    trailing_output: TrailingOutput,
-    /// Padding queued solely for the spelling being compacted. A fallback
-    /// rematerializes this boundary explicitly; it is not persistent
-    /// formatter execution state.
-    pending_breakable_spaces: usize,
-    pending_field_spaces: usize,
-}
-
-/// Execution facts at transaction entry.  Replacement output may consult
-/// them, but rollback never restores them: hidden source remains executed.
+/// Start of an output slice whose source still executes in the live formatter.
+/// Semantic annotation records this boundary without saving execution state.
 #[derive(Clone, Copy)]
-struct InboundExecution {
-    boundary: PendingBoundary,
-    final_source_continuation: Option<bool>,
+pub(in crate::mandoc) struct OutputCheckpoint {
+    node_count: usize,
 }
 
 /// Formatter execution state that crosses a private presentation scope.
@@ -768,10 +742,18 @@ impl InlineExecutionState {
             concat_consumed_for_body: false,
             flush_consumed_for_body: false,
             scope_posts: crate::mandoc::containers::ScopePostState::default(),
+            column_output_depth: 0,
         }
     }
 
     fn reset_paragraph_segment(&mut self, armed_zero_advance: bool) {
+        if self.has_column_output_scope() {
+            // term_flushln() already settled the native buffer at the real
+            // pre/post. Retiring its IR owner must retain NOSPACE/NONEWLINE,
+            // the occupied device row and the next field's native minbl.
+            self.retire_output_owner();
+            return;
+        }
         self.boundary = PendingBoundary::Ordinary;
         self.last_visible_character = None;
         self.has_printable_content = false;
@@ -791,7 +773,7 @@ impl InlineExecutionState {
         // TERMP_NONEWLINE is a native execution register, not an IR segment
         // property. A paragraph drain does not consume a preceding \c.
         self.execution_epoch = 0;
-        self.definition = None;
+        self.retire_definition_output_owner();
         self.last_executed_source_line = None;
         self.completed_vertical_rows = 0;
         if let Some(author) = &mut self.author_execution {
@@ -813,10 +795,38 @@ impl InlineExecutionState {
         self.zero_advance_joined = false;
         self.final_word_join = None;
         self.execution_epoch = 0;
-        self.definition = None;
+        self.retire_definition_output_owner();
         self.last_executed_source_line = None;
         if let Some(author) = &mut self.author_execution {
             author.field_output_start = 0;
+        }
+    }
+
+    pub(in crate::mandoc) fn enter_column_output_scope(&mut self) {
+        self.column_output_depth = self.column_output_depth.saturating_add(1);
+    }
+
+    pub(in crate::mandoc) fn exit_column_output_scope(&mut self) {
+        self.column_output_depth = self.column_output_depth.saturating_sub(1);
+        self.retire_definition_output_owner();
+    }
+
+    pub(in crate::mandoc) fn has_column_output_scope(&self) -> bool {
+        self.column_output_depth > 0
+    }
+
+    fn retire_definition_output_owner(&mut self) {
+        if self.has_column_output_scope() {
+            // print_mdoc_node() restores node geometry after post, but never
+            // clears viscol/minbl or the surrounding column flags because an
+            // IR destination returned (mdoc_term.c:409-439, term.c:233-253).
+            if let Some(field) = &mut self.definition {
+                field.field_word_anchors.clear();
+                field.field_buffer.detach_projection_owner();
+                field.row.retire_row_origin();
+            }
+        } else {
+            self.definition = None;
         }
     }
 
@@ -842,8 +852,23 @@ impl InlineExecutionState {
     }
 
     pub(in crate::mandoc) fn has_visible_content_since(&self, before: (u64, bool)) -> bool {
-        self.visible_glyph_epoch != before.0
-            || (!before.1 && self.zero_advance.has_printable_pending_glyph())
+        let (buffer, anchors) = self
+            .definition
+            .as_ref()
+            .map_or((&self.flush_unit, &self.flush_unit_anchors), |field| {
+                (&field.field_buffer, &field.field_word_anchors)
+            });
+        let rejected_word = buffer.pending_pass_is_definitively_rejected()
+            && anchors
+                .last()
+                .is_some_and(|(_, _, first_content)| *first_content >= buffer.resume_offset());
+        // term_fill's rejected suffix is still buffered until term_flushln,
+        // but cannot claim a visible BODY row merely because its projection
+        // has not yet been trimmed. An accepted prefix in this same word
+        // remains visible and still advances the observation.
+        !rejected_word
+            && (self.visible_glyph_epoch != before.0
+                || (!before.1 && self.zero_advance.has_printable_pending_glyph()))
     }
 
     pub(in crate::mandoc) fn has_printable_pending_zero_advance_glyph(&self) -> bool {

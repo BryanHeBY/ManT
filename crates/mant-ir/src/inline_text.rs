@@ -28,6 +28,7 @@ pub fn visit_inline_plain_text<'a>(nodes: &'a [Inline], mut emit: impl FnMut(&'a
                 | Inline::Equation { value, .. } => emit(value),
                 Inline::Strong { children }
                 | Inline::Emphasis { children }
+                | Inline::PortableDisplay { children, .. }
                 | Inline::Link { children, .. } => append(children, emit),
                 Inline::Anchor { .. } => {}
                 Inline::LineBreak { .. } => emit("\n"),
@@ -62,6 +63,7 @@ pub fn has_printable_character(nodes: &[Inline]) -> bool {
         }
         Inline::Strong { children }
         | Inline::Emphasis { children }
+        | Inline::PortableDisplay { children, .. }
         | Inline::Link { children, .. } => has_printable_character(children),
         Inline::Anchor { .. } | Inline::LineBreak { .. } => false,
     })
@@ -74,6 +76,7 @@ fn first_character(node: &Inline) -> Option<char> {
         }
         Inline::Strong { children }
         | Inline::Emphasis { children }
+        | Inline::PortableDisplay { children, .. }
         | Inline::Link { children, .. } => first_visible_character(children),
         Inline::Anchor { .. } => None,
         Inline::LineBreak { .. } => Some('\n'),
@@ -87,6 +90,7 @@ fn last_character(node: &Inline) -> Option<char> {
         }
         Inline::Strong { children }
         | Inline::Emphasis { children }
+        | Inline::PortableDisplay { children, .. }
         | Inline::Link { children, .. } => last_visible_character(children),
         Inline::Anchor { .. } => None,
         Inline::LineBreak { .. } => Some('\n'),

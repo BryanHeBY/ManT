@@ -36,6 +36,12 @@ impl InlineBuilder {
     /// rejected word-end slices in their shared native input buffer.
     pub(in crate::mandoc) fn begin_definition_head_consumption(&mut self) {
         self.definition_state_mut();
+        if self.execution.has_column_output_scope() {
+            // A new semantic HEAD owns its authored words, not the preceding
+            // column field's deferred positioning pad. Preserve native minbl
+            // for the real flush; its display origin is separate IR geometry.
+            self.execution.pending_field_spaces = 0;
+        }
     }
 
     pub(in crate::mandoc) fn set_definition_native_margin(&mut self, units: usize) {
@@ -54,9 +60,16 @@ impl InlineBuilder {
     /// `term_newln()` flushes an active `NOBREAK` definition field. `BRIND` may
     /// start a new row when a tag overruns its width; HANG keeps that row.
     pub(in crate::mandoc) fn no_fill_source_line(&mut self) {
+        self.execute_native_newline();
+    }
+
+    /// Execute `term_newln()` before any enclosing node restores geometry.
+    /// Source `NODE_LINE` and macro posts share this flush; `roff_pre_br()` is
+    /// separate because it also changes the field flags and row origin.
+    pub(in crate::mandoc) fn execute_native_newline(&mut self) {
         self.commit_definition_row_origin();
         if let Some(definition) = &mut self.execution.definition {
-            definition.row.commit_on_source_flush();
+            definition.row.commit_at_flush();
         }
         let field = self
             .execution
@@ -80,9 +93,10 @@ impl InlineBuilder {
         if let Some((start, gap, body, field_width, flags)) = field {
             self.flush_definition_field(start, gap, body, field_width, flags, false);
             if self.execution.pending_field_spaces > 0 {
-                self.definition_state_mut().pending_gap_origin = PendingFieldGapOrigin::SourceLine;
+                self.definition_state_mut().pending_gap_origin =
+                    PendingFieldGapOrigin::CommittedFlush;
             }
-            // print_mdoc_node() runs term_newln() at each no-fill NODE_LINE.
+            // NODE_LINE and termp_fd_post() both request term_newln().
             // Even if that flush has no buffered glyph, term_newln() sets
             // NOSPACE for the next term_word(). The retained trailspace is
             // separate and can still position the next HANG field.
@@ -134,8 +148,14 @@ impl InlineBuilder {
             self.hard_break();
             return had_cell;
         };
-        let changed =
-            self.flush_definition_field(start, gap, body, field_width_columns, flags, true);
+        let changed = self.flush_definition_field(
+            start,
+            gap,
+            body,
+            field_width_columns,
+            flags,
+            flags.contains(FieldFlag::Brind),
+        );
         self.note_field_control_cleared_no_break(
             flags.contains(FieldFlag::Brind),
             field_width_columns,
@@ -416,24 +436,11 @@ impl InlineBuilder {
             .find(|(cell, _, _)| *cell <= rejected_from)
             .cloned();
         let (marker, prefix_cells) = anchor.map_or((None, 0), |(_, marker, content)| {
-            // Each accepted pass owns a separate range. The blanks consumed
-            // between passes have no semantic scalar and cannot extend the
-            // accepted owner into a later rejected suffix.
-            let mut pass_start = 0;
-            let mut length = 0;
-            for pass in &passes {
-                let start = content.max(pass_start);
-                if start < pass.end {
-                    length += definition.field_buffer.projection_length(start, pass.end);
-                }
-                pass_start = pass.end;
-                while matches!(
-                    definition.field_buffer.cells().get(pass_start),
-                    Some(super::super::field_buffer::FieldCell::BreakableBlank)
-                ) {
-                    pass_start += 1;
-                }
-            }
+            let length = super::super::output::native_passes::accepted_owner_prefix_length(
+                &definition.field_buffer,
+                &passes,
+                content,
+            );
             (Some(marker), length)
         });
         let accepted_owned_prefix = !passes.is_empty()
@@ -494,7 +501,7 @@ impl InlineBuilder {
         execution: &mut super::super::InlineExecutionState,
         nodes: &mut Vec<Inline>,
     ) -> bool {
-        use super::super::field_buffer::{FieldCell, FillTargets, FlushReceipt};
+        use super::super::field_buffer::{FillTargets, FlushReceipt};
         // An author-less definition session has no field geometry: its
         // buffer is the same native `tcol->buf` as the plain unit (term.c
         // runs one term_fill() regardless of authorship) and retires with
@@ -532,6 +539,22 @@ impl InlineBuilder {
             unbounded: true,
         };
         let receipt = buffer.flush_receipt(targets, false);
+        let passes = match &receipt {
+            FlushReceipt::Accepted { passes } | FlushReceipt::Rejected { passes, .. } => passes,
+        };
+        // A deferred scanner can accept several authored-marker passes at
+        // the actual term_flushln(). Acceptance still carries their row
+        // events (term.c:165-220); retirement cannot silently omit them.
+        // The same projector handles a complete unit and an accepted
+        // prefix whose following pass is rejected.
+        super::super::output::native_passes::project_accepted_native_passes(
+            nodes,
+            &buffer,
+            &anchors,
+            passes,
+            0,
+            output_start,
+        );
         let FlushReceipt::Rejected {
             passes,
             rejected_from,
@@ -555,23 +578,9 @@ impl InlineBuilder {
             .find(|(cell, _, _)| *cell <= rejected_from)
             .cloned();
         let (marker, prefix_cells) = anchor.map_or((None, 0), |(_, marker, content)| {
-            // Each accepted pass owns a separate range; the blanks consumed
-            // between passes cannot extend the accepted prefix.
-            let mut pass_start = 0;
-            let mut length = 0;
-            for pass in &passes {
-                let start = content.max(pass_start);
-                if start < pass.end {
-                    length += buffer.projection_length(start, pass.end);
-                }
-                pass_start = pass.end;
-                while matches!(
-                    buffer.cells().get(pass_start),
-                    Some(FieldCell::BreakableBlank)
-                ) {
-                    pass_start += 1;
-                }
-            }
+            let length = super::super::output::native_passes::accepted_owner_prefix_length(
+                &buffer, &passes, content,
+            );
             (Some(marker), length)
         });
         let accepted_owned_prefix =
@@ -666,95 +675,25 @@ impl InlineBuilder {
     }
 
     fn project_accepted_field_passes(&mut self, passes: &[super::super::field_buffer::FillPass]) {
-        use std::collections::BTreeMap;
-        let state = self.execution.definition.as_mut().expect("native field");
-        let first = state
-            .projected_passes
-            .max(state.field_buffer.committed_pass_count());
-        let count = passes.len().saturating_sub(1);
-        if first >= count {
-            state.projected_passes = count;
-            return;
-        }
+        let state = self.execution.definition.as_ref().expect("native field");
         let start = self
             .execution
             .author_execution
             .as_ref()
-            .map_or(0, |author| author.field_output_start)
-            .min(self.nodes.len());
-        let mut authored_breaks =
-            super::super::output::native_passes::authored_owner_breaks(&self.nodes[start..]);
-        let state = self.execution.definition.as_mut().expect("native field");
-        let mut boundaries: BTreeMap<String, Vec<usize>> = BTreeMap::new();
-        let mut pass_start = 0;
-        for (index, pass) in passes
-            .iter()
-            .take(passes.len().saturating_sub(1))
-            .enumerate()
-        {
-            let mut cell = pass.end;
-            while matches!(
-                state.field_buffer.cells().get(cell),
-                Some(super::super::field_buffer::FieldCell::BreakableBlank)
-            ) {
-                cell += 1;
-            }
-            let marker_owner = state.field_buffer.cells()[pass_start..cell]
-                .iter()
-                .rposition(|cell| {
-                    matches!(cell, super::super::field_buffer::FieldCell::BreakMarker)
-                })
-                .map(|relative| pass_start + relative)
-                .and_then(|marker_cell| {
-                    let owner = state
-                        .field_word_anchors
-                        .partition_point(|(_, _, content)| *content <= marker_cell);
-                    owner
-                        .checked_sub(1)
-                        .and_then(|index| state.field_word_anchors.get(index))
-                });
-            pass_start = cell;
-            // An authored break has already produced its hard boundary in
-            // this word's semantic output. It cannot become a width split
-            // at a later scalar merely because pending tabs changed width.
-            let represented = marker_owner.is_some_and(|(_, marker, _)| {
-                authored_breaks.get_mut(marker).is_some_and(|count| {
-                    if *count == 0 {
-                        return false;
-                    }
-                    *count -= 1;
-                    true
-                })
-            });
-            if index < first || represented {
-                continue;
-            }
-            let owner = state
-                .field_word_anchors
-                .partition_point(|(_, _, content)| *content <= cell);
-            if let Some((_, marker, content)) = owner
-                .checked_sub(1)
-                .and_then(|index| state.field_word_anchors.get(index))
-            {
-                boundaries
-                    .entry(marker.clone())
-                    .or_default()
-                    .push(state.field_buffer.projection_length(*content, cell));
-            }
-        }
-        state.projected_passes = passes.len().saturating_sub(1);
-        if !boundaries.is_empty() {
-            // Earlier fields are already committed output. Only the active
-            // field owner needs this pass map; repeatedly copying the whole
-            // HEAD would revisit its growing committed prefix at each flush.
-            let pending = self.nodes.split_off(start);
-            self.nodes.extend(
-                super::super::output::native_passes::split_native_field_passes(
-                    &pending,
-                    &boundaries,
-                ),
-            );
-        }
+            .map_or(0, |author| author.field_output_start);
+        let projected = super::super::output::native_passes::project_accepted_native_passes(
+            &mut self.nodes,
+            &state.field_buffer,
+            &state.field_word_anchors,
+            passes,
+            state.projected_passes,
+            start,
+        );
+        self.execution
+            .definition
+            .as_mut()
+            .expect("native field")
+            .projected_passes = projected;
     }
 
     /// Retire only the rejected native buffer's registers after its exact
@@ -1023,14 +962,7 @@ impl InlineBuilder {
     /// Enter or leave no-fill mode at a physical source-line boundary.
     /// `print_mdoc_node()` performs that boundary in addition to the request's
     /// own `roff_term_pre_br()` dispatch.
-    pub(in crate::mandoc) fn fill_mode_boundary(&mut self) {
-        self.commit_definition_row_origin();
-        // The request's roff_term_pre_br() sets TERMP_NOSPACE after its
-        // term_newln() (roff_term.c:75-78): the first word after `.nf`/
-        // `.fi` concatenates onto the current row with no auto blank —
-        // the reference prints `body linetail text` after `.fi`.
-        self.execution.concat_next_word = true;
-        self.execution.concat_flush_source = false;
+    fn finish_resumed_fill_mode_boundary(&mut self) -> bool {
         if let Some(field) = self.take_no_break_field() {
             // print_mdoc_node() runs this fill-mode boundary in addition to
             // the request's own roff_term_pre_br() (roff_term.c:45-58).
@@ -1043,6 +975,20 @@ impl InlineBuilder {
                 .expect("definition field session")
                 .outcome
                 .mark_field_exited();
+            return true;
+        }
+        false
+    }
+
+    pub(in crate::mandoc) fn fill_mode_boundary(&mut self) {
+        self.commit_definition_row_origin();
+        // The request's roff_term_pre_br() sets TERMP_NOSPACE after its
+        // term_newln() (roff_term.c:75-78): the first word after `.nf`/
+        // `.fi` concatenates onto the current row with no auto blank —
+        // the reference prints `body linetail text` after `.fi`.
+        self.execution.concat_next_word = true;
+        self.execution.concat_flush_source = false;
+        if self.finish_resumed_fill_mode_boundary() {
             return;
         }
         let Some(ActiveDefinitionField {
@@ -1056,6 +1002,14 @@ impl InlineBuilder {
             self.control_line_break();
             return;
         };
+        if !flags.contains(FieldFlag::Brind) {
+            self.execution.concat_next_word = false;
+            // roff_term_pre_br() changes field origin/flags only under
+            // BRIND. Column NOBREAK survives fi/nf; the receipt, not the
+            // mode switch, decides whether this physical row closes.
+            self.control_line_break();
+            return;
+        }
         // fi/nf share pre_br(): consume the old native buffer before the
         // request changes BRIND/NOBREAK (roff_term.c:45-58,69-78). A zero
         // glyph still waiting for IR belongs to that buffer's receipt.
@@ -1211,11 +1165,10 @@ impl InlineBuilder {
             // a vertical row or consuming skipvsp.
             self.continue_source_line(true);
         } else {
-            let rows = self.resolve_vertical_space(1);
-            self.vertical_space(usize::from(rows));
-            self.asserted_vertical_row |= rows > 0;
-            self.execution.completed_vertical_rows =
-                self.execution.completed_vertical_rows.saturating_add(rows);
+            // Empty TEXT calls term_vspace(), not roff_term_pre_sp().
+            // Its resolved rows are recorded by that single execution
+            // entry; it must not add a second receipt or execute pre_br.
+            self.native_vertical_space(1);
         }
     }
 
@@ -1243,6 +1196,16 @@ impl InlineBuilder {
                     .unwrap()
                     .field_output_start = self.nodes.len();
             }
+            return;
+        }
+        if self
+            .active_definition_field()
+            .is_some_and(|field| !field.flags.contains(FieldFlag::Brind))
+        {
+            // Column fields have no BRIND transition after term_vspace().
+            // It emits real device rows while retaining their NOBREAK state.
+            self.native_vertical_space(u16::try_from(rows).unwrap_or(u16::MAX));
+            self.control_line_break();
             return;
         }
         if rows == 0 {
@@ -1406,10 +1369,15 @@ impl InlineBuilder {
     /// this does not execute `pre_br` or clear BRIND/NOBREAK afterwards.
     pub(in crate::mandoc) fn native_vertical_space(&mut self, rows: u16) {
         self.no_fill_source_line();
-        let rows = usize::from(self.execution.resolve_vertical_space(i32::from(rows)));
-        self.retain_line_breaks(rows);
-        self.finish_native_vertical_row(rows);
+        let rows = self.execution.resolve_vertical_space(i32::from(rows));
+        self.retain_line_breaks(usize::from(rows));
+        self.finish_native_vertical_row(usize::from(rows));
         self.asserted_vertical_row |= rows > 0;
+        // term_vspace() already emitted these empty rows after resolving
+        // skipvsp. They survive an output-owner return independently of
+        // the ordinary row end from its leading term_newln().
+        self.execution.completed_vertical_rows =
+            self.execution.completed_vertical_rows.saturating_add(rows);
     }
 
     /// A real `term_flushln()` commits this input field irreversibly. Keep
@@ -1606,7 +1574,10 @@ mod recording_tests {
     #[test]
     fn native_recording_uses_the_field_owner_before_lazy_reentry() {
         let mut builder = InlineBuilder::with_spacing(true);
-        assert!(!builder.records_native_field_cells());
+        assert!(
+            builder.records_native_field_cells(),
+            "plain words record native cells too"
+        );
         builder.inherit_author_execution_with_effect(
             crate::mandoc::formatter::AuthorFlow::default(),
             false,

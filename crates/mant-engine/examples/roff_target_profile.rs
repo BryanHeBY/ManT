@@ -556,6 +556,7 @@ Escape.
             table_row_kind: None,
             flags,
             list_kind: None,
+            columns: Vec::new(),
             definition_list_style: None,
             display_kind: None,
             font: None,

@@ -63,11 +63,12 @@ fn author_mode_request_respects_no_fill_source_continuation() {
 
 #[test]
 fn bare_zero_advance_keeps_generated_closing_glyph_in_its_row() {
-    // Exact enclosure and function forms checked with fixed CVS -Tascii/
-    // -Tlint. term.c::term_word() buffers a generated glyph after bare \z;
+    // Exact enclosure and function forms rechecked with pristine ASCII/
+    // UTF-8/tree/lint. Ao's UTF-8 device glyphs are ⟨⟩, while its ASCII
+    // fallback is <>. term.c::term_word() buffers a glyph after bare \z;
     // mdoc_term.c's post emits it before the next NODE_LINE term_newln().
     for (scope, expected) in [
-        (".Ao\n\\z\n.Ac", "<\n>\nNEXT"),
+        (".Ao\n\\z\n.Ac", "⟨\n⟩\nNEXT"),
         (".Bo\n\\z\n.Bc", "[\n]\nNEXT"),
         (".Fo call\n\\z\n.Fc", "call(\n)\nNEXT"),
     ] {

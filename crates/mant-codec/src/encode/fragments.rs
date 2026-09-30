@@ -20,6 +20,7 @@ impl MarkdownFragmentOptions {
         MarkdownOptions {
             preserve_anchors: self.preserve_anchors,
             preserve_semantics: false,
+            ..MarkdownOptions::default()
         }
     }
 }

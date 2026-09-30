@@ -38,7 +38,10 @@ impl<'ir> Visit<'ir> for VisibleText {
             Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. } => {
                 self.0 = !value.trim().is_empty();
             }
-            Inline::Strong { .. } | Inline::Emphasis { .. } | Inline::Link { .. } => {
+            Inline::Strong { .. }
+            | Inline::Emphasis { .. }
+            | Inline::PortableDisplay { .. }
+            | Inline::Link { .. } => {
                 crate::visit::walk_inline(self, inline);
             }
             Inline::LineBreak { .. } | Inline::Anchor { .. } => {}

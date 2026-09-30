@@ -65,6 +65,16 @@ impl FieldFlags {
         flags
     }
 
+    /// `LIST_column` BODY pre (mdoc_term.c:817-824): only non-last
+    /// fields keep NOBREAK, with trailspace one; no BRIND or HANG.
+    pub(in crate::mandoc) const fn column(last: bool) -> Self {
+        if last {
+            Self::new(&[], 0)
+        } else {
+            Self::new(&[FieldFlag::NoBreak], 1)
+        }
+    }
+
     /// `mdoc_term.c::termp_it_pre()`: `LIST_diag` (mdoc_term.c:827-831) —
     /// NoBreak|Brind without Hang, trailspace 1.
     pub(in crate::mandoc) const fn diag() -> Self {

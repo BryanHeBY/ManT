@@ -906,6 +906,16 @@
             "description": "Block-capable table.",
             "type": "object",
             "properties": {
+              "columnWidths": {
+                "description": "Measured declaration content widths in display cells, excluding\nthe inter-column gap. These are preferred field origins, not fixed\nviewport widths. The producer resolves source escapes using its\nreading device. Empty selects content-derived table layout.\nConsumers share bounded 4/3/1-cell gap placement and preserve every\nactual cell when declarations and cells have different lengths.",
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "uint16",
+                  "maximum": 65535,
+                  "minimum": 0
+                }
+              },
               "layout": {
                 "description": "Source-derived indentation and vertical spacing.",
                 "$ref": "#/$defs/LayoutHint"
@@ -989,11 +999,11 @@
             ]
           },
           {
-            "description": "Explicit vertical spacing requested by the source.",
+            "description": "Completed blank rows emitted by the producer.",
             "type": "object",
             "properties": {
               "lines": {
-                "description": "Number of terminal rows requested.",
+                "description": "Number of executed blank rows.",
                 "type": "integer",
                 "format": "uint16",
                 "maximum": 65535,
@@ -2358,6 +2368,33 @@
             "required": [
               "type",
               "target",
+              "children"
+            ]
+          },
+          {
+            "description": "A retained portable spelling over native terminal execution.\n\n`children` hold the native execution result exactly as the formatter\nrecorded it (for mdoc `.Bx` lifecycle operands: the authored operand\nglyphs plus the validator-generated `BSD` word). `display` is the\nportable replacement spelling the project retains for reader-facing\nprojections. Native-faithful consumers project `children`; the two\nare asserted separately and never conflated (external review\nsection 9: execution facts and display replacement stay separated).",
+            "type": "object",
+            "properties": {
+              "children": {
+                "description": "Native execution result this spelling replaces.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/Inline"
+                }
+              },
+              "display": {
+                "description": "Reader-facing replacement spelling.",
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "const": "portable-display"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "type",
+              "display",
               "children"
             ]
           },
@@ -3840,6 +3877,16 @@
             "description": "Block-capable table.",
             "type": "object",
             "properties": {
+              "columnWidths": {
+                "description": "Measured declaration content widths in display cells, excluding\nthe inter-column gap. These are preferred field origins, not fixed\nviewport widths. The producer resolves source escapes using its\nreading device. Empty selects content-derived table layout.\nConsumers share bounded 4/3/1-cell gap placement and preserve every\nactual cell when declarations and cells have different lengths.",
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "uint16",
+                  "maximum": 65535,
+                  "minimum": 0
+                }
+              },
               "layout": {
                 "description": "Source-derived indentation and vertical spacing.",
                 "$ref": "#/$defs/LayoutHint"
@@ -3923,11 +3970,11 @@
             ]
           },
           {
-            "description": "Explicit vertical spacing requested by the source.",
+            "description": "Completed blank rows emitted by the producer.",
             "type": "object",
             "properties": {
               "lines": {
-                "description": "Number of terminal rows requested.",
+                "description": "Number of executed blank rows.",
                 "type": "integer",
                 "format": "uint16",
                 "maximum": 65535,
@@ -6204,6 +6251,33 @@
             "required": [
               "type",
               "target",
+              "children"
+            ]
+          },
+          {
+            "description": "A retained portable spelling over native terminal execution.\n\n`children` hold the native execution result exactly as the formatter\nrecorded it (for mdoc `.Bx` lifecycle operands: the authored operand\nglyphs plus the validator-generated `BSD` word). `display` is the\nportable replacement spelling the project retains for reader-facing\nprojections. Native-faithful consumers project `children`; the two\nare asserted separately and never conflated (external review\nsection 9: execution facts and display replacement stay separated).",
+            "type": "object",
+            "properties": {
+              "children": {
+                "description": "Native execution result this spelling replaces.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/Inline"
+                }
+              },
+              "display": {
+                "description": "Reader-facing replacement spelling.",
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "const": "portable-display"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "type",
+              "display",
               "children"
             ]
           },
@@ -9848,6 +9922,16 @@
             "description": "Block-capable table.",
             "type": "object",
             "properties": {
+              "columnWidths": {
+                "description": "Measured declaration content widths in display cells, excluding\nthe inter-column gap. These are preferred field origins, not fixed\nviewport widths. The producer resolves source escapes using its\nreading device. Empty selects content-derived table layout.\nConsumers share bounded 4/3/1-cell gap placement and preserve every\nactual cell when declarations and cells have different lengths.",
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "uint16",
+                  "maximum": 65535,
+                  "minimum": 0
+                }
+              },
               "layout": {
                 "description": "Source-derived indentation and vertical spacing.",
                 "$ref": "#/$defs/LayoutHint"
@@ -9931,11 +10015,11 @@
             ]
           },
           {
-            "description": "Explicit vertical spacing requested by the source.",
+            "description": "Completed blank rows emitted by the producer.",
             "type": "object",
             "properties": {
               "lines": {
-                "description": "Number of terminal rows requested.",
+                "description": "Number of executed blank rows.",
                 "type": "integer",
                 "format": "uint16",
                 "maximum": 65535,
@@ -11254,6 +11338,33 @@
             "required": [
               "type",
               "target",
+              "children"
+            ]
+          },
+          {
+            "description": "A retained portable spelling over native terminal execution.\n\n`children` hold the native execution result exactly as the formatter\nrecorded it (for mdoc `.Bx` lifecycle operands: the authored operand\nglyphs plus the validator-generated `BSD` word). `display` is the\nportable replacement spelling the project retains for reader-facing\nprojections. Native-faithful consumers project `children`; the two\nare asserted separately and never conflated (external review\nsection 9: execution facts and display replacement stay separated).",
+            "type": "object",
+            "properties": {
+              "children": {
+                "description": "Native execution result this spelling replaces.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/Inline"
+                }
+              },
+              "display": {
+                "description": "Reader-facing replacement spelling.",
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "const": "portable-display"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "type",
+              "display",
               "children"
             ]
           },
@@ -13186,6 +13297,16 @@
             "description": "Block-capable table.",
             "type": "object",
             "properties": {
+              "columnWidths": {
+                "description": "Measured declaration content widths in display cells, excluding\nthe inter-column gap. These are preferred field origins, not fixed\nviewport widths. The producer resolves source escapes using its\nreading device. Empty selects content-derived table layout.\nConsumers share bounded 4/3/1-cell gap placement and preserve every\nactual cell when declarations and cells have different lengths.",
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "uint16",
+                  "maximum": 65535,
+                  "minimum": 0
+                }
+              },
               "layout": {
                 "description": "Source-derived indentation and vertical spacing.",
                 "$ref": "#/$defs/LayoutHint"
@@ -13269,11 +13390,11 @@
             ]
           },
           {
-            "description": "Explicit vertical spacing requested by the source.",
+            "description": "Completed blank rows emitted by the producer.",
             "type": "object",
             "properties": {
               "lines": {
-                "description": "Number of terminal rows requested.",
+                "description": "Number of executed blank rows.",
                 "type": "integer",
                 "format": "uint16",
                 "maximum": 65535,
@@ -15702,6 +15823,33 @@
             "required": [
               "type",
               "target",
+              "children"
+            ]
+          },
+          {
+            "description": "A retained portable spelling over native terminal execution.\n\n`children` hold the native execution result exactly as the formatter\nrecorded it (for mdoc `.Bx` lifecycle operands: the authored operand\nglyphs plus the validator-generated `BSD` word). `display` is the\nportable replacement spelling the project retains for reader-facing\nprojections. Native-faithful consumers project `children`; the two\nare asserted separately and never conflated (external review\nsection 9: execution facts and display replacement stay separated).",
+            "type": "object",
+            "properties": {
+              "children": {
+                "description": "Native execution result this spelling replaces.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/Inline"
+                }
+              },
+              "display": {
+                "description": "Reader-facing replacement spelling.",
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "const": "portable-display"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "type",
+              "display",
               "children"
             ]
           },

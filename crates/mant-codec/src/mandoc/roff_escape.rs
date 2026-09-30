@@ -258,6 +258,71 @@ pub(super) fn decode(source: &str) -> Vec<RoffInlineEvent> {
     Decoder::new(source).decode()
 }
 
+/// Device measurement of an unevaluated width sample. This follows
+/// `term.c::term_strlen()` rather than executing `term_word()`: `\\z` skips
+/// the next measured glyph, font/motion controls have no width, and an
+/// overstrike measures its widest unescaped constituent.
+pub(in crate::mandoc) fn width_sample(source: &str) -> usize {
+    let mut width = 0_usize;
+    let mut skip = false;
+    let mut decoder = Decoder::new(source);
+    decoder.measurement = true;
+    for event in decoder.decode() {
+        match event {
+            RoffInlineEvent::Text(text) => {
+                let tail = if skip && !text.is_empty() {
+                    skip = false;
+                    text.get(text.chars().next().map_or(0, char::len_utf8)..)
+                        .unwrap_or_default()
+                } else {
+                    &text
+                };
+                width = width.saturating_add(mant_ir::geometry::text_width(tail));
+            }
+            RoffInlineEvent::Glyph(text) => {
+                if skip {
+                    skip = false;
+                } else {
+                    width = width.saturating_add(mant_ir::geometry::text_width(&text));
+                }
+            }
+            RoffInlineEvent::DeviceName => {
+                if skip {
+                    skip = false;
+                } else {
+                    width = width.saturating_add(4);
+                }
+            }
+            RoffInlineEvent::ZeroAdvance => skip = true,
+            RoffInlineEvent::Overstrike { source, .. } => {
+                let mut decoder = Decoder::new(&source);
+                let mut maximum = 0;
+                while let Some(character) = decoder.take_character() {
+                    if character == '\\' {
+                        if let Some(trigger) = decoder.take_character() {
+                            decoder.decode_escape(trigger);
+                        }
+                    } else {
+                        maximum =
+                            maximum.max(mant_ir::geometry::text_width(&character.to_string()));
+                    }
+                }
+                width = width.saturating_add(maximum);
+            }
+            RoffInlineEvent::FallbackGlyph(_)
+            | RoffInlineEvent::ZeroWidthGlyph
+            | RoffInlineEvent::Font(_)
+            | RoffInlineEvent::PreviousFont
+            | RoffInlineEvent::Link(_)
+            | RoffInlineEvent::EmptyDestination
+            | RoffInlineEvent::LineBreak
+            | RoffInlineEvent::NoSpace
+            | RoffInlineEvent::Presentation { .. } => {}
+        }
+    }
+    width
+}
+
 /// Project the one terminal cell written by CVS `ESCAPE_OVERSTRIKE`.
 ///
 /// The terminal encoder repeatedly backs up over the same cell.  A graphic
@@ -299,6 +364,7 @@ pub(in crate::mandoc) const fn is_formatter_word_blank(character: char) -> bool 
 }
 
 struct Decoder {
+    measurement: bool,
     characters: Vec<char>,
     index: usize,
     events: Vec<RoffInlineEvent>,
@@ -308,6 +374,7 @@ struct Decoder {
 impl Decoder {
     fn new(source: &str) -> Self {
         Self {
+            measurement: false,
             characters: source.chars().collect(),
             index: 0,
             events: Vec::new(),
@@ -552,7 +619,7 @@ impl Decoder {
 
     fn decode_horizontal_motion(&mut self) {
         let argument = self.take_delimited_argument();
-        if argument.as_deref().is_some_and(is_positive_literal_motion) {
+        if !self.measurement && argument.as_deref().is_some_and(is_positive_literal_motion) {
             // ManT does not reproduce formatter geometry, but an explicit
             // positive advance is still a semantic word boundary. Retaining
             // one space matters when `\c` suppresses the input-line break.
@@ -565,6 +632,13 @@ impl Decoder {
     }
 
     fn push_special_character(&mut self, name: &str, syntax: NamedCharacterSyntax) {
+        // term_strlen uses the pinned catalog and a single ESCAPE_UNICODE
+        // scalar. GNU fallback/composite display spellings are not native
+        // declaration glyphs and must not create a device width or consume z.
+        if self.measurement && (name.contains('_') || unicode_special_characters(name).is_none()) {
+            self.push_native_special_character(name, syntax);
+            return;
+        }
         if let Some(value) = dedicated_special_character(name) {
             self.emit(RoffInlineEvent::Glyph(value.to_owned()));
             return;
@@ -581,6 +655,10 @@ impl Decoder {
             self.emit(RoffInlineEvent::Glyph(glyph));
             return;
         }
+        self.push_native_special_character(name, syntax);
+    }
+
+    fn push_native_special_character(&mut self, name: &str, syntax: NamedCharacterSyntax) {
         match libmandoc_rs::special_character(name) {
             Some(SpecialCharacter::Visible(character)) => {
                 let mut glyph = String::new();

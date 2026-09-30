@@ -476,6 +476,7 @@ fn collect_inlines(inlines: &[Inline], output: &mut Vec<ExpectedFragment>, indep
             }
             Inline::Strong { children }
             | Inline::Emphasis { children }
+            | Inline::PortableDisplay { children, .. }
             | Inline::Link { children, .. } => {
                 collect_inlines(children, output, independent);
             }

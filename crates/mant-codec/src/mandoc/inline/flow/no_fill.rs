@@ -111,6 +111,12 @@ impl NoFillInlineState {
             }
             output.push(Inline::line_break());
         }
+        // roff_term_pre_mc() holds NOBREAK while term_flushln() consumes the
+        // active buffer. Its reset (term.c:233-237) clears col/lastcol even
+        // when the device row continues: a previous NBRZW + \\p may not be
+        // re-fed when the next word arrives. The word executor already
+        // projected accepted passes; this is retirement, not another pass.
+        InlineBuilder::clear_plain_flush_unit_for_row(execution);
         execution.reset_no_fill_row(false);
         self.formatter_cell = NoFillFormatterCell::Origin;
         self.active = false;
@@ -209,5 +215,9 @@ pub(in crate::mandoc) fn lower_no_fill_fragment_with_formatter(
     if finishes_row && !continues_line {
         row.finish_row(&mut formatter.execution, &mut output);
     }
+    // A word receipt may carry an internal projection anchor even when
+    // term_word() wrote no formatter cell. Remove it before LiteralFlow
+    // decides whether this fragment occupies a physical row.
+    super::output::finalize_inline_output(&mut output);
     (output, continues_line, asserted_vertical_row)
 }

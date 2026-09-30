@@ -6,6 +6,7 @@ mod flat;
 mod fragments;
 mod inline;
 mod mapped;
+mod portable;
 mod semantic;
 
 use std::{borrow::Cow, ops::Range};
@@ -46,6 +47,9 @@ pub struct MarkdownOptions {
     /// Unsupported documents retain portable content without semantic comments;
     /// this is not a lossless serialization (use IR JSON for that).
     pub preserve_semantics: bool,
+    /// Project the executed native children of portable display annotations.
+    /// The default exports their portable spelling while keeping hard rows.
+    pub native_text: bool,
 }
 
 impl MarkdownOptions {
@@ -53,6 +57,7 @@ impl MarkdownOptions {
     pub const ADDRESSABLE: Self = Self {
         preserve_anchors: true,
         preserve_semantics: false,
+        native_text: false,
     };
 }
 
@@ -197,6 +202,17 @@ pub enum MarkdownNode<'src> {
 #[must_use]
 pub fn render_addressable_markdown(query: &ResolvedContent) -> MarkdownArtifact<'_> {
     render_markdown_artifact(query, MarkdownOptions::ADDRESSABLE, true)
+}
+
+/// Encode addressable bytes using the requested visible-text projection.
+/// Returned coordinates refer to these exact bytes, including native text
+/// when [`MarkdownOptions::native_text`] is selected.
+#[must_use]
+pub fn render_addressable_markdown_with_options(
+    query: &ResolvedContent,
+    options: MarkdownOptions,
+) -> MarkdownArtifact<'_> {
+    render_markdown_artifact(query, options, true)
 }
 
 fn render_markdown_artifact(
@@ -561,7 +577,10 @@ pub fn heading_has_local_link(heading: &mant_ir::Heading) -> bool {
             } => true,
             mant_ir::Inline::Link { children, .. }
             | mant_ir::Inline::Strong { children }
-            | mant_ir::Inline::Emphasis { children } => inlines_have_local_link(children),
+            | mant_ir::Inline::Emphasis { children }
+            | mant_ir::Inline::PortableDisplay { children, .. } => {
+                inlines_have_local_link(children)
+            }
             mant_ir::Inline::Text { .. }
             | mant_ir::Inline::Code { .. }
             | mant_ir::Inline::Equation { .. }

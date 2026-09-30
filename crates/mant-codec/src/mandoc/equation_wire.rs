@@ -179,6 +179,7 @@ fn visit_inlines(inlines: &mut [Inline], array_depth: usize, summary: &mut Summa
         match inline {
             Inline::Strong { children }
             | Inline::Emphasis { children }
+            | Inline::PortableDisplay { children, .. }
             | Inline::Link { children, .. } => {
                 visit_inlines(children, object_depth + 1, summary);
             }

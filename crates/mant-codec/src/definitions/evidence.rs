@@ -77,6 +77,10 @@ pub(super) fn head_content(terms: &[Vec<Inline>]) -> Vec<Vec<Inline>> {
                     Inline::Emphasis { children } => Inline::Emphasis {
                         children: without_anchors(children),
                     },
+                    Inline::PortableDisplay { display, children } => Inline::PortableDisplay {
+                        display: display.clone(),
+                        children: without_anchors(children),
+                    },
                     Inline::Link {
                         children,
                         target,
@@ -119,6 +123,27 @@ mod tests {
                 ..Default::default()
             },
         }
+    }
+
+    #[test]
+    fn portable_head_navigation_does_not_invalidate_native_evidence() {
+        let mut original = item();
+        original.terms[0] = vec![Inline::PortableDisplay {
+            display: "portable description".into(),
+            children: original.terms[0].clone(),
+        }];
+        let mut evidence = NativeHeadEvidence::default();
+        evidence.record(&original, NativeHeadRole::Environment);
+        let mut moved = original.clone();
+        let Inline::PortableDisplay { children, .. } = &mut moved.terms[0][0] else {
+            panic!("portable head");
+        };
+        children.insert(0, Inline::anchor("allocated-navigation-id"));
+        assert_eq!(evidence.role(&moved), Some(NativeHeadRole::Environment));
+        moved.terms[0].push(Inline::Text {
+            value: "different native text".into(),
+        });
+        assert_eq!(evidence.role(&moved), None);
     }
 
     #[test]

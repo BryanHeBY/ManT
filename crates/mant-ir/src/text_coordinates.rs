@@ -34,6 +34,7 @@ pub fn project_content_slice(
             match node {
                 Inline::Strong { children }
                 | Inline::Emphasis { children }
+                | Inline::PortableDisplay { children, .. }
                 | Inline::Link { children, .. } => children,
                 _ => return None,
             }
@@ -72,6 +73,7 @@ pub fn inline_scalar_len(nodes: &[Inline]) -> usize {
             }
             Inline::Strong { children }
             | Inline::Emphasis { children }
+            | Inline::PortableDisplay { children, .. }
             | Inline::Link { children, .. } => inline_scalar_len(children),
             Inline::LineBreak { .. } => 1,
             Inline::Anchor { .. } => 0,

@@ -420,6 +420,138 @@ fn preserves_explicit_targets_on_empty_mdoc_list_items() {
 }
 
 #[test]
+fn moved_list_target_uses_its_surviving_native_owner_once() {
+    // Exact fixed CVS tree/HTML: post_tg() moves NODE_ID to Pp at line 9;
+    // the NOPRT Tg at line 7 no longer owns it. Recovery must not invent an
+    // additional definition item before that real paragraph destination.
+    let source = b".Dd September 9, 2026\n.Dt TARGET 1\n.Os\n.Sh DESCRIPTION\nBEFORE\n.Bl -tag -width Ds\n.Tg empty-target\n.El\n.Pp\nAFTER\n";
+    let document = parse_manual_bytes(std::path::Path::new("moved-empty-target.1"), source)
+        .expect("lower the validated paragraph target");
+    let json = serde_json::to_string(&document).expect("serialize target ownership");
+    let decoded: mant_ir::Document =
+        serde_json::from_str(&json).expect("decode actual target JSON");
+    assert_eq!(decoded, document);
+    assert_eq!(anchor_owner_lines(&decoded), [("empty-target".into(), 9)]);
+    assert!(
+        decoded.sections[0].blocks.iter().any(|block| {
+            matches!(block, Block::DefinitionList { items, .. } if items.is_empty())
+        })
+    );
+    assert_eq!(
+        mant_ir::DocumentIndex::build(&decoded)
+            .fragment_target("empty-target")
+            .map(mant_ir::NodeId::as_str),
+        Some("empty-target")
+    );
+    assert!(
+        decoded
+            .diagnostics
+            .iter()
+            .all(|diagnostic| { diagnostic.impact == mant_ir::DiagnosticImpact::None })
+    );
+}
+
+#[test]
+fn removed_empty_column_owner_retains_authored_target_recovery() {
+    // Exact fixed CVS tree: post_it() removes the empty column It; the Tg
+    // remains NOPRT with no surviving NODE_ID anywhere. The established
+    // authored-target recovery retains that one zero-width source identity.
+    let source = b".Dd September 9, 2026\n.Dt TARGET 1\n.Os\n.Sh DESCRIPTION\nBEFORE\n.Bl -column one two\n.Tg empty-column-target\n.It\n.El\n.Pp\nAFTER\n";
+    let document = parse_manual_bytes(std::path::Path::new("removed-empty-column.1"), source)
+        .expect("recover an authored target whose native owner was removed");
+    let json = serde_json::to_string(&document).expect("serialize recovered target");
+    let decoded: mant_ir::Document =
+        serde_json::from_str(&json).expect("decode recovered target JSON");
+    assert_eq!(decoded, document);
+    assert_eq!(
+        anchor_owner_lines(&decoded),
+        [("empty-column-target".into(), 7)]
+    );
+    assert_eq!(
+        mant_ir::DocumentIndex::build(&decoded)
+            .fragment_target("empty-column-target")
+            .map(mant_ir::NodeId::as_str),
+        Some("empty-column-target")
+    );
+    assert!(
+        decoded
+            .diagnostics
+            .iter()
+            .all(|diagnostic| { diagnostic.impact == mant_ir::DiagnosticImpact::None })
+    );
+}
+
+#[test]
+fn surviving_same_named_owner_takes_precedence_over_removed_owner_recovery() {
+    // Exact fixed CVS tree/HTML: the first owner is deleted with the empty
+    // column It. Only the later Pp has NODE_ID. Recovery preserves target
+    // availability, not an extra speculative owner when that spelling has
+    // already survived on the real paragraph. This differs from two actual
+    // NODE_ID owners, covered by the duplicate-owner test below.
+    let source = b".Dd September 9, 2026\n.Dt TARGET 1\n.Os\n.Sh DESCRIPTION\nBEFORE\n.Bl -column one two\n.Tg repeated-target\n.It\n.El\n.Pp\n.Tg repeated-target\n.No AFTER\n";
+    let document = parse_manual_bytes(std::path::Path::new("recovery-precedence.1"), source)
+        .expect("prefer the surviving same-named target owner");
+    assert_eq!(
+        anchor_owner_lines(&document),
+        [("repeated-target".into(), 10)]
+    );
+    assert_eq!(
+        mant_ir::DocumentIndex::build(&document)
+            .fragment_target("repeated-target")
+            .map(mant_ir::NodeId::as_str),
+        Some("repeated-target")
+    );
+    assert!(
+        document
+            .diagnostics
+            .iter()
+            .all(|diagnostic| { diagnostic.impact == mant_ir::DiagnosticImpact::None })
+    );
+}
+
+#[test]
+fn surviving_authored_owners_keep_real_duplicates_and_source_positions() {
+    // Each exact source was run with fixed CVS before these assertions.
+    // tag_put() can retain two real NODE_ID owners with the same authored
+    // spelling. The recovery filter cannot erase either native owner or
+    // suppress their genuine alias ambiguity. A Tg that still has NODE_ID
+    // itself also takes precedence over the recovery-only lookup.
+    for (source, owners, ambiguous) in [
+        (
+            b".Dd September 9, 2026\n.Dt TARGET 1\n.Os\n.Sh DESCRIPTION\nBEFORE\n.Bl -bullet\n.Tg repeated-target\n.It\nFIRST\n.Tg repeated-target\n.It\nSECOND\n.El\n".as_slice(),
+            [("repeated-target", 8), ("repeated-target-2", 11)],
+            true,
+        ),
+        (
+            b".Dd September 9, 2026\n.Dt TARGET 1\n.Os\n.Sh DESCRIPTION\nBEFORE\n.Bl -bullet\n.Tg first-target\n.It\nFIRST\n.Tg second-target\n.It\nSECOND\n.El\n".as_slice(),
+            [("first-target", 8), ("second-target", 11)],
+            false,
+        ),
+        (
+            b".Dd September 9, 2026\n.Dt TARGET 1\n.Os\n.Sh DESCRIPTION\nBEFORE\n.Bl -bullet\n.Tg repeated-target\n.It\n.El\n.Pp\n.Tg repeated-target\n.No AFTER\n".as_slice(),
+            [("repeated-target", 7), ("repeated-target-2", 10)],
+            true,
+        ),
+    ] {
+        let document = parse_manual_bytes(std::path::Path::new("native-target-owners.1"), source)
+            .expect("retain actual native target owners");
+        assert_eq!(
+            anchor_owner_lines(&document),
+            owners.map(|(name, line)| (name.to_owned(), line))
+        );
+        assert_eq!(
+            document.diagnostics.iter().any(|diagnostic| {
+                diagnostic.code.as_deref() == Some("ir.ambiguous-fragment-alias")
+            }),
+            ambiguous
+        );
+        assert!(document.diagnostics.iter().all(|diagnostic| {
+            diagnostic.impact != mant_ir::DiagnosticImpact::ContentCoverage
+        }));
+    }
+}
+
+#[test]
 fn explicit_section_targets_preserve_fragments_beside_normalized_ids() {
     let document = parse_manual_bytes(
         std::path::Path::new("section-targets.1"),
@@ -927,6 +1059,9 @@ fn recognizes_explicitly_styled_traditional_man_references_in_any_section() {
 
 #[test]
 fn lowers_modern_groff_manual_uri_and_mail_macros() {
+    // Exact source rerun with pristine CVS -Tutf8/-Thtml before updating
+    // these expectations. man_term.c::post_UR() generates literal '<' and
+    // '>' for UR and MT; the general enclosure glyph table does not apply.
     let path = temporary_source(
         "man-modern-links",
         ".TH TOOL 1\n\
@@ -1013,8 +1148,8 @@ fn lowers_modern_groff_manual_uri_and_mail_macros() {
     assert_eq!(
         linked_paragraphs,
         [
-            "Read Documentation ⟨https://example.test/docs⟩ now.",
-            "Mail comments, suggestions and bug reports to Sean ⟨docs@example.test⟩."
+            "Read Documentation <https://example.test/docs> now.",
+            "Mail comments, suggestions and bug reports to Sean <docs@example.test>."
         ]
     );
 }

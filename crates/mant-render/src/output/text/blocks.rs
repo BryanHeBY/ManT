@@ -3,7 +3,7 @@
 use super::flow::Flow;
 use super::indent_lines;
 use crate::presentation::{
-    EntryStyleMap, InlinePresentation, TextPresentation, TextRole, visit_inline_text_for_terminal,
+    EntryStyleMap, InlinePresentation, TextPresentation, TextRole, visit_inline_text,
 };
 use mant_ir::geometry::{compose_origin, coordinate, marker_run_in_gap, padding, text_width};
 use mant_ir::{Block, DefinitionItem, Inline, ListItem, ListKind, Section, TableCell};
@@ -53,9 +53,10 @@ impl BlockRenderer<'_> {
         if let Some(locations) = self.locations {
             locations.visit_inline(children, role, append);
         } else {
-            // Terminal projection follows mdoc_term.c::termp_lk_pre(): a
-            // label-replaced external link still shows `label: uri`.
-            visit_inline_text_for_terminal(children, names, |inline, _, value| {
+            // Generic links consume only IR visible content; mdoc `Lk`
+            // terminal expansion (generated colon and address) is executed
+            // in the shared lowering, not appended here.
+            visit_inline_text(children, names, |inline, _, value| {
                 append(
                     TextPresentation {
                         role,
@@ -254,15 +255,15 @@ impl BlockRenderer<'_> {
     }
 
     fn cell_text(&self, cell: &TableCell) -> String {
-        self.render_blocks(&cell.blocks, 0)
+        self.block_flow(&cell.blocks, 0).finish_cell().0
     }
 
     fn table_flow(&self, rows: &[mant_ir::TableRow], column_widths: &[u16], origin: i32) -> Flow {
-        if !column_widths.is_empty() {
-            return self.declared_column_flow(rows, column_widths, origin);
-        }
         if mant_ir::geometry::table_requires_origin_preserving_stack(rows, origin) {
             return self.stacked_table_flow(rows, origin);
+        }
+        if !column_widths.is_empty() {
+            return self.declared_column_flow(rows, column_widths, origin);
         }
         let physical_rows = super::super::table::table_rows(rows, |cell| self.cell_text(cell));
         let value = physical_rows.join("\n");
@@ -280,98 +281,130 @@ impl BlockRenderer<'_> {
         }
     }
 
-    /// Fixed-width projection of a declared `Bl -column` table, mirroring
-    /// `mdoc_term.c::termp_bl_pre` (701-733): column `i` starts at the sum of
-    /// the earlier declared widths plus the dcol gap (4/3/1 blanks for
-    /// fewer than/exactly/more than five declared columns), and columns past
-    /// the declaration fall back to the default width of 10.
+    /// Shared declared-field placement. Complex topology uses the existing
+    /// source-order fallback; declarations never bypass origin preservation.
     fn declared_column_flow(
         &self,
         rows: &[mant_ir::TableRow],
         column_widths: &[u16],
         origin: i32,
     ) -> Flow {
-        let dcol: u16 = match column_widths.len() {
-            count if count < 5 => 4,
-            5 => 3,
-            _ => 1,
+        let Some(columns) = mant_ir::geometry::DeclaredColumns::new(column_widths) else {
+            return self.stacked_table_flow(rows, origin);
         };
-        let default_width = 10_u16;
-        let mut offsets: Vec<u16> = Vec::with_capacity(column_widths.len());
-        let mut offset = 0_u16;
-        for declared in column_widths {
-            offsets.push(offset);
-            offset = offset.saturating_add(*declared + dcol);
+        if rows.iter().any(|row| {
+            !matches!(row.kind, mant_ir::TableRowKind::Data)
+                || row.cells.iter().any(|cell| {
+                    cell.column_span != 1
+                        || cell.row_span != 1
+                        || cell.kind != mant_ir::TableCellKind::Text
+                })
+        }) {
+            return self.stacked_table_flow(rows, origin);
         }
-        let mut lines = Vec::new();
+        let identity = |_: TextPresentation, text: &str| text.to_owned();
+        let measure = BlockRenderer {
+            locations: None,
+            names: None,
+            decorate: &identity,
+        };
+        let mut output = Flow::default();
         for row in rows {
-            if !matches!(row.kind, mant_ir::TableRowKind::Data) {
+            if mant_ir::table_row_is_navigation_only(row) {
                 continue;
             }
-            let cells: Vec<Vec<String>> = row
+            if row.cells.is_empty() {
+                output.gap(1);
+                continue;
+            }
+            // A hard inline break leaves an open final row which the next
+            // cell may use. A completed vertical row owns its final delimiter
+            // and cannot be reused; both consumers pass that fact to the plan.
+            let split = |text: String, completed: bool| -> Vec<String> {
+                if text.is_empty() {
+                    vec![String::new()]
+                } else if completed {
+                    text.split_terminator('\n').map(str::to_owned).collect()
+                } else {
+                    text.split('\n').map(str::to_owned).collect()
+                }
+            };
+            let cells = row
                 .cells
                 .iter()
                 .map(|cell| {
-                    self.cell_text(cell)
-                        .lines()
-                        .map(str::to_owned)
-                        .collect::<Vec<_>>()
+                    let (text, completed) = self.block_flow(&cell.blocks, 0).finish_cell();
+                    split(text, completed)
                 })
-                .collect();
-            let depth = cells.iter().map(Vec::len).max().unwrap_or(0);
-            for line_index in 0..depth {
-                let mut line = String::new();
-                for (index, cell_lines) in cells.iter().enumerate() {
-                    let Some(cell_line) = cell_lines.get(line_index) else {
-                        continue;
-                    };
-                    // Columns past the declaration continue the upstream
-                    // accumulation with the default width of 10.
-                    let start = if index < offsets.len() {
-                        offsets[index]
-                    } else {
-                        offsets.last().map_or(0, |last| {
-                            last.saturating_add(
-                                (index - offsets.len() + 1) as u16 * (default_width + dcol),
-                            )
-                        })
-                    };
-                    let start = start as usize;
-                    if line.len() < start {
-                        line.push_str(&" ".repeat(start - line.len()));
+                .collect::<Vec<_>>();
+            let widths = row
+                .cells
+                .iter()
+                .map(|cell| {
+                    let (text, completed) = measure.block_flow(&cell.blocks, 0).finish_cell();
+                    let mut rows = split(text, completed)
+                        .iter()
+                        .map(|line| mant_ir::geometry::ColumnFieldWidth::from_text(line))
+                        .collect::<Vec<_>>();
+                    if let Some(last) = rows.last_mut() {
+                        last.completed = completed;
                     }
-                    line.push_str(cell_line);
+                    rows
+                })
+                .collect::<Vec<_>>();
+            let Some(placements) = columns.place(&widths) else {
+                return self.stacked_table_flow(rows, origin);
+            };
+            let mut lines = Vec::new();
+            for pieces in placements {
+                let mut line = String::new();
+                let mut visible = 0_usize;
+                for piece in pieces {
+                    line.push_str(&" ".repeat(piece.column.saturating_sub(visible)));
+                    line.push_str(&cells[piece.cell][piece.line]);
+                    visible = piece
+                        .column
+                        .saturating_add(widths[piece.cell][piece.line].output);
                 }
                 lines.push(line);
             }
+            output.extend(Flow::literal(indent_lines(
+                &lines.join("\n"),
+                padding(origin),
+            )));
         }
-        if lines.is_empty() {
-            Flow::default()
-        } else {
-            Flow::text(indent_lines(&lines.join("\n"), padding(origin)))
-        }
+        output
     }
 
     fn stacked_table_flow(&self, rows: &[mant_ir::TableRow], origin: i32) -> Flow {
         let mut output = Flow::default();
         for row in rows {
+            if mant_ir::table_row_is_navigation_only(row) {
+                continue;
+            }
             match &row.kind {
                 mant_ir::TableRowKind::Data if row.cells.is_empty() => output.gap(1),
                 mant_ir::TableRowKind::Data => {
+                    let mut row_flow = Flow::default();
                     for cell in &row.cells {
                         match cell.kind {
                             mant_ir::TableCellKind::Text => {
-                                output.extend(self.block_flow(&cell.blocks, origin));
+                                row_flow.extend(self.block_flow(&cell.blocks, origin));
                             }
                             mant_ir::TableCellKind::HorizontalRule
                             | mant_ir::TableCellKind::IsolatedHorizontalRule => {
-                                output.push_text(indent_lines("---", padding(origin)));
+                                row_flow.push_text(indent_lines("---", padding(origin)));
                             }
                             mant_ir::TableCellKind::DoubleHorizontalRule
                             | mant_ir::TableCellKind::IsolatedDoubleHorizontalRule => {
-                                output.push_text(indent_lines("===", padding(origin)));
+                                row_flow.push_text(indent_lines("===", padding(origin)));
                             }
                         }
+                    }
+                    if row_flow.has_physical_rows() {
+                        output.extend(row_flow);
+                    } else {
+                        output.gap(1);
                     }
                 }
                 mant_ir::TableRowKind::HorizontalRule => {
@@ -401,6 +434,112 @@ impl BlockRenderer<'_> {
 mod tests {
     use super::*;
     use mant_ir::LayoutHint;
+
+    fn navigation_table(widths: &[u16], origin: i32, cells: Vec<Vec<Block>>) -> Block {
+        Block::Table {
+            rows: vec![mant_ir::TableRow {
+                kind: mant_ir::TableRowKind::Data,
+                cells: cells
+                    .into_iter()
+                    .map(|blocks| TableCell {
+                        blocks,
+                        kind: mant_ir::TableCellKind::Text,
+                        column_span: 1,
+                        row_span: 1,
+                        alignment: None,
+                    })
+                    .collect(),
+            }],
+            column_widths: widths.to_vec(),
+            layout: LayoutHint {
+                indent_columns: origin,
+                ..Default::default()
+            },
+            source: None,
+        }
+    }
+
+    #[test]
+    fn navigation_table_rows_preserve_physical_empty_row_counters() {
+        let paragraph = |children| Block::Paragraph {
+            children,
+            layout: LayoutHint::default(),
+            source: None,
+        };
+        let text = |value: &str| Inline::Text {
+            value: value.into(),
+        };
+        let navigation = paragraph(vec![Inline::Strong {
+            children: vec![Inline::Emphasis {
+                children: vec![Inline::anchor("target")],
+            }],
+        }]);
+        for widths in [vec![], vec![3, 3], vec![u16::MAX]] {
+            for origin in [0, -2] {
+                for (cells, extra_rows) in [
+                    (vec![vec![navigation.clone()]], 0),
+                    (vec![], 1),
+                    (vec![vec![]], 1),
+                    (vec![vec![], vec![]], 1),
+                    (vec![vec![paragraph(vec![text("")])]], 1),
+                    (vec![vec![navigation.clone()], vec![]], 1),
+                    (vec![vec![], vec![navigation.clone()]], 1),
+                    (
+                        vec![vec![Block::Preformatted {
+                            children: vec![text("")],
+                            language: None,
+                            layout: LayoutHint::default(),
+                            source: None,
+                        }]],
+                        1,
+                    ),
+                    (
+                        vec![vec![Block::VerticalSpace {
+                            lines: 1,
+                            source: None,
+                        }]],
+                        1,
+                    ),
+                    (
+                        vec![vec![Block::VerticalSpace {
+                            lines: 0,
+                            source: None,
+                        }]],
+                        1,
+                    ),
+                ] {
+                    let table = navigation_table(&widths, origin, cells);
+                    let blocks = [
+                        paragraph(vec![text("BEFORE")]),
+                        table,
+                        paragraph(vec![text("AFTER")]),
+                    ];
+                    for decorated in [false, true] {
+                        let paint = |_: TextPresentation, value: &str| {
+                            if decorated {
+                                format!("\x1b[1m{value}\x1b[0m")
+                            } else {
+                                value.into()
+                            }
+                        };
+                        let renderer = BlockRenderer {
+                            names: None,
+                            locations: None,
+                            decorate: &paint,
+                        };
+                        let output = renderer
+                            .render_blocks(&blocks, 0)
+                            .replace("\x1b[1m", "")
+                            .replace("\x1b[0m", "");
+                        let rows = output.split('\n').collect::<Vec<_>>();
+                        let before = rows.iter().position(|row| row.contains("BEFORE")).unwrap();
+                        let after = rows.iter().position(|row| row.contains("AFTER")).unwrap();
+                        assert_eq!(after - before, 1 + extra_rows, "{output:?}");
+                    }
+                }
+            }
+        }
+    }
 
     #[test]
     fn hard_row_origins_compose_for_paragraph_and_literal_rows() {
@@ -937,5 +1076,167 @@ mod tests {
             source: None,
         };
         assert_eq!(renderer.render_blocks(&[block], 0), "TERM BODY");
+    }
+
+    fn declared_column_table(widths: &[u16], cells: &[&str]) -> Block {
+        Block::Table {
+            column_widths: widths.to_vec(),
+            rows: vec![mant_ir::TableRow {
+                kind: mant_ir::TableRowKind::Data,
+                cells: cells
+                    .iter()
+                    .map(|text| TableCell {
+                        kind: mant_ir::TableCellKind::Text,
+                        blocks: vec![paragraph(text, 0)],
+                        column_span: 1,
+                        row_span: 1,
+                        alignment: None,
+                    })
+                    .collect(),
+            }],
+            layout: LayoutHint::default(),
+            source: None,
+        }
+    }
+
+    #[test]
+    fn declared_columns_pad_to_their_declared_offsets() {
+        let renderer = super::super::plain_renderer();
+        // mdoc_term.c::termp_it_pre (709-715): column 1 starts after the
+        // first declared width plus the dcol gap of 4 (fewer than five
+        // columns). Verified against the fixed -Tutf8 reference.
+        let block = declared_column_table(&[3, 3], &["A", "B"]);
+        assert_eq!(renderer.render_blocks(&[block], 0), "A      B");
+    }
+
+    #[test]
+    fn declared_column_advances_truncate_at_256_columns() {
+        let renderer = super::super::plain_renderer();
+        // term_ascii.c::ascii_advance() truncates one advance at 256
+        // columns; the fixed reference puts B 257 columns after A for a
+        // 300-column declaration (300 + 4 - 1 = 303, clamped to 256).
+        let block = declared_column_table(&[300, 10], &["A", "B"]);
+        let expected = format!("A{}B", " ".repeat(256));
+        assert_eq!(renderer.render_blocks(&[block], 0), expected);
+        // A gap of exactly 255 remains unclamped.
+        let block = declared_column_table(&[252, 10], &["A", "B"]);
+        assert_eq!(
+            renderer.render_blocks(&[block], 0),
+            format!("A{}B", " ".repeat(255))
+        );
+    }
+
+    #[test]
+    fn saturated_column_widths_keep_bounded_and_aligned_projection() {
+        let renderer = super::super::plain_renderer();
+        // External audit CW01: 65531/65532/65535/65536-column declarations
+        // must neither overflow u16 arithmetic nor explode padding. Every
+        // column boundary still advances one truncated 256-column step.
+        for width in [65531_u16, 65532, 65535, u16::MAX] {
+            let block = declared_column_table(&[width, width], &["A", "B"]);
+            assert_eq!(
+                renderer.render_blocks(&[block], 0),
+                format!("A{}B", " ".repeat(256)),
+                "width {width}"
+            );
+            let block = declared_column_table(&[width, width, width], &["A", "B", "C"]);
+            assert_eq!(
+                renderer.render_blocks(&[block], 0),
+                format!("A{}B{}C", " ".repeat(256), " ".repeat(256)),
+                "width {width}"
+            );
+        }
+        // Zero and one column declarations keep the dcol-only separation.
+        let block = declared_column_table(&[0, 0], &["A", "B"]);
+        assert_eq!(renderer.render_blocks(&[block], 0), "A   B");
+        let block = declared_column_table(&[1, 1], &["A", "B"]);
+        assert_eq!(renderer.render_blocks(&[block], 0), "A    B");
+    }
+
+    #[test]
+    fn full_column_starts_wrap_to_the_next_physical_line() {
+        let renderer = super::super::plain_renderer();
+        // External audit CW03/CW04: content that already fills the next
+        // column's start moves that column to a fresh physical line at its
+        // declared start. The fixed reference renders `.Bl -column one two`
+        // with `.It AAAA BB Ta C` as `AAAA BB` then `C` at the declared
+        // column offset (term.c moves the field once viscol reaches the
+        // field's rmargin).
+        let block = declared_column_table(&[3, 3], &["AAAA BB", "C"]);
+        assert_eq!(renderer.render_blocks(&[block], 0), "AAAA BB\n       C");
+        // Ending one column earlier keeps the same-line continuation.
+        let block = declared_column_table(&[3, 3], &["AAAA B", "C"]);
+        assert_eq!(renderer.render_blocks(&[block], 0), "AAAA B C");
+        // Overrunning content survives untruncated and later columns keep
+        // their boundaries (reference: `.It AAAA BBX Ta C`).
+        let block = declared_column_table(&[3, 3], &["AAAA BBX", "C"]);
+        assert_eq!(renderer.render_blocks(&[block], 0), "AAAA BBX\n       C");
+    }
+
+    #[test]
+    fn undeclared_cells_keep_their_source_order_without_an_invented_stride() {
+        let renderer = super::super::plain_renderer();
+        // termp_it_pre caps its preceding-offset loop at ncols. Exact roff
+        // oracle input was run first; the parser joins trailing Ta operands,
+        // while this source-neutral IR deliberately keeps four actual cells.
+        let block = declared_column_table(&[3, 3], &["A", "B", "C", "D"]);
+        assert_eq!(
+            renderer.render_blocks(&[block], 0),
+            "A      B      C\n              D"
+        );
+        // CW02's many-cell boundary reaches the shared dense-placement
+        // budget and uses existing source-order stack output. No derived
+        // stride multiplication or large padding allocation is permitted.
+        let cells: Vec<&str> = (0..4700).map(|_| "x").collect();
+        let block = declared_column_table(&[3, 3], &cells);
+        let text = renderer.render_blocks(&[block], 0);
+        let lines: Vec<_> = text.lines().collect();
+        assert_eq!(lines.len(), 4700);
+        assert!(lines.iter().all(|line| *line == "x"));
+        assert!(text.len() <= 4700 * 2);
+    }
+
+    #[test]
+    fn preserved_public_ir_padding_keeps_plain_and_ansi_cursors_monotonic() {
+        let block = declared_column_table(&[3, 3], &["X          ", "CLICK"]);
+        let expected = "X          CLICK";
+        let plain = super::super::plain_renderer().render_blocks(std::slice::from_ref(&block), 0);
+        assert_eq!(plain, expected);
+        let decorated = BlockRenderer {
+            locations: None,
+            names: None,
+            decorate: &|_, text| format!("\u{1b}[1m{text}\u{1b}[0m"),
+        };
+        let text = decorated.render_blocks(&[block], 0);
+        assert_eq!(
+            text.replace("\u{1b}[1m", "").replace("\u{1b}[0m", ""),
+            expected
+        );
+    }
+
+    #[test]
+    fn decorated_columns_measure_before_ansi_styling() {
+        // External audit §18.3: positioning must measure the projection
+        // before the decorator adds zero-width ANSI styles; the decorator
+        // contract only preserves visible text, never byte length.
+        let decorated = BlockRenderer {
+            locations: None,
+            names: None,
+            decorate: &|_, text| {
+                if text.trim().is_empty() {
+                    text.to_owned()
+                } else {
+                    format!("\x1b[1m{text}\x1b[0m")
+                }
+            },
+        };
+        let block = declared_column_table(&[10, 10], &["styled", "cells"]);
+        let projected = decorated.render_blocks(std::slice::from_ref(&block), 0);
+        let plain = super::super::plain_renderer().render_blocks(&[block], 0);
+        let stripped: String = projected
+            .split("\x1b[1m")
+            .map(|rest| rest.replace("\x1b[0m", ""))
+            .collect();
+        assert_eq!(stripped, plain);
     }
 }

@@ -139,10 +139,10 @@ fn field_acceptance_preserves_native_zero_width_rows_and_new_body_fields() {
         ),
         (
             ".Bl -hang -width 4n\n.It Xo\n.Lk https://example.org \"X\\p Y\" \"\\p Z\"\n.Xc\n.No BodyWord\n.El\n",
-            // termp_lk_pre() projects a descriptive label as
-            // `label: uri` (mdoc_term.c:1880-1930); the URI glyphs share
-            // the same field word stream as the label.
-            vec!["X", "Y: https://example.org", "BodyWord"],
+            // Pristine CVS accepts X/Y, then rejects the remaining field.
+            // termp_lk_pre() executes every description operand before the
+            // colon and URI; term_fill() rejects that suffix along with Z.
+            vec!["X", "Y", "BodyWord"],
         ),
         (
             // The label projects as `label: uri` exactly like the pristine
@@ -207,6 +207,53 @@ fn field_acceptance_preserves_native_zero_width_rows_and_new_body_fields() {
         }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
+fn rejected_lk_suffix_preserves_accepted_label_identity_and_row_origin() {
+    #[derive(Default)]
+    struct Links(Vec<(String, String)>);
+    impl<'ir> Visit<'ir> for Links {
+        fn visit_inline(&mut self, inline: &'ir mant_ir::Inline) {
+            if let mant_ir::Inline::Link {
+                target: mant_ir::LinkTarget::External { uri },
+                children,
+                ..
+            } = inline
+            {
+                self.0
+                    .push((uri.clone(), mant_ir::inline_plain_text(children)));
+            }
+            mant_ir::visit::walk_inline(self, inline);
+        }
+    }
+
+    use mant_ir::visit::Visit;
+
+    // This exact complete source ran through the pristine oracle before the
+    // assertion. termp_lk_pre() executes both description operands before
+    // the colon/URI; term_fill() accepts X and Y, rejects the remaining
+    // current field, and cannot retract those accepted rows or the identity.
+    let body = ".Bl -hang -width 4n\n.It Xo\n.Lk https://example.org \"X\\p Y\" \"\\p Z\"\n.Xc\n.No BodyWord\n.El\n";
+    // G-IND keeps responsive HANG placement: term_flushln's BRIND device
+    // origin for the internal Y pass is not a column-equivalence promise.
+    // Preserve both authored hard rows exactly; the BODY's six-column
+    // origin remains a separate selected IR layout contract.
+    assert_eq!(description_rows(body), ["X", "Y", "      BodyWord"]);
+    let query = mant_loader::load_roff_bytes(source(body).as_bytes()).unwrap();
+    let mut links = Links::default();
+    links.visit_document(query.document.as_ref().unwrap());
+    assert!(!links.0.is_empty(), "accepted label lost its link identity");
+    assert!(links.0.iter().all(|(uri, label)| {
+        uri == "https://example.org" && !label.contains('Z') && !label.contains(uri)
+    }));
+    let accepted_glyphs: String = links
+        .0
+        .iter()
+        .flat_map(|(_, label)| label.chars())
+        .filter(|ch| !ch.is_whitespace())
+        .collect();
+    assert_eq!(accepted_glyphs, "XY");
 }
 
 #[test]

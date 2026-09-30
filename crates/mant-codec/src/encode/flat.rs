@@ -1,14 +1,32 @@
 //! Portable table cells flatten presentation, never semantic ownership.
 use super::{inline::flatten_inline, mapped::MappedText};
-use mant_ir::{Block, EntryOwner, TableCell, TableRow, TableRowPlan, bounded_table_rows};
+use mant_ir::{
+    Block, EntryOwner, TableCell, TableCellKind, TableRow, TableRowPlan, TableRuleCellKind,
+    bounded_table_rows,
+};
 
 pub(super) fn rows(rows: &[TableRow], track: bool) -> Vec<MappedText> {
     bounded_table_rows(rows)
         .into_iter()
+        .zip(rows)
+        .filter_map(|(plan, row)| (!mant_ir::table_row_is_navigation_only(row)).then_some(plan))
         .map(|row| match row {
-            TableRowPlan::Empty
-            | TableRowPlan::WholeRule { .. }
-            | TableRowPlan::LayoutRule { .. } => MappedText::default(),
+            TableRowPlan::Empty => MappedText::default(),
+            TableRowPlan::WholeRule { double } => {
+                MappedText::from(if double { "===" } else { "---" }.to_owned())
+            }
+            TableRowPlan::LayoutRule { cells } => MappedText::join(
+                cells.iter().map(|cell| {
+                    MappedText::from(
+                        match cell {
+                            TableRuleCellKind::Horizontal => "---",
+                            TableRuleCellKind::DoubleHorizontal => "===",
+                        }
+                        .to_owned(),
+                    )
+                }),
+                " | ",
+            ),
             TableRowPlan::Dense { slots } => MappedText::join(
                 slots.into_iter().map(|cell| {
                     cell.map_or_else(MappedText::default, |cell| plain_cell(cell, track))
@@ -31,6 +49,18 @@ pub(super) fn rows(rows: &[TableRow], track: bool) -> Vec<MappedText> {
 }
 
 fn plain_cell(cell: &TableCell, track: bool) -> MappedText {
+    // tbl_term.c::term_tbl/tbl_hrule distinguish data, whole-row and
+    // layout rules. The portable spelling keeps their order and strength;
+    // a ruled cell's suppressed payload never becomes table text.
+    match cell.kind {
+        TableCellKind::HorizontalRule | TableCellKind::IsolatedHorizontalRule => {
+            return "---".to_owned().into();
+        }
+        TableCellKind::DoubleHorizontalRule | TableCellKind::IsolatedDoubleHorizontalRule => {
+            return "===".to_owned().into();
+        }
+        TableCellKind::Text => {}
+    }
     MappedText::join(
         cell.blocks
             .iter()

@@ -1031,6 +1031,7 @@ fn has_visible_inline(inlines: &[Inline]) -> bool {
         }
         Inline::Strong { children }
         | Inline::Emphasis { children }
+        | Inline::PortableDisplay { children, .. }
         | Inline::Link { children, .. } => has_visible_inline(children),
         Inline::Anchor { .. } | Inline::LineBreak { .. } => false,
     })
@@ -1045,7 +1046,9 @@ fn collect_inlines(
 ) {
     for inline in inlines {
         match inline {
-            Inline::Strong { children } | Inline::Emphasis { children } => {
+            Inline::Strong { children }
+            | Inline::Emphasis { children }
+            | Inline::PortableDisplay { children, .. } => {
                 collect_inlines(children, source_line, inside_table, profile, topology);
             }
             Inline::Link {
@@ -1088,6 +1091,7 @@ fn line_break_count(inlines: &[Inline]) -> usize {
         .map(|inline| match inline {
             Inline::Strong { children }
             | Inline::Emphasis { children }
+            | Inline::PortableDisplay { children, .. }
             | Inline::Link { children, .. } => line_break_count(children),
             Inline::LineBreak { .. } => 1,
             Inline::Text { .. }

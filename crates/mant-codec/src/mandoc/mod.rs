@@ -102,6 +102,9 @@ fn lower_mandoc_document_with_source(
     let explicit_targets = target_plan.explicit();
     let mut context = LoweringContext::new(parsed.metadata.name.as_deref(), source);
     context.macro_set = parsed.macro_set;
+    context
+        .native_target_owners
+        .clone_from(target_plan.validated_owners());
     context.scope_posts.index_structural_payload(&parsed.root);
     declaration_groups::record(&parsed.root, &mut context.native_heads.borrow_mut());
     context.reserve_section_ids(explicit_targets);

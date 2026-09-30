@@ -15,6 +15,7 @@ fn inline_text(inlines: &[mant_ir::Inline]) -> String {
             | mant_ir::Inline::Equation { value, .. } => value.clone(),
             mant_ir::Inline::Strong { children }
             | mant_ir::Inline::Emphasis { children }
+            | mant_ir::Inline::PortableDisplay { children, .. }
             | mant_ir::Inline::Link { children, .. } => inline_text(children),
             mant_ir::Inline::Anchor { .. } => String::new(),
             mant_ir::Inline::LineBreak { .. } => "\n".into(),

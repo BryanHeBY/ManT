@@ -100,15 +100,7 @@ impl BlockLowerer<'_, '_> {
         ip_run: Option<super::lists::man::IpRun>,
         source: NodeSourceContext,
     ) {
-        if self.consume_font_request(node) {
-            return;
-        }
-        self.prepare_man_synopsis_spacing(node, source);
-        // The container callback returns child execution to this same driver.
-        if self.push_container(node) || self.consume_control_or_empty_block(node) {
-            return;
-        }
-        if self.push_no_fill_synopsis(node) {
+        if self.push_node_pre_handlers(node, next, source) {
             return;
         }
         let structural_targets = targets::structural_targets(node);
@@ -178,14 +170,6 @@ impl BlockLowerer<'_, '_> {
             self.state.hard_break();
         } else if participates_in_inline_flow(node) {
             self.push_inline_node(node, next);
-            // mdoc_term.c::termp_fd_post (1261-1265) ends the formatter row
-            // after `.Fd` in every section. Outside SYNOPSIS the declaration
-            // boundary machinery does not own that newline, so the inline
-            // flow must break here. `.Cd` has no post handler upstream
-            // (mdoc_term.c:142) and never breaks.
-            if node.macro_name.as_deref() == Some("Fd") && !node.flags.synopsis_pretty {
-                self.state.hard_break();
-            }
         } else {
             self.state.flush_paragraph();
             let output_start = self.state.output.len();
@@ -218,9 +202,68 @@ impl BlockLowerer<'_, '_> {
         }
     }
 
+    fn push_node_pre_handlers(
+        &mut self,
+        node: &Node,
+        next: Option<&Node>,
+        source: NodeSourceContext,
+    ) -> bool {
+        if self.consume_font_request(node) {
+            return true;
+        }
+        self.prepare_man_synopsis_spacing(node, source);
+        // The container callback returns child execution to this same driver.
+        if self.push_container(node) {
+            return true;
+        }
+        if self.column_field && self.push_column_payload(node, next) {
+            return true;
+        }
+        if self.consume_control_or_empty_block(node) {
+            return true;
+        }
+        if self.push_no_fill_synopsis(node) {
+            return true;
+        }
+        false
+    }
+
+    /// The output destination changes field flags, never macro interpretation.
+    /// Requests and words borrow the same live paragraph/native buffer; real
+    /// structural nodes continue through the ordinary block driver below.
+    fn push_column_payload(&mut self, node: &Node, next: Option<&Node>) -> bool {
+        if node.macro_name.as_deref() == Some("Pp") {
+            self.state.column_vertical_space(1);
+            return true;
+        }
+        if participates_in_inline_flow(node)
+            || formatter_control(node.macro_name.as_deref())
+                .is_some_and(|control| !control.specialized)
+            || matches!(
+                node.macro_name.as_deref(),
+                Some("br" | "sp" | "nf" | "fi" | "ta")
+            )
+        {
+            self.push_inline_node(node, next);
+            return true;
+        }
+        false
+    }
+
     fn prepare_node_execution(&mut self, node: &Node) {
         self.state.formatter.enter_tab_source_node(node);
         self.state.formatter.execute_tab_configuration(node);
+        if self.column_field {
+            // The ordinary structural pre boundary consumes the same field
+            // before switching IR owner (Bl/Bd/D1 pre all call term_newln).
+            // Requests keep their specialized ordered inline dispatch.
+            if formatter_control(node.macro_name.as_deref()).is_none()
+                && no_fill_boundary(node, false) == FormatterBoundary::Line
+            {
+                self.state.finish_column_nested_row();
+            }
+            return;
+        }
         let formatter_control = formatter_control(node.macro_name.as_deref());
         if formatter_control.is_some_and(|control| control.boundary == FormatterBoundary::Line) {
             // This is the actual request dispatch, after HEAD execution and
@@ -287,6 +330,10 @@ impl BlockLowerer<'_, '_> {
     }
 
     fn enter_no_fill_source_line(&mut self, node: &Node) -> bool {
+        if self.column_field {
+            self.state.enter_column_node(node);
+            return node.flags.no_fill && node.flags.line_start;
+        }
         if !self.state.formatter.no_fill || !node.flags.no_fill || !node.flags.line_start {
             return false;
         }

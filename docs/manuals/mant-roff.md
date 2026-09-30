@@ -402,9 +402,13 @@ The required mdoc prologue and structural macros are normalized as follows:
 | `Sx` | Resolved same-document section link, including one unique parenthetical heading qualifier, or visible text when unresolved |
 | `Xr` | Typed link to a manual name and section |
 | `Lk`, `Mt` | External URI or email link; an unlabeled target remains visible and any trailing sentence punctuation stays outside the link |
-| `Bx` | BSD lifecycle forms such as `-alpha`, `-beta`, and `-devel` expand to their portable descriptive text; version forms render as canonical `versionBSD` names with an optional `-release` suffix |
+| `Bx` | Native reading retains the authored lifecycle operand plus `BSD`; portable Markdown expands lifecycle forms such as `-alpha`, `-beta`, and `-devel` to descriptive text. Version forms retain canonical `versionBSD` names with an optional `-release` suffix |
 
 Validated libmandoc tags on man and mdoc definitions are retained for page-local navigation. Every target receives a normalized internal `NodeId`, allocated uniquely against section IDs and earlier targets before IR validation. Explicit mdoc `Tg` destinations additionally retain their exact source spelling as a fragment alias at the same location, so values such as `Mixed.Target` and `--option` remain valid external deep links without violating the internal ID grammar. An argument-less `Tg` derives its destination from the following source macro; it never inherits an earlier parser tag. Automatic wrapper fallbacks likewise use source tokens rather than rendered text, so spacing and decoration cannot change an identity. When libmandoc moves a target onto a paragraph, display, list, item, function block, or section wrapper, ManT attaches it to the corresponding addressable lowered descendant (or to the section itself) without adding visible text. Target-only and empty mdoc list items retain zero-width anchors for bullet, dash, ordered, plain, column, and definition layouts rather than assigning them to a neighbouring item. Root content and section content pass through the same local-link and traditional-manual-reference resolution.
+
+Authored target recovery applies only when native validation left no surviving owner for that destination. A hidden `Tg` whose ID moved to a later paragraph does not create another anchor at the original stream position. Actual repeated native ID owners remain separate targets under the existing fragment ambiguity policy. Navigation carriers do not create list items for paragraph spacing: that request belongs to normalized native `It` blocks, even when a target-only IR item preserves an otherwise empty list destination.
+
+A table row containing one unspanned text cell of anchor-only paragraphs is a navigation carrier. It adds no physical row in text, Markdown or TUI output. TUI navigation waits for the next physical output; Markdown preserves its anchor markers outside table fences. Empty text, hard breaks, literal rows and completed vertical rows retain their separate output facts. Multi-cell and spanning rows preserve their physical topology even when they contain no visible glyphs.
 
 After source lowering, ManT assigns semantic identities only inside a reliable structural context. Definition lists under environment sections recognize a complete term in bare `NAME`, shell `$NAME`, PowerShell `$Env:NAME` and `${Env:NAME}`, Windows `%NAME%`, or one assignment `NAME=value` form through the same grammar used by explicit Markdown declarations. The assignment value is not part of the selector. Named variables and similar entries may also carry one explicitly delimited trailing parenthetical annotation, such as Readline's `(On)` default notation; that annotation remains in the authored form but not the selector. A generic technical term may retain complete `::` qualification such as `Class::ISA`, strip a bounded optional suffix such as `istrip[=<bool>]`, or keep a lower-case callable head before all-uppercase placeholders such as `getservbyname NAME,PROTO`. A single colon, URI-like spelling, array subscript, mixed-case prose, or arbitrary trailing words remain unclassified. ManT never takes only the first word of a term, and a composite heading such as `ENVIRONMENT OPTIONS` selects the more specific option grammar. Hanging paragraph plus relative-indent layouts are reconstructed as definitions only in that environment context. Ordinary prose and unrelated uppercase terms are never scanned or promoted. A definition-shaped term that fails the selected grammar remains visible as an unclassified term and emits `manual.semantic-entry.unclassified-definition`; the outline then reports `semanticsComplete: false` rather than claiming a complete semantic inventory.
 
@@ -581,7 +585,19 @@ Plain text and transparent macros such as `Pf` do not create font scopes. Their 
 
 Bibliographies and table cells inherit the enclosing font state; a rejected cell recovery does not commit its partial state. Generated function and manual-reference punctuation participates in the same output flow as its operands. `Fo` is an inline scope in ordinary prose, while SYNOPSIS retains declaration boundaries. Font changes inside a man `SY` body persist across physical no-fill lines and reset when that macro scope ends.
 
-`Lk` evaluates its optional label in an emphasis scope before evaluating the URI in the inherited font, even when compact link presentation hides the URI. It executes both operands exactly once, then uses the executed visible label when one remains; an empty or overstruck label falls back to the URI, while an empty URI target degrades to ordinary visible text rather than an empty link. Compaction removes only replaced glyphs: executed source and explicit escape line breaks remain in the surrounding flow, and an empty operand remains a formatter word that can settle a preceding `\z` glyph. The formatter-generated colon between label and URI also executes: a label-final `\c` is consumed there, while a URI-final `\c` joins the following source line. Container closers and generated syntax make their own final word decision, so ManT never recreates a join solely from an outer AST flag. `Mt` uses one emphasis scope for its whole address sequence. `In` uses the native prose/synopsis font scope while retaining ManT's code presentation; `Xr` does not create a font scope. Pure link-target extraction does not execute font escapes. These choices follow the pinned mandoc CVS formatter, including its unstyled URI policy; the source-consumer contract was originally checked against `mdoc_term.c` revision 1.388.
+`Lk` executes its description operands in an emphasis scope, a generated colon in the inherited font, and then its URI word. The description-node topology selects that sequence: a label equal to the complete URI or its suffix still gets the colon and URI, and an empty or control-only description still executes the colon. With no description operand, the URI is the visible link label. URI validation never removes safe description text. Both operands execute exactly once through the caller's formatter; a label-final `\c` is consumed by the generated colon, while a URI-final `\c` can join the following source line. `Mt` uses one emphasis scope for its complete address sequence. These rules follow `mdoc_term.c::termp_lk_pre()` and the pinned CVS font lifecycle. `UR` and `MT` retain their own man rules, including the ASCII `<` and `>` generated by `man_term.c::post_UR()`; ordinary Markdown links never acquire these macro-specific suffixes.
+
+Link identity extraction is pure and does not execute font or zero-advance effects twice. `UR`, `MT`, `Lk`, `Mt` and `%U` decode their destinations according to the HTML attribute path in `html.c::print_encode(norecurse=1)`; the authored target word still executes separately in the native stream. Thus a device escape selects `html` for the destination and `utf8` for native text, a `\z` glyph is absent from the destination, and an overstrike takes its final source character, including an invalid trailing space. These facts remain typed identity data; URI/email validation controls host activation without changing the safe label or terminal target word. `%R` checks the original first operand before that decoding: only the exact `RFC ` prefix followed by ASCII digits qualifies for an rfc-editor target. The CVS loop also accepts an empty digit suffix. Font or zero-width escapes do not qualify an otherwise similar visible spelling. Typed destinations do not insert text into bibliography display. Decoded non-ASCII URI characters remain observable and are diagnosed under ManT's separate RFC 3986 URI policy rather than silently enabling host activation.
+
+Markdown export retains its explicit angle-URI autolink policy. A native `UR` suffix such as `<https://example.org/utf8>` can therefore parse as an additional Markdown autolink beside the BODY label's typed destination, even when that destination ends in `html`. This is export syntax over existing visible text; it does not add a typed IR occurrence, native execution, or TUI activation range. Angle email text is escaped as literal Markdown text.
+
+Semantic link annotations keep delayed glyphs with their original source operand. For example, `.Mt \zX a@example.org` reads `Xa@example.org`: `X` keeps the first operand's font, while only `a@example.org` is linked and copied by an address selection. Pure target decoding cannot erase that pending glyph or move its activation range.
+
+The retained G-IND reading difference also applies here: a filled line beginning with an empty or control-only formatter word can acquire one automatic leading separator cell in the CVS device buffer. ManT keeps the executed word and hard-row effects while omitting that device-only first-row padding. This does not remove authored spaces, between-word separators, or empty physical rows. Responsive HANG labels likewise preserve the accepted hard-row sequence without promising the device's BRIND origin for each internal field pass; the separately recorded BODY origin remains active.
+
+`PortableDisplay` separates an optional portable spelling from the accepted native `children`. Plain reading, TUI search/copy, semantic ownership and native coordinates use the children. Clean Markdown export retains the established readable BSD lifecycle descriptions and the compact `Lk` anchor label, instead of the native URI suffix. These are declared portable presentation differences, not oracle-equivalent native text. Replacement occurs at the first accepted native glyph and keeps surrounding separator padding, anchors, and every executed hard line boundary in order, even when the replacement spelling is empty. A rejected interval without accepted glyphs does not produce replacement prose.
+
+`MarkdownOptions.native_text` selects native children when an embedding caller needs native Markdown phrasing. Visible query search uses that projection; explicit Markdown search retains portable export spelling. Each response's byte ranges and line counts describe the exact addressable artifact for its requested scope. Both projections read the same IR and never repeat formatter execution. Container closers and generated syntax retain their own final word decisions. `In` retains code presentation while following the native prose/synopsis font scope; `Xr` does not create a font scope.
 
 Inside `Fo`, a generated comma separates adjacent logical `Fa` parameters. Nonprinting controls and targets do not break that adjacency, but intervening prose or a visible container does; an authored closing delimiter is not duplicated. Generated punctuation is emitted before following controls, so `.Fa x`, `.Sm off`, `.Fa y` retains `x, y`.
 
@@ -704,6 +720,43 @@ Decoded text is never interpreted a second time as roff syntax. In particular, l
 ## Tables
 
 Text, Markdown and TUI preserve the logical column after a horizontal span; covered slots stay empty instead of shifting later cells left. Tables wider than 256 logical columns use explicit column labels in text/Markdown and stacked cells in the TUI, avoiding span-driven allocation amplification.
+
+Mdoc `.Bl -column` keeps its ordered width declarations as `Table.columnWidths`:
+measured content widths in display cells of ManT's UTF-8 reading device,
+excluding the gap between columns. Roff escapes affect this measurement; a
+numeric-looking declaration such as `8n` remains a width sample, not a scale
+expression. Both terminal consumers add the upstream 4/3/1-cell gap for fewer
+than, exactly, or more than five declarations. Additional cells start after
+all declared fields, rather than adding an invented default stride. The last
+field keeps its complete content.
+
+These widths are preferred origins, not a promise of fixed viewport columns.
+Plain and ANSI output use the same measurement before decoration. Successive
+cells continue after the preceding cell's last physical row; they are never
+zipped by local line number. A full field moves the following cell to a new
+row. One positioning advance is bounded to 256 cells, including for hand-built
+or decoded IR. More than 256 columns, span/rule combinations, and origins
+that require preserving signed descendant coordinates use source-order
+fallback. The TUI uses these same facts at readable widths and stacks cells
+when a viewport cannot accommodate the declared starts; links, anchors,
+search coordinates and selection follow the visible cell content.
+Ordinary trailing separator padding is excluded from the field-fit decision,
+while every preserved space remains part of visible placement. The next
+cell's actual start cannot move backwards through that output padding.
+An executed empty row remains completed when a cell changes output container;
+the next cell starts after it. A final empty field may instead close a row
+already occupied by a preceding field, which does not request another blank
+row. Both terminal consumers use the same distinction.
+
+Nested lists, displays and tables retain their block identities. Their
+responsive reading layout can differ from mandoc's device column geometry;
+this never permits dropping or duplicating cell content, rules or spans.
+Nested definition labels retain the HEAD/BODY row relation established by
+their actual post: if the HEAD has closed its native row, the description
+starts separately even when the enclosing column uses a responsive fallback.
+This preserves execution boundaries without reproducing all device wrapping.
+Markdown exports the logical table or its existing faithful fallback without
+copying a second version of the text.
 
 Separate native tables remain separate IR blocks even when adjacent. A `T&` layout restart changes rows within the same table; leading rule-only rows do not hide its boundary.
 

@@ -24,7 +24,10 @@ pub(super) use owned::{OwnedTarget, PendingTargets};
 /// same target policy.
 #[derive(Debug)]
 pub(super) struct NativeTargetPlan {
+    /// Authored fragment namespace, including permitted removed-owner recovery.
     explicit: HashSet<String>,
+    /// Surviving `NODE_ID` facts; this is not an executed-output namespace.
+    validated_owners: HashSet<String>,
 }
 
 impl NativeTargetPlan {
@@ -43,7 +46,11 @@ impl NativeTargetPlan {
         // normalization preserves their original fragment spellings as well.
         for node in &nodes {
             if node.macro_name.as_deref() == Some("Bl") && node.kind == NodeKind::Body {
-                explicit.extend(node.children.iter().filter_map(list_stream_target));
+                explicit.extend(
+                    node.children
+                        .iter()
+                        .filter_map(|child| list_stream_target(child, &retained)),
+                );
             }
         }
         for (index, node) in nodes.iter().enumerate() {
@@ -68,22 +75,38 @@ impl NativeTargetPlan {
                 explicit.insert(target);
             }
         }
-        Self { explicit }
+        Self {
+            explicit,
+            validated_owners: retained,
+        }
     }
 
     pub(super) fn explicit(&self) -> &HashSet<String> {
         &self.explicit
     }
+
+    pub(super) fn validated_owners(&self) -> &HashSet<String> {
+        &self.validated_owners
+    }
 }
 
 /// Destination consumed by the list's pending-target stream. A validated
 /// argument-less Tg is authoritative; only an actual authored argument may
-/// recover a target discarded with an empty native item. Never revive stale
-/// tags on unflagged argument-less requests.
-pub(super) fn list_stream_target(node: &Node) -> Option<String> {
-    (node.macro_name.as_deref() == Some("Tg"))
-        .then(|| raw_target(node).or_else(|| explicit_target_argument(node)))
-        .flatten()
+/// recover a target discarded with an empty native item. A surviving native
+/// owner takes precedence over recovery: `mdoc_validate.c::post_tg()` hides
+/// the Tg when it moves `NODE_ID` to a following macro. NOPRT alone is not proof
+/// that ownership survived, because `post_it()` can delete an empty column
+/// item afterwards. Never revive stale unflagged argument-less requests.
+pub(super) fn list_stream_target(
+    node: &Node,
+    validated_owners: &HashSet<String>,
+) -> Option<String> {
+    if node.macro_name.as_deref() != Some("Tg") {
+        return None;
+    }
+    raw_target(node).or_else(|| {
+        explicit_target_argument(node).filter(|target| !validated_owners.contains(target))
+    })
 }
 
 /// Return the first source token used by libmandoc when a target has no tag.
@@ -350,6 +373,7 @@ pub(super) fn inline_anchor_ids(nodes: &[Inline], output: &mut Vec<String>) {
             Inline::Anchor { id, .. } => output.push(id.to_string()),
             Inline::Strong { children }
             | Inline::Emphasis { children }
+            | Inline::PortableDisplay { children, .. }
             | Inline::Link { children, .. } => inline_anchor_ids(children, output),
             Inline::Text { .. }
             | Inline::Code { .. }
@@ -365,6 +389,7 @@ pub(super) fn inline_anchor_owner_source(nodes: &[Inline]) -> Option<SourceSpan>
         Inline::Anchor { owner_source, .. } => *owner_source,
         Inline::Strong { children }
         | Inline::Emphasis { children }
+        | Inline::PortableDisplay { children, .. }
         | Inline::Link { children, .. } => inline_anchor_owner_source(children),
         Inline::Text { .. }
         | Inline::Code { .. }
@@ -520,6 +545,7 @@ fn inlines_contain_anchor(nodes: &[Inline], target: &str) -> bool {
         Inline::Anchor { id, .. } => id == target,
         Inline::Strong { children }
         | Inline::Emphasis { children }
+        | Inline::PortableDisplay { children, .. }
         | Inline::Link { children, .. } => inlines_contain_anchor(children, target),
         Inline::Text { .. }
         | Inline::Code { .. }

@@ -93,7 +93,15 @@ impl StructuralLowerer<'_, '_, '_> {
                     self.has_paragraph_predecessor(),
                     self.formatter,
                 );
-                if self.has_paragraph_predecessor() && !node.compact {
+                // Bl BLOCK pre/post call only term_newln(). The vertical
+                // request belongs to It pre's print_bvspace(), so an empty
+                // normalized list cannot acquire another paragraph gap.
+                // Target attachment may create a zero-width IR carrier; it
+                // does not create an It BLOCK in the native execution tree.
+                if super::lists::has_native_mdoc_list_items(node)
+                    && self.has_paragraph_predecessor()
+                    && !node.compact
+                {
                     set_block_spacing(&mut block, 1);
                 }
                 self.output.push(block);

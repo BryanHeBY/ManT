@@ -33,9 +33,11 @@ fn native_section_pd_and_explicit_requests_compose_once() {
 #[test]
 fn no_fill_source_line_precedes_state_only_requests_inside_man_links() {
     // Exact UR/MT x ft/PD/ta/ll/po x continuation inputs were run with the
-    // fixed CVS -Tascii/-Tlint oracle. man_term.c::print_man_node() handles
+    // fixed CVS -Tascii/-Tutf8/-Thtml/-Tlint oracle. man_term.c::print_man_node() handles
     // NODE_NOFILL | NODE_LINE before the roff request handler; a preceding
-    // \c suppresses only that source-line break.
+    // \c suppresses only that source-line break. post_UR() (also MT's post)
+    // executes literal ASCII '<' and '>' on both terminal devices; the mdoc
+    // enclosure catalog glyphs do not apply to these generated man words.
     for (open, close, target) in [
         ("UR", "UE", "https://example.org"),
         ("MT", "ME", "user@example.org"),
@@ -49,11 +51,15 @@ fn no_fill_source_line_precedes_state_only_requests_inside_man_links() {
                 let query = load_roff_bytes(input.as_bytes()).unwrap();
                 let text = render_query_text(&query);
                 let boundary = if continued {
-                    format!("label⟨{target}⟩\nafter")
+                    format!("label<{target}>\nafter")
                 } else {
-                    format!("label\n⟨{target}⟩\nafter")
+                    format!("label\n<{target}>\nafter")
                 };
-                assert!(text.contains(&boundary), "{input}\n{text:?}");
+                assert_eq!(
+                    text.split_once("DESCRIPTION\n").unwrap().1,
+                    boundary,
+                    "{input}\n{text:?}"
+                );
             }
         }
     }

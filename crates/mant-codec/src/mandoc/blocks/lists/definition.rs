@@ -307,6 +307,7 @@ fn only_breakable_head_padding(inline: &Inline) -> bool {
         Inline::Text { value } | Inline::Code { value } => value.chars().all(|ch| ch == ' '),
         Inline::Emphasis { children }
         | Inline::Strong { children }
+        | Inline::PortableDisplay { children, .. }
         | Inline::Link { children, .. } => children.iter().all(only_breakable_head_padding),
         // Equations and other semantic nodes are not ordinary term_fill()
         // padding cells.
@@ -324,7 +325,9 @@ fn clear_breakable_head_padding(term: &mut Vec<Inline>) {
             clear_breakable_head_padding(children);
             true
         }
-        Inline::Emphasis { children } | Inline::Strong { children } => {
+        Inline::Emphasis { children }
+        | Inline::Strong { children }
+        | Inline::PortableDisplay { children, .. } => {
             clear_breakable_head_padding(children);
             !children.is_empty()
         }

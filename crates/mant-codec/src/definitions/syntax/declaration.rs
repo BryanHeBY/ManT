@@ -166,7 +166,7 @@ fn literal_ranges(
             Inline::Emphasis { children } => {
                 literal_ranges(children, literal, true, offset, ranges);
             }
-            Inline::Link { children, .. } => {
+            Inline::PortableDisplay { children, .. } | Inline::Link { children, .. } => {
                 literal_ranges(children, literal, parameter, offset, ranges);
             }
             Inline::LineBreak { .. } => *offset += 1,
@@ -196,7 +196,7 @@ fn collect_literal_starts(
             Inline::Emphasis { children } => {
                 collect_literal_starts(children, strong, true, offset, starts);
             }
-            Inline::Link { children, .. } => {
+            Inline::PortableDisplay { children, .. } | Inline::Link { children, .. } => {
                 collect_literal_starts(children, strong, parameter, offset, starts);
             }
             Inline::LineBreak { .. } => *offset += 1,

@@ -26,16 +26,20 @@ pub(super) struct BlockState {
 #[derive(Clone, Copy)]
 pub(super) struct LinkOutputCursor {
     output: usize,
-    paragraph: usize,
-    literal: usize,
+    node_id: u32,
 }
 
 impl BlockState {
-    pub(super) fn link_output_cursor(&self) -> LinkOutputCursor {
+    pub(super) fn link_output_cursor(&mut self, node_id: u32) -> LinkOutputCursor {
+        let marker = super::man_links::link_cursor_marker(node_id);
+        if self.formatter.no_fill {
+            self.literal.insert_link_cursor(marker);
+        } else {
+            self.paragraph.insert_link_cursor(marker);
+        }
         LinkOutputCursor {
             output: self.output.len(),
-            paragraph: self.paragraph.node_count(),
-            literal: self.literal.node_count(),
+            node_id,
         }
     }
 
@@ -46,25 +50,46 @@ impl BlockState {
         skip_prior_glyph: bool,
     ) -> bool {
         let mut skip_visible = usize::from(skip_prior_glyph);
-        let mut paragraph_offset = Some(cursor.paragraph);
-        let mut literal_offset = Some(cursor.literal);
-        let output_start = cursor.output.min(self.output.len());
-        for block in &mut self.output[output_start..] {
-            let offset = match block {
-                Block::Paragraph { .. } => paragraph_offset.take().unwrap_or(0),
-                Block::Preformatted { .. } => literal_offset.take().unwrap_or(0),
-                _ => 0,
-            };
-            if super::man_links::wrap_first_visible_block(block, target, offset, &mut skip_visible)
-            {
-                return true;
+        let marker = super::man_links::link_cursor_marker(cursor.node_id);
+        let mut started = false;
+        for index in cursor.output..self.output.len() {
+            let block = &mut self.output[index];
+            let wrapped = super::man_links::wrap_first_visible_block(
+                block,
+                target,
+                &marker,
+                &mut started,
+                &mut skip_visible,
+            );
+            if started {
+                // HTML closes the annotation when this output owner closes
+                // (man_html.c::man_IP_pre and html_close_paragraph). A
+                // rejected/empty label cannot migrate to a later list item.
+                if matches!(block, Block::Paragraph { children, .. } | Block::Preformatted { children, .. } if children.is_empty())
+                {
+                    self.output.remove(index);
+                }
+                return wrapped;
             }
         }
-        self.paragraph
-            .wrap_first_link(target, paragraph_offset.unwrap_or(0), &mut skip_visible)
-            || self
-                .literal
-                .wrap_first_link(target, literal_offset.unwrap_or(0), &mut skip_visible)
+        let wrapped =
+            self.paragraph
+                .wrap_first_link(target, &marker, &mut started, &mut skip_visible);
+        if started {
+            return wrapped;
+        }
+        self.literal
+            .wrap_first_link(target, &marker, &mut started, &mut skip_visible)
+    }
+
+    pub(super) fn discard_link_cursor(&mut self, cursor: LinkOutputCursor) {
+        let marker = super::man_links::link_cursor_marker(cursor.node_id);
+        let mut scoped_output = self.output.split_off(cursor.output);
+        scoped_output
+            .retain_mut(|block| !super::man_links::remove_link_cursor_block(block, &marker));
+        self.output.extend(scoped_output);
+        self.paragraph.discard_link_cursor(&marker);
+        self.literal.discard_link_cursor(&marker);
     }
 
     pub(super) const fn source_indent(&self) -> crate::mandoc::layout::SourceIndent {
@@ -401,6 +426,45 @@ impl BlockState {
         self.formatter.vertical_space_debt = 0;
     }
 
+    pub(super) fn begin_column_body(&mut self, width: u16, origin: usize, last: bool) {
+        self.paragraph
+            .with_inline_builder(&mut self.formatter, |builder| {
+                builder.begin_column_body(width, origin, last);
+            });
+    }
+
+    pub(super) fn finish_column_nested_row(&mut self) {
+        if self.formatter.execution.has_column_output_scope() {
+            // The native post runs in the active output owner. In particular,
+            // closing literal graph must not produce a second empty paragraph.
+            if self.literal.has_output() {
+                self.literal
+                    .with_inline_builder(&mut self.formatter, |builder| {
+                        builder.execute_native_newline();
+                    });
+            } else {
+                self.paragraph
+                    .with_inline_builder(&mut self.formatter, |builder| {
+                        builder.execute_native_newline();
+                    });
+            }
+        }
+    }
+
+    pub(super) fn enter_column_node(&mut self, node: &libmandoc_rs::Node) {
+        self.paragraph
+            .with_inline_builder(&mut self.formatter, |builder| {
+                builder.begin_executed_node(node);
+            });
+    }
+
+    pub(super) fn column_vertical_space(&mut self, rows: i32) {
+        self.paragraph
+            .with_inline_builder(&mut self.formatter, |builder| {
+                builder.native_vertical_space(u16::try_from(rows.max(0)).unwrap_or(u16::MAX));
+            });
+    }
+
     pub(super) fn inherit_author_execution(
         &mut self,
         flow: crate::mandoc::formatter::AuthorFlow,
@@ -527,10 +591,18 @@ impl BlockState {
             }
         }
         if completed_vertical_rows > 0 {
-            self.output.push(Block::VerticalSpace {
-                lines: completed_vertical_rows,
-                source: None,
-            });
+            // A detached HEAD may already represent the device row that
+            // this flush ended (termp_it_post followed by term_flushln).
+            // Claim its row once regardless of whether the receipt came
+            // from an invisible word or a rejected plain-buffer suffix.
+            let head_row = !suppressed_head_row && self.formatter.consume_definition_head_row();
+            let body_rows = completed_vertical_rows.saturating_sub(u16::from(head_row));
+            if body_rows > 0 {
+                self.output.push(Block::VerticalSpace {
+                    lines: body_rows,
+                    source: None,
+                });
+            }
         }
         if empty_word_end_break && !suppressed_head_row {
             // A bare \p can occupy the native tag row without leaving an
@@ -611,7 +683,16 @@ impl BlockState {
     }
 
     fn settle(&mut self, row_boundary: super::FormatterRowBoundary) {
-        if row_boundary == super::FormatterRowBoundary::Settle {
+        let mut column_closed_row = false;
+        if matches!(row_boundary, super::FormatterRowBoundary::Column { .. }) {
+            column_closed_row =
+                self.paragraph
+                    .with_inline_builder(&mut self.formatter, |builder| {
+                        let closed = builder.finish_nested_column_part();
+                        builder.observe_no_fill_source_lines(false);
+                        closed
+                    });
+        } else if row_boundary == super::FormatterRowBoundary::Settle {
             // The caller identified a native BODY post, not an IR owner
             // return. mdoc_term.c::termp_it_post() executes term_newln()
             // for inset/diag BODY here before retiring the field flags.
@@ -620,6 +701,15 @@ impl BlockState {
         }
         self.flush_preformatted();
         self.flush_paragraph();
+        if column_closed_row
+            && let Some(Block::Paragraph { children, .. } | Block::Preformatted { children, .. }) =
+                self.output.last_mut()
+            && !matches!(children.last(), Some(Inline::LineBreak { .. }))
+        {
+            // It post closed an already represented graph row. The trailing
+            // hard break opens the next row; it is not another blank row.
+            children.push(Inline::line_break());
+        }
         if let Some((lines, source)) = self.pending_spacing.take() {
             self.output.push(Block::VerticalSpace { lines, source });
         }
@@ -633,6 +723,7 @@ fn has_formatter_text_cell(nodes: &[Inline]) -> bool {
         Inline::Text { .. } | Inline::Code { .. } | Inline::Equation { .. } => true,
         Inline::Strong { children }
         | Inline::Emphasis { children }
+        | Inline::PortableDisplay { children, .. }
         | Inline::Link { children, .. } => has_formatter_text_cell(children),
         Inline::Anchor { .. } | Inline::LineBreak { .. } => false,
     })

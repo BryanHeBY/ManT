@@ -13,6 +13,8 @@ pub(super) fn table_rows(
 ) -> Vec<String> {
     bounded_table_rows(rows)
         .into_iter()
+        .zip(rows)
+        .filter_map(|(plan, row)| (!mant_ir::table_row_is_navigation_only(row)).then_some(plan))
         .flat_map(|row| match row {
             TableRowPlan::Empty => vec![String::new()],
             TableRowPlan::WholeRule { double } => {

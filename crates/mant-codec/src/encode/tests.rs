@@ -13,6 +13,63 @@ use super::{
 };
 use mant_ir::ResolvedContent;
 
+#[test]
+fn navigation_only_tables_emit_targets_without_empty_fences() {
+    let paragraph = |children| Block::Paragraph {
+        children,
+        layout: LayoutHint::default(),
+        source: None,
+    };
+    let table = |cells| Block::Table {
+        rows: vec![TableRow {
+            kind: mant_ir::TableRowKind::Data,
+            cells,
+        }],
+        column_widths: vec![3, 3],
+        layout: LayoutHint::default(),
+        source: None,
+    };
+    let cell = |blocks| TableCell {
+        blocks,
+        kind: mant_ir::TableCellKind::Text,
+        column_span: 1,
+        row_span: 1,
+        alignment: None,
+    };
+    let navigation = cell(vec![paragraph(vec![Inline::Strong {
+        children: vec![Inline::anchor_with_aliases(
+            "target",
+            vec!["Exact.Target".into()],
+        )],
+    }])]);
+    for preserve_anchors in [false, true] {
+        let output = super::render_blocks_fragment(
+            &[table(vec![navigation.clone()])],
+            super::MarkdownFragmentOptions { preserve_anchors },
+        )
+        .join("\n\n");
+        if preserve_anchors {
+            assert_eq!(output, "<a id=\"target\"></a>\n<a id=\"Exact.Target\"></a>");
+        } else {
+            assert!(output.is_empty());
+        }
+    }
+    for cells in [
+        vec![],
+        vec![cell(vec![])],
+        vec![navigation.clone(), cell(vec![])],
+        vec![cell(vec![]), navigation],
+    ] {
+        let output = super::render_blocks_fragment(
+            &[table(cells)],
+            super::MarkdownFragmentOptions::default(),
+        )
+        .join("\n\n");
+        assert!(output.starts_with("```\n"), "{output:?}");
+        assert!(output.ends_with("\n```"), "{output:?}");
+    }
+}
+
 /// Supply already-parsed content to the document encoder without discovery,
 /// query validation, projection, or report DTOs. Labels here are caller-owned.
 fn parse_content(

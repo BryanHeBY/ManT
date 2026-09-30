@@ -7,6 +7,18 @@ use super::{
     layout, lower_scope, ordinal_sequence, part_child_groups, source_span, targets,
 };
 
+/// Only normalized `It` blocks execute `termp_it_pre`'s paragraph distance.
+/// Navigation-only IR items inserted below do not establish this source fact.
+pub(in crate::mandoc::blocks) fn has_native_mdoc_list_items(node: &Node) -> bool {
+    first_part_children(node, NodeKind::Body)
+        .iter()
+        .any(is_mdoc_list_item)
+}
+
+fn is_mdoc_list_item(node: &Node) -> bool {
+    node.kind == NodeKind::Block && node.macro_name.as_deref() == Some("It")
+}
+
 pub(in crate::mandoc::blocks) fn lower_mdoc_list(
     node: &Node,
     context: &LoweringContext<'_>,
@@ -20,7 +32,7 @@ pub(in crate::mandoc::blocks) fn lower_mdoc_list(
         items,
         trailing_targets,
         trailing_controls,
-    } = mdoc_list_items(node);
+    } = mdoc_list_items(node, context);
     formatter.set_spacing_enabled(initial_spacing);
     let is_definition = matches!(
         node.list_kind,
@@ -469,18 +481,21 @@ struct MdocListItems<'a> {
 /// `@newuser name:uid`. Consumers execute these slices between item bodies,
 /// including trailing controls, exactly once in source order. This also
 /// preserves font requests, not just the spacing settings known to a scanner.
-fn mdoc_list_items(node: &Node) -> MdocListItems<'_> {
+fn mdoc_list_items<'node>(
+    node: &'node Node,
+    context: &LoweringContext<'_>,
+) -> MdocListItems<'node> {
     let body = first_part_children(node, NodeKind::Body);
     let mut controls_start = 0;
     let mut items = Vec::new();
     let mut pending_targets: Vec<targets::OwnedTarget> = Vec::new();
     for (index, child) in body.iter().enumerate() {
-        if let Some(target) = targets::list_stream_target(child)
+        if let Some(target) = targets::list_stream_target(child, &context.native_target_owners)
             && !pending_targets.iter().any(|pending| pending.name == target)
         {
             pending_targets.push(targets::OwnedTarget::new(target, source_span(child)));
         }
-        if child.macro_name.as_deref() == Some("It") {
+        if is_mdoc_list_item(child) {
             items.push(MdocListItem {
                 node: child,
                 leading_controls: &body[controls_start..index],
@@ -511,6 +526,15 @@ fn lower_mdoc_column_list(
     paragraph_distance: &mut u16,
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> Block {
+    let column_widths: Vec<u16> = node
+        .columns
+        .iter()
+        .map(|declared| {
+            u16::try_from(crate::mandoc::roff_escape::width_sample(declared)).unwrap_or(u16::MAX)
+        })
+        .collect();
+    let origins = mant_ir::geometry::DeclaredColumns::new(&column_widths);
+    formatter.execution.enter_column_output_scope();
     let rows = items
         .into_iter()
         .map(|item| {
@@ -524,22 +548,42 @@ fn lower_mdoc_column_list(
                 formatter.spacing_enabled(),
                 formatter,
             );
-            let mut cells = part_child_groups(item.node, NodeKind::Body)
-                .map(|body| {
-                    let spacing_enabled = formatter.spacing_enabled();
+            let bodies = part_child_groups(item.node, NodeKind::Body).collect::<Vec<_>>();
+            let gap = match column_widths.len() {
+                n if n < 5 => 4,
+                5 => 3,
+                _ => 1,
+            };
+            let mut cells = bodies
+                .iter()
+                .enumerate()
+                .map(|(index, body)| {
+                    let width = column_widths
+                        .get(index)
+                        .copied()
+                        .unwrap_or(10)
+                        .saturating_add(gap);
+                    let origin = origins.as_ref().map_or(0, |columns| columns.start(index));
+                    let blocks = lower_scope(
+                        body,
+                        context,
+                        paragraph_distance,
+                        formatter,
+                        ScopeFlow::column_post(
+                            cell_indent.content_origin(),
+                            formatter.spacing_enabled(),
+                            if index + 1 == bodies.len() {
+                                u16::MAX
+                            } else {
+                                width
+                            },
+                            origin,
+                            index + 1 == bodies.len(),
+                        ),
+                    );
                     AstTableCell {
                         kind: mant_ir::TableCellKind::Text,
-                        blocks: lower_scope(
-                            body,
-                            context,
-                            paragraph_distance,
-                            formatter,
-                            ScopeFlow::body_post_row_end(
-                                cell_indent.content_origin(),
-                                spacing_enabled,
-                                item_body_predecessor(false, 0, false),
-                            ),
-                        ),
+                        blocks,
                         column_span: 1,
                         row_span: 1,
                         alignment: Some(AstTableAlignment::Left),
@@ -572,15 +616,7 @@ fn lower_mdoc_column_list(
         })
         .filter(|row| !row.cells.is_empty())
         .collect();
-    // mdoc_term.c::termp_bl_pre (701-733) derives every column's offset from
-    // the declared `Bl -column` width strings, not from rendered content.
-    // The dcol gap (4/3/1 by declared column count) is applied by the
-    // consumer so the stored widths stay the author's own declaration.
-    let column_widths = node
-        .columns
-        .iter()
-        .map(|declared| declared.chars().count().min(u16::MAX as usize) as u16)
-        .collect();
+    formatter.execution.exit_column_output_scope();
     Block::Table {
         column_widths,
         rows,

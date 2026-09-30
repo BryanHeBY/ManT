@@ -14,7 +14,9 @@ use mant_protocol::{
 };
 
 use crate::ResolvedContent;
+#[cfg(test)]
 use mant_codec::encode::render_addressable_markdown;
+use mant_codec::encode::{MarkdownOptions, render_addressable_markdown_with_options};
 
 mod mapping;
 mod owners;
@@ -87,7 +89,16 @@ fn search_with_matcher(
     request: &SearchQuery,
     matcher: &grep_regex::RegexMatcher,
 ) -> Result<QuerySearch, SearchError> {
-    let artifact = render_addressable_markdown(query);
+    let artifact = render_addressable_markdown_with_options(
+        query,
+        MarkdownOptions {
+            // Visible search follows the executed reader text. Explicit
+            // Markdown search follows the portable export spelling. Both
+            // map against the exact artifact encoded for this request.
+            native_text: request.scope == mant_protocol::SearchScope::Visible,
+            ..MarkdownOptions::ADDRESSABLE
+        },
+    );
     let markdown = artifact.text();
     let lines = LineIndex::with_anchors(markdown, artifact.anchor_ranges().to_vec());
     let owners = OwnerIndex::new(&artifact);

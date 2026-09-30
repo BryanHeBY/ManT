@@ -116,7 +116,7 @@ fn render_block(
         Block::DefinitionList { items, compact, .. } => {
             render_definition_list(items, *compact, options, locations, track)
         }
-        Block::Table { rows, .. } => render_table(rows, track),
+        Block::Table { rows, .. } => render_table(rows, options, track),
         Block::Equation { value, display, .. } => {
             if *display {
                 Some(fenced_code(value, Some("math")).into())
@@ -284,12 +284,27 @@ fn join_definition_items(
     Some(output)
 }
 
-fn render_table(rows: &[TableRow], track: bool) -> Option<MappedText> {
-    let rows = super::flat::rows(rows, track)
-        .into_iter()
-        .filter(|row| !row.text.trim().is_empty())
-        .collect::<Vec<_>>();
-    (!rows.is_empty()).then(|| {
+fn render_table(rows: &[TableRow], options: MarkdownOptions, track: bool) -> Option<MappedText> {
+    // Empty data rows and native rules are authored structure, not fence
+    // delimiters. Keep them in the same source-order portable row plan.
+    let markers = if options.preserve_anchors {
+        rows.iter()
+            .filter(|row| mant_ir::table_row_is_navigation_only(row))
+            .flat_map(|row| &row.cells)
+            .flat_map(|cell| &cell.blocks)
+            .filter_map(|block| match block {
+                Block::Paragraph { children, .. } => Some(preformatted_anchor_markers(children)),
+                _ => None,
+            })
+            .collect::<String>()
+    } else {
+        String::new()
+    };
+    let rows = super::flat::rows(rows, track);
+    if rows.is_empty() {
+        return nonempty(markers);
+    }
+    Some({
         let mut body = MappedText::join(rows, "\n");
         let fenced = fenced_code(&body.text, None);
         let prefix = fenced.find('\n').expect("fence header") + 1;
@@ -298,6 +313,9 @@ fn render_table(rows: &[TableRow], track: bool) -> Option<MappedText> {
             range.end += prefix;
         }
         body.text = fenced;
+        if !markers.is_empty() {
+            body.insert(0, &format!("{markers}\n\n"));
+        }
         body
     })
 }

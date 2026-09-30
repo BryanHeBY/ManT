@@ -86,10 +86,10 @@ impl HeadRowState {
         }
     }
 
-    /// A source-row flush prints the carrying word before the enclosing
-    /// node restores its offset. Commit the emitted jump at that execution
-    /// boundary; another word arriving alone does not commit it.
-    pub(in crate::mandoc::inline::flow) fn commit_on_source_flush(&mut self) {
+    /// A source event or macro post flush prints the carrying word before
+    /// the enclosing node restores its offset. Commit the emitted jump at
+    /// that boundary; another word arriving alone does not commit it.
+    pub(in crate::mandoc::inline::flow) fn commit_at_flush(&mut self) {
         if self
             .pending
             .as_ref()
@@ -124,7 +124,7 @@ mod head_row_state_tests {
         row.arm_jump(14);
         assert_eq!(row.emit_armed(0, 8), 6);
         row.close_word();
-        row.commit_on_source_flush();
+        row.commit_at_flush();
         assert_eq!(row.retract_on_head_close(), None);
     }
 

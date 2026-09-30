@@ -311,6 +311,42 @@ fn empty_displays_preserve_their_independent_requests_without_visible_leaves() {
     }
 }
 
+fn assert_column_display_source(source: &str) {
+    use libmandoc_rs::{Node, NodeKind, NormalizedListKind, Parser};
+
+    fn column(node: &Node) -> Option<&Node> {
+        if node.kind == NodeKind::Block && node.list_kind == Some(NormalizedListKind::Column) {
+            return Some(node);
+        }
+        node.children.iter().find_map(column)
+    }
+
+    let parsed = Parser::default()
+        .parse_bytes("first-column-display.1", source.as_bytes())
+        .unwrap();
+    let list = column(&parsed.document.root).expect("actual column list BLOCK");
+    let body = list
+        .children
+        .iter()
+        .find(|node| node.kind == NodeKind::Body)
+        .unwrap();
+    let item = body
+        .children
+        .iter()
+        .find(|node| node.kind == NodeKind::Block && node.macro_name.as_deref() == Some("It"))
+        .unwrap();
+    let item_body = item
+        .children
+        .iter()
+        .find(|node| node.kind == NodeKind::Body)
+        .unwrap();
+    assert!(
+        item_body.children.iter().any(|node| {
+            node.kind == NodeKind::Block && node.macro_name.as_deref() == Some("Bd")
+        })
+    );
+}
+
 #[test]
 fn first_item_display_boundaries_follow_the_native_list_kind() {
     struct Gap(Option<u16>);
@@ -326,6 +362,10 @@ fn first_item_display_boundaries_follow_the_native_list_kind() {
             visit::walk_block(self, block);
         }
     }
+    // Exact pristine ASCII/UTF-8/tree runs preceded these assertions:
+    // mdoc_term.c::print_bvspace() climbs first-child wrappers, then stops
+    // at every non-LIST_item It. Bl -compact suppresses It pre's spacing,
+    // but cannot suppress an inner noncompact Bd's independent request.
     for list in [
         "-item",
         "-bullet",
@@ -337,28 +377,47 @@ fn first_item_display_boundaries_follow_the_native_list_kind() {
         "-ohang",
         "-column X",
     ] {
-        for predecessor in [false, true] {
-            let before = if predecessor { "BASE\n" } else { "" };
-            let head = if ["-tag", "-hang", "-diag", "-inset", "-ohang"]
-                .iter()
-                .any(|style| list.starts_with(style))
-            {
-                " TERM"
-            } else {
-                ""
-            };
-            let source = format!(
-                ".Dd September 9, 2026\n.Dt PROBE 1\n.Os\n.Sh TEST\n{before}.Bl {list} -compact\n.It{head}\n.Bd -literal\nINNER\n.Ed\n.El\nAFTER\n"
-            );
-            let content = load_roff_bytes(source.as_bytes()).unwrap();
-            let mut gap = Gap(None);
-            gap.visit_document(content.document.as_ref().unwrap());
-            assert_eq!(
-                gap.0,
-                Some(u16::from(list != "-item" || predecessor)),
-                "{source}\n{}",
-                render_query_text(&content)
-            );
+        for compact in [false, true] {
+            for predecessor in [false, true] {
+                let before = if predecessor { "BASE\n" } else { "" };
+                let flag = if compact { " -compact" } else { "" };
+                let head = if ["-tag", "-hang", "-diag", "-inset", "-ohang"]
+                    .iter()
+                    .any(|style| list.starts_with(style))
+                {
+                    " TERM"
+                } else {
+                    ""
+                };
+                let source = format!(
+                    ".Dd September 9, 2026\n.Dt PROBE 1\n.Os\n.Sh TEST\n{before}.Bl {list}{flag}\n.It{head}\n.Bd -literal\nINNER\n.Ed\n.El\nAFTER\n"
+                );
+                if list == "-column X" {
+                    assert_column_display_source(&source);
+                }
+                let content = load_roff_bytes(source.as_bytes()).unwrap();
+                let mut gap = Gap(None);
+                gap.visit_document(content.document.as_ref().unwrap());
+                let display_gap = usize::from(list != "-item" || predecessor);
+                assert_eq!(gap.0, Some(u16::try_from(display_gap).unwrap()), "{source}");
+                let text = render_query_text(&content);
+                let inner = text.find("INNER").unwrap();
+                let line_boundaries = text[..inner]
+                    .chars()
+                    .rev()
+                    .take_while(|character| character.is_whitespace())
+                    .filter(|character| *character == '\n')
+                    .count();
+                // Item/column have no rendered HEAD marker, so their outer
+                // list spacing and inner display spacing share this interval.
+                let outer_gap =
+                    usize::from(predecessor && !compact && matches!(list, "-item" | "-column X"));
+                assert_eq!(
+                    line_boundaries,
+                    1 + display_gap + outer_gap,
+                    "{source}\n{text}"
+                );
+            }
         }
     }
     // LIST_item inherits outer predecessors through the detached list body.
@@ -366,4 +425,130 @@ fn first_item_display_boundaries_follow_the_native_list_kind() {
     assert!(render_query_text(&content).contains("BASE\n\n\n\nINNER\nAFTER"));
     let content = load_roff_bytes(b".Dd September 9, 2026\n.Dt PROBE 1\n.Os\n.Sh TEST\n.Bl -item -compact\n.It\nFIRST\n.It\n.Bd -literal\nINNER\n.Ed\n.El\nAFTER\n").unwrap();
     assert!(render_query_text(&content).contains("FIRST\n\nINNER\nAFTER"));
+}
+
+#[test]
+fn compact_column_display_suppresses_only_its_own_vertical_request() {
+    struct Gap(Option<u16>);
+    impl<'a> Visit<'a> for Gap {
+        fn visit_block(&mut self, block: &'a Block) {
+            if let Block::Preformatted {
+                children, layout, ..
+            } = block
+                && visible(children) == "INNER"
+            {
+                self.0 = Some(layout.spacing_before_lines);
+            }
+            visit::walk_block(self, block);
+        }
+    }
+    // Exact pristine ASCII/UTF-8/tree runs: print_bvspace() returns after
+    // term_newln() when this Bd itself is compact, even under non-item It.
+    for predecessor in [false, true] {
+        let before = if predecessor { "BASE\n" } else { "" };
+        let source = format!(
+            ".Dd September 9, 2026\n.Dt PROBE 1\n.Os\n.Sh TEST\n{before}.Bl -column X -compact\n.It\n.Bd -literal -compact\nINNER\n.Ed\n.El\nAFTER\n"
+        );
+        assert_column_display_source(&source);
+        let content = load_roff_bytes(source.as_bytes()).unwrap();
+        let mut gap = Gap(None);
+        gap.visit_document(content.document.as_ref().unwrap());
+        assert_eq!(gap.0, Some(0), "{source}");
+        let text = render_query_text(&content);
+        let before = if predecessor { "BASE" } else { "TEST" };
+        assert!(
+            text.contains(&format!("{before}\nINNER")),
+            "{source}\n{text}"
+        );
+    }
+}
+
+#[test]
+fn column_body_post_preserves_completed_empty_rows_after_json() {
+    // Exact pristine ASCII/UTF-8/tree sources precede these assertions.
+    // termp_it_post() unconditionally calls term_flushln() for a column
+    // BODY. Its empty last-field tail executes endline (term.c:233-253),
+    // unlike a normal term_newln() after the display already closed its row.
+    // For a non-final BODY, retain the same device viscol across output
+    // owners: its empty post closes INNER's occupied row only when the
+    // trailspace overruns vfield + half an en; I/INNE remain on that row.
+    let pre =
+        ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n";
+    for (body, expected) in [
+        (
+            ".Bl -column X -compact\n.It\n.Bd -literal\nINNER\n.Ed\n.El\nAFTER\n",
+            "DESCRIPTION\n\nINNER\n\nAFTER",
+        ),
+        (
+            ".Bl -column X -compact\n.It\n.Bd -literal -compact\nINNER\n.Ed\n.El\nAFTER\n",
+            "DESCRIPTION\nINNER\n\nAFTER",
+        ),
+        (
+            ".Bl -column X -compact\n.It\n.Bd -filled\nINNER\n.Ed\n.El\nAFTER\n",
+            "DESCRIPTION\n\nINNER\n\nAFTER",
+        ),
+        (
+            ".Bl -column X -compact\n.It A\n.Bd -literal\nINNER\n.Ed\n.El\nAFTER\n",
+            "DESCRIPTION\nA\n\nINNER\n\nAFTER",
+        ),
+        (
+            ".Bl -column X -compact\n.It A\n.Bd -literal -compact\nINNER\n.Ed\n.El\nAFTER\n",
+            "DESCRIPTION\nA\nINNER\n\nAFTER",
+        ),
+        (
+            ".Bl -column X -compact\n.It A\n.sp 0\n.El\nAFTER\n",
+            "DESCRIPTION\nA\n\nAFTER",
+        ),
+        (
+            ".Bl -column X -compact\n.It INNER\n.sp 1\n.El\nAFTER\n",
+            "DESCRIPTION\nINNER\n\n\nAFTER",
+        ),
+        (
+            ".Bl -column X -compact\n.It INNER\n.El\nAFTER\n",
+            "DESCRIPTION\nINNER\nAFTER",
+        ),
+        (
+            ".Bl -column X -compact\n.It INNER\n.br\n.El\nAFTER\n",
+            "DESCRIPTION\nINNER\nAFTER",
+        ),
+        (
+            ".Bl -column XX YY -compact\n.It A Ta B\n.El\nAFTER\n",
+            "DESCRIPTION\nA     B\nAFTER",
+        ),
+        (
+            ".Bl -column XX YY -compact\n.It A Ta\n.El\nAFTER\n",
+            "DESCRIPTION\nA     \nAFTER",
+        ),
+        (
+            ".Bl -column XX YY -compact\n.It\n.Bd -literal -compact\nINNER\n.Ed\n.Ta FINAL\n.El\nAFTER\n",
+            "DESCRIPTION\nINNER\n      FINAL\nAFTER",
+        ),
+        (
+            ".Bl -column XX YY -compact\n.It\n.Bd -literal -compact\nI\n.Ed\n.Ta FINAL\n.El\nAFTER\n",
+            "DESCRIPTION\nI     FINAL\nAFTER",
+        ),
+        (
+            ".Bl -column XX YY -compact\n.It\n.Bd -literal -compact\nINNE\n.Ed\n.Ta FINAL\n.El\nAFTER\n",
+            "DESCRIPTION\nINNE  FINAL\nAFTER",
+        ),
+    ] {
+        let source = format!("{pre}{body}.Sh NEXT\n.No END\n");
+        if body.contains(".Bd") {
+            assert_column_display_source(&source);
+        }
+        let content = load_roff_bytes(source.as_bytes()).unwrap();
+        let json = serde_json::to_string(&mant_protocol::QueryBundle::from(&content)).unwrap();
+        let decoded: mant_protocol::QueryBundle = serde_json::from_str(&json).unwrap();
+        let content: mant_ir::ResolvedContent = decoded.into();
+        let text = render_query_text(&content);
+        let body = text
+            .split_once("DESCRIPTION\n")
+            .unwrap()
+            .1
+            .split_once("\nNEXT\n")
+            .unwrap()
+            .0
+            .trim_end_matches('\n');
+        assert_eq!(format!("DESCRIPTION\n{body}"), expected, "{source}\n{json}");
+    }
 }

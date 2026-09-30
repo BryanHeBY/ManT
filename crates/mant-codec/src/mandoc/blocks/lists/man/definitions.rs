@@ -532,9 +532,9 @@ fn record_mark_role(node: &Node, item: &DefinitionItem, context: &LoweringContex
             Inline::Anchor { .. } | Inline::Code { .. } | Inline::Equation { .. } => true,
             Inline::Text { value } => value.trim().is_empty() || in_style,
             Inline::Strong { children } => styled(children, true),
-            Inline::Emphasis { children } | Inline::Link { children, .. } => {
-                styled(children, in_style)
-            }
+            Inline::Emphasis { children }
+            | Inline::PortableDisplay { children, .. }
+            | Inline::Link { children, .. } => styled(children, in_style),
             Inline::LineBreak { .. } => false,
         })
     }

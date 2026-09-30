@@ -1,12 +1,20 @@
 use super::super::{Inline, InlineBuilder, PendingBoundary};
 use super::split::split_word_at_row_boundaries;
 
+#[derive(Default)]
+pub(super) struct WordPassProjection {
+    pub(super) closes_before: usize,
+    pub(super) leading_cells: usize,
+    pub(super) native_separator: bool,
+    pub(super) split_word: Option<Vec<Inline>>,
+}
+
 impl InlineBuilder {
     pub(super) fn record_hang_word(
         &mut self,
         incoming: &[Inline],
         boundary: PendingBoundary,
-    ) -> (usize, Option<Vec<Inline>>) {
+    ) -> WordPassProjection {
         let native_writes = self.execution.native_word_writes.take();
         let native_boundary = self
             .execution
@@ -21,7 +29,7 @@ impl InlineBuilder {
             return self.record_plain_unit_word(incoming, native_boundary, native_writes);
         }
         let Some(definition) = &mut self.execution.definition else {
-            return (0, None);
+            return WordPassProjection::default();
         };
         // term_word() buffers its separator and glyph in the native field.
         // Generated IR padding is excluded from that field.
@@ -76,7 +84,12 @@ impl InlineBuilder {
                 .find(|part| !part.is_empty())
                 .map_or(0, mant_ir::geometry::text_width);
         }
-        self.record_authored_native_passes(incoming)
+        let native_separator = definition
+            .field_buffer
+            .word_separator_survives(native_word_start, separator);
+        let mut projection = self.record_authored_native_passes(incoming);
+        projection.native_separator = native_separator;
+        projection
     }
 
     /// Plain-flow word recording: the paragraph's flush unit takes the same
@@ -87,24 +100,13 @@ impl InlineBuilder {
         incoming: &[Inline],
         native_boundary: PendingBoundary,
         native_writes: Option<Vec<super::super::field_buffer::FieldWrite>>,
-    ) -> (usize, Option<Vec<Inline>>) {
+    ) -> WordPassProjection {
         let native_word_start = self.execution.flush_unit.cells().len();
-        self.execution.flush_unit.begin_word(
+        let separator = self.execution.flush_unit.begin_word(
             native_boundary.is_native_tight(),
             self.execution.spacing.enabled() || native_boundary == PendingBoundary::Preserved,
             native_boundary == PendingBoundary::Kept,
         );
-        if self.execution.no_fill_word_active {
-            // No-fill fragments retire rows outside the builder and keep
-            // the text executor's own marker decisions
-            // (`field_authoritative` is false there): buffer the cells for
-            // upstream parity, but neither anchors nor the shared pass
-            // loop may act on them.
-            self.execution
-                .flush_unit
-                .apply_writes(&native_writes.unwrap_or_default());
-            return (0, None);
-        }
         let anchor_ir_start = format!(
             "{}{}-{}",
             super::INTERNAL_FIELD_WORD,
@@ -120,6 +122,10 @@ impl InlineBuilder {
             anchor_ir_start,
             receipt.first_content_cell,
         ));
+        let native_separator = self
+            .execution
+            .flush_unit
+            .word_separator_survives(native_word_start, separator);
         // The plain unit is a BRNEVER-shaped degenerate field (term.c:134,
         // 143-144): responsive reflow owns width, so passes only ever end
         // at authored markers and never at a device-width guess.
@@ -130,28 +136,26 @@ impl InlineBuilder {
         };
         let mut buffer = std::mem::take(&mut self.execution.flush_unit);
         let mut anchors = std::mem::take(&mut self.execution.flush_unit_anchors);
-        let result = self.native_unit_passes(incoming, &mut buffer, &mut anchors, targets);
+        let mut result = Self::native_unit_passes(incoming, &mut buffer, &mut anchors, targets);
+        result.native_separator = native_separator;
         self.execution.flush_unit = buffer;
         self.execution.flush_unit_anchors = anchors;
         result
     }
 
-    fn record_authored_native_passes(
-        &mut self,
-        incoming: &[Inline],
-    ) -> (usize, Option<Vec<Inline>>) {
+    fn record_authored_native_passes(&mut self, incoming: &[Inline]) -> WordPassProjection {
         // Width-dependent passes stay provisional until term_flushln(): a
         // later .ta may reinterpret every buffered tab. Only authored break
         // markers can settle a word's existing hard-break execution here.
         let Some(targets) = self.native_field_targets(false, None) else {
-            return (0, None);
+            return WordPassProjection::default();
         };
         let Some(definition) = self.execution.definition.as_mut() else {
-            return (0, None);
+            return WordPassProjection::default();
         };
         let mut buffer = std::mem::take(&mut definition.field_buffer);
         let mut anchors = std::mem::take(&mut definition.field_word_anchors);
-        let result = self.native_unit_passes(incoming, &mut buffer, &mut anchors, targets);
+        let result = Self::native_unit_passes(incoming, &mut buffer, &mut anchors, targets);
         let Some(definition) = self.execution.definition.as_mut() else {
             return result;
         };
@@ -163,17 +167,16 @@ impl InlineBuilder {
     /// The shared incremental pass loop (definition fields and plain flush
     /// units alike): commit only authored-marker passes, and report the row
     /// boundary positions relative to the word just recorded.
-    #[allow(clippy::unused_self)] // shared by builder methods; state arrives by argument
     fn native_unit_passes(
-        &mut self,
         incoming: &[Inline],
         buffer: &mut super::super::field_buffer::FieldBuffer,
         anchors: &mut [(usize, String, usize)],
         targets: super::super::field_buffer::FillTargets,
-    ) -> (usize, Option<Vec<Inline>>) {
+    ) -> WordPassProjection {
         let anchor_count = anchors.len();
         let mut inside_splits = Vec::new();
         let mut closes_before = 0;
+        let mut leading_cells = 0;
         if anchor_count > 0 && !buffer.word_scan_deferred() && buffer.has_pending_break_markers() {
             let word_first_cell = anchors[anchor_count - 1].2;
             let word_end = buffer.cells().len();
@@ -211,6 +214,14 @@ impl InlineBuilder {
                 }
                 if boundary <= word_first_cell {
                     closes_before += usize::from(!represented_in_ir);
+                    // term_flushln() consumes blanks only until the first
+                    // non-blank byte (term.c:205-207). A NODE_LINE TABREF
+                    // stops that sweep, leaving this word's real separator
+                    // at the new row origin even after an empty operand.
+                    leading_cells = buffer.projection_length(
+                        boundary.max(anchors[anchor_count - 1].0),
+                        word_first_cell,
+                    );
                 } else if boundary < word_end && !represented_in_ir {
                     inside_splits.push(buffer.projection_length(word_first_cell, boundary));
                 }
@@ -222,6 +233,11 @@ impl InlineBuilder {
         }
         let split_word = (!inside_splits.is_empty())
             .then(|| split_word_at_row_boundaries(incoming, &mut inside_splits));
-        (closes_before, split_word)
+        WordPassProjection {
+            closes_before,
+            leading_cells,
+            split_word,
+            native_separator: false,
+        }
     }
 }

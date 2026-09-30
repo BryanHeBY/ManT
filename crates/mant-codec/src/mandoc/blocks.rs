@@ -115,6 +115,31 @@ impl ScopeFlow<'_> {
         }
     }
 
+    /// Column BODY post calls `term_flushln()`, while its children use the
+    /// ordinary source-order block driver and persistent word state.
+    pub(super) const fn column_post(
+        indent_columns: crate::mandoc::layout::SourceIndent,
+        spacing_enabled: bool,
+        width: u16,
+        origin: usize,
+        last: bool,
+    ) -> Self {
+        Self {
+            indent_columns,
+            spacing_enabled,
+            // print_bvspace() stops at any non-LIST_item It ancestor.
+            // A detached column BODY therefore keeps that source boundary,
+            // even when it has not emitted a cell block yet.
+            paragraph_predecessor: true,
+            run_in: None,
+            row_boundary: FormatterRowBoundary::Column {
+                width,
+                origin,
+                last,
+            },
+        }
+    }
+
     /// The owning macro's BODY post calls `term_newln()` (or
     /// `term_flushln()`); keep that distinct from an IR output-owner return
     /// without such a post. A detached structural body keeps its source
@@ -161,6 +186,15 @@ pub(super) fn lower_scope(
         );
     }
     lowerer.paragraph_predecessor = flow.paragraph_predecessor;
+    if let FormatterRowBoundary::Column {
+        width,
+        origin,
+        last,
+    } = flow.row_boundary
+    {
+        lowerer.column_field = true;
+        lowerer.state.begin_column_body(width, origin, last);
+    }
     lowerer.push_nodes(nodes);
     lowerer.finish_into(formatter, flow.row_boundary)
 }
@@ -172,6 +206,11 @@ const DEFAULT_MAN_TAG_WIDTH: i32 = 7;
 pub(super) enum FormatterRowBoundary {
     Preserve,
     Settle,
+    Column {
+        width: u16,
+        origin: usize,
+        last: bool,
+    },
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -209,6 +248,7 @@ struct BlockLowerer<'a, 'source> {
     // not make the first child of an unrelated BODY a source successor.
     man_source_predecessor: bool,
     display_fill: Option<DisplayFillMode>,
+    column_field: bool,
 }
 
 impl<'a, 'source> BlockLowerer<'a, 'source> {
@@ -244,6 +284,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             paragraph_predecessor: false,
             man_source_predecessor: false,
             display_fill: None,
+            column_field: false,
         }
     }
 
@@ -269,6 +310,9 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         row_boundary: FormatterRowBoundary,
     ) -> Vec<Block> {
         if row_boundary == FormatterRowBoundary::Settle {
+            // Native BODY posts settle the field before its IR owner drains.
+            // In a column, NOBREAK may leave the device row occupied afterwards.
+            self.state.finish_column_nested_row();
             self.settle_no_fill_inline();
         }
         let blocks = self.state.finish_with_formatter(formatter, row_boundary);

@@ -232,21 +232,59 @@ impl InlineBuilder {
         self.tighten_next_boundary();
     }
 
+    /// Configure a top-level column BODY on the existing execution state;
+    /// child blocks still use the ordinary driver and preserve IR structure.
+    pub(in crate::mandoc) fn begin_column_body(&mut self, width: u16, origin: usize, last: bool) {
+        let flow = self.author_flow().unwrap_or_default();
+        self.inherit_author_execution_with_effect(
+            flow,
+            false,
+            AuthorBreakEffect::Field {
+                flags: FieldFlags::column(last),
+                gap_cells: u8::from(!last),
+                body_width_columns: width,
+                field_width_columns: width,
+            },
+        );
+        self.begin_definition_head_consumption();
+        self.observe_no_fill_source_lines(true);
+        let state = self.definition_state_mut();
+        state.field_offset_units = origin.saturating_mul(24);
+        state.hang_row.field_offset = origin;
+        state.native_margin_units =
+            Some(origin.saturating_add(usize::from(width)).saturating_mul(24));
+        state.hang_row.minbl = 0;
+        // Column BODY pre clears minbl, independently of the incoming
+        // term_word NOSPACE register (mdoc_term.c:916-921).
+        self.execution.pending_field_spaces = 0;
+    }
+
     /// A column BODY post calls `term_flushln()`, rather than `term_newln()`:
     /// pending text and \p run through the ordinary field consumer, and the
     /// Tab reference is not reset between columns (`mdoc_term.c:953`).
-    pub(in crate::mandoc) fn finish_nested_column_part(&mut self) {
-        if let Some((start, flags, gap)) =
-            self.execution
-                .author_execution
-                .and_then(|author| match author.break_effect {
-                    AuthorBreakEffect::Field {
-                        flags, gap_cells, ..
-                    } => Some((author.field_output_start, flags, gap_cells)),
-                    AuthorBreakEffect::Line => None,
-                })
+    pub(in crate::mandoc) fn finish_nested_column_part(&mut self) -> bool {
+        // A nested BODY post can clear the field flags and retire its
+        // input buffer. Column It post still calls term_flushln(), using
+        // those current cleared flags rather than skipping the call.
+        let (start, flags, gap) = self
+            .execution
+            .author_execution
+            .and_then(|author| match author.break_effect {
+                AuthorBreakEffect::Field {
+                    flags, gap_cells, ..
+                } => Some((author.field_output_start, flags, gap_cells)),
+                AuthorBreakEffect::Line => None,
+            })
+            .unwrap_or((0, FieldFlags::inset(), 0));
+        let mut closed_represented_row = false;
         {
             let occupied = self.has_formatter_cell();
+            let empty_ends_row = self.native_empty_field_row_ends();
+            let device_row_occupied = self
+                .execution
+                .definition
+                .as_ref()
+                .is_some_and(|state| state.hang_row.viscol > 0);
             self.flush_definition_field(start, gap, u16::MAX, u16::MAX, flags, false);
             if !occupied {
                 // Unlike term_newln(), the column BODY post calls
@@ -254,13 +292,24 @@ impl InlineBuilder {
                 // executes endline for the last column (term.c:233-253).
                 self.execution.zero_advance.discard_at_row_end();
                 self.retire_consumed_native_field();
-                if !flags.contains(FieldFlag::NoBreak) {
-                    self.retain_line_breaks(1);
+                self.definition_state_mut().hang_row.minbl = usize::from(gap);
+                if empty_ends_row {
+                    closed_represented_row = device_row_occupied;
+                    if !device_row_occupied {
+                        self.retain_line_breaks(1);
+                        // term_flushln()'s unconditional endline emitted a
+                        // new empty row, rather than closing prior graph.
+                        // The block drain owns this completed-row receipt;
+                        // it must not trim it as an IR paragraph terminator.
+                        self.execution.completed_vertical_rows =
+                            self.execution.completed_vertical_rows.saturating_add(1);
+                    }
                     self.definition_state_mut().hang_row.endline();
                 }
             }
         }
         self.enter_nested_column_part(true);
+        closed_represented_row
     }
 
     pub(in crate::mandoc) fn restore_nested_list_geometry(&mut self, saved: NestedListScope) {

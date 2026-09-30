@@ -169,6 +169,7 @@ impl<'a> EntryOwner<'a> {
                     nodes = match node {
                         Inline::Strong { children }
                         | Inline::Emphasis { children }
+                        | Inline::PortableDisplay { children, .. }
                         | Inline::Link { children, .. } => children,
                         _ => return false,
                     };
@@ -265,10 +266,16 @@ impl<'a> EntryOwner<'a> {
             nodes = match parent {
                 Inline::Strong { children }
                 | Inline::Emphasis { children }
+                | Inline::PortableDisplay { children, .. }
                 | Inline::Link { children, .. } => children,
                 _ => return None,
             };
-            wrappers.push(parent);
+            // A selected native subrange does not own its enclosing export
+            // spelling. Keep styles and destinations, but do not expand a
+            // partial name into the complete portable alias.
+            if !matches!(parent, Inline::PortableDisplay { .. }) {
+                wrappers.push(parent);
+            }
         }
         let node = nodes.get(last)?;
         let mut selected = if let Some(range) = &slice.bytes {
@@ -363,6 +370,7 @@ impl<'a> EntryOwner<'a> {
             let Some(
                 Inline::Strong { children }
                 | Inline::Emphasis { children }
+                | Inline::PortableDisplay { children, .. }
                 | Inline::Link { children, .. },
             ) = nodes.get(index)
             else {
@@ -426,6 +434,7 @@ fn consume_text(nodes: &[Inline], expected: &mut &str) -> bool {
             Inline::Anchor { .. } => continue,
             Inline::Strong { children }
             | Inline::Emphasis { children }
+            | Inline::PortableDisplay { children, .. }
             | Inline::Link { children, .. } => {
                 if !consume_text(children, expected) {
                     return false;
@@ -680,6 +689,80 @@ mod tests {
             assert!(owner.content_slice(&invalid).is_none());
         }
         assert_eq!(owner.facts().unwrap().names, ["é名"]);
+    }
+
+    #[test]
+    fn portable_native_slices_validate_bindings_without_expanding_partial_names() {
+        let mut item = item("portable-name", EntryKind::Term, "é");
+        let Block::Paragraph { children, .. } = &mut item.blocks[0] else {
+            panic!("paragraph");
+        };
+        children[0] = Inline::PortableDisplay {
+            display: "portable complete description".into(),
+            children: vec![Inline::Link {
+                target: crate::LinkTarget::Document {
+                    name: "other".into(),
+                    fragment: None,
+                },
+                title: None,
+                children: vec![Inline::Strong {
+                    children: vec![Inline::Code {
+                        value: "é名".into(),
+                    }],
+                }],
+            }],
+        };
+        let slice = EntryContentSlice {
+            root: EntryInlineRoot::Block { index: 0 },
+            path: vec![0, 0, 0, 0],
+            bytes: Some(0..2),
+        };
+        let form = EntryForm {
+            parts: vec![slice.clone()],
+        };
+        let facts = item.entry.as_mut().unwrap();
+        facts.forms = vec![form.clone()];
+        facts.name_bindings[0].occurrences = vec![form.clone()];
+        let json = serde_json::to_string(&item).unwrap();
+        let decoded = serde_json::from_str::<ListItem>(&json).unwrap();
+        let owner = EntryOwner::List(&decoded);
+        assert_eq!(owner.validated_form_count(), Some(1));
+        assert!(owner.form_text_equals(&form, "é"));
+        assert!(!owner.form_text_equals(&form, "portable complete description"));
+        let selected = owner.content_slice(&slice).unwrap();
+        assert_eq!(crate::inline_plain_text(&selected), "é");
+        assert_eq!(
+            crate::project_content_slice(owner, &slice).unwrap().chars,
+            0..1
+        );
+        let complete = owner
+            .content_slice(&EntryContentSlice {
+                root: slice.root.clone(),
+                path: vec![0],
+                bytes: None,
+            })
+            .unwrap();
+        assert!(
+            matches!(complete.as_slice(), [Inline::PortableDisplay { display, .. }]
+            if display == "portable complete description")
+        );
+        assert!(
+            matches!(selected.as_slice(), [Inline::Link { children, .. }]
+            if matches!(children.as_slice(), [Inline::Strong { children }]
+                if matches!(children.as_slice(), [Inline::Code { value }] if value == "é")))
+        );
+        assert!(
+            owner
+                .content_slice(&EntryContentSlice {
+                    bytes: Some(1..2),
+                    ..slice
+                })
+                .is_none()
+        );
+        assert_eq!(
+            crate::validate_document(&document(vec![list(vec![decoded])])),
+            []
+        );
     }
 
     #[test]

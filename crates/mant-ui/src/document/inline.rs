@@ -48,6 +48,7 @@ fn collect_anchor_rows(nodes: &[Inline], row: &mut usize, ids: &mut Vec<(String,
             }
             Inline::Strong { children }
             | Inline::Emphasis { children }
+            | Inline::PortableDisplay { children, .. }
             | Inline::Link { children, .. } => collect_anchor_rows(children, row, ids),
             Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. } => {
                 *row += value.matches('\n').count();
@@ -132,7 +133,9 @@ fn reference_marks(
                 }
                 reference_marks(children, origins, lines, row, column);
             }
-            Inline::Strong { children } | Inline::Emphasis { children } => {
+            Inline::Strong { children }
+            | Inline::Emphasis { children }
+            | Inline::PortableDisplay { children, .. } => {
                 reference_marks(children, origins, lines, row, column);
             }
             Inline::LineBreak { .. } => {

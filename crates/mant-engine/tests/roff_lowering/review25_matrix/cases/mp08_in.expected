@@ -1,0 +1,11 @@
+SYNOPSIS
+#include <sys/types.h>
+
+A
+B
+int
+f();
+
+
+NEXT
+END

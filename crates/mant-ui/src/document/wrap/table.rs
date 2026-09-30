@@ -26,10 +26,114 @@ pub(super) fn render_table_row_with_links(
     if table.layout.force_stack {
         return stack_table_cells(indent, table, width);
     }
+    if !table.layout.declared_widths.is_empty() {
+        return render_declared_columns(indent, table, width, available);
+    }
     let Some(column_widths) = table_column_widths(&table.layout.preferred_widths, available) else {
         return stack_table_cells(indent, table, width);
     };
     render_table_columns(indent, table, &column_widths)
+}
+
+/// The same measured origins and sequential cell rows as plain terminal
+/// output, while links/search/anchors travel with their original glyphs.
+fn render_declared_columns(
+    indent: usize,
+    table: &LogicalTableRow,
+    width: usize,
+    available: usize,
+) -> Vec<WrappedLine> {
+    let Some(columns) = mant_ir::geometry::DeclaredColumns::new(&table.layout.declared_widths)
+    else {
+        return stack_table_cells(indent, table, width);
+    };
+    if table.cells.len() > mant_ir::geometry::MAX_DECLARED_COLUMNS
+        || table
+            .cells
+            .iter()
+            .enumerate()
+            .any(|(i, _)| columns.start(i) >= available)
+    {
+        return stack_table_cells(indent, table, width);
+    }
+    let mut group = 0;
+    let cells = table
+        .cells
+        .iter()
+        .enumerate()
+        .map(|(index, cell)| {
+            wrap_table_cell(
+                cell,
+                available.saturating_sub(columns.start(index)).max(1),
+                0,
+                &mut group,
+            )
+        })
+        .collect::<Vec<_>>();
+    let widths = cells
+        .iter()
+        .zip(&table.cells)
+        .map(|(rows, cell)| {
+            rows.iter()
+                .enumerate()
+                .map(|(index, row)| mant_ir::geometry::ColumnFieldWidth {
+                    content: mant_ir::geometry::declared_field_width(&row.line.to_string()),
+                    output: super::super::inline::spans_width(&row.line.spans),
+                    completed: cell.completed_tail && index + 1 == rows.len(),
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
+    let Some(placements) = columns.place(&widths) else {
+        return stack_table_cells(indent, table, width);
+    };
+    if placements.iter().flatten().any(|piece| {
+        piece
+            .column
+            .saturating_add(widths[piece.cell][piece.line].output)
+            > available
+    }) {
+        return stack_table_cells(indent, table, width);
+    }
+    placements
+        .into_iter()
+        .map(|pieces| {
+            let mut spans = vec![Span::raw(" ".repeat(indent))];
+            let mut links = Vec::new();
+            let mut search_cells = Vec::new();
+            let mut anchors = Vec::new();
+            let mut visible = 0_usize;
+            for piece in pieces {
+                let row = &cells[piece.cell][piece.line];
+                spans.push(Span::raw(" ".repeat(piece.column.saturating_sub(visible))));
+                spans.extend(row.line.spans.clone());
+                let offset = indent.saturating_add(piece.column);
+                links.extend(row.links.iter().map(|link| WrappedLink {
+                    target: link.target.clone(),
+                    start_column: offset.saturating_add(link.start_column),
+                    end_column: offset.saturating_add(link.end_column),
+                }));
+                search_cells.extend(row.search_cells.iter().map(|cell| WrappedSearchCell {
+                    group: cell.group,
+                    join_before: cell.join_before,
+                    character: cell.character,
+                    start_column: offset.saturating_add(cell.start_column),
+                    end_column: offset.saturating_add(cell.end_column),
+                }));
+                anchors.extend(row.anchors.iter().cloned());
+                visible = piece
+                    .column
+                    .saturating_add(widths[piece.cell][piece.line].output);
+            }
+            WrappedLine {
+                source_end: None,
+                anchors,
+                line: Line::from(spans),
+                links,
+                search_cells,
+            }
+        })
+        .collect()
 }
 
 fn render_layout_rule(
@@ -68,11 +172,21 @@ fn render_layout_rule(
 
 fn stack_table_cells(indent: usize, table: &LogicalTableRow, width: usize) -> Vec<WrappedLine> {
     let mut next_group = 0;
-    let mut rows = table
-        .cells
-        .iter()
-        .flat_map(|cell| wrap_table_cell(cell, width, indent, &mut next_group))
-        .collect::<Vec<_>>();
+    let mut rows = Vec::new();
+    let mut pending_anchors = Vec::new();
+    for cell in &table.cells {
+        if cell.lines.is_empty() {
+            // No physical cell receipt was produced. Keep navigation without
+            // applying the per-cell column-layout fallback to stacked rows.
+            pending_anchors.extend(cell.anchors.keys().cloned());
+            continue;
+        }
+        let mut rendered = wrap_table_cell(cell, width, indent, &mut next_group);
+        if let Some(first) = rendered.first_mut() {
+            first.anchors.append(&mut pending_anchors);
+        }
+        rows.extend(rendered);
+    }
     if rows.is_empty() {
         rows.push(WrappedLine {
             source_end: None,
@@ -81,6 +195,9 @@ fn stack_table_cells(indent: usize, table: &LogicalTableRow, width: usize) -> Ve
             links: Vec::new(),
             search_cells: Vec::new(),
         });
+    }
+    if let Some(last) = rows.last_mut() {
+        last.anchors.append(&mut pending_anchors);
     }
     rows
 }
@@ -102,6 +219,15 @@ fn wrap_table_cell(
         line.indent = line.indent.saturating_add(indent);
         line.continuation_indent = line.continuation_indent.saturating_add(indent);
         let mut wrapped = wrap_line_with_links(&line, width);
+        if line.surface == super::super::LineSurface::Code && line.table_row.is_none() {
+            // cells_to_line() appends exactly one renderer-owned
+            // surface-fill span after every Code row. That viewport paint is
+            // neither cell content nor a positioning cell; retire only this
+            // known span, preserving every authored blank and glyph/style.
+            for row in &mut wrapped {
+                row.line.spans.pop();
+            }
+        }
         for row in &mut wrapped {
             for search_cell in &mut row.search_cells {
                 search_cell.group = *next_group;
@@ -110,7 +236,9 @@ fn wrap_table_cell(
         *next_group += 1;
         rendered.extend(wrapped);
     }
-    if rendered.is_empty() && !cell.anchors.is_empty() {
+    if rendered.is_empty() {
+        // The parent omitted navigation-only rows before this point. An
+        // actual data cell still owns a physical row even without glyphs.
         rendered.push(WrappedLine {
             source_end: None,
             anchors: Vec::new(),

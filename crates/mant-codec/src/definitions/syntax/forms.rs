@@ -157,7 +157,9 @@ fn append_name_prefix(nodes: &[Inline], output: &mut String) -> bool {
             Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. } => {
                 output.push_str(value);
             }
-            Inline::Strong { children } | Inline::Link { children, .. } => {
+            Inline::PortableDisplay { children, .. }
+            | Inline::Strong { children }
+            | Inline::Link { children, .. } => {
                 if !append_name_prefix(children, output) {
                     return false;
                 }
@@ -278,6 +280,11 @@ fn split_groups(
                 .into_iter()
                 .map(|children| vec![Inline::Strong { children }])
                 .collect(),
+            // Alias groups address native pieces, not the complete export
+            // spelling around them. Their source term remains unchanged.
+            Inline::PortableDisplay { children, .. } => {
+                split_groups(children, separators, remaining, state)
+            }
             Inline::Link {
                 target,
                 title,
@@ -331,9 +338,9 @@ fn first_content_is_parameter(term: &[Inline]) -> Option<bool> {
         Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. } => {
             (!value.trim().is_empty()).then_some(false)
         }
-        Inline::Strong { children } | Inline::Link { children, .. } => {
-            first_content_is_parameter(children)
-        }
+        Inline::PortableDisplay { children, .. }
+        | Inline::Strong { children }
+        | Inline::Link { children, .. } => first_content_is_parameter(children),
         Inline::Emphasis { children } => first_content_is_parameter(children).map(|_| true),
     })
 }
@@ -388,6 +395,32 @@ mod tests {
 
         let term = vec![text("--mode=[a|b], --other")];
         assert_eq!(declaration_groups(&term).len(), 2);
+    }
+
+    #[test]
+    fn portable_alias_groups_follow_native_separators_and_preserve_the_source() {
+        let source = vec![Inline::PortableDisplay {
+            display: "unrelated export spelling".into(),
+            children: vec![Inline::Strong {
+                children: vec![Inline::Text {
+                    value: "-n/-NUM".into(),
+                }],
+            }],
+        }];
+        let original = source.clone();
+        let groups = option_alias_groups(&source);
+        assert_eq!(
+            groups
+                .iter()
+                .map(|group| plain_text(group))
+                .collect::<Vec<_>>(),
+            ["-n", "-NUM"]
+        );
+        assert_eq!(
+            super::super::option_names_from_terms(std::slice::from_ref(&source)),
+            ["-n", "-NUM"]
+        );
+        assert_eq!(source, original);
     }
 
     #[test]

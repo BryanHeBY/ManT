@@ -67,6 +67,7 @@ fn append(
             }
             Inline::Strong { children }
             | Inline::Emphasis { children }
+            | Inline::PortableDisplay { children, .. }
             | Inline::Link { children, .. } => {
                 append(children, depth.saturating_add(1), budget, limit, label)?;
             }

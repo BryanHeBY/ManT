@@ -61,6 +61,17 @@ fn split_nodes_at_boundaries(
                     )),
                 });
             }
+            Inline::PortableDisplay { display, children } => {
+                output.push(Inline::PortableDisplay {
+                    display: display.clone(),
+                    children: split_nodes_at_boundaries_owned(
+                        children,
+                        cell,
+                        next_boundary,
+                        boundaries,
+                    ),
+                });
+            }
             Inline::Link {
                 target,
                 title,
@@ -239,9 +250,11 @@ pub(in crate::mandoc::inline::flow) fn retain_native_field_prefix(
             match node {
                 Inline::Strong { children }
                 | Inline::Emphasis { children }
+                | Inline::PortableDisplay { children, .. }
                 | Inline::Link { children, .. } => {
                     retain(children, marker, found, remaining);
-                    !children.is_empty() || matches!(node, Inline::Link { .. })
+                    !children.is_empty()
+                        || matches!(node, Inline::Link { .. } | Inline::PortableDisplay { .. })
                 }
                 _ if !*found => true,
                 Inline::Text { value } | Inline::Code { value } => {

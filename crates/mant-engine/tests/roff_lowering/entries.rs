@@ -468,7 +468,10 @@ fn ip_does_not_absorb_unproven_definition_heads() {
 }
 
 #[test]
-fn expands_mdoc_bsd_lifecycle_and_release_forms() {
+fn separates_native_bsd_spelling_from_portable_lifecycle_display() {
+    // Exact source rerun with pristine CVS before changing this assertion.
+    // mdoc_validate.c::post_bx() adds BSD after the authored operand; native
+    // reading retains it, while portable Markdown has a separate enhancement.
     let source = b".Dd August 19, 2026\n.Dt BSD-LIFECYCLE 7\n.Os\n.Sh DESCRIPTION\n.Bx\n.Bx -alpha\n.Bx -beta\n.Bx -devel .\n.Bx 4.3 .\n.Bx 4.3 Net/2 .\n.Bx 386 0.1 .\n";
     let document = parse_manual_bytes(std::path::Path::new("bsd-lifecycle.7"), source)
         .expect("lower mdoc BSD lifecycle forms");
@@ -478,8 +481,22 @@ fn expands_mdoc_bsd_lifecycle_and_release_forms() {
     };
     assert_eq!(
         inline_text(children),
-        "BSD BSD (currently in alpha test) BSD (currently in beta test) BSD (currently under development). 4.3BSD. 4.3BSD-Net/2. 386BSD-0.1."
+        "BSD -alphaBSD -betaBSD -develBSD. 4.3BSD. 4.3BSD-Net/2. 386BSD-0.1."
     );
+    let query = mant_ir::ResolvedContent {
+        address: None,
+        label: "bsd-lifecycle.7".into(),
+        document: Some(document),
+        tldr: None,
+    };
+    let portable = mant_codec::encode::render_markdown(&query);
+    for display in [
+        "BSD (currently in alpha test)",
+        "BSD (currently in beta test)",
+        "BSD (currently under development)",
+    ] {
+        assert!(portable.contains(display), "{portable}");
+    }
 }
 
 #[test]

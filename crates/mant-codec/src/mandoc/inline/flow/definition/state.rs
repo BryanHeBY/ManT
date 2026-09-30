@@ -76,7 +76,7 @@ pub(in crate::mandoc) struct PreservedDefinitionField {
 pub(in crate::mandoc::inline::flow) enum PendingFieldGapOrigin {
     #[default]
     Other,
-    SourceLine,
+    CommittedFlush,
 }
 /// The two persistent columns in `term.c::term_flushln()`, plus its unflushed
 /// input field. Generated IR padding never enters this ledger.

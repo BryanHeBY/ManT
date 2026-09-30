@@ -35,7 +35,7 @@ fn inline_execution_keeps_word_joins_glyph_ownership_and_literal_breaks_distinct
         (
             "hidden-uri-explicit-break-closes-the-source-row-once",
             b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal\n.Lk https://example.org\\p label\n.No AFTER\n.Ed\n".as_slice(),
-            "label\nAFTER",
+            "label: https://example.org\nAFTER",
         ),
         (
             "literal-enclosure-retains-formatter-and-authored-blanks",

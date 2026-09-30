@@ -96,7 +96,7 @@ fn append_scope_children(builder: &mut InlineBuilder, node: &Node, name: Option<
         Some("Cm" | "Ic" | "Sy" | "Ms" | "Cd" | "Fd") => {
             builder.with_font_scope(Font::Strong, |builder| {
                 append_inline_nodes(builder, children, name);
-            })
+            });
         }
         Some("Ar" | "Pa" | "Em" | "Va" | "Vt" | "Ft" | "Fa" | "Ad" | "Fr") => builder
             .with_font_scope(Font::Emphasis, |builder| {

@@ -1,7 +1,7 @@
 use super::{
-    FilledBoundary, Font, FormatterColumn, InboundExecution, Inline, InlineBuilder, KeepPhase,
-    OutputRollback, OutputTransaction, PendingBoundary, PreservedInlineState, TrailingOutput,
-    WordEndBreak, has_printable_character, last_visible_character,
+    FilledBoundary, Font, FormatterColumn, Inline, InlineBuilder, KeepPhase, OutputCheckpoint,
+    PendingBoundary, PreservedInlineState, TrailingOutput, WordEndBreak, has_printable_character,
+    last_visible_character,
 };
 
 // A private boundary carried only while one authored Link spans two native
@@ -19,38 +19,20 @@ impl InlineBuilder {
         self.nodes.len()
     }
 
-    /// Save presentation-only state before executing an operand whose
-    /// rendered spelling may be replaced. Font, spacing, and zero-advance
-    /// state are intentionally not part of this snapshot: they are execution
-    /// effects and must survive an eventual compact-output fallback.
-    pub(in crate::mandoc) fn begin_output_transaction(&self) -> OutputTransaction {
-        OutputTransaction {
-            rollback: OutputRollback {
-                node_count: self.nodes.len(),
-                native_field_position: self
-                    .definition
-                    .as_ref()
-                    .map(|state| state.field_buffer.position()),
-                last_visible_character: self.execution.last_visible_character,
-                has_printable_content: self.execution.has_printable_content,
-                trailing_output: self.execution.trailing_output,
-                pending_breakable_spaces: self.execution.pending_breakable_spaces,
-                pending_field_spaces: self.execution.pending_field_spaces,
-            },
-            inbound: InboundExecution {
-                boundary: self.execution.boundary,
-                final_source_continuation: self.execution.final_source_continuation,
-            },
+    /// Record an output slice before its source executes. The checkpoint
+    /// owns no formatter registers and cannot roll execution back.
+    pub(in crate::mandoc) fn begin_output_checkpoint(&self) -> OutputCheckpoint {
+        OutputCheckpoint {
+            node_count: self.nodes.len(),
         }
     }
 
-    /// Whether output since `checkpoint` contains a glyph a reader can use
-    /// as a semantic link label. Whitespace-only output is not a label: link
-    /// identity must fall back to its visible target instead of wrapping an
-    /// invisible click region.
+    /// Whether the accepted output slice contains a readable semantic glyph.
+    /// Syntactic label eligibility and pending-glyph consumption remain with
+    /// the macro's execution stages, independent of this output observation.
     pub(in crate::mandoc) fn output_since_has_non_whitespace_glyph(
         &self,
-        transaction: &OutputTransaction,
+        checkpoint: OutputCheckpoint,
     ) -> bool {
         fn contains_glyph(nodes: &[Inline]) -> bool {
             nodes.iter().any(|node| match node {
@@ -61,47 +43,12 @@ impl InlineBuilder {
                 }
                 Inline::Strong { children }
                 | Inline::Emphasis { children }
+                | Inline::PortableDisplay { children, .. }
                 | Inline::Link { children, .. } => contains_glyph(children),
                 Inline::Anchor { .. } | Inline::LineBreak { .. } => false,
             })
         }
-        contains_glyph(&self.nodes[transaction.rollback.node_count..])
-    }
-
-    fn rollback_compacted_output(&mut self, rollback: &OutputRollback) {
-        self.nodes.truncate(rollback.node_count);
-        if let Some(definition) = &mut self.definition
-            && let Some(position) = rollback.native_field_position
-        {
-            definition.field_buffer.hide_projection_since(position);
-        }
-        if let Some(author) = &mut self.execution.author_execution {
-            author.field_output_start = author.field_output_start.min(self.nodes.len());
-        }
-        self.execution.last_visible_character = rollback.last_visible_character;
-        self.execution.has_printable_content = rollback.has_printable_content;
-        self.execution.trailing_output = rollback.trailing_output;
-        self.execution.pending_breakable_spaces = rollback.pending_breakable_spaces;
-        self.execution.pending_field_spaces = rollback.pending_field_spaces;
-    }
-
-    /// Drop a compactly hidden operand's output while preserving the
-    /// formatter transitions it performed.  In particular, `\\c` changes the
-    /// next word's boundary and a literal row advances its source cursor;
-    /// those are execution facts even though a semantic macro may replace the
-    /// operand's visible spelling.
-    pub(in crate::mandoc) fn discard_output_preserving_execution(
-        &mut self,
-        transaction: &OutputTransaction,
-    ) {
-        let retained_layout =
-            retained_hidden_layout(&self.nodes[transaction.rollback.node_count..]);
-        self.rollback_compacted_output(&transaction.rollback);
-        // Semantic compaction may replace an operand's glyphs, never its
-        // layout. A word-end `\\p` is realized by the shared builder; retain
-        // that result outside a subsequently visible fallback link so a
-        // cursor that already consumed the source row cannot erase it.
-        self.append_retained_layout(retained_layout);
+        contains_glyph(&self.nodes[checkpoint.node_count..])
     }
 
     /// Wrap the output emitted since `checkpoint` without replaying its
@@ -109,85 +56,10 @@ impl InlineBuilder {
     /// annotations over an already-executed source stream.
     pub(in crate::mandoc) fn wrap_output_since(
         &mut self,
-        transaction: &OutputTransaction,
+        checkpoint: OutputCheckpoint,
         wrap: impl FnMut(Vec<Inline>) -> Vec<Inline>,
     ) {
-        self.wrap_output_from(transaction.rollback.node_count, wrap);
-    }
-
-    /// Replace the visible glyphs emitted since `checkpoint` without
-    /// replaying formatter execution.
-    ///
-    /// Semantic macros such as `.Bx` execute authored operands and then use
-    /// a generated spelling for presentation.  The replacement occupies the
-    /// already-executed formatter word: leading inter-word padding and real
-    /// line boundaries survive, while pending `\p`, `\c`, font, KEEP, and
-    /// zero-advance state remain exactly where source execution left them.
-    pub(in crate::mandoc) fn replace_output_since(
-        &mut self,
-        transaction: &OutputTransaction,
-        replacement: &str,
-    ) {
-        let output = self.nodes.split_off(transaction.rollback.node_count);
-        let retained = retained_replacement_layout(output);
-        if let Some(definition) = &mut self.definition
-            && let Some(position) = transaction.rollback.native_field_position
-        {
-            definition.field_buffer.hide_projection_since(position);
-        }
-        let boundary_materialized =
-            has_printable_character(&retained) || line_break_count(&retained) > 0;
-        let inbound_continued = transaction.inbound.boundary.is_tight()
-            || transaction.inbound.boundary == PendingBoundary::Continued
-            || transaction
-                .inbound
-                .final_source_continuation
-                .unwrap_or(false);
-        let replacement_word_spaces = if inbound_continued {
-            // An explicit empty formatter word consumes incoming `\c` before
-            // CVS post_bx()'s generated Ns + BSD sequence.  Padding queued by
-            // that empty word is therefore not presentation content.
-            transaction.rollback.pending_breakable_spaces
-        } else {
-            self.execution.pending_breakable_spaces
-        };
-
-        // These fields summarize projected output rather than formatter
-        // execution.  Rewind only them before installing the replacement;
-        // boundary, cursor, word-end break, KEEP, and zero-advance state must
-        // remain the post-execution values.
-        self.execution.last_visible_character = transaction.rollback.last_visible_character;
-        self.execution.has_printable_content = transaction.rollback.has_printable_content;
-        self.append_projected(retained);
-        if !boundary_materialized && replacement_word_spaces > 0 {
-            self.append_projected(vec![Inline::Text {
-                value: " ".repeat(replacement_word_spaces),
-            }]);
-        } else if !boundary_materialized
-            && !inbound_continued
-            && self.execution.empty_word
-            && transaction.rollback.has_printable_content
-            && self.execution.spacing.enabled()
-            && !self.execution.boundary.is_tight()
-        {
-            self.append_projected(vec![Inline::Text {
-                value: " ".to_owned(),
-            }]);
-        }
-        // The replacement occupies the already executed word. Any deferred
-        // empty-word padding has now been materialized exactly once and must
-        // not leak into the following source word.
-        self.execution.empty_word = false;
-        self.execution.trailing_output = TrailingOutput::None;
-        self.execution.pending_breakable_spaces = 0;
-        self.execution.pending_field_spaces = 0;
-        // The validator-generated replacement is a formatter word, not an
-        // inert IR splice. It consumes authored `\z`/`\c` state while a
-        // deferred `\p` remains pending until the next real word boundary.
-        // It occupies the source word being replaced, so that deferred break
-        // belongs after the replacement rather than before it.
-        self.tighten_next_boundary();
-        self.append_generated_word(replacement);
+        self.wrap_output_from(checkpoint.node_count, wrap);
     }
 
     /// Preserve a formatter-requested line boundary without creating empty
@@ -215,7 +87,14 @@ impl InlineBuilder {
             });
         // term_newln() flushes the plain flush unit through the same
         // term_flushln(): a definitive rejection ends its own row here.
-        let plain_flush_rejection = self.retire_plain_flush_unit();
+        let plain_flush_rejection = if self.in_definition_field() {
+            // term_newln() flushes the same tcol->buf after a TAG request
+            // cleared NOBREAK. A definition session still owns that input;
+            // consume its receipt before the row reset retires the cells.
+            self.discard_unprinted_definition_field_output()
+        } else {
+            self.retire_plain_flush_unit()
+        };
         if !self.execution.has_printable_content {
             self.execution.leading_line_boundary = super::LeadingLineBoundary::BeforeVisibleWord;
         }
@@ -373,16 +252,14 @@ impl InlineBuilder {
     }
 
     pub(in crate::mandoc) fn execute_empty_word(&mut self) {
-        self.execution.native_word_boundary = Some(self.execution.boundary);
-        self.execution.native_word_writes = Some(Vec::new());
         self.begin_word_projection(true);
+        self.execution.native_word_writes = Some(Vec::new());
         self.append_word(Vec::new());
     }
 
     /// Generated glyphs use the effective font just like authored text, but
     /// are not reparsed as roff source (names can contain literal escapes).
     pub(in crate::mandoc) fn append_text(&mut self, value: &str) {
-        self.execution.native_word_boundary = Some(self.execution.boundary);
         self.begin_word_projection(!value.is_empty());
         self.append_prepared_text(value);
     }
@@ -391,7 +268,6 @@ impl InlineBuilder {
     /// output owner. A pending `\z` glyph may become visible at this word's
     /// implicit boundary and still belongs to the preceding authored owner.
     pub(in crate::mandoc) fn prepare_generated_word(&mut self) {
-        self.execution.native_word_boundary = Some(self.execution.boundary);
         self.begin_word_projection(true);
     }
 
@@ -445,7 +321,6 @@ impl InlineBuilder {
     /// `\p` handling, and closes physical source continuation before the next
     /// source node. CVS uses this path for the generated `BSD` child of `.Bx`.
     pub(in crate::mandoc) fn append_generated_word(&mut self, value: &str) {
-        self.execution.native_word_boundary = Some(self.execution.boundary);
         self.execution.native_word_writes = self
             .records_native_field_cells()
             .then(|| super::field_buffer::FieldWrite::literal(value));
@@ -502,6 +377,21 @@ impl InlineBuilder {
         if next_is_visible {
             self.execution.final_word_join = Some(false);
             self.execution.final_source_continuation = Some(false);
+        }
+        // term_word() writes its automatic separator using the incoming
+        // NOSPACE/KEEP registers, then promotes PREKEEP (term.c:573-586).
+        // Zero-advance projection may subsequently tighten the IR boundary;
+        // that cannot change which native cell was already written.
+        if next_is_visible {
+            self.execution.native_word_boundary = Some(
+                if self.execution.keep.phase == KeepPhase::Keep
+                    && !self.execution.boundary.is_tight()
+                {
+                    PendingBoundary::Kept
+                } else {
+                    self.execution.boundary
+                },
+            );
         }
         if next_is_visible && self.execution.keep.keeping() && !self.execution.boundary.is_tight() {
             self.execution.boundary = PendingBoundary::Kept;
@@ -760,6 +650,16 @@ impl InlineBuilder {
         &mut self,
         line_request: bool,
     ) -> (Vec<Inline>, bool, u16) {
+        // term_newln() consumes first, then the output owner accounts for
+        // every row in its receipt (term.c:143-146,220,250-253). Doing this
+        // in finish_nodes() is too late: the block row count is already
+        // detached, and trimming would erase the rejected pass's endline.
+        if self.retire_plain_flush_unit() {
+            self.execution.completed_vertical_rows =
+                self.execution.completed_vertical_rows.saturating_add(1);
+            self.execution.word_end_break = WordEndBreak::Clear;
+            self.execution.formatter_column = FormatterColumn::Origin;
+        }
         // finish_nodes() trims a trailing break because it normally ends an
         // IR paragraph. If another invisible cell is already active after
         // that break, the break closed a real earlier row (term_newln()) and
@@ -905,6 +805,10 @@ impl InlineBuilder {
             self.finish_nodes()
         };
         self.execution.reset_paragraph_segment(surviving_armed);
+        // This API is an actual term_newln(), unlike an IR owner drain.
+        // NOSPACE is selected even when the flushed field left viscol live
+        // (term.c:475-481), independently of the preserved column registers.
+        self.execution.boundary = PendingBoundary::Tight;
         self.reset_native_tab_origin();
         (output, self.execution)
     }
@@ -1056,8 +960,7 @@ impl InlineBuilder {
         }
         let mut nodes = std::mem::take(&mut self.nodes);
 
-        join_authored_links(&mut nodes);
-        strip_native_projection_markers(&mut nodes);
+        finalize_inline_output(&mut nodes);
         nodes
     }
 
@@ -1110,20 +1013,6 @@ impl InlineBuilder {
         }
     }
 
-    fn append_retained_layout(&mut self, retained: Vec<Inline>) {
-        if retained.is_empty() {
-            return;
-        }
-        if last_visible_character(&retained) == Some('\n') {
-            self.execution.last_visible_character = Some('\n');
-            self.execution.trailing_output = TrailingOutput::None;
-        }
-        if line_break_count(&retained) > 0 {
-            self.note_definition_output_row();
-        }
-        self.nodes.extend(retained);
-    }
-
     pub(super) fn retain_line_breaks(&mut self, count: usize) {
         if count == 0 {
             return;
@@ -1149,6 +1038,7 @@ pub(in crate::mandoc::inline::flow) fn ends_with_executed_line_break(nodes: &[In
                 Inline::LineBreak { .. } => return Some(true),
                 Inline::Strong { children }
                 | Inline::Emphasis { children }
+                | Inline::PortableDisplay { children, .. }
                 | Inline::Link { children, .. } => {
                     if let Some(result) = ending(children) {
                         return Some(result);
@@ -1174,6 +1064,7 @@ fn trim_output_terminators(nodes: &mut Vec<Inline>) -> bool {
                 Inline::LineBreak { .. } => continue,
                 Inline::Strong { children }
                 | Inline::Emphasis { children }
+                | Inline::PortableDisplay { children, .. }
                 | Inline::Link { children, .. } => trimming = trim_output_terminators(children),
                 Inline::Text { .. } | Inline::Code { .. } | Inline::Equation { .. } => {
                     trimming = false;
@@ -1187,11 +1078,20 @@ fn trim_output_terminators(nodes: &mut Vec<Inline>) -> bool {
     trimming
 }
 
+/// End one projection destination after its word receipts have executed.
+/// Native cell owners are private and must never become visible occupancy
+/// witnesses, authored navigation targets, or serialized IR.
+pub(in crate::mandoc) fn finalize_inline_output(nodes: &mut Vec<Inline>) {
+    join_authored_links(nodes);
+    strip_native_projection_markers(nodes);
+}
+
 fn strip_native_projection_markers(nodes: &mut Vec<Inline>) {
     nodes.retain_mut(|node| match node {
         Inline::Anchor { id, .. } => !id.as_str().starts_with(INTERNAL_FIELD_WORD),
         Inline::Strong { children }
         | Inline::Emphasis { children }
+        | Inline::PortableDisplay { children, .. }
         | Inline::Link { children, .. } => {
             strip_native_projection_markers(children);
             true
@@ -1228,6 +1128,7 @@ pub(in crate::mandoc::inline) fn trailing_ascii_spaces(nodes: &[Inline]) -> usiz
                 }
                 Inline::Strong { children }
                 | Inline::Emphasis { children }
+                | Inline::PortableDisplay { children, .. }
                 | Inline::Link { children, .. } => {
                     if !visit(children, count) {
                         return false;
@@ -1250,6 +1151,7 @@ fn join_authored_links(nodes: &mut Vec<Inline>) {
         match node {
             Inline::Strong { children }
             | Inline::Emphasis { children }
+            | Inline::PortableDisplay { children, .. }
             | Inline::Link { children, .. } => join_authored_links(children),
             Inline::Text { .. }
             | Inline::Code { .. }
@@ -1342,6 +1244,14 @@ pub(in crate::mandoc) fn trim_trailing_breakable_spaces(nodes: &mut Vec<Inline>,
                     }
                     false
                 }
+                Inline::PortableDisplay { children, .. } => {
+                    // The wrapper retains native terminal facts: trim blanks
+                    // inside it, but never discard the wrapper itself.
+                    if !trim(children, remaining) {
+                        return false;
+                    }
+                    false
+                }
             };
             if remove {
                 nodes.remove(index);
@@ -1354,10 +1264,7 @@ pub(in crate::mandoc) fn trim_trailing_breakable_spaces(nodes: &mut Vec<Inline>,
     trim(nodes, &mut remaining);
 }
 
-/// Count layout instructions recursively before discarding a compact operand.
-/// Styling and link wrappers are presentation-only, but their explicit line
-/// breaks are formatter output and must survive without retaining the hidden
-/// operand's glyphs.
+/// Count executed hard-row boundaries through semantic wrappers.
 fn line_break_count(nodes: &[Inline]) -> usize {
     nodes
         .iter()
@@ -1365,6 +1272,7 @@ fn line_break_count(nodes: &[Inline]) -> usize {
             Inline::LineBreak { .. } => 1,
             Inline::Strong { children }
             | Inline::Emphasis { children }
+            | Inline::PortableDisplay { children, .. }
             | Inline::Link { children, .. } => line_break_count(children),
             Inline::Text { .. }
             | Inline::Code { .. }
@@ -1372,108 +1280,4 @@ fn line_break_count(nodes: &[Inline]) -> usize {
             | Inline::Anchor { .. } => 0,
         })
         .sum()
-}
-
-/// Keep identity anchors and explicit layout emitted by hidden source in
-/// their original order. These nodes are projected facts, not formatter
-/// events: the source cursor and execution registers already reflect them.
-fn retained_hidden_layout(nodes: &[Inline]) -> Vec<Inline> {
-    let mut retained = Vec::new();
-    for node in nodes {
-        match node {
-            Inline::Anchor { .. } | Inline::LineBreak { .. } => retained.push(node.clone()),
-            Inline::Strong { children }
-            | Inline::Emphasis { children }
-            | Inline::Link { children, .. } => retained.extend(retained_hidden_layout(children)),
-            Inline::Text { .. } | Inline::Code { .. } | Inline::Equation { .. } => {}
-        }
-    }
-    retained
-}
-
-/// Retain layout surrounding a compact semantic replacement.
-///
-/// Padding before the first authored glyph belongs to the caller.  Explicit
-/// line boundaries are execution output and likewise cannot be discarded.
-/// Glyphs and styling inside the replaced source spelling are omitted.
-fn retained_replacement_layout(nodes: Vec<Inline>) -> Vec<Inline> {
-    fn leading_whitespace(value: &str) -> Option<Inline> {
-        let end = value
-            .char_indices()
-            .take_while(|(_, character)| character.is_whitespace())
-            .last()
-            .map_or(0, |(index, character)| index + character.len_utf8());
-        (end > 0).then(|| Inline::Text {
-            value: value[..end].to_owned(),
-        })
-    }
-
-    fn retain(nodes: Vec<Inline>, before_first_glyph: &mut bool, retained: &mut Vec<Inline>) {
-        for node in nodes {
-            match node {
-                Inline::LineBreak { .. } => {
-                    retained.push(node);
-                    *before_first_glyph = true;
-                }
-                Inline::Anchor { .. } => retained.push(node),
-                Inline::Text { value }
-                | Inline::Code { value }
-                | Inline::Equation { value, .. } => {
-                    if *before_first_glyph {
-                        if let Some(prefix) = leading_whitespace(&value) {
-                            retained.push(prefix);
-                        }
-                        if value.chars().any(|character| !character.is_whitespace()) {
-                            *before_first_glyph = false;
-                        }
-                    }
-                }
-                Inline::Strong { children }
-                | Inline::Emphasis { children }
-                | Inline::Link { children, .. } => retain(children, before_first_glyph, retained),
-            }
-        }
-    }
-    let mut retained = Vec::new();
-    retain(nodes, &mut true, &mut retained);
-    retained
-}
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn retained_layout_summary_ignores_trailing_anchor() {
-        let mut builder = InlineBuilder::with_spacing(true);
-        builder.append_text("prefix");
-        builder
-            .append_retained_layout(vec![Inline::line_break_indented(6), Inline::anchor("mark")]);
-
-        assert_eq!(builder.last_visible_character, Some('\n'));
-        assert_eq!(builder.trailing_output, TrailingOutput::None);
-        assert!(matches!(
-            builder.nodes.as_slice(),
-            [Inline::Text { value }, Inline::LineBreak { indent_columns: 6 }, Inline::Anchor { .. }] if value == "prefix"
-        ));
-    }
-
-    #[test]
-    fn replacement_layout_keeps_execution_boundaries_through_styles() {
-        // Macro compaction replaces glyphs, not already-executed row ends
-        // or owner markers. The style is metadata over that same range.
-        let retained = retained_replacement_layout(vec![Inline::Strong {
-            children: vec![
-                Inline::anchor(format!("{INTERNAL_FIELD_WORD}1-0")),
-                Inline::Text {
-                    value: "hidden".to_owned(),
-                },
-                Inline::line_break_indented(6),
-                Inline::Text {
-                    value: "  next".to_owned(),
-                },
-            ],
-        }]);
-        assert!(matches!(retained.as_slice(), [Inline::Anchor { .. },
-            Inline::LineBreak { indent_columns: 6 }, Inline::Text { value }] if value == "  "));
-    }
 }

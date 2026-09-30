@@ -187,6 +187,9 @@ fn constant_width_table_layout_keeps_terminal_font_registers_separate_from_displ
                     Inline::Emphasis { children } => {
                         visit(children, &format!("{style}italic:"), output);
                     }
+                    Inline::PortableDisplay { children, .. } => {
+                        visit(children, style, output);
+                    }
                     other => panic!("unexpected inline in font fixture: {other:?}"),
                 }
             }
@@ -718,6 +721,7 @@ fn contains_manual_link(children: &[Inline]) -> bool {
         } => true,
         Inline::Strong { children }
         | Inline::Emphasis { children }
+        | Inline::PortableDisplay { children, .. }
         | Inline::Link { children, .. } => contains_manual_link(children),
         Inline::Text { .. }
         | Inline::Code { .. }
@@ -730,7 +734,9 @@ fn contains_manual_link(children: &[Inline]) -> bool {
 fn contains_emphasis(children: &[Inline]) -> bool {
     children.iter().any(|inline| match inline {
         Inline::Emphasis { .. } => true,
-        Inline::Strong { children } | Inline::Link { children, .. } => contains_emphasis(children),
+        Inline::Strong { children }
+        | Inline::PortableDisplay { children, .. }
+        | Inline::Link { children, .. } => contains_emphasis(children),
         Inline::Text { .. }
         | Inline::Code { .. }
         | Inline::Equation { .. }
@@ -887,4 +893,42 @@ fn tbl_inline_recovery_recreates_the_active_document_escape_state() {
         panic!("expected one table paragraph");
     };
     assert_eq!(inline_text(children), "leftright");
+}
+
+#[test]
+fn bl_column_widths_measure_executed_device_glyphs() {
+    // mdoc_term.c::termp_it_pre (709-715) weighs each declared `Bl -column`
+    // string with term_strlen() after escape execution (term.c:18.2), then
+    // folds the basic units through term_hspan(SCALE_BU). Checked against
+    // the fixed -Tutf8 reference: `\(lq\(rq` and `a\&b` advance two columns,
+    // the two CJK glyphs advance four.
+    let document = parse_manual_bytes(
+        std::path::Path::new("bl-column-device-widths.7"),
+        b".Dd September 8, 2026\n.Dt BL-COLUMN-WIDTH 7\n.Os\n.Sh DESCRIPTION\n.Bl -column \\(lq\\(rq a\\&b \xe4\xb8\xad\xe4\xb8\xad\n.It A Ta B\n.El\n",
+    )
+    .expect("lower a column list");
+    let Block::Table { column_widths, .. } = &document.sections[0].blocks[0] else {
+        panic!("expected one lowered column table");
+    };
+    assert_eq!(column_widths, &[2, 2, 4]);
+}
+
+#[test]
+fn bl_column_widths_saturate_at_the_ir_bound() {
+    // External audit CW01: an oversized declaration must saturate into the
+    // IR's u16 columns instead of overflowing. The fixed reference accepts
+    // the 70000-character declaration and truncates its single advance.
+    let document = parse_manual_bytes(
+        std::path::Path::new("bl-column-oversized-width.7"),
+        format!(
+            ".Dd September 8, 2026\n.Dt BL-COLUMN-WIDE 7\n.Os\n.Sh DESCRIPTION\n.Bl -column {} one\n.It A Ta B\n.El\n",
+            "x".repeat(70_000)
+        )
+        .as_bytes(),
+    )
+    .expect("lower an oversized column declaration");
+    let Block::Table { column_widths, .. } = &document.sections[0].blocks[0] else {
+        panic!("expected one lowered column table");
+    };
+    assert_eq!(column_widths, &[u16::MAX, 3]);
 }

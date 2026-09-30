@@ -62,33 +62,6 @@ pub fn visit_inline_text<'a>(
         names,
         &mut cursor,
         &mut emit,
-        false,
-    );
-}
-
-/// Terminal-faithful projection of inline content (see [`visit_inline_text`]).
-///
-/// In addition to the shared walk, a link carrying an external target whose
-/// visible children do not already spell that target emits the mdoc `Lk`
-/// display form: the generated colon, the URI, and nothing else. This mirrors
-/// `mdoc_term.c::termp_lk_pre()`, which prints the descriptive label, a
-/// generated `:`, and the link word in one stream. Addresses already spelled
-/// out by their children (bare `.Lk uri`, `.Mt`, and `UR`/`UE` links whose
-/// target ends with the visible text) are left untouched.
-pub fn visit_inline_text_for_terminal<'a>(
-    nodes: &'a [Inline],
-    names: &[InlineNameRange],
-    mut emit: impl FnMut(InlinePresentation, Option<&'a LinkTarget>, &'a str),
-) {
-    let mut cursor = 0;
-    walk(
-        nodes,
-        InlinePresentation::default(),
-        None,
-        names,
-        &mut cursor,
-        &mut emit,
-        true,
     );
 }
 
@@ -99,7 +72,6 @@ fn walk<'a>(
     names: &[InlineNameRange],
     cursor: &mut usize,
     emit: &mut impl FnMut(InlinePresentation, Option<&'a LinkTarget>, &'a str),
-    expand: bool,
 ) {
     for node in nodes {
         match node {
@@ -125,7 +97,6 @@ fn walk<'a>(
                 names,
                 cursor,
                 emit,
-                expand,
             ),
             Inline::Emphasis { children } => walk(
                 children,
@@ -137,7 +108,6 @@ fn walk<'a>(
                 names,
                 cursor,
                 emit,
-                expand,
             ),
             Inline::Link {
                 children, target, ..
@@ -152,23 +122,10 @@ fn walk<'a>(
                     names,
                     cursor,
                     emit,
-                    expand,
                 );
-                if expand {
-                    // Not source-bound text: emit through the callback
-                    // directly so name decoration ranges stay aligned with
-                    // the authored scalar stream.
-                    if let LinkTarget::External { uri } = target
-                        && let Some(separator) = link_target_display_gap(children, uri)
-                    {
-                        let link_style = InlinePresentation {
-                            link: true,
-                            ..style
-                        };
-                        emit(link_style, Some(target), separator);
-                        emit(link_style, Some(target), uri.as_str());
-                    }
-                }
+            }
+            Inline::PortableDisplay { children, .. } => {
+                walk(children, style, target, names, cursor, emit);
             }
             Inline::LineBreak { indent_columns } => text(
                 "\n",
@@ -185,18 +142,6 @@ fn walk<'a>(
             Inline::Anchor { .. } => {}
         }
     }
-}
-
-/// The mdoc `Lk` separator projection `": "` when a link's children replace
-/// its target without spelling it, mirroring `termp_lk_pre()`'s generated
-/// colon. `None` keeps the compact form for self-spelled addresses.
-fn link_target_display_gap(children: &[Inline], uri: &str) -> Option<&'static str> {
-    if uri.is_empty() {
-        return None;
-    }
-    let visible = mant_ir::inline_plain_text(children);
-    let visible = visible.trim();
-    (!visible.is_empty() && uri != visible && !uri.ends_with(visible)).then_some(": ")
 }
 
 fn text<'a>(

@@ -11,7 +11,7 @@ mod font;
 mod generated;
 pub(in crate::mandoc) use generated::function_argument;
 mod links;
-pub(super) use links::append_man_link;
+pub(super) use links::{append_man_link, man_link_identity_text};
 mod scopes;
 mod source_fragment;
 pub(in crate::mandoc) use flow::{
@@ -299,7 +299,19 @@ pub(super) fn append_inline_node_with_next(
         _ => scopes::append(builder, node, default_name),
     }
     finish_inline_node_execution(builder, node, next, final_word_join_before);
+    execute_inline_macro_post(builder, node);
     builder.restore_definition_geometry(geometry);
+}
+
+fn execute_inline_macro_post(builder: &mut InlineBuilder, node: &Node) {
+    if node.macro_name.as_deref() == Some("Fd") {
+        // mdoc_term.c::print_mdoc_node() restores the font before running
+        // termp_fd_post(). That post requests term_newln() for every sink,
+        // even after \c. It does not run roff_pre_br(): NOBREAK field flags
+        // survive; without buffered cells or an open device row, it emits
+        // no physical line (term.c::term_newln,475-480).
+        builder.execute_native_newline();
+    }
 }
 
 fn execute_author_pre(builder: &mut InlineBuilder, node: &Node) -> bool {
@@ -424,7 +436,6 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
         RoffInlineEvent::DeviceName | RoffInlineEvent::Overstrike { .. } => true,
         _ => false,
     });
-    builder.native_word_boundary = Some(builder.execution.boundary);
     builder.begin_word_projection_with_break(
         true,
         !builder.in_definition_field() || has_glyph,
@@ -775,18 +786,21 @@ mod tests {
 
     #[test]
     fn styled_scopes_preserve_pending_spacing_and_continuation() {
+        // Equivalent No/Sm/Em source and its Ns control ran pristine CVS
+        // first. These are actual term_word calls (term.c:573-589), not
+        // presentation-only IR appends that invent no native boundary.
         for tight in [false, true] {
             let mut builder = super::InlineBuilder::new();
-            builder.append(super::text_node("FIRST"));
+            builder.append_text("FIRST");
             if tight {
                 builder.tighten_next_boundary();
             }
             builder.append_scope(|builder| builder.set_spacing("off"), |nodes| nodes);
             builder.append_scope(
-                |builder| builder.append(super::text_node("SECOND")),
+                |builder| builder.append_text("SECOND"),
                 |children| vec![super::Inline::Emphasis { children }],
             );
-            builder.append(super::text_node("THIRD"));
+            builder.append_text("THIRD");
             assert_eq!(
                 super::plain_text(&builder.finish()),
                 if tight {

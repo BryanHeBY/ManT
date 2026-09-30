@@ -35,7 +35,7 @@ fn append_literal_head(inlines: &[Inline], output: &mut String) -> bool {
             }
             Inline::Strong { children } => output.push_str(&plain_text(children)),
             Inline::Code { value } | Inline::Equation { value, .. } => output.push_str(value),
-            Inline::Link { children, .. } => {
+            Inline::PortableDisplay { children, .. } | Inline::Link { children, .. } => {
                 if !append_literal_head(children, output) {
                     return false;
                 }
@@ -88,10 +88,18 @@ mod tests {
             let term = [Inline::Strong {
                 children: vec![Inline::Text { value: form.into() }],
             }];
-            assert_eq!(
-                leading_styled_command_name(&term).as_deref(),
-                Some(expected)
-            );
+            for content in [
+                term.to_vec(),
+                vec![Inline::PortableDisplay {
+                    display: "unrelated export spelling".into(),
+                    children: term.to_vec(),
+                }],
+            ] {
+                assert_eq!(
+                    leading_styled_command_name(&content).as_deref(),
+                    Some(expected)
+                );
+            }
         }
     }
 }

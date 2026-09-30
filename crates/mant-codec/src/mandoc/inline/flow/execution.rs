@@ -16,7 +16,16 @@ impl InlineBuilder {
         flow: crate::mandoc::formatter::AuthorFlow,
         authors_section: bool,
     ) {
-        self.inherit_author_execution_with_effect(flow, authors_section, AuthorBreakEffect::Line);
+        // Changing an IR output owner refreshes section/author context, not
+        // the surrounding Column It's live NOBREAK/trailspace device flags.
+        let effect = if self.execution.has_column_output_scope() {
+            self.execution
+                .author_execution
+                .map_or(AuthorBreakEffect::Line, |author| author.break_effect)
+        } else {
+            AuthorBreakEffect::Line
+        };
+        self.inherit_author_execution_with_effect(flow, authors_section, effect);
     }
 
     pub(in crate::mandoc) fn inherit_author_execution_with_effect(
@@ -45,12 +54,12 @@ impl InlineBuilder {
                 .definition
                 .as_ref()
                 .is_some_and(|definition| {
-                    definition.pending_gap_origin == PendingFieldGapOrigin::SourceLine
+                    definition.pending_gap_origin == PendingFieldGapOrigin::CommittedFlush
                 })
         {
-            // A mode-only An emits no word. Only a preceding NODE_LINE
-            // term_newln() has committed native trailspace for the next
-            // word; an unrealized author field separator is abandoned.
+            // A mode-only An emits no word. A preceding term_newln()
+            // (NODE_LINE or a macro post) committed native trailspace for
+            // the next word; an unrealized author separator is abandoned.
             self.execution.pending_field_spaces = 0;
             self.execution.boundary = PendingBoundary::Tight;
         }
@@ -489,18 +498,19 @@ impl InlineBuilder {
         if updated == self.execution.spacing.enabled() {
             return;
         }
-        // `.Sm off` changes spacing *after* the request. If the native
-        // buffer is already occupied — printable content, or a pending
-        // zero-advance glyph, which is `p->col > 0` upstream — retain the
-        // ordinary boundary to the first following fragment (that word's
-        // term_word() still sees TERMP_NOSPACE cleared, term.c:573-580),
-        // then concatenate subsequent macro arguments until spacing is
-        // enabled again.
-        let buffer_occupied = self.execution.has_printable_content
-            || self.execution.zero_advance.has_buffered_glyph();
-        self.execution.boundary = match (updated, !buffer_occupied, self.execution.boundary) {
+        // Changing NONOSPACE does not rewrite the incoming NOSPACE flag.
+        // A previous word may have established an ordinary boundary with
+        // only a marker, NBRZW, or an empty operand. Read that native word
+        // transition, never infer it from visible IR (termp_sm_pre() and
+        // term.c:573-589). The first word retains that boundary; subsequent
+        // words use the new spacing mode.
+        let boundary_ready = self.execution.definition.as_ref().map_or_else(
+            || self.execution.flush_unit.word_boundary_ready(),
+            |state| state.field_buffer.word_boundary_ready(),
+        );
+        self.execution.boundary = match (updated, boundary_ready, self.execution.boundary) {
             (_, _, boundary) if boundary.is_tight() => boundary,
-            (false, false, _) => PendingBoundary::Preserved,
+            (false, true, _) => PendingBoundary::Preserved,
             _ => PendingBoundary::Ordinary,
         };
         self.execution.spacing = SpacingMode::from(updated);
@@ -515,14 +525,15 @@ impl super::InlineExecutionState {
             return;
         }
         self.last_tab_source_node = (node.id != 0).then_some(node.id);
-        if !node.flags.no_fill
-            && node.flags.line_start
-            && let Some(definition) = &mut self.definition
-        {
+        if !node.flags.no_fill && node.flags.line_start {
             // Both normal node drivers insert ASCII_TABREF on filled
             // NODE_LINE, before any handler including state-only requests
             // (mdoc_term.c:321; man_term.c:929; term.c:873-878).
-            definition.field_buffer.note_tab_reference();
+            if let Some(definition) = &mut self.definition {
+                definition.field_buffer.note_tab_reference();
+            } else {
+                self.flush_unit.note_tab_reference();
+            }
         }
     }
 

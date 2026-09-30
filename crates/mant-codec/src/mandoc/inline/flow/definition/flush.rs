@@ -147,11 +147,11 @@ impl InlineBuilder {
             } else {
                 usize::from(gap_cells)
             };
-            if !exit_field && !flags.wraps() {
+            if !exit_field && (!flags.wraps() || self.execution.has_column_output_scope()) {
                 // term_flushln() retains trailspace as minbl. A following
                 // formatter word materializes it, while roff_term_pre_br()
-                // can clear it before that word. IR must make the same
-                // decision at the consuming event, not at field flush.
+                // or an overrun empty column post can retire it first. An
+                // output-owner drain cannot eagerly print these cells.
                 deferred_field_cells = cells;
             } else {
                 self.append_fixed_cells(cells);
@@ -259,7 +259,7 @@ impl InlineBuilder {
                     value.clear();
                 }
             } else {
-                definition.row.commit_on_source_flush();
+                definition.row.commit_at_flush();
             }
         }
         overruns
@@ -805,7 +805,9 @@ pub(super) fn retain_unprinted_field_targets(inlines: &mut Vec<Inline>) {
             retain_unprinted_field_targets(children);
             true
         }
-        Inline::Strong { children } | Inline::Emphasis { children } => {
+        Inline::Strong { children }
+        | Inline::Emphasis { children }
+        | Inline::PortableDisplay { children, .. } => {
             retain_unprinted_field_targets(children);
             !children.is_empty()
         }

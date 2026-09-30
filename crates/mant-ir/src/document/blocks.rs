@@ -97,10 +97,12 @@ pub enum Block {
     Table {
         /// Logical rows in source order.
         rows: Vec<TableRow>,
-        /// Declared per-column widths in terminal cells, when the source
-        /// fixes them (`.Bl -column` argument widths plus the upstream
-        /// inter-column gap). Empty lets renderers derive widths from
-        /// content, matching tables whose source declares none.
+        /// Measured declaration content widths in display cells, excluding
+        /// the inter-column gap. These are preferred field origins, not fixed
+        /// viewport widths. The producer resolves source escapes using its
+        /// reading device. Empty selects content-derived table layout.
+        /// Consumers share bounded 4/3/1-cell gap placement and preserve every
+        /// actual cell when declarations and cells have different lengths.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         column_widths: Vec<u16>,
         /// Source-derived indentation and vertical spacing.
@@ -128,9 +130,9 @@ pub enum Block {
         #[serde(skip_serializing_if = "Option::is_none")]
         source: Option<SourceSpan>,
     },
-    /// Explicit vertical spacing requested by the source.
+    /// Completed blank rows emitted by the producer.
     VerticalSpace {
-        /// Number of terminal rows requested.
+        /// Number of executed blank rows.
         lines: u16,
         /// Original source range.
         #[serde(skip_serializing_if = "Option::is_none")]

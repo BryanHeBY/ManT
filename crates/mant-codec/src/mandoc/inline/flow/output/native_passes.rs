@@ -4,6 +4,103 @@ use super::super::Inline;
 use super::split::{advance_boundary, split_text_at_boundaries};
 use std::collections::BTreeMap;
 
+/// Scalar ownership retained by the accepted passes of a rejected word.
+/// Blanks consumed between passes never extend that owner's accepted range.
+pub(in crate::mandoc::inline::flow) fn accepted_owner_prefix_length(
+    buffer: &super::super::field_buffer::FieldBuffer,
+    passes: &[super::super::field_buffer::FillPass],
+    content: usize,
+) -> usize {
+    use super::super::field_buffer::FieldCell;
+
+    let mut pass_start = 0;
+    let mut length = 0;
+    for pass in passes {
+        let start = content.max(pass_start);
+        if start < pass.end {
+            length += buffer.projection_length(start, pass.end);
+        }
+        pass_start = pass.end;
+        while matches!(
+            buffer.cells().get(pass_start),
+            Some(FieldCell::BreakableBlank)
+        ) {
+            pass_start += 1;
+        }
+    }
+    length
+}
+
+/// Consume accepted `term_flushln()` passes at their real retirement point.
+/// Word-time marker passes may already have produced a boundary; a deferred
+/// scan supplies the remaining ones here. Definition and plain owners share
+/// this projection, including an accepted prefix followed by rejection.
+pub(in crate::mandoc::inline::flow) fn project_accepted_native_passes(
+    nodes: &mut Vec<Inline>,
+    buffer: &super::super::field_buffer::FieldBuffer,
+    anchors: &[(usize, String, usize)],
+    passes: &[super::super::field_buffer::FillPass],
+    projected_passes: usize,
+    output_start: usize,
+) -> usize {
+    use super::super::field_buffer::FieldCell;
+
+    let first = projected_passes.max(buffer.committed_pass_count());
+    let count = passes.len().saturating_sub(1);
+    if first >= count {
+        return count;
+    }
+    let start = output_start.min(nodes.len());
+    let mut authored_breaks = authored_owner_breaks(&nodes[start..]);
+    let mut boundaries: BTreeMap<String, Vec<usize>> = BTreeMap::new();
+    let mut pass_start = 0;
+    for (index, pass) in passes.iter().take(count).enumerate() {
+        let mut cell = pass.end;
+        while matches!(buffer.cells().get(cell), Some(FieldCell::BreakableBlank)) {
+            cell += 1;
+        }
+        let marker_owner = buffer.cells()[pass_start..cell]
+            .iter()
+            .rposition(|cell| matches!(cell, FieldCell::BreakMarker))
+            .map(|relative| pass_start + relative)
+            .and_then(|marker_cell| {
+                let owner = anchors.partition_point(|(_, _, content)| *content <= marker_cell);
+                owner.checked_sub(1).and_then(|index| anchors.get(index))
+            });
+        pass_start = cell;
+        // A real authored row already represented inside a styled owner
+        // is the same event, not another width break at a later scalar.
+        let represented = marker_owner.is_some_and(|(_, marker, _)| {
+            authored_breaks.get_mut(marker).is_some_and(|count| {
+                if *count == 0 {
+                    return false;
+                }
+                *count -= 1;
+                true
+            })
+        });
+        if index < first || represented {
+            continue;
+        }
+        let owner = anchors.partition_point(|(_, _, content)| *content <= cell);
+        if let Some((_, marker, content)) =
+            owner.checked_sub(1).and_then(|index| anchors.get(index))
+        {
+            boundaries
+                .entry(marker.clone())
+                .or_default()
+                .push(buffer.projection_length(*content, cell));
+        }
+    }
+    if !boundaries.is_empty() {
+        // Earlier flushed fields are immutable output. Only the active
+        // suffix is traversed, once per real flush (term.c:233-237).
+        let pending = nodes.split_off(start);
+        nodes.extend(split_native_field_passes(&pending, &boundaries));
+    }
+    count
+}
+
 #[cfg(test)]
 std::thread_local! {
     static OWNER_NODES_VISITED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
@@ -59,6 +156,7 @@ pub(in crate::mandoc::inline::flow) fn authored_owner_breaks(
                     }
                     Inline::Strong { children }
                     | Inline::Emphasis { children }
+                    | Inline::PortableDisplay { children, .. }
                     | Inline::Link { children, .. } => visit(children, owner, breaks),
                     _ => {}
                 }
@@ -133,6 +231,10 @@ fn project_native_pass_nodes<'a>(
             Inline::Emphasis { children } => output.push(Inline::Emphasis {
                 children: project_native_pass_nodes(children, boundaries, cursor),
             }),
+            Inline::PortableDisplay { display, children } => output.push(Inline::PortableDisplay {
+                display: display.clone(),
+                children: project_native_pass_nodes(children, boundaries, cursor),
+            }),
             Inline::Link {
                 target,
                 title,
@@ -157,6 +259,7 @@ fn trim_native_pass_rows(nodes: &mut Vec<Inline>) {
         let starts_row = match &mut node {
             Inline::Strong { children }
             | Inline::Emphasis { children }
+            | Inline::PortableDisplay { children, .. }
             | Inline::Link { children, .. } => {
                 trim_native_pass_rows(children);
                 starts_with_native_break(children)
@@ -185,6 +288,7 @@ fn first_native_row_event(nodes: &[Inline]) -> Option<bool> {
             Inline::LineBreak { .. } => return Some(true),
             Inline::Strong { children }
             | Inline::Emphasis { children }
+            | Inline::PortableDisplay { children, .. }
             | Inline::Link { children, .. } => {
                 if let Some(event) = first_native_row_event(children) {
                     return Some(event);
@@ -217,6 +321,7 @@ fn trim_native_breakable_tail(nodes: &mut Vec<Inline>) -> bool {
             }
             Inline::Strong { children }
             | Inline::Emphasis { children }
+            | Inline::PortableDisplay { children, .. }
             | Inline::Link { children, .. } => {
                 let consumed = trim_native_breakable_tail(children);
                 if consumed && !children.is_empty() {

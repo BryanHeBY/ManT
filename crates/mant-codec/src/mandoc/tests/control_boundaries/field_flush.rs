@@ -1,6 +1,35 @@
 use super::*;
 
 #[test]
+fn no_break_flush_retires_its_native_cells_without_ending_the_device_row() {
+    // Six exact sources ran pristine UTF-8/ASCII/tree/lint before these
+    // assertions. roff_term_pre_mc() holds NOBREAK through term_flushln();
+    // term.c:233-237 still destroys the consumed buffer while 250-253 keeps
+    // this row open. A NBRZW/\p marker cannot execute again in the next word.
+    for (operand, controls, expected) in [
+        (r"A\p\c", "", "A B C"),
+        (r"\&\p\c", "", " B C"),
+        (r"\zX\p\c", "", "X B C"),
+        (r"\&\p\c", ".mc !\n", " B C"),
+        (r"\&\p\c", ".Ns\n", " B C"),
+        (r"\&\p\c", ".Sm off\n", " BC"),
+    ] {
+        let source = format!(
+            ".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal\n.No {operand}\n.mc |\n{controls}.No B C\n.Ed\n"
+        );
+        let document = parse_manual_bytes(
+            std::path::Path::new("no-break-native-buffer-retirement.1"),
+            source.as_bytes(),
+        )
+        .unwrap();
+        let [Block::Preformatted { children, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!("{source}: unexpected blocks {:#?}", document.sections);
+        };
+        assert_eq!(inline_text(children), expected, "{source}: {children:?}");
+    }
+}
+
+#[test]
 fn hang_field_flush_preserves_native_trailspace_without_reusing_br_gap() {
     // Both exact inputs passed fixed CVS -Tascii/-Tutf8/-Tlint. term.c's
     // term_flushln() restores minbl=trailspace even when nbr=0; explicit
@@ -31,7 +60,10 @@ fn hang_field_rejects_only_the_unaccepted_word_end_suffix() {
         (".No \"X\\p Y\"\n.No \"\\p Z\"", "X\nY"),
         (".No X\\p\n.No \\p\n.No \"\"\n.No Z", "X"),
         (".No X\n.No \\p\n.No Y", "X"),
-        (".No X\\p\n.No \"\"\n.No Y", "X\nY"),
+        // Filled NODE_LINE buffers TABREF (mdoc_term.c:321,
+        // term.c:873-878); it stops the break-blank sweep at term.c:205.
+        // The next word's separator remains at the restarted row origin.
+        (".No X\\p\n.No \"\"\n.No Y", "X\n Y"),
     ] {
         let item = review_definition_item(&format!(
             ".Bl -hang -width 4n\n.It Xo\n{head}\n.Xc\n.No BODY\n.El\n"

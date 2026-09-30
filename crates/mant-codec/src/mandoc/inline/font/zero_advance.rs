@@ -189,10 +189,17 @@ impl ZeroAdvanceState {
     }
 
     pub(in crate::mandoc) fn has_printable_pending_glyph(&self) -> bool {
-        self.machine.pending_ref().is_some_and(|glyph| {
+        self.pending_visible_characters() > 0
+    }
+
+    /// Size of the still-buffered visible owner, before another word causes
+    /// it to print. Fallback spelling can contain more than one scalar.
+    pub(in crate::mandoc) fn pending_visible_characters(&self) -> usize {
+        self.machine.pending_ref().map_or(0, |glyph| {
             mant_ir::inline_plain_text(std::slice::from_ref(glyph))
                 .chars()
-                .any(|character| !character.is_whitespace())
+                .filter(|character| !character.is_whitespace())
+                .count()
         })
     }
 
@@ -256,18 +263,6 @@ impl ZeroAdvanceState {
         }
     }
 
-    /// Discard a completed glyph emitted by an operand whose compact output
-    /// is suppressed. A bare `\\z` remains armed: CVS carries that request
-    /// into the next formatter word, whereas `\\zX` has already produced the
-    /// hidden glyph `X` and must not lend it to a later visible operand.
-    pub(in crate::mandoc) fn discard_hidden_pending_glyph(&mut self) {
-        self.note_pending_replaced();
-        self.machine.discard_pending();
-        self.held.clear();
-        self.fragment_started_pending = false;
-        self.resolved_preexisting = false;
-    }
-
     /// Execute CVS `ESCAPE_NOSPACE` against the pending `\\z` state.
     ///
     /// `term_word()` clears only `TERMP_BACKAFTER` before it considers a
@@ -277,9 +272,6 @@ impl ZeroAdvanceState {
         self.machine.cancel_armed()
     }
 
-    /// The output-free recovery path can only carry a bare armed `\\z`.
-    /// Keep its state transition encapsulated instead of letting consumers
-    /// treat the representation of pending glyphs as public behavior.
     /// Feed formatter-generated text through the same projection as authored
     /// glyphs. Brackets from `.OP`, generated declaration punctuation, and
     /// implicit wrapper text can overwrite a pending `\z` glyph just like a
@@ -308,10 +300,6 @@ impl ZeroAdvanceState {
                 buffer.push(character);
                 continue;
             }
-            if self.machine.is_armed() {
-                let _ = self.project_glyph(styled_segment(character.to_string(), font));
-                continue;
-            }
             if self.machine.has_pending() {
                 if is_formatter_word_blank(character) || character == '\t' {
                     // The same encode() non-graph buffering as authored
@@ -323,6 +311,12 @@ impl ZeroAdvanceState {
                     continue;
                 }
                 if !self.held.is_empty() {
+                    // encode1() settles the completed glyph and its held
+                    // blanks before the incoming graph — even when a
+                    // second `\z` has armed the graph itself: the retreat
+                    // eats one buffered blank, the glyph settles, and the
+                    // armed graph then becomes the new zero-width pending
+                    // glyph (term.c:901-908 write order, not an enum).
                     self.settle_pending_before_graph(output);
                     if self.machine.is_armed() {
                         let _ = self.project_glyph(styled_segment(character.to_string(), font));
@@ -335,11 +329,20 @@ impl ZeroAdvanceState {
                 let Some((_, replaced)) =
                     self.project_glyph(styled_segment(character.to_string(), font))
                 else {
+                    // The armed case: the graph becomes the pending
+                    // zero-width glyph and prints nothing yet.
                     continue;
                 };
                 if replaced && self.fragment_started_pending {
                     self.resolved_preexisting = true;
                 }
+                self.flush_recoveries(output, &mut buffer, font, None);
+                buffer.push(character);
+                continue;
+            }
+            if self.machine.is_armed() {
+                let _ = self.project_glyph(styled_segment(character.to_string(), font));
+                continue;
             }
             self.flush_recoveries(output, &mut buffer, font, None);
             buffer.push(character);

@@ -47,6 +47,28 @@ impl InlineBuilder {
             .is_some_and(|field| field.ends_row)
     }
 
+    /// A column BODY's unconditional empty `term_flushln()` still executes
+    /// the same tail comparison as a nonempty flush (term.c:143-146,233-253).
+    pub(in crate::mandoc::inline::flow) fn native_empty_field_row_ends(&self) -> bool {
+        let Some(state) = self.execution.definition.as_ref() else {
+            return true;
+        };
+        let Some((flags, margin, trailspace)) = self.native_field_parameters(false, None) else {
+            return true;
+        };
+        let viscol = state.hang_row.viscol.saturating_mul(24);
+        let vbl = state
+            .field_offset_units
+            .saturating_sub(viscol)
+            .max(state.hang_row.minbl.saturating_mul(24));
+        let vfield = self
+            .native_margin_units(margin)
+            .saturating_sub(viscol.saturating_add(vbl));
+        !flags.contains(FieldFlag::Hang)
+            && (!self.native_no_break(flags, false, None)
+                || trailspace.saturating_mul(24) > vfield.saturating_add(12))
+    }
+
     fn native_field_parameters(
         &self,
         force_no_break: bool,

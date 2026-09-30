@@ -42,7 +42,10 @@ pub(super) struct LoweringContext<'a> {
     pub(super) section_ids: HashMap<String, usize>,
     pub(super) assigned_section_ids: HashSet<String>,
     pub(super) authored_section_targets: HashMap<String, Option<String>>,
+    /// Immutable authored namespace reserved for normalized identities.
     pub(super) explicit_targets: HashSet<String>,
+    /// Immutable `NODE_ID` owners collected before structural lowering.
+    pub(super) native_target_owners: HashSet<String>,
     pub(super) diagnostics: RefCell<Vec<Diagnostic>>,
     /// Private pre/children/post execution shared by detached output buffers.
     pub(super) scope_posts: super::containers::ScopePostState,
@@ -137,6 +140,7 @@ impl<'a> LoweringContext<'a> {
             assigned_section_ids: HashSet::new(),
             authored_section_targets: HashMap::new(),
             explicit_targets: HashSet::new(),
+            native_target_owners: HashSet::new(),
             diagnostics: RefCell::new(Vec::new()),
             scope_posts: super::containers::ScopePostState::default(),
             active_mdoc_section: std::cell::Cell::new(MdocSectionContext::Other),

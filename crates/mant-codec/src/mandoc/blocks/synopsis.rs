@@ -324,10 +324,15 @@ impl super::BlockLowerer<'_, '_> {
         // The real BODY walk owns its leading boundary. Once a visible word
         // exists, keep each CVS synopsis break at that source position.
         match role {
-            SynopsisDeclarationRole::ReturnType | SynopsisDeclarationRole::NoPostBreak => {
+            SynopsisDeclarationRole::ReturnType
+            | SynopsisDeclarationRole::NoPostBreak
+            | SynopsisDeclarationRole::PostBreak => {
                 if newline_boundary && self.state.has_formatter_cell() {
                     self.state.flush_paragraph();
                 }
+                // Fd's shared inline exit already owns its term_newln()
+                // post. No presentation drain may repeat that post or skip
+                // its NOBREAK/empty-buffer decision.
                 self.push_inline_node(node, None);
             }
             SynopsisDeclarationRole::Function => {
@@ -341,13 +346,6 @@ impl super::BlockLowerer<'_, '_> {
                     } else {
                         self.state.flush_paragraph();
                     }
-                }
-                self.push_inline_node(node, None);
-                self.state.flush_paragraph();
-            }
-            SynopsisDeclarationRole::PostBreak => {
-                if newline_boundary && self.state.has_formatter_cell() {
-                    self.state.flush_paragraph();
                 }
                 self.push_inline_node(node, None);
                 self.state.flush_paragraph();

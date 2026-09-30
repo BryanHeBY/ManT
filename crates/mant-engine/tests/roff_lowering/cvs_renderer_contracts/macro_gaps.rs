@@ -58,6 +58,30 @@ fn nd_prints_the_reference_en_dash() {
 
 #[test]
 fn fd_is_bold_and_ends_its_row_in_every_section() {
+    struct StrongInclude(bool);
+    impl<'ir> Visit<'ir> for StrongInclude {
+        fn visit_inline(&mut self, inline: &'ir Inline) {
+            if let Inline::Strong { children } = inline
+                && mant_ir::inline_plain_text(children).contains("include")
+            {
+                self.0 = true;
+            }
+            visit::walk_inline(self, inline);
+        }
+    }
+
+    struct StrongConfig(bool);
+    impl<'ir> Visit<'ir> for StrongConfig {
+        fn visit_inline(&mut self, inline: &'ir Inline) {
+            if let Inline::Strong { children } = inline
+                && mant_ir::inline_plain_text(children) == "CFG"
+            {
+                self.0 = true;
+            }
+            visit::walk_inline(self, inline);
+        }
+    }
+
     // mdoc_term.c dispatch (142/149): Cd and Fd both run termp_fd_pre =
     // termp_bold_pre unconditionally; termp_fd_post (1261-1265) breaks the
     // row after `.Fd` even outside SYNOPSIS, while `.Cd` never breaks.
@@ -82,29 +106,7 @@ fn fd_is_bold_and_ends_its_row_in_every_section() {
     assert!(lowered.contains("normal CFG tail"), "{lowered}");
 
     let document = lowered_document(source);
-    struct StrongInclude(bool);
-    impl<'ir> Visit<'ir> for StrongInclude {
-        fn visit_inline(&mut self, inline: &'ir Inline) {
-            if let Inline::Strong { children } = inline
-                && mant_ir::inline_plain_text(children).contains("include")
-            {
-                self.0 = true;
-            }
-            visit::walk_inline(self, inline);
-        }
-    }
     let mut include_bold = StrongInclude(false);
-    struct StrongConfig(bool);
-    impl<'ir> Visit<'ir> for StrongConfig {
-        fn visit_inline(&mut self, inline: &'ir Inline) {
-            if let Inline::Strong { children } = inline
-                && mant_ir::inline_plain_text(children) == "CFG"
-            {
-                self.0 = true;
-            }
-            visit::walk_inline(self, inline);
-        }
-    }
     let mut config_bold = StrongConfig(false);
     visit::walk_document(&mut include_bold, &document);
     visit::walk_document(&mut config_bold, &document);
@@ -149,6 +151,20 @@ fn lk_projects_label_colon_uri_with_trailing_punctuation() {
 
 #[test]
 fn reference_fields_carry_typed_external_targets() {
+    struct ExternalTargets(Vec<String>);
+    impl<'ir> Visit<'ir> for ExternalTargets {
+        fn visit_inline(&mut self, inline: &'ir Inline) {
+            if let Inline::Link {
+                target: LinkTarget::External { uri, .. },
+                ..
+            } = inline
+            {
+                self.0.push(uri.clone());
+            }
+            visit::walk_inline(self, inline);
+        }
+    }
+
     // mdoc_html.c::mdoc__x_pre (1553-1581): `%U` always links its argument;
     // `%R` links exactly `RFC <digits>` to the canonical rfc-editor page.
     // The terminal word keeps the authored argument spelling.
@@ -163,19 +179,6 @@ fn reference_fields_carry_typed_external_targets() {
     );
 
     let document = lowered_document(source);
-    struct ExternalTargets(Vec<String>);
-    impl<'ir> Visit<'ir> for ExternalTargets {
-        fn visit_inline(&mut self, inline: &'ir Inline) {
-            if let Inline::Link {
-                target: LinkTarget::External { uri, .. },
-                ..
-            } = inline
-            {
-                self.0.push(uri.clone());
-            }
-            visit::walk_inline(self, inline);
-        }
-    }
     let mut targets = ExternalTargets(Vec::new());
     visit::walk_document(&mut targets, &document);
     assert!(
@@ -191,11 +194,16 @@ fn reference_fields_carry_typed_external_targets() {
         targets.0
     );
     let lowered = without_line_indentation(&lowered_terminal(source));
+    // LK07: the terminal display keeps only the authored reference words;
+    // the typed rfc-editor target must never expand into visible text.
     assert!(
-        lowered.contains("RFC 1149: https://www.rfc-editor.org/rfc/rfc1149.html"),
+        lowered.contains("RFC 1149, https://u.example/x."),
         "{lowered}"
     );
-    assert!(lowered.contains("https://u.example/x"), "{lowered}");
+    assert!(
+        !lowered.contains("https://www.rfc-editor.org"),
+        "%R target leaked into terminal display: {lowered}"
+    );
 }
 
 #[test]
@@ -241,4 +249,82 @@ fn z_escape_separators_settle_like_the_reference() {
             "lowered lost {expected:?} for {tail:?} in\n{lowered}"
         );
     }
+}
+
+#[test]
+fn lk_double_address_and_ur_link_keep_single_display() {
+    // LK02/LK05: `.Lk URI URI` (label spelled as the address) shows the
+    // `URI: URI` two-operand form, while a man `.UR` link shows its address
+    // exactly once — the generic visitor never appends a second copy.
+    let lk_source = concat!(
+        ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n",
+        ".Lk https://example.com/w https://example.com/w\n",
+    );
+    let native = native_terminal(lk_source);
+    let lowered = without_line_indentation(&lowered_terminal(lk_source));
+    assert!(
+        native.contains("https://example.com/w: https://example.com/w"),
+        "{native}"
+    );
+    assert!(
+        lowered.contains("https://example.com/w: https://example.com/w"),
+        "{lowered}"
+    );
+
+    let ur_source = ".TH PROBE 1\n.SH DESCRIPTION\n.UR https://u.example/x label\n.UE\nafter\n";
+    let ur_native = native_terminal(ur_source);
+    let ur_lowered = without_line_indentation(&lowered_terminal(ur_source));
+    assert!(
+        ur_native.contains("<https://u.example/x> after"),
+        "{ur_native}"
+    );
+    assert!(
+        ur_lowered.matches("https://u.example/x").count() == 1,
+        "UR address duplicated in\n{ur_lowered}"
+    );
+    assert!(ur_lowered.contains("after"), "{ur_lowered}");
+}
+
+#[test]
+fn percent_u_target_decodes_roff_escapes() {
+    struct Targets(Vec<String>);
+    impl<'ir> Visit<'ir> for Targets {
+        fn visit_inline(&mut self, inline: &'ir Inline) {
+            if let Inline::Link {
+                target: LinkTarget::External { uri },
+                ..
+            } = inline
+            {
+                self.0.push(uri.clone());
+            }
+            visit::walk_inline(self, inline);
+        }
+    }
+
+    // LK08: `%U` identity is the roff-decoded operand (mdoc_html.c builds
+    // the href from the logical string): `\&` never reaches the typed
+    // target, and the decoded URI passes validation without a diagnostic.
+    let source = concat!(
+        ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n.Sh AUTHORS\n",
+        ".An Alice\n.Rs\n.%U https://u.example/a\\&b\n.Re\n",
+    );
+    let lowered = without_line_indentation(&lowered_terminal(source));
+    assert!(lowered.contains("https://u.example/ab"), "{lowered}");
+    assert!(!lowered.contains("\\&"), "{lowered}");
+    let document = lowered_document(source);
+    assert!(
+        document
+            .diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic.code.as_deref() != Some("ir.invalid-external-uri")),
+        "decoded %U target still diagnosed: {:?}",
+        document.diagnostics
+    );
+    let mut targets = Targets(Vec::new());
+    visit::walk_document(&mut targets, &document);
+    assert!(
+        targets.0.contains(&"https://u.example/ab".to_owned()),
+        "%%U target not decoded: {:?}",
+        targets.0
+    );
 }

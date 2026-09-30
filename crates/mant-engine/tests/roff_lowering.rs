@@ -46,6 +46,8 @@ mod native_nested_list_tabs;
 #[path = "roff_lowering/tab_display_lifecycle.rs"]
 mod tab_display_lifecycle;
 
+#[path = "roff_lowering/review25_matrix/mod.rs"]
+mod review25_matrix;
 #[path = "roff_lowering/shared_execution_matrix.rs"]
 mod shared_execution_matrix;
 #[path = "roff_lowering/upstream_inline.rs"]
@@ -114,6 +116,7 @@ fn visible_document_text(document: &mant_ir::Document) -> String {
                 Inline::Strong { .. }
                 | Inline::Emphasis { .. }
                 | Inline::Link { .. }
+                | Inline::PortableDisplay { .. }
                 | Inline::Anchor { .. } => {}
             }
             visit::walk_inline(self, inline);
@@ -134,7 +137,8 @@ fn inline_text(children: &[Inline]) -> String {
             }
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::Link { children, .. } => inline_text(children),
+            | Inline::Link { children, .. }
+            | Inline::PortableDisplay { children, .. } => inline_text(children),
             Inline::Anchor { .. } => String::new(),
             Inline::LineBreak { .. } => "\n".to_owned(),
         })
@@ -159,3 +163,12 @@ mod layout_geometry;
 mod navigation;
 #[path = "roff_lowering/tables.rs"]
 mod tables;
+
+#[path = "roff_lowering/fd_macro_lifecycle.rs"]
+mod fd_macro_lifecycle;
+
+#[path = "roff_lowering/shared_execution_contracts.rs"]
+mod shared_execution_contracts;
+
+#[path = "roff_lowering/shared_execution_owners.rs"]
+mod shared_execution_owners;

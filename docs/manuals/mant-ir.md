@@ -62,9 +62,9 @@ The block union preserves structures that matter across renderers:
 | `preformatted` | Literal flow with an optional language |
 | `list` | Bullet, ordered, or plain items containing blocks |
 | `definition-list` | Terms and block descriptions with item layout, source, and optional `entry` facts |
-| `table` | Rows and block-capable cells with spans and alignment |
+| `table` | Rows and block-capable cells with spans, alignment, and optional measured `columnWidths` |
 | `equation` | Parsed expression and its checked readable text projection when available; legacy producers may supply text alone |
-| `vertical-space` | Explicit source-requested blank terminal rows |
+| `vertical-space` | Executed blank terminal rows |
 | `thematic-break` | Semantic separator |
 | `unsupported` | Visible source preserved when no lossless semantic lowering exists |
 
@@ -72,7 +72,7 @@ The block union preserves structures that matter across renderers:
 
 Paragraph `continuationIndentColumns` is an additional signed displacement from its first-line origin (default zero). Hard-line continuations and visual wraps share that origin; later sibling blocks do not inherit it. It expresses hanging paragraphs without inserting spaces into source text or changing search/link coordinates. A terminal applies wrapping at its current width; unbounded text preserves hard breaks only.
 
-Block `spacingBeforeLines` is already resolved by the producer: zero means a tight boundary, including when omitted from JSON. It is not an invitation for a frontend to supply paragraph spacing. Independent `VerticalSpace` requests add to that boundary, including repeated equal requests; one source request must have only one IR consumption point. Empty anchors and transparent containers do not reset the boundary. Presentation bounds each accumulated gap at 4096 rows, independently of literal blank lines inside text. Native lowering reports `manual.vertical-spacing-limit` when this loses requested spacing. Definition-item optional spacing is different: absence inherits list compactness, while explicit zero suppresses that default.
+Block `spacingBeforeLines` is already resolved by the producer: zero means a tight boundary, including when omitted from JSON. It is not an invitation for a frontend to supply paragraph spacing. Independent `VerticalSpace` blocks add their already-resolved blank rows to that boundary, including repeated equal blocks; each executed row has one IR consumption point. Empty anchors and transparent containers do not reset the boundary. Presentation bounds each accumulated gap at 4096 rows, independently of literal blank lines inside text. Native lowering reports `manual.vertical-spacing-limit` when this loses requested spacing. Definition-item optional spacing is different: absence inherits list compactness, while explicit zero suppresses that default.
 
 A definition description starts at its resolved `layout.bodyIndentColumns` relative to the label origin (generic default: four cells), before applying each child's layout. `minTermGapColumns` controls minimum separation after a run-in label (default: one). `DefinitionItem::inline_description()` identifies the first paragraph or literal fragment that may share the term's line when the producer records a shared row; explicit leading spacing prevents that presentation. A literal fragment shares the row only with native continuation evidence, so ordinary no-fill input remains on separate lines. The first line clears the displayed label; hard and wrapped continuation lines, later paragraphs, nested blocks and code use the structural body origin, not the label's width. Separate source term roots retain their original lines rather than acquiring invented commas. Native continuation normalization, plain text, and the TUI share this distinction. Markdown expresses definition ownership through its own block syntax. Inferring a semantic definition from separate source paragraphs preserves their line boundary; it does not authorize run-in presentation.
 
@@ -153,6 +153,25 @@ fields, and negative/fractional/oversized starts are rejected during decoding.
 
 Every canonical ID in `DocumentIndex` is a local navigation target, including entries attached directly to ordinary list items or native definitions. A `LinkTarget::Section` may target any such ID; its historical variant name does not restrict links to heading-backed sections. Entry targets do not need an additional inline anchor. Producers resolve exact authored fragments to canonical IDs before validation; duplicate identities and incompatible roles remain separate errors.
 
+`Table.columnWidths` is an ordered array of measured declaration content widths,
+in display cells of the producer's reading device, excluding the inter-column
+gap. Empty or omitted uses content-derived table layout; `null` is invalid.
+Every element is an integer from 0 through 65535. These are preferred field
+origins rather than fixed viewport widths: shared terminal placement adds a
+4/3/1-cell gap for fewer than, exactly, or more than five declarations. Cells
+beyond the declarations start after the sum of all declared fields. One advance
+is bounded to 256 cells. More than 256 declared or actual columns, incompatible
+spans/rules, and signed descendant origins use the existing source-order
+fallback; all actual content remains owned by its original cell. ANSI decoration
+never changes measurement. TUI resizing may stack cells while retaining links,
+anchors, search ranges and selection coordinates.
+Ordinary trailing separator spaces do not force a field wrap, but preserved
+output spaces still advance the visible cursor. A later cell never starts
+before the preceding cell's actual output ends.
+Completed blank rows are distinct from an open trailing line: a later cell
+cannot reuse a row already completed by the formatter. CLI and TUI placement
+consume the same row-completion facts, including empty final fields.
+
 `TableGrid` supplies shared sparse logical-column coordinates for table consumers. Each row has a closed `kind`: `data`, `horizontal-rule`, `double-horizontal-rule`, or `layout-rule`. A layout rule retains one `horizontal` or `double-horizontal` strength per logical column, including mixed `_`/`=` layout rows. Data-row cells also have a closed `kind`: omitted/`text`, `horizontal-rule`, `double-horizontal-rule`, `isolated-horizontal-rule`, or `isolated-double-horizontal-rule`. These cell roles preserve partial layout rows and tbl data-cell rule tokens without inventing text blocks; a rule cell must have no ordinary block content. A data row with no cells is an intentional physical blank row; it is not interchangeable with a rule. Horizontal spans omit covered cells; vertical continuations retain explicit empty cells in subsequent rows, while `rowSpan` remains on the content owner. Covered content is never repeated. Callers can request dense column slots with an explicit budget, so large span values need not allocate a dense grid.
 
 CLI text and TUI stack cells in source order when a table's composed origin falls outside the final padding bounds, a cell subtree contains a negative relative displacement, or a descendant origin would cross those bounds. The check includes nested containers, list markers, definition bodies, and continuation lines. In this fallback, ordinary block rendering composes the real parent origin before clipping visible text, preserving outdents, links, anchors, and hard lines. Rendering cells at local column zero and translating them afterwards would lose that geometry. Tables with nonnegative origins and displacements that remain within the bounds retain the ordinary column layout unless expanding multiline cells across dense logical slots would exceed the renderer's bounded physical-slot budget; text output then uses explicit `column N:` rows so every physical line remains visible without width-by-height amplification.
@@ -166,6 +185,7 @@ The inline union contains:
 | `text` | Plain visible text |
 | `strong` | Strong importance or source bold semantics |
 | `emphasis` | Emphasis or source italic semantics |
+| `portable-display` | Accepted native `children` with an optional portable export spelling in `display` |
 | `code` | Literal inline text |
 | `equation` | Parsed equation in its original position between neighboring text |
 | `link` | Visible children plus a typed destination |
@@ -182,6 +202,20 @@ layout cells, while fenced content uses spaces. Source text, semantic names,
 link ranges, and explanation coordinates do not gain those padding scalars:
 the structural break still counts as one source scalar. Unknown fields, null,
 negative, fractional, or values above 65535 are rejected.
+
+`portable-display` is transparent to native reading, text coordinates, entry
+recognition, navigation and TUI search/copy: those consumers traverse its
+`children`. Portable Markdown export uses `display` at the first accepted native
+glyph and keeps the children's executed hard breaks, indent hints, anchors and
+surrounding word boundaries. Empty `display` hides an optional export suffix;
+children without accepted glyphs do not produce replacement prose. A consumer
+can request native Markdown text instead. The two projections do not replay
+source execution or alter link targets. For example, native `BSD` may carry the
+portable spelling `BSD (currently supported)`. This is a presentation choice,
+not a second source text or a claim of oracle equivalence.
+Entry form and name-binding paths also descend through native children. A
+selected native subrange retains its styles and destinations, without copying
+the enclosing complete portable spelling into a partial name.
 
 Links use a closed `LinkTarget` union rather than stringly typed URLs:
 

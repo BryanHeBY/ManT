@@ -216,7 +216,6 @@ pub(in crate::mandoc::inline) struct FieldBuffer {
     /// Offset after the established scan prefix's passes; the initial offset
     /// above remains available for the complete device receipt.
     pass_tab_offset: i64,
-    generation: u64,
     /// Scalar ownership attached to each native write. Replaced zero-advance
     /// graphs remain native graph cells but contribute no projected glyph.
     projection_prefix: Vec<usize>,
@@ -315,29 +314,6 @@ impl FieldBuffer {
         self.cells.push(cell);
     }
 
-    pub(super) fn position(&self) -> (u64, usize) {
-        (self.generation, self.cells.len())
-    }
-
-    /// A compact semantic operand has no visible glyph range. It still owns
-    /// these native cells, so their graph and pass decisions are unchanged.
-    pub(super) fn hide_projection_since(&mut self, (generation, start): (u64, usize)) {
-        let start = if generation == self.generation {
-            start.min(self.cells.len())
-        } else {
-            0
-        };
-        let mut total = self.projection_prefix.get(start).copied().unwrap_or(0);
-        for index in start..self.cells.len() {
-            #[cfg(test)]
-            {
-                self.projection_work += 1;
-            }
-            total += usize::from(matches!(self.cells[index], FieldCell::BreakMarker));
-            self.projection_prefix[index + 1] = total;
-        }
-    }
-
     pub(super) fn begin_word(&mut self, tight: bool, spacing: bool, kept: bool) -> usize {
         let separator = usize::from(self.word_space_ready && !tight && spacing);
         self.word_space_ready = true;
@@ -349,6 +325,25 @@ impl FieldBuffer {
             }
         }
         separator
+    }
+
+    /// A previous `term_word()` established the next word boundary even
+    /// when it buffered no glyph (`term.c:573-589`). Explicit NOSPACE joins
+    /// remain a separate caller-owned register.
+    pub(super) const fn word_boundary_ready(&self) -> bool {
+        self.word_space_ready
+    }
+
+    /// Whether this word's automatic separator still occupies its native
+    /// cell after `encode1()` ran. BACKBEFORE pops an ordinary blank; its
+    /// backspace arm overwrites a KEEP blank instead (term.c:901-908).
+    pub(super) fn word_separator_survives(&self, start: usize, separator: usize) -> bool {
+        separator > 0
+            && matches!(
+                self.cells.get(start),
+                Some(FieldCell::BreakableBlank | FieldCell::NonBreakingBlank)
+            )
+            && !matches!(self.cells.get(start + 1), Some(FieldCell::Backline))
     }
 
     pub(super) fn has_pending_break_markers(&self) -> bool {
@@ -371,6 +366,14 @@ impl FieldBuffer {
                 matches!(scan.stopped, Some(PassStop::Rejected))
                     || (scan.registers.nbr == 0 && !scan.registers.graph)
             })
+    }
+
+    /// An incremental pass stopped at the same nbr=0 boundary that the
+    /// final flush will consume. Later buffered words cannot print in it.
+    pub(super) fn pending_pass_is_definitively_rejected(&self) -> bool {
+        self.scan
+            .as_ref()
+            .is_some_and(|scan| matches!(scan.stopped, Some(PassStop::Rejected)))
     }
 
     pub(super) fn is_empty(&self) -> bool {
@@ -422,7 +425,6 @@ impl FieldBuffer {
     /// term.c:233-237: the row ends and the buffer restarts empty (used
     /// both by the accepted-exit and by the nbr==0 wipe).
     pub(super) fn clear(&mut self) {
-        self.generation = self.generation.wrapping_add(1);
         self.cells.clear();
         self.projection_prefix.clear();
         self.pending_projection_graph = None;

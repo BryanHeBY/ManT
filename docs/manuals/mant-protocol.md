@@ -882,9 +882,9 @@ Every block is tagged by `type`:
 | `preformatted` | `children`, optional `language` | Literal/code display |
 | `list` | structured `kind`, `items`, `compact` | Bullet, dash, ordered, or plain list |
 | `definition-list` | `items`, `compact` | Terms with block-capable descriptions |
-| `table` | `rows` | Block-capable cells, spans, and alignment |
+| `table` | `rows`, optional `columnWidths` | Block-capable cells, spans, alignment, and measured field origins |
 | `equation` | `value`, optional `expression`, `display` | Readable text projected from parsed equation structure when available |
-| `vertical-space` | `lines` | Explicit source-requested blank rows |
+| `vertical-space` | `lines` | Executed blank rows |
 | `thematic-break` | None | Semantic horizontal break |
 | `unsupported` | optional `name`, `text` | Visible source ManT could not structure |
 
@@ -921,6 +921,18 @@ block-level `start`, and bullet/dash/plain `start:null` are rejected.
 Table cells contain `blocks`;
 `columnSpan` and `rowSpan` default to `1`, and `alignment` can be `left`,
 `center`, or `right`.
+
+Table `columnWidths` is a closed array of unsigned integer display-cell widths
+(0 through 65535), measured by the producer after interpreting declaration
+escapes, and excluding the inter-column gap. Missing and `[]` select
+content-derived layout; canonical output omits the empty array. Null, negative,
+fractional and out-of-range values are rejected in actual JSON decoding. For
+example, `"columnWidths":[8,1]` gives the second field a preferred origin of
+12 cells after the four-cell gap. Plain and ANSI consumers use the same bounded
+geometry as the TUI. Extreme widths remain valid IR, but an individual advance
+is bounded to 256 cells and tables beyond the dense placement budget use the
+existing source-order fallback. Widths never authorize dropping cells or
+changing their entry, link or span ownership.
 
 Native equation blocks carry `expression`, a nested box tree with `kind`,
 `font`, `position`, parsed text/fences/decorations, argument counts and ordered
@@ -1040,6 +1052,7 @@ Inline nodes are tagged by `type`:
 | `text` | `value` | Render literal text |
 | `strong` | `children` | Strong emphasis |
 | `emphasis` | `children` | Emphasis |
+| `portable-display` | `display`, `children` | Native children are authoritative; portable Markdown may use the display spelling |
 | `code` | `value` | Inline or preformatted code fragment |
 | `link` | `target`, optional `title`, `children` | Typed destination described below |
 | `anchor` | `id`, optional `fragmentAliases` | Zero-width normalized destination plus exact source fragments |
@@ -1056,6 +1069,16 @@ For example, `[{"type":"text","value":"Alpha"},
 {"type":"line-break","indentColumns":6},
 {"type":"text","value":"Beta"}]` displays the second row six cells past
 the inline root's origin while retaining the source text `Alpha\nBeta`.
+
+`portable-display` has required `display` and `children` fields. Its children
+carry native text, styles, targets and hard boundaries; native query coordinates
+and TUI hit ranges refer to them. Portable Markdown substitutes `display` at
+accepted glyphs while preserving layout and anchors, and emits no replacement
+for a rejected interval without glyphs. An empty display hides an optional
+export suffix. Visible search uses native Markdown wording; Markdown-scope
+search uses the portable wording. Each response reports coordinates in the
+actual artifact selected by that scope. This remains the unreleased v0.12
+contract and requires no version increase.
 
 Every `link.target` is tagged by `kind`: `external { uri }`,
 `email { address }`, `document { name, fragment? }`,

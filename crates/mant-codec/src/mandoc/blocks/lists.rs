@@ -26,7 +26,7 @@ use definition::{
 use man::ordered::{ManListState, append_ordered, ordinal_marker, ordinal_sequence};
 pub(super) use man::{ManDefinitionState, lower_man_definition};
 
-pub(super) use mdoc::lower_mdoc_list;
+pub(super) use mdoc::{has_native_mdoc_list_items, lower_mdoc_list};
 
 #[cfg(test)]
 mod tests {

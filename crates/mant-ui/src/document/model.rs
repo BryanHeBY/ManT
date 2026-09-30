@@ -89,6 +89,7 @@ pub(super) struct LogicalTableCell {
     pub(super) lines: Vec<LogicalLine>,
     pub(super) alignment: TableAlignment,
     pub(super) anchors: std::collections::HashMap<String, usize>,
+    pub(super) completed_tail: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -102,6 +103,8 @@ pub(super) struct LogicalTableRow {
 pub(super) struct LogicalTableLayout {
     pub(super) preferred_widths: Vec<usize>,
     pub(super) force_stack: bool,
+    /// Measured declaration content widths, excluding the shared dcol gap.
+    pub(super) declared_widths: Vec<u16>,
 }
 
 impl LogicalTableLayout {
@@ -120,6 +123,7 @@ impl LogicalTableLayout {
         Self {
             preferred_widths,
             force_stack: false,
+            declared_widths: Vec::new(),
         }
     }
 
@@ -135,6 +139,7 @@ impl LogicalTableCell {
             lines,
             alignment: alignment.unwrap_or(TableAlignment::Left),
             anchors: std::collections::HashMap::new(),
+            completed_tail: false,
         }
     }
 

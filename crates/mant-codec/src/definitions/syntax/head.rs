@@ -191,7 +191,9 @@ fn append_syntax(inlines: &[Inline], output: &mut String) {
             Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. } => {
                 output.push_str(value);
             }
-            Inline::Strong { children } | Inline::Link { children, .. } => {
+            Inline::PortableDisplay { children, .. }
+            | Inline::Strong { children }
+            | Inline::Link { children, .. } => {
                 append_syntax(children, output);
             }
             Inline::Emphasis { children } => {

@@ -610,3 +610,16 @@ source text, anchors, and typed links survive terminal lowering.
 
 Repository layout, local commands, fixture policy, and CI responsibilities are
 documented in the [development guide](../development.md).
+
+### Declared column fields
+
+The owned AST transfers a column list's ordered declaration strings on its
+`Bl` BLOCK only. Pointer/count pairs and aggregate allocation are checked
+before the owned copy; ABI tests cover the new pointer and count offsets.
+
+Lowering measures declaration content using the reading device and stores
+display-cell widths, excluding inter-column spacing. `DeclaredColumns` is the
+shared bounded consumer plan for terminal origins and source-order physical
+rows. Decoration is applied after width measurement. Complex block identities
+and signed origins keep the established faithful fallback, and the TUI adapts
+the same facts to its viewport without changing link/search ownership.

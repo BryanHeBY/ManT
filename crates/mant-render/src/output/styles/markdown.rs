@@ -87,6 +87,12 @@ fn mark(nodes: &[Inline], cursor: &mut usize, spans: &[Span], strong: bool) -> V
                 target: target.clone(),
                 title: title.clone(),
             }),
+            Inline::PortableDisplay { display, children } => {
+                output.push(Inline::PortableDisplay {
+                    display: display.clone(),
+                    children: mark(children, cursor, spans, strong),
+                });
+            }
             Inline::LineBreak { .. } => {
                 *cursor += 1;
                 output.push(node.clone());
