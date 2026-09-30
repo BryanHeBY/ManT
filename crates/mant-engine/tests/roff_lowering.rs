@@ -46,6 +46,8 @@ mod native_nested_list_tabs;
 #[path = "roff_lowering/tab_display_lifecycle.rs"]
 mod tab_display_lifecycle;
 
+#[path = "roff_lowering/shared_execution_matrix.rs"]
+mod shared_execution_matrix;
 #[path = "roff_lowering/upstream_inline.rs"]
 mod upstream_inline;
 #[path = "roff_lowering/upstream_tables.rs"]
