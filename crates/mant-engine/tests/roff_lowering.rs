@@ -138,6 +138,8 @@ mod definition_matrix;
 mod entries;
 #[path = "roff_lowering/escape_matrix.rs"]
 mod escape_matrix;
+#[path = "roff_lowering/g2g3_matrix.rs"]
+mod g2g3_matrix;
 #[path = "roff_lowering/layout.rs"]
 mod layout;
 #[path = "roff_lowering/layout_geometry.rs"]

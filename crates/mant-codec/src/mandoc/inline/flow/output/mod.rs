@@ -236,6 +236,11 @@ impl InlineBuilder {
             }
             return;
         }
+        // term.c:143-146 with 233-237: a definitively rejected unit dies
+        // whole - including a `\z`-generated glyph still pending in the
+        // zero-advance register. A bare armed `\z` wrote no cell and keeps
+        // its request alive across the boundary (term.c:836-838), so it
+        // still settles through the ordinary flush.
         self.flush_zero_advance();
         self.external_head_row_pending = false;
         if self.execution.completed_vertical_rows > 0
@@ -448,6 +453,16 @@ impl InlineBuilder {
     /// the next glyph: preserve the pending glyph but suppress this reader's
     /// own inter-word space. Tight joins (for example alternating `.BR`
     /// operands) deliberately bypass this transition and overstrike instead.
+    /// Under a definitive rejection (term.c:143-146 with 233-237) a glyph
+    /// still buffered in the zero-advance register is unprinted input: it
+    /// must not settle at a word boundary. It dies at the next retirement.
+    fn resolve_zero_advance_at_word_boundary(&mut self) -> Option<Vec<Inline>> {
+        if self.execution.wipe_remainder {
+            return None;
+        }
+        self.execution.zero_advance.resolve_at_word_boundary()
+    }
+
     pub(in crate::mandoc) fn begin_word_projection(&mut self, next_is_visible: bool) {
         self.begin_word_projection_with_break(next_is_visible, next_is_visible, false);
     }
@@ -474,7 +489,7 @@ impl InlineBuilder {
         }
         if next_is_visible && self.execution.keep.keeping() && !self.execution.boundary.is_tight() {
             self.execution.boundary = PendingBoundary::Kept;
-            if let Some(glyph) = self.execution.zero_advance.resolve_at_word_boundary() {
+            if let Some(glyph) = self.resolve_zero_advance_at_word_boundary() {
                 // CVS writes TERMP_KEEP's implicit NBRSP before the next
                 // glyph. It settles BACKBEFORE without becoming visible, so
                 // retain the glyph and join the incoming formatter word.
@@ -493,7 +508,7 @@ impl InlineBuilder {
                     PendingBoundary::Preserved | PendingBoundary::Continued
                 ))
         {
-            if let Some(glyph) = self.execution.zero_advance.resolve_at_word_boundary() {
+            if let Some(glyph) = self.resolve_zero_advance_at_word_boundary() {
                 // The formatter's automatic word blank settles BACKBEFORE
                 // before a buffered `\\p` can become a line boundary.  Keep
                 // the glyph and join the incoming word at that position.
@@ -533,7 +548,7 @@ impl InlineBuilder {
                 && (self.execution.spacing.enabled()
                     || matches!(self.execution.boundary, PendingBoundary::Preserved))
             {
-                if let Some(glyph) = self.execution.zero_advance.resolve_at_word_boundary() {
+                if let Some(glyph) = self.resolve_zero_advance_at_word_boundary() {
                     self.append_projected(glyph);
                 } else {
                     self.append_projected(vec![Inline::Text {
@@ -578,7 +593,7 @@ impl InlineBuilder {
         {
             return;
         }
-        let Some(glyph) = self.execution.zero_advance.resolve_at_word_boundary() else {
+        let Some(glyph) = self.resolve_zero_advance_at_word_boundary() else {
             return;
         };
         self.append_projected(glyph);
@@ -960,6 +975,16 @@ impl InlineBuilder {
     }
 
     pub(super) fn flush_zero_advance(&mut self) {
+        // term.c:143-146 with 233-237: a definitively rejected unit dies
+        // whole - including a `\z`-generated glyph still pending in the
+        // zero-advance register, at every retirement site (hard break,
+        // paragraph drain, formatter-line finish). A bare armed `\z`
+        // wrote no cell and keeps its request alive, so it settles through
+        // the ordinary flush.
+        if self.execution.wipe_remainder && self.execution.zero_advance.has_pending_glyph() {
+            self.execution.zero_advance.discard_at_row_end();
+            return;
+        }
         let mut pending = Vec::new();
         self.execution.zero_advance.finish_into(&mut pending);
         if !pending.is_empty()

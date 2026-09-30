@@ -23,6 +23,10 @@ use super::state::{DefinitionFieldStyle, HangRowTransition, NoBreakField, Pendin
 
 /// Device facts of one real `term_flushln()`, independent of its semantic
 /// owner or of whether a Link/style wrapper contains the printed glyphs.
+///
+/// `width` is the last printed pass's fill width; `overruns` and `ends_row`
+/// already carry the term.c:250-253 decision over the sweep-widened `vbr`
+/// (computed inside `native_field_device_with_resume`).
 pub(super) struct NativeFieldDevice {
     pub(super) width: usize,
     pub(super) viscol: usize,
@@ -294,15 +298,23 @@ impl InlineBuilder {
         let (flags, rmargin, trailspace) =
             match self.execution.author_execution.as_ref()?.break_effect {
                 AuthorBreakEffect::Field {
-                    flags,
+                    flags: field_flags,
                     body_width_columns,
                     gap_cells,
                     ..
-                } => (
-                    flags,
+                } if !state.head_flags_cleared => (
+                    field_flags,
                     usize::from(body_width_columns),
                     usize::from(gap_cells),
                 ),
+                // The run-in HEAD post already cleared the field flags
+                // (mdoc_term.c:961-962) while keeping the shared buffer
+                // (939-945): a later flush over those cells decides with
+                // no BRIND restart, no HANG, and no trailspace, against
+                // the ambient margin the It node restored.
+                AuthorBreakEffect::Field {
+                    body_width_columns, ..
+                } => (FieldFlags::inset(), usize::from(body_width_columns), 0),
                 AuthorBreakEffect::Line => match state.no_break.or(resumed) {
                     Some(field) => (
                         match field.style {
@@ -312,6 +324,10 @@ impl InlineBuilder {
                         field.body_width,
                         field.trailspace_cells,
                     ),
+                    // `.mc` recomputes an ordinary row with NOBREAK held on
+                    // (roff_term.c:147-150): its vtarget and vfield are the
+                    // page margin (term.c:134-136), not a field width.
+                    None if force_no_break => (FieldFlags::inset(), usize::MAX / 2, 0),
                     None => (
                         FieldFlags::inset(),
                         usize::from(state.cleared_field_capacity_columns),
@@ -360,7 +376,19 @@ impl InlineBuilder {
                 // preserves the cells, not the HEAD's temporary flags.
                 && !state.run_in_continuation
                 && matches!(self.execution.author_execution.as_ref()?.break_effect, AuthorBreakEffect::Field { .. });
-        let overruns = width.saturating_add(trailspace) > vfield;
+        // term.c:177-196 with 250-253: the final row decision sees the last
+        // printed pass's `vbr` after the trailing ignorable sweep widened it
+        // under BRTRSP (blanks +1, tab -> next stop), and compares it to
+        // `vfield` with the half-EN tolerance of `term_len(p, 1) / 2`. The
+        // rejected successor pass printed nothing, but the sweep of the last
+        // accepted pass already ran before it (stopping at the significant
+        // remainder), so its widened `vbr` is what the decision consumes.
+        let final_vbr = state.field_buffer.brtrsp_tail_sweep(
+            passes.last().map_or(0, |pass| pass.accepted_end),
+            width,
+            flags.contains(FieldFlag::BrTrsp),
+        );
+        let overruns = 2 * final_vbr + 2 * trailspace > 2 * vfield + 1;
         let ends_row = !flags.contains(FieldFlag::Hang) && (!no_break || overruns);
         Some(NativeFieldDevice {
             width,
@@ -421,18 +449,41 @@ impl InlineBuilder {
         }
     }
 
+    /// The It HEAD post executed (mdoc_term.c:961-962): the field's
+    /// NOBREAK/BRTRSP/BRIND/HANG flags and trailspace are gone, but the
+    /// run-in kinds keep the shared input buffer (939-945 runs no
+    /// `term_newln` at HEAD post). Later flush decisions over the surviving
+    /// cells must use the cleared flag set.
+    pub(in crate::mandoc) fn note_definition_head_flags_cleared(&mut self) {
+        if let Some(state) = &mut self.execution.definition {
+            state.head_flags_cleared = true;
+        }
+    }
+
     pub(in crate::mandoc) fn discard_unprinted_definition_field_output(&mut self) -> bool {
-        self.project_definition_field_receipt(false)
+        self.project_definition_field_receipt(false, false)
+    }
+
+    /// The `.mc` variant: `roff_term_pre_mc()` sets `TERMP_NOBREAK` around
+    /// its `term_flushln()` (roff_term.c:147-150), so the field tail this
+    /// projection returns must be decided with NOBREAK held on - the row
+    /// only ends on overrun, not unconditionally.
+    pub(in crate::mandoc) fn discard_unprinted_definition_field_output_no_break(&mut self) -> bool {
+        self.project_definition_field_receipt(false, true)
     }
 
     pub(in crate::mandoc) fn project_definition_owner_prefix(&mut self) {
-        self.project_definition_field_receipt(true);
+        self.project_definition_field_receipt(true, false);
     }
 
     /// Returns the ordinary field tail's native row end owed by this real
     /// flush. It runs even on first-pass rejection and is independent of
     /// any accepted-pass endline. Owner drains do not execute that tail.
-    fn project_definition_field_receipt(&mut self, owner_boundary: bool) -> bool {
+    fn project_definition_field_receipt(
+        &mut self,
+        owner_boundary: bool,
+        no_break_flush: bool,
+    ) -> bool {
         use super::super::field_buffer::FlushReceipt;
         let Some(receipt) = self.native_field_flush_receipt() else {
             return false;
@@ -524,13 +575,13 @@ impl InlineBuilder {
         if let Some(author) = &mut self.execution.author_execution {
             author.field_output_start = self.nodes.len();
         }
-        self.finish_rejected_field_state(owner_boundary)
+        self.finish_rejected_field_state(owner_boundary, no_break_flush)
     }
 
     /// Retire only the rejected native buffer's registers after its exact
     /// output interval was projected. The ordinary field tail is a separate
     /// device event and is returned to the actual flush caller.
-    fn finish_rejected_field_state(&mut self, owner_boundary: bool) -> bool {
+    fn finish_rejected_field_state(&mut self, owner_boundary: bool, no_break_flush: bool) -> bool {
         let Some(exited_field) = self
             .execution
             .author_execution
@@ -573,7 +624,7 @@ impl InlineBuilder {
         // The same numeric tail rule handles accepted and rejected final
         // passes; an IR owner drain executes neither device endline.
         let flags_end_row = self
-            .native_field_device(false)
+            .native_field_device(no_break_flush)
             .is_some_and(|field| field.ends_row);
         !owner_boundary && flags_end_row
     }

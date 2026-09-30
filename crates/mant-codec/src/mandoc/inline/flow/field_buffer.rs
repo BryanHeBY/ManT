@@ -44,6 +44,14 @@ pub(in crate::mandoc) enum FieldCell {
     /// A `\p` break marker (`bufferc('\n')`, term.c:657-658). A pass only
     /// arms its LOCAL `breakline` from it (304-306); `term_field` skips it.
     BreakMarker,
+    /// A literal tab in the word (`bufferc('\t')` through `encode()`,
+    /// term.c:946-958). `term_fill` advances to the next periodic tab stop
+    /// and counts it as a graph (term.c:337); the `term_flushln()` tail
+    /// scan skips it while `TERMP_BRTRSP` moves `vbr` to the next stop
+    /// (term.c:179-182). The periodic stops come from
+    /// `term_tab_set(p, "T"); term_tab_set(p, ".5i")` (mdoc_term.c:257-259,
+    /// man_term.c:160-162): 120 basic units, 24 per character cell.
+    Tab,
     /// `ASCII_NBRZW`: a native buffer cell and graph with zero width.
     ZeroWidthGraph,
     /// A zero-width breakpoint `\:` on the ascii device (`ASCII_BREAK`,
@@ -92,6 +100,7 @@ impl FieldWrite {
         Self::Cell(match character {
             ' ' => FieldCell::BreakableBlank,
             '\n' => FieldCell::BreakMarker,
+            '\t' => FieldCell::Tab,
             // The frozen Unicode reader executes escaped spaces through
             // ESCAPE_SPECIAL -> encode1(U+00A0), not bufferc(ASCII_NBRSP).
             // KEEP's automatic separators remain direct buffered cells.
@@ -221,7 +230,10 @@ impl FieldBuffer {
         }
         match &cell {
             FieldCell::BreakableBlank => self.blank_positions.push(self.cells.len()),
-            FieldCell::BreakMarker | FieldCell::ZeroWidthGraph | FieldCell::Breakpoint => {}
+            FieldCell::BreakMarker
+            | FieldCell::Tab
+            | FieldCell::ZeroWidthGraph
+            | FieldCell::Breakpoint => {}
             _ => self.significant_positions.push(self.cells.len()),
         }
         let projection = usize::from(matches!(
@@ -230,6 +242,7 @@ impl FieldBuffer {
                 | FieldCell::BreakableBlank
                 | FieldCell::NonBreakingBlank
                 | FieldCell::BreakMarker
+                | FieldCell::Tab
         ));
         if self.projection_prefix.is_empty() {
             self.projection_prefix.push(0);
@@ -525,6 +538,22 @@ impl FieldBuffer {
                         return result;
                     }
                 }
+                FieldCell::Tab => {
+                    // term.c:332-338: a literal tab advances to the next
+                    // periodic stop (taboff is zero outside tbl) and is a
+                    // graph for both the break candidate and the tail
+                    // acceptance.
+                    registers.vis = tab_next_stop(registers.vis);
+                    registers.graph = true;
+                    if registers.vis > vtarget && registers.nbr > 0 {
+                        let result = Some(FillPass {
+                            accepted_end: registers.nbr,
+                            accepted_width: registers.vbr,
+                        });
+                        scan.stopped = Some(PassStop::from(result));
+                        return result;
+                    }
+                }
             }
             registers.index += 1;
         }
@@ -591,6 +620,11 @@ impl FieldBuffer {
                     };
                     column = column.saturating_sub(width);
                     printed = Some(column);
+                }
+                FieldCell::Tab => {
+                    // term_field() treats a tab like deferred whitespace:
+                    // the advance only flushes when a later graph prints.
+                    column = tab_next_stop(column);
                 }
                 FieldCell::BreakMarker | FieldCell::ZeroWidthGraph | FieldCell::Breakpoint => {}
             }
@@ -664,6 +698,35 @@ impl FieldBuffer {
         !self.has_non_ignorable_after(self.resume, brtrsp)
     }
 
+    /// term.c:177-196: the trailing ignorable-cell sweep `term_flushln()`
+    /// runs after each printed pass. Starting from the last pass's
+    /// `accepted_end` with its `vbr`, blanks add one column and a tab jumps
+    /// to the next periodic stop while `TERMP_BRTRSP` is set; markers and
+    /// zero-width cells never stop the sweep, everything else does. The
+    /// result is the `vbr` the final row decision at term.c:250-253 sees.
+    pub(super) fn brtrsp_tail_sweep(&self, from: usize, vbr: usize, brtrsp: bool) -> usize {
+        let mut vbr = vbr;
+        for cell in self.cells.iter().skip(from.min(self.cells.len())) {
+            match cell {
+                FieldCell::BreakableBlank => {
+                    if brtrsp {
+                        vbr += 1;
+                    }
+                }
+                FieldCell::Tab => {
+                    if brtrsp {
+                        vbr = tab_next_stop(vbr);
+                    }
+                }
+                FieldCell::BreakMarker | FieldCell::ZeroWidthGraph | FieldCell::Breakpoint => {}
+                FieldCell::Graph { .. } | FieldCell::NonBreakingBlank | FieldCell::Backline => {
+                    break;
+                }
+            }
+        }
+        vbr
+    }
+
     pub(super) fn cells(&self) -> &[FieldCell] {
         &self.cells
     }
@@ -685,6 +748,15 @@ fn finish_pass(registers: FillRegisters, target: usize) -> Option<FillPass> {
         accepted_end: end,
         accepted_width: width,
     })
+}
+
+/// `term_tab_next()` over the renderer's periodic stop list: the terminal
+/// backends install exactly one periodic stop of `.5i` (mdoc_term.c:257-259,
+/// man_term.c:160-162), i.e. 120 basic units at 24 units per character
+/// cell (term_ascii.c:208-215, term_utf8.c:198-206) — every fifth column.
+/// `taboff` is a tbl-only register (term.c:270-278) and stays zero here.
+fn tab_next_stop(previous: usize) -> usize {
+    (previous / 5 + 1) * 5
 }
 
 #[cfg(test)]

@@ -23,6 +23,12 @@ pub(in crate::mandoc::inline::flow) struct DefinitionFieldState {
     /// `term_fill()` targets `vfield` instead of the page margin
     /// (term.c:134-136): head words wrap at the field's own width.
     pub(in crate::mandoc::inline::flow) no_break_cleared: bool,
+    /// The It HEAD post already ran (`mdoc_term.c:961-962`): NOBREAK, BRTRSP,
+    /// BRIND, HANG, and trailspace are cleared even though the run-in kind
+    /// (`LIST_diag`) flushed nothing at that point (939-945 keeps the shared
+    /// buffer). Later flush decisions over the surviving cells must use the
+    /// cleared flag set, not the HEAD's temporary field flags.
+    pub(in crate::mandoc::inline::flow) head_flags_cleared: bool,
     /// Row geometry a control request left behind: the indent a break's
     /// row carries and the jump a word emits onto the open HANG row, with
     /// the print-deferral lifetime upstream gives them.

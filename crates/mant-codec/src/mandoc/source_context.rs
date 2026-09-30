@@ -278,6 +278,10 @@ impl<'a> LoweringContext<'a> {
         // is settled before the run-in word runs.
         let surviving_cells = generated_cells;
         builder.project_definition_owner_prefix();
+        // The It HEAD post runs here (mdoc_term.c:961-962): field flags and
+        // trailspace clear before any BODY word executes, while the run-in
+        // kinds keep the shared input buffer (939-945).
+        builder.note_definition_head_flags_cleared();
         builder.settle_provisional_definition_break();
         if let Some(saved_font) = saved_font {
             builder.font.pop_scope(saved_font);

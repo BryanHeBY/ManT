@@ -111,11 +111,13 @@ impl FieldFlags {
 
 /// The `term_flushln()` tail rule (term.c:236-253): after the buffer loop,
 /// the next field follows on the same line exactly when Hang is set, or
-/// `NoBreak` is set and the printed field did not overrun. The integer
-/// half-EN of the ASCII device (`term_len(p, 1) / 2`, term.c:251) is zero.
+/// `NoBreak` is set and the printed field did not overrun. The comparison
+/// carries the half-EN tolerance (`term_len(p, 1) / 2`, term.c:251) — half
+/// a column at 24 basic units per cell — kept in the integer form
+/// `2*vbr + 2*trailspace > 2*vfield + 1`.
 pub(in crate::mandoc) fn row_continues(flags: FieldFlags, vbr: usize, vfield: usize) -> bool {
     flags.contains(FieldFlag::Hang)
-        || flags.contains(FieldFlag::NoBreak) && vbr + flags.trailspace() <= vfield
+        || flags.contains(FieldFlag::NoBreak) && 2 * vbr + 2 * flags.trailspace() <= 2 * vfield + 1
 }
 
 #[cfg(test)]

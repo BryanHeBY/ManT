@@ -343,11 +343,47 @@ impl InlineBuilder {
         }
         // The first .mc flush is not yet a NoBreakField, but it still runs
         // term_fill() before changing NOBREAK/NOSPACE.
-        self.discard_unprinted_definition_field_output();
+        let row_ends = self.discard_unprinted_definition_field_output_no_break();
         if self.no_break_definition_field() {
             return;
         }
+        // term.c:235-237 retires the input field for accepted and rejected
+        // flushes alike. Here the retirement is scoped to the rejected
+        // interval - the shape that loses later words when the dead native
+        // cells stay behind (an accepted field's cells keep feeding the
+        // occupied-row bookkeeping downstream drains rely on, e.g. a bare
+        // armed `\z` that survives in an accepted unit).
+        let rejected_interval = self
+            .execution
+            .definition
+            .as_ref()
+            .is_some_and(|state| state.hang_row.field_discarded);
+        let device_row_continues = self
+            .native_field_device(true)
+            .is_none_or(|field| !field.ends_row);
         self.flush_zero_advance();
+        if rejected_interval && let Some(definition) = &mut self.execution.definition {
+            definition.field_buffer.clear_consumed_field();
+            definition.field_word_anchors.clear();
+            // The rejected interval this latch described is retired by a
+            // real flush; a later `.br` must not re-assert its row.
+            definition.hang_row.field_discarded = false;
+        }
+        if row_ends && !device_row_continues {
+            // term.c:220 with 250-253 under NOBREAK: the overrun field ends
+            // its device row inside this flush; the next word starts a new
+            // one at the list offset.
+            let row_indent = self.take_definition_row_indent();
+            self.nodes.push(Inline::line_break_indented(row_indent));
+            self.note_definition_output_row();
+            if let Some(definition) = &mut self.execution.definition {
+                definition.hang_row.endline();
+            }
+            self.execution.last_visible_character = Some('\n');
+        }
+        if let Some(author) = &mut self.execution.author_execution {
+            author.field_output_start = self.nodes.len();
+        }
         self.execution.boundary = PendingBoundary::Ordinary;
         self.execution.empty_word = false;
         if let TrailingOutput::BreakableBlank(count) = self.execution.trailing_output {
