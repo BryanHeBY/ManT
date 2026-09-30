@@ -11,6 +11,30 @@ set -euo pipefail
 REF="${MANT_REFERENCE:-target/mandoc-migration/reference/mandoc}"
 [ -x "$REF" ] || { echo "reference binary not found: $REF" >&2; exit 1; }
 cd "$(dirname "$0")/.."
+# Gate: expectations may only be regenerated from the registered pristine
+# oracle. MANT_REFERENCE still overrides the binary location, but the binary
+# it names must pass the full preflight (active registry attestation, binary
+# hash, ascii/utf8/html profiles) — there is no bypass path.
+python3 - "$REF" <<'PREFLIGHT'
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path("scripts").resolve()))
+import mandoc_oracle
+import rebuild_reference_mandoc
+
+root = Path.cwd().resolve()
+binary = Path(sys.argv[1]).resolve()
+try:
+    attestation, value = rebuild_reference_mandoc.active_attestation(root)
+    archive = mandoc_oracle.repository_path(
+        root, value["source"]["archive"]["path"], "source archive")
+    rebuild_reference_mandoc.verify_all(root, binary, archive, attestation, value["identity"])
+except (OSError, ValueError, KeyError) as error:
+    print(f"oracle preflight rejected {binary}: {error}", file=sys.stderr)
+    raise SystemExit(1)
+print(f"oracle preflight passed: {value['identity']}", file=sys.stderr)
+PREFLIGHT
 for source in crates/mant-engine/tests/roff_lowering/escape_matrix/cases/*.1; do
   name=$(basename "$source" .1)
   "$REF" -Tutf8 "$source" | python3 -c '
