@@ -140,6 +140,8 @@ impl InlineExecutionState {
         self.pending_field_spaces = 0;
         self.pending_line_indent = 0;
         self.word_end_break = WordEndBreak::Clear;
+        self.wipe_remainder = false;
+        self.row_zero_graph = false;
         self.leading_line_boundary = super::LeadingLineBoundary::None;
         self.zero_advance.reset_projection(bare_armed);
         self.zero_advance_joined = false;

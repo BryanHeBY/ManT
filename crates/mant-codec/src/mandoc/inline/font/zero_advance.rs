@@ -14,6 +14,10 @@ pub(in crate::mandoc) struct ZeroAdvanceState {
     fragment_started_pending: bool,
     resolved_preexisting: bool,
     output_owners: Vec<PendingOutputOwner>,
+    /// The word began with a `\p` marker whose blank the pending glyph's
+    /// retreat consumes: the cross-word separator survives in the native
+    /// buffer (term.c:573-576 with 901-908) and must print after the glyph.
+    marker_blank_separator: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -25,6 +29,7 @@ struct PendingOutputOwner {
 impl ZeroAdvanceState {
     pub(in crate::mandoc) const fn new() -> Self {
         Self {
+            marker_blank_separator: false,
             machine: ZeroAdvanceMachine::new(),
             fragment_started_pending: false,
             resolved_preexisting: false,
@@ -109,6 +114,21 @@ impl ZeroAdvanceState {
         if armed {
             self.arm();
         }
+    }
+
+    /// Record that this word's entry boundary carried a separator the
+    /// marker-blank retreat keeps alive (`ph` shape, term.c:901-908:
+    /// the retreat eats the marker's own blank, not the word separator).
+    pub(in crate::mandoc) fn note_marker_blank_separator(&mut self) {
+        self.marker_blank_separator = true;
+    }
+
+    pub(super) fn take_marker_blank_separator(&mut self) -> bool {
+        std::mem::take(&mut self.marker_blank_separator)
+    }
+
+    pub(in crate::mandoc) fn clear_marker_blank_separator(&mut self) {
+        self.marker_blank_separator = false;
     }
 
     pub(in crate::mandoc) fn take_armed(&mut self) -> bool {

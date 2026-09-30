@@ -136,6 +136,8 @@ mod definition_execution_rows;
 mod definition_matrix;
 #[path = "roff_lowering/entries.rs"]
 mod entries;
+#[path = "roff_lowering/escape_matrix.rs"]
+mod escape_matrix;
 #[path = "roff_lowering/layout.rs"]
 mod layout;
 #[path = "roff_lowering/layout_geometry.rs"]

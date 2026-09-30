@@ -200,6 +200,7 @@ pub(super) fn append_inline_node_with_next(
     builder.begin_word_projection_with_break(
         begins_visible_word,
         !builder.in_definition_field() || generates_break_glyph,
+        node_starts_with_break_marker_blank(node),
     );
     if node.flags.delimiter_close {
         builder.tighten_next_boundary();
@@ -387,21 +388,12 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
     }
     let source = node.decoder_text().unwrap_or_default();
     let events = decode(source);
-    if source.contains('\u{1c}')
-        || events.iter().any(|event| {
-            matches!(
-                event,
-                RoffInlineEvent::Presentation {
-                    kind: super::roff_escape::PresentationKind::Spacing,
-                    ..
-                }
-            )
-        })
-    {
+    if source.contains('\u{1c}') {
         // CVS roff.c and mdoc_validate.c::post_hyph() mark source hyphens with
-        // ASCII_HYPH; term_fill() can also break at \:. Both markers lose
-        // their distinct identity in readable IR text, so they must reach
-        // the HANG gap proof before that projection.
+        // ASCII_HYPH; term_fill() can break at them. The marker loses its
+        // distinct identity in readable IR text, so it must reach the HANG
+        // gap proof before that projection. (`\:` is no longer breakable:
+        // on this UTF-8 device it buffers ASCII_NBRZW, chars.c:53.)
         builder.note_discretionary_hang_field_break();
     }
     if source.is_empty() && builder.visits_empty_text_as_space(node) {
@@ -425,7 +417,11 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
         _ => false,
     });
     builder.native_word_boundary = Some(builder.execution.boundary);
-    builder.begin_word_projection_with_break(true, !builder.in_definition_field() || has_glyph);
+    builder.begin_word_projection_with_break(
+        true,
+        !builder.in_definition_field() || has_glyph,
+        starts_with_break_marker_blank(&events),
+    );
     let pending_word_end_break = builder.take_word_end_break();
     let record_native_cells = builder.records_native_field_cells();
     // term_word() stores a previous operand's \p in the native buffer.
@@ -433,6 +429,7 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
     // this operand's internal blanks. Do not replay that older marker in
     // the new TEXT projection: the field's ordered cell consumer decides
     // its row boundary (term.c:573-580,287-306).
+    let field_authoritative = builder.in_definition_field();
     let execution = font::parse_roff_text_with_zero_advance(
         source,
         &mut builder.execution.font,
@@ -440,10 +437,10 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
         &mut builder.execution.zero_advance,
         pending_word_end_break && !record_native_cells,
         record_native_cells,
+        field_authoritative,
     );
     builder.ensure_definition_field_session();
     builder.native_word_writes = record_native_cells.then_some(execution.native_writes);
-    builder.note_word_zero_break_prefixes(&execution.zero_break_prefixes);
     // mdoc_term gives an empty text node a vertical row only when the text
     // itself begins an input line. An empty No/Em argument does not, whereas
     // a buffered zero-width glyph (for example \&) still occupies that row.
@@ -464,6 +461,12 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
         occupies_literal_row,
         execution.trailing_output,
     );
+    if execution.definitive_reject {
+        builder.note_definitive_word_rejection();
+    }
+    if execution.word_zero_graph {
+        builder.note_row_zero_graph();
+    }
     if provisional_definition_break {
         builder.note_provisional_definition_break();
     }
@@ -479,6 +482,49 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
         builder.tighten_next_boundary();
     }
     builder.continue_source_line(continues_line);
+}
+
+/// Whether a decoded word begins with a `\p` marker whose following blank
+/// precedes the word's first graph. Upstream, that blank is the retreat
+/// target of an armed BACKBEFORE glyph (term.c:901-908), not the marker's
+/// break cell; the word-boundary projection must not consume it early.
+fn starts_with_break_marker_blank(events: &[RoffInlineEvent]) -> bool {
+    let mut seen_marker = false;
+    for event in events {
+        match event {
+            RoffInlineEvent::LineBreak => seen_marker = true,
+            RoffInlineEvent::Text(value) => {
+                for character in value.chars() {
+                    if is_formatter_word_blank(character) {
+                        return seen_marker;
+                    }
+                    if character != '\n' {
+                        return false;
+                    }
+                }
+            }
+            RoffInlineEvent::Glyph(_)
+            | RoffInlineEvent::FallbackGlyph(_)
+            | RoffInlineEvent::DeviceName
+            | RoffInlineEvent::Overstrike { .. }
+            | RoffInlineEvent::ZeroWidthGlyph => return false,
+            _ => {}
+        }
+    }
+    false
+}
+
+/// Macro wrapper form of [`starts_with_break_marker_blank`]: a wrapper node
+/// whose first text child begins with a `\p` marker followed by a blank
+/// before its first graph. The wrapper's own word boundary must defer to
+/// the child's marker-blank retreat decision.
+fn node_starts_with_break_marker_blank(node: &Node) -> bool {
+    node.children.iter().any(|child| {
+        child.kind == NodeKind::Text
+            && child
+                .decoder_text()
+                .is_some_and(|text| starts_with_break_marker_blank(&decode(text)))
+    })
 }
 
 /// Append sibling events without throwing away pending formatter effects.

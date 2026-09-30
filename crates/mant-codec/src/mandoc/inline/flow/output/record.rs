@@ -40,17 +40,21 @@ impl InlineBuilder {
             self.execution.execution_epoch,
             native_word_start
         );
-        definition.field_word_anchors.push((
-            native_word_start,
-            anchor_ir_start,
-            native_word_start + separator,
-        ));
         // Every source and generated formatter-word entry supplies writes.
         // Empty operands supply an explicit empty write list, preserving the
         // word event without recovering graph facts from semantic output.
-        definition
+        // Register the anchor only AFTER execution, from the receipt: a
+        // BACKBEFORE retreat (term.c:901-908) can pop the separator blank
+        // recorded above, and a pre-execution content start would put
+        // already-accepted cells into a later rejected interval.
+        let receipt = definition
             .field_buffer
             .apply_writes(&native_writes.expect("formatter word native writes"));
+        definition.field_word_anchors.push((
+            native_word_start,
+            anchor_ir_start,
+            receipt.first_content_cell,
+        ));
         let projected = super::super::super::plain_text(incoming);
         let trimmed = projected.trim_end_matches(' ');
         let trailing_spaces = projected.len().saturating_sub(trimmed.len());
@@ -111,8 +115,7 @@ impl InlineBuilder {
             // prefix, so the plain capacity (term.c:124-125, 229-230).
             let rest_vtarget = capacity;
             {
-                let word_anchor = definition.field_word_anchors[anchor_count - 1].0;
-                let word_first_cell = word_anchor + usize::from(separator > 0);
+                let word_first_cell = definition.field_word_anchors[anchor_count - 1].2;
                 let word_end = definition.field_buffer.cells().len();
                 let mut closes_before = 0;
                 let mut first_pass = !definition.field_buffer.has_committed_pass();

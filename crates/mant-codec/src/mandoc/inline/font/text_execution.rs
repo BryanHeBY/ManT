@@ -18,6 +18,7 @@ pub(in crate::mandoc) fn parse_roff_text_with_state(
         &mut zero_advance,
         false,
         false,
+        false,
     );
     let mut output = execution.output;
     if execution.pending_word_end_break {
@@ -27,6 +28,7 @@ pub(in crate::mandoc) fn parse_roff_text_with_state(
     output
 }
 
+#[allow(clippy::struct_excessive_bools)]
 pub(in crate::mandoc) struct TextExecution {
     pub(in crate::mandoc) output: Vec<Inline>,
     /// Native writes in decode order; semantic wrappers never supply cells.
@@ -35,9 +37,12 @@ pub(in crate::mandoc) struct TextExecution {
     pub(in crate::mandoc) source_continuation: Option<bool>,
     pub(in crate::mandoc) pending_word_end_break: bool,
     pub(in crate::mandoc) trailing_output: TrailingOutput,
-    /// Graph counts (from the word's start) at which a zero-width
-    /// breakpoint `\:` executed (term.c:287-300, `ASCII_BREAK`).
-    pub(in crate::mandoc) zero_break_prefixes: Vec<usize>,
+    /// A `\p` marker met a surviving breakable blank before this flush unit
+    /// recorded any graph: the remainder of the unit is unprinted input
+    /// (term.c:143-146 with 233-237).
+    pub(in crate::mandoc) definitive_reject: bool,
+    /// This word armed `graph` only through zero-width cells (NBRZW).
+    pub(in crate::mandoc) word_zero_graph: bool,
 }
 
 /// One presentation segment inside a single native formatter word.
@@ -64,11 +69,17 @@ struct TextEventState {
     break_started_after_blank: bool,
     break_trailing_blanks: usize,
     graph_since_break: bool,
-    /// Graphs produced since the word began, and the graph counts at which
-    /// a zero-width breakpoint (`\:`) occurred (term.c:287-300 shares the
-    /// breakable-blank arm with `ASCII_BREAK`).
     graph_count: usize,
-    zero_break_prefixes: Vec<usize>,
+    /// A graph cell occurred since the last breakable blank (term.c `graph`
+    /// flag): at a marker's break blank it selects the tail-acceptance arm
+    /// (term.c:362-366) over the nbr==0 rejection.
+    graph_since_blank: bool,
+    /// A `\p` marker met a surviving breakable blank: `term_fill()` stopped
+    /// the pass with `nbr == 0` (term.c:143-146) and `term_flushln()` wiped
+    /// the unprinted remainder of the flush unit (term.c:233-237).
+    wiped: bool,
+    /// A zero-width graph class cell (NBRZW) armed `graph` this word.
+    zero_graph_seen: bool,
 }
 
 impl TextEventState {
@@ -79,15 +90,18 @@ impl TextEventState {
             graph_seen: false,
             last_breakable_blank: false,
             trailing_breakable_blanks: 0,
+            graph_since_blank: false,
             break_started_after_blank: false,
             break_trailing_blanks: 0,
             graph_since_break: false,
             graph_count: 0,
-            zero_break_prefixes: Vec::new(),
+            wiped: false,
+            zero_graph_seen: false,
         }
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn append_text_event(
     value: &str,
     output: &mut Vec<Inline>,
@@ -96,9 +110,15 @@ fn append_text_event(
     link: Option<&str>,
     zero_advance: &mut ZeroAdvanceState,
     state: &mut TextEventState,
+    field_authoritative: bool,
 ) {
     let mut chunk = String::new();
     for character in value.chars() {
+        if state.wiped {
+            // The flush unit's remainder is unprinted input (term.c:233-237
+            // reached through 143-146); graphs and blanks alike die with it.
+            continue;
+        }
         if state.pending_word_end_break && is_formatter_word_blank(character) {
             zero_advance.append_text(&chunk, output, buffer, font, link);
             chunk.clear();
@@ -108,6 +128,12 @@ fn append_text_event(
                 // that glyph first; the word-end break remains pending until
                 // the next ordinary formatter boundary.
                 zero_advance.flush(output, buffer, font, link);
+                if zero_advance.take_marker_blank_separator() {
+                    // The retreat eats the marker's own blank; the word
+                    // separator before the marker survives (term.c:573-576,
+                    // 901-908) and prints after the settled glyph.
+                    buffer.push(' ');
+                }
                 state.suppress_break_whitespace = true;
                 continue;
             }
@@ -122,10 +148,34 @@ fn append_text_event(
                     state.break_trailing_blanks,
                 );
             }
-            output.push(Inline::line_break());
+            // The marker arms `breakline` and this blank stops the pass
+            // (term.c:294-295). A definition-field session computes its own
+            // pass arithmetic (`FieldBuffer::flush_receipt`); there the
+            // committed row keeps its break exactly as before. In ordinary
+            // flow, with the `graph` flag still armed — a graph occurred
+            // since the last breakable blank — the stopped pass
+            // tail-accepts through the marker (term.c:362-366): the row
+            // commits, the blank is consumed with the break (205-207), and
+            // the NEXT pass continues normally after it. Otherwise the next
+            // pass resumes at the marker itself, immediately rejects with
+            // `nbr == 0`, and term_flushln() wipes the whole unprinted
+            // remainder of the flush unit (term.c:143-146 with 233-237); an
+            // earlier graph keeps its committed row (term.c:220).
+            if field_authoritative {
+                output.push(Inline::line_break());
+            } else {
+                let tail_accepted = state.graph_since_blank;
+                if tail_accepted || state.graph_seen {
+                    output.push(Inline::line_break());
+                }
+                if !tail_accepted {
+                    state.wiped = true;
+                }
+            }
             state.pending_word_end_break = false;
             state.suppress_break_whitespace = true;
             state.graph_seen = false;
+            state.graph_since_blank = false;
             state.break_started_after_blank = false;
             state.graph_since_break = false;
             state.last_breakable_blank = false;
@@ -143,6 +193,7 @@ fn append_text_event(
         }
         state.graph_seen |= graph;
         state.graph_since_break |= state.pending_word_end_break && graph;
+        state.graph_since_blank = graph;
         state.last_breakable_blank = is_formatter_word_blank(character);
         state.trailing_breakable_blanks = if state.last_breakable_blank {
             state.trailing_breakable_blanks.saturating_add(1)
@@ -159,6 +210,7 @@ fn append_text_event(
 /// Decode a text node while retaining formatter state in its caller's inline
 /// stream.  The result reports cross-node zero-advance joining, the final
 /// physical-line decision, and a deferred word-end break independently.
+#[allow(clippy::too_many_arguments, clippy::fn_params_excessive_bools)]
 pub(in crate::mandoc) fn parse_roff_text_with_zero_advance(
     source: &str,
     state: &mut FontState,
@@ -166,6 +218,7 @@ pub(in crate::mandoc) fn parse_roff_text_with_zero_advance(
     zero_advance: &mut ZeroAdvanceState,
     pending_word_end_break: bool,
     record_native_cells: bool,
+    field_authoritative: bool,
 ) -> TextExecution {
     let events = decode(source)
         .into_iter()
@@ -178,9 +231,11 @@ pub(in crate::mandoc) fn parse_roff_text_with_zero_advance(
         zero_advance,
         pending_word_end_break,
         record_native_cells,
+        field_authoritative,
     )
 }
 
+#[allow(clippy::too_many_arguments, clippy::fn_params_excessive_bools)]
 pub(in crate::mandoc) fn parse_formatter_word_parts_with_zero_advance(
     parts: &[FormatterWordPart<'_>],
     state: &mut FontState,
@@ -188,6 +243,7 @@ pub(in crate::mandoc) fn parse_formatter_word_parts_with_zero_advance(
     zero_advance: &mut ZeroAdvanceState,
     pending_word_end_break: bool,
     record_native_cells: bool,
+    field_authoritative: bool,
 ) -> TextExecution {
     let events = parts
         .iter()
@@ -208,11 +264,16 @@ pub(in crate::mandoc) fn parse_formatter_word_parts_with_zero_advance(
         zero_advance,
         pending_word_end_break,
         record_native_cells,
+        field_authoritative,
     )
 }
 
 // Keep the decoded escape events in their native term_word() order.
-#[allow(clippy::too_many_lines)]
+#[allow(
+    clippy::too_many_lines,
+    clippy::too_many_arguments,
+    clippy::fn_params_excessive_bools
+)]
 fn execute_formatter_word_events(
     events: &[FormatterWordEvent],
     state: &mut FontState,
@@ -220,6 +281,10 @@ fn execute_formatter_word_events(
     zero_advance: &mut ZeroAdvanceState,
     pending_word_end_break: bool,
     record_native_cells: bool,
+    // The definition-field session owns the pass arithmetic for this word
+    // (`FieldBuffer::flush_receipt`): a marker's break blank defers to it
+    // instead of the ordinary-flow wipe decision here.
+    field_authoritative: bool,
 ) -> TextExecution {
     let (mut output, mut buffer) = (Vec::new(), String::new());
     let mut font = state.display_current();
@@ -257,6 +322,7 @@ fn execute_formatter_word_events(
                     link.as_deref(),
                     zero_advance,
                     &mut text_state,
+                    field_authoritative,
                 );
             }
             FormatterWordEvent::Source(
@@ -268,14 +334,26 @@ fn execute_formatter_word_events(
             ) => {
                 text_state.suppress_break_whitespace = false;
                 text_state.graph_seen = true;
+                text_state.graph_since_blank = true;
                 text_state.graph_since_break |= text_state.pending_word_end_break;
                 text_state.last_breakable_blank = false;
                 text_state.trailing_breakable_blanks = 0;
                 text_state.graph_count += 1;
-                zero_advance.append_glyph(value, &mut output, &mut buffer, font, link.as_deref());
+                if !text_state.wiped {
+                    zero_advance.append_glyph(
+                        value,
+                        &mut output,
+                        &mut buffer,
+                        font,
+                        link.as_deref(),
+                    );
+                }
             }
             FormatterWordEvent::Source(RoffInlineEvent::FallbackGlyph(value)) => {
-                zero_advance.append_fallback_glyph(value, &mut buffer, font, link.as_deref());
+                if !text_state.wiped {
+                    zero_advance.append_fallback_glyph(value, &mut buffer, font, link.as_deref());
+                }
+                text_state.graph_since_blank = true;
                 // Native recovery is still a zero-width graph even when its
                 // source spelling has no semantic contribution after \z.
                 text_state.suppress_break_whitespace = false;
@@ -288,10 +366,19 @@ fn execute_formatter_word_events(
             FormatterWordEvent::Source(RoffInlineEvent::DeviceName) => {
                 text_state.suppress_break_whitespace = false;
                 text_state.graph_seen = true;
+                text_state.graph_since_blank = true;
                 text_state.graph_since_break |= text_state.pending_word_end_break;
                 text_state.last_breakable_blank = false;
                 text_state.trailing_breakable_blanks = 0;
-                zero_advance.append_text("utf8", &mut output, &mut buffer, font, link.as_deref());
+                if !text_state.wiped {
+                    zero_advance.append_text(
+                        "utf8",
+                        &mut output,
+                        &mut buffer,
+                        font,
+                        link.as_deref(),
+                    );
+                }
             }
             FormatterWordEvent::Source(RoffInlineEvent::ZeroAdvance) => zero_advance.arm(),
             FormatterWordEvent::Source(RoffInlineEvent::NoSpace) => {
@@ -315,14 +402,16 @@ fn execute_formatter_word_events(
                 link.clone_from(target);
             }
             FormatterWordEvent::Source(RoffInlineEvent::EmptyDestination) => {
-                append_empty_destination(
-                    &mut output,
-                    &mut buffer,
-                    font,
-                    link.as_deref(),
-                    recognize_generated_references,
-                    &mut text_state,
-                );
+                if !text_state.wiped {
+                    append_empty_destination(
+                        &mut output,
+                        &mut buffer,
+                        font,
+                        link.as_deref(),
+                        recognize_generated_references,
+                        &mut text_state,
+                    );
+                }
             }
             FormatterWordEvent::Source(RoffInlineEvent::LineBreak) => {
                 text_state.pending_word_end_break = true;
@@ -333,20 +422,13 @@ fn execute_formatter_word_events(
             }
             FormatterWordEvent::Source(RoffInlineEvent::ZeroWidthGlyph) => {
                 text_state.graph_seen = true;
+                text_state.graph_since_blank = true;
                 text_state.graph_since_break |= text_state.pending_word_end_break;
                 text_state.last_breakable_blank = false;
                 text_state.trailing_breakable_blanks = 0;
-                text_state.trailing_breakable_blanks = 0;
+                text_state.zero_graph_seen = true;
             }
-            FormatterWordEvent::Source(RoffInlineEvent::Presentation {
-                kind: crate::mandoc::roff_escape::PresentationKind::Spacing,
-                ..
-            }) => {
-                // `\:` (roff_escape.rs decodes it as a Presentation
-                // request): term.c:287-300 buffers ASCII_BREAK at this
-                // graph position.
-                text_state.zero_break_prefixes.push(text_state.graph_count);
-            }
+
             FormatterWordEvent::Source(
                 RoffInlineEvent::Presentation { .. }
                 | RoffInlineEvent::Overstrike { terminal: None, .. },
@@ -354,14 +436,15 @@ fn execute_formatter_word_events(
         }
     }
     flush_segment(&mut output, &mut buffer, font, link.as_deref());
-    let zero_break_prefixes = std::mem::take(&mut text_state.zero_break_prefixes);
+    zero_advance.clear_marker_blank_separator();
     finish_text_execution(
         events,
         output,
         zero_advance,
         explicit_line_continuation,
         text_state.pending_word_end_break,
-        zero_break_prefixes,
+        text_state.wiped,
+        text_state.zero_graph_seen,
         native_writes,
     )
 }
@@ -412,10 +495,6 @@ fn record_native_event(
         FormatterWordEvent::Source(RoffInlineEvent::EmptyDestination) => {
             FieldWrite::append_literal(writes, "<>");
         }
-        FormatterWordEvent::Source(RoffInlineEvent::Presentation {
-            kind: crate::mandoc::roff_escape::PresentationKind::Spacing,
-            ..
-        }) => writes.push(FieldWrite::Cell(FieldCell::Breakpoint)),
         FormatterWordEvent::Source(_) => {}
     }
 }
@@ -436,13 +515,15 @@ fn append_empty_destination(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn finish_text_execution(
     events: &[FormatterWordEvent],
     output: Vec<Inline>,
     zero_advance: &mut ZeroAdvanceState,
     source_continuation: Option<bool>,
     pending_word_end_break: bool,
-    zero_break_prefixes: Vec<usize>,
+    definitive_reject: bool,
+    word_zero_graph: bool,
     native_writes: Vec<super::super::flow::field_buffer::FieldWrite>,
 ) -> TextExecution {
     let trailing_output = match mant_ir::last_visible_character(&output) {
@@ -464,8 +545,9 @@ fn finish_text_execution(
         joins_preceding_node: zero_advance.take_preceding_join(),
         source_continuation,
         pending_word_end_break,
+        definitive_reject,
+        word_zero_graph,
         trailing_output,
-        zero_break_prefixes,
     }
 }
 
@@ -527,6 +609,7 @@ fn append_code_event(
         link,
         zero_advance,
         text_state,
+        false,
     );
     flush_segment(output, buffer, Font::Code, link);
 }
@@ -573,7 +656,9 @@ mod tests {
         let run = |record| {
             let mut font = FontState::new();
             let mut zero = ZeroAdvanceState::new();
-            parse_roff_text_with_zero_advance("X\\p\\&", &mut font, false, &mut zero, false, record)
+            parse_roff_text_with_zero_advance(
+                "X\\p\\&", &mut font, false, &mut zero, false, record, false,
+            )
         };
         let ordinary = run(false);
         let field = run(true);

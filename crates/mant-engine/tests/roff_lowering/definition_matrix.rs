@@ -2,13 +2,19 @@
 //!
 //! Each case under `definition_matrix/cases/*.1` is an mdoc document
 //! exercising the NOBREAK head field row machine (hang/tag heads, `.sp`,
-//! `.br`, `.nf`/`.fi`, width sweeps, `\:` and `\p` markers). The sibling
+//! `.br`, `.nf`/`.fi`, width sweeps, and `\p` markers). The sibling
 //! `.expected` file holds the **row-grouped** output of the fixed CVS
 //! reference binary (`target/mandoc-migration/reference/mandoc -Tascii`),
 //! recorded once by `scripts/regen_definition_matrix.sh`: metadata lines
 //! and indentation widths are presentation, but which words share a
 //! physical row is the row machine's observable decision. Regenerate the
 //! expectations only with that script, never by hand.
+//!
+//! There is deliberately no `\:` case here: `\:` sits exactly on the
+//! ascii/UTF-8 device fork (chars.c:53 — ASCII_BREAK byte versus NBRZW),
+//! and this matrix is recorded `-Tascii`. The UTF-8 side of that fork and
+//! the rest of the escape semantics live in `escape_matrix`, recorded
+//! `-Tutf8` by `scripts/regen_escape_matrix.sh`.
 
 use std::fmt::Write as _;
 

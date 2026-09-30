@@ -157,7 +157,10 @@ fn final_hang_field_only_consumes_a_proven_body_gap() {
         ("AA BB CC", 1),
         ("YYYYY Z", 1),
         ("YYYYY ZZZZZZZZ", 0),
-        (r"YYYYY\:Z", 1),
+        // Fixed CVS -Tutf8: `\:` is an unbreakable zero-width graph here
+        // (chars.c:53), so the operand never wraps and BODY concatenates
+        // on the head row: no gap is proven.
+        (r"YYYYY\:Z", 0),
         (r"YYY\:Z", 0),
         (r"YYY\pZ", 0),
         (r"A BBBBBB\zC", 0),

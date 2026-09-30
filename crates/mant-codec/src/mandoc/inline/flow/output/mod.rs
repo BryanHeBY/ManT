@@ -273,6 +273,8 @@ impl InlineBuilder {
         self.execution.pending_breakable_spaces = 0;
         self.execution.pending_field_spaces = 0;
         self.execution.word_end_break = WordEndBreak::Clear;
+        self.execution.wipe_remainder = false;
+        self.execution.row_zero_graph = false;
         self.execution.formatter_column = FormatterColumn::Origin;
         if (exited_discarded_buffer && !exited_definition_row)
             || !matches!(self.nodes.last(), Some(Inline::LineBreak { .. }))
@@ -440,7 +442,7 @@ impl InlineBuilder {
     /// own inter-word space. Tight joins (for example alternating `.BR`
     /// operands) deliberately bypass this transition and overstrike instead.
     pub(in crate::mandoc) fn begin_word_projection(&mut self, next_is_visible: bool) {
-        self.begin_word_projection_with_break(next_is_visible, next_is_visible);
+        self.begin_word_projection_with_break(next_is_visible, next_is_visible, false);
     }
 
     /// An empty or control-only formatter word still updates registers, but
@@ -449,6 +451,7 @@ impl InlineBuilder {
         &mut self,
         next_is_visible: bool,
         next_has_glyph: bool,
+        marker_blank_before_graph: bool,
     ) {
         if next_is_visible {
             // term_word() clears skipvsp before consuming the word itself.
@@ -490,7 +493,18 @@ impl InlineBuilder {
                 self.append_projected(glyph);
                 self.execution.boundary = PendingBoundary::Tight;
             } else if !self.in_definition_field() {
-                self.hard_break();
+                if self.execution.no_fill_word_active || self.current_row_has_graph() {
+                    self.hard_break();
+                } else {
+                    // The marker meets the word's own separator blank with
+                    // no graph in the flush unit: term_fill() stops the pass
+                    // with `nbr == 0` (term.c:143-146) and the unprinted
+                    // remainder dies with the row reset (term.c:233-237).
+                    // No row is committed: whitespace-only input prints
+                    // nothing (term.c:145-146).
+                    self.execution.word_end_break = WordEndBreak::Clear;
+                    self.execution.wipe_remainder = true;
+                }
             }
         }
         if continued_word && !self.execution.boundary.is_tight() {
@@ -523,6 +537,19 @@ impl InlineBuilder {
                 self.execution.boundary = PendingBoundary::Tight;
             }
             self.execution.keep.phase = KeepPhase::Keep;
+        }
+        if marker_blank_before_graph
+            && !self.in_definition_field()
+            && self.execution.zero_advance.has_pending_glyph()
+        {
+            // The incoming word starts with a `\p` marker whose following
+            // blank the pending glyph's BACKBEFORE retreat consumes
+            // (term.c:901-908): resolving the glyph at this virtual boundary
+            // would instead eat the separator and arm the marker's break on
+            // the wrong cell. Keep the glyph pending; the word's own blank
+            // settles it and the separator stays visible (ph shape).
+            self.execution.zero_advance.note_marker_blank_separator();
+            return;
         }
         if !next_is_visible
             || self.execution.boundary.is_nonbreaking()

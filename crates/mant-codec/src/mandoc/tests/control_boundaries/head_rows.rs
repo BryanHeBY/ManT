@@ -364,15 +364,18 @@ fn diagnostic_xo_spelling_is_not_an_explicit_definition_head_scope() {
 
 #[test]
 fn inset_head_drain_keeps_native_word_separator_state() {
-    // Exact variants checked with fixed CVS -Tascii/-Tlint. In
-    // mdoc_term.c::termp_it_pre(), the inset BODY executes term_word("\\ ")
-    // even when a pending HEAD glyph consumed that cell. term.c::term_word()
-    // then consumes NOSPACE for an empty BODY word before the visible word.
+    // Exact variants checked with fixed CVS -Tutf8 (ascii pins the old
+    // visible-X expectation). In mdoc_term.c::termp_it_pre(), the inset
+    // BODY's generated `\\ ` cell executes encode1(U+00A0), which consumes
+    // the pending HEAD glyph's BACKBEFORE retreat and overstrikes it
+    // (term.c:901-908: `X^H<NBSP>`): the HEAD term loses its only glyph and
+    // the body owns the row. NOSPACE for an empty BODY word still precedes
+    // the visible word.
     for (middle, expected_body) in [
-        (".No \"\"\n", " BODY"),
-        (".No \\&\n", " BODY"),
-        (".No \\fB\n", " BODY"),
-        ("", "BODY"),
+        (".No \"\"\n", "  BODY"),
+        (".No \\&\n", "  BODY"),
+        (".No \\fB\n", "  BODY"),
+        ("", " BODY"),
     ] {
         let source = format!(
             ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd review probe\n.Sh DESCRIPTION\n.Bl -inset\n.It \\zX\n{middle}.No BODY\n.El\n"
@@ -385,7 +388,13 @@ fn inset_head_drain_keeps_native_word_separator_state() {
         let Block::DefinitionList { items, .. } = &document.sections[1].blocks[0] else {
             panic!("missing definition item: {document:#?}");
         };
-        assert_eq!(inline_text(&items[0].terms[0]), "X", "{middle}: {items:#?}");
+        assert!(
+            items[0]
+                .terms
+                .iter()
+                .all(|term| inline_text(term).is_empty()),
+            "{middle}: {items:#?}"
+        );
         let Block::Paragraph { children, .. } = &items[0].description[0] else {
             panic!("missing definition body: {items:#?}");
         };
@@ -421,9 +430,11 @@ fn unrendered_definition_head_does_not_consume_body_row() {
 
 #[test]
 fn no_fill_body_does_not_replay_detached_head_cell() {
-    // Exact forms checked with fixed CVS -Tascii/-Tlint. A completed \zX
-    // belongs to the HEAD row. An empty or font-only BODY word adds no new
-    // cell, while \& adds a genuine invisible BODY cell and its own row.
+    // Exact forms checked with fixed CVS -Tutf8. A completed \zX belongs to
+    // the HEAD row, and the inset BODY's generated `\ ` cell overstrikes it
+    // (encode1 consumes BACKBEFORE, term.c:901-908): the HEAD term loses X.
+    // An empty or font-only BODY word adds no new cell, while \& adds a
+    // genuine invisible BODY cell and its own row.
     for (body_word, body_breaks) in [(".No \"\"", 0), (".No \\fB", 0), (".No \\&", 1)] {
         let source = format!(
             ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -inset\n.It \\zX\n{body_word}\n.No BODY\n.El\n"
@@ -436,10 +447,15 @@ fn no_fill_body_does_not_replay_detached_head_cell() {
         let Block::DefinitionList { items, .. } = &document.sections[1].blocks[0] else {
             panic!("{body_word}: {document:#?}");
         };
-        assert_eq!(inline_text(&items[0].terms[0]), "X", "{items:#?}");
-        let Block::Preformatted { children, .. } = &items[0].description[0] else {
-            panic!("{body_word}: {items:#?}");
-        };
+        assert!(items[0].terms.is_empty(), "{body_word}: {items:#?}");
+        let children = items[0]
+            .description
+            .iter()
+            .find_map(|block| match block {
+                Block::Preformatted { children, .. } => Some(children),
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("{body_word}: {items:#?}"));
         assert_eq!(
             children
                 .iter()
@@ -568,23 +584,18 @@ fn detached_definition_head_keeps_authored_vertical_rows() {
 
 #[test]
 fn colon_breakpoint_wraps_the_head_row_like_the_reference() {
-    // Fixed CVS -Tascii: an overrunning operand breaks at its buffered
-    // ASCII_BREAK cell (term.c:287-300) and the remainder wraps, while a
-    // fitting operand stays one row and joins BODY.
-    // Width sweep against fixed CVS -Tascii (all rows verified): the
-    // buffered ASCII_BREAK ends the row only when the pass truncates or
-    // breaks at it (term.c:294-295, 362-366) — the ZcWrapTrace probe pins
-    // both shapes; a fitting operand stays one row whatever sits inside.
+    // Fixed CVS -Tutf8: `\:` buffers ASCII_NBRZW on this device (chars.c:53
+    // unicode column 0; term.c:631-632), a zero-width graph that can never
+    // break a pass (term.c:340-349) and never prints (term.c:397). Every
+    // operand therefore stays one row and BODY concatenates, however long
+    // the tail: the wrapping shapes below are the ascii-device column
+    // (ASCII_BREAK byte, term.c:287-300), kept for the -Tascii switch in
+    // FieldCell::Breakpoint. All five rows verified against the pinned
+    // reference: `X YYYYYZBODY` … `X YYYZBODY`.
     for (words, expected_rows) in [
-        // `X YYYYY` / `Z     BODY`: the tail truncated at the breakpoint.
-        (r"YYYYY\:Z", 2),
-        // `X YYYY` / `ZZ    BODY`: the overrun broke at the recorded
-        // word-end candidate (term.c:350-351 with 296-299).
-        (r"YYYY\:ZZ", 2),
-        // `X Y` / `ZZZZ  BODY`: the four-column tail overruns.
-        (r"Y\:ZZZZ", 2),
-        // Fitting operands keep one row and BODY concatenates:
-        // `X YYZZBODY`, `X YYYZBODY`.
+        (r"YYYYY\:Z", 1),
+        (r"YYYY\:ZZ", 1),
+        (r"Y\:ZZZZ", 1),
         (r"YY\:ZZ", 1),
         (r"YYY\:Z", 1),
     ] {

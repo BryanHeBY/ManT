@@ -46,10 +46,13 @@ pub(in crate::mandoc) enum FieldCell {
     BreakMarker,
     /// `ASCII_NBRZW`: a native buffer cell and graph with zero width.
     ZeroWidthGraph,
-    /// A zero-width breakpoint `\:` (`ASCII_BREAK`, term.c:287-300).
-    /// Shares the breakable-blank arm with no width of its own: a pass may
-    /// break at it, records it as the resume candidate after a graph, and
-    /// never prints it (term.c:396-398).
+    /// A zero-width breakpoint `\:` on the ascii device (`ASCII_BREAK`,
+    /// term.c:287-300). Shares the breakable-blank arm with no width of
+    /// its own: a pass may break at it, records it as the resume candidate
+    /// after a graph, and never prints it (term.c:396-398). Unproduced
+    /// while mant is single-device UTF-8 (`\:` buffers `ASCII_NBRZW`
+    /// there, chars.c:53); preserved as the -Tascii implementation point.
+    #[expect(dead_code)]
     Breakpoint,
     /// The `'\b'` `encode1()` buffers when a BACKBEFORE retreat meets a
     /// non-blank predecessor (term.c:906): fill subtracts the width of the
@@ -103,6 +106,20 @@ impl FieldWrite {
         })
     }
 }
+/// Post-execution ownership interval of one word's writes: the landing
+/// facts the recorder must register its anchor from, never a prediction
+/// made before execution (a BACKBEFORE retreat can pop the separator
+/// blank or a previous word's trailing blank, term.c:901-908).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(super) struct WordWriteReceipt {
+    /// Index of the first cell this word's writes produced that survives
+    /// execution with projection ownership. A leading `Backline` is a
+    /// zero-width pairing cell, so the paired graph owns the content.
+    /// Equal to `end_cell` when the writes produced no cell.
+    pub(super) first_content_cell: usize,
+    /// `cells.len()` after the writes executed.
+    pub(super) end_cell: usize,
+}
 
 /// One `term_fill()` result: the slice accepted for the current output
 /// line (`nbr` bytes, `vbr` visual width).
@@ -155,6 +172,9 @@ pub(super) struct FieldBuffer {
     scan_work: usize,
     #[cfg(test)]
     projection_work: usize,
+    /// Landing of the first cell pushed by the word currently executing
+    /// its writes; tracked only while `apply_writes` runs.
+    word_first_content: Option<usize>,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -196,6 +216,9 @@ impl From<Option<FillPass>> for PassStop {
 
 impl FieldBuffer {
     fn push_cell(&mut self, cell: FieldCell) {
+        if self.word_first_content.is_none() {
+            self.word_first_content = Some(self.cells.len());
+        }
         match &cell {
             FieldCell::BreakableBlank => self.blank_positions.push(self.cells.len()),
             FieldCell::BreakMarker | FieldCell::ZeroWidthGraph | FieldCell::Breakpoint => {}
@@ -284,6 +307,7 @@ impl FieldBuffer {
         self.committed_passes.clear();
         self.last_break_marker = None;
         self.word_space_ready = false;
+        self.word_first_content = None;
         self.significant_positions.clear();
         self.blank_positions.clear();
         self.scan = None;
@@ -299,7 +323,8 @@ impl FieldBuffer {
     }
 
     /// Execute decoded native writes without consulting projected IR.
-    pub(super) fn apply_writes(&mut self, writes: &[FieldWrite]) {
+    pub(super) fn apply_writes(&mut self, writes: &[FieldWrite]) -> WordWriteReceipt {
+        self.word_first_content = None;
         for write in writes {
             match write {
                 FieldWrite::Cell(FieldCell::Graph { text, width }) => {
@@ -320,8 +345,19 @@ impl FieldBuffer {
                 FieldWrite::CancelBackafter => self.backafter_armed = false,
             }
         }
+        let end_cell = self.cells.len();
+        let mut first_content_cell = self.word_first_content.take().unwrap_or(end_cell);
+        if matches!(
+            self.cells.get(first_content_cell),
+            Some(FieldCell::Backline)
+        ) {
+            first_content_cell += 1;
+        }
+        WordWriteReceipt {
+            first_content_cell,
+            end_cell,
+        }
     }
-
     fn encode_graph(&mut self, text: char, width: usize, projected: bool) {
         self.push_graph(text, width);
         if !projected {

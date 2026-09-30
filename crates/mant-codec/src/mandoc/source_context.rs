@@ -271,8 +271,12 @@ impl<'a> LoweringContext<'a> {
             inline::append_inline_nodes(&mut builder, nodes, self.default_name);
         }
         builder.observe_no_fill_source_lines(false);
-        let surviving_cells = generated_cells
-            - usize::from(generated_cells > 0 && builder.settle_head_glyph_before_run_in_cells());
+        // The generated cells execute FIRST (append_run_in_cells routes
+        // them through the zero-advance projection): a pending HEAD glyph
+        // is overstruck by the first generated cell (encode1 consumes
+        // BACKBEFORE, term.c:901-908), so no cell is deducted and no glyph
+        // is settled before the run-in word runs.
+        let surviving_cells = generated_cells;
         builder.project_definition_owner_prefix();
         builder.settle_provisional_definition_break();
         if let Some(saved_font) = saved_font {
@@ -336,6 +340,7 @@ impl<'a> LoweringContext<'a> {
             &mut zero_advance,
             false,
             false,
+            false,
         );
         let mut output = execution.output;
         if execution.pending_word_end_break {
@@ -365,6 +370,7 @@ impl<'a> LoweringContext<'a> {
             &mut formatter.font,
             self.macro_set == MacroSet::Mdoc,
             &mut zero_advance,
+            false,
             false,
             false,
         );

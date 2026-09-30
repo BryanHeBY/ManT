@@ -1,5 +1,5 @@
 use super::super::{
-    FormatterColumn, Inline, InlineBuilder, PendingBoundary, TrailingOutput,
+    FormatterColumn, Inline, InlineBuilder, PendingBoundary, TrailingOutput, WordEndBreak,
     first_visible_character, has_printable_character, last_visible_character, needs_boundary_space,
     push_text,
 };
@@ -60,6 +60,18 @@ impl InlineBuilder {
         incoming_starts_with_fixed_blank: bool,
     ) {
         if incoming.is_empty() && !word {
+            return;
+        }
+
+        if word && self.execution.wipe_remainder {
+            // The flush unit was definitively rejected (term.c:143-146 with
+            // 233-237): the words after the rejection point are unprinted
+            // input. Their formatter registers still advance exactly like
+            // `term_word()` calls whose buffer dies at the next flush.
+            self.execution.execution_epoch = self.execution.execution_epoch.wrapping_add(1);
+            self.execution.boundary = PendingBoundary::Ordinary;
+            self.execution.word_end_break = WordEndBreak::Clear;
+            self.execution.native_word_writes = None;
             return;
         }
 

@@ -158,17 +158,40 @@ impl InlineBuilder {
         self.execution.concat_next_word
     }
 
-    /// Record the graph counts at which this word executed a zero-width
-    /// breakpoint `\:` (term.c:287-300). Consumed by the HANG field's
-    /// width simulation when the word's cells are buffered.
-    pub(in crate::mandoc) fn note_word_zero_break_prefixes(&mut self, prefixes: &[usize]) {
-        self.execution.word_zero_break_prefixes = prefixes.to_vec();
+    /// A word's `\p` marker met a surviving breakable blank with no graph
+    /// recorded in the flush unit (term.c:143-146): the unprinted remainder
+    /// of the unit dies with the row reset (term.c:233-237). Every word
+    /// appended until the next real row retirement projects nothing.
+    pub(in crate::mandoc) fn note_definitive_word_rejection(&mut self) {
+        self.execution.wipe_remainder = true;
+    }
+
+    /// A zero-width graph class cell armed `graph` for the current row
+    /// without printing (term.c:349): a later marker decision must treat
+    /// the row as carrying input, not as whitespace-only.
+    pub(in crate::mandoc) fn note_row_zero_graph(&mut self) {
+        self.execution.row_zero_graph = true;
+    }
+
+    /// Whether the current device row carries any graph input: printable
+    /// projection, a buffered `\\z` glyph, or an NBRZW-class cell.
+    pub(in crate::mandoc) fn current_row_has_graph(&self) -> bool {
+        self.nodes
+            .iter()
+            .rev()
+            .take_while(|node| !matches!(node, Inline::LineBreak { .. }))
+            .any(|node| {
+                !mant_ir::inline_plain_text(std::slice::from_ref(node))
+                    .chars()
+                    .all(char::is_whitespace)
+            })
+            || self.execution.row_zero_graph
+            || self.execution.zero_advance.has_pending_glyph()
     }
 
     /// Arm the next word's concatenation for a filled cleared field
     /// (term.c:250-253 with 205-207): same no-separator word, but the
     /// body starts at the description column rather than against the
-    /// last head cell.
     pub(in crate::mandoc) fn note_flushed_at_body_column(&mut self) {
         self.execution.concat_next_word = true;
         self.execution.concat_flush_source = true;
@@ -539,6 +562,8 @@ impl InlineBuilder {
             // line request. Dropping that buffer leaves no current cell.
             self.execution.formatter_column = FormatterColumn::Origin;
             self.execution.word_end_break = WordEndBreak::Clear;
+            self.execution.wipe_remainder = false;
+            self.execution.row_zero_graph = false;
             self.execution.pending_breakable_spaces = 0;
             self.execution.trailing_output = TrailingOutput::None;
             if let Some(execution) = &mut self.execution.author_execution {
@@ -1126,6 +1151,8 @@ impl InlineBuilder {
             };
         }
         self.execution.word_end_break = WordEndBreak::Clear;
+        self.execution.wipe_remainder = false;
+        self.execution.row_zero_graph = false;
         self.execution.formatter_column = FormatterColumn::Origin;
         self.execution.empty_word = false;
         self.execution.final_word_join = Some(false);

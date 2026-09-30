@@ -50,7 +50,6 @@ pub(super) enum PresentationKind {
     PointSize,
     HorizontalMotion,
     Motion,
-    Spacing,
     FormatterState,
     Postprocessor,
 }
@@ -457,17 +456,20 @@ impl Decoder {
                 self.emit(RoffInlineEvent::EmptyDestination);
             }
             // These requests affect formatter state or introduce zero-width
-            // hints. Their trigger byte is never printable document content.
-            '%' | '&' | ')' | ',' | '/' | '^' | 'a' | 'd' | 'r' | 't' | 'u' | '{' | '|' | '}' => {
+            // hints, and `\:` buffers ASCII_NBRZW on this UTF-8 device
+            // (chars.c:53 unicode column 0; term.c:631-632): a zero-width
+            // graph, never a break point. The ASCII device's ASCII_BREAK
+            // byte (and thus FieldCell::Breakpoint) has no producer while
+            // mant is single-device UTF-8. None of these triggers is
+            // printable document content.
+            '%' | '&' | ')' | ',' | '/' | ':' | '^' | 'a' | 'd' | 't' | 'u' | '{' | '|' | '}' => {
                 self.emit(RoffInlineEvent::ZeroWidthGlyph);
             }
             'c' => self.emit(RoffInlineEvent::NoSpace),
-            '!' | '?' | ':' => {
-                self.emit(RoffInlineEvent::Presentation {
-                    kind: PresentationKind::Spacing,
-                    argument: None,
-                });
-            }
+            // `\!`, `\?`, `\r` are ESCAPE_UNSUPP (roff_escape.c:156-160):
+            // term_word()'s default arm continues without any buffer
+            // footprint on both devices (term.c:800-801).
+            '!' | '?' | 'r' => {}
             // An undefined escape prints its trigger without the backslash in
             // roff. Keeping that behavior preserves intentional literal text
             // while all known control families are handled above.

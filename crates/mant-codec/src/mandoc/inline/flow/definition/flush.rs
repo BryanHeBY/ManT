@@ -195,6 +195,8 @@ impl InlineBuilder {
         self.execution.pending_field_spaces = deferred_field_cells;
         self.definition_state_mut().pending_gap_origin = PendingFieldGapOrigin::Other;
         self.execution.word_end_break = WordEndBreak::Clear;
+        self.execution.wipe_remainder = false;
+        self.execution.row_zero_graph = false;
         self.execution.formatter_column = FormatterColumn::Origin;
         if let Some(execution) = &mut self.execution.author_execution {
             execution.field_output_start = self.nodes.len();
@@ -366,6 +368,8 @@ impl InlineBuilder {
         self.execution.pending_breakable_spaces = 0;
         self.execution.pending_field_spaces = 1;
         self.execution.word_end_break = WordEndBreak::Clear;
+        self.execution.wipe_remainder = false;
+        self.execution.row_zero_graph = false;
         self.execution.formatter_column = FormatterColumn::Origin;
         // `TERMP_NOBREAK` only changes this flush; it does not create
         // TERMP_NONEWLINE.  Preserve any already-executed `\c` continuation,
@@ -464,6 +468,8 @@ impl InlineBuilder {
         self.execution.pending_breakable_spaces = 0;
         self.execution.pending_field_spaces = 0;
         self.execution.word_end_break = WordEndBreak::Clear;
+        self.execution.wipe_remainder = false;
+        self.execution.row_zero_graph = false;
         self.execution.formatter_column = FormatterColumn::Origin;
         self.execution.final_word_join = Some(false);
     }
@@ -582,6 +588,8 @@ impl InlineBuilder {
         self.execution.empty_word = false;
         self.execution.pending_breakable_spaces = 0;
         self.execution.word_end_break = WordEndBreak::Clear;
+        self.execution.wipe_remainder = false;
+        self.execution.row_zero_graph = false;
         self.execution.formatter_column = FormatterColumn::Origin;
         self.execution.final_word_join = Some(false);
         self.retire_consumed_native_field();

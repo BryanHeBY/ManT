@@ -393,12 +393,15 @@ fn no_fill_hang_source_line_and_explicit_br_keep_distinct_field_gaps() {
 #[test]
 fn run_in_fixed_cells_keep_completed_head_glyph_in_its_term() {
     // Fixed CVS mdoc_term.c::termp_it_pre() sends inset/diag cells through
-    // term_word("\\ ") / term_word("\\ \\ "). term.c::encode1() retains a
-    // completed nonblank BACKBEFORE glyph under the first escaped space.
-    // The raw terminal rows for these exact inputs contain X/Y, while bare
-    // or blank \z operands do not contribute a visible HEAD glyph.
+    // term_word("\\ ") / term_word("\\ \\ "). On this UTF-8 device the
+    // generated cell executes encode1(U+00A0) and consumes the pending HEAD
+    // glyph's BACKBEFORE retreat (term.c:901-908): the raw terminal rows
+    // still carry the overstruck glyph bytes (`X^H<NBSP>`), but the
+    // coverage folds the pending glyph out of the readable term — only
+    // glyphs before the `\z` remain visible. Bare or blank \z operands
+    // never contributed a visible HEAD glyph.
     for style in ["inset", "diag"] {
-        for (head, expected_term) in [(r"\zX", "X"), (r"x\zY", "xY"), (r"\z", ""), ("\\z ", "")] {
+        for (head, expected_term) in [(r"\zX", ""), (r"x\zY", "x"), (r"\z", ""), ("\\z ", "")] {
             let source = format!(
                 ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.Bl -{style}\n.It {head}\n.No Q\n.El\n"
             );
@@ -1625,11 +1628,13 @@ fn a_wrapping_hang_field_keeps_only_the_proven_body_word_boundary() {
     // therefore preserves the BODY word boundary in either presentation.
     let source = ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo X\n.br\n.No YYYYY\\:Z\n.Xc\n.No BODY\n.El\n";
     let lowered = lowered_terminal(source);
-    // Fixed CVS -Tascii: `X YYYYY` then `Z     BODY` — the ASCII wraps at
-    // the buffered breakpoint (term.c:287-300) and BODY joins the wrapped
-    // remainder row (the column-relative renderer keeps the reference's
-    // five-column gap).
-    assert!(lowered.contains("YYYYY\nZ     BODY"), "{lowered:?}");
+    // Fixed CVS -Tutf8: `\:` buffers ASCII_NBRZW here (chars.c:53, term.c
+    // 631-632) — a zero-width graph that never breaks a pass (term.c
+    // 340-349), so the field stays one row and BODY concatenates:
+    // `X YYYYYZBODY`. The two-row wrap is the ascii-device column
+    // (ASCII_BREAK, term.c:287-300), preserved for a -Tascii switch in
+    // FieldCell::Breakpoint.
+    assert!(lowered.contains("X     YYYYYZBODY"), "{lowered:?}");
     // Exact fixed CVS -Tascii/-Tutf8/-Tlint: roff.c::post_hyph() marks
     // this source hyphen ASCII_HYPH, and term.c::term_fill() wraps after it.
     // It is ordinary text in the AST, so the gap proof must see that marker

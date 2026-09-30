@@ -121,12 +121,17 @@ pub(in crate::mandoc) struct InlineExecutionState {
     /// (term.c:250-253 with 205-207): the next word concatenates directly,
     /// like the `TERMP_NOSPACE` left by the request's own `term_newln()`
     /// (`roff_term.c:78`).
-    /// Graph counts (word-relative) at which `\:` executed in the word
-    /// currently being appended; cleared once its cells are buffered.
-    pub(in crate::mandoc) word_zero_break_prefixes: Vec<usize>,
     pub(in crate::mandoc) native_word_writes: Option<Vec<field_buffer::FieldWrite>>,
     pub(in crate::mandoc) native_word_boundary: Option<PendingBoundary>,
     pub(in crate::mandoc) concat_next_word: bool,
+    /// A `\p` marker met a surviving breakable blank before this flush
+    /// unit recorded any graph (term.c:143-146 with 233-237): the whole
+    /// unprinted remainder of the unit is wiped. Words appended while
+    /// set contribute no projection until the next real row retirement.
+    pub(in crate::mandoc) wipe_remainder: bool,
+    /// A zero-width graph (`\&`, NBRZW recovery) occupied the current row;
+    /// it arms `graph` in `term_fill()` without printing (term.c:349).
+    pub(in crate::mandoc) row_zero_graph: bool,
     /// Whether `concat_next_word` was armed by a filled cleared field
     /// (term.c:250-253) rather than the request's `TERMP_NOSPACE`
     /// (`roff_term.c:78`); the two arm the same no-separator word but
@@ -481,7 +486,7 @@ enum SpacingMode {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum WordEndBreak {
+pub(in crate::mandoc::inline::flow) enum WordEndBreak {
     Clear,
     Pending,
 }
@@ -723,7 +728,8 @@ impl InlineExecutionState {
             last_executed_source_line: None,
             observe_no_fill_source_lines: SourceLineObservation::Disabled,
             no_fill_word_active: false,
-            word_zero_break_prefixes: Vec::new(),
+            wipe_remainder: false,
+            row_zero_graph: false,
             native_word_writes: None,
             native_word_boundary: None,
             concat_next_word: false,
@@ -745,6 +751,8 @@ impl InlineExecutionState {
         self.pending_field_spaces = 0;
         self.pending_line_indent = 0;
         self.word_end_break = WordEndBreak::Clear;
+        self.wipe_remainder = false;
+        self.row_zero_graph = false;
         self.leading_line_boundary = LeadingLineBoundary::None;
         self.zero_advance.reset_projection(armed_zero_advance);
         self.zero_advance_joined = false;

@@ -397,25 +397,6 @@ impl InlineBuilder {
         }
     }
 
-    /// CVS `term.c::encode1()` preserves a completed nonblank BACKBEFORE
-    /// glyph when a generated escaped space overstrikes it.  Settle that
-    /// glyph while its definition HEAD still owns the output; the first
-    /// generated cell occupies its position instead of adding body spacing.
-    pub(in crate::mandoc) fn settle_head_glyph_before_run_in_cells(&mut self) -> bool {
-        if !self.execution.zero_advance.has_pending_glyph()
-            || !self.execution.zero_advance.has_printable_pending_glyph()
-        {
-            return false;
-        }
-        let glyph = self
-            .execution
-            .zero_advance
-            .resolve_at_word_boundary()
-            .expect("completed BACKBEFORE glyph");
-        self.append_projected(glyph);
-        true
-    }
-
     /// Execute the generated no-break word between an mdoc inset/diagnostic
     /// head and body.  Its `term_word()` transition still runs when the only
     /// fixed cell was consumed by a completed HEAD glyph.

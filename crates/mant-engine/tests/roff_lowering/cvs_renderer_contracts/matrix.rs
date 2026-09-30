@@ -76,10 +76,12 @@ fn terminal_divergence_matrix_pins_native_and_lowered_behavior_together() {
                 ".Bl -inset\n.It A\\zX\n.No BC\n.El\n",
             ),
             native_contains: &["     A\u{a0}BC"],
-            // term.c::encode1() leaves X in the prior column when the
-            // generated escaped space overstrikes it; the semantic reading
-            // retains AX even though generic backspace stripping loses X.
-            lowered_contains: &["AXBC"],
+            // term.c::encode1(U+00A0) executes the generated escaped space
+            // and consumes X's BACKBEFORE retreat (term.c:901-908): the
+            // native row keeps the overstrike bytes `X^H<NBSP>`, and the
+            // coverage folds X out of the semantic reading — A stays, the
+            // generated cell becomes the gap, BC follows.
+            lowered_contains: &["A BC"],
             selected: SelectedContract::Cvs,
         },
         TerminalCase {
@@ -99,7 +101,9 @@ fn terminal_divergence_matrix_pins_native_and_lowered_behavior_together() {
                 ".Bl -diag\n.It A\\zX\n.No BC\n.El\n",
             ),
             native_contains: &["     A\u{a0}\u{a0}BC"],
-            lowered_contains: &["AX BC"],
+            // X is overstruck by both generated NBSP cells (term.c:901-908)
+            // and folds out of the semantic reading; the two gap cells stay.
+            lowered_contains: &["A  BC"],
             selected: SelectedContract::Cvs,
         },
         TerminalCase {
@@ -129,7 +133,9 @@ fn terminal_divergence_matrix_pins_native_and_lowered_behavior_together() {
                 ".de XX\n.Bl -inset\n.It A\\zX\n BC\n.El\n..\n.XX\n",
             ),
             native_contains: &["\n      BC"],
-            lowered_contains: &["AX\n BC"],
+            // X is overstruck by the generated NBSP cell (term.c:901-908)
+            // and folds out; the gap cell remains between A and the break.
+            lowered_contains: &["A \n BC"],
             selected: SelectedContract::Cvs,
         },
         TerminalCase {
@@ -139,7 +145,8 @@ fn terminal_divergence_matrix_pins_native_and_lowered_behavior_together() {
                 ".de XX\n.Bl -diag\n.It A\\zX\n BC\n.El\n..\n.XX\n",
             ),
             native_contains: &["\n      BC"],
-            lowered_contains: &["AX \n BC"],
+            // X folds under the two generated cells; both gap cells stay.
+            lowered_contains: &["A  \n BC"],
             selected: SelectedContract::Cvs,
         },
         TerminalCase {
