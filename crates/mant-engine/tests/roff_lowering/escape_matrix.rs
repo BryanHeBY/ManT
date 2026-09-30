@@ -222,7 +222,7 @@ fn escape_matrix_rows_match_the_pinned_utf8_reference() {
         }
     }
     assert_eq!(
-        total, 50,
+        total, 65,
         "case set changed; regen via scripts/regen_escape_matrix.sh"
     );
     assert!(

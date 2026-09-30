@@ -87,6 +87,15 @@ fn lower_no_fill_lines(
                     append_inline_node_with_next(builder, node, next, default_name);
                 },
             );
+        // A definitively rejected flush unit still ran its `nbr == 0` pass:
+        // term_flushln() reset the buffer and ended the row (term.c:143-146
+        // with 250-253).  The literal keeps that asserted empty row even
+        // when the rejection swallowed every glyph of the source line.
+        if formatter.execution.wipe_remainder {
+            nodes.push(Inline::Text {
+                value: String::new(),
+            });
+        }
         let mut occupies_row = !nodes.is_empty();
         if nodes.is_empty() {
             occupies_row = has_invisible_word_cell(node);

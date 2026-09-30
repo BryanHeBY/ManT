@@ -217,10 +217,16 @@ impl InlineBuilder {
         // term_newln() flushes only an occupied terminal cell. A completed
         // `\zX` glyph and a buffered `\p` both advanced the native buffer;
         // a bare armed `\z` did not and remains ordered before the next word.
+        // A definitively rejected flush unit still occupied the native
+        // buffer: term_newln() flushed it (lastcol > 0), term_flushln()
+        // reset the buffer (term.c:233-237), and the nbr == 0 pass ended
+        // its own row (term.c:250-253). The rejection must retire here.
+        let retiring_rejection = self.execution.wipe_remainder;
         if !self.has_formatter_cell()
             && !had_native_buffer
             && !exited_definition_row
             && !exited_discarded_buffer
+            && !retiring_rejection
         {
             if self.external_head_row_pending {
                 // term_newln() still flushes the detached native tag row.
@@ -278,6 +284,7 @@ impl InlineBuilder {
         self.execution.formatter_column = FormatterColumn::Origin;
         if (exited_discarded_buffer && !exited_definition_row)
             || !matches!(self.nodes.last(), Some(Inline::LineBreak { .. }))
+            || retiring_rejection
         {
             let row_indent = self.take_definition_row_indent();
             self.nodes.push(Inline::line_break_indented(row_indent));
@@ -541,13 +548,24 @@ impl InlineBuilder {
         if marker_blank_before_graph
             && !self.in_definition_field()
             && self.execution.zero_advance.has_pending_glyph()
+            && !self.execution.boundary.is_nonbreaking()
+            && (self.execution.spacing.enabled()
+                || matches!(
+                    self.execution.boundary,
+                    PendingBoundary::Preserved | PendingBoundary::Continued
+                ))
         {
             // The incoming word starts with a `\p` marker whose following
             // blank the pending glyph's BACKBEFORE retreat consumes
             // (term.c:901-908): resolving the glyph at this virtual boundary
             // would instead eat the separator and arm the marker's break on
             // the wrong cell. Keep the glyph pending; the word's own blank
-            // settles it and the separator stays visible (ph shape).
+            // settles it. The surviving separator is the blank term_word()
+            // actually wrote before the marker, so it exists only where the
+            // entry state allowed one: spacing enabled (`.Sm on`) or the
+            // first fragment after the transition (`Preserved`/`Continued`),
+            // never across a tight join — TERMP_NOSPACE wrote nothing
+            // (term.c:573-580).
             self.execution.zero_advance.note_marker_blank_separator();
             return;
         }

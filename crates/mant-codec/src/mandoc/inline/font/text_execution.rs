@@ -125,13 +125,15 @@ fn append_text_event(
             if zero_advance.has_pending_glyph() {
                 // CVS stores `\\p` in the same terminal buffer as a
                 // completed `\\z` glyph.  The intervening word blank settles
-                // that glyph first; the word-end break remains pending until
-                // the next ordinary formatter boundary.
+                // that glyph first; the next graph's retreat consumes the
+                // marker's own blank (term.c:901-908), so the blank held
+                // before the marker — like the word separator of the `ph`
+                // shape — survives and prints after the settled glyph
+                // (term.c:573-576).  `breakline` stays armed: term_fill()
+                // cannot stop at the eaten blank and defers the break to
+                // the next surviving blank (term.c:294-295).
                 zero_advance.flush(output, buffer, font, link);
-                if zero_advance.take_marker_blank_separator() {
-                    // The retreat eats the marker's own blank; the word
-                    // separator before the marker survives (term.c:573-576,
-                    // 901-908) and prints after the settled glyph.
+                if zero_advance.take_marker_blank_separator() || zero_advance.take_held_blank() {
                     buffer.push(' ');
                 }
                 state.suppress_break_whitespace = true;
@@ -429,6 +431,17 @@ fn execute_formatter_word_events(
                 text_state.zero_graph_seen = true;
             }
 
+            FormatterWordEvent::Source(RoffInlineEvent::Presentation {
+                kind: crate::mandoc::roff_escape::PresentationKind::HorizontalMotion,
+                ..
+            }) => {
+                // A positive `\h` consumed by TERMP_BACKAFTER clears the arm
+                // and skips the advance entirely (term.c:677-680): the
+                // decoder's semantic boundary space must not print either.
+                if zero_advance.take_armed() && buffer.ends_with(' ') {
+                    buffer.pop();
+                }
+            }
             FormatterWordEvent::Source(
                 RoffInlineEvent::Presentation { .. }
                 | RoffInlineEvent::Overstrike { terminal: None, .. },

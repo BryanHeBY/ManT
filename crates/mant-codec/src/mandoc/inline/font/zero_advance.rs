@@ -9,6 +9,7 @@ use crate::mandoc::roff_escape::ZeroAdvanceMachine;
 /// pending glyph therefore belongs to the surrounding inline stream rather
 /// than to the one text node that happened to contain the escape.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[allow(clippy::struct_excessive_bools)]
 pub(in crate::mandoc) struct ZeroAdvanceState {
     machine: ZeroAdvanceMachine<Inline>,
     fragment_started_pending: bool,
@@ -18,6 +19,10 @@ pub(in crate::mandoc) struct ZeroAdvanceState {
     /// retreat consumes: the cross-word separator survives in the native
     /// buffer (term.c:573-576 with 901-908) and must print after the glyph.
     marker_blank_separator: bool,
+    /// A blank passed the pending glyph and stays buffered upstream until
+    /// the next graph's retreat (term.c:901-908) or a `\p` marker decides
+    /// whether it survives.
+    held_blank: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -30,6 +35,7 @@ impl ZeroAdvanceState {
     pub(in crate::mandoc) const fn new() -> Self {
         Self {
             marker_blank_separator: false,
+            held_blank: false,
             machine: ZeroAdvanceMachine::new(),
             fragment_started_pending: false,
             resolved_preexisting: false,
@@ -59,6 +65,7 @@ impl ZeroAdvanceState {
     pub(in crate::mandoc) fn reset_projection(&mut self, bare_armed: bool) {
         self.note_pending_replaced();
         self.machine.clear();
+        self.held_blank = false;
         self.fragment_started_pending = false;
         self.resolved_preexisting = false;
         self.inherit_armed(bare_armed);
@@ -131,6 +138,13 @@ impl ZeroAdvanceState {
         self.marker_blank_separator = false;
     }
 
+    /// A blank is buffered behind the pending glyph when a `\p` marker
+    /// arrives: the next graph's retreat lands on the marker's own blank,
+    /// so this held one survives and prints after the settled glyph.
+    pub(super) fn take_held_blank(&mut self) -> bool {
+        std::mem::take(&mut self.held_blank)
+    }
+
     pub(in crate::mandoc) fn take_armed(&mut self) -> bool {
         self.machine.cancel_armed()
     }
@@ -177,6 +191,7 @@ impl ZeroAdvanceState {
     pub(in crate::mandoc) fn discard_at_row_end(&mut self) {
         self.note_pending_replaced();
         self.machine.clear();
+        self.held_blank = false;
         self.fragment_started_pending = false;
         self.resolved_preexisting = false;
     }
@@ -208,6 +223,7 @@ impl ZeroAdvanceState {
     pub(in crate::mandoc) fn discard_hidden_pending_glyph(&mut self) {
         self.note_pending_replaced();
         self.machine.discard_pending();
+        self.held_blank = false;
         self.fragment_started_pending = false;
         self.resolved_preexisting = false;
     }
@@ -285,17 +301,31 @@ impl ZeroAdvanceState {
                 buffer.push(character);
                 continue;
             }
-            if self.machine.is_armed() {
-                let _ = self.project_glyph(styled_link(character.to_string(), font, link));
-                continue;
-            }
             if self.machine.has_pending() {
                 if is_formatter_word_blank(character) {
-                    // The first intervening formatter blank consumes the
-                    // backtracking position but does not become document
-                    // content.  This is why `TOKEN\\zX END` renders as
-                    // `TOKENXEND` in both pinned reference formatters.
+                    // Hold the blank instead of consuming it: upstream
+                    // keeps it buffered, and only the next graph's
+                    // BACKBEFORE retreat decides whether it dies
+                    // (term.c:901-908).  A `\p` marker between the two
+                    // redirects the retreat onto the marker's own blank,
+                    // and this one survives.
+                    self.held_blank = true;
+                    continue;
+                }
+                if self.held_blank {
+                    // This graph's retreat ate the held blank (col--): the
+                    // completed zero-advance glyph prints before it, glued.
+                    // Any later `\z` still converts at this graph's
+                    // encode1() tail (term.c:924-926), so the graph itself
+                    // may become the next deferred target.
+                    self.held_blank = false;
                     self.flush(output, buffer, font, link);
+                    if self.machine.is_armed() {
+                        let _ = self.project_glyph(styled_link(character.to_string(), font, link));
+                        continue;
+                    }
+                    self.flush_recoveries(output, buffer, font, link);
+                    buffer.push(character);
                     continue;
                 }
                 let Some((_, replaced)) =
@@ -306,6 +336,22 @@ impl ZeroAdvanceState {
                 if replaced && self.fragment_started_pending {
                     self.resolved_preexisting = true;
                 }
+                self.flush_recoveries(output, buffer, font, link);
+                buffer.push(character);
+                continue;
+            }
+            if self.machine.is_armed() {
+                if is_formatter_word_blank(character) {
+                    // A word blank is buffered through encode()'s
+                    // non-graph branch (term.c:944-952); it never runs
+                    // encode1(), so TERMP_BACKAFTER survives it and the
+                    // arm only converts at the next graph (924-926).
+                    self.flush_recoveries(output, buffer, font, link);
+                    buffer.push(character);
+                    continue;
+                }
+                let _ = self.project_glyph(styled_link(character.to_string(), font, link));
+                continue;
             }
             self.flush_recoveries(output, buffer, font, link);
             buffer.push(character);
@@ -382,6 +428,9 @@ impl ZeroAdvanceState {
             output.extend(glyph);
         }
         self.machine.clear();
+        // A blank still held at the drain is trailing whitespace;
+        // term_field() never prints it (term.c:389-398).
+        self.held_blank = false;
     }
 
     pub(super) fn take_preceding_join(&mut self) -> bool {

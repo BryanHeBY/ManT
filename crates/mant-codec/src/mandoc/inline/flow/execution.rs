@@ -484,15 +484,16 @@ impl InlineBuilder {
         if updated == self.execution.spacing.enabled() {
             return;
         }
-        // `.Sm off` changes spacing *after* the request. If printable
-        // content precedes the transition, retain its ordinary boundary to
-        // the first following fragment, then concatenate subsequent macro
-        // arguments until spacing is enabled again.
-        self.execution.boundary = match (
-            updated,
-            !self.execution.has_printable_content,
-            self.execution.boundary,
-        ) {
+        // `.Sm off` changes spacing *after* the request. If the native
+        // buffer is already occupied — printable content, or a pending
+        // zero-advance glyph, which is `p->col > 0` upstream — retain the
+        // ordinary boundary to the first following fragment (that word's
+        // term_word() still sees TERMP_NOSPACE cleared, term.c:573-580),
+        // then concatenate subsequent macro arguments until spacing is
+        // enabled again.
+        let buffer_occupied = self.execution.has_printable_content
+            || self.execution.zero_advance.has_buffered_glyph();
+        self.execution.boundary = match (updated, !buffer_occupied, self.execution.boundary) {
             (_, _, boundary) if boundary.is_tight() => boundary,
             (false, false, _) => PendingBoundary::Preserved,
             _ => PendingBoundary::Ordinary,
