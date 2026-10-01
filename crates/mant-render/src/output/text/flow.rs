@@ -3,13 +3,15 @@
 //! gap budget, and literal blank lines must not be mistaken for requests.
 use mant_ir::geometry::GapPlan;
 
+use super::layout::LayoutText;
+
 #[derive(Default)]
 pub(super) struct Flow {
     parts: Vec<Part>,
 }
 
 enum Part {
-    Text(String),
+    Text(LayoutText),
     Gap(u16),
 }
 
@@ -24,19 +26,19 @@ impl Flow {
             Part::Gap(rows) => *rows > 0,
         })
     }
-    pub(super) fn text(value: String) -> Self {
+    pub(super) fn text(value: LayoutText) -> Self {
         let mut result = Self::default();
         result.push_text(value);
         result
     }
 
-    pub(super) fn literal(value: String) -> Self {
+    pub(super) fn literal(value: LayoutText) -> Self {
         Self {
             parts: vec![Part::Text(value)],
         }
     }
 
-    pub(super) fn push_text(&mut self, value: String) {
+    pub(super) fn push_text(&mut self, value: LayoutText) {
         if !value.is_empty() {
             self.parts.push(Part::Text(value));
         }
@@ -51,6 +53,10 @@ impl Flow {
     }
 
     pub(super) fn finish(self, preceding_content: bool) -> String {
+        self.finish_layout(preceding_content).rendered
+    }
+
+    pub(super) fn finish_layout(self, preceding_content: bool) -> LayoutText {
         self.finish_with_cell_boundary(preceding_content, false).0
     }
 
@@ -58,12 +64,12 @@ impl Flow {
     /// content arrives. Completed trailing gap rows need their own final
     /// delimiter; otherwise `split_terminator` would consume one as a mere
     /// close of the preceding printed row.
-    pub(super) fn finish_cell(self) -> (String, bool) {
+    pub(super) fn finish_cell(self) -> (LayoutText, bool) {
         self.finish_with_cell_boundary(false, true)
     }
 
-    fn finish_with_cell_boundary(self, preceding_content: bool, cell: bool) -> (String, bool) {
-        let mut output = String::new();
+    fn finish_with_cell_boundary(self, preceding_content: bool, cell: bool) -> (LayoutText, bool) {
+        let mut output = LayoutText::default();
         let mut gap = GapPlan::default();
         let mut has_content = preceding_content;
         for part in self.parts {
@@ -71,19 +77,19 @@ impl Flow {
                 Part::Gap(rows) => gap.append_resolved(rows),
                 Part::Text(text) => {
                     if has_content {
-                        output.push('\n');
+                        output.push_plain("\n");
                     }
-                    output.push_str(&"\n".repeat(usize::from(gap.rows(0))));
-                    output.push_str(&text);
+                    output.push_plain(&"\n".repeat(usize::from(gap.rows(0))));
+                    output.append(&text);
                     has_content = true;
                     gap = GapPlan::default();
                 }
             }
         }
         let rows = gap.rows(0);
-        output.push_str(&"\n".repeat(usize::from(rows)));
+        output.push_plain(&"\n".repeat(usize::from(rows)));
         if cell && has_content && rows > 0 {
-            output.push('\n');
+            output.push_plain("\n");
         }
         (output, rows > 0)
     }

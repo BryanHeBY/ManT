@@ -1,6 +1,6 @@
 //! Plain document bodies: apply source layout without report selection policy.
 
-use super::{blocks, document_label, flow};
+use super::{blocks, document_label, flow, layout::LayoutText};
 use crate::presentation::{EntryStyleMap, TextPresentation, TextRole};
 use mant_ir::{Block, ResolvedContent, TldrCommandPart, TldrDocument, TldrOrigin};
 
@@ -68,10 +68,8 @@ fn render_query_body_with(
         .and_then(|document| document.heading.as_ref())
         .map_or_else(
             || {
-                decorate(
-                    TextRole::Document.into(),
-                    &document_label(&query.label, section),
-                )
+                let label = document_label(&query.label, section);
+                LayoutText::decorated(&label, decorate(TextRole::Document.into(), &label))
             },
             |heading| {
                 blocks::BlockRenderer {
@@ -79,13 +77,13 @@ fn render_query_body_with(
                     decorate,
                     locations: None,
                 }
-                .inline_text(&heading.content, TextRole::Document)
+                .inline_layout(&heading.content, TextRole::Document)
             },
         );
     let mut output = flow::Flow::text(title);
     if include_tldr && let Some(tldr) = &query.tldr {
         output.gap(1);
-        output.push_text(render_tldr_text(tldr));
+        output.push_text(render_tldr_text(tldr).into());
     }
     if let Some(document) = &query.document {
         let renderer = blocks::BlockRenderer {

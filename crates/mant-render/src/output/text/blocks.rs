@@ -2,13 +2,18 @@
 //! Decorators must preserve visible content and boundary whitespace.
 use super::flow::Flow;
 use super::indent_lines;
+use super::layout::LayoutText;
 use crate::presentation::{
     EntryStyleMap, InlinePresentation, TextPresentation, TextRole, visit_inline_text,
 };
 use mant_ir::geometry::{compose_origin, coordinate, marker_run_in_gap, padding, text_width};
 use mant_ir::{Block, DefinitionItem, Inline, ListItem, ListKind, Section, TableCell};
 
+#[cfg(test)]
+mod cell_layout_tests;
 mod lists;
+#[cfg(test)]
+mod visits;
 
 pub(super) struct BlockRenderer<'a> {
     pub(super) names: Option<EntryStyleMap<'a>>,
@@ -25,15 +30,21 @@ impl BlockRenderer<'_> {
     /// [`LineBreak`](Inline::LineBreak) closes its row and carries the next
     /// row's indent (a cleared-BRIND request moved the upstream offset,
     /// roff_term.c:73-75); wrapped text rows inherit the current indent.
-    pub(super) fn inline_rows(&self, children: &[Inline], role: TextRole) -> Vec<(String, u16)> {
-        let mut rows: Vec<(String, u16)> = vec![(String::new(), 0)];
+    pub(super) fn inline_rows(
+        &self,
+        children: &[Inline],
+        role: TextRole,
+    ) -> Vec<(LayoutText, u16)> {
+        let mut rows = vec![(LayoutText::default(), 0)];
         let mut next_indent = 0_u16;
         let names = self
             .names
             .as_ref()
             .map_or(&[][..], |map| map.ranges(children));
         let mut append = |presentation: TextPresentation, value: &str| {
-            let decorated = &(self.decorate)(presentation, value);
+            #[cfg(test)]
+            visits::inline();
+            let decorated = LayoutText::decorated(value, (self.decorate)(presentation, value));
             if let InlinePresentation {
                 line_break_indent: Some(indent),
                 ..
@@ -41,13 +52,15 @@ impl BlockRenderer<'_> {
             {
                 next_indent = indent;
             }
-            for (index, piece) in decorated.split('\n').enumerate() {
+            // Decoration is applied once. Measurements retain the original
+            // fragments and are composed before measuring a complete row.
+            for (index, piece) in decorated.split(false).into_iter().enumerate() {
                 if index > 0 {
                     let indent = next_indent;
                     next_indent = 0;
-                    rows.push((String::new(), indent));
+                    rows.push((LayoutText::default(), indent));
                 }
-                rows.last_mut().expect("open row").0.push_str(piece);
+                rows.last_mut().expect("open row").0.append(&piece);
             }
         };
         if let Some(locations) = self.locations {
@@ -71,11 +84,16 @@ impl BlockRenderer<'_> {
     }
 
     pub(super) fn inline_text(&self, children: &[Inline], role: TextRole) -> String {
-        self.inline_rows(children, role)
-            .into_iter()
-            .map(|(row, indent)| indent_lines(&row, padding(i32::from(indent))))
-            .collect::<Vec<_>>()
-            .join("\n")
+        self.inline_layout(children, role).rendered
+    }
+
+    pub(super) fn inline_layout(&self, children: &[Inline], role: TextRole) -> LayoutText {
+        LayoutText::join(
+            self.inline_rows(children, role)
+                .into_iter()
+                .map(|(row, indent)| row.indented(padding(i32::from(indent)))),
+            "\n",
+        )
     }
 
     pub(super) fn sections_flow(&self, sections: &[Section], depth: usize) -> Flow {
@@ -94,10 +112,10 @@ impl BlockRenderer<'_> {
         let heading_indent = "  ".repeat(depth);
         let mut output = Flow::default();
         output.gap(section.spacing_before_lines);
-        output.push_text(format!(
-            "{heading_indent}{}",
-            self.inline_text(&section.heading.content, TextRole::Heading)
-        ));
+        output.push_text(
+            self.inline_layout(&section.heading.content, TextRole::Heading)
+                .prefixed(&heading_indent),
+        );
         output.extend(self.block_flow(&section.blocks, coordinate(depth.saturating_mul(2))));
         output.extend(self.sections_flow(&section.children, depth + 1));
         output
@@ -127,6 +145,8 @@ impl BlockRenderer<'_> {
     }
 
     fn render_block(&self, block: &Block, base_indent: i32) -> Flow {
+        #[cfg(test)]
+        visits::block();
         let (value, layout_indent) = match block {
             Block::Paragraph {
                 children, layout, ..
@@ -175,16 +195,19 @@ impl BlockRenderer<'_> {
                 layout,
                 ..
             } => (
-                self.locations.map_or_else(
-                    || self.paint(TextRole::Body, value),
-                    |locations| locations.text(value, self.decorate),
+                LayoutText::decorated(
+                    value,
+                    self.locations.map_or_else(
+                        || self.paint(TextRole::Body, value),
+                        |locations| locations.text(value, self.decorate),
+                    ),
                 ),
                 layout.indent_columns,
             ),
             // Vertical space is handled as an inter-block separator in
             // `render_blocks`, never as a standalone rendered block.
             Block::VerticalSpace { .. } => return Flow::default(),
-            Block::ThematicBreak { .. } => ("---".to_owned(), 0),
+            Block::ThematicBreak { .. } => ("---".into(), 0),
         };
         Self::nonliteral_leaf(&value, compose_origin(base_indent, layout_indent))
     }
@@ -201,15 +224,14 @@ impl BlockRenderer<'_> {
             return Flow::default();
         }
         let origin = compose_origin(base_indent, layout.indent_columns);
-        Flow::literal(
+        Flow::literal(LayoutText::join(
             self.inline_rows(children, TextRole::Body)
                 .into_iter()
                 .map(|(row, indent)| {
-                    indent_lines(&row, padding(compose_origin(origin, i32::from(indent))))
-                })
-                .collect::<Vec<_>>()
-                .join("\n"),
-        )
+                    row.indented(padding(compose_origin(origin, i32::from(indent))))
+                }),
+            "\n",
+        ))
     }
 
     fn paragraph_flow(
@@ -219,42 +241,39 @@ impl BlockRenderer<'_> {
         base_indent: i32,
     ) -> Flow {
         let mut rows = self.inline_rows(children, TextRole::Body);
-        if rows.iter().all(|(row, _)| row.trim().is_empty()) {
+        if rows.iter().all(|(row, _)| row.visible.trim().is_empty()) {
             return Flow::default();
         }
         while rows.last().is_some_and(|(row, _)| row.is_empty()) {
-            rows.pop();
+            let (tail, _) = rows.pop().expect("trailing row");
+            if let Some((row, _)) = rows.last_mut() {
+                row.append(&tail);
+            }
         }
         let first_origin = compose_origin(base_indent, layout.indent_columns);
-        Flow::text(
-            rows.into_iter()
-                .enumerate()
-                .map(|(index, (line, indent))| {
-                    let origin = if index == 0 {
-                        first_origin
-                    } else {
-                        compose_origin(first_origin, layout.continuation_indent_columns)
-                    };
-                    format!(
-                        "{}{line}",
-                        " ".repeat(padding(compose_origin(origin, i32::from(indent))))
-                    )
-                })
-                .collect::<Vec<_>>()
-                .join("\n"),
-        )
+        Flow::text(LayoutText::join(
+            rows.into_iter().enumerate().map(|(index, (line, indent))| {
+                let origin = if index == 0 {
+                    first_origin
+                } else {
+                    compose_origin(first_origin, layout.continuation_indent_columns)
+                };
+                line.prefixed(&" ".repeat(padding(compose_origin(origin, i32::from(indent)))))
+            }),
+            "\n",
+        ))
     }
 
-    fn nonliteral_leaf(value: &str, origin: i32) -> Flow {
-        let value = value.trim_matches('\n');
-        if value.trim().is_empty() {
+    fn nonliteral_leaf(value: &LayoutText, origin: i32) -> Flow {
+        let value = value.trim_newlines();
+        if value.visible.trim().is_empty() {
             Flow::default()
         } else {
-            Flow::text(indent_lines(value, padding(origin)))
+            Flow::text(value.indented(padding(origin)))
         }
     }
 
-    fn cell_text(&self, cell: &TableCell) -> String {
+    fn cell_layout(&self, cell: &TableCell) -> LayoutText {
         self.block_flow(&cell.blocks, 0).finish_cell().0
     }
 
@@ -265,8 +284,9 @@ impl BlockRenderer<'_> {
         if !column_widths.is_empty() {
             return self.declared_column_flow(rows, column_widths, origin);
         }
-        let physical_rows = super::super::table::table_rows(rows, |cell| self.cell_text(cell));
-        let value = physical_rows.join("\n");
+        let physical_rows =
+            super::super::table::projected_table_rows(rows, |cell| self.cell_layout(cell));
+        let value = LayoutText::join(physical_rows.iter().cloned(), "\n");
         if physical_rows.is_empty() {
             Flow::default()
         } else if value.is_empty() {
@@ -277,7 +297,7 @@ impl BlockRenderer<'_> {
             flow.gap(1);
             flow
         } else {
-            Flow::text(indent_lines(&value, padding(origin)))
+            Flow::text(value.indented(padding(origin)))
         }
     }
 
@@ -294,6 +314,7 @@ impl BlockRenderer<'_> {
         };
         if rows.iter().any(|row| {
             !matches!(row.kind, mant_ir::TableRowKind::Data)
+                || row.cells.len() > mant_ir::geometry::MAX_DECLARED_COLUMNS
                 || row.cells.iter().any(|cell| {
                     cell.column_span != 1
                         || cell.row_span != 1
@@ -302,12 +323,6 @@ impl BlockRenderer<'_> {
         }) {
             return self.stacked_table_flow(rows, origin);
         }
-        let identity = |_: TextPresentation, text: &str| text.to_owned();
-        let measure = BlockRenderer {
-            locations: None,
-            names: None,
-            decorate: &identity,
-        };
         let mut output = Flow::default();
         for row in rows {
             if mant_ir::table_row_is_navigation_only(row) {
@@ -320,59 +335,60 @@ impl BlockRenderer<'_> {
             // A hard inline break leaves an open final row which the next
             // cell may use. A completed vertical row owns its final delimiter
             // and cannot be reused; both consumers pass that fact to the plan.
-            let split = |text: String, completed: bool| -> Vec<String> {
-                if text.is_empty() {
-                    vec![String::new()]
-                } else if completed {
-                    text.split_terminator('\n').map(str::to_owned).collect()
-                } else {
-                    text.split('\n').map(str::to_owned).collect()
+            let mut cells = Vec::with_capacity(row.cells.len());
+            let mut widths = Vec::with_capacity(row.cells.len());
+            for cell in &row.cells {
+                let (text, completed) = self.block_flow(&cell.blocks, 0).finish_cell();
+                let lines = text.split(completed);
+                let mut measured = lines
+                    .iter()
+                    .map(|line| mant_ir::geometry::ColumnFieldWidth::from_text(&line.visible))
+                    .collect::<Vec<_>>();
+                if let Some(last) = measured.last_mut() {
+                    last.completed = completed;
                 }
-            };
-            let cells = row
-                .cells
-                .iter()
-                .map(|cell| {
-                    let (text, completed) = self.block_flow(&cell.blocks, 0).finish_cell();
-                    split(text, completed)
-                })
-                .collect::<Vec<_>>();
-            let widths = row
-                .cells
-                .iter()
-                .map(|cell| {
-                    let (text, completed) = measure.block_flow(&cell.blocks, 0).finish_cell();
-                    let mut rows = split(text, completed)
-                        .iter()
-                        .map(|line| mant_ir::geometry::ColumnFieldWidth::from_text(line))
-                        .collect::<Vec<_>>();
-                    if let Some(last) = rows.last_mut() {
-                        last.completed = completed;
-                    }
-                    rows
-                })
-                .collect::<Vec<_>>();
-            let Some(placements) = columns.place(&widths) else {
-                return self.stacked_table_flow(rows, origin);
-            };
-            let mut lines = Vec::new();
-            for pieces in placements {
-                let mut line = String::new();
-                let mut visible = 0_usize;
-                for piece in pieces {
-                    line.push_str(&" ".repeat(piece.column.saturating_sub(visible)));
-                    line.push_str(&cells[piece.cell][piece.line]);
-                    visible = piece
-                        .column
-                        .saturating_add(widths[piece.cell][piece.line].output);
-                }
-                lines.push(line);
+                cells.push(lines);
+                widths.push(measured);
             }
-            output.extend(Flow::literal(indent_lines(
-                &lines.join("\n"),
-                padding(origin),
-            )));
+            output.extend(Self::placed_column_row(&columns, cells, &widths, origin));
         }
+        output
+    }
+
+    fn placed_column_row(
+        columns: &mant_ir::geometry::DeclaredColumns,
+        cells: Vec<Vec<LayoutText>>,
+        widths: &[Vec<mant_ir::geometry::ColumnFieldWidth>],
+        origin: i32,
+    ) -> Flow {
+        let mut output = Flow::default();
+        let Some(placements) = columns.place(widths) else {
+            // Defensive fallback reuses the completed layouts. In normal
+            // input it is excluded by the preflight cell budget and the
+            // content <= output invariant of ColumnFieldWidth::from_text.
+            for cell in cells {
+                output.extend(Flow::literal(
+                    LayoutText::join(cell, "\n").indented(padding(origin)),
+                ));
+            }
+            return output;
+        };
+        let mut lines = Vec::new();
+        for pieces in placements {
+            let mut line = LayoutText::default();
+            let mut visible = 0_usize;
+            for piece in pieces {
+                line.push_plain(&" ".repeat(piece.column.saturating_sub(visible)));
+                line.append(&cells[piece.cell][piece.line]);
+                visible = piece
+                    .column
+                    .saturating_add(widths[piece.cell][piece.line].output);
+            }
+            lines.push(line);
+        }
+        output.extend(Flow::literal(
+            LayoutText::join(lines, "\n").indented(padding(origin)),
+        ));
         output
     }
 
@@ -393,11 +409,11 @@ impl BlockRenderer<'_> {
                             }
                             mant_ir::TableCellKind::HorizontalRule
                             | mant_ir::TableCellKind::IsolatedHorizontalRule => {
-                                row_flow.push_text(indent_lines("---", padding(origin)));
+                                row_flow.push_text(indent_lines("---", padding(origin)).into());
                             }
                             mant_ir::TableCellKind::DoubleHorizontalRule
                             | mant_ir::TableCellKind::IsolatedDoubleHorizontalRule => {
-                                row_flow.push_text(indent_lines("===", padding(origin)));
+                                row_flow.push_text(indent_lines("===", padding(origin)).into());
                             }
                         }
                     }
@@ -408,10 +424,10 @@ impl BlockRenderer<'_> {
                     }
                 }
                 mant_ir::TableRowKind::HorizontalRule => {
-                    output.push_text(indent_lines("---", padding(origin)));
+                    output.push_text(indent_lines("---", padding(origin)).into());
                 }
                 mant_ir::TableRowKind::DoubleHorizontalRule => {
-                    output.push_text(indent_lines("===", padding(origin)));
+                    output.push_text(indent_lines("===", padding(origin)).into());
                 }
                 mant_ir::TableRowKind::LayoutRule { cells } => {
                     let row = cells
@@ -422,7 +438,7 @@ impl BlockRenderer<'_> {
                         })
                         .collect::<Vec<_>>()
                         .join(" | ");
-                    output.push_text(indent_lines(&row, padding(origin)));
+                    output.push_text(indent_lines(&row, padding(origin)).into());
                 }
             }
         }

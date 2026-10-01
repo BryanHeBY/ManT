@@ -7,21 +7,39 @@ use mant_ir::{TableCell, TableCellKind, TableRow, TableRowPlan, bounded_table_ro
 /// source cell in an explicit sparse form instead.
 const MAX_DENSE_PHYSICAL_SLOTS: usize = 16_384;
 
-pub(super) fn table_rows(
+/// Local physical-row operations shared by plain and decorated text layouts.
+/// Implementations already contain their visible measurement material; the
+/// table projection never traverses a cell's document subtree to measure it.
+pub(super) trait TableText: Clone {
+    fn plain(value: &str) -> Self;
+    fn is_empty(&self) -> bool;
+    fn line_count(&self) -> usize;
+    fn physical_lines(&self) -> Vec<Self>;
+    fn join(values: &[Self], separator: &str) -> Self;
+    fn prefixed(self, prefix: &str) -> Self;
+    fn append(&mut self, other: &Self);
+}
+
+#[cfg(test)]
+fn table_rows(rows: &[TableRow], render_cell: impl FnMut(&TableCell) -> String) -> Vec<String> {
+    projected_table_rows(rows, render_cell)
+}
+
+pub(super) fn projected_table_rows<T: TableText>(
     rows: &[TableRow],
-    mut render_cell: impl FnMut(&TableCell) -> String,
-) -> Vec<String> {
+    mut render_cell: impl FnMut(&TableCell) -> T,
+) -> Vec<T> {
     bounded_table_rows(rows)
         .into_iter()
         .zip(rows)
         .filter_map(|(plan, row)| (!mant_ir::table_row_is_navigation_only(row)).then_some(plan))
         .flat_map(|row| match row {
-            TableRowPlan::Empty => vec![String::new()],
+            TableRowPlan::Empty => vec![T::plain("")],
             TableRowPlan::WholeRule { double } => {
-                vec![if double { "===" } else { "---" }.to_owned()]
+                vec![T::plain(if double { "===" } else { "---" })]
             }
-            TableRowPlan::LayoutRule { cells } => vec![
-                cells
+            TableRowPlan::LayoutRule { cells } => vec![T::plain(
+                &cells
                     .iter()
                     .map(|kind| match kind {
                         mant_ir::TableRuleCellKind::Horizontal => "---",
@@ -29,7 +47,7 @@ pub(super) fn table_rows(
                     })
                     .collect::<Vec<_>>()
                     .join(" | "),
-            ],
+            )],
             TableRowPlan::Dense { slots } => dense_physical_rows(
                 slots
                     .into_iter()
@@ -51,15 +69,15 @@ pub(super) fn table_rows(
         .collect()
 }
 
-fn render_table_cell(
+fn render_table_cell<T: TableText>(
     cell: &TableCell,
-    render_cell: &mut impl FnMut(&TableCell) -> String,
-) -> String {
+    render_cell: &mut impl FnMut(&TableCell) -> T,
+) -> T {
     match cell.kind {
         TableCellKind::Text => render_cell(cell),
-        TableCellKind::HorizontalRule | TableCellKind::IsolatedHorizontalRule => "---".to_owned(),
+        TableCellKind::HorizontalRule | TableCellKind::IsolatedHorizontalRule => T::plain("---"),
         TableCellKind::DoubleHorizontalRule | TableCellKind::IsolatedDoubleHorizontalRule => {
-            "===".to_owned()
+            T::plain("===")
         }
     }
 }
@@ -68,11 +86,11 @@ fn render_table_cell(
 /// cells.  CVS `tbl_term.c` flushes one line from every cell per pass and
 /// repeats the row while any cell has content left; flattening a cell before
 /// this point would silently discard formatter-requested line boundaries.
-fn dense_physical_rows(cells: Vec<Option<String>>) -> Vec<String> {
+fn dense_physical_rows<T: TableText>(cells: Vec<Option<T>>) -> Vec<T> {
     let height = cells
         .iter()
-        .filter_map(Option::as_deref)
-        .map(line_count)
+        .filter_map(Option::as_ref)
+        .map(TableText::line_count)
         .max()
         .unwrap_or(1);
     if height
@@ -89,34 +107,45 @@ fn dense_physical_rows(cells: Vec<Option<String>>) -> Vec<String> {
     }
     let cells = cells
         .iter()
-        .map(|cell| physical_lines(cell.as_deref().unwrap_or_default()))
+        .map(|cell| {
+            cell.as_ref()
+                .map_or_else(|| vec![T::plain("")], TableText::physical_lines)
+        })
         .collect::<Vec<_>>();
     (0..height)
         .map(|line| {
             let mut segments = cells
                 .iter()
-                .map(|cell| cell.get(line).copied().unwrap_or_default())
+                .map(|cell| cell.get(line).cloned().unwrap_or_else(|| T::plain("")))
                 .collect::<Vec<_>>();
-            while line > 0 && segments.last().is_some_and(|value| value.is_empty()) {
-                segments.pop();
+            let mut retired = Vec::new();
+            while line > 0 && segments.last().is_some_and(TableText::is_empty) {
+                retired.push(segments.pop().expect("empty tail"));
             }
-            segments.join(" | ")
+            let mut output = T::join(&segments, " | ");
+            // A trailing empty cell contributes no further separator, but a
+            // zero-width decoration closure is still part of the output. Its
+            // source order and this physical row both survive retirement.
+            for tail in retired.into_iter().rev() {
+                output.append(&tail);
+            }
+            output
         })
         .collect()
 }
 
-fn sparse_physical_rows(cells: Vec<(usize, String)>) -> Vec<String> {
+fn sparse_physical_rows<T: TableText>(cells: Vec<(usize, T)>) -> Vec<T> {
     cells
         .into_iter()
         .flat_map(|(column, cell)| {
-            physical_lines(&cell)
+            cell.physical_lines()
                 .into_iter()
                 .enumerate()
                 .map(|(line, value)| {
                     if line == 0 {
-                        format!("column {}: {value}", column.saturating_add(1))
+                        value.prefixed(&format!("column {}: ", column.saturating_add(1)))
                     } else {
-                        format!("  {value}")
+                        value.prefixed("  ")
                     }
                 })
                 .collect::<Vec<_>>()
@@ -124,19 +153,36 @@ fn sparse_physical_rows(cells: Vec<(usize, String)>) -> Vec<String> {
         .collect()
 }
 
-fn line_count(value: &str) -> usize {
-    if value.is_empty() {
-        1
-    } else {
-        value.split_terminator('\n').count()
+#[cfg(test)]
+impl TableText for String {
+    fn plain(value: &str) -> Self {
+        value.to_owned()
     }
-}
-
-fn physical_lines(value: &str) -> Vec<&str> {
-    if value.is_empty() {
-        vec![""]
-    } else {
-        value.split_terminator('\n').collect()
+    fn is_empty(&self) -> bool {
+        self.is_empty()
+    }
+    fn line_count(&self) -> usize {
+        if self.is_empty() {
+            1
+        } else {
+            self.split_terminator('\n').count()
+        }
+    }
+    fn physical_lines(&self) -> Vec<Self> {
+        if self.is_empty() {
+            vec![Self::new()]
+        } else {
+            self.split_terminator('\n').map(str::to_owned).collect()
+        }
+    }
+    fn join(values: &[Self], separator: &str) -> Self {
+        values.join(separator)
+    }
+    fn prefixed(self, prefix: &str) -> Self {
+        format!("{prefix}{self}")
+    }
+    fn append(&mut self, other: &Self) {
+        self.push_str(other);
     }
 }
 

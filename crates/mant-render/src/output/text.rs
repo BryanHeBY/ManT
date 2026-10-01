@@ -4,6 +4,7 @@ pub(super) mod blocks;
 mod body;
 mod excerpt;
 mod flow;
+mod layout;
 #[cfg(test)]
 mod tests;
 
