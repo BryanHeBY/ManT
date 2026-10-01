@@ -284,16 +284,26 @@ impl InlineBuilder {
         // term_flushln() executes endline even when its field fits.
         // Hand that native row close to the block owner before its
         // paragraph drain trims the output terminator.
+        let native = self.native_field_device(false);
         let explicit_row_end = self.native_field_tail_is_unconditional()
-            || self.native_field_device(false).is_some_and(|device| {
+            || native.as_ref().is_some_and(|device| {
                 // A temporary native origin may close a row whose public
                 // cell glyphs still fit the declared field. Preserve the
                 // real tail in that case; ordinary column width overruns
                 // remain responsive placement, without inline pollution.
                 device.unprojected_origin_units > 0
             });
-        let mut closed_represented_row =
-            self.has_formatter_cell() && explicit_row_end && self.native_field_row_ends();
+        let mut closed_represented_row = self.has_formatter_cell()
+            && native.as_ref().is_some_and(|device| {
+                // The final tail decision (term.c:250-253) ended this
+                // field's own last row, or an authored `\p` pass boundary
+                // already executed the loop endline (term.c:217 with
+                // 294-305) and the rejected remainder never printed on
+                // the fresh row that the tail then left open. The next
+                // cell starts a new row in both cases; a device-width
+                // guess alone never carries a row boundary into the IR.
+                (explicit_row_end && device.ends_row) || device.row_closed_by_author()
+            });
         {
             let occupied = self.has_formatter_cell();
             let empty_ends_row = self.native_empty_field_row_ends();

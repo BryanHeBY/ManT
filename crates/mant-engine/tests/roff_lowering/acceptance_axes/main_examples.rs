@@ -255,15 +255,15 @@ fn six_examples_assert_registered_axes_across_projections() {
     }
 }
 
-/// The acceptance base has to catch the three review regressions it was
-/// built for: the column tail hard row, the tag explicit vertical spacing
-/// and the hang final-word gap. This is the detection proof for the
-/// registered criteria; when a repair closes one of them, its expectation
-/// flips from `after_repair` to `must` in the same commit.
+/// The acceptance base has to catch the review regressions it was built
+/// for: the tag explicit vertical spacing and the hang final-word gap.
+/// This is the detection proof for the registered criteria; when a repair
+/// closes one of them, its expectation flips from `after_repair` to
+/// `must` in the same commit, and its proof entry retires with it (the
+/// column tail hard row flipped with its repair).
 #[test]
 fn comparator_detects_the_registered_hard_row_blank_and_separator_regressions() {
-    let proofs: [(&str, AxisKind); 3] = [
-        ("column_tail_hard_row", AxisKind::HardRows),
+    let proofs: [(&str, AxisKind); 2] = [
         ("tag_explicit_vspace", AxisKind::BlankCount),
         ("hang_final_gap", AxisKind::Separator),
     ];

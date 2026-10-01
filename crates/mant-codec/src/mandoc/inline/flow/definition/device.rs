@@ -15,9 +15,10 @@
 
 //! Native field targets and the numeric device receipt of a real flush.
 
+use super::super::field_buffer::FlushReceipt;
 use super::super::native_field::{FieldFlag, FieldFlags};
 use super::super::{AuthorBreakEffect, InlineBuilder};
-use super::state::NoBreakField;
+use super::state::{DefinitionFieldState, NoBreakField};
 
 /// Output of the current `term_field()` sweep, independent of inherited
 /// device viscol. NBRZW, rejected and empty cells can remain unprinted.
@@ -36,6 +37,24 @@ struct NativeFieldSweep {
     separator_retention: Option<usize>,
     row_origins: Vec<(String, usize, usize)>,
     unprojected_origin_units: usize,
+    /// Outcome of the last pass-loop endline (term.c:217) of this flush.
+    loop_row_end: LoopRowEnd,
+}
+
+/// The last pass-loop `endline()` (term.c:217) of one flush, once its
+/// effect on the final device row is known.
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub(super) enum LoopRowEnd {
+    /// No endline stayed final: none ran, or a later pass of this flush
+    /// printed a graph on the fresh row an earlier endline opened.
+    Open,
+    /// The final endline ran on a device-width boundary, or behind no
+    /// represented row: the following field keeps responsive placement.
+    Responsive,
+    /// The final endline closed a represented row on an authored `\p`
+    /// pass boundary (term.c:294-305 armed breakline, 217 endline) and
+    /// no later pass printed on the fresh row it opened.
+    Authored,
 }
 
 /// Position at which one accepted interval reaches `term_field()`.
@@ -54,6 +73,16 @@ struct NativeFieldTail {
     overruns: bool,
     final_pass_continued: bool,
     trailspace_cells: usize,
+}
+
+/// One completed pass sweep: the device row facts plus the fill width,
+/// width units, tab reference, and field width the tail decision needs.
+struct NativePassSweep {
+    sweep: NativeFieldSweep,
+    width: usize,
+    width_units: usize,
+    tab_offset: i64,
+    vfield: usize,
 }
 
 impl NativeFieldSweep {
@@ -77,6 +106,7 @@ impl NativeFieldSweep {
                 tail.trailspace_cells
             },
             tab_offset,
+            loop_row_end: self.loop_row_end,
             unprojected_origin_units: self.unprojected_origin_units,
             printed_row: self.printed_row,
             emission: self.emission,
@@ -125,7 +155,20 @@ pub(super) struct NativeFieldDevice {
     /// projector consumes these only after native acceptance, never at a
     /// tentative word append or from its visible IR width.
     pub(super) row_origins: Vec<(String, usize, usize)>,
+    /// Outcome of the pass loop's last `endline()` (term.c:217). With
+    /// [`LoopRowEnd::Authored`], an authored hard row end exists even
+    /// though the final tail comparison (250-253) left the fresh row open;
+    /// responsive width placement stays with `overruns`/`ends_row`.
+    pub(super) loop_row_end: LoopRowEnd,
     pub(super) output_start: usize,
+}
+
+impl NativeFieldDevice {
+    /// The pass loop ended a represented row on an authored `\p` boundary
+    /// and printed nothing after it: the next field starts a new row.
+    pub(super) fn row_closed_by_author(&self) -> bool {
+        self.loop_row_end == LoopRowEnd::Authored
+    }
 }
 
 impl InlineBuilder {
@@ -436,6 +479,10 @@ impl InlineBuilder {
             .saturating_add(self.printed_origin_advance(print.padding_units, sweep.viscol));
         sweep.viscol = sweep.viscol.saturating_add(printed);
         sweep.printed_row = Some(sweep.viscol);
+        // A graph printed after a loop endline occupies that endline's
+        // fresh row; only an endline that stays final hands its row
+        // boundary to the next field (term.c:217,233-237).
+        sweep.loop_row_end = LoopRowEnd::Open;
     }
 
     pub(super) fn native_field_device_with_resume(
@@ -443,7 +490,6 @@ impl InlineBuilder {
         force_no_break: bool,
         resumed: Option<NoBreakField>,
     ) -> Option<NativeFieldDevice> {
-        use super::super::field_buffer::{FieldCell, FlushReceipt};
         let state = self.execution.definition.as_ref()?;
         let targets = self.native_field_targets(force_no_break, resumed)?;
         // term_newln() also calls term_flushln() when only sweep.viscol is live.
@@ -457,6 +503,58 @@ impl InlineBuilder {
         let (flags, rmargin, trailspace) = self.native_field_parameters(force_no_break, resumed)?;
         let no_break = self.native_no_break(flags, force_no_break, resumed);
         let rmargin = self.native_margin_units(rmargin);
+        let NativePassSweep {
+            sweep,
+            width,
+            width_units,
+            tab_offset,
+            vfield,
+        } = self.sweep_native_field_passes(state, &receipt, flags, no_break, rmargin, resumed);
+        // The nbr==0 pass exits before the tail sweep (term.c:143-146),
+        // with its own freshly reset vbr=0. Only an accepted final pass
+        // widens vbr over its ignorable tail (177-196). Keep basic units
+        // through the half-EN comparison (250-253), before IR rounding.
+        let final_vbr = self.native_field_final_vbr(
+            rejected,
+            passes.last().map_or(0, |pass| pass.end),
+            width_units,
+            flags,
+        );
+        let overruns =
+            final_vbr.saturating_add(trailspace.saturating_mul(24)) > vfield.saturating_add(12);
+        let ends_row = !flags.contains(FieldFlag::Hang) && (!no_break || overruns);
+        Some(sweep.into_device(
+            width,
+            tab_offset,
+            &NativeFieldTail {
+                ends_row,
+                overruns,
+                final_pass_continued: passes.len() > 1 && !rejected,
+                trailspace_cells: trailspace,
+            },
+            state.no_break.or(resumed),
+            self.native_field_output_start(),
+        ))
+    }
+
+    /// Run the `term_flushln()` pass loop (term.c:143-230) over one
+    /// receipt: print each accepted pass at its computed origin, execute
+    /// the loop `endline()` while a genuine remaining field exists, and
+    /// keep BRIND's restart origin for the following pass.
+    fn sweep_native_field_passes(
+        &self,
+        state: &DefinitionFieldState,
+        receipt: &FlushReceipt,
+        flags: FieldFlags,
+        no_break: bool,
+        rmargin: usize,
+        resumed: Option<NoBreakField>,
+    ) -> NativePassSweep {
+        use super::super::field_buffer::FieldCell;
+        let (passes, rejected) = match receipt {
+            FlushReceipt::Accepted { passes } => (passes.as_slice(), false),
+            FlushReceipt::Rejected { passes, .. } => (passes.as_slice(), true),
+        };
         let row = &state.hang_row;
         let mut sweep = NativeFieldSweep {
             viscol: row.viscol,
@@ -465,6 +563,7 @@ impl InlineBuilder {
             separator_retention: None,
             row_origins: Vec::new(),
             unprojected_origin_units: row.unprojected_origin_units,
+            loop_row_end: LoopRowEnd::Open,
         };
         let mut vbl = state
             .field_offset_units
@@ -487,6 +586,7 @@ impl InlineBuilder {
             };
             width = pass.width;
             width_units = pass.units;
+            let pass_start = start;
             self.print_native_field_pass(
                 &mut sweep,
                 &NativeFieldPrint {
@@ -514,6 +614,19 @@ impl InlineBuilder {
             if index + 1 < passes.len() || rejected {
                 // A genuine remaining field executes loop endline(), then
                 // BRIND selects its right-margin origin for the next pass.
+                // That endline ends the row this pass printed when the
+                // boundary came from an authored `\p` marker (term.c:294-
+                // 305 armed breakline; 217 endline); a device-width guess
+                // (vn > vtarget) stays responsive placement instead.
+                sweep.loop_row_end = if sweep.printed_row.is_some()
+                    && state.field_buffer.cells()[pass_start..pass.end]
+                        .iter()
+                        .any(|cell| matches!(cell, FieldCell::BreakMarker))
+                {
+                    LoopRowEnd::Authored
+                } else {
+                    LoopRowEnd::Responsive
+                };
                 sweep.viscol = 0;
                 sweep.printed_row = None;
                 sweep.unprojected_origin_units = 0;
@@ -530,31 +643,13 @@ impl InlineBuilder {
             width_units = 0;
             vfield = rmargin.saturating_sub(sweep.viscol.saturating_mul(24).saturating_add(vbl));
         }
-        // The nbr==0 pass exits before the tail sweep (term.c:143-146),
-        // with its own freshly reset vbr=0. Only an accepted final pass
-        // widens vbr over its ignorable tail (177-196). Keep basic units
-        // through the half-EN comparison (250-253), before IR rounding.
-        let final_vbr = self.native_field_final_vbr(
-            rejected,
-            passes.last().map_or(0, |pass| pass.end),
-            width_units,
-            flags,
-        );
-        let overruns =
-            final_vbr.saturating_add(trailspace.saturating_mul(24)) > vfield.saturating_add(12);
-        let ends_row = !flags.contains(FieldFlag::Hang) && (!no_break || overruns);
-        Some(sweep.into_device(
+        NativePassSweep {
+            sweep,
             width,
+            width_units,
             tab_offset,
-            &NativeFieldTail {
-                ends_row,
-                overruns,
-                final_pass_continued: passes.len() > 1 && !rejected,
-                trailspace_cells: trailspace,
-            },
-            state.no_break.or(resumed),
-            self.native_field_output_start(),
-        ))
+            vfield,
+        }
     }
 
     pub(super) fn native_field_output_start(&self) -> usize {
