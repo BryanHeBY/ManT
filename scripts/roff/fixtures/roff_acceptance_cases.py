@@ -409,6 +409,22 @@ def families():
         yield 'adjacent', family, generate()
     for family, generate in EXPANSION_GENERATORS:
         yield 'expansion', family, generate()
+    yield 'qualification', 'corrected-owner-scopes', corrected_owner_scopes()
+
+
+def corrected_owner_scopes():
+    """Legal man RS witnesses beside the preserved mdoc recovery templates.
+
+    The historical output-owners RS cases remain byte-identical. man_term.c
+    pre_RS()/post_RS() execute newln and save/restore the BODY offset; an
+    unknown RS macro in mdoc does not cover that scope lifecycle.
+    """
+    for prefix, word in itertools.product(
+            [r'BEFORE\c', r'BEFORE \c', r'\&\c'],
+            [r'\p D', r'\p  D', r'D\p E']):
+        body = prefix + '\n.RS 4\n' + word + '\n.RE\nAFTER\n'
+        yield case('corrected-owner-scopes', 'man', 'nf', body,
+                   prefix=prefix, word=word, inner='RS')
 
 
 # --------------------------------------------------------------------------
@@ -509,6 +525,13 @@ def axis_policy(one_case):
             'identity': 'rich-inline',
         },
         'physical-row-handoffs': {
+            'content': 'exact',
+            'separators': 'constrained-events',
+            'rows': 'exact-hard-rows',
+            'indent': 'omit-common-margin',
+            'identity': 'display-and-safety',
+        },
+        'corrected-owner-scopes': {
             'content': 'exact',
             'separators': 'constrained-events',
             'rows': 'exact-hard-rows',

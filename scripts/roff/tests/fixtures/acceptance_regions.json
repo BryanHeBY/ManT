@@ -1,0 +1,591 @@
+[
+  {
+    "id": "physical-row-handoffs-0097",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 8\nHeadWord\n.B \"\"\n.PP\n",
+    "source_sha256": "9b48c0271eaf790080ff5dbc2617065445ace8b3fa19f6469ac845103380bf15",
+    "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+    "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+    "oracle": {
+      "utf8": {
+        "code": 0,
+        "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     test - probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     HeadWord\n\n                              September 28, 2026                       TEST(1)\n",
+        "stderr": "",
+        "stdout_sha256": "16c1bcd50ec946ffbac7ddcd25aaa62c6436f62d1f72da122d21644955a2b310",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "tree": {
+        "code": 0,
+        "stdout": "title = \"TEST\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\ndate  = \"September 28, 2026\"\n\nSH (block) *2:2\n  SH (head) 2:2 ID=HREF\n      NAME (text) 2:5\n  SH (body) 2:2\n      test \\- probe (text) *3:1\nSH (block) *4:2\n  SH (head) 4:2 ID=HREF\n      DESCRIPTION (text) 4:5\n  SH (body) 4:2\n      TP (block) *5:2\n        TP (head) 5:2 ID=HREF=HeadWord\n            8 (text) 5:5\n            HeadWord (text) *6:1\n        TP (body) 6:1\n            B (elem) *7:2\n                 (text) 7:4\n",
+        "stderr": "",
+        "stdout_sha256": "cc832bda091b2b18c04fa2c4a093cd8014dc43f121027d081278276bd5f997d0",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "lint": {
+        "code": 2,
+        "stdout": "mandoc: <stdin>:8:2: WARNING: skipping paragraph macro: PP empty\n",
+        "stderr": "",
+        "stdout_sha256": "278fb664a4699de08003fe41baafbaf76ab079f0aa347808a52e1c489a9380c4",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    "expected_rows": [
+      "     HeadWord"
+    ]
+  },
+  {
+    "id": "physical-row-handoffs-0107",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 8\nHeadWord\n\\&\n.PP\n",
+    "source_sha256": "31ec225acdc4ca8d6141e7ca17ea0647190d1e87ee7c64c8c814ddc76805f493",
+    "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+    "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+    "oracle": {
+      "utf8": {
+        "code": 0,
+        "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     test - probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     HeadWord\n\n\n                              September 28, 2026                       TEST(1)\n",
+        "stderr": "",
+        "stdout_sha256": "85731f444c5019854adb14fc0a5ddd3cc13e75f4ad52a1a92fced85fab5e434a",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "tree": {
+        "code": 0,
+        "stdout": "title = \"TEST\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\ndate  = \"September 28, 2026\"\n\nSH (block) *2:2\n  SH (head) 2:2 ID=HREF\n      NAME (text) 2:5\n  SH (body) 2:2\n      test \\- probe (text) *3:1\nSH (block) *4:2\n  SH (head) 4:2 ID=HREF\n      DESCRIPTION (text) 4:5\n  SH (body) 4:2\n      TP (block) *5:2\n        TP (head) 5:2 ID=HREF=HeadWord\n            8 (text) 5:5\n            HeadWord (text) *6:1\n        TP (body) 6:1\n            \\& (text) *7:1\n",
+        "stderr": "",
+        "stdout_sha256": "27fef02ebc8db75a2d72559056bdadd4c4073025fda27aa3caf9c030080bef0b",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "lint": {
+        "code": 2,
+        "stdout": "mandoc: <stdin>:8:2: WARNING: skipping paragraph macro: PP empty\n",
+        "stderr": "",
+        "stdout_sha256": "278fb664a4699de08003fe41baafbaf76ab079f0aa347808a52e1c489a9380c4",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    "expected_rows": [
+      "     HeadWord",
+      ""
+    ]
+  },
+  {
+    "id": "physical-row-handoffs-0126",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n\n.Pp\n.No AFTER\n.Sh NEXT\n.No END\n",
+    "source_sha256": "a42d1e05dea7e4025753ff3eb387df2278e65b249bfd1ac8ac83ae1af7f0e128",
+    "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+    "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+    "oracle": {
+      "utf8": {
+        "code": 0,
+        "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n\n     AFTER\n\nN\bNE\bEX\bXT\bT\n     END\n\nLinux 6.18.40.1-microsoft-standard-WSL2\n                              September 28, 2026                       TEST(1)\n",
+        "stderr": "",
+        "stdout_sha256": "8ff16f97bd726eece339c251f1c1c49e3c4a6ca77424d7c7cc0dcc749356a180",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "tree": {
+        "code": 0,
+        "stdout": "title = \"TEST\"\nname  = \"test\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.40.1-microsoft-standard-WSL2\"\ndate  = \"September 28, 2026\"\n\nDd (elem) *1:2 NOPRT\n    September 28, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    TEST (text) 2:5\n    1 (text) 2:10\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          test (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            probe (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      Pp (elem) *9:2\n      No (elem) *10:2\n          AFTER (text) 10:5\nSh (block) *11:2\n  Sh (head) 11:2 ID=HREF\n      NEXT (text) 11:5\n  Sh (body) 11:2\n      No (elem) *12:2\n          END (text) 12:5\n",
+        "stderr": "",
+        "stdout_sha256": "2cc5455a52acb6bc96bb8b90a9a341fe95ee5e8b5c523611cef8fb176ab4609b",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "lint": {
+        "code": 2,
+        "stdout": "mandoc: <stdin>:8:1: WARNING: blank line in fill mode, using .sp\nmandoc: <stdin>:8:1: WARNING: skipping paragraph macro: sp after Sh\n",
+        "stderr": "",
+        "stdout_sha256": "30c5a7b758dfd3af920edc81ef9987e06caf1f0f071b94bf34796a676a385f2c",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    "expected_rows": [
+      "",
+      "     AFTER"
+    ]
+  },
+  {
+    "id": "physical-row-handoffs-0205",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It Xo\n\n.sp 1\n.Xc\n.El\n",
+    "source_sha256": "8a51249c1ce3c1676cd54acc59918c83362c44d40ec6a5688562512109209586",
+    "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+    "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+    "oracle": {
+      "utf8": {
+        "code": 0,
+        "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n\n\n\nLinux 6.18.40.1-microsoft-standard-WSL2\n                              September 28, 2026                       TEST(1)\n",
+        "stderr": "",
+        "stdout_sha256": "42ad821fe9647e69c1317ab1ab20aca255e4d07747558987817253d3882a615d",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "tree": {
+        "code": 0,
+        "stdout": "title = \"TEST\"\nname  = \"test\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.40.1-microsoft-standard-WSL2\"\ndate  = \"September 28, 2026\"\n\nDd (elem) *1:2 NOPRT\n    September 28, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    TEST (text) 2:5\n    1 (text) 2:10\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          test (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            probe (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      Bl (block) -tag -width [ [8n] ] *8:2\n        Bl (head) 8:2\n        Bl (body) 8:2\n            It (block) *9:2\n              It (head) 9:2\n                  Xo (block) 9:5 BROKEN\n                    Xo (head) 9:5\n                    Xo (body) 9:5 BROKEN\n                        sp (elem) *10:1\n                        sp (elem) *11:2\n                            1 (text) 11:5\n              It (body) *9:2\n",
+        "stderr": "",
+        "stdout_sha256": "b3a32e6b97f795315bf650e990e7d41167d727a19cee5d00198aec9090afba26",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "lint": {
+        "code": 2,
+        "stdout": "mandoc: <stdin>:10:1: WARNING: blank line in fill mode, using .sp\n",
+        "stderr": "",
+        "stdout_sha256": "72802d2bec7469293a1e8ec46d19c9972d7bb42c125c4e04e38a55ad8969b6f5",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    "expected_rows": [
+      "",
+      ""
+    ]
+  },
+  {
+    "id": "physical-row-handoffs-0207",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It Xo\n\n.Pp\n.Xc\n.El\n",
+    "source_sha256": "3df8ca87fdada6f984f91ff0fdb38417c095c8efa701e91af703a1de7a9d1cc2",
+    "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+    "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+    "oracle": {
+      "utf8": {
+        "code": 0,
+        "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n\n\n\nLinux 6.18.40.1-microsoft-standard-WSL2\n                              September 28, 2026                       TEST(1)\n",
+        "stderr": "",
+        "stdout_sha256": "42ad821fe9647e69c1317ab1ab20aca255e4d07747558987817253d3882a615d",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "tree": {
+        "code": 0,
+        "stdout": "title = \"TEST\"\nname  = \"test\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.40.1-microsoft-standard-WSL2\"\ndate  = \"September 28, 2026\"\n\nDd (elem) *1:2 NOPRT\n    September 28, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    TEST (text) 2:5\n    1 (text) 2:10\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          test (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            probe (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      Bl (block) -tag -width [ [8n] ] *8:2\n        Bl (head) 8:2\n        Bl (body) 8:2\n            It (block) *9:2\n              It (head) 9:2\n                  Xo (block) 9:5 BROKEN\n                    Xo (head) 9:5\n                    Xo (body) 9:5 BROKEN\n                        sp (elem) *10:1\n                        Pp (elem) *11:2\n              It (body) *9:2\n",
+        "stderr": "",
+        "stdout_sha256": "2ded2d7c60ea1aa22273429260aa546c499a0a8d3e7ab7f3bf5a7004a469c39e",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "lint": {
+        "code": 2,
+        "stdout": "mandoc: <stdin>:10:1: WARNING: blank line in fill mode, using .sp\n",
+        "stderr": "",
+        "stdout_sha256": "72802d2bec7469293a1e8ec46d19c9972d7bb42c125c4e04e38a55ad8969b6f5",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    "expected_rows": [
+      "",
+      ""
+    ]
+  },
+  {
+    "id": "delimiter-arguments-0434",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\o\\[aq]\\[a Z\"\n.No AFTER\n.Sh NEXT\n.No END\n",
+    "source_sha256": "4b88ce707da42c224123aa693c7fdc41975dac8fbfe8386ccf418be4bb08ca06",
+    "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+    "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+    "oracle": {
+      "utf8": {
+        "code": 0,
+        "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n      AFTER\n\nN\bNE\bEX\bXT\bT\n     END\n\nLinux 6.18.40.1-microsoft-standard-WSL2\n                              September 28, 2026                       TEST(1)\n",
+        "stderr": "",
+        "stdout_sha256": "2caac8563694b3b78944d3c479c8cb8efe9510acdfc5281541204b28b465261b",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "tree": {
+        "code": 0,
+        "stdout": "title = \"TEST\"\nname  = \"test\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.40.1-microsoft-standard-WSL2\"\ndate  = \"September 28, 2026\"\n\nDd (elem) *1:2 NOPRT\n    September 28, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    TEST (text) 2:5\n    1 (text) 2:10\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          test (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            probe (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      No (elem) *8:2\n          \\o\\[aq]\\[a Z (text) 8:5\n      No (elem) *9:2\n          AFTER (text) 9:5\nSh (block) *10:2\n  Sh (head) 10:2 ID=HREF\n      NEXT (text) 10:5\n  Sh (body) 10:2\n      No (elem) *11:2\n          END (text) 11:5\n",
+        "stderr": "",
+        "stdout_sha256": "e1e023d388b245a9a17e88d8a41c352a2ed999d1c1b10ee1f8431487eebb8b1a",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "lint": {
+        "code": 3,
+        "stdout": "mandoc: <stdin>:8:13: ERROR: incomplete escape sequence: \\[a Z\"\n",
+        "stderr": "",
+        "stdout_sha256": "59842795cd1b17afeadf58c5ae4e3e95b9c5e5ebc41c48efc29c427ed51f67e9",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    "expected_rows": [
+      "      AFTER"
+    ]
+  },
+  {
+    "id": "formatter-1327",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\nBEFORE\\c\n.mc |\n\\p D\nAFTER\n.fi\n.Sh NEXT\n.No END\n",
+    "source_sha256": "6b8de221134c67ab74658d2158d2af6e94b4106c731981e2a632735180a26e51",
+    "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+    "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+    "oracle": {
+      "utf8": {
+        "code": 0,
+        "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     BEFORE                                                                    |\n     AFTER                                                                     |\n\nN\bNE\bEX\bXT\bT                                                                           |\n     END                                                                       |\n\nLinux 6.18.40.1-microsoft-standard-WSL2                                        |\n                              September 28, 2026                       TEST(1) |\n",
+        "stderr": "",
+        "stdout_sha256": "b209c16ae8f487c05019c533713b14fdf711da737418e1eeee240fa96f025da9",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "tree": {
+        "code": 0,
+        "stdout": "title = \"TEST\"\nname  = \"test\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.40.1-microsoft-standard-WSL2\"\ndate  = \"September 28, 2026\"\n\nDd (elem) *1:2 NOPRT\n    September 28, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    TEST (text) 2:5\n    1 (text) 2:10\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          test (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            probe (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      nf (elem) *8:2\n      BEFORE\\c (text) *9:1 NOFILL\n      mc (elem) *10:2 NOFILL\n          | (text) 10:5 NOFILL\n      \\p D (text) *11:1 NOFILL\n      AFTER (text) *12:1 NOFILL\n      fi (elem) *13:2 NOFILL\nSh (block) *14:2\n  Sh (head) 14:2 ID=HREF\n      NEXT (text) 14:5\n  Sh (body) 14:2\n      No (elem) *15:2\n          END (text) 15:5\n",
+        "stderr": "",
+        "stdout_sha256": "8be77cd730c7fe478dcf1c6ebc4a0a728059bc6ac6ce27dff66385fe52ff6e91",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "lint": {
+        "code": 0,
+        "stdout": "",
+        "stderr": "",
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    "expected_rows": [
+      "     BEFORE",
+      "     AFTER"
+    ]
+  },
+  {
+    "id": "margin-authored-bar",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.mc |\nAUTHORED |\n\nAFTER\n.fi\n.Sh NEXT\n.No END\n",
+    "source_sha256": "7f2d8cc08ffc71bd4b48d42a0323020b195d9e383bdd9c8b014b792ae5857731",
+    "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+    "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+    "oracle": {
+      "utf8": {
+        "code": 0,
+        "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     AUTHORED |                                                                |\n\n     AFTER                                                                     |\n\nN\bNE\bEX\bXT\bT                                                                           |\n     END                                                                       |\n\nLinux 6.18.40.1-microsoft-standard-WSL2                                        |\n                              September 28, 2026                       TEST(1) |\n",
+        "stderr": "",
+        "stdout_sha256": "070d9314a169f4cbb9ee9544fb3c09c29e77487fa735d530ed0f77a29158d9f3",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "tree": {
+        "code": 0,
+        "stdout": "title = \"TEST\"\nname  = \"test\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.40.1-microsoft-standard-WSL2\"\ndate  = \"September 28, 2026\"\n\nDd (elem) *1:2 NOPRT\n    September 28, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    TEST (text) 2:5\n    1 (text) 2:10\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          test (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            probe (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      nf (elem) *8:2\n      mc (elem) *9:2 NOFILL\n          | (text) 9:5 NOFILL\n      AUTHORED | (text) *10:1 NOFILL\n       (text) *11:1 NOFILL\n      AFTER (text) *12:1 NOFILL\n      fi (elem) *13:2 NOFILL\nSh (block) *14:2\n  Sh (head) 14:2 ID=HREF\n      NEXT (text) 14:5\n  Sh (body) 14:2\n      No (elem) *15:2\n          END (text) 15:5\n",
+        "stderr": "",
+        "stdout_sha256": "d72b25b5c79d05310e73331c36c06dad54852fdb3d94814ad7c0df71712cee76",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "lint": {
+        "code": 0,
+        "stdout": "",
+        "stderr": "",
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    "expected_rows": [
+      "     AUTHORED |",
+      "",
+      "     AFTER"
+    ]
+  },
+  {
+    "id": "corrected-owner-scopes-0000",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\nBEFORE\\c\n.RS 4\n\\p D\n.RE\nAFTER\n.fi\n.SH NEXT\nEND\n",
+    "source_sha256": "bb0bdadc6d0d428b31ce7ea140e5329e66a3b5b4335cf6dec88198c16442ab4e",
+    "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+    "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+    "oracle": {
+      "utf8": {
+        "code": 0,
+        "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     test - probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     BEFORE\n\n     AFTER\n\nN\bNE\bEX\bXT\bT\n     END\n\n                              September 28, 2026                       TEST(1)\n",
+        "stderr": "",
+        "stdout_sha256": "13328b4ba93377186da1ebd6f0217d8d73380d327aebac059508dbe024653c21",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "tree": {
+        "code": 0,
+        "stdout": "title = \"TEST\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\ndate  = \"September 28, 2026\"\n\nSH (block) *2:2\n  SH (head) 2:2 ID=HREF\n      NAME (text) 2:5\n  SH (body) 2:2\n      test \\- probe (text) *3:1\nSH (block) *4:2\n  SH (head) 4:2 ID=HREF\n      DESCRIPTION (text) 4:5\n  SH (body) 4:2\n      nf (elem) *5:2\n      BEFORE\\c (text) *6:1 NOFILL\n      RS (block) *7:2\n        RS (head) 7:2\n            4 (text) 7:5\n        RS (body) 7:2\n            \\p D (text) *8:1 NOFILL\n      AFTER (text) *10:1 NOFILL\n      fi (elem) *11:2 NOFILL\nSH (block) *12:2\n  SH (head) 12:2 ID=HREF\n      NEXT (text) 12:5\n  SH (body) 12:2\n      END (text) *13:1\n",
+        "stderr": "",
+        "stdout_sha256": "f74d97753d371b7a05b7d22558f3c1ef2a918105d3b5c79f278256b7fea704c2",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "lint": {
+        "code": 0,
+        "stdout": "",
+        "stderr": "",
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    "expected_rows": [
+      "     BEFORE",
+      "",
+      "     AFTER"
+    ]
+  },
+  {
+    "id": "corrected-owner-scopes-0001",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\nBEFORE\\c\n.RS 4\n\\p  D\n.RE\nAFTER\n.fi\n.SH NEXT\nEND\n",
+    "source_sha256": "80e6c9f7ff8a988ded201294433ce27148baf669a19c1cce493278eae3f60edf",
+    "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+    "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+    "oracle": {
+      "utf8": {
+        "code": 0,
+        "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     test - probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     BEFORE\n\n     AFTER\n\nN\bNE\bEX\bXT\bT\n     END\n\n                              September 28, 2026                       TEST(1)\n",
+        "stderr": "",
+        "stdout_sha256": "13328b4ba93377186da1ebd6f0217d8d73380d327aebac059508dbe024653c21",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "tree": {
+        "code": 0,
+        "stdout": "title = \"TEST\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\ndate  = \"September 28, 2026\"\n\nSH (block) *2:2\n  SH (head) 2:2 ID=HREF\n      NAME (text) 2:5\n  SH (body) 2:2\n      test \\- probe (text) *3:1\nSH (block) *4:2\n  SH (head) 4:2 ID=HREF\n      DESCRIPTION (text) 4:5\n  SH (body) 4:2\n      nf (elem) *5:2\n      BEFORE\\c (text) *6:1 NOFILL\n      RS (block) *7:2\n        RS (head) 7:2\n            4 (text) 7:5\n        RS (body) 7:2\n            \\p  D (text) *8:1 NOFILL\n      AFTER (text) *10:1 NOFILL\n      fi (elem) *11:2 NOFILL\nSH (block) *12:2\n  SH (head) 12:2 ID=HREF\n      NEXT (text) 12:5\n  SH (body) 12:2\n      END (text) *13:1\n",
+        "stderr": "",
+        "stdout_sha256": "b70136ee7db62e197f2db22f4550b8333f8d607664be3c998df3fd4ae9cc2480",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "lint": {
+        "code": 0,
+        "stdout": "",
+        "stderr": "",
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    "expected_rows": [
+      "     BEFORE",
+      "",
+      "     AFTER"
+    ]
+  },
+  {
+    "id": "corrected-owner-scopes-0002",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\nBEFORE\\c\n.RS 4\nD\\p E\n.RE\nAFTER\n.fi\n.SH NEXT\nEND\n",
+    "source_sha256": "f88d9635172569ece17dc70ccea668b0f499263d300966e4612e502359ba352f",
+    "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+    "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+    "oracle": {
+      "utf8": {
+        "code": 0,
+        "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     test - probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     BEFORE\n         D\n         E\n     AFTER\n\nN\bNE\bEX\bXT\bT\n     END\n\n                              September 28, 2026                       TEST(1)\n",
+        "stderr": "",
+        "stdout_sha256": "fb2f98e3d3c7ce949f6fcbfb1692060d8a9408fa4e6ed06cd0d11d1235b1c3b6",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "tree": {
+        "code": 0,
+        "stdout": "title = \"TEST\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\ndate  = \"September 28, 2026\"\n\nSH (block) *2:2\n  SH (head) 2:2 ID=HREF\n      NAME (text) 2:5\n  SH (body) 2:2\n      test \\- probe (text) *3:1\nSH (block) *4:2\n  SH (head) 4:2 ID=HREF\n      DESCRIPTION (text) 4:5\n  SH (body) 4:2\n      nf (elem) *5:2\n      BEFORE\\c (text) *6:1 NOFILL\n      RS (block) *7:2\n        RS (head) 7:2\n            4 (text) 7:5\n        RS (body) 7:2\n            D\\p E (text) *8:1 NOFILL\n      AFTER (text) *10:1 NOFILL\n      fi (elem) *11:2 NOFILL\nSH (block) *12:2\n  SH (head) 12:2 ID=HREF\n      NEXT (text) 12:5\n  SH (body) 12:2\n      END (text) *13:1\n",
+        "stderr": "",
+        "stdout_sha256": "62df8183c4b1d0ec7fa30c64a7862cd4638332072eacd7abf550a8dd5f971110",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "lint": {
+        "code": 0,
+        "stdout": "",
+        "stderr": "",
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    "expected_rows": [
+      "     BEFORE",
+      "         D",
+      "         E",
+      "     AFTER"
+    ]
+  },
+  {
+    "id": "corrected-owner-scopes-0003",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\nBEFORE \\c\n.RS 4\n\\p D\n.RE\nAFTER\n.fi\n.SH NEXT\nEND\n",
+    "source_sha256": "c99ea9a05d6b2c4c74707b9ec4a911be25ab79eaac9dd202a34d633dacdecfe0",
+    "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+    "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+    "oracle": {
+      "utf8": {
+        "code": 0,
+        "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     test - probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     BEFORE\n\n     AFTER\n\nN\bNE\bEX\bXT\bT\n     END\n\n                              September 28, 2026                       TEST(1)\n",
+        "stderr": "",
+        "stdout_sha256": "13328b4ba93377186da1ebd6f0217d8d73380d327aebac059508dbe024653c21",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "tree": {
+        "code": 0,
+        "stdout": "title = \"TEST\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\ndate  = \"September 28, 2026\"\n\nSH (block) *2:2\n  SH (head) 2:2 ID=HREF\n      NAME (text) 2:5\n  SH (body) 2:2\n      test \\- probe (text) *3:1\nSH (block) *4:2\n  SH (head) 4:2 ID=HREF\n      DESCRIPTION (text) 4:5\n  SH (body) 4:2\n      nf (elem) *5:2\n      BEFORE \\c (text) *6:1 NOFILL\n      RS (block) *7:2\n        RS (head) 7:2\n            4 (text) 7:5\n        RS (body) 7:2\n            \\p D (text) *8:1 NOFILL\n      AFTER (text) *10:1 NOFILL\n      fi (elem) *11:2 NOFILL\nSH (block) *12:2\n  SH (head) 12:2 ID=HREF\n      NEXT (text) 12:5\n  SH (body) 12:2\n      END (text) *13:1\n",
+        "stderr": "",
+        "stdout_sha256": "3d7ad3f0a5b4e264af3a86f7f086f05c81a4c3893f59e32267752f0b36a2f3dc",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "lint": {
+        "code": 0,
+        "stdout": "",
+        "stderr": "",
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    "expected_rows": [
+      "     BEFORE",
+      "",
+      "     AFTER"
+    ]
+  },
+  {
+    "id": "corrected-owner-scopes-0004",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\nBEFORE \\c\n.RS 4\n\\p  D\n.RE\nAFTER\n.fi\n.SH NEXT\nEND\n",
+    "source_sha256": "c2e76e8ad6f5b338d560ddd2a872c955fc44b93b310a55bda7852772f5bf4b4f",
+    "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+    "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+    "oracle": {
+      "utf8": {
+        "code": 0,
+        "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     test - probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     BEFORE\n\n     AFTER\n\nN\bNE\bEX\bXT\bT\n     END\n\n                              September 28, 2026                       TEST(1)\n",
+        "stderr": "",
+        "stdout_sha256": "13328b4ba93377186da1ebd6f0217d8d73380d327aebac059508dbe024653c21",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "tree": {
+        "code": 0,
+        "stdout": "title = \"TEST\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\ndate  = \"September 28, 2026\"\n\nSH (block) *2:2\n  SH (head) 2:2 ID=HREF\n      NAME (text) 2:5\n  SH (body) 2:2\n      test \\- probe (text) *3:1\nSH (block) *4:2\n  SH (head) 4:2 ID=HREF\n      DESCRIPTION (text) 4:5\n  SH (body) 4:2\n      nf (elem) *5:2\n      BEFORE \\c (text) *6:1 NOFILL\n      RS (block) *7:2\n        RS (head) 7:2\n            4 (text) 7:5\n        RS (body) 7:2\n            \\p  D (text) *8:1 NOFILL\n      AFTER (text) *10:1 NOFILL\n      fi (elem) *11:2 NOFILL\nSH (block) *12:2\n  SH (head) 12:2 ID=HREF\n      NEXT (text) 12:5\n  SH (body) 12:2\n      END (text) *13:1\n",
+        "stderr": "",
+        "stdout_sha256": "1b4c602d3a37a365339453b1a0f9f88d0e700ef89329ad47a0b3b4bbc93b0f3e",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "lint": {
+        "code": 0,
+        "stdout": "",
+        "stderr": "",
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    "expected_rows": [
+      "     BEFORE",
+      "",
+      "     AFTER"
+    ]
+  },
+  {
+    "id": "corrected-owner-scopes-0005",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\nBEFORE \\c\n.RS 4\nD\\p E\n.RE\nAFTER\n.fi\n.SH NEXT\nEND\n",
+    "source_sha256": "872719c478edb100a629aed490f21394607776b4b30098f1f0b54b8a8052d76b",
+    "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+    "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+    "oracle": {
+      "utf8": {
+        "code": 0,
+        "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     test - probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     BEFORE\n         D\n         E\n     AFTER\n\nN\bNE\bEX\bXT\bT\n     END\n\n                              September 28, 2026                       TEST(1)\n",
+        "stderr": "",
+        "stdout_sha256": "fb2f98e3d3c7ce949f6fcbfb1692060d8a9408fa4e6ed06cd0d11d1235b1c3b6",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "tree": {
+        "code": 0,
+        "stdout": "title = \"TEST\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\ndate  = \"September 28, 2026\"\n\nSH (block) *2:2\n  SH (head) 2:2 ID=HREF\n      NAME (text) 2:5\n  SH (body) 2:2\n      test \\- probe (text) *3:1\nSH (block) *4:2\n  SH (head) 4:2 ID=HREF\n      DESCRIPTION (text) 4:5\n  SH (body) 4:2\n      nf (elem) *5:2\n      BEFORE \\c (text) *6:1 NOFILL\n      RS (block) *7:2\n        RS (head) 7:2\n            4 (text) 7:5\n        RS (body) 7:2\n            D\\p E (text) *8:1 NOFILL\n      AFTER (text) *10:1 NOFILL\n      fi (elem) *11:2 NOFILL\nSH (block) *12:2\n  SH (head) 12:2 ID=HREF\n      NEXT (text) 12:5\n  SH (body) 12:2\n      END (text) *13:1\n",
+        "stderr": "",
+        "stdout_sha256": "1830997d366461ce258d4ab3c20d385fd6519c75e23c02118824ba532c4513b0",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "lint": {
+        "code": 0,
+        "stdout": "",
+        "stderr": "",
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    "expected_rows": [
+      "     BEFORE",
+      "         D",
+      "         E",
+      "     AFTER"
+    ]
+  },
+  {
+    "id": "corrected-owner-scopes-0006",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\n\\&\\c\n.RS 4\n\\p D\n.RE\nAFTER\n.fi\n.SH NEXT\nEND\n",
+    "source_sha256": "15909e7b56635025d1be73eca6ffde4f64383c99a2b0c4a8997bf35ff15ada7f",
+    "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+    "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+    "oracle": {
+      "utf8": {
+        "code": 0,
+        "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     test - probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n\n\n     AFTER\n\nN\bNE\bEX\bXT\bT\n     END\n\n                              September 28, 2026                       TEST(1)\n",
+        "stderr": "",
+        "stdout_sha256": "0558930e8b3a9082c36a62c24968f8fe16b1bc4489a90f227bdb1d09e7d9a052",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "tree": {
+        "code": 0,
+        "stdout": "title = \"TEST\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\ndate  = \"September 28, 2026\"\n\nSH (block) *2:2\n  SH (head) 2:2 ID=HREF\n      NAME (text) 2:5\n  SH (body) 2:2\n      test \\- probe (text) *3:1\nSH (block) *4:2\n  SH (head) 4:2 ID=HREF\n      DESCRIPTION (text) 4:5\n  SH (body) 4:2\n      nf (elem) *5:2\n      \\&\\c (text) *6:1 NOFILL\n      RS (block) *7:2\n        RS (head) 7:2\n            4 (text) 7:5\n        RS (body) 7:2\n            \\p D (text) *8:1 NOFILL\n      AFTER (text) *10:1 NOFILL\n      fi (elem) *11:2 NOFILL\nSH (block) *12:2\n  SH (head) 12:2 ID=HREF\n      NEXT (text) 12:5\n  SH (body) 12:2\n      END (text) *13:1\n",
+        "stderr": "",
+        "stdout_sha256": "731972d7d0314555e8147bf472bd3ccf6837127faa8ea06e640e125a85a551d2",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "lint": {
+        "code": 0,
+        "stdout": "",
+        "stderr": "",
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    "expected_rows": [
+      "",
+      "",
+      "     AFTER"
+    ]
+  },
+  {
+    "id": "corrected-owner-scopes-0007",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\n\\&\\c\n.RS 4\n\\p  D\n.RE\nAFTER\n.fi\n.SH NEXT\nEND\n",
+    "source_sha256": "24edcd30dae2659bdd2b4d35c5f407f87a54c1ea5dbfaa697a38de8daa19357a",
+    "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+    "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+    "oracle": {
+      "utf8": {
+        "code": 0,
+        "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     test - probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n\n\n     AFTER\n\nN\bNE\bEX\bXT\bT\n     END\n\n                              September 28, 2026                       TEST(1)\n",
+        "stderr": "",
+        "stdout_sha256": "0558930e8b3a9082c36a62c24968f8fe16b1bc4489a90f227bdb1d09e7d9a052",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "tree": {
+        "code": 0,
+        "stdout": "title = \"TEST\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\ndate  = \"September 28, 2026\"\n\nSH (block) *2:2\n  SH (head) 2:2 ID=HREF\n      NAME (text) 2:5\n  SH (body) 2:2\n      test \\- probe (text) *3:1\nSH (block) *4:2\n  SH (head) 4:2 ID=HREF\n      DESCRIPTION (text) 4:5\n  SH (body) 4:2\n      nf (elem) *5:2\n      \\&\\c (text) *6:1 NOFILL\n      RS (block) *7:2\n        RS (head) 7:2\n            4 (text) 7:5\n        RS (body) 7:2\n            \\p  D (text) *8:1 NOFILL\n      AFTER (text) *10:1 NOFILL\n      fi (elem) *11:2 NOFILL\nSH (block) *12:2\n  SH (head) 12:2 ID=HREF\n      NEXT (text) 12:5\n  SH (body) 12:2\n      END (text) *13:1\n",
+        "stderr": "",
+        "stdout_sha256": "688be94617210c99cd37b1de5ace34019bd6755e3babf28065703e34cec21914",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "lint": {
+        "code": 0,
+        "stdout": "",
+        "stderr": "",
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    "expected_rows": [
+      "",
+      "",
+      "     AFTER"
+    ]
+  },
+  {
+    "id": "corrected-owner-scopes-0008",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\n\\&\\c\n.RS 4\nD\\p E\n.RE\nAFTER\n.fi\n.SH NEXT\nEND\n",
+    "source_sha256": "3ecf53b6166898cca872e3f3c5b9daaca2c46e8165d58da0b3d1984a721d6646",
+    "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+    "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+    "oracle": {
+      "utf8": {
+        "code": 0,
+        "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     test - probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n\n         D\n         E\n     AFTER\n\nN\bNE\bEX\bXT\bT\n     END\n\n                              September 28, 2026                       TEST(1)\n",
+        "stderr": "",
+        "stdout_sha256": "33cda79b31d2553c0eb22dc5ad1375c853493afc029efb6915fd0520b56cc2d1",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "tree": {
+        "code": 0,
+        "stdout": "title = \"TEST\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\ndate  = \"September 28, 2026\"\n\nSH (block) *2:2\n  SH (head) 2:2 ID=HREF\n      NAME (text) 2:5\n  SH (body) 2:2\n      test \\- probe (text) *3:1\nSH (block) *4:2\n  SH (head) 4:2 ID=HREF\n      DESCRIPTION (text) 4:5\n  SH (body) 4:2\n      nf (elem) *5:2\n      \\&\\c (text) *6:1 NOFILL\n      RS (block) *7:2\n        RS (head) 7:2\n            4 (text) 7:5\n        RS (body) 7:2\n            D\\p E (text) *8:1 NOFILL\n      AFTER (text) *10:1 NOFILL\n      fi (elem) *11:2 NOFILL\nSH (block) *12:2\n  SH (head) 12:2 ID=HREF\n      NEXT (text) 12:5\n  SH (body) 12:2\n      END (text) *13:1\n",
+        "stderr": "",
+        "stdout_sha256": "0d9e5deddaaa2c6cb8297d03137e904217d184efe62243a202ab05ab67dee400",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "lint": {
+        "code": 0,
+        "stdout": "",
+        "stderr": "",
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    "expected_rows": [
+      "",
+      "         D",
+      "         E",
+      "     AFTER"
+    ]
+  }
+]

@@ -49,12 +49,15 @@ import sys
 from scripts.roff.fixtures import roff_acceptance_cases
 from scripts.roff.fixtures import roff_execution_cases
 from scripts.roff.fixtures import roff_fixture_reference
+from scripts.roff.fixtures import acceptance_comparison
+from scripts.roff.fixtures import acceptance_regions
+from scripts.roff.lib.roff_content_compare import visible_text
 
 ROOT = Path(__file__).resolve().parents[3]
 REFERENCE = ROOT / "target/mandoc-migration/reference/mandoc"
 ACCEPTANCE = ROOT / "scripts/roff/fixtures/acceptance"
-LEDGER_SCHEMA = "mant.roff-acceptance-ledger/v1"
-POLICY_VERSION = 1
+LEDGER_SCHEMA = "mant.roff-acceptance-ledger/v2"
+POLICY_VERSION = 2
 # Fixed page-furniture marker for end-of-file tail projections: the footer
 # date row always carries the frozen header date of these generated sources.
 DATE_TOKEN = "September 28, 2026"
@@ -129,21 +132,33 @@ def select_frozen(cases):
 # ---------------------------------------------------------------------------
 
 def run(binary, arguments, source, timeout=20):
-    completed = subprocess.run(
-        [str(binary), *arguments], input=source.encode(), capture_output=True,
-        timeout=timeout, env={"PATH": "/usr/bin:/bin", "LC_ALL": "C.UTF-8",
-                              "TZ": "UTC"}, check=False)
-    return {"code": completed.returncode,
-            "stdout": completed.stdout.decode("utf-8", "replace"),
-            "stderr": completed.stderr.decode("utf-8", "replace")}
+    try:
+        completed = subprocess.run(
+            [str(binary), *arguments], input=source.encode(), capture_output=True,
+            timeout=timeout, env={"PATH": "/usr/bin:/bin", "LC_ALL": "C.UTF-8",
+                                  "TZ": "UTC"}, check=False)
+        code, stdout, stderr = completed.returncode, completed.stdout, completed.stderr
+        timed_out = False
+    except subprocess.TimeoutExpired as error:
+        code, stdout, stderr = None, error.stdout or b"", error.stderr or b""
+        timed_out = True
+    result = {"code": code, "timeout": timed_out, "utf8_valid": True}
+    for name, data in (("stdout", stdout), ("stderr", stderr)):
+        try:
+            result[name] = data.decode("utf-8")
+        except UnicodeDecodeError:
+            # A partial timed-out write or corrupt internal UTF-8 is evidence,
+            # not silently repaired text. Keep bytes and fail the execution.
+            result["utf8_valid"] = False
+            result[name] = data.decode("utf-8", "replace")
+            result[name + "_bytes_hex"] = data.hex()
+    return result
 
 
 def unstyle(text):
-    # Overstrike pairs and ANSI select sequences both leave their last scalar
-    # at the same device cell; this is the historical screening projection.
-    while "\b" in text:
-        text = re.sub(r".\x08", "", text)
-    return re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", text)
+    # Reuse the bounded display scanner: only known SGR and actual writes
+    # over a preceding backspace are styling. Unknown controls stay visible.
+    return visible_text(text)
 
 
 def body_rows(text, terminal, *, eof_tail=False):
@@ -256,7 +271,9 @@ def collect_oracle(reference, registration, cases, evidence, workers):
     cache_dir, cache_path, cache = load_cache(evidence, identity)
     unique = sorted({one["source_sha256"]: one for one in cases}.values(),
                     key=lambda one: one["source_sha256"])
-    missing = [one for one in unique if one["source_sha256"] not in cache]
+    missing = [one for one in unique if one["source_sha256"] not in cache
+               or not all(profile in cache[one["source_sha256"]]
+                          for profile in ("ascii", "utf8", "html", "tree", "lint"))]
     print(f"oracle cache: {len(cache)} cached, {len(missing)} to collect "
           f"(identity {identity})", flush=True)
     cache_dir.mkdir(parents=True, exist_ok=True)
@@ -264,7 +281,9 @@ def collect_oracle(reference, registration, cases, evidence, workers):
     def record(one):
         source = one["source"]
         profiles = {}
-        for profile, arguments in (("utf8", ["-Tutf8", "-Owidth=78"]),
+        for profile, arguments in (("ascii", ["-Tascii", "-Owidth=78"]),
+                                   ("utf8", ["-Tutf8", "-Owidth=78"]),
+                                   ("html", ["-Thtml"]),
                                    ("lint", ["-Tlint"]),
                                    ("tree", ["-Ttree"])):
             completed = roff_fixture_reference.run_reference(
@@ -280,6 +299,7 @@ def collect_oracle(reference, registration, cases, evidence, workers):
                 "stdout": completed.stdout.decode("utf-8"),
                 "stderr": completed.stderr.decode("utf-8"),
                 "stdout_sha256": digest(completed.stdout),
+                "stderr_sha256": digest(completed.stderr),
             }
         return {"source_sha256": one["source_sha256"], **profiles}
 
@@ -295,7 +315,7 @@ def collect_oracle(reference, registration, cases, evidence, workers):
     manifest = {"identity": identity,
                 "reference_sha256": digest(Path(reference).read_bytes()),
                 "policy_version": POLICY_VERSION,
-                "records": len(cache) + added,
+                "records": len(set(cache) | {one["source_sha256"] for one in missing}),
                 "expectations_from_product": False}
     (cache_dir / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     print(f"oracle collection complete: {added} new, {len(cache)} cache hits",
@@ -368,6 +388,16 @@ def admit(one, cache):
             and one["delimiter"].startswith("literal") \
             and one["termination"] == "truncated-close":
         result["construction"] = "recovery-candidate: trailing incomplete backslash"
+    if (one.get("dialect") == "mdoc" and one.get("family") == "output-owners"
+            and one.get("inner") == "RS"):
+        result["recovery_admission"] = result["admission"]
+        result["admission"] = "generator-scope-gap"
+        result["reason"] = "man RS/RE in mdoc does not witness the declared RS owner"
+    if one["family"] == "corrected-owner-scopes":
+        witness = tree_witness(record["tree"]["stdout"])
+        if not witness["kinds"].get("RS") or "RS (body)" not in record["tree"]["stdout"]:
+            result["admission"] = "generator-defect"
+            result["reason"] = "corrected man source did not create the required RS BODY"
     return result
 
 
@@ -385,8 +415,23 @@ PRODUCT_MARKDOWN = ["--input", "-", "--input-format", "roff", "--display",
 IDENTITY_MACROS = ("Lk", "UR", ".Mt", ".MR", ".Sx", ".In", ".Bx", ".Xr")
 
 
-def replay_product(product, cases, evidence, workers):
+def product_binding(product, product_head=None):
+    return {
+        "binary": str(Path(product).resolve()),
+        "sha256": digest(Path(product).read_bytes()),
+        "head": product_head or subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True,
+            text=True, check=False).stdout.strip(),
+        "dirty_tree": bool(subprocess.run(
+            ["git", "status", "--porcelain"], cwd=ROOT, capture_output=True,
+            text=True, check=False).stdout.strip()),
+    }
+
+
+def replay_product(product, cases, evidence, workers, product_head=None):
     """Run the product once per unique source; aggregate per-case results."""
+    binding = product_binding(product, product_head)
+    product_sha256 = binding["sha256"]
     by_hash = {}
     for one in cases:
         by_hash.setdefault(one["source_sha256"], one)
@@ -398,42 +443,66 @@ def replay_product(product, cases, evidence, workers):
         ansi = run(product, PRODUCT_ANSI, source)
         result = {
             "plain_code": plain["code"],
-            "product_error": plain["code"] != 0,
+            "product_error": (plain["code"] != 0 or ansi["code"] != 0
+                              or not plain["utf8_valid"] or not ansi["utf8_valid"]),
             "ansi_parity": unstyle(plain["stdout"]) == unstyle(ansi["stdout"]),
             "stdout_sha256": {name: digest(run_output["stdout"].encode())
                               for name, run_output in
                               (("plain", plain), ("ansi", ansi))},
         }
-        wants_identity = any(macro in source for macro in IDENTITY_MACROS)
         result["product_rows"] = body_rows(
             plain["stdout"], terminal, eof_tail=one.get("tail") == "eof")
-        if wants_identity:
-            encoded = run(product, PRODUCT_JSON, source)
-            result["json_code"] = encoded["code"]
-            result["marker_leak"] = ("\\u0000mant:" in encoded["stdout"]
-                                     if encoded["code"] == 0 else None)
-            if encoded["code"] != 0:
+        encoded = run(product, PRODUCT_JSON, source)
+        result["json_code"] = encoded["code"]
+        result["marker_leak"] = ("\\u0000mant:" in encoded["stdout"]
+                                 if encoded["code"] == 0 else None)
+        if encoded["code"] != 0 or not encoded["utf8_valid"]:
+            result["product_error"] = True
+        else:
+            try:
+                bundle = json.loads(encoded["stdout"])
+                result["product_region"] = acceptance_regions.select_product_region(
+                    plain["stdout"], bundle)
+                result["external_targets"] = acceptance_comparison.product_external_targets(bundle)
+            except (json.JSONDecodeError, TypeError, AttributeError) as error:
                 result["product_error"] = True
+                result["json_error"] = str(error)
+        raw = {"text": plain, "ansi": ansi, "json": encoded}
+        if any(macro in source for macro in IDENTITY_MACROS):
             markdown = run(product, PRODUCT_MARKDOWN, source)
+            raw["markdown"] = markdown
             result["markdown_code"] = markdown["code"]
-            if markdown["code"] != 0:
+            if markdown["code"] != 0 or not markdown["utf8_valid"]:
                 result["product_error"] = True
-        return result
+        result["stdout_sha256"]["json"] = digest(encoded["stdout"].encode())
+        return result, raw
 
     results = {}
     failures = 0
     unique = sorted(by_hash.values(), key=lambda one: one["source_sha256"])
-    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
-        for i, (one, result) in enumerate(
-                zip(unique, pool.map(execute, unique)), 1):
-            results[one["source_sha256"]] = result
-            if result["product_error"]:
-                failures += 1
-            if i % 500 == 0:
-                print(f"replayed {i}/{len(unique)}", flush=True)
+    with (evidence / "product-raw.jsonl").open("w", encoding="utf-8") as raw_output:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
+            for i, (one, (result, raw)) in enumerate(
+                    zip(unique, pool.map(execute, unique)), 1):
+                results[one["source_sha256"]] = result
+                raw_output.write(json.dumps({"source_sha256": one["source_sha256"],
+                                             "profiles": raw}, ensure_ascii=False) + "\n")
+                if result["product_error"]:
+                    failures += 1
+                if i % 500 == 0:
+                    print(f"replayed {i}/{len(unique)}", flush=True)
     (evidence / "replay-results.json").write_text(
         json.dumps({sha: result for sha, result in results.items()},
                    indent=1, sort_keys=True) + "\n")
+    if digest(Path(product).read_bytes()) != product_sha256:
+        raise SystemExit("product binary changed during replay; rerun after the build finishes")
+    (evidence / "replay-binding.json").write_text(json.dumps({
+        "binary": str(Path(product).resolve()), "sha256": product_sha256,
+        "unique_sources": len(results), "results_sha256": digest(
+            (evidence / "replay-results.json").read_bytes()),
+        "raw_sha256": digest((evidence / "product-raw.jsonl").read_bytes()),
+        "product_binding": binding,
+    }, indent=2) + "\n")
     print(f"product replay complete: {len(unique)} unique sources, "
           f"{failures} with product errors", flush=True)
     return results
@@ -443,47 +512,26 @@ def replay_product(product, cases, evidence, workers):
 # Ledger assembly
 # ---------------------------------------------------------------------------
 
-def case_status(admission, screen, product_result):
-    if admission in ("not-collected", "generator-defect"):
-        return "review", []
-    if screen.get("extraction") != "ok":
-        # Screening could not extract a comparable window; never a pass.
-        return "review", []
-    failing = []
-    if product_result.get("product_error"):
-        failing.append("product-error")
-    for axis in ("glyph_equal", "row_equal", "indent_equal"):
-        if screen.get(axis) is False:
-            failing.append(axis)
-    if product_result.get("ansi_parity") is False:
-        failing.append("ansi-parity")
-    if product_result.get("marker_leak"):
-        failing.append("marker-leak")
-    if failing:
-        return "fail", failing
-    if admission in ("native-diagnostics", "recovery"):
-        return "review", []
-    # A screening-level pass never claims full axis assertion (section 5.8).
-    return "pass", []
-
-
-def uncovered_axes(one):
+def uncovered_axes(one, report):
     """Declared axes still awaiting comparator wiring beyond screening."""
     policy = one["policy"]
-    axes = []
-    if not str(policy["separators"]).startswith("not-applicable"):
-        axes.append("separators")
+    axes = [axis for axis, outcome in report.items() if outcome == "uncovered"]
     if policy["identity"] == "rich-inline":
         axes.append("identity:rich-inline")
-    if policy["rows"] == "exact-hard-rows":
-        axes.append("rows:exact-hard-rows")
+    # The full CLI layer covers display/edge rows and external URI occurrence.
+    # Source/style/scalar ranges and real interactive consumers are covered
+    # by the Rust adapter's cards, not inferred from a successful CLI render.
+    axes.extend(("style", "source", "scalar-range", "tui", "query"))
     return axes
 
 
-def build_ledger(cases, cache, product_results, product_binding, frozen):
+def build_ledger(cases, cache, product_results, product_binding, frozen,
+                 oracle_binding=None):
     families = {}
     case_rows = {}
     terminal = "NEXT"
+    policies = acceptance_comparison.load_policies()
+    oracle_binding = oracle_binding or {}
     for one in cases:
         record = cache.get(one["source_sha256"], {})
         admission_info = admit(one, cache)
@@ -493,8 +541,26 @@ def build_ledger(cases, cache, product_results, product_binding, frozen):
         product_result = product_results.get(one["source_sha256"], {})
         product_rows = product_result.get("product_rows")
         screen = screening(native_rows, product_rows)
-        status, failing = case_status(admission_info["admission"], screen,
-                                      product_result)
+        policy, policy_error = acceptance_comparison.qualified_policy(
+            one, record, oracle_binding, policies)
+        native_region = acceptance_regions.select_native_region(
+            record.get("utf8", {}).get("stdout", ""),
+            record.get("tree", {}).get("stdout", ""))
+        expected_region = policy.get("expected_region", native_region)
+        report = acceptance_comparison.compare_axes(
+            expected_region, product_result.get("product_region", {}), policy)
+        if "external_targets" in product_result and "html" in record:
+            expected_targets = policy.get("external_targets",
+                acceptance_comparison.native_external_targets(record["html"]["stdout"]))
+            report["identity:external-occurrences"] = (
+                expected_targets == product_result["external_targets"])
+        else:
+            report["identity:external-occurrences"] = "uncovered"
+        missing_axes = uncovered_axes(one, report)
+        if policy_error:
+            missing_axes.append("policy-binding")
+        status, failing = acceptance_comparison.verdict(
+            admission_info["admission"], report, product_result, missing_axes)
         row = {
             "id": one["id"], "cohort": one["cohort"], "family": one["family"],
             "axes": {k: v for k, v in one.items()
@@ -503,11 +569,15 @@ def build_ledger(cases, cache, product_results, product_binding, frozen):
             "policy": one["policy"],
             **admission_info,
             "screening": screen,
+            "axis_report": report,
+            "region": native_region,
+            "presentation_policy": policy,
+            "policy_binding_error": policy_error,
             "product": {k: v for k, v in product_result.items()
                         if k not in ("native_rows", "product_rows")},
             "status": status,
             "failing_axes": failing,
-            "uncovered_axes": uncovered_axes(one),
+            "uncovered_axes": missing_axes,
             "consumer_covered": ["cli-text-screening", "cli-ansi-screening"],
         }
         if product_result.get("marker_leak") is not None:
@@ -532,8 +602,8 @@ def build_ledger(cases, cache, product_results, product_binding, frozen):
         summary["generated"] += 1
         summary["source_unique"].add(one["source_sha256"])
         summary["admission"][row["admission"]] += 1
-        for axis, policy in one["policy"].items():
-            summary["axis_asserted"][axis][str(policy).split(":", 1)[0]] += 1
+        for axis, outcome in row["axis_report"].items():
+            summary["axis_asserted"][axis][str(outcome).lower()] += 1
         for consumer in row["consumer_covered"]:
             summary["consumer_covered"][consumer] += 1
         summary[row["status"]] += 1
@@ -579,17 +649,16 @@ def build_ledger(cases, cache, product_results, product_binding, frozen):
         "schema": LEDGER_SCHEMA,
         "policy_version": POLICY_VERSION,
         "product_binding": product_binding,
+        "oracle_binding": oracle_binding,
         "case_count": len(case_rows),
         "families": dict(sorted(families.items())),
         "coverage": coverage,
         "empty_text_witness": roff_acceptance_cases.EMPTY_TEXT_WITNESS,
         "notes": [
-            "pass/fail are screening-level outcomes (glyph/row/indent equality,",
-            "ansi parity, json marker leak) over the registered pristine oracle;",
-            "they never claim full axis assertion. native-diagnostics and recovery",
-            "cases stay review. uncovered_axes lists axes whose exact assertions",
-            "await the comparator wiring; the frozen subset carries full",
-            "five-profile oracle records for those consumers.",
+            "screening equalities are diagnostics only; verdict comes from independent axes.",
+            "Native diagnostics qualify inputs and do not override applicable assertion failures.",
+            "Content edges are retained; source-bound presentation policies change only named axes.",
+            "Uncovered consumer/style/source/range dimensions keep otherwise matching cases review.",
         ],
         "cases": case_rows,
     }
@@ -753,6 +822,7 @@ def main():
     reference = args.reference if args.reference.is_absolute() \
         else ROOT / args.reference
     if args.check_frozen:
+        roff_fixture_reference.verified_reference(ROOT, reference)
         check_frozen(reference)
         return
 
@@ -778,32 +848,40 @@ def main():
 
     product_results = {}
     if args.replay:
-        product_results = replay_product(product, cases, evidence, args.workers)
+        product_results = replay_product(product, cases, evidence, args.workers,
+                                         args.product_head)
     elif (args.ledger or args.freeze) and (evidence / "replay-results.json").exists():
+        binding_path = evidence / "replay-binding.json"
+        if not binding_path.exists():
+            raise SystemExit("persisted replay has no product binding; rerun --replay")
+        binding = json.loads(binding_path.read_text())
+        if digest((evidence / "replay-results.json").read_bytes()) != binding["results_sha256"]:
+            raise SystemExit("persisted replay bytes differ from their binding; rerun --replay")
+        raw_path = evidence / "product-raw.jsonl"
+        if not raw_path.exists() or digest(raw_path.read_bytes()) != binding["raw_sha256"]:
+            raise SystemExit("persisted raw replay differs from its binding; rerun --replay")
+        if product is not None and digest(Path(product).read_bytes()) != binding["sha256"]:
+            raise SystemExit("persisted replay belongs to a different product binary; rerun --replay")
         product_results = json.loads(
             (evidence / "replay-results.json").read_text())
         print(f"loaded persisted product replay: {len(product_results)} sources")
 
     ledger_path = evidence / "ledger.json"
     if args.ledger or args.freeze:
-        product_binding = {
-            "binary": str(product) if product else None,
-            "sha256": digest(Path(product).read_bytes()) if product else None,
-            "head": args.product_head or subprocess.run(
-                ["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True,
-                text=True, check=False).stdout.strip(),
-            "dirty_tree": bool(subprocess.run(
-                ["git", "status", "--porcelain"], cwd=ROOT, capture_output=True,
-                text=True, check=False).stdout.strip()),
-        }
-        ledger = build_ledger(cases, cache, product_results, product_binding,
-                              frozen)
+        binding_path = evidence / "replay-binding.json"
+        if not binding_path.exists():
+            raise SystemExit("ledger requires a bound product replay; run --replay")
+        replay_binding = json.loads(binding_path.read_text())
+        candidate_binding = replay_binding["product_binding"]
+        ledger = build_ledger(cases, cache, product_results, candidate_binding,
+                              frozen, {"identity": registration["identity"],
+                                       "reference_sha256": digest(reference.read_bytes())})
         ledger_path.write_text(
             json.dumps(ledger, ensure_ascii=False, indent=1, sort_keys=True) + "\n")
         counts = collections.Counter(row["status"] for row in ledger["cases"].values())
         print(f"ledger written: {ledger_path} ({dict(counts)})")
     if args.freeze:
-        freeze(frozen, product_binding, reference, ledger_path)
+        freeze(frozen, candidate_binding, reference, ledger_path)
 
 
 if __name__ == "__main__":

@@ -55,6 +55,8 @@ run "check roff fidelity audit" python3 -m scripts.roff.audit.audit_roff_fidelit
 run "test bidirectional roff content comparison" python3 -m scripts.roff.lib.roff_content_compare
 run "test source-bound presentation explanations" python3 -m scripts.roff.tests.test_roff_content_explanations
 run "test source-bound roff layout geometry" python3 -m scripts.roff.tests.test_roff_layout_geometry
+run "test roff acceptance axes and structural edges" \
+  python3 -m unittest scripts.roff.tests.test_acceptance_replay
 run "test rendering matrix mutation sensitivity" python3 -m scripts.roff.audit.check_roff_behavior_matrix --self-test
 run "test bounded rendering census" python3 -m scripts.roff.audit.audit_roff_rendering --self-test
 run "test roff audit parallelism planning" python3 -m scripts.roff.tests.test_roff_audit_common
