@@ -450,70 +450,8 @@ mod tests {
     }
 
     #[test]
-    #[expect(
-        clippy::too_many_lines,
-        reason = "the nested fixture covers every visible fallback owner"
-    )]
     fn final_fallback_preserves_visible_terms_cells_and_equations() {
-        let mut section = Section {
-            id: "leaf".into(),
-            fragment_aliases: Vec::new(),
-            heading: Heading::from("leaf heading"),
-            spacing_before_lines: 0,
-            blocks: vec![
-                Block::DefinitionList {
-                    items: vec![DefinitionItem {
-                        source: None,
-                        entry: None,
-                        terms: vec![vec![Inline::Text {
-                            value: "definition term".into(),
-                        }]],
-                        description: vec![Block::Paragraph {
-                            children: vec![Inline::Text {
-                                value: "definition body".into(),
-                            }],
-                            layout: LayoutHint::default(),
-                            source: None,
-                        }],
-                        layout: DefinitionLayout::default(),
-                    }],
-                    declaration_groups: Vec::new(),
-                    compact: false,
-                    layout: LayoutHint::default(),
-                    source: None,
-                },
-                Block::Table {
-                    column_widths: Vec::new(),
-                    rows: vec![TableRow {
-                        kind: TableRowKind::Data,
-                        cells: vec![TableCell {
-                            kind: TableCellKind::Text,
-                            blocks: vec![Block::Paragraph {
-                                children: vec![Inline::Text {
-                                    value: "table cell".into(),
-                                }],
-                                layout: LayoutHint::default(),
-                                source: None,
-                            }],
-                            column_span: 1,
-                            row_span: 1,
-                            alignment: None,
-                        }],
-                    }],
-                    layout: LayoutHint::default(),
-                    source: None,
-                },
-                Block::Equation {
-                    value: "formula operand".into(),
-                    expression: None,
-                    display: true,
-                    layout: LayoutHint::default(),
-                    source: None,
-                },
-            ],
-            children: Vec::new(),
-            source: None,
-        };
+        let mut section = fallback_leaf_section();
         for depth in 0..70 {
             section = Section {
                 id: format!("level-{depth}").into(),
@@ -571,5 +509,67 @@ mod tests {
                 .count(),
             1
         );
+    }
+
+    fn fallback_leaf_section() -> Section {
+        Section {
+            id: "leaf".into(),
+            fragment_aliases: Vec::new(),
+            heading: Heading::from("leaf heading"),
+            spacing_before_lines: 0,
+            blocks: vec![
+                Block::DefinitionList {
+                    items: vec![DefinitionItem {
+                        source: None,
+                        entry: None,
+                        terms: vec![vec![Inline::Text {
+                            value: "definition term".into(),
+                        }]],
+                        description: vec![Block::Paragraph {
+                            children: vec![Inline::Text {
+                                value: "definition body".into(),
+                            }],
+                            layout: LayoutHint::default(),
+                            source: None,
+                        }],
+                        layout: DefinitionLayout::default(),
+                    }],
+                    declaration_groups: Vec::new(),
+                    compact: false,
+                    layout: LayoutHint::default(),
+                    source: None,
+                },
+                Block::Table {
+                    column_widths: Vec::new(),
+                    rows: vec![TableRow {
+                        kind: TableRowKind::Data,
+                        cells: vec![TableCell {
+                            kind: TableCellKind::Text,
+                            blocks: vec![Block::Paragraph {
+                                children: vec![Inline::Text {
+                                    value: "table cell".into(),
+                                }],
+                                layout: LayoutHint::default(),
+                                source: None,
+                            }],
+                            column_span: 1,
+                            row_span: 1,
+                            alignment: None,
+                        }],
+                    }],
+                    layout: LayoutHint::default(),
+                    source: None,
+                },
+                Block::Equation {
+                    value: "formula operand".into(),
+                    expression: None,
+                    display: true,
+                    layout: LayoutHint::default(),
+                    source: None,
+                },
+            ],
+            children: Vec::new(),
+            source: None,
+        }
     }
 }

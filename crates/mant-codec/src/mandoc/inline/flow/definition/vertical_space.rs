@@ -48,7 +48,6 @@ impl InlineBuilder {
     /// numeric operand as document text.  `term_vspace(n)` first closes an
     /// occupied row, then emits `n` empty rows.
     // term_vspace() must settle the active field before asserting rows.
-    #[allow(clippy::too_many_lines)]
     pub(in crate::mandoc) fn vertical_space(&mut self, rows: usize) {
         if let Some(field) = self.take_no_break_field() {
             self.vertical_space_in_definition_field(field, rows);
@@ -111,111 +110,20 @@ impl InlineBuilder {
                 field_width_columns,
             );
             if !self.has_formatter_cell() {
-                // `term_vspace()` always emits its requested empty row, but
-                // its leading `term_newln()` leaves a bare BACKAFTER armed
-                // when neither tcol nor viscol is occupied.  The following
-                // BRIND phase still ends a tag field; HANG keeps its run-in
-                // body contract.  Preserve those independent effects.
-                // term.c:475-480,489-497: the conditional term_newln()
-                // emits nothing with no buffered cell or occupied row.
-                // Only the requested endline events exist; an IR helper
-                // return must not contribute another row close.
-                self.retain_line_breaks(rows);
-                self.execution.boundary = PendingBoundary::Tight;
-                if flags.wraps() {
-                    self.execution
-                        .definition
-                        .as_mut()
-                        .expect("definition field session")
-                        .outcome
-                        .mark_field_exited();
-                    if let Some(execution) = &mut self.execution.author_execution {
-                        execution.field_output_start = self.nodes.len();
-                        execution.break_effect = AuthorBreakEffect::Line;
-                    }
-                }
-                self.execution.final_word_join = Some(false);
-                self.execution.final_source_continuation = Some(false);
-                self.finish_native_vertical_row(rows);
-                self.move_definition_field_origin_to_body(body_width_columns);
-                if !flags.wraps()
-                    && let Some(execution) = &mut self.execution.author_execution
-                {
-                    // pre_br clears trailspace even when term_newln had
-                    // no cell to flush. HANG survives; offset is not viscol.
-                    execution.break_effect = AuthorBreakEffect::Field {
-                        gap_cells: 0,
-                        body_width_columns,
-                        field_width_columns,
-                        flags,
-                    };
-                }
+                self.vertical_space_after_empty_field(
+                    rows,
+                    body_width_columns,
+                    field_width_columns,
+                    flags,
+                );
                 return;
             }
-            // `roff_term_pre_sp()` executes term_vspace() before the final
-            // BRIND transition. HANG can suppress term_newln(), but the
-            // vertical request still ends the row; field padding is trailing
-            // geometry and must not leak onto the empty row.
-            // roff_term_pre_sp() executes term_vspace() before the final
-            // BRIND transition. The CVS-pinned occupied-head rows keep
-            // term_newln()'s close consuming the first requested row for
-            // wrappable fields; HANG suppresses that close only when the
-            // field did not overrun (term.c:250-252).
-            let start = self
-                .author_execution
-                .as_ref()
-                .map_or(self.nodes.len(), |execution| execution.field_output_start);
-            self.flush_zero_advance();
-            let width = mant_ir::geometry::text_width(&super::super::super::plain_text(
-                self.nodes.get(start..).unwrap_or_default(),
-            ));
-            let trailspace = self
-                .author_execution
-                .as_ref()
-                .map_or(0, |execution| match execution.break_effect {
-                    AuthorBreakEffect::Field { gap_cells, .. } => usize::from(gap_cells),
-                    AuthorBreakEffect::Line => 0,
-                });
-            let term_newln_ended_row =
-                flags.wraps() && width.saturating_add(trailspace) > usize::from(body_width_columns);
-            self.hard_break();
-            self.retain_line_breaks(if term_newln_ended_row {
-                rows
-            } else {
-                rows.saturating_sub(1)
-            });
-            self.definition_state_mut().pending_indent = Some(usize::from(body_width_columns));
-            if let Some(execution) = &mut self.execution.author_execution {
-                execution.field_output_start = self.nodes.len();
-                if flags.wraps() {
-                    self.execution
-                        .definition
-                        .as_mut()
-                        .expect("definition field session")
-                        .outcome
-                        .mark_field_exited();
-                    execution.break_effect = AuthorBreakEffect::Line;
-                } else {
-                    self.execution
-                        .definition
-                        .as_mut()
-                        .expect("definition field session")
-                        .outcome
-                        .mark_body_gap_consumed();
-                    execution.break_effect = AuthorBreakEffect::Field {
-                        gap_cells: 0,
-                        body_width_columns,
-                        field_width_columns,
-                        flags,
-                    };
-                }
-            }
-            // term.c:233-237: the committed flush ends the field; the
-            // input buffer restarts empty for whatever follows this row.
-            if let Some(definition) = &mut self.execution.definition {
-                definition.field_buffer.clear();
-                definition.field_word_anchors.clear();
-            }
+            self.vertical_space_after_occupied_field(
+                rows,
+                body_width_columns,
+                field_width_columns,
+                flags,
+            );
         } else {
             self.hard_break();
             self.retain_line_breaks(rows);
@@ -241,6 +149,127 @@ impl InlineBuilder {
         }
         self.execution.final_word_join = Some(false);
         self.execution.final_source_continuation = Some(false);
+    }
+
+    fn vertical_space_after_occupied_field(
+        &mut self,
+        rows: usize,
+        body_width_columns: u16,
+        field_width_columns: u16,
+        flags: super::super::native_field::FieldFlags,
+    ) {
+        // `roff_term_pre_sp()` executes term_vspace() before the final
+        // BRIND transition. HANG can suppress term_newln(), but the
+        // vertical request still ends the row; field padding is trailing
+        // geometry and must not leak onto the empty row.
+        // roff_term_pre_sp() executes term_vspace() before the final
+        // BRIND transition. The CVS-pinned occupied-head rows keep
+        // term_newln()'s close consuming the first requested row for
+        // wrappable fields; HANG suppresses that close only when the
+        // field did not overrun (term.c:250-252).
+        let start = self
+            .author_execution
+            .as_ref()
+            .map_or(self.nodes.len(), |execution| execution.field_output_start);
+        self.flush_zero_advance();
+        let width = mant_ir::geometry::text_width(&super::super::super::plain_text(
+            self.nodes.get(start..).unwrap_or_default(),
+        ));
+        let trailspace =
+            self.author_execution
+                .as_ref()
+                .map_or(0, |execution| match execution.break_effect {
+                    AuthorBreakEffect::Field { gap_cells, .. } => usize::from(gap_cells),
+                    AuthorBreakEffect::Line => 0,
+                });
+        let term_newln_ended_row =
+            flags.wraps() && width.saturating_add(trailspace) > usize::from(body_width_columns);
+        self.hard_break();
+        self.retain_line_breaks(if term_newln_ended_row {
+            rows
+        } else {
+            rows.saturating_sub(1)
+        });
+        self.definition_state_mut().pending_indent = Some(usize::from(body_width_columns));
+        if let Some(execution) = &mut self.execution.author_execution {
+            execution.field_output_start = self.nodes.len();
+            if flags.wraps() {
+                self.execution
+                    .definition
+                    .as_mut()
+                    .expect("definition field session")
+                    .outcome
+                    .mark_field_exited();
+                execution.break_effect = AuthorBreakEffect::Line;
+            } else {
+                self.execution
+                    .definition
+                    .as_mut()
+                    .expect("definition field session")
+                    .outcome
+                    .mark_body_gap_consumed();
+                execution.break_effect = AuthorBreakEffect::Field {
+                    gap_cells: 0,
+                    body_width_columns,
+                    field_width_columns,
+                    flags,
+                };
+            }
+        }
+        // term.c:233-237: the committed flush ends the field; the
+        // input buffer restarts empty for whatever follows this row.
+        if let Some(definition) = &mut self.execution.definition {
+            definition.field_buffer.clear();
+            definition.field_word_anchors.clear();
+        }
+    }
+
+    fn vertical_space_after_empty_field(
+        &mut self,
+        rows: usize,
+        body_width_columns: u16,
+        field_width_columns: u16,
+        flags: super::super::native_field::FieldFlags,
+    ) {
+        // `term_vspace()` always emits its requested empty row, but
+        // its leading `term_newln()` leaves a bare BACKAFTER armed
+        // when neither tcol nor viscol is occupied.  The following
+        // BRIND phase still ends a tag field; HANG keeps its run-in
+        // body contract.  Preserve those independent effects.
+        // term.c:475-480,489-497: the conditional term_newln()
+        // emits nothing with no buffered cell or occupied row.
+        // Only the requested endline events exist; an IR helper
+        // return must not contribute another row close.
+        self.retain_line_breaks(rows);
+        self.execution.boundary = PendingBoundary::Tight;
+        if flags.wraps() {
+            self.execution
+                .definition
+                .as_mut()
+                .expect("definition field session")
+                .outcome
+                .mark_field_exited();
+            if let Some(execution) = &mut self.execution.author_execution {
+                execution.field_output_start = self.nodes.len();
+                execution.break_effect = AuthorBreakEffect::Line;
+            }
+        }
+        self.execution.final_word_join = Some(false);
+        self.execution.final_source_continuation = Some(false);
+        self.finish_native_vertical_row(rows);
+        self.move_definition_field_origin_to_body(body_width_columns);
+        if !flags.wraps()
+            && let Some(execution) = &mut self.execution.author_execution
+        {
+            // pre_br clears trailspace even when term_newln had
+            // no cell to flush. HANG survives; offset is not viscol.
+            execution.break_effect = AuthorBreakEffect::Field {
+                gap_cells: 0,
+                body_width_columns,
+                field_width_columns,
+                flags,
+            };
+        }
     }
 
     pub(super) fn finish_native_vertical_row(&mut self, rows: usize) {

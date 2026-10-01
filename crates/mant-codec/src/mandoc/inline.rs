@@ -138,7 +138,6 @@ pub(super) fn append_inline_node(
 }
 
 // Node entry, handler, and post have one shared execution sequence.
-#[allow(clippy::too_many_lines)]
 pub(super) fn append_inline_node_with_next(
     builder: &mut InlineBuilder,
     node: &Node,
@@ -193,6 +192,18 @@ pub(super) fn append_inline_node_with_next(
     if node.flags.delimiter_close {
         builder.tighten_next_boundary();
     }
+    execute_inline_macro_handler(builder, node, next, default_name);
+    finish_inline_node_execution(builder, node, next, final_word_join_before);
+    execute_inline_macro_post(builder, node);
+    builder.restore_definition_geometry(geometry);
+}
+
+fn execute_inline_macro_handler(
+    builder: &mut InlineBuilder,
+    node: &Node,
+    next: Option<&Node>,
+    default_name: Option<&str>,
+) {
     match node.macro_name.as_deref() {
         Some("B" | "I" | "SB" | "R" | "BI" | "BR" | "IB" | "IR" | "RB" | "RI" | "OP") => {
             lower_man_font_scope(builder, node, default_name);
@@ -286,9 +297,6 @@ pub(super) fn append_inline_node_with_next(
         }
         _ => scopes::append(builder, node, default_name),
     }
-    finish_inline_node_execution(builder, node, next, final_word_join_before);
-    execute_inline_macro_post(builder, node);
-    builder.restore_definition_geometry(geometry);
 }
 
 fn execute_inline_macro_post(builder: &mut InlineBuilder, node: &Node) {

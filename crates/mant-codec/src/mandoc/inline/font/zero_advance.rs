@@ -9,7 +9,6 @@ use crate::mandoc::roff_escape::ZeroAdvanceMachine;
 /// pending glyph therefore belongs to the surrounding inline stream rather
 /// than to the one text node that happened to contain the escape.
 #[derive(Clone, Debug, Eq, PartialEq)]
-#[allow(clippy::struct_excessive_bools)]
 pub(in crate::mandoc) struct ZeroAdvanceState {
     machine: ZeroAdvanceMachine<OwnedGlyph>,
     native_word_owner: Option<u64>,

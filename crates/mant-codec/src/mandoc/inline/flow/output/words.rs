@@ -157,45 +157,89 @@ impl InlineBuilder {
     }
 
     /// An empty or control-only formatter word still updates registers, but
-    #[allow(clippy::too_many_lines)] // term_word(): full pre-decode register dance
     pub(in crate::mandoc) fn begin_word_projection_with_break(
         &mut self,
         next_is_visible: bool,
         next_has_glyph: bool,
         marker_blank_before_graph: bool,
     ) {
-        if next_is_visible {
-            // term_word() clears skipvsp before consuming the word itself.
-            self.execution.vertical_space_debt = 0;
-            self.execution.execution_epoch = self.execution.execution_epoch.wrapping_add(1);
+        let continued_word = self.begin_native_word_registers(next_is_visible);
+        self.settle_pending_word_break(next_is_visible, next_has_glyph);
+        if continued_word && !self.execution.boundary.is_tight() {
+            // TERMP_NONEWLINE suppresses the physical source break while an
+            // `.Ec`-style release permits the normal formatter blank.  An
+            // authored leading blank is retained separately by the incoming
+            // word, producing the two spaces emitted by CVS in both filled
+            // and literal flows.
+            self.execution.boundary = PendingBoundary::Continued;
         }
-        let continued_word = next_is_visible
-            && self.final_source_continuation_or(false)
-            && !self.execution.boundary.is_tight();
-        if next_is_visible {
-            self.execution.final_word_join = Some(false);
-            self.execution.final_source_continuation = Some(false);
+        self.promote_word_keep(next_is_visible);
+        if marker_blank_before_graph
+            && self.execution.zero_advance.has_pending_glyph()
+            && !self.execution.boundary.is_nonbreaking()
+            && (self.execution.spacing.enabled()
+                || matches!(
+                    self.execution.boundary,
+                    PendingBoundary::Preserved | PendingBoundary::Continued
+                ))
+        {
+            // The incoming word starts with a `\p` marker whose following
+            // blank the pending glyph's BACKBEFORE retreat consumes
+            // (term.c:901-908): resolving the glyph at this virtual boundary
+            // would instead eat the separator and arm the marker's break on
+            // the wrong cell. Keep the glyph pending; the word's own blank
+            // settles it. The surviving separator is the blank term_word()
+            // actually wrote before the marker, so it exists only where the
+            // entry state allowed one: spacing enabled (`.Sm on`) or the
+            // first fragment after the transition (`Preserved`/`Continued`),
+            // never across a tight join — TERMP_NOSPACE wrote nothing
+            // (term.c:573-580).
+            self.execution.zero_advance.note_marker_blank_separator();
+            return;
         }
-        // term_word() writes its automatic separator using the incoming
-        // NOSPACE/KEEP registers, then promotes PREKEEP (term.c:573-586).
-        // Zero-advance projection may subsequently tighten the IR boundary;
-        // that cannot change which native cell was already written.
-        if next_is_visible {
-            self.execution.native_word_boundary = Some(
-                if self.execution.keep.phase == KeepPhase::Keep
-                    && !self.execution.boundary.is_tight()
-                    && (self.execution.spacing.enabled()
-                        || matches!(
-                            self.execution.boundary,
-                            PendingBoundary::Preserved | PendingBoundary::Continued
-                        ))
-                {
-                    PendingBoundary::Kept
+        if !next_is_visible
+            || self.execution.boundary.is_nonbreaking()
+            || !(self.execution.has_printable_content
+                || self.execution.zero_advance.has_buffered_glyph())
+            || !(self.execution.spacing.enabled()
+                || matches!(self.execution.boundary, PendingBoundary::Preserved))
+        {
+            return;
+        }
+        let Some(glyph) = self.resolve_zero_advance_at_word_boundary() else {
+            return;
+        };
+        self.append_projected(glyph);
+        self.execution.boundary = PendingBoundary::Tight;
+    }
+
+    fn promote_word_keep(&mut self, next_is_visible: bool) {
+        if next_is_visible && self.execution.keep.phase == KeepPhase::PreKeep {
+            // term_word() inserts the leading boundary using the *previous*
+            // KEEP value, then promotes PREKEEP. Execute that ordering before
+            // decoding the word: a bare BACKAFTER survives the ordinary blank,
+            // while BACKBEFORE consumes it and retains its buffered glyph.
+            if !self.execution.boundary.is_nonbreaking()
+                && (self.execution.formatter_column == FormatterColumn::Advanced
+                    || self.execution.zero_advance.has_buffered_glyph())
+                && (self.execution.spacing.enabled()
+                    || matches!(self.execution.boundary, PendingBoundary::Preserved))
+            {
+                if let Some(glyph) = self.resolve_zero_advance_at_word_boundary() {
+                    self.append_projected(glyph);
                 } else {
-                    self.execution.boundary
-                },
-            );
+                    self.append_projected(vec![Inline::Text {
+                        value: " ".to_owned(),
+                    }]);
+                    self.execution.formatter_column = FormatterColumn::Advanced;
+                }
+                self.execution.boundary = PendingBoundary::Tight;
+            }
+            self.execution.keep.phase = KeepPhase::Keep;
         }
+    }
+
+    fn settle_pending_word_break(&mut self, next_is_visible: bool, next_has_glyph: bool) {
         if next_is_visible
             && self.execution.keep.keeping()
             && !self.execution.boundary.is_tight()
@@ -273,74 +317,42 @@ impl InlineBuilder {
                 self.hard_break();
             }
         }
-        if continued_word && !self.execution.boundary.is_tight() {
-            // TERMP_NONEWLINE suppresses the physical source break while an
-            // `.Ec`-style release permits the normal formatter blank.  An
-            // authored leading blank is retained separately by the incoming
-            // word, producing the two spaces emitted by CVS in both filled
-            // and literal flows.
-            self.execution.boundary = PendingBoundary::Continued;
+    }
+
+    fn begin_native_word_registers(&mut self, next_is_visible: bool) -> bool {
+        if next_is_visible {
+            // term_word() clears skipvsp before consuming the word itself.
+            self.execution.vertical_space_debt = 0;
+            self.execution.execution_epoch = self.execution.execution_epoch.wrapping_add(1);
         }
-        if next_is_visible && self.execution.keep.phase == KeepPhase::PreKeep {
-            // term_word() inserts the leading boundary using the *previous*
-            // KEEP value, then promotes PREKEEP. Execute that ordering before
-            // decoding the word: a bare BACKAFTER survives the ordinary blank,
-            // while BACKBEFORE consumes it and retains its buffered glyph.
-            if !self.execution.boundary.is_nonbreaking()
-                && (self.execution.formatter_column == FormatterColumn::Advanced
-                    || self.execution.zero_advance.has_buffered_glyph())
-                && (self.execution.spacing.enabled()
-                    || matches!(self.execution.boundary, PendingBoundary::Preserved))
-            {
-                if let Some(glyph) = self.resolve_zero_advance_at_word_boundary() {
-                    self.append_projected(glyph);
+        let continued_word = next_is_visible
+            && self.final_source_continuation_or(false)
+            && !self.execution.boundary.is_tight();
+        if next_is_visible {
+            self.execution.final_word_join = Some(false);
+            self.execution.final_source_continuation = Some(false);
+        }
+        // term_word() writes its automatic separator using the incoming
+        // NOSPACE/KEEP registers, then promotes PREKEEP (term.c:573-586).
+        // Zero-advance projection may subsequently tighten the IR boundary;
+        // that cannot change which native cell was already written.
+        if next_is_visible {
+            self.execution.native_word_boundary = Some(
+                if self.execution.keep.phase == KeepPhase::Keep
+                    && !self.execution.boundary.is_tight()
+                    && (self.execution.spacing.enabled()
+                        || matches!(
+                            self.execution.boundary,
+                            PendingBoundary::Preserved | PendingBoundary::Continued
+                        ))
+                {
+                    PendingBoundary::Kept
                 } else {
-                    self.append_projected(vec![Inline::Text {
-                        value: " ".to_owned(),
-                    }]);
-                    self.execution.formatter_column = FormatterColumn::Advanced;
-                }
-                self.execution.boundary = PendingBoundary::Tight;
-            }
-            self.execution.keep.phase = KeepPhase::Keep;
+                    self.execution.boundary
+                },
+            );
         }
-        if marker_blank_before_graph
-            && self.execution.zero_advance.has_pending_glyph()
-            && !self.execution.boundary.is_nonbreaking()
-            && (self.execution.spacing.enabled()
-                || matches!(
-                    self.execution.boundary,
-                    PendingBoundary::Preserved | PendingBoundary::Continued
-                ))
-        {
-            // The incoming word starts with a `\p` marker whose following
-            // blank the pending glyph's BACKBEFORE retreat consumes
-            // (term.c:901-908): resolving the glyph at this virtual boundary
-            // would instead eat the separator and arm the marker's break on
-            // the wrong cell. Keep the glyph pending; the word's own blank
-            // settles it. The surviving separator is the blank term_word()
-            // actually wrote before the marker, so it exists only where the
-            // entry state allowed one: spacing enabled (`.Sm on`) or the
-            // first fragment after the transition (`Preserved`/`Continued`),
-            // never across a tight join — TERMP_NOSPACE wrote nothing
-            // (term.c:573-580).
-            self.execution.zero_advance.note_marker_blank_separator();
-            return;
-        }
-        if !next_is_visible
-            || self.execution.boundary.is_nonbreaking()
-            || !(self.execution.has_printable_content
-                || self.execution.zero_advance.has_buffered_glyph())
-            || !(self.execution.spacing.enabled()
-                || matches!(self.execution.boundary, PendingBoundary::Preserved))
-        {
-            return;
-        }
-        let Some(glyph) = self.resolve_zero_advance_at_word_boundary() else {
-            return;
-        };
-        self.append_projected(glyph);
-        self.execution.boundary = PendingBoundary::Tight;
+        continued_word
     }
 
     pub(in crate::mandoc::inline::flow) fn flush_zero_advance(&mut self) {

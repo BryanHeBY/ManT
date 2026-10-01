@@ -7,6 +7,16 @@ use super::has_non_whitespace_glyph;
 use super::line_break_count;
 use super::trim_trailing_breakable_spaces;
 
+/// Observations of the operand being appended, taken before its Vec is drained.
+/// Native acceptance and formatter registers remain in their existing owners.
+#[derive(Clone, Copy)]
+struct AppendedWordContent {
+    last: Option<char>,
+    printable: bool,
+    glyphs: bool,
+    line_break: bool,
+}
+
 impl InlineBuilder {
     /// A compact semantic spelling can omit an authored empty trailing word
     /// after its generated punctuation.  The omitted word still establishes
@@ -51,7 +61,6 @@ impl InlineBuilder {
 
     // The register choreography mirrors print_mdoc_node()/term_word(); the
     // length is the sequence itself.
-    #[allow(clippy::too_many_lines)]
     pub(super) fn append_at_boundary(
         &mut self,
         incoming: &mut Vec<Inline>,
@@ -87,6 +96,91 @@ impl InlineBuilder {
             self.nodes.append(incoming);
             return;
         }
+        let (empty_word, boundary, fixed_blank_boundary, concat_next_word) = self
+            .prepare_projection_boundary(
+                incoming_first,
+                incoming_has_printable,
+                incoming_starts_with_fixed_blank,
+                word,
+            );
+        let add_space = if concat_next_word {
+            false
+        } else if empty_word
+            && self.execution.formatter_column == FormatterColumn::Origin
+            && self.execution.last_visible_character == Some('\n')
+            && !self.execution.empty_word
+        {
+            // term_newln() selects NOSPACE for the first word of the new
+            // physical row. A second empty term_word() can then buffer its
+            // automatic separator even while the last visible glyph remains
+            // the preceding row's newline.
+            false
+        } else if fixed_blank_boundary {
+            self.execution.has_printable_content
+        } else if (matches!(boundary, PendingBoundary::Continued)
+            && incoming_first.is_some_and(char::is_whitespace))
+            || empty_word
+            || self.execution.empty_word
+        {
+            self.execution.has_printable_content
+                || self.execution.trailing_output != TrailingOutput::None
+                || (empty_word && self.execution.empty_word)
+        } else {
+            needs_boundary_space(self.execution.last_visible_character, incoming_first)
+        };
+        let projection = if word {
+            self.record_hang_word(incoming, boundary)
+        } else {
+            super::record::WordPassProjection::default()
+        };
+        self.append_recorded_word_boundary(
+            boundary,
+            word,
+            empty_word,
+            add_space,
+            incoming_first,
+            &projection,
+        );
+        // The native word boundary belongs to its surrounding flow. Only
+        // the operand itself belongs to an optional semantic annotation;
+        // authored leading blanks therefore stay inside that owner.
+        if word {
+            for marker in self.pending_output_scope_prefixes.drain(..) {
+                self.nodes.push(Inline::anchor(marker));
+            }
+        }
+        let starts_output_row = incoming_has_line_break
+            || projection.split_word.is_some()
+            || projection.closes_before > 0;
+        match projection.split_word {
+            Some(split) => self.nodes.extend(split),
+            None => self.nodes.append(incoming),
+        }
+        if starts_output_row {
+            self.note_definition_output_row();
+        }
+        if let Some(definition) = &mut self.execution.definition {
+            definition.row.close_word();
+        }
+        self.observe_appended_word(
+            AppendedWordContent {
+                last: incoming_last,
+                printable: incoming_has_printable,
+                glyphs: incoming_has_glyph,
+                line_break: incoming_has_line_break,
+            },
+            occupies_row,
+            empty_word,
+        );
+    }
+
+    fn prepare_projection_boundary(
+        &mut self,
+        incoming_first: Option<char>,
+        incoming_has_printable: bool,
+        incoming_starts_with_fixed_blank: bool,
+        word: bool,
+    ) -> (bool, PendingBoundary, bool, bool) {
         if (incoming_has_printable || word)
             && (self.pending_definition_indent().is_some()
                 || self.execution.pending_line_indent > 0)
@@ -132,41 +226,62 @@ impl InlineBuilder {
                 });
             }
         }
-        let add_space = if concat_next_word {
-            false
-        } else if empty_word
-            && self.execution.formatter_column == FormatterColumn::Origin
-            && self.execution.last_visible_character == Some('\n')
-            && !self.execution.empty_word
-        {
-            // term_newln() selects NOSPACE for the first word of the new
-            // physical row. A second empty term_word() can then buffer its
-            // automatic separator even while the last visible glyph remains
-            // the preceding row's newline.
-            false
-        } else if fixed_blank_boundary {
-            self.execution.has_printable_content
-        } else if (matches!(boundary, PendingBoundary::Continued)
-            && incoming_first.is_some_and(char::is_whitespace))
-            || empty_word
-            || self.execution.empty_word
-        {
-            self.execution.has_printable_content
-                || self.execution.trailing_output != TrailingOutput::None
-                || (empty_word && self.execution.empty_word)
-        } else {
-            needs_boundary_space(self.execution.last_visible_character, incoming_first)
-        };
-        let super::record::WordPassProjection {
-            closes_before: accepted_row_break,
-            leading_cells,
-            native_separator,
-            split_word,
-        } = if word {
-            self.record_hang_word(incoming, boundary)
-        } else {
-            super::record::WordPassProjection::default()
-        };
+        (empty_word, boundary, fixed_blank_boundary, concat_next_word)
+    }
+
+    fn observe_appended_word(
+        &mut self,
+        content: AppendedWordContent,
+        occupies_row: bool,
+        empty_word: bool,
+    ) {
+        let AppendedWordContent {
+            last: incoming_last,
+            printable: incoming_has_printable,
+            glyphs: incoming_has_glyph,
+            line_break: incoming_has_line_break,
+        } = content;
+        if incoming_last.is_some() {
+            self.execution.last_visible_character = incoming_last;
+            // Generic projected words are formatter glyphs, not trim-eligible
+            // source padding. Raw text execution supplies its precise class
+            // through `append_word_with_literal_row()` above.
+            self.execution.trailing_output = if incoming_last.is_some_and(char::is_whitespace) {
+                TrailingOutput::BoundaryBlank
+            } else {
+                TrailingOutput::NonBlank
+            };
+        }
+        self.execution.has_printable_content |= incoming_has_printable;
+        if incoming_has_glyph {
+            self.execution.visible_glyph_epoch = self.execution.visible_glyph_epoch.wrapping_add(1);
+            self.execution.completed_vertical_rows = 0;
+        }
+        if incoming_has_line_break {
+            self.execution.formatter_column =
+                if incoming_has_printable && !matches!(incoming_last, Some('\n')) {
+                    FormatterColumn::Advanced
+                } else {
+                    FormatterColumn::Origin
+                };
+        } else if incoming_has_printable || occupies_row {
+            self.execution.formatter_column = FormatterColumn::Advanced;
+        }
+        self.execution.empty_word = empty_word;
+    }
+
+    fn append_recorded_word_boundary(
+        &mut self,
+        boundary: PendingBoundary,
+        word: bool,
+        empty_word: bool,
+        add_space: bool,
+        incoming_first: Option<char>,
+        projection: &super::record::WordPassProjection,
+    ) {
+        let accepted_row_break = projection.closes_before;
+        let leading_cells = projection.leading_cells;
+        let native_separator = projection.native_separator;
         // Plain words anchor into the same native flush unit the field
         // path uses; the marker routes by session exactly like the cell
         // recording in `record_native_word`.
@@ -244,53 +359,6 @@ impl InlineBuilder {
                 self.nodes.push(Inline::anchor(marker));
             }
         }
-        // The native word boundary belongs to its surrounding flow. Only
-        // the operand itself belongs to an optional semantic annotation;
-        // authored leading blanks therefore stay inside that owner.
-        if word {
-            for marker in self.pending_output_scope_prefixes.drain(..) {
-                self.nodes.push(Inline::anchor(marker));
-            }
-        }
-        let starts_output_row =
-            incoming_has_line_break || split_word.is_some() || accepted_row_break > 0;
-        match split_word {
-            Some(split) => self.nodes.extend(split),
-            None => self.nodes.append(incoming),
-        }
-        if starts_output_row {
-            self.note_definition_output_row();
-        }
-        if let Some(definition) = &mut self.execution.definition {
-            definition.row.close_word();
-        }
-        if incoming_last.is_some() {
-            self.execution.last_visible_character = incoming_last;
-            // Generic projected words are formatter glyphs, not trim-eligible
-            // source padding. Raw text execution supplies its precise class
-            // through `append_word_with_literal_row()` above.
-            self.execution.trailing_output = if incoming_last.is_some_and(char::is_whitespace) {
-                TrailingOutput::BoundaryBlank
-            } else {
-                TrailingOutput::NonBlank
-            };
-        }
-        self.execution.has_printable_content |= incoming_has_printable;
-        if incoming_has_glyph {
-            self.execution.visible_glyph_epoch = self.execution.visible_glyph_epoch.wrapping_add(1);
-            self.execution.completed_vertical_rows = 0;
-        }
-        if incoming_has_line_break {
-            self.execution.formatter_column =
-                if incoming_has_printable && !matches!(incoming_last, Some('\n')) {
-                    FormatterColumn::Advanced
-                } else {
-                    FormatterColumn::Origin
-                };
-        } else if incoming_has_printable || occupies_row {
-            self.execution.formatter_column = FormatterColumn::Advanced;
-        }
-        self.execution.empty_word = empty_word;
     }
 
     pub(super) fn append_boundary_spacing(

@@ -59,10 +59,7 @@ fn inline_execution_keeps_word_joins_glyph_ownership_and_literal_breaks_distinct
     }
 }
 
-#[test]
-#[allow(clippy::too_many_lines)]
-fn inline_execution_tracks_zero_advance_word_and_physical_line_states_independently() {
-    let cases = [
+const INLINE_WORD_LINE_CASES: &[(&str, &[u8], &str)] = &[
         (
             "completed-zero-advance-survives-no-space",
             b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\\zX\\c\n.No AFTER\n".as_slice(),
@@ -289,7 +286,10 @@ fn inline_execution_tracks_zero_advance_word_and_physical_line_states_independen
             "[BEFORE  AFTER",
         ),
     ];
-    for (label, source, expected) in cases {
+
+#[test]
+fn inline_execution_tracks_zero_advance_word_and_physical_line_states_independently() {
+    for &(label, source, expected) in INLINE_WORD_LINE_CASES {
         let document = parse_manual_bytes(
             std::path::Path::new(&format!("inline-state-{label}.1")),
             source,

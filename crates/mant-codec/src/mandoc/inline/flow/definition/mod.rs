@@ -12,6 +12,7 @@ mod flush;
 mod geometry;
 mod head_row;
 mod list_scope;
+mod no_break;
 mod retirement;
 mod state;
 mod vertical_space;

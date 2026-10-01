@@ -152,7 +152,6 @@ impl InlineBuilder {
 
     /// Preserve a formatter-requested line boundary without creating empty
     /// leading, repeated, or trailing rows around the paragraph.
-    #[allow(clippy::too_many_lines)] // term_newln(): one native row boundary, one execution order
     pub(in crate::mandoc) fn hard_break(&mut self) {
         let had_native_buffer = self.definition.as_ref().is_some_and(|state| {
             state.field_buffer.resume_offset() < state.field_buffer.cells().len()
@@ -255,6 +254,20 @@ impl InlineBuilder {
                 value: String::new(),
             });
         }
+        self.finish_hard_break_projection(
+            exited_definition_row,
+            exited_discarded_buffer,
+            retiring_rejection,
+        );
+        // term_newln() does not clear TERMP_NONEWLINE; the next word does.
+    }
+
+    fn finish_hard_break_projection(
+        &mut self,
+        exited_definition_row: bool,
+        exited_discarded_buffer: bool,
+        retiring_rejection: bool,
+    ) {
         self.execution.boundary = PendingBoundary::Ordinary;
         self.execution.empty_word = false;
         self.execution.trailing_output = TrailingOutput::None;
@@ -297,7 +310,6 @@ impl InlineBuilder {
             // another field. A later nbr=0 may discard only the new suffix.
             author.field_output_start = self.nodes.len();
         }
-        // term_newln() does not clear TERMP_NONEWLINE; the next word does.
     }
 
     pub(in crate::mandoc) fn has_formatter_cell(&self) -> bool {

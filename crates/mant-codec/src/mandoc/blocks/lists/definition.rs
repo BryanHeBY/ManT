@@ -92,7 +92,6 @@ impl DefinitionHeadFlow {
 }
 
 // Keep the native HEAD/BODY checkpoint decisions in source execution order.
-#[allow(clippy::too_many_lines)]
 pub(super) fn definition_item(
     node: &Node,
     context: &LoweringContext<'_>,
@@ -144,7 +143,170 @@ pub(super) fn definition_item(
     if definition_body_gap_consumed {
         geometry.gap = 0;
     }
-    let mut terms = split_definition_terms(term, &term_breaks);
+    let (mut terms, closed_head_row) =
+        normalize_executed_definition_head(term, &term_breaks, node, flow, &mut geometry);
+    let body_origin = geometry.body_origin(context, node, indent_columns);
+    // The BODY is executed once. Its active formatter records whether a real
+    // boundary preceded the first visible word and whether the detached head
+    // already accounts for an invisible first row.
+    // A native HEAD may occupy a formatter cell without giving IR any term
+    // that represents its row (for example, `.It \\&`). Only a rendered HEAD
+    // can own the first invisible BODY row when term_newln() closes it.
+    let rendered_head_row = terms
+        .iter()
+        .any(|term| mant_ir::has_printable_character(term));
+    formatter.begin_definition_body(
+        flow.shares_pending_term_row
+            && rendered_head_row
+            && !closed_head_row
+            && !definition_field_exited,
+    );
+    let spacing_enabled = formatter.spacing_enabled();
+    let mut description = lower_scope(
+        body,
+        context,
+        paragraph_distance,
+        formatter,
+        definition_body_flow(node, body_origin, spacing_enabled, flow, run_in_execution),
+    );
+    carry_invisible_head_row(node, &terms, closed_head_row, &mut description);
+    if node.macro_name.as_deref() == Some("IP") {
+        // man_term.c::post_IP() can complete an empty HEAD word even though
+        // it supplies no tag. Its row now belongs to the description; an
+        // empty term shell must not turn a headless .IP continuation into a
+        // new semantic definition.
+        terms.retain(|term| !term.is_empty());
+    }
+    let observed = formatter.finish_definition_body();
+    if man_node {
+        formatter.font.man_text_boundary(); // BODY post
+    }
+    apply_executed_definition_body_layout(
+        &mut geometry,
+        flow,
+        closed_head_row,
+        definition_field_exited,
+        observed,
+        head_source_continues,
+        &description,
+    );
+    let layout = geometry.layout(indent_columns, body_origin, &terms);
+    let mut item = DefinitionItem {
+        source: source_span(node),
+        entry: None,
+        layout,
+        terms,
+        description,
+    };
+    record_definition_item(&mut item, node, head, context);
+    item
+}
+
+fn record_definition_item(
+    item: &mut DefinitionItem,
+    node: &Node,
+    head: &[Node],
+    context: &LoweringContext<'_>,
+) {
+    // A source coordinate identifies authored text, not one executed macro
+    // invocation: expansion can produce the same coordinate and head several
+    // times. Carry the native node identity through IR-only normalization and
+    // strip it once semantic declaration grouping has consumed the witness.
+    crate::definitions::mark_native_definition_owner(item, std::ptr::from_ref(node) as usize);
+    context
+        .native_heads
+        .borrow_mut()
+        .groups
+        .record(item, std::ptr::from_ref(node) as usize);
+    if context.macro_set == libmandoc_rs::MacroSet::Mdoc
+        && let Some(role) = super::evidence::leading_role(head)
+    {
+        context.native_heads.borrow_mut().record(item, role);
+    }
+}
+
+fn definition_body_flow(
+    node: &Node,
+    body_origin: crate::mandoc::layout::SourceIndent,
+    spacing_enabled: bool,
+    flow: DefinitionFlow,
+    run_in_execution: Option<RunInExecution>,
+) -> ScopeFlow<'_> {
+    if let Some(run_in) = run_in_execution {
+        ScopeFlow {
+            indent_columns: body_origin,
+            spacing_enabled,
+            paragraph_predecessor: flow.paragraph_predecessor,
+            run_in: Some(RunInBody {
+                execution: run_in.state,
+                generated_cells: run_in.surviving_cells,
+                native_generated_cells: usize::from(
+                    flow.head.generated_cells().unwrap_or_default(),
+                ),
+                generated_word: run_in.generated_word,
+                entry: node
+                    .children
+                    .iter()
+                    .find(|part| part.kind == NodeKind::Body && part.scope_end.is_none()),
+            }),
+            row_boundary: FormatterRowBoundary::Settle,
+        }
+    } else {
+        ScopeFlow::body_post_row_end(body_origin, spacing_enabled, flow.paragraph_predecessor)
+    }
+}
+
+fn apply_executed_definition_body_layout(
+    geometry: &mut crate::mandoc::layout::DefinitionGeometry,
+    flow: DefinitionFlow,
+    closed_head_row: bool,
+    definition_field_exited: bool,
+    observed: crate::mandoc::formatter::DefinitionBodyObservation,
+    head_source_continues: bool,
+    description: &[Block],
+) {
+    if flow.shares_pending_term_row && observed.placement_breaks() {
+        geometry.placement = crate::mandoc::layout::TermPlacement::Stacked;
+    }
+    // NOSPACE describes the next word, not the relation to a previous
+    // physical row. A closed HEAD stays separate even if pre_br left that
+    // register armed (roff_term.c:69-78, mdoc_term.c::termp_it_post()).
+    if !closed_head_row && !definition_field_exited && observed.first_word_flushed_at_body() {
+        // The cleared field filled its capacity (term.c:250-253 with
+        // 205-207): the body shares the head's row starting at the
+        // description column, with no separator cell to count.
+        geometry.relation_override = Some(mant_ir::HeadBodyRelation::FlushAtBody);
+        geometry.gap = 0;
+    } else if !closed_head_row && !definition_field_exited && observed.first_word_concatenated() {
+        // TERMP_NOSPACE at the body's first word leaves no separator cell:
+        // the body column starts at the head's end (roff_term.c:75-78),
+        // so the layout carries no minimum gap.
+        geometry.relation_override = Some(mant_ir::HeadBodyRelation::JoinedNoSpace);
+        geometry.gap = 0;
+    }
+    if matches!(description.first(), Some(Block::Preformatted { .. }))
+        && !observed
+            .source_continues_after_run_in()
+            .unwrap_or(head_source_continues)
+    {
+        // A literal BODY can run in only when CVS kept the source row open
+        // with \\c. Ordinary no-fill NODE_LINE starts a fresh physical row.
+        // That executed close also supersedes a provisional relation from
+        // the first word's NOSPACE/column state: a word register cannot join
+        // a row that print_mdoc_node() already ended (mdoc_term.c:314-318).
+        geometry.placement = crate::mandoc::layout::TermPlacement::Stacked;
+        geometry.relation_override = None;
+    }
+}
+
+fn normalize_executed_definition_head(
+    term: Vec<Inline>,
+    term_breaks: &[usize],
+    node: &Node,
+    flow: DefinitionFlow,
+    geometry: &mut crate::mandoc::layout::DefinitionGeometry,
+) -> (Vec<Vec<Inline>>, bool) {
+    let mut terms = split_definition_terms(term, term_breaks);
     if matches!(flow.head, DefinitionHeadFlow::Detached { .. }) {
         for term in &mut terms {
             // CVS term.c::term_fill() drops a field made solely of ordinary
@@ -180,125 +342,7 @@ pub(super) fn definition_item(
         // adding the static geometry gap as well would count it twice.
         geometry.gap = 0;
     }
-    let body_origin = geometry.body_origin(context, node, indent_columns);
-    // The BODY is executed once. Its active formatter records whether a real
-    // boundary preceded the first visible word and whether the detached head
-    // already accounts for an invisible first row.
-    // A native HEAD may occupy a formatter cell without giving IR any term
-    // that represents its row (for example, `.It \\&`). Only a rendered HEAD
-    // can own the first invisible BODY row when term_newln() closes it.
-    let rendered_head_row = terms
-        .iter()
-        .any(|term| mant_ir::has_printable_character(term));
-    formatter.begin_definition_body(
-        flow.shares_pending_term_row
-            && rendered_head_row
-            && !closed_head_row
-            && !definition_field_exited,
-    );
-    let spacing_enabled = formatter.spacing_enabled();
-    let mut description = if let Some(run_in) = run_in_execution {
-        lower_scope(
-            body,
-            context,
-            paragraph_distance,
-            formatter,
-            ScopeFlow {
-                indent_columns: body_origin,
-                spacing_enabled,
-                paragraph_predecessor: flow.paragraph_predecessor,
-                run_in: Some(RunInBody {
-                    execution: run_in.state,
-                    generated_cells: run_in.surviving_cells,
-                    native_generated_cells: usize::from(
-                        flow.head.generated_cells().unwrap_or_default(),
-                    ),
-                    generated_word: run_in.generated_word,
-                    entry: node
-                        .children
-                        .iter()
-                        .find(|part| part.kind == NodeKind::Body && part.scope_end.is_none()),
-                }),
-                row_boundary: FormatterRowBoundary::Settle,
-            },
-        )
-    } else {
-        lower_scope(
-            body,
-            context,
-            paragraph_distance,
-            formatter,
-            ScopeFlow::body_post_row_end(body_origin, spacing_enabled, flow.paragraph_predecessor),
-        )
-    };
-    carry_invisible_head_row(node, &terms, closed_head_row, &mut description);
-    if node.macro_name.as_deref() == Some("IP") {
-        // man_term.c::post_IP() can complete an empty HEAD word even though
-        // it supplies no tag. Its row now belongs to the description; an
-        // empty term shell must not turn a headless .IP continuation into a
-        // new semantic definition.
-        terms.retain(|term| !term.is_empty());
-    }
-    let observed = formatter.finish_definition_body();
-    if man_node {
-        formatter.font.man_text_boundary(); // BODY post
-    }
-    if flow.shares_pending_term_row && observed.placement_breaks() {
-        geometry.placement = crate::mandoc::layout::TermPlacement::Stacked;
-    }
-    // NOSPACE describes the next word, not the relation to a previous
-    // physical row. A closed HEAD stays separate even if pre_br left that
-    // register armed (roff_term.c:69-78, mdoc_term.c::termp_it_post()).
-    if !closed_head_row && !definition_field_exited && observed.first_word_flushed_at_body() {
-        // The cleared field filled its capacity (term.c:250-253 with
-        // 205-207): the body shares the head's row starting at the
-        // description column, with no separator cell to count.
-        geometry.relation_override = Some(mant_ir::HeadBodyRelation::FlushAtBody);
-        geometry.gap = 0;
-    } else if !closed_head_row && !definition_field_exited && observed.first_word_concatenated() {
-        // TERMP_NOSPACE at the body's first word leaves no separator cell:
-        // the body column starts at the head's end (roff_term.c:75-78),
-        // so the layout carries no minimum gap.
-        geometry.relation_override = Some(mant_ir::HeadBodyRelation::JoinedNoSpace);
-        geometry.gap = 0;
-    }
-    if matches!(description.first(), Some(Block::Preformatted { .. }))
-        && !observed
-            .source_continues_after_run_in()
-            .unwrap_or(head_source_continues)
-    {
-        // A literal BODY can run in only when CVS kept the source row open
-        // with \\c. Ordinary no-fill NODE_LINE starts a fresh physical row.
-        // That executed close also supersedes a provisional relation from
-        // the first word's NOSPACE/column state: a word register cannot join
-        // a row that print_mdoc_node() already ended (mdoc_term.c:314-318).
-        geometry.placement = crate::mandoc::layout::TermPlacement::Stacked;
-        geometry.relation_override = None;
-    }
-    let layout = geometry.layout(indent_columns, body_origin, &terms);
-    let mut item = DefinitionItem {
-        source: source_span(node),
-        entry: None,
-        layout,
-        terms,
-        description,
-    };
-    // A source coordinate identifies authored text, not one executed macro
-    // invocation: expansion can produce the same coordinate and head several
-    // times. Carry the native node identity through IR-only normalization and
-    // strip it once semantic declaration grouping has consumed the witness.
-    crate::definitions::mark_native_definition_owner(&mut item, std::ptr::from_ref(node) as usize);
-    context
-        .native_heads
-        .borrow_mut()
-        .groups
-        .record(&item, std::ptr::from_ref(node) as usize);
-    if context.macro_set == libmandoc_rs::MacroSet::Mdoc
-        && let Some(role) = super::evidence::leading_role(head)
-    {
-        context.native_heads.borrow_mut().record(&item, role);
-    }
-    item
+    (terms, closed_head_row)
 }
 
 fn only_breakable_head_padding(inline: &Inline) -> bool {
