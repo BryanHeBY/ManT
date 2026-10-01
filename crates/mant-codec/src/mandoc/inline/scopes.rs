@@ -110,7 +110,8 @@ fn append_scope_children(builder: &mut InlineBuilder, node: &Node, name: Option<
         }),
         Some("Sx") => {
             let authored_target = authored_section_phrase(children, name);
-            builder.append_semantic_scope(
+            let previous_owner = builder.zero_advance.pending_native_owner();
+            let annotated = builder.append_semantic_scope(
                 node.id,
                 |builder| {
                     builder.with_font_scope(Font::Emphasis, |builder| {
@@ -118,6 +119,13 @@ fn append_scope_children(builder: &mut InlineBuilder, node: &Node, name: Option<
                     });
                 },
                 |children| section_reference(authored_target.clone(), children),
+            );
+            builder.zero_advance.bind_pending_link(
+                previous_owner,
+                mant_ir::LinkTarget::Section {
+                    id: authored_target.into(),
+                },
+                annotated,
             );
         }
         Some("Nd") => {

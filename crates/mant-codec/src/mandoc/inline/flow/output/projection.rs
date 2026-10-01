@@ -378,13 +378,22 @@ fn join_authored_links(nodes: &mut Vec<Inline>) {
             index += 1;
             continue;
         }
-        let next = index + 1;
+        // Native source-owner markers can separate these two projections
+        // when a cached glyph settles at the next word. They are metadata,
+        // not a different authored link or an intervening visible boundary.
+        let is_owner_marker = |at: usize| {
+            matches!(&nodes[at], Inline::Anchor { id, .. }
+                if id.as_str().starts_with(super::INTERNAL_FIELD_WORD)
+                    || id.as_str().strip_prefix(super::INTERNAL_OUTPUT_SCOPE).is_some_and(
+                        |scope| scope.starts_with("lk:") || scope.starts_with("semantic:")))
+        };
+        let left = (0..index).rev().find(|&at| !is_owner_marker(at));
+        let next = (index + 1..nodes.len())
+            .find(|&at| !is_owner_marker(at))
+            .unwrap_or(nodes.len());
         let prefix = matches!(nodes.get(next), Some(Inline::Text { value }) if value.chars().all(char::is_whitespace));
         let right = next + usize::from(prefix);
-        let merge = match (
-            index.checked_sub(1).and_then(|left| nodes.get(left)),
-            nodes.get(right),
-        ) {
+        let merge = match (left.and_then(|at| nodes.get(at)), nodes.get(right)) {
             (
                 Some(Inline::Link {
                     target: left,
@@ -408,7 +417,7 @@ fn join_authored_links(nodes: &mut Vec<Inline>) {
             }
             if let Inline::Link {
                 children: accepted, ..
-            } = &mut nodes[index - 1]
+            } = &mut nodes[left.unwrap()]
             {
                 accepted.append(&mut children);
             }

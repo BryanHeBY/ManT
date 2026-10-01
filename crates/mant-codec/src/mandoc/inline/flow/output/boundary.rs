@@ -53,7 +53,6 @@ impl InlineBuilder {
             occupies_row,
             trailing_output == TrailingOutput::FixedBlank,
         );
-        self.materialize_boundary_before_pending_glyph();
         if trailing_output != TrailingOutput::None {
             self.execution.trailing_output = trailing_output;
         }
@@ -145,6 +144,11 @@ impl InlineBuilder {
         // the operand itself belongs to an optional semantic annotation;
         // authored leading blanks therefore stay inside that owner.
         if word {
+            // A word containing only a cached glyph has no immediate IR
+            // content. Its already-executed separator still precedes this
+            // content marker (term_word() before encode1()), including when
+            // that separator otherwise waits for the next visible word.
+            self.materialize_boundary_before_pending_glyph();
             for marker in self.pending_output_scope_prefixes.drain(..) {
                 self.nodes.push(Inline::anchor(marker));
             }

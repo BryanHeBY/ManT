@@ -200,9 +200,15 @@ fn append_external_link(
 ) {
     let checkpoint = builder.begin_output_checkpoint();
     let pending_visible = builder.zero_advance.pending_visible_characters();
+    let previous_owner = builder.zero_advance.pending_native_owner();
     builder.zero_advance.begin_output_owner();
     append(builder);
     let previous_glyph_emitted = builder.zero_advance.end_output_owner();
+    builder.zero_advance.bind_pending_link(
+        previous_owner,
+        external_link_target(address.to_owned(), email),
+        true, // This operand always emits its own typed Link below.
+    );
     let mut previous_glyph = if previous_glyph_emitted {
         pending_visible
     } else {

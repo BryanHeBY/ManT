@@ -31,6 +31,9 @@ pub(in crate::mandoc) struct ZeroAdvanceState {
 struct OwnedGlyph {
     value: Inline,
     owner: Option<u64>,
+    /// This cached tail and the preceding annotated output are one authored
+    /// link. The seam joins only those pieces after native acceptance.
+    link_continuation: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -107,6 +110,7 @@ impl ZeroAdvanceState {
             .project_glyph(OwnedGlyph {
                 value: glyph,
                 owner: self.native_word_owner,
+                link_continuation: false,
             })
             .map(|(glyph, replaced)| (glyph.value, replaced))
     }
@@ -116,6 +120,7 @@ impl ZeroAdvanceState {
             .project_fallback(OwnedGlyph {
                 value: glyph,
                 owner: self.native_word_owner,
+                link_continuation: false,
             })
             .map(|(glyph, replaced)| (glyph.value, replaced))
     }
@@ -131,6 +136,9 @@ impl ZeroAdvanceState {
                     "{}{owner}",
                     super::super::flow::INTERNAL_FIELD_WORD
                 )));
+            }
+            if glyph.link_continuation {
+                output.push(Inline::anchor(super::super::flow::INTERNAL_LINK_SPLIT));
             }
             output.push(glyph.value);
         }
@@ -247,6 +255,41 @@ impl ZeroAdvanceState {
                 .filter(|character| !character.is_whitespace())
                 .count()
         })
+    }
+
+    /// Original glyph annotation is evidence of ownership; the size of a
+    /// later wrapper's projected node cannot establish that ownership.
+    pub(in crate::mandoc) fn pending_projection(&self) -> Option<Inline> {
+        self.machine.pending_ref().map(|glyph| glyph.value.clone())
+    }
+
+    pub(in crate::mandoc) fn pending_native_owner(&self) -> Option<u64> {
+        self.machine.pending_ref().and_then(|glyph| glyph.owner)
+    }
+
+    /// Annotate a glyph created by this link's real operands even when it is
+    /// still waiting for the next `encode1()`/word boundary. An older cached
+    /// glyph never acquires the new link. `mdoc_html.c::mdoc_mt_pre` and
+    /// `mdoc_sx_pre` bind the source operand, while terminal `under_pre/encode1`
+    /// supply its font and execution lifetime independently.
+    pub(in crate::mandoc) fn bind_pending_link(
+        &mut self,
+        previous_owner: Option<u64>,
+        target: mant_ir::LinkTarget,
+        has_annotation_prefix: bool,
+    ) {
+        let Some(glyph) = self.machine.pending_mut() else {
+            return;
+        };
+        if glyph.owner == previous_owner {
+            return;
+        }
+        glyph.value = Inline::Link {
+            target,
+            title: None,
+            children: vec![glyph.value.clone()],
+        };
+        glyph.link_continuation = has_annotation_prefix;
     }
 
     /// `term_flushln()` clears both backtracking flags when the native tag row

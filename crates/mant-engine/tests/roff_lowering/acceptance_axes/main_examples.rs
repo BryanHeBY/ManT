@@ -3,12 +3,12 @@
 //! Every case runs through three product projections: plain rows drive the
 //! row axes, an ANSI-styled projection must not move the layout, and the
 //! JSON contract round-trips without private markers or row changes. The
-//! registered axes are then driven by [`super::assert_registered_axes`]:
-//! `must` axes hold today, `after_repair` axes are divergences the
-//! comparator has to keep detecting until their repair unit flips them.
+//! registered axes are then driven by [`super::assert_registered_axes`]
+//! and must all hold. Comparator mutation tests independently prove that
+//! the declared axes reject their corresponding regressions.
 
 use super::acceptance_cases::{MAIN_EXAMPLES, case_by_name};
-use super::axis_model::{AxisKind, Observed, Owner, UnitStyle, row_words};
+use super::axis_model::{Observed, Owner, UnitStyle, row_words};
 use super::{assert_registered_axes, evaluate_case, load_case, validate_against_oracle};
 use mant_ir::{
     Block, Document, Inline, LinkTarget, ResolvedContent, Section,
@@ -252,30 +252,5 @@ fn six_examples_assert_registered_axes_across_projections() {
         let observed = observe(&query);
         let report = evaluate_case(&case, &files, &observed);
         assert_registered_axes(&case, &report);
-    }
-}
-
-/// The acceptance base caught the review regressions it was built for
-/// while they were open. Every registration has now flipped from
-/// `after_repair` to `must` with its repair (the column tail hard row,
-/// the tag explicit vertical spacing and the hang final-word gap); a new
-/// registered divergence must re-add its detection proof here.
-#[test]
-fn comparator_detects_the_registered_hard_row_blank_and_separator_regressions() {
-    let proofs: [(&str, AxisKind); 0] = [];
-    for (name, kind) in proofs {
-        let case = case_by_name(name);
-        let files = load_case(name);
-        let query = mant_loader::load_roff_bytes(files.source.as_bytes())
-            .unwrap_or_else(|error| panic!("{}: lower case: {error}", case.id));
-        let observed = observe(&query);
-        let report = evaluate_case(&case, &files, &observed);
-        assert!(
-            report.fails_on(kind),
-            "{}: the {} axis no longer detects the registered regression; \
-             the repair landed, flip its registration to must",
-            case.id,
-            kind.name()
-        );
     }
 }

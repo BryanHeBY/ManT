@@ -20,8 +20,8 @@ mod main_examples;
 mod mutations;
 
 use axis_model::{
-    AcceptanceCase, AxisKind, HardRowRelation, Owner, Status, is_blank_row, region_words,
-    row_containing, separator_holds,
+    AcceptanceCase, AxisKind, HardRowRelation, Owner, is_blank_row, region_words, row_containing,
+    separator_holds,
 };
 
 pub(crate) const CASES: &str = concat!(
@@ -198,11 +198,11 @@ fn validate_sources(case: &AcceptanceCase, files: &CaseFiles) {
 }
 
 /// Drive the registered axes of one case against a comparison report:
-/// `must` axes have to hold, `after_repair` axes have to be detected, and
-/// every unregistered axis needs its applicability note.
+/// every registered axis must hold, and every unregistered axis needs
+/// its applicability note.
 pub(crate) fn assert_registered_axes(case: &AcceptanceCase, report: &axis_model::AxisReport) {
     for kind in AxisKind::ALL {
-        let Some(status) = case.status_for(kind) else {
+        if !case.registers(kind) {
             assert!(
                 case.note_for(kind).is_some(),
                 "{}/{}: the {} axis is neither registered nor noted",
@@ -211,25 +211,15 @@ pub(crate) fn assert_registered_axes(case: &AcceptanceCase, report: &axis_model:
                 kind.name()
             );
             continue;
-        };
-        match status {
-            Status::MustHold => assert!(
-                !report.fails_on(kind),
-                "{}/{}: the {} axis failed: {}",
-                case.family,
-                case.id,
-                kind.name(),
-                report.details_for(kind)
-            ),
-            Status::HoldsAfterRepair => assert!(
-                report.fails_on(kind),
-                "{}/{}: the comparator no longer detects the registered {} divergence; \
-                 flip its registration to must",
-                case.family,
-                case.id,
-                kind.name()
-            ),
         }
+        assert!(
+            !report.fails_on(kind),
+            "{}/{}: the {} axis failed: {}",
+            case.family,
+            case.id,
+            kind.name(),
+            report.details_for(kind)
+        );
     }
 }
 

@@ -180,7 +180,7 @@ fn append_text_event(
             // event (term.c:294-305,901-908). Native passes retain breakline
             // independently until they accept their ordered cell interval.
             state.pending_word_end_break = false;
-            if zero_advance.has_pending_glyph() {
+            if zero_advance.has_buffered_glyph() {
                 // CVS stores `\\p` in the same terminal buffer as a
                 // completed `\\z` glyph.  The intervening word blank settles
                 // that glyph first; the next graph's retreat consumes the

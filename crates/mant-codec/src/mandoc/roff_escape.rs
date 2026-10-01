@@ -137,6 +137,11 @@ impl<T> ZeroAdvanceMachine<T> {
         self.pending.as_ref()
     }
 
+    /// Change projection metadata without consuming either backtracking flag.
+    pub(super) fn pending_mut(&mut self) -> Option<&mut T> {
+        self.pending.as_mut()
+    }
+
     pub(super) fn cancel_armed(&mut self) -> bool {
         std::mem::take(&mut self.armed)
     }
@@ -245,12 +250,6 @@ pub(super) fn inline_event_effect(event: &RoffInlineEvent) -> InlineEventEffect 
         | RoffInlineEvent::Link(_)
         | RoffInlineEvent::Presentation { .. } => InlineEventEffect::StateOnly,
     }
-}
-
-pub(super) fn source_has_visible_glyph(source: &str) -> bool {
-    decode(source)
-        .iter()
-        .any(|event| inline_event_effect(event) == InlineEventEffect::Visible)
 }
 
 /// Decode one libmandoc text node into typed, renderer-independent events.

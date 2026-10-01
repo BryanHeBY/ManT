@@ -5,7 +5,7 @@ use super::{
 
 // A private boundary carried only while one authored Link spans two native
 // term_flushln() fields. It is removed before any IR owner is returned.
-const INTERNAL_LINK_SPLIT: &str = "\0mant:field-link-split";
+pub(in crate::mandoc::inline) const INTERNAL_LINK_SPLIT: &str = "\0mant:field-link-split";
 const INTERNAL_COMPLETED_ROW: &str = "\0mant:output-scope:completed-row";
 const INTERNAL_LITERAL_ROW: &str = "\0mant:output-scope:literal-row";
 const INTERNAL_ROW_ORIGIN: &str = "\0mant:output-scope:row-origin:";
@@ -412,12 +412,14 @@ impl InlineBuilder {
     /// `term_word()` writes that prefix before encoding the source spelling
     /// (term.c:573-589); inspecting leading whitespace cannot distinguish it
     /// from the author's own blank glyphs. These bounded local markers do.
+    /// Return whether this occurrence produced a typed annotation prefix;
+    /// a cached tail can rejoin only that prefix, never a preceding occurrence.
     pub(in crate::mandoc) fn append_semantic_scope(
         &mut self,
         owner: u32,
         append: impl FnOnce(&mut Self),
         mut wrap: impl FnMut(Vec<Inline>) -> Vec<Inline>,
-    ) {
+    ) -> bool {
         let scope = format!("{INTERNAL_OUTPUT_SCOPE}semantic:{owner}");
         let content = format!("{scope}:content");
         self.begin_output_scope(&scope);
@@ -426,18 +428,28 @@ impl InlineBuilder {
         self.pending_output_scope_prefixes
             .retain(|pending| pending != &content);
         let mut started = false;
+        let mut annotated = false;
         self.wrap_output_scope(&scope, |children| {
             if started {
-                return wrap(children);
+                let output = wrap(children);
+                annotated |= output
+                    .iter()
+                    .any(|node| matches!(node, Inline::Link { .. }));
+                return output;
             }
             let (mut prefix, children, found) =
                 projection::split_output_scope_prefix(children, &content);
             started = found;
             if found {
-                prefix.extend(wrap(children));
+                let output = wrap(children);
+                annotated |= output
+                    .iter()
+                    .any(|node| matches!(node, Inline::Link { .. }));
+                prefix.extend(output);
             }
             prefix
         });
+        annotated
     }
 
     /// Append content using the formatter-level boundary selected by the

@@ -2,10 +2,9 @@
 //!
 //! Every card's row facts are validated against the committed oracle
 //! snapshot (see `validate_against_oracle`); semantic facts cite the case
-//! source and the typed contracts the guide freezes. Expectations marked
-//! `after_repair` describe oracle facts the product does not yet produce;
-//! the comparator must currently *detect* those divergences, and the repair
-//! unit that closes one flips its status to `must` in the same commit.
+//! source and the typed contracts the guide freezes. Every registered
+//! expectation must hold in the product; unregistered axes retain their
+//! explicit applicability notes.
 
 use super::axis_model::{
     AcceptanceCase, Axis, AxisKind, AxisPolicy, BlankCountExpect, ContentPolicy, GoldCard,
@@ -77,7 +76,7 @@ fn word_owner_pending_prefix() -> AcceptanceCase {
             identity: IdentityPolicy::RichInline,
         },
         gold: GoldCard {
-            accepted_units: Some(Axis::after_repair(vec!["PY"])),
+            accepted_units: Some(Axis::must(vec!["PY"])),
             forbidden_units: Some(Axis::must(vec!["Z", "AFTER"])),
             row_count: Some(Axis::must(3)),
             identities: Some(Axis::must(vec![IdentityExpect {
@@ -119,10 +118,10 @@ fn rejected_suffix_revival() -> AcceptanceCase {
             identity: IdentityPolicy::RichInline,
         },
         gold: GoldCard {
-            accepted_units: Some(Axis::after_repair(vec!["P"])),
-            forbidden_units: Some(Axis::after_repair(vec![":", "https://ex.org", "AFTER"])),
+            accepted_units: Some(Axis::must(vec!["P"])),
+            forbidden_units: Some(Axis::must(vec![":", "https://ex.org", "AFTER"])),
             row_count: Some(Axis::must(3)),
-            identities: Some(Axis::after_repair(vec![IdentityExpect {
+            identities: Some(Axis::must(vec![IdentityExpect {
                 uri: "https://ex.org",
                 // The fully rejected label keeps its typed identity with a
                 // zero-glyph visible range.

@@ -16,7 +16,7 @@ use tab_stops::TabStops;
 mod no_fill;
 pub(in crate::mandoc) use native_field::{FieldFlag, FieldFlags};
 mod output;
-pub(in crate::mandoc::inline) use output::INTERNAL_FIELD_WORD;
+pub(in crate::mandoc::inline) use output::{INTERNAL_FIELD_WORD, INTERNAL_LINK_SPLIT};
 
 pub(in crate::mandoc) use no_fill::{NoFillInlineState, lower_no_fill_fragment_with_formatter};
 

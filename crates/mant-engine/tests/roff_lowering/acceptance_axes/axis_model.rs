@@ -61,37 +61,14 @@ pub(crate) struct AxisPolicy {
     pub(crate) identity: IdentityPolicy,
 }
 
-/// Registration status of one expectation.
-///
-/// `MustHold` fails the suite today. `HoldsAfterRepair` proves that the
-/// comparator detects the currently registered divergence; the repair unit
-/// that closes the divergence flips the status to `MustHold` in the same
-/// commit, so a green suite always means every registered axis holds.
-#[derive(Clone, Copy, Debug)]
-pub(crate) enum Status {
-    MustHold,
-    HoldsAfterRepair,
-}
-
-/// One registered expectation with its status.
+/// One registered expectation that must hold in the product.
 pub(crate) struct Axis<T> {
-    pub(crate) status: Status,
     pub(crate) expect: T,
 }
 
 impl<T> Axis<T> {
     pub(crate) fn must(expect: T) -> Self {
-        Self {
-            status: Status::MustHold,
-            expect,
-        }
-    }
-
-    pub(crate) fn after_repair(expect: T) -> Self {
-        Self {
-            status: Status::HoldsAfterRepair,
-            expect,
-        }
+        Self { expect }
     }
 }
 
@@ -299,26 +276,6 @@ impl AcceptanceCase {
             .iter()
             .find(|(noted, _)| *noted == kind)
             .map(|(_, reason)| *reason)
-    }
-
-    /// Registration status of one axis, when the case registers it.
-    pub(crate) fn status_for(&self, kind: AxisKind) -> Option<Status> {
-        match kind {
-            AxisKind::Content => self.gold.accepted_units.as_ref().map(|axis| axis.status),
-            AxisKind::ForbiddenContent => {
-                self.gold.forbidden_units.as_ref().map(|axis| axis.status)
-            }
-            AxisKind::Separator => self.gold.separators.as_ref().map(|axis| axis.status),
-            AxisKind::HardRows => self.gold.hard_rows.as_ref().map(|axis| axis.status),
-            AxisKind::BlankCount => self.gold.blank_counts.as_ref().map(|axis| axis.status),
-            AxisKind::RowCount => self.gold.row_count.as_ref().map(|axis| axis.status),
-            AxisKind::ExactRows => self.registers(kind).then_some(Status::MustHold),
-            AxisKind::Identity => self.gold.identities.as_ref().map(|axis| axis.status),
-            AxisKind::Ownership => self.gold.ownership.as_ref().map(|axis| axis.status),
-            AxisKind::ScalarRange => self.gold.scalar_ranges.as_ref().map(|axis| axis.status),
-            AxisKind::Style => self.gold.styles.as_ref().map(|axis| axis.status),
-            AxisKind::Source => self.gold.sources.as_ref().map(|axis| axis.status),
-        }
     }
 
     /// Responsive indentation only makes sense with constrained row
