@@ -213,7 +213,7 @@ fn fd_font_scope_does_not_leak_to_following_body() {
     }
     // Original MP01 exact source ran pristine before this assertion:
     // mdoc_term.c::print_mdoc_node restores font depth before Fd post.
-    let source = include_str!("review25_matrix/cases/mp01.1");
+    let source = include_str!("macro_consumer_matrix/cases/mp01.1");
     let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
     let mut runs = FontRuns { strong: Vec::new() };
     visit::walk_document(&mut runs, query.document.as_ref().unwrap());

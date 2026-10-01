@@ -173,7 +173,7 @@ fn margin_flush_retires_accepted_run_in_cells_before_the_next_word() {
     // because the run-in fixed blank's columns are device geometry.
     for (head, expected) in [("\\p", vec!["BodyWord"]), ("X\\p", vec!["X BodyWord"])] {
         let source = if head == "\\p" {
-            include_str!("../g2g3_matrix/cases/g2_v_mc_pX_noX.1").to_owned()
+            include_str!("../field_retirement_matrix/cases/buffer_mc_pX_noX.1").to_owned()
         } else {
             format!(
                 ".Dd September 30, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset\n.It Xo\n.No \"{head}\"\n.Xc\n.mc\n.No BodyWord\n.El\n"

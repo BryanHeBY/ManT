@@ -94,7 +94,7 @@ fn author_split_restarts_an_overrun_tag_field() {
     // field restarts — NOBREAK and BRIND survive until the item post — so
     // the next author word is the restarted field's first word and BODY
     // shares ITS row (`LONGTEXT A` / `Bob     BODY`), not a fresh block.
-    let item = review_definition_item(
+    let item = definition_item_from_source(
         ".Bl -tag -width 6n\n.It Xo\n.No LONGTEXT\n.No A\n.An -split\n.An Bob\n.Xc\n.No BODY\n.El\n",
     );
     assert_eq!(
@@ -129,7 +129,7 @@ fn author_split_families_keep_the_reference_row_shapes() {
         ("hang", "LONGTEXT", 1, HeadBodyRelation::RunIn),
         ("hang", "A", 1, HeadBodyRelation::RunIn),
     ] {
-        let item = review_definition_item(&format!(
+        let item = definition_item_from_source(&format!(
             ".Bl -{style} -width 6n\n.It Xo\n.No {head}\n.An -split\n.An Bob\n.Xc\n.No BODY\n.El\n"
         ));
         assert_eq!(

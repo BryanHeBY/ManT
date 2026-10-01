@@ -1,16 +1,13 @@
-//! LK family (review §25.3): links, targets and positions (NF03/NF04).
+//! Link identity, visible labels and consumer positions.
 //!
 //! Oracle cases `lk02`–`lk16` pin the terminal row projection of the
 //! upstream link display rules (`mdoc_term.c::termp_lk_pre`: description
 //! operands → generated `:` → address → trailing punctuation; `%U/%R`
 //! reference fields; `.Mt`; man `UR/UE`). `lk01` has no roff oracle —
-//! it is a Markdown-input contract test (review §19.1: the generic link
+//! it is a Markdown-input contract test (the generic link
 //! projection must not append `: URI` to Markdown labels).
 //!
-//! The `TARGET_RED` layer pins the roff-identity decode of typed link
-//! targets (review §20: `%U` operands reach `LinkTarget::External` with
-//! the raw roff escapes still inside); it is dispatched with the LK
-//! fixes to NF-LINK.
+//! Targets are checked after roff identity decoding, independently of display.
 
 use super::{MatrixRun, actual_rows, case_names, load_case};
 use mant_ir::{
@@ -24,18 +21,10 @@ mod contracts;
 #[path = "portable_display_contracts.rs"]
 mod portable;
 
-/// Cases whose layer-1 projection is still red against the oracle pin.
-/// Dispatched to NF-LINK (review §26.1 step 3); entries are removed as
-/// the fixes land.
-const KNOWN_RED: &[&str] = &[];
-
 // These two filled paragraphs have no authored row requests. Their native
 // width=78 breaks are device wrapping, covered separately below rather than
 // being mistaken for source hard breaks. All other fixtures keep exact rows.
 const RESPONSIVE_CASES: &[&str] = &["lk16_long", "lk16_many"];
-
-/// Cases whose typed link targets still carry raw roff escapes (NF04).
-const TARGET_RED: &[&str] = &[];
 
 #[derive(Default)]
 struct LinkTargets(Vec<String>);
@@ -80,15 +69,15 @@ fn link_targets(query: &mant_ir::ResolvedContent) -> Vec<String> {
 }
 
 #[test]
-fn lk_matrix_matches_the_pinned_reference() {
+fn link_matrix_matches_the_pinned_reference() {
     let mut matrix = MatrixRun::new();
     for name in case_names("lk", 28) {
         if RESPONSIVE_CASES.contains(&name.as_str()) {
             continue;
         }
-        matrix.evaluate(&name, KNOWN_RED, None);
+        matrix.evaluate(&name, None);
     }
-    matrix.finish(KNOWN_RED, "LK");
+    matrix.finish("LK");
 }
 
 fn unwrap_filled_description(mut rows: Vec<String>) -> Vec<String> {
@@ -170,15 +159,9 @@ fn long_lk_paragraphs_keep_words_without_fixed_device_wrapping() {
     }
 }
 
-/// LK01 (review §19.1, §25.3): a Markdown `[label](uri)` link keeps the
-/// compact label display. The IR visible label is `label`; the address
-/// appendix invented by the generic terminal link visitor
-/// (`link_target_display_gap`) was the regression. Promoted green by the
-/// NF-LINK visitor fix; the flag stays so drift is still detected.
-const LK01_RED: bool = false;
-
+/// Markdown links retain their authored compact label in plain text.
 #[test]
-fn lk01_markdown_external_links_keep_the_compact_label() {
+fn markdown_external_links_keep_the_compact_label() {
     let query = mant_loader::load_markdown_text(
         "# Title\n\n[label](https://example.com/x)\n",
         Some("lk01.md".to_owned()),
@@ -186,21 +169,14 @@ fn lk01_markdown_external_links_keep_the_compact_label() {
     .expect("parse markdown link fixture");
     let rendered = mant_render::render_query_text(&query);
     let rows = actual_rows(&rendered);
-    let failed = rows != ["label".to_owned()] || rendered.contains("https://example.com/x");
-    assert_eq!(
-        failed, LK01_RED,
-        "LK01 red tracking drifted\nrows: {rows:?}\n{rendered}"
-    );
+    assert_eq!(rows, ["label".to_owned()], "{rendered}");
+    assert!(!rendered.contains("https://example.com/x"), "{rendered}");
 }
 
-/// NF04 layer (review §20): typed link targets are roff-identity decoded
-/// — no `\&`, font or zero-width escape survives into the URI/mailbox
-/// strings. Red cases must be exactly `TARGET_RED`; green cases are
-/// asserted directly.
+/// Typed targets contain decoded identity, never raw roff escapes.
 #[test]
-fn lk_targets_are_roff_identity_decoded() {
+fn link_targets_are_roff_identity_decoded() {
     let mut red = Vec::new();
-    let mut red_names: Vec<String> = Vec::new();
     for name in case_names("lk", 28) {
         let (query, _) = load_case(&name);
         let targets = link_targets(&query);
@@ -211,22 +187,11 @@ fn lk_targets_are_roff_identity_decoded() {
             .collect();
         if !dirty.is_empty() {
             red.push(format!("{name}: {dirty:?}"));
-            red_names.push(name);
         }
     }
-    let unexpected = red_names
-        .iter()
-        .filter(|name| !TARGET_RED.contains(&name.as_str()))
-        .map(String::as_str)
-        .collect::<Vec<_>>();
-    let still_listed = TARGET_RED
-        .iter()
-        .copied()
-        .filter(|listed| !red_names.iter().any(|name| name == listed))
-        .collect::<Vec<_>>();
     assert!(
-        unexpected.is_empty() && still_listed.is_empty(),
-        "TARGET_RED tracking drifted; new reds {unexpected:?}, stale {still_listed:?}\n{}",
+        red.is_empty(),
+        "raw roff escapes in targets:\n{}",
         red.join("\n")
     );
 }

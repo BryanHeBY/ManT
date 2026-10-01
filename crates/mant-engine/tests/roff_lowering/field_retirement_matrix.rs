@@ -1,14 +1,14 @@
-//! G2/G3 flush-retirement matrix against pinned CVS mandoc output.
+//! Field flush and buffer retirement matrix against pinned CVS mandoc output.
 //!
-//! Each case under `g2g3_matrix/cases/*.1` is an mdoc document exercising
-//! the real-`term_flushln()` retirement points (G2: `.mc` across the list
-//! kinds and the `.Xc` flags-timing probes; G3: TAG tail-width thresholds
+//! Each case under `field_retirement_matrix/cases/*.1` is an mdoc document exercising
+//! the real-`term_flushln()` retirement points (`.mc` across the list
+//! kinds and the `.Xc` flags-timing probes; TAG tail-width thresholds
 //! for `emptyno`/`embedded`/`nbrsp`/`nbrsp_tilde`/`mixed`/`tab`/`tabq`
 //! boundary pairs).
 //! The sibling `.expected` file holds the **row-grouped** output of the
 //! fixed CVS reference binary
 //! (`target/mandoc-migration/reference/mandoc -Tascii`), recorded once by
-//! `scripts/regen_g2g3_matrix.sh`: which words
+//! `scripts/regen_field_retirement_matrix.sh`: which words
 //! share a physical row is the row machine's observable decision. The
 //! `.mc <arg>` margin-note cases are deliberately absent: the per-line
 //! trailing margin character (term.c:450-465) is a registered deviation,
@@ -19,11 +19,11 @@ use std::fmt::Write as _;
 
 const CASES: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/tests/roff_lowering/g2g3_matrix/cases"
+    "/tests/roff_lowering/field_retirement_matrix/cases"
 );
 
 /// The probe's row-grouping normalization: overstrike projection, glyph
-/// normalization (NBSP and the tracked en/em dash presentation deviation),
+/// normalization (NBSP and ASCII-compatible dash glyphs),
 /// then drop only the page furniture by **position windows** — row 0 is
 /// always the header/label row, trailing blank rows are page-edge framing.
 /// This renderer has no footer block, so no trailing non-empty block is
@@ -41,8 +41,8 @@ fn normalize_mant(output: &str) -> Vec<String> {
             // grouping treats it as the blank it occupies.
             projected.push(' ');
         } else if character == '\u{2013}' || character == '\u{2014}' {
-            // The en/em dash glyph is a tracked presentation deviation
-            // (G7); row grouping normalizes it on both sides.
+            // This ASCII row-group snapshot normalizes Unicode dashes on
+            // both sides; precise glyphs have dedicated consumer tests.
             projected.push('-');
         } else {
             projected.push(character);
@@ -68,11 +68,11 @@ fn normalize_mant(output: &str) -> Vec<String> {
 }
 
 #[test]
-fn g2g3_matrix_rows_match_the_pinned_reference() {
+fn field_retirement_matrix_rows_match_the_pinned_reference() {
     let mut failures = Vec::new();
     let mut total = 0;
     let mut entries: Vec<_> = std::fs::read_dir(CASES)
-        .expect("g2g3 matrix case directory")
+        .expect("field retirement matrix case directory")
         .filter_map(Result::ok)
         .map(|entry| entry.path())
         .filter(|path| path.extension().is_some_and(|extension| extension == "1"))
@@ -121,7 +121,7 @@ fn g2g3_matrix_rows_match_the_pinned_reference() {
     }
     assert_eq!(
         total, 161,
-        "case set changed; regen via scripts/regen_g2g3_matrix.sh"
+        "case set changed; regen via scripts/regen_field_retirement_matrix.sh"
     );
     assert!(
         failures.is_empty(),

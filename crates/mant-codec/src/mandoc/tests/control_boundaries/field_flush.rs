@@ -35,7 +35,7 @@ fn hang_field_flush_preserves_native_trailspace_without_reusing_br_gap() {
     // term_flushln() restores minbl=trailspace even when nbr=0; explicit
     // roff_term_pre_br() clears BRIND, while NODE_LINE sets NOSPACE.
     for (middle, expected) in [(".No \\p", "X Y"), (".br\n.No \"\"", "XY")] {
-        let item = review_definition_item(&format!(
+        let item = definition_item_from_source(&format!(
             ".nf\n.Bl -hang -width 4n\n.It Xo\n.No X\n{middle}\n.No Y\n.Xc\n.No BODY\n.El\n"
         ));
         assert_eq!(inline_text(&item.terms[0]), expected, "{middle}: {item:#?}");
@@ -65,7 +65,7 @@ fn hang_field_rejects_only_the_unaccepted_word_end_suffix() {
         // The next word's separator remains at the restarted row origin.
         (".No X\\p\n.No \"\"\n.No Y", "X\n Y"),
     ] {
-        let item = review_definition_item(&format!(
+        let item = definition_item_from_source(&format!(
             ".Bl -hang -width 4n\n.It Xo\n{head}\n.Xc\n.No BODY\n.El\n"
         ));
         assert_eq!(inline_text(&item.terms[0]), expected, "{head}: {item:#?}");
@@ -73,8 +73,9 @@ fn hang_field_rejects_only_the_unaccepted_word_end_suffix() {
     }
     // The same term_fill() consumption runs for OHANG even though its HEAD
     // does not use HANG geometry. The pinned reference drops Y here too.
-    let item =
-        review_definition_item(".Bl -ohang\n.It Xo\n.No X\n.No \\p\n.No Y\n.Xc\n.No BODY\n.El\n");
+    let item = definition_item_from_source(
+        ".Bl -ohang\n.It Xo\n.No X\n.No \\p\n.No Y\n.Xc\n.No BODY\n.El\n",
+    );
     assert_eq!(inline_text(&item.terms[0]), "X\n", "{item:#?}");
 }
 
@@ -85,7 +86,7 @@ fn hang_field_restarts_term_fill_from_the_actual_breakable_blank() {
     // after \p. With "X \p Y", the next pass has no graph and rejects Y/Z;
     // with "X\p Y", it accepts Y in the next pass.
     for (first, expected, rejected) in [("X \\p Y", "X", true), ("X\\p Y", "X\nY Z", false)] {
-        let item = review_definition_item(&format!(
+        let item = definition_item_from_source(&format!(
             ".Bl -hang -width 4n\n.It Xo\n.No \"{first}\"\n.No Z\n.Xc\n.No BODY\n.El\n"
         ));
         assert_eq!(inline_text(&item.terms[0]), expected, "{first}: {item:#?}");
@@ -99,7 +100,7 @@ fn tag_margin_flush_does_not_print_an_unconsumed_next_field_separator() {
     // roff_term.c::roff_term_pre_mc(), TERMP_NOBREAK flushes the TAG field;
     // mdoc_term.c::termp_it_post() then closes HEAD. The ordinary separator
     // for a *later* term_word() has not occupied a second physical row.
-    let item = review_definition_item(
+    let item = definition_item_from_source(
         ".nf\n.Bl -tag -width 4n\n.It Xo\n.No QHEADQ\\c\n.mc |\n.Xc\n.No QBODYQ\n.El\n.fi\n",
     );
     assert_eq!(inline_text(&item.terms[0]), "QHEADQ", "{item:#?}");
@@ -117,7 +118,7 @@ fn margin_control_flushes_rejected_native_field_before_starting_another() {
     // occupied; term.c::term_fill() can reject the suffix after \\p there,
     // before `.mc` changes NOBREAK and prepares the following field.
     for style in ["hang", "tag"] {
-        let item = review_definition_item(&format!(
+        let item = definition_item_from_source(&format!(
             ".Bl -{style} -width 4n\n.It Xo\n.No \"QAA \\p QBB\"\n.mc |\n.Xc\n.No QBODYQ\n.El\n"
         ));
         assert_eq!(
@@ -126,7 +127,7 @@ fn margin_control_flushes_rejected_native_field_before_starting_another() {
             "{style}: {item:#?}"
         );
     }
-    let empty = review_definition_item(
+    let empty = definition_item_from_source(
         ".Bl -hang -width 4n\n.It Xo\n.No \"\\p QAA\"\n.mc |\n.Xc\n.No QBODYQ\n.El\n",
     );
     assert!(!inline_text(&empty.terms[0]).contains("QAA"), "{empty:#?}");
@@ -139,7 +140,7 @@ fn every_post_margin_field_flush_rejects_the_pending_suffix() {
     // even after a prior `.mc` opened another NOBREAK field. The accepted
     // QBB prefix survives; the later QCC suffix is never printed.
     for request in [".br", ".sp 0", ".ce 0", ".rj 0"] {
-        let item = review_definition_item(&format!(
+        let item = definition_item_from_source(&format!(
             ".Bl -hang -width 4n\n.It Xo\n.No QAA\n.mc |\n.No \"QBB \\p QCC\"\n{request}\n.Xc\n.No QBODYQ\n.El\n"
         ));
         let term = inline_text(&item.terms[0]);

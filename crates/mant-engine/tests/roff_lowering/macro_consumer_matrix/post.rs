@@ -1,4 +1,4 @@
-//! MP family (review §25.4, NF05): the `.Fd` macro post across every
+//! The `.Fd` macro post across every
 //! shared execution entry.
 //!
 //! Upstream `mdoc_term.c::termp_fd_post` is a plain `term_newln(p)` — it
@@ -19,13 +19,12 @@
 //! column field execution contract. Every pin is now a required pass.
 
 use super::{MatrixRun, case_names};
-const KNOWN_RED: &[&str] = &[];
 
 #[test]
-fn mp_matrix_matches_the_pinned_reference() {
+fn macro_post_matrix_matches_the_pinned_reference() {
     let mut matrix = MatrixRun::new();
     for name in case_names("mp", 22) {
-        matrix.evaluate(&name, KNOWN_RED, None);
+        matrix.evaluate(&name, None);
     }
-    matrix.finish(KNOWN_RED, "MP");
+    matrix.finish("MP");
 }

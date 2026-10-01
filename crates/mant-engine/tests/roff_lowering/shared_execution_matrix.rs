@@ -1,4 +1,4 @@
-//! Shared execution-boundary matrix (wave 2c, full recording) against the
+//! Shared execution-boundary matrix against the
 //! pinned CVS mandoc oracle.
 //!
 //! Cases under `shared_execution_matrix/cases/*.1` (209) pin the unified
@@ -17,22 +17,21 @@
 //! * matrix C (`c_s*`, 36): control boundaries (`.ft`/`.ta`/`.Tg`/`.br`/
 //!   `.sp`/`.mc`/`.Pp`/`.nf`/`.ti`) crossed with three initial buffer
 //!   states (empty, armed `\z`, cells written).
-//! * RF minimal repros (`rf*`, 22): the RF01-07 minimal failure examples
-//!   from external review §3-9 — landed as known-red oracle pins so the
-//!   fixes have a green target; expectations are oracle recordings and
-//!   must never be edited to match `ManT`.
+//! * named regressions (22): word breaks, semantic links, displays,
+//!   generated prefixes and keep scopes. Every oracle snapshot is required.
 //!
 //! The sibling `.expected` file holds the oracle projection, recorded by
 //! `scripts/regen_shared_execution_matrix.sh`: backspace-pop projection,
 //! NBSP read as the blank it occupies, furniture removed by position
 //! windows only (row 0 header, trailing footer block). Interior blank rows
 //! are paragraph structure and stay pinned; intra-row spacing survives
-//! because only the page margin is trimmed. Layer 1 is exact row equality —
+//! because outer row whitespace alone is trimmed. These pins do not assert
+//! row origins or trailing spaces. Layer 1 is row equality —
 //! no whitespace collapsing and no blank-row squeezing.
 //!
 //! Assertion layers:
 //! 1. row projection (execution result) — all cases;
-//! 2. JSON contract round-trip — all green cases;
+//! 2. JSON text contract round-trip — all cases;
 //! 3. consumers — plain/styled text cover the complete recording; portable
 //!    spelling has dedicated contracts alongside the first-cut `b*`/`g_*`
 //!    Markdown token checks.
@@ -44,15 +43,29 @@ const CASES: &str = concat!(
     "/tests/roff_lowering/shared_execution_matrix/cases"
 );
 
-/// Cases whose layer-1 projection is still red against the oracle pin.
-/// Entries are removed as the tracked fixes land; a known-red case that
-/// turns green fails this test so the pin is promoted (layers 2-3 then
-/// run automatically on the next execution).
-const KNOWN_RED: &[&str] = &[];
-
-/// First-cut cases with additional Markdown token-conservation assertions.
+/// Cases with additional Markdown token-conservation assertions.
 fn has_markdown_token_layer(name: &str) -> bool {
-    name.starts_with('b') || name.starts_with("g_")
+    name.strip_prefix('b')
+        .and_then(|suffix| suffix.chars().next())
+        .is_some_and(|character| character.is_ascii_digit())
+        || name.starts_with("g_")
+}
+
+#[test]
+fn markdown_token_layer_selects_only_generated_word_and_gap_cases() {
+    let names = matrix_case_names();
+    assert_eq!(
+        names
+            .iter()
+            .filter(|name| has_markdown_token_layer(name))
+            .count(),
+        39
+    );
+    assert!(has_markdown_token_layer("b01"));
+    assert!(has_markdown_token_layer("b19"));
+    assert!(has_markdown_token_layer("g_hang_zA"));
+    assert!(!has_markdown_token_layer("bsd_word_end_break"));
+    assert!(!has_markdown_token_layer("bsd_pending_glyph"));
 }
 
 fn project(output: &str) -> Vec<String> {
@@ -85,17 +98,8 @@ fn project(output: &str) -> Vec<String> {
     rows
 }
 
-/// Neutralize the known pre-existing `.Nd` dash gap on the `ManT` side only
-/// (review appendix A: `ManT` em dash vs oracle en dash; tracked separately
-/// from this matrix). Oracle expectations are never edited.
-fn neutralize_known_dash_gap(rows: Vec<String>) -> Vec<String> {
-    rows.into_iter()
-        .map(|row| row.replace('\u{2014}', "\u{2013}"))
-        .collect()
-}
-
 fn actual_rows(rendered: &str) -> Vec<String> {
-    neutralize_known_dash_gap(project(rendered))
+    project(rendered)
 }
 
 fn load_case(name: &str) -> (mant_ir::ResolvedContent, Vec<String>) {
@@ -131,13 +135,11 @@ fn matrix_case_names() -> Vec<String> {
 }
 
 /// Layer 1 (row projection) + layer 2 (JSON round-trip) + layer 3
-/// (plain/styled consumers) for every matrix case. Layer-1 reds must be
-/// exactly the `KNOWN_RED` tracking list; green cases must keep the JSON
-/// contract stable, and the additional Markdown assertions must hold.
+/// (plain/styled consumers) for every matrix case. Every native row must
+/// match; the JSON contract and Markdown token assertions must also hold.
 #[test]
 fn shared_execution_matrix_matches_the_pinned_reference() {
     let mut failures = Vec::new();
-    let mut red: Vec<String> = Vec::new();
     for name in matrix_case_names() {
         let (query, expected) = load_case(&name);
 
@@ -165,41 +167,13 @@ fn shared_execution_matrix_matches_the_pinned_reference() {
                 );
             }
             failures.push(report);
-            red.push(name.clone());
             continue;
         }
-        if KNOWN_RED.contains(&name.as_str()) {
-            failures.push(format!(
-                "{name}: pinned known-red is green now; remove it from KNOWN_RED\n"
-            ));
-            continue;
-        }
-
         assert_matrix_consumers(&name, &query, &expected);
     }
-    let unexpected_reds: Vec<&str> = red
-        .iter()
-        .filter(|name| !KNOWN_RED.contains(&name.as_str()))
-        .map(String::as_str)
-        .collect();
-    let still_listed: Vec<&str> = KNOWN_RED
-        .iter()
-        .copied()
-        .filter(|listed| !red.iter().any(|name| name == listed))
-        .collect();
-    let mut report = String::new();
-    if !unexpected_reds.is_empty() {
-        let _ = writeln!(
-            report,
-            "new reds against the oracle pin: {unexpected_reds:?}"
-        );
-    }
-    if !still_listed.is_empty() {
-        let _ = writeln!(report, "KNOWN_RED entries no longer red: {still_listed:?}");
-    }
     assert!(
-        unexpected_reds.is_empty() && still_listed.is_empty(),
-        "KNOWN_RED tracking drifted\n{report}row diffs:\n{}",
+        failures.is_empty(),
+        "execution row differences:\n{}",
         failures.join("")
     );
 }
@@ -244,7 +218,7 @@ fn assert_matrix_consumers(name: &str, query: &mant_ir::ResolvedContent, expecte
         expected,
         "{name}: styled text rows diverged"
     );
-    // The first-cut Markdown assertion checks semantic token conservation;
+    // The Markdown assertion checks semantic token conservation;
     // portable spelling and hard-row contracts have dedicated regressions.
     if !has_markdown_token_layer(name) {
         return;

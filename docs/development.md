@@ -270,6 +270,30 @@ cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
 cargo build --locked --release -p mant
 ```
 
+Run formatting and strict Clippy before the complete verification script.
+Prefer named execution arguments and helpers that correspond to actual
+ownership or ordered lifecycle steps. Keep a local lint exception only when
+its reason remains part of the contract: independent native registers,
+ordered formatter transitions, FFI/Serde layout, or an explicitly bounded
+numeric conversion. Splitting a function solely to meet a line count is not
+a substitute for a clear execution boundary.
+
+Roff regression modules and fixtures use behavior names rather than review
+or implementation-stage names. Existing source and expected bytes stay intact
+when files move. The snapshot recorders read those checked-in sources as the
+sole case definitions and verify the registered pristine oracle before writing:
+
+```sh
+bash scripts/regen_macro_consumer_matrix.sh --check
+bash scripts/regen_shared_execution_matrix.sh --check
+bash scripts/regen_field_retirement_matrix.sh --check
+```
+
+Omit `--check` only to record deliberately reviewed oracle changes. The UTF-8
+matrices preserve internal spaces and blank rows but trim row-edge whitespace;
+the ASCII field matrix checks normalized row groups. Dedicated regressions
+must cover origins, trailing cells and responsive wrapping separately.
+
 Dependency policy is declared in `deny.toml`. CI runs cargo-deny across all
 features and every supported target family to reject known vulnerabilities,
 yanked packages, unapproved licenses, wildcard requirements, and dependencies

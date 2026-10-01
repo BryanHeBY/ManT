@@ -7,7 +7,7 @@ fn inset_mid_word_marker_wipes_body_first_text() {
     // still holds the marker suffix, the generated separator, and the
     // BODY text, and the rejected pass wipes that whole buffer
     // (term.c:144-146 with 235): only the accepted prefix prints.
-    let item = review_definition_item(
+    let item = definition_item_from_source(
         ".Bl -inset\n.It Xo\n.No \"alpha \\p beta\"\n.Xc\n.No tail text\n.El\n",
     );
     assert_eq!(inline_text(&item.terms[0]), "alpha", "{item:#?}");
@@ -38,7 +38,7 @@ fn inset_empty_operand_after_marker_breaks_when_the_body_consumes_its_field() {
     // boundary belongs to BODY output, not a predicted HEAD layout break.
     // The generated NBSP without an intervening empty operand is a graph
     // (term.c:347-350), so the armed-only case keeps its shared field.
-    let inset = review_definition_item(
+    let inset = definition_item_from_source(
         ".Bl -inset\n.It Xo\n.No alpha\\p\n.No \"\"\n.Xc\n.No tail text\n.El\n",
     );
     assert_eq!(inline_text(&inset.terms[0]), "alpha", "{inset:#?}");
@@ -54,7 +54,7 @@ fn inset_empty_operand_after_marker_breaks_when_the_body_consumes_its_field() {
         "BODY owns the executed marker boundary: {inset:#?}"
     );
     assert_eq!(inline_text(children), "\n tail text", "{inset:#?}");
-    let diag = review_definition_item(
+    let diag = definition_item_from_source(
         ".Bl -diag\n.It Xo\n.No alpha\\p\n.No \"\"\n.Xc\n.No tail text\n.El\n",
     );
     assert!(
@@ -62,7 +62,7 @@ fn inset_empty_operand_after_marker_breaks_when_the_body_consumes_its_field() {
         "diag NOBREAK keeps the shared row: {diag:#?}"
     );
     let armed_only =
-        review_definition_item(".Bl -inset\n.It Xo\n.No alpha\\p\n.Xc\n.No tail text\n.El\n");
+        definition_item_from_source(".Bl -inset\n.It Xo\n.No alpha\\p\n.Xc\n.No tail text\n.El\n");
     assert!(
         armed_only.layout.inline_term(),
         r"a trailing \p without the empty TEXT keeps the shared row: {armed_only:#?}"
@@ -78,7 +78,7 @@ fn inset_separate_marker_text_wipes_body_first_text() {
     // discards the suffix together with the run-in BODY text that still
     // shared the buffer. The native receipt decides this interval exactly
     // as it does for the single-TEXT case above; no BODY-wide latch remains.
-    let item = review_definition_item(
+    let item = definition_item_from_source(
         ".Bl -inset\n.It Xo\n.No one\n.No \\p\n.No two\n.Xc\n.No tail text\n.El\n",
     );
     assert_eq!(inline_text(&item.terms[0]), "one", "{item:#?}");
@@ -114,7 +114,7 @@ fn diag_literal_head_marker_wipes_field_suffix() {
     // body text never does. CVS prints `Xo  alpha` followed by one blank
     // row: BRIND makes the rejected pass vfield=0, and trailspace=1
     // still executes the independent term_flushln()250-253 tail endline.
-    let item = review_definition_item(
+    let item = definition_item_from_source(
         ".Bl -diag\n.It Xo\n.No \"alpha \\p beta\"\n.Xc\n.No tail text\n.El\n",
     );
     assert_eq!(inline_text(&item.terms[0]), "Xo", "{item:#?}");
@@ -143,7 +143,7 @@ fn empty_head_sp_keeps_its_blank_rows() {
     // the remaining head words at the field's own vfield (term.c:134-136,
     // reference: `after`/`space` rows at the list offset), while the
     // restored head margins keep tag's final row closed for BODY.
-    let item = review_definition_item(
+    let item = definition_item_from_source(
         ".Bl -tag -width 4n\n.It Xo\n.sp\n.No after space\n.Xc\n.No tail text\n.El\n",
     );
     // A repeated exact reference run also verifies the count: an empty
@@ -161,7 +161,7 @@ fn cleared_no_break_field_wraps_hang_head_words_at_the_field_width() {
     // head words with vtarget=vfield (term.c:134-136): `after` and
     // `space` take separate rows at the list offset, and HANG keeps the
     // last row open for its body (term.c:250-253).
-    let item = review_definition_item(
+    let item = definition_item_from_source(
         ".Bl -hang -width 4n\n.It Xo\n.sp\n.No after space\n.Xc\n.No tail text\n.El\n",
     );
     assert_eq!(inline_text(&item.terms[0]), "\nafter\nspace", "{item:#?}");
@@ -179,7 +179,7 @@ fn no_fill_head_words_never_wrap_at_the_field_width() {
     // TERMP_BRNEVER (mdoc_term.c:314-318): term_fill() runs with an
     // infinite target (term.c:143-144), so `after space` stays on one row
     // and only the BODY column follows.
-    let item = review_definition_item(
+    let item = definition_item_from_source(
         ".Bl -hang -width 4n\n.It Xo\n.nf\n.No after space\n.Xc\n.No tail text\n.El\n",
     );
     assert_eq!(inline_text(&item.terms[0]), "after space", "{item:#?}");
@@ -196,7 +196,7 @@ fn tag_marker_split_head_closes_its_final_row() {
     // tail rule (term.c:250-252) closes a NOBREAK-without-HANG (tag) row at
     // the final pass: BODY starts its own row even without a trailing
     // break. A HANG field keeps the shared row for its body.
-    let tag = review_definition_item(
+    let tag = definition_item_from_source(
         ".Bl -tag -width 4n\n.It Xo\n.No \"x\\p y\\p z\"\n.Xc\n.No tail text\n.El\n",
     );
     assert_eq!(inline_text(&tag.terms[0]), "x\ny\nz", "{tag:#?}");
@@ -204,7 +204,7 @@ fn tag_marker_split_head_closes_its_final_row() {
         !tag.layout.inline_term(),
         "tag body must start its own row: {tag:#?}"
     );
-    let hang = review_definition_item(
+    let hang = definition_item_from_source(
         ".Bl -hang -width 4n\n.It Xo\n.No \"x\\p y\\p z\"\n.Xc\n.No tail text\n.El\n",
     );
     assert_eq!(inline_text(&hang.terms[0]), "x\ny\nz", "{hang:#?}");
@@ -252,7 +252,7 @@ fn definition_head_handoff_uses_native_close_and_executed_continuation() {
             1,
         ),
     ] {
-        let item = review_definition_item(source);
+        let item = definition_item_from_source(source);
         assert_eq!(inline_text(&item.terms[0]), term, "{label}: {item:#?}");
         let rows: u16 = item
             .description
@@ -272,7 +272,7 @@ fn no_fill_head_projects_each_buffered_word_end_row_once() {
     // term.c::ESCAPE_BREAK writes a newline into the native buffer; each
     // later NODE_LINE invokes term_newln(), even after an earlier row ended.
     for (breaks, expected) in [(1, "X\n\nY"), (2, "X\n\n\nY")] {
-        let item = review_definition_item(&format!(
+        let item = definition_item_from_source(&format!(
             ".nf\n.Bl -ohang\n.It Xo\n.No X\n{}.No Y\n.Xc\n.No BODY\n.El\n",
             ".No \\p\n".repeat(breaks)
         ));
@@ -286,7 +286,7 @@ fn literal_definition_body_shares_only_a_continued_head_row() {
     // -Tlint. mdoc_term.c enters no-fill BODY at NODE_LINE; TERMP_NONEWLINE
     // from a final \c suppresses that row break and survives the IR drain.
     for (head, joins) in [(".No X\\c", true), (".No X", false)] {
-        let item = review_definition_item(&format!(
+        let item = definition_item_from_source(&format!(
             ".nf\n.Bl -hang -width 4n\n.It Xo\n{head}\n.Xc\n.No BODY\n.El\n"
         ));
         assert!(matches!(
@@ -309,7 +309,7 @@ fn rejected_hang_link_field_does_not_reintroduce_a_wrapped_suffix() {
     // word's ordinary separator before any graph in that pass. A typed Lk
     // wrapper cannot turn the rejected suffix into a committed prefix.
     for style in ["hang", "tag"] {
-        let item = review_definition_item(&format!(
+        let item = definition_item_from_source(&format!(
             ".Bl -{style} -width 4n\n.It Xo\n.Lk https://example.com \\p QAXAQ\n.Xc\n.No BODY\n.El\n"
         ));
         assert!(
@@ -659,7 +659,7 @@ fn head_body_relation_classifies_shared_rows() {
             HeadBodyRelation::FlushAtBody,
         ),
     ] {
-        let item = review_definition_item(body);
+        let item = definition_item_from_source(body);
         assert_eq!(item.layout.head_body_relation, expected, "{item:#?}");
     }
 }
@@ -1037,7 +1037,7 @@ fn fill_mode_closed_head_scope_does_not_add_a_row() {
     // (mdoc.c:238-250). Only no-fill mode runs another term_newln() at the
     // next NODE_LINE (mdoc_term.c:314-317), which is where the closed-scope
     // extra row comes from.
-    let item = review_definition_item(".Bl -inset\n.It Xo X\n.Xc\n.br\n.No BODY\n.El\n");
+    let item = definition_item_from_source(".Bl -inset\n.It Xo X\n.Xc\n.br\n.No BODY\n.El\n");
     assert_eq!(inline_text(&item.terms[0]), "X", "{item:#?}");
     let blank_rows: u16 = item
         .description

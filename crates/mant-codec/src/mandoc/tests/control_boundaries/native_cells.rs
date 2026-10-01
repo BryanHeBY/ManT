@@ -193,7 +193,7 @@ fn invisible_native_graph_preserves_following_accepted_field() {
     // Exact fixture ran through pinned pristine CVS -Tascii/-Tutf8/-Tlint.
     // term.c::term_fill() treats ASCII_NBRZW as graph despite zero width;
     // the second accepted pass ends its own physical row before Y prints.
-    let item = review_definition_item(
+    let item = definition_item_from_source(
         ".Bl -hang -width 4n\n.It Xo\n.No X\\p\n.No \"\\p\\&\"\n.No Y\n.Xc\n.No BodyWord\n.El\n",
     );
     assert_eq!(inline_text(&item.terms[0]), "X\n\nY", "{item:#?}");
@@ -209,7 +209,7 @@ fn first_native_pass_rejection_drops_only_its_unprinted_field() {
     // Exact fixture ran through pinned pristine CVS -Tascii/-Tutf8/-Tlint.
     // term.c::term_flushln() stops on first nbr=0 and clears that buffer,
     // including a \z glyph already written by encode1(). BODY is a new field.
-    let item = review_definition_item(
+    let item = definition_item_from_source(
         ".Bl -hang -width 4n\n.It Xo\n.No \\p\n.No \\zY\n.No Z\n.Xc\n.No BodyWord\n.El\n",
     );
     assert!(
@@ -228,7 +228,7 @@ fn head_rejection_cannot_revoke_a_body_after_a_real_flush() {
     // Exact fixture ran through pinned pristine CVS -Tascii/-Tutf8/-Tlint.
     // roff_term_pre_br() term_newln() consumes the old HEAD buffer. Rejected
     // HEAD bytes and the later BodyWord cannot share one rejection interval.
-    let item = review_definition_item(
+    let item = definition_item_from_source(
         ".Bl -inset\n.It Xo\n.No \"X\\p \\p Y\"\n.Xc\n.br\n.No BodyWord\n.El\n",
     );
     assert_eq!(inline_text(&item.terms[0]), "X", "{item:#?}");
@@ -244,7 +244,7 @@ fn overwritten_native_graphs_do_not_keep_a_rejected_owned_suffix() {
     // Exact CVS profiles retain the last overstrike glyph C, reject Z, and
     // retain BodyWord. encode1() keeps A/B as native graph but backspaces
     // their positions; source-cell acceptance cannot count them as IR glyphs.
-    let item = review_definition_item(
+    let item = definition_item_from_source(
         ".Bl -hang -width 4n\n.It Xo\n.No \"\\zA\\zBC \\p Z\"\n.Xc\n.No BodyWord\n.El\n",
     );
     assert_eq!(inline_text(&item.terms[0]), "C", "{item:#?}");
@@ -261,7 +261,7 @@ fn explicit_flush_cannot_delete_a_prefix_already_accepted_by_an_earlier_pass() {
     // Exact CVS profiles keep X and BodyWord, reject Y. term_flushln()
     // consumes accepted passes before rejecting the remaining buffer; a
     // subsequent roff_term_pre_br() cannot revoke that committed prefix.
-    let item = review_definition_item(
+    let item = definition_item_from_source(
         ".Bl -hang -width 4n\n.It Xo\n.No \"X\\p \\p Y\"\n.br\n.Xc\n.No BodyWord\n.El\n",
     );
     assert_eq!(inline_text(&item.terms[0]), "X", "{item:#?}");
@@ -278,7 +278,7 @@ fn native_acceptance_ranges_survive_link_and_style_wrappers() {
     // Exact CVS profiles keep X/Y on separate rows and reject Z, including
     // when Lk underlining owns both passes. Macro-generated URI spelling
     // executes after the label; typed Link identity is presentation metadata.
-    let item = review_definition_item(
+    let item = definition_item_from_source(
         ".Bl -hang -width 4n\n.It Xo\n.Lk https://example.org \"X\\p Y\" \"\\p Z\"\n.Xc\n.No BodyWord\n.El\n",
     );
     assert_eq!(inline_text(&item.terms[0]), "X\nY", "{item:#?}");
@@ -295,7 +295,7 @@ fn portable_hidden_source_operand_retains_its_native_owner_range() {
     // Exact pristine CVS profiles retain X and URI, reject later Z.
     // Portable Markdown suppresses the executed suffix, while native readers
     // retain its accepted interval. Neither projection may revive rejected Z.
-    let item = review_definition_item(
+    let item = definition_item_from_source(
         ".Bl -hang -width 4n\n.It Xo\n.Lk \"https://example.org\\p \\p\" X\n.No Z\n.Xc\n.No BodyWord\n.El\n",
     );
     // This exact source was rerun before changing the carrier assertion:

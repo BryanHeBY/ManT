@@ -148,7 +148,7 @@ fn responsive_table_geometry_keeps_native_owners_rules_and_buffer_coordinates() 
         ("cw12_span", &["A", "B", "C"][..]),
     ] {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../mant-engine/tests/roff_lowering/review25_matrix/cases")
+            .join("../mant-engine/tests/roff_lowering/macro_consumer_matrix/cases")
             .join(format!("{name}.1"));
         let query = mant_loader::load_roff_bytes(&std::fs::read(path).unwrap()).unwrap();
         let json = mant_render::render_query_json(&query, false).unwrap();

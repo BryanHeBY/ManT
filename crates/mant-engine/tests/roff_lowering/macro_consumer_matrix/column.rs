@@ -1,31 +1,16 @@
-//! CW family (review §25.2, NF02/NF07): declared column geometry,
-//! boundaries and consumers for `.Bl -column` and `tbl`.
+//! Declared column geometry, boundaries and consumers for `.Bl -column` and tbl.
 //!
-//! CW01–CW02 (panic seeds: 65531/65532/65535/65536-declared widths) are
-//! owned by the `NFSafe` unit and are not re-recorded here. The oracle
-//! cases `cw03`–`cw12` pin the terminal projection of
-//! `mdoc_term.c::termp_it_pre` geometry: display-width measurement
-//! (CJK/combining/emoji), escape-executed declared widths (`\(em`,
-//! `\(ha`, `\fB..\fP`, `\&`), the 4/3/1 dcol gap across 4/5/6 declared
-//! columns, cells beyond the declaration, multi-line cells (`br`/`sp`/
-//! `nf`/`.Pp`/nested list/link), origin-preserving fallbacks and `tbl`
-//! rules/spans.
+//! Cases `cw03`–`cw12` pin `mdoc_term.c::termp_it_pre`: Unicode widths,
+//! escape-executed declarations, the 4/3/1 dcol gap, extra cells, multiline
+//! cell content, signed origins and tbl rules/spans. Extreme parsed widths
+//! are covered separately by `column_safety_boundaries`.
 //!
-//! Family extras beyond the oracle rows:
-//!
-//! * ANSI parity (CW04/CW15, CLI half) — the same case rendered with an
-//!   SGR decorator must project to identical rows after stripping SGR;
-//!   geometry may not be re-measured from decorated strings;
-//! * CW14 — hand-crafted IR (and the same IR arriving as inbound JSON)
-//!   with extreme declared widths must validate exactly like the parsed
-//!   entry instead of panicking (tracked red until NF-COLUMN/NF-SAFE);
-//! * CW18 — scale 1/10/100/1000 rows keeps output bounded (no padding
-//!   explosion buying a passing layout).
-//!
-//! CW13 (roff→AST→IR→JSON round-trip) is the layer-2 assertion every
-//! green case already runs. The TUI Buffer half of CW15 and CW16/17
-//! (Markdown export fidelity, `node_view` ABI) ride with the NF-COLUMN
-//! consumer work, not with this oracle matrix.
+//! Additional contracts require plain/ANSI row parity, reject handcrafted
+//! and inbound JSON geometry outside the same IR bounds, and bound padding
+//! at 1/10/100/1000 rows. Every matching native case also runs an actual JSON
+//! text round trip. Approved reading layouts retain dedicated exact-row,
+//! owner and topology assertions in `column_contracts`; real TUI cell and
+//! depth tests cover the interactive consumers independently.
 
 use std::fmt::Write as _;
 use std::panic::AssertUnwindSafe;
@@ -38,7 +23,7 @@ use super::{MatrixRun, actual_rows, case_names, load_case};
 const READING_LAYOUT_CASES: &[&str] = &["cw10_list", "cw12_box", "cw12_span"];
 
 /// Strip SGR control sequences so plain and decorated renders compare on
-/// visible text only (review §25.2 CW04: geometry must be identical after
+/// visible text only (geometry must be identical after
 /// ANSI is removed).
 fn strip_sgr(text: &str) -> String {
     let mut stripped = String::with_capacity(text.len());
@@ -68,14 +53,14 @@ fn ansi_parity(query: &mant_ir::ResolvedContent, expected: &[String]) -> Option<
 }
 
 #[test]
-fn cw_matrix_matches_the_pinned_reference() {
+fn declared_column_matrix_matches_the_pinned_reference() {
     let mut matrix = MatrixRun::new();
     for name in case_names("cw", 27) {
         if !READING_LAYOUT_CASES.contains(&name.as_str()) {
-            matrix.evaluate(&name, &[], Some(&ansi_parity));
+            matrix.evaluate(&name, Some(&ansi_parity));
         }
     }
-    matrix.finish(&[], "CW");
+    matrix.finish("CW");
 }
 
 /// Mutate every table of a loaded case to the given declared widths.
@@ -101,7 +86,7 @@ fn with_column_widths(
 }
 
 #[test]
-fn cw14_handcrafted_ir_extremes_validate_like_the_parsed_entry() {
+fn handcrafted_ir_extremes_validate_like_the_parsed_entry() {
     // Review §25.2 CW14: protection must not live in the roff parser
     // only. u16::MAX-declared widths reach the same geometry unit the
     // parsed entry uses; the previous debug overflow is a hard failure.
@@ -121,7 +106,7 @@ fn cw14_handcrafted_ir_extremes_validate_like_the_parsed_entry() {
 }
 
 #[test]
-fn cw14_inbound_json_cannot_bypass_the_geometry_guard() {
+fn inbound_json_cannot_bypass_the_geometry_guard() {
     // The same extreme IR serialized as JSON and decoded back through
     // the protocol bundle must validate identically — the inbound JSON
     // path may not skip whatever guard the parsed entry gets.
@@ -145,7 +130,7 @@ fn cw14_inbound_json_cannot_bypass_the_geometry_guard() {
 }
 
 #[test]
-fn cw18_declared_column_output_cost_stays_bounded_with_scale() {
+fn declared_column_output_cost_stays_bounded_with_scale() {
     // Review §25.2 CW18: 1/10/100/1000 rows with a declared width must
     // stay near-linear and bounded — no per-row padding explosion.
     for rows in [1_usize, 10, 100, 1000] {

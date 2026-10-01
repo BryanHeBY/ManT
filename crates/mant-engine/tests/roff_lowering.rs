@@ -46,8 +46,8 @@ mod native_nested_list_tabs;
 #[path = "roff_lowering/tab_display_lifecycle.rs"]
 mod tab_display_lifecycle;
 
-#[path = "roff_lowering/review25_matrix/mod.rs"]
-mod review25_matrix;
+#[path = "roff_lowering/macro_consumer_matrix/mod.rs"]
+mod macro_consumer_matrix;
 #[path = "roff_lowering/shared_execution_matrix.rs"]
 mod shared_execution_matrix;
 #[path = "roff_lowering/upstream_inline.rs"]
@@ -153,8 +153,8 @@ mod definition_matrix;
 mod entries;
 #[path = "roff_lowering/escape_matrix.rs"]
 mod escape_matrix;
-#[path = "roff_lowering/g2g3_matrix.rs"]
-mod g2g3_matrix;
+#[path = "roff_lowering/field_retirement_matrix.rs"]
+mod field_retirement_matrix;
 #[path = "roff_lowering/layout.rs"]
 mod layout;
 #[path = "roff_lowering/layout_geometry.rs"]

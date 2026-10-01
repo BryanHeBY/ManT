@@ -1,30 +1,18 @@
-//! Review §25 oracle-pinned matrix families: LK (links, targets and
-//! positions, §25.3), AQ (quote enclosure topology, §25.4), MP (macro
-//! post, §25.4) and CW (declared column geometry and boundaries, §25.2).
+//! Pinned macro execution and consumer contracts for links, enclosures,
+//! macro post handlers and declared column layouts.
 //!
-//! Cases under `review25_matrix/cases/*.1` pin execution boundaries at
-//! `-Tutf8 -Owidth=78` against the pinned CVS mandoc oracle, using the
-//! same recording and normalization rule as the shared-execution matrix
-//! (`scripts/regen_review25_matrix.sh` is the only writer of `.expected`
-//! files): backspace-pop projection, NBSP read as the blank it occupies,
-//! furniture removed by position windows only (row 0 header, trailing
-//! footer block). Interior blank rows are paragraph structure and stay
-//! pinned; intra-row spacing survives because only the page margin is
-//! trimmed. Layer 1 is exact row equality.
+//! `macro_consumer_matrix/cases/*.1` and sibling snapshots pin the CVS
+//! `-Tutf8 -Owidth=78` output. Record expectations only through
+//! `scripts/regen_macro_consumer_matrix.sh`. The projection applies
+//! backspace replacement, maps NBSP to its occupied blank, removes page
+//! furniture by position, and trims each row's outer whitespace. Internal
+//! spaces and blank rows remain exact; these snapshots do not measure row
+//! origins or trailing spaces. Dedicated consumer tests cover those facts.
 //!
-//! Assertion layers (review §25.5 chain, cut after layer 2 for this
-//! matrix — consumers beyond text/JSON ride with the owning fix units):
-//! 1. row projection (execution result) — all cases;
-//! 2. JSON contract round-trip — all green cases;
-//! 3. per-family extras — the LK target-decode contract, the CW
-//!    ANSI-parity projection, and the non-oracle boundary tests
-//!    (lk01 Markdown contract, cw14 hand-crafted IR, cw18 scale).
-//!
-//! `KNOWN_RED` tracks exactly which cases are still red against the
-//! oracle pin; entries are removed as the dispatched fix units land
-//! (LK → NF-LINK, MP → NF-POST, CW03+ → NF-COLUMN). A known-red case
-//! that turns green fails the family test so the pin is promoted; an
-//! unlisted red fails it so new regressions cannot hide.
+//! Native row cases require equality and JSON text round trips. Approved
+//! responsive and reading layouts have explicit family contracts rather
+//! than native device-row equality. Family checks also cover decoded
+//! targets, styled text and source-neutral IR.
 
 use std::fmt::Write as _;
 
@@ -36,7 +24,7 @@ mod quote;
 
 const CASES: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/tests/roff_lowering/review25_matrix/cases"
+    "/tests/roff_lowering/macro_consumer_matrix/cases"
 );
 
 pub(super) fn project(output: &str) -> Vec<String> {
@@ -69,17 +57,8 @@ pub(super) fn project(output: &str) -> Vec<String> {
     rows
 }
 
-/// Neutralize the known pre-existing `.Nd` dash gap on the `ManT` side only
-/// (review appendix A: `ManT` em dash vs oracle en dash; tracked separately
-/// from this matrix). Oracle expectations are never edited.
-pub(super) fn neutralize_known_dash_gap(rows: Vec<String>) -> Vec<String> {
-    rows.into_iter()
-        .map(|row| row.replace('\u{2014}', "\u{2013}"))
-        .collect()
-}
-
 pub(super) fn actual_rows(rendered: &str) -> Vec<String> {
-    neutralize_known_dash_gap(project(rendered))
+    project(rendered)
 }
 
 pub(super) fn load_case(name: &str) -> (mant_ir::ResolvedContent, Vec<String>) {
@@ -100,7 +79,7 @@ pub(super) fn load_case(name: &str) -> (mant_ir::ResolvedContent, Vec<String>) {
 /// expected count so silent case loss or duplication fails the run.
 pub(super) fn case_names(prefix: &str, expected_count: usize) -> Vec<String> {
     let mut names: Vec<String> = std::fs::read_dir(CASES)
-        .unwrap_or_else(|error| panic!("review25 matrix case directory: {error}"))
+        .unwrap_or_else(|error| panic!("macro consumer matrix case directory: {error}"))
         .filter_map(Result::ok)
         .map(|entry| entry.path())
         .filter(|path| {
@@ -116,37 +95,30 @@ pub(super) fn case_names(prefix: &str, expected_count: usize) -> Vec<String> {
     assert_eq!(
         names.len(),
         expected_count,
-        "{prefix} case set changed; regen via scripts/regen_review25_matrix.sh"
+        "{prefix} case set changed; regen via scripts/regen_macro_consumer_matrix.sh"
     );
     names
 }
 
 /// One family's evaluation state: layer 1 per case, then layer 2 for the
-/// green ones, with an optional family extra that can turn a case red.
+/// matching ones, with an optional family consumer check.
 type ConsumerCheck<'a> = &'a dyn Fn(&mant_ir::ResolvedContent, &[String]) -> Option<String>;
 
 pub(super) struct MatrixRun {
     failures: Vec<String>,
-    red: Vec<String>,
 }
 
 impl MatrixRun {
     pub(super) fn new() -> Self {
         Self {
             failures: Vec::new(),
-            red: Vec::new(),
         }
     }
 
     /// Evaluate one case: layer 1 (row projection), then `extra`
     /// (family-specific projection such as ANSI parity), then layer 2
-    /// (JSON round-trip) for cases that are green and not pinned red.
-    pub(super) fn evaluate(
-        &mut self,
-        name: &str,
-        known_red: &[&str],
-        extra: Option<ConsumerCheck<'_>>,
-    ) {
+    /// (JSON text round-trip) for matching cases.
+    pub(super) fn evaluate(&mut self, name: &str, extra: Option<ConsumerCheck<'_>>) {
         let (query, expected) = load_case(name);
 
         // Layer 1: execution result (which cells survived, which rows ended).
@@ -173,7 +145,6 @@ impl MatrixRun {
                 );
             }
             self.failures.push(report);
-            self.red.push(name.to_owned());
             return;
         }
 
@@ -181,14 +152,6 @@ impl MatrixRun {
             && let Some(report) = extra(&query, &expected)
         {
             self.failures.push(format!("{name}: {report}\n"));
-            self.red.push(name.to_owned());
-            return;
-        }
-
-        if known_red.contains(&name) {
-            self.failures.push(format!(
-                "{name}: pinned known-red is green now; remove it from KNOWN_RED\n"
-            ));
             return;
         }
 
@@ -199,7 +162,7 @@ impl MatrixRun {
             .unwrap_or_else(|error| panic!("{name}: render json: {error}"));
         let value: serde_json::Value = serde_json::from_str(&json)
             .unwrap_or_else(|error| panic!("{name}: parse json: {error}"));
-        let roundtripped = serde_json::from_value::<mant_protocol::QueryBundle>(value.clone())
+        let roundtripped = serde_json::from_str::<mant_protocol::QueryBundle>(&json)
             .unwrap_or_else(|error| panic!("{name}: bundle decode: {error}"));
         let json_again = mant_render::render_query_json(&(roundtripped.into()), false)
             .unwrap_or_else(|error| panic!("{name}: re-render json: {error}"));
@@ -210,7 +173,7 @@ impl MatrixRun {
             "{name}: JSON roundtrip changed the contract"
         );
         let after = mant_render::render_query_man(
-            &serde_json::from_value::<mant_protocol::QueryBundle>(value.clone())
+            &serde_json::from_str::<mant_protocol::QueryBundle>(&json)
                 .unwrap_or_else(|error| panic!("{name}: bundle decode: {error}"))
                 .into(),
         );
@@ -221,33 +184,11 @@ impl MatrixRun {
         );
     }
 
-    /// Close the family: reds must be exactly the `known_red` tracking
-    /// list, in both directions.
-    pub(super) fn finish(self, known_red: &[&str], family: &str) {
-        let unexpected_reds: Vec<&str> = self
-            .red
-            .iter()
-            .filter(|name| !known_red.contains(&name.as_str()))
-            .map(String::as_str)
-            .collect();
-        let still_listed: Vec<&str> = known_red
-            .iter()
-            .copied()
-            .filter(|listed| !self.red.iter().any(|name| name == listed))
-            .collect();
-        let mut report = String::new();
-        if !unexpected_reds.is_empty() {
-            let _ = writeln!(
-                report,
-                "new reds against the oracle pin: {unexpected_reds:?}"
-            );
-        }
-        if !still_listed.is_empty() {
-            let _ = writeln!(report, "KNOWN_RED entries no longer red: {still_listed:?}");
-        }
+    /// All cases are required passes; report their row differences together.
+    pub(super) fn finish(self, family: &str) {
         assert!(
-            unexpected_reds.is_empty() && still_listed.is_empty(),
-            "{family} KNOWN_RED tracking drifted\n{report}row diffs:\n{}",
+            self.failures.is_empty(),
+            "{family} differs from the pinned oracle:\n{}",
             self.failures.join("")
         );
     }

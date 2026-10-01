@@ -1,15 +1,15 @@
 use super::*;
 use mant_ir::HeadBodyRelation;
 
-pub(super) fn review_definition_item(body: &str) -> mant_ir::DefinitionItem {
+pub(super) fn definition_item_from_source(body: &str) -> mant_ir::DefinitionItem {
     let source = format!(
         ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n{body}"
     );
     let document = parse_manual_bytes(
-        std::path::Path::new("definition-physical-row-review.1"),
+        std::path::Path::new("definition-physical-row.1"),
         source.as_bytes(),
     )
-    .expect("lower reviewed definition source");
+    .expect("lower definition source");
     let Block::DefinitionList { items, .. } = &document.sections[1].blocks[0] else {
         panic!("expected definition list: {document:#?}");
     };
@@ -65,6 +65,12 @@ pub(super) fn document_link_targets(document: &mant_ir::Document) -> Vec<mant_ir
 
 mod author_modes;
 mod field_flush;
+mod generated_words;
 mod head_rows;
-mod man_flow;
+mod man_links;
+mod man_nodes;
 mod native_cells;
+mod native_rows;
+mod scope_fonts;
+mod scope_rows;
+mod vertical_rows;
