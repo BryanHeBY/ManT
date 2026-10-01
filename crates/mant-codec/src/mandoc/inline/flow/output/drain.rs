@@ -1,6 +1,6 @@
 //! Drain IR ownership after the live formatter's real boundary executes.
 
-use super::super::definition::PreservedDefinitionField;
+use super::super::definition::{NativeFieldDevice, PreservedDefinitionField};
 use super::super::{
     FormatterColumn, Inline, InlineBuilder, InlineExecutionState, PendingBoundary,
     PreservedInlineState, WordEndBreak, has_printable_character,
@@ -148,8 +148,13 @@ impl InlineBuilder {
     pub(in crate::mandoc) fn finish_formatter_line(
         mut self,
         preserve_rows: bool,
-    ) -> (Vec<Inline>, InlineExecutionState) {
+    ) -> (Vec<Inline>, InlineExecutionState, bool) {
         self.commit_definition_row_origin();
+        // This is the HEAD post's real term_newln()/term_flushln(), not an
+        // owner drain. Capture before acceptance advances projection ranges;
+        // geometry is restored already, and pending glyphs enter their owner
+        // before that receipt projects actual same-row padding and origins.
+        let native = self.native_field_device(false);
         // The mdoc HEAD ledger has the list's actual pad/break flags, so
         // its accepted NBRZW field can prove a physical close even without
         // an IR glyph (term_fill():340-349, term_flushln():250-253).
@@ -162,14 +167,14 @@ impl InlineBuilder {
                 .definition
                 .as_ref()
                 .is_some_and(|state| !state.field_buffer.is_empty())
-            && self.native_field_row_ends()
+            && native.as_ref().is_some_and(NativeFieldDevice::ends_row)
             && !has_printable_character(&self.nodes)
             && !self.execution.zero_advance.has_buffered_glyph();
-        // This is the HEAD post's real term_newln()/term_flushln(), not an
-        // owner drain. Capture before acceptance advances projection ranges;
-        // geometry is restored already, and pending glyphs enter their owner
-        // before that receipt projects actual same-row padding and origins.
-        let native = self.native_field_device(false);
+        // The actual HEAD post receipt also supplies its occupied row to
+        // BODY; observing it cannot require a second numeric field sweep.
+        let occupied_head_row = native
+            .as_ref()
+            .is_some_and(NativeFieldDevice::has_occupied_row);
         let native_tail_end = self.discard_unprinted_definition_field_output();
         let surviving_armed = if self.has_formatter_cell() {
             false
@@ -194,7 +199,7 @@ impl InlineBuilder {
         // (term.c:475-481), independently of the preserved column registers.
         self.execution.boundary = PendingBoundary::Tight;
         self.reset_native_tab_origin();
-        (output, self.execution)
+        (output, self.execution, occupied_head_row)
     }
 
     /// Execute the native BODY post selected by `FormatterRowBoundary::Settle`.
@@ -352,3 +357,7 @@ impl InlineBuilder {
         nodes
     }
 }
+
+#[cfg(test)]
+#[path = "drain/tests.rs"]
+mod tests;

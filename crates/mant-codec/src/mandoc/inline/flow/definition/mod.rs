@@ -17,6 +17,7 @@ mod retirement;
 mod state;
 mod vertical_space;
 
+pub(super) use device::NativeFieldDevice;
 pub(in crate::mandoc) use state::PreservedDefinitionField;
 pub(super) use state::{DefinitionFieldState, PendingFieldGapOrigin};
 

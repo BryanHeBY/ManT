@@ -359,12 +359,13 @@ impl FormatterState {
             builder.note_flushed_at_body_column();
         }
         let definition_body_gap_consumed = builder.definition_body_gap_consumed();
-        self.definition_head_rows = DefinitionHeadRows {
-            occupied: builder.definition_head_row_occupied(),
-            completed_empty_rows: builder.completed_empty_rows(),
-        };
+        let completed_empty_rows = builder.completed_empty_rows();
         let definition_term_breaks = builder.take_definition_term_breaks();
-        let (output, mut execution) = builder.finish_formatter_line(preserve_rows);
+        let (output, mut execution, occupied) = builder.finish_formatter_line(preserve_rows);
+        self.definition_head_rows = DefinitionHeadRows {
+            occupied,
+            completed_empty_rows,
+        };
         std::mem::swap(&mut execution, &mut self.execution);
         self.spare_execution = Some(execution);
         FinishedInlineLine {

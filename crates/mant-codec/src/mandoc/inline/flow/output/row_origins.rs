@@ -151,16 +151,31 @@ impl OriginCursor<'_> {
             if let Inline::Anchor { id, .. } = &node
                 && id.as_str().starts_with(INTERNAL_FIELD_WORD)
             {
-                if let Some(owner) = self.owner.replace(id.as_str().to_owned()) {
+                if let Some(owner) = self.owner.take() {
+                    #[cfg(test)]
+                    OWNER_HISTORY_STORES.with(|stores| stores.set(stores.get().saturating_add(1)));
                     self.previous.insert(owner, (self.scalar, self.next));
                 }
-                (self.scalar, self.next) =
-                    self.previous.get(id.as_str()).copied().unwrap_or_default();
+                // Positions are complete and immutable for this receipt.
+                // An unselected word can never need a cursor on re-entry;
+                // preserve its IR without rebuilding glyph strings.
+                self.owner = self
+                    .positions
+                    .contains_key(id.as_str())
+                    .then(|| id.as_str().to_owned());
+                (self.scalar, self.next) = self
+                    .owner
+                    .as_ref()
+                    .and_then(|owner| self.previous.get(owner))
+                    .copied()
+                    .unwrap_or_default();
                 output.push(node);
                 continue;
             }
             match &mut node {
-                Inline::Text { value } | Inline::Code { value } if !value.is_empty() => {
+                Inline::Text { value } | Inline::Code { value }
+                    if !value.is_empty() && self.owner.is_some() =>
+                {
                     self.project_text(&node, &mut output);
                     continue;
                 }
@@ -205,8 +220,12 @@ impl OriginCursor<'_> {
         let (Inline::Text { value } | Inline::Code { value }) = node else {
             unreachable!("only word glyph projections advance the scalar cursor");
         };
+        #[cfg(test)]
+        OWNER_TEXT_REBUILDS.with(|texts| texts.set(texts.get().saturating_add(1)));
         let mut piece = String::new();
         for character in value.chars() {
+            #[cfg(test)]
+            OWNER_CHARS_PROJECTED.with(|chars| chars.set(chars.get().saturating_add(1)));
             if self
                 .owner
                 .as_ref()
@@ -235,3 +254,14 @@ fn append_piece(node: &Inline, piece: &mut String, output: &mut Vec<Inline>) {
         _ => unreachable!("only Text and Code have scalar pieces"),
     });
 }
+
+#[cfg(test)]
+std::thread_local! {
+    static OWNER_HISTORY_STORES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static OWNER_TEXT_REBUILDS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static OWNER_CHARS_PROJECTED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+#[cfg(test)]
+#[path = "row_origins/tests.rs"]
+mod tests;

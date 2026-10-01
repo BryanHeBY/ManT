@@ -70,12 +70,14 @@ impl InlineBuilder {
         };
 
         // term_flushln() only reaches loop endline (term.c:217) when an
-        // accepted pass has a remaining field. Its single accepted pass or
-        // first-pass rejection has no loop rows to classify; the actual
-        // device-tail retirement below still runs with its original flags.
-        let empty_pass_ends = if owner_boundary || !receipt_has_loop_rows(&receipt) {
+        // accepted pass has a remaining field. Only authored marker ends
+        // can supply the unprinted rows consumed here; device-width ends
+        // do not. The actual device tail still runs with its original flags.
+        let empty_pass_ends = if owner_boundary || !receipt_has_authored_loop_rows(&receipt) {
             Vec::new()
         } else {
+            #[cfg(test)]
+            EMPTY_LOOP_DEVICE_VIEWS.with(|views| views.set(views.get().saturating_add(1)));
             self.native_field_device(no_break_flush)
                 .filter(|device| device.printed_row.is_none())
                 .map_or_else(Vec::new, |device| {
@@ -455,18 +457,34 @@ impl InlineBuilder {
     }
 }
 
-fn receipt_has_loop_rows(receipt: &super::super::field_buffer::FlushReceipt) -> bool {
-    use super::super::field_buffer::FlushReceipt;
-    match receipt {
-        FlushReceipt::Accepted { passes } => passes.len() > 1,
-        FlushReceipt::Rejected { passes, .. } => !passes.is_empty(),
-    }
+fn receipt_has_authored_loop_rows(receipt: &super::super::field_buffer::FlushReceipt) -> bool {
+    use super::super::field_buffer::{FillBoundary, FlushReceipt};
+    let loop_passes = match receipt {
+        FlushReceipt::Accepted { passes } => &passes[..passes.len().saturating_sub(1)],
+        FlushReceipt::Rejected { passes, .. } => passes.as_slice(),
+    };
+    loop_passes
+        .iter()
+        .any(|pass| pass.boundary == FillBoundary::WordEndBreak)
+}
+
+#[cfg(test)]
+std::thread_local! {
+    static EMPTY_LOOP_DEVICE_VIEWS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 #[cfg(test)]
 mod tests {
     use super::super::super::field_buffer::{FieldBuffer, FieldCell, FieldWrite, FillTargets};
     use super::*;
+
+    fn operand(node: &libmandoc_rs::Node) -> Option<&libmandoc_rs::Node> {
+        if node.decoder_text() == Some("\\&\\p \\p REJECTED") {
+            Some(node)
+        } else {
+            node.children.iter().find_map(operand)
+        }
+    }
 
     #[test]
     fn device_loop_views_are_needed_only_after_an_accepted_prefix() {
@@ -512,7 +530,84 @@ mod tests {
                 },
                 false,
             );
-            assert_eq!(receipt_has_loop_rows(&receipt), expected);
+            assert_eq!(receipt_has_authored_loop_rows(&receipt), expected);
         }
+    }
+
+    #[test]
+    fn width_passes_and_an_authored_final_tail_do_not_request_empty_loop_views() {
+        use super::super::super::field_buffer::FlushReceipt;
+
+        // Exact aa/marker counterparts ran all five pristine profiles
+        // first. term_fill()299-312 distinguishes breakline from width,
+        // while term_flushln()177-217 omits the accepted final pass's
+        // loop endline even when that pass stopped at an authored marker.
+        for word in ["aa aa aa aa", "aa aa\n ", "aa bb \n DROP"] {
+            let mut buffer = FieldBuffer::default();
+            buffer.apply_writes(&FieldWrite::literal(word));
+            let receipt = buffer.flush_receipt(
+                FillTargets {
+                    first: 2 * 24,
+                    rest: 2 * 24,
+                    unbounded: false,
+                },
+                false,
+            );
+            let passes = match &receipt {
+                FlushReceipt::Accepted { passes } | FlushReceipt::Rejected { passes, .. } => passes,
+            };
+            assert!(passes.len() > 1, "{word:?} must exercise multiple passes");
+            assert!(!receipt_has_authored_loop_rows(&receipt), "{word:?}");
+        }
+    }
+
+    #[test]
+    fn ordinary_width_passes_never_build_the_empty_loop_device_view() {
+        use crate::mandoc::formatter::AuthorFlow;
+        use crate::mandoc::inline::{AuthorBreakEffect, InlineBuilder};
+
+        // The complete 1024/2048/4096/8192-word HEAD sources ran pristine
+        // first. This bounded inset field exercises term_fill's width stop
+        // (term.c:299-301) without changing the native input or device tail.
+        for words in [1024, 2048, 4096, 8192] {
+            let mut builder = InlineBuilder::new();
+            builder.inherit_author_execution_with_effect(
+                AuthorFlow::default(),
+                false,
+                AuthorBreakEffect::Field {
+                    gap_cells: 0,
+                    body_width_columns: 4,
+                    field_width_columns: 4,
+                    flags: FieldFlags::inset(),
+                },
+            );
+            builder.append_text(&"aa ".repeat(words));
+            EMPTY_LOOP_DEVICE_VIEWS.with(|views| views.set(0));
+            builder.discard_unprinted_definition_field_output();
+            assert_eq!(EMPTY_LOOP_DEVICE_VIEWS.with(std::cell::Cell::get), 0);
+        }
+
+        let mut builder = InlineBuilder::new();
+        builder.inherit_author_execution_with_effect(
+            AuthorFlow::default(),
+            false,
+            AuthorBreakEffect::Field {
+                gap_cells: 0,
+                body_width_columns: 4,
+                field_width_columns: 4,
+                flags: FieldFlags::inset(),
+            },
+        );
+        let source = b".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.ll 2n\n.No \"\\&\\p \\p REJECTED\"\n.No AFTER\n";
+        let parsed = libmandoc_rs::Parser::default()
+            .parse_bytes("native-loop-view.1", source)
+            .unwrap();
+        crate::mandoc::inline::append_text_node(
+            &mut builder,
+            operand(&parsed.document.root).unwrap(),
+        );
+        EMPTY_LOOP_DEVICE_VIEWS.with(|views| views.set(0));
+        builder.discard_unprinted_definition_field_output();
+        assert_eq!(EMPTY_LOOP_DEVICE_VIEWS.with(std::cell::Cell::get), 1);
     }
 }

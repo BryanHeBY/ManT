@@ -191,6 +191,16 @@ pub(in crate::mandoc::inline::flow) struct NativeFieldDevice {
 }
 
 impl NativeFieldDevice {
+    pub(in crate::mandoc::inline::flow) const fn ends_row(&self) -> bool {
+        self.ends_row
+    }
+
+    /// The consumed field left a printed device row open for BODY.
+    /// `term_flushln()`250-253 can retain that row after its cells retire.
+    pub(in crate::mandoc::inline::flow) fn has_occupied_row(&self) -> bool {
+        !self.ends_row && self.viscol > 0
+    }
+
     /// The pass loop ended an accepted row on an authored `\p` boundary
     /// and printed nothing after it: the next field starts a new row.
     pub(super) fn row_closed_by_author(&self) -> bool {
@@ -206,7 +216,19 @@ impl InlineBuilder {
         &self,
         force_no_break: bool,
     ) -> Option<NativeFieldDevice> {
+        #[cfg(test)]
+        NATIVE_FIELD_DEVICE_VIEWS.with(|views| views.set(views.get().saturating_add(1)));
         self.native_field_device_with_resume(force_no_break, None)
+    }
+
+    #[cfg(test)]
+    pub(in crate::mandoc::inline::flow) fn reset_native_field_device_views() {
+        NATIVE_FIELD_DEVICE_VIEWS.with(|views| views.set(0));
+    }
+
+    #[cfg(test)]
+    pub(in crate::mandoc::inline::flow) fn native_field_device_views() -> usize {
+        NATIVE_FIELD_DEVICE_VIEWS.with(std::cell::Cell::get)
     }
 
     /// Capture the consumed owner's range before acceptance can advance its
@@ -222,11 +244,6 @@ impl InlineBuilder {
                 device.output_start = output_start;
                 device
             })
-    }
-
-    pub(in crate::mandoc::inline::flow) fn native_field_row_ends(&self) -> bool {
-        self.native_field_device(false)
-            .is_some_and(|field| field.ends_row)
     }
 
     /// An ordinary column's NOBREAK overrun is already represented by
@@ -307,4 +324,9 @@ impl InlineBuilder {
                 author.field_output_start
             })
     }
+}
+
+#[cfg(test)]
+std::thread_local! {
+    static NATIVE_FIELD_DEVICE_VIEWS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
