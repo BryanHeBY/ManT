@@ -9,7 +9,26 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[3]
-WORKFLOW = (ROOT / ".github/workflows/release.yml").read_text()
+# Git may check the workflow out with CRLF endings on Windows; the commands
+# executed below must stay LF so bash does not parse carriage returns.
+WORKFLOW = (ROOT / ".github/workflows/release.yml").read_text().replace("\r\n", "\n")
+
+
+# Windows resolves a bare "bash" to the System32 WSL placeholder (the loader
+# searches System32 before PATH), and that placeholder executes no command
+# string. Resolve the interpreter once and keep it only when it runs commands.
+def usable_bash():
+    path = shutil.which("bash")
+    if path is None:
+        return None
+    probe = subprocess.run(
+        [path, "-c", "mant_bash=usable; printf '%s' \"$mant_bash\""],
+        capture_output=True, text=True, timeout=10, check=False,
+    )
+    return path if probe.returncode == 0 and probe.stdout == "usable" else None
+
+
+BASH = usable_bash()
 BASH_STEPS = {
     "Package Unix release archive": "scripts/release/package-release.sh",
     "Package portable manual archive": "scripts/release/package-manuals.sh",
@@ -37,27 +56,36 @@ class SourceToolPathTests(unittest.TestCase):
             with self.subTest(step=name, layout=layout), tempfile.TemporaryDirectory(
                 prefix="mant release source "
             ) as directory:
+                # Shells spell the working directory differently per platform,
+                # so the stand-ins read this marker relative to their working
+                # directory instead of printing $PWD.
+                marker = Path(directory, "checkout-directory")
+                marker.write_bytes(marker.parent.name.encode())
                 for kind in layout:
                     path = Path(current if kind == "current" else f"scripts/{Path(current).name}")
                     tool = Path(directory, path)
                     tool.parent.mkdir(parents=True, exist_ok=True)
-                    tool.write_text(
-                        f"printf '%s\\n' '{kind}' \"$MANT_RELEASE_TAG\" \"$PWD\"\n"
+                    tool.write_bytes(
+                        (f"printf '%s\\n' '{kind}' \"$MANT_RELEASE_TAG\"\n"
+                         "cat checkout-directory\n").encode()
                     )
                 result = subprocess.run(
-                    ["bash", "-e", "-c", workflow_command(name)], cwd=directory,
+                    [BASH, "-e", "-c", workflow_command(name)], cwd=directory,
                     env={**os.environ, "MANT_RELEASE_TAG": "v0.11.0"},
                     capture_output=True, text=True, timeout=10, check=False,
                 )
                 self.assertEqual(result.returncode, 0, result.stderr)
                 expected = "current" if "current" in layout else "legacy"
-                self.assertEqual(result.stdout.splitlines(), [expected, "v0.11.0", directory])
+                self.assertEqual(
+                    result.stdout.splitlines(),
+                    [expected, "v0.11.0", marker.parent.name],
+                )
 
-    @unittest.skipUnless(shutil.which("bash"), "Bash is required for Unix workflow steps")
+    @unittest.skipUnless(BASH, "Bash is required for Unix workflow steps")
     def test_old_tag_steps_use_the_source_owned_root_tools(self):
         self.check_bash_layout(["legacy"])
 
-    @unittest.skipUnless(shutil.which("bash"), "Bash is required for Unix workflow steps")
+    @unittest.skipUnless(BASH, "Bash is required for Unix workflow steps")
     def test_current_tag_steps_prefer_the_organized_source_tools(self):
         self.check_bash_layout(["current"])
         self.check_bash_layout(["current", "legacy"])
