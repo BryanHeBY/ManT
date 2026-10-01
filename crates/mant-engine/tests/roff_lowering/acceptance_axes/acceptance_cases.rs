@@ -301,8 +301,8 @@ fn escaped_delimiter_payload() -> AcceptanceCase {
             identity: IdentityPolicy::RichInline,
         },
         gold: GoldCard {
-            accepted_units: Some(Axis::after_repair(vec!["Y", "Z", "AFTER"])),
-            forbidden_units: Some(Axis::after_repair(vec!["Y(aq"])),
+            accepted_units: Some(Axis::must(vec!["Y", "Z", "AFTER"])),
+            forbidden_units: Some(Axis::must(vec!["Y(aq"])),
             separators: Some(Axis::must(vec![SeparatorExpect {
                 left: "Z",
                 right: "AFTER",
