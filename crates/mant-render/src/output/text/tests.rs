@@ -231,7 +231,9 @@ fn vertical_space_sets_the_gap_instead_of_stacking_blank_lines() {
     // Heading/content and trailing gaps are source-owned. Only the page
     // title receives an independent presentation separator.
     let edges = render_query_text(&document_with(vec![vspace(2), para("only"), vspace(3)]));
-    assert!(edges.ends_with("only\n\n\n"), "got: {edges:?}");
+    // Three completed empty rows each own their delimiter after the text
+    // row's close, including EOF (term_vspace(), pinned term.c:489).
+    assert!(edges.ends_with("only\n\n\n\n"), "got: {edges:?}");
     assert!(edges.contains("S\n\n\nonly"), "got: {edges:?}");
 }
 

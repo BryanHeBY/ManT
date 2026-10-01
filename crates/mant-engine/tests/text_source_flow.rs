@@ -183,11 +183,26 @@ fn native_newlines_and_ir_drains_keep_source_continuation_until_a_word() {
 
 #[test]
 fn section_tail_requests_survive_document_and_excerpt_facades() {
-    let content = load_roff_bytes(b".TH PROBE 1\n.SH FIRST\nALPHA\n.sp 3\n").unwrap();
-    assert!(render_query_text(&content).ends_with("ALPHA\n\n\n"));
-    let excerpt =
-        mant_query::select_excerpt(&content, &[mant_protocol::ContentSelector::path("1")]).unwrap();
-    assert!(render_excerpt_text(&excerpt).ends_with("ALPHA\n\n\n"));
+    // All exact sources ran pristine ASCII/UTF-8/HTML/tree/lint first.
+    // term.c::term_vspace() closes ALPHA, then emits each completed empty
+    // row. Each EOF row needs a delimiter independently of ALPHA's close;
+    // the terminal footer's separate blank is outside the document body.
+    for rows in [1, 2, 3] {
+        let source = format!(".TH PROBE 1\n.SH FIRST\nALPHA\n.sp {rows}\n");
+        let content = load_roff_bytes(source.as_bytes()).unwrap();
+        let json = mant_render::render_query_json(&content, false).unwrap();
+        let bundle: mant_protocol::QueryBundle = serde_json::from_str(&json).unwrap();
+        let content = bundle.into();
+        let tail = format!("ALPHA{}", "\n".repeat(rows + 1));
+        assert!(render_query_text(&content).ends_with(&tail));
+        assert!(mant_render::render_query_man(&content).ends_with(&tail));
+        let excerpt =
+            mant_query::select_excerpt(&content, &[mant_protocol::ContentSelector::path("1")])
+                .unwrap();
+        let json = serde_json::to_string(&excerpt).unwrap();
+        let excerpt: mant_protocol::QueryExcerpt = serde_json::from_str(&json).unwrap();
+        assert!(render_excerpt_text(&excerpt).ends_with(&tail));
+    }
 }
 
 #[test]

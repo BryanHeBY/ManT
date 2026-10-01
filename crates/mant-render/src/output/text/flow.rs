@@ -57,7 +57,7 @@ impl Flow {
     }
 
     pub(super) fn finish_layout(self, preceding_content: bool) -> LayoutText {
-        self.finish_with_cell_boundary(preceding_content, false).0
+        self.finish_rows(preceding_content).0
     }
 
     /// A rendered cell is split into physical rows before the following
@@ -65,10 +65,10 @@ impl Flow {
     /// delimiter; otherwise `split_terminator` would consume one as a mere
     /// close of the preceding printed row.
     pub(super) fn finish_cell(self) -> (LayoutText, bool) {
-        self.finish_with_cell_boundary(false, true)
+        self.finish_rows(false)
     }
 
-    fn finish_with_cell_boundary(self, preceding_content: bool, cell: bool) -> (LayoutText, bool) {
+    fn finish_rows(self, preceding_content: bool) -> (LayoutText, bool) {
         let mut output = LayoutText::default();
         let mut gap = GapPlan::default();
         let mut has_content = preceding_content;
@@ -88,7 +88,10 @@ impl Flow {
         }
         let rows = gap.rows(0);
         output.push_plain(&"\n".repeat(usize::from(rows)));
-        if cell && has_content && rows > 0 {
+        // The final printed row also needs its closing delimiter outside a
+        // table cell. Otherwise EOF consumes one completed empty row as the
+        // preceding row's terminator (term_vspace's endline, term.c:489).
+        if has_content && rows > 0 {
             output.push_plain("\n");
         }
         (output, rows > 0)
@@ -98,6 +101,26 @@ impl Flow {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn completed_eof_gap_has_its_own_row_delimiters() {
+        // Exact ALPHA/.sp 1/2/3 and rejected-empty-buffer sources ran the
+        // pristine oracle first. term_vspace ends an additional physical
+        // row; EOF must not consume that row as BEFORE's terminator.
+        for rows in [1, 2, 3] {
+            let mut flow = Flow::text("BEFORE".into());
+            flow.gap(rows);
+            let rendered = flow.finish(false);
+            assert_eq!(
+                rendered,
+                format!("BEFORE{}", "\n".repeat(usize::from(rows) + 1))
+            );
+            assert_eq!(rendered.lines().count(), usize::from(rows) + 1);
+        }
+        let mut empty = Flow::default();
+        empty.gap(2);
+        assert_eq!(empty.finish(false), "\n\n");
+    }
 
     #[test]
     fn transparent_children_share_a_budget_but_literal_rows_do_not() {
