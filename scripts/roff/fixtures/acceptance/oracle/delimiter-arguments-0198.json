@@ -1,0 +1,150 @@
+{
+ "admission": {
+  "admission": "legal",
+  "lint_classes": {},
+  "lint_code": 0,
+  "reason": null
+ },
+ "ascii_rows": [
+  "     Y",
+  "     Z AFTER"
+ ],
+ "axes": {
+  "carrier": "No",
+  "cohort": "expansion",
+  "context": "filled",
+  "delimiter": "literal-pipe",
+  "dialect": "mdoc",
+  "family": "delimiter-arguments",
+  "id": "delimiter-arguments-0198",
+  "payload": "X\\zY",
+  "prefix": "\\p",
+  "termination": "complete"
+ },
+ "cohort": "expansion",
+ "expectations_from_product": false,
+ "family": "delimiter-arguments",
+ "id": "delimiter-arguments-0198",
+ "note": "family representative",
+ "oracle": {
+  "ascii": {
+   "code": 0,
+   "stderr": "",
+   "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt - probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     X\bz\bY\n     Z AFTER\n\nN\bNE\bEX\bXT\bT\n     END\n\nLinux 6.18.40.1-microsoft-standard-WSL2\n                              September 28, 2026                       TEST(1)\n",
+   "stdout_sha256": "98d717b9a992f7358f43f727709fb7345ed14af40a188aea31ed1ea2b501098f"
+  },
+  "html": {
+   "code": 0,
+   "stderr": "",
+   "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "stdout": "<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"utf-8\"/>\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>\n  <style>\n    table.head, table.foot { width: 100%; }\n    td.head-rtitle, td.foot-os { text-align: right; }\n    td.head-vol { text-align: center; }\n    .Nd, .Bf, .Op { display: inline; }\n    .Pa, .Ad { font-style: italic; }\n    .Ms { font-weight: bold; }\n    .Bl-diag > dt { font-weight: bold; }\n    code.Nm, .Fl, .Cm, .Ic, code.In, .Fd, .Fn, .Cd { font-weight: bold;\n      font-family: inherit; }\n  </style>\n  <title>TEST(1)</title>\n</head>\n<body>\n<div class=\"head\" role=\"doc-pageheader\" aria-label=\"Manual header\n  line\"><span class=\"head-ltitle\">TEST(1)</span> <span class=\"head-vol\">General\n  Commands Manual</span> <span class=\"head-rtitle\">TEST(1)</span></div>\n<main class=\"manual-text\">\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NAME\"><a class=\"permalink\" href=\"#NAME\">NAME</a></h2>\n<p class=\"Pp\"><code class=\"Nm\">test</code> &#x2014;\n    <span class=\"Nd\" role=\"doc-subtitle\">probe</span></p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"DESCRIPTION\"><a class=\"permalink\" href=\"#DESCRIPTION\">DESCRIPTION</a></h2>\n<p class=\"Pp\"><span class=\"No\">Y\n  <br/>\nZ</span> <span class=\"No\">AFTER</span></p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NEXT\"><a class=\"permalink\" href=\"#NEXT\">NEXT</a></h2>\n<p class=\"Pp\"><span class=\"No\">END</span></p>\n</section>\n</main>\n<div class=\"foot\" role=\"doc-pagefooter\" aria-label=\"Manual footer\n  line\"><span class=\"foot-left\">Linux 6.18.40.1-microsoft-standard-WSL2</span>\n  <span class=\"foot-date\">September 28, 2026</span>\n  <span class=\"foot-right\">TEST(1)</span></div>\n</body>\n</html>\n",
+   "stdout_sha256": "091a5dffc77f1866a3c129bd183f399514c31183f1f5aa676db0a494cd39ba7d"
+  },
+  "lint": {
+   "code": 0,
+   "stderr": "",
+   "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "stdout": "",
+   "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "tree": {
+   "code": 0,
+   "stderr": "",
+   "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "stdout": "title = \"TEST\"\nname  = \"test\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.40.1-microsoft-standard-WSL2\"\ndate  = \"September 28, 2026\"\n\nDd (elem) *1:2 NOPRT\n    September 28, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    TEST (text) 2:5\n    1 (text) 2:10\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          test (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            probe (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      No (elem) *8:2\n          \\p\\o|X\\zY| Z (text) 8:5\n      No (elem) *9:2\n          AFTER (text) 9:5\nSh (block) *10:2\n  Sh (head) 10:2 ID=HREF\n      NEXT (text) 10:5\n  Sh (body) 10:2\n      No (elem) *11:2\n          END (text) 11:5\n",
+   "stdout_sha256": "9e7afa63d3b71171dfe970d59fa515e8f0f1ce2501e227a4599f6fabe7c2e763"
+  },
+  "utf8": {
+   "code": 0,
+   "stderr": "",
+   "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     X\bz\bY\n     Z AFTER\n\nN\bNE\bEX\bXT\bT\n     END\n\nLinux 6.18.40.1-microsoft-standard-WSL2\n                              September 28, 2026                       TEST(1)\n",
+   "stdout_sha256": "acc5741b1c089eead430fbe566912501462d6b71ddd95049489a2e1ca884d433"
+  }
+ },
+ "policy": {
+  "content": "exact",
+  "identity": "display-and-safety",
+  "indent": "omit-common-margin",
+  "rows": "not-applicable: single word expression, no authored row break",
+  "separators": "not-applicable: single delimited expression per operand"
+ },
+ "product_binding": {
+  "binary": "/home/hby/dev/tmp/agent-scratch/SpecLand/tgt-spec/debug/mant",
+  "dirty_tree": true,
+  "head": "f2647b8f",
+  "sha256": "aafd73bc6332c7a21f75036603f41435bf21bc47dd04f81100969cd3c51ebc47"
+ },
+ "replay_failing_axes": [],
+ "replay_status": "pass",
+ "role": "representative",
+ "selection": "representative-delimiter-arguments",
+ "source_sha256": "112a567e6d55a1fe768255843438fb1d7cb27a2b959e33a81d1f5cc389d0a7f9",
+ "targets": [],
+ "tree_witness": {
+  "broken_flags": 0,
+  "empty_text_nodes": 0,
+  "it_body_groups": 0,
+  "kinds": {
+   "Dd": 1,
+   "Dt": 1,
+   "Nd": 1,
+   "Nm": 1,
+   "No": 3,
+   "Os": 1,
+   "Sh": 3
+  },
+  "text_nodes": 11,
+  "text_positions": [
+   [
+    1,
+    5
+   ],
+   [
+    2,
+    5
+   ],
+   [
+    2,
+    10
+   ],
+   [
+    4,
+    5
+   ],
+   [
+    5,
+    5
+   ],
+   [
+    6,
+    5
+   ],
+   [
+    7,
+    5
+   ],
+   [
+    8,
+    5
+   ],
+   [
+    9,
+    5
+   ],
+   [
+    10,
+    5
+   ],
+   [
+    11,
+    5
+   ]
+  ]
+ },
+ "utf8_rows": [
+  "     Y",
+  "     Z AFTER"
+ ]
+}

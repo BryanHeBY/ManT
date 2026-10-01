@@ -1,0 +1,181 @@
+{
+ "admission": {
+  "admission": "legal",
+  "lint_classes": {},
+  "lint_code": 0,
+  "reason": null
+ },
+ "ascii_rows": [
+  "     D",
+  "",
+  "           : https://reset.example",
+  "",
+  "     AFTER",
+  "           BodyWord"
+ ],
+ "axes": {
+  "cohort": "expansion",
+  "context": "filled",
+  "dialect": "mdoc",
+  "family": "spacing-reset-contrasts",
+  "id": "spacing-reset-contrasts-0000",
+  "variant": "wrapper-checkpoint"
+ },
+ "cohort": "expansion",
+ "expectations_from_product": false,
+ "family": "spacing-reset-contrasts",
+ "id": "spacing-reset-contrasts-0000",
+ "note": "XV-derived RESET replacement: wrapper-checkpoint",
+ "oracle": {
+  "ascii": {
+   "code": 0,
+   "stderr": "",
+   "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt - probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     D\n\n           : https://reset.example\n\n     AFTER\n           BodyWord\n\nN\bNE\bEX\bXT\bT\n     END\n\nLinux 6.18.40.1-microsoft-standard-WSL2\n                              September 28, 2026                       TEST(1)\n",
+   "stdout_sha256": "1749c10f4771a4c11b9f976e0592d52db554df4465db18d18cc58ea2213bc86d"
+  },
+  "html": {
+   "code": 0,
+   "stderr": "",
+   "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "stdout": "<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"utf-8\"/>\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>\n  <style>\n    table.head, table.foot { width: 100%; }\n    td.head-rtitle, td.foot-os { text-align: right; }\n    td.head-vol { text-align: center; }\n    .Nd, .Bf, .Op { display: inline; }\n    .Pa, .Ad { font-style: italic; }\n    .Ms { font-weight: bold; }\n    .Bl-diag > dt { font-weight: bold; }\n    code.Nm, .Fl, .Cm, .Ic, code.In, .Fd, .Fn, .Cd { font-weight: bold;\n      font-family: inherit; }\n  </style>\n  <title>TEST(1)</title>\n</head>\n<body>\n<div class=\"head\" role=\"doc-pageheader\" aria-label=\"Manual header\n  line\"><span class=\"head-ltitle\">TEST(1)</span> <span class=\"head-vol\">General\n  Commands Manual</span> <span class=\"head-rtitle\">TEST(1)</span></div>\n<main class=\"manual-text\">\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NAME\"><a class=\"permalink\" href=\"#NAME\">NAME</a></h2>\n<p class=\"Pp\"><code class=\"Nm\">test</code> &#x2014;\n    <span class=\"Nd\" role=\"doc-subtitle\">probe</span></p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"DESCRIPTION\"><a class=\"permalink\" href=\"#DESCRIPTION\">DESCRIPTION</a></h2>\n<dl class=\"Bl-tag\">\n  <dt id=\"D\"><a class=\"permalink\" href=\"#D\"><span class=\"No\">D\n  <br/>\nE</span></a>\n  <p class=\"Pp\"><a class=\"Lk\" href=\"https://reset.example\"></a></p>\n  <p class=\"Pp\"><span class=\"No\">AFTER</span></p>\n  </dt>\n  <dd><a class=\"permalink\" href=\"#BodyWord\"><span class=\"No\" id=\"BodyWord\">BodyWord</span></a></dd>\n</dl>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NEXT\"><a class=\"permalink\" href=\"#NEXT\">NEXT</a></h2>\n<p class=\"Pp\"><span class=\"No\">END</span></p>\n</section>\n</main>\n<div class=\"foot\" role=\"doc-pagefooter\" aria-label=\"Manual footer\n  line\"><span class=\"foot-left\">Linux 6.18.40.1-microsoft-standard-WSL2</span>\n  <span class=\"foot-date\">September 28, 2026</span>\n  <span class=\"foot-right\">TEST(1)</span></div>\n</body>\n</html>\n",
+   "stdout_sha256": "4f38ec546ea70bc01c53b50789d6e5e8130a4b2b477be9cdcb817fa33dbdd6b7"
+  },
+  "lint": {
+   "code": 0,
+   "stderr": "",
+   "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "stdout": "",
+   "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "tree": {
+   "code": 0,
+   "stderr": "",
+   "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "stdout": "title = \"TEST\"\nname  = \"test\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.40.1-microsoft-standard-WSL2\"\ndate  = \"September 28, 2026\"\n\nDd (elem) *1:2 NOPRT\n    September 28, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    TEST (text) 2:5\n    1 (text) 2:10\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          test (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            probe (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      Bl (block) -tag -width [ [4n] ] *8:2\n        Bl (head) 8:2\n        Bl (body) 8:2\n            It (block) *9:2\n              It (head) 9:2 ID=D\n                  Xo (block) 9:5 BROKEN\n                    Xo (head) 9:5\n                    Xo (body) 9:5 BROKEN\n                        No (elem) *10:2 HREF=D\n                            D \\p E (text) 10:5\n                        sp (elem) *11:2\n                            -1 (text) 11:5\n                        Lk (elem) *12:2\n                            https://reset.example (text) 12:5\n                             (text) 12:27\n                        sp (elem) *13:2\n                            1 (text) 13:5\n                        No (elem) *14:2\n                            AFTER (text) 14:5\n              It (body) *9:2\n                  No (elem) *16:2 ID=HREF\n                      BodyWord (text) 16:5\nSh (block) *18:2\n  Sh (head) 18:2 ID=HREF\n      NEXT (text) 18:5\n  Sh (body) 18:2\n      No (elem) *19:2\n          END (text) 19:5\n",
+   "stdout_sha256": "d9fa10905c379f5a69ed145cf716c830cd438cfca360befcff76318abfaa6b97"
+  },
+  "utf8": {
+   "code": 0,
+   "stderr": "",
+   "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     D\n\n           : https://reset.example\n\n     AFTER\n           BodyWord\n\nN\bNE\bEX\bXT\bT\n     END\n\nLinux 6.18.40.1-microsoft-standard-WSL2\n                              September 28, 2026                       TEST(1)\n",
+   "stdout_sha256": "52ab820146a25d7bb1861e764865a72eb93c8574faa550937af4508b7663f747"
+  }
+ },
+ "policy": {
+  "content": "exact",
+  "identity": "display-and-safety",
+  "indent": "responsive: list width places HEAD and BODY columns",
+  "rows": "exact-hard-rows",
+  "separators": "constrained-events"
+ },
+ "product_binding": {
+  "binary": "/home/hby/dev/tmp/agent-scratch/SpecLand/tgt-spec/debug/mant",
+  "dirty_tree": true,
+  "head": "f2647b8f",
+  "sha256": "aafd73bc6332c7a21f75036603f41435bf21bc47dd04f81100969cd3c51ebc47"
+ },
+ "replay_failing_axes": [],
+ "replay_status": "pass",
+ "role": "derived-contrast",
+ "selection": "derived-reset-contrast-wrapper-checkpoint",
+ "source_sha256": "2f77c12643f2e969269ebd32d358cbcba79d84e6cd61b976e5cbed1807081326",
+ "targets": [
+  "https://reset.example"
+ ],
+ "tree_witness": {
+  "broken_flags": 2,
+  "empty_text_nodes": 1,
+  "it_body_groups": 1,
+  "kinds": {
+   "Bl": 1,
+   "Dd": 1,
+   "Dt": 1,
+   "It": 1,
+   "Lk": 1,
+   "Nd": 1,
+   "Nm": 1,
+   "No": 4,
+   "Os": 1,
+   "Sh": 3,
+   "Xo": 1,
+   "sp": 2
+  },
+  "text_nodes": 16,
+  "text_positions": [
+   [
+    1,
+    5
+   ],
+   [
+    2,
+    5
+   ],
+   [
+    2,
+    10
+   ],
+   [
+    4,
+    5
+   ],
+   [
+    5,
+    5
+   ],
+   [
+    6,
+    5
+   ],
+   [
+    7,
+    5
+   ],
+   [
+    10,
+    5
+   ],
+   [
+    11,
+    5
+   ],
+   [
+    12,
+    5
+   ],
+   [
+    12,
+    27
+   ],
+   [
+    13,
+    5
+   ],
+   [
+    14,
+    5
+   ],
+   [
+    16,
+    5
+   ],
+   [
+    18,
+    5
+   ],
+   [
+    19,
+    5
+   ]
+  ]
+ },
+ "utf8_rows": [
+  "     D",
+  "",
+  "           : https://reset.example",
+  "",
+  "     AFTER",
+  "           BodyWord"
+ ]
+}

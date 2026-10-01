@@ -1,0 +1,810 @@
+#!/usr/bin/env python3
+"""Replay the frozen shared-execution acceptance matrix (guide sections 5.6/5.8).
+
+Layered execution, mirroring section 5.8:
+
+1. Oracle acquisition layer.  Every distinct complete source is rendered by
+   the registered pristine oracle exactly once per (source hash, oracle
+   identity, command); results live in a cache below ``target``.  Changing
+   the source, the pinned oracle identity or the projection policy version
+   invalidates the cache.  Product output never enters it.
+2. Fast shared execution layer.  All cases replay against one product binary
+   inside this single process run; every failing case id is aggregated, the
+   recorder never aborts at the first failure.
+3. Admission ledger.  ``lint`` plus the pristine ``tree`` qualify each case
+   as legal / native-diagnostics / recovery / not-applicable /
+   generator-defect before any expectation is frozen.  Only the frozen
+   selection (family representatives, RR anchors and directed RR-adjacent
+   pairs declared in ``roff_acceptance_cases``) is checked in, with its full
+   five-profile oracle record; the complete matrix stays replay-only.
+
+Interface for the axis-assertion consumers (comparator module): the ledger
+schema below plus ``scripts/roff/fixtures/acceptance/oracle/<id>.json``
+records provide, per case, the exact source, source hash, axis values,
+effective axis policy (section 5.7 vocabulary), admission class and the
+pristine oracle evidence.  Consumers add assertions on top; they never
+rewrite gold (``--check-frozen`` verifies the checked-in records).
+
+Examples:
+
+    python3 scripts/_run_module.py scripts.roff.fixtures.replay_roff_acceptance \\
+        --check-generation
+    python3 scripts/_run_module.py scripts.roff.fixtures.replay_roff_acceptance \\
+        --collect --replay --ledger --product path/to/mant
+    python3 scripts/_run_module.py scripts.roff.fixtures.replay_roff_acceptance \\
+        --freeze --product path/to/mant
+"""
+
+import argparse
+import collections
+import concurrent.futures
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import subprocess
+import sys
+
+from scripts.roff.fixtures import roff_acceptance_cases
+from scripts.roff.fixtures import roff_execution_cases
+from scripts.roff.fixtures import roff_fixture_reference
+
+ROOT = Path(__file__).resolve().parents[3]
+REFERENCE = ROOT / "target/mandoc-migration/reference/mandoc"
+ACCEPTANCE = ROOT / "scripts/roff/fixtures/acceptance"
+LEDGER_SCHEMA = "mant.roff-acceptance-ledger/v1"
+POLICY_VERSION = 1
+# Fixed page-furniture marker for end-of-file tail projections: the footer
+# date row always carries the frozen header date of these generated sources.
+DATE_TOKEN = "September 28, 2026"
+
+
+def digest(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+# ---------------------------------------------------------------------------
+# Case assembly (frozen definitions only; deterministic and idempotent)
+# ---------------------------------------------------------------------------
+
+def all_cases():
+    """Return the full acceptance case list with stable ids and cohorts."""
+    cases = []
+    for matrix, matrix_cases in roff_execution_cases.matrices():
+        if matrix != "formatter":
+            continue
+        for index, one in enumerate(matrix_cases):
+            cases.append({"cohort": "replay", "id": f"formatter-{index:04}", **one})
+    for cohort, family, family_cases in roff_acceptance_cases.families():
+        for index, one in enumerate(family_cases):
+            cases.append({"cohort": cohort, "id": f"{family}-{index:04}", **one})
+    for one in cases:
+        one["source_sha256"] = digest(one["source"].encode())
+        one["policy"] = roff_acceptance_cases.axis_policy(one) \
+            if one["cohort"] != "replay" else replay_cohort_policy(one)
+    return cases
+
+
+def replay_cohort_policy(one):
+    """Section 5.7 policy for the historical replay cohort (A-L sets)."""
+    context = one.get("context")
+    rows = {
+        "filled": "constrained-events: filled reflow, only authored breaks are hard rows",
+        "nf": "exact-hard-rows",
+        "literal": "exact-hard-rows",
+        "unfilled": "exact-hard-rows",
+        "EX": "exact-hard-rows",
+        "tag": "exact-hard-rows",
+        "hang": "exact-hard-rows",
+        "column": "exact-hard-rows",
+    }.get(context, "exact-hard-rows")
+    return {
+        "content": "exact",
+        "separators": "constrained-events",
+        "rows": rows,
+        "indent": "omit-common-margin",
+        "identity": "rich-inline" if "Lk" in one.get("source", "") else
+                    "display-and-safety",
+    }
+
+
+def select_frozen(cases):
+    """Resolve the frozen selection names to concrete case ids."""
+    by_family = collections.defaultdict(list)
+    for one in cases:
+        by_family[one["family"]].append(one)
+    resolved = {}
+    for name, family, axes, role, note in roff_acceptance_cases.FROZEN_SELECTIONS:
+        matches = [c for c in by_family[family]
+                   if all(c.get(key) == value for key, value in axes.items())]
+        if len(matches) != 1:
+            raise ValueError(f"frozen selection {name}: {len(matches)} matches")
+        resolved[name] = {"case": matches[0], "role": role, "note": note}
+    return resolved
+
+
+# ---------------------------------------------------------------------------
+# Shared transport and screening projections (historical probe semantics)
+# ---------------------------------------------------------------------------
+
+def run(binary, arguments, source, timeout=20):
+    completed = subprocess.run(
+        [str(binary), *arguments], input=source.encode(), capture_output=True,
+        timeout=timeout, env={"PATH": "/usr/bin:/bin", "LC_ALL": "C.UTF-8",
+                              "TZ": "UTC"}, check=False)
+    return {"code": completed.returncode,
+            "stdout": completed.stdout.decode("utf-8", "replace"),
+            "stderr": completed.stderr.decode("utf-8", "replace")}
+
+
+def unstyle(text):
+    # Overstrike pairs and ANSI select sequences both leave their last scalar
+    # at the same device cell; this is the historical screening projection.
+    while "\b" in text:
+        text = re.sub(r".\x08", "", text)
+    return re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", text)
+
+
+def body_rows(text, terminal, *, eof_tail=False):
+    """Screening row projection between DESCRIPTION and the tail boundary.
+
+    Screening-only projection (historical probe semantics): interior blank
+    rows are kept; the blank edges of the extracted window are removed.  For
+    end-of-file tails there is no trailing sentinel, so the fixed page footer
+    (blank row, optional OS row, date row carrying the frozen header date) is
+    removed by cutting at the last blank row before the date row.  Exact
+    edge-row assertion stays an uncovered axis for those cases.
+    """
+    rows = unstyle(text).splitlines()
+    if "DESCRIPTION" not in rows:
+        return None
+    start = rows.index("DESCRIPTION") + 1
+    if eof_tail:
+        rows = rows[start:]
+        dates = [i for i, row in enumerate(rows) if DATE_TOKEN in row]
+        if dates:
+            blanks = [i for i in range(dates[-1]) if rows[i] == ""]
+            rows = rows[:blanks[-1] if blanks else dates[-1]]
+    elif terminal in rows:
+        rows = rows[start:rows.index(terminal)]
+    else:
+        return None
+    while rows and not rows[0].strip():
+        rows.pop(0)
+    while rows and not rows[-1].strip():
+        rows.pop()
+    return rows
+
+
+def screening(native_rows, product_rows):
+    """Glyph/row/indent screening equalities; screening never proves axes."""
+    if native_rows is None or product_rows is None:
+        return {"extraction": "not-applicable"}
+    return {
+        "extraction": "ok",
+        "glyph_equal": ("".join("".join(native_rows).split())
+                        == "".join("".join(product_rows).split())),
+        "row_equal": ([" ".join(row.split()) for row in native_rows]
+                      == [" ".join(row.split()) for row in product_rows]),
+        "indent_equal": ([row.lstrip() for row in native_rows]
+                         == [row.lstrip() for row in product_rows]),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Layer 1: oracle acquisition with source-hash cache
+# ---------------------------------------------------------------------------
+
+# A tree text node is "<content> (text) [*]line:col [FLAGS...]"; the content
+# may be empty and the position may carry an asterisk or trailing node flags
+# such as NOFILL/NOPRT, all of which belong to the position, not the content.
+TEXT_NODE = re.compile(r"^(.*?)\s*\(text\) \*?(\d+):(\d+)\s*(?:[A-Z]+\s*)*$")
+NODE_KIND = re.compile(r"^\s*(\w+) \((?:block|elem)\)")
+
+
+def tree_witness(tree_stdout):
+    """Compact structural witness extracted from the pristine tree."""
+    witness = {"text_nodes": 0, "empty_text_nodes": 0, "broken_flags": 0,
+               "it_body_groups": 0, "text_positions": [], "kinds": {}}
+    kinds = collections.Counter()
+    for line in tree_stdout.splitlines():
+        match = TEXT_NODE.match(line.strip())
+        if match:
+            witness["text_nodes"] += 1
+            if not match.group(1).strip():
+                witness["empty_text_nodes"] += 1
+            witness["text_positions"].append(
+                [int(match.group(2)), int(match.group(3))])
+        if "BROKEN" in line:
+            witness["broken_flags"] += 1
+        if "It (body)" in line:
+            witness["it_body_groups"] += 1
+        kind = NODE_KIND.match(line)
+        if kind:
+            kinds[kind.group(1)] += 1
+    witness["kinds"] = dict(sorted(kinds.items()))
+    witness["text_positions"] = witness["text_positions"][:64]
+    return witness
+
+
+def lint_classes(lint):
+    """Classify pristine lint output by severity class."""
+    counts = collections.Counter()
+    for message in (lint["stdout"] + lint["stderr"]).splitlines():
+        for severity in ("STYLE", "WARNING", "ERROR", "FATAL"):
+            if severity in message:
+                counts[severity] += 1
+                break
+    return dict(sorted(counts.items()))
+
+
+def load_cache(evidence, identity):
+    cache_dir = evidence / f"oracle-cache-{re.sub(r'[^A-Za-z0-9_.-]', '_', identity)}"
+    cache = {}
+    path = cache_dir / "cache.jsonl"
+    if path.exists():
+        for line in path.read_text().splitlines():
+            record = json.loads(line)
+            cache[record["source_sha256"]] = record
+    return cache_dir, path, cache
+
+
+def collect_oracle(reference, registration, cases, evidence, workers):
+    """Ensure one cached oracle record per unique source (utf8/lint/tree)."""
+    identity = registration["identity"]
+    cache_dir, cache_path, cache = load_cache(evidence, identity)
+    unique = sorted({one["source_sha256"]: one for one in cases}.values(),
+                    key=lambda one: one["source_sha256"])
+    missing = [one for one in unique if one["source_sha256"] not in cache]
+    print(f"oracle cache: {len(cache)} cached, {len(missing)} to collect "
+          f"(identity {identity})", flush=True)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+
+    def record(one):
+        source = one["source"]
+        profiles = {}
+        for profile, arguments in (("utf8", ["-Tutf8", "-Owidth=78"]),
+                                   ("lint", ["-Tlint"]),
+                                   ("tree", ["-Ttree"])):
+            completed = roff_fixture_reference.run_reference(
+                reference, arguments, input_bytes=source.encode(), timeout=30,
+                env={"PATH": "/usr/bin:/bin", "LC_ALL": "C.UTF-8", "TZ": "UTC"},
+                check=False)
+            if profile != "lint" and completed.returncode > 2:
+                # Render/AST failure is a generator-level defect candidate;
+                # keep the record and let admission flag it (no abort).
+                pass
+            profiles[profile] = {
+                "code": completed.returncode,
+                "stdout": completed.stdout.decode("utf-8"),
+                "stderr": completed.stderr.decode("utf-8"),
+                "stdout_sha256": digest(completed.stdout),
+            }
+        return {"source_sha256": one["source_sha256"], **profiles}
+
+    added = 0
+    if missing:
+        with cache_path.open("a", encoding="utf-8") as output:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
+                for i, entry in enumerate(pool.map(record, missing), 1):
+                    output.write(json.dumps(entry, ensure_ascii=False) + "\n")
+                    added += 1
+                    if i % 500 == 0:
+                        print(f"collected {i}/{len(missing)}", flush=True)
+    manifest = {"identity": identity,
+                "reference_sha256": digest(Path(reference).read_bytes()),
+                "policy_version": POLICY_VERSION,
+                "records": len(cache) + added,
+                "expectations_from_product": False}
+    (cache_dir / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+    print(f"oracle collection complete: {added} new, {len(cache)} cache hits",
+          flush=True)
+    return cache_dir / "manifest.json"
+
+
+def full_oracle_profiles(reference, source):
+    """Five-profile oracle record used only for frozen selections."""
+    profiles = {}
+    for profile in ("ascii", "utf8", "html", "tree", "lint"):
+        arguments = ["-T" + profile]
+        if profile in ("ascii", "utf8"):
+            arguments.append("-Owidth=78")
+        completed = roff_fixture_reference.run_reference(
+            reference, arguments, input_bytes=source.encode(), timeout=30,
+            env={"PATH": "/usr/bin:/bin", "LC_ALL": "C.UTF-8", "TZ": "UTC"},
+            check=False)
+        profiles[profile] = {
+            "code": completed.returncode,
+            "stdout": completed.stdout.decode("utf-8"),
+            "stderr": completed.stderr.decode("utf-8"),
+            "stdout_sha256": digest(completed.stdout),
+            "stderr_sha256": digest(completed.stderr),
+        }
+    return profiles
+
+
+# ---------------------------------------------------------------------------
+# Layer 3: admission (lint + tree qualification before any gold)
+# ---------------------------------------------------------------------------
+
+def admit(one, cache):
+    record = cache.get(one["source_sha256"])
+    if record is None:
+        return {"admission": "not-collected",
+                "reason": "no cached oracle record; run --collect first"}
+    lint = record["lint"]
+    render_failed = any(record[p]["code"] > 2 for p in ("utf8", "tree"))
+    admission, reason = None, None
+    if render_failed:
+        admission = "generator-defect"
+        reason = "pristine render/AST profile failed; template must be fixed"
+    elif lint["code"] == 0:
+        admission = "legal"
+    elif lint["code"] <= 2:
+        admission = "native-diagnostics"
+        reason = "warning-level diagnostics; structure remains comparable"
+    else:
+        admission = "recovery"
+        reason = "error-level diagnostics; content compared as recovery only"
+    # Tree-shape qualification for the multi-line column template: the three
+    # declared columns must appear as three It body groups (BODY/Ta ownership).
+    if admission != "generator-defect" and one["family"] == "column-positions" \
+            and one["layout"] == "multiline":
+        witness = tree_witness(record["tree"]["stdout"])
+        if witness["it_body_groups"] < 3:
+            admission = "generator-defect"
+            reason = (f"multiline column template produced "
+                      f"{witness['it_body_groups']} It body groups, expected 3")
+    result = {"admission": admission, "reason": reason,
+              "lint_code": lint["code"],
+              "lint_classes": lint_classes(lint)}
+    if one["family"] == "physical-row-handoffs":
+        witness = tree_witness(record["tree"]["stdout"])
+        lines = {line for line, _ in witness["text_positions"]}
+        result["native_text_event"] = bool(
+            lines & set(one.get("input_source_lines", [])))
+    if one["family"] == "delimiter-arguments" \
+            and one["delimiter"].startswith("literal") \
+            and one["termination"] == "truncated-close":
+        result["construction"] = "recovery-candidate: trailing incomplete backslash"
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Layer 2: product replay in one process, aggregated failures
+# ---------------------------------------------------------------------------
+
+PRODUCT_TEXT = ["--input", "-", "--input-format", "roff", "--display", "direct",
+                "--color", "never", "--format", "text"]
+PRODUCT_ANSI = ["--input", "-", "--input-format", "roff", "--display", "direct",
+                "--color", "always", "--format", "text"]
+PRODUCT_JSON = ["--input", "-", "--input-format", "roff", "--format", "json"]
+PRODUCT_MARKDOWN = ["--input", "-", "--input-format", "roff", "--display",
+                    "direct", "--format", "markdown"]
+IDENTITY_MACROS = ("Lk", "UR", ".Mt", ".MR", ".Sx", ".In", ".Bx", ".Xr")
+
+
+def replay_product(product, cases, evidence, workers):
+    """Run the product once per unique source; aggregate per-case results."""
+    by_hash = {}
+    for one in cases:
+        by_hash.setdefault(one["source_sha256"], one)
+    terminal = "NEXT"
+
+    def execute(one):
+        source = one["source"]
+        plain = run(product, PRODUCT_TEXT, source)
+        ansi = run(product, PRODUCT_ANSI, source)
+        result = {
+            "plain_code": plain["code"],
+            "product_error": plain["code"] != 0,
+            "ansi_parity": unstyle(plain["stdout"]) == unstyle(ansi["stdout"]),
+            "stdout_sha256": {name: digest(run_output["stdout"].encode())
+                              for name, run_output in
+                              (("plain", plain), ("ansi", ansi))},
+        }
+        wants_identity = any(macro in source for macro in IDENTITY_MACROS)
+        result["product_rows"] = body_rows(
+            plain["stdout"], terminal, eof_tail=one.get("tail") == "eof")
+        if wants_identity:
+            encoded = run(product, PRODUCT_JSON, source)
+            result["json_code"] = encoded["code"]
+            result["marker_leak"] = ("\\u0000mant:" in encoded["stdout"]
+                                     if encoded["code"] == 0 else None)
+            if encoded["code"] != 0:
+                result["product_error"] = True
+            markdown = run(product, PRODUCT_MARKDOWN, source)
+            result["markdown_code"] = markdown["code"]
+            if markdown["code"] != 0:
+                result["product_error"] = True
+        return result
+
+    results = {}
+    failures = 0
+    unique = sorted(by_hash.values(), key=lambda one: one["source_sha256"])
+    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
+        for i, (one, result) in enumerate(
+                zip(unique, pool.map(execute, unique)), 1):
+            results[one["source_sha256"]] = result
+            if result["product_error"]:
+                failures += 1
+            if i % 500 == 0:
+                print(f"replayed {i}/{len(unique)}", flush=True)
+    (evidence / "replay-results.json").write_text(
+        json.dumps({sha: result for sha, result in results.items()},
+                   indent=1, sort_keys=True) + "\n")
+    print(f"product replay complete: {len(unique)} unique sources, "
+          f"{failures} with product errors", flush=True)
+    return results
+
+
+# ---------------------------------------------------------------------------
+# Ledger assembly
+# ---------------------------------------------------------------------------
+
+def case_status(admission, screen, product_result):
+    if admission in ("not-collected", "generator-defect"):
+        return "review", []
+    if screen.get("extraction") != "ok":
+        # Screening could not extract a comparable window; never a pass.
+        return "review", []
+    failing = []
+    if product_result.get("product_error"):
+        failing.append("product-error")
+    for axis in ("glyph_equal", "row_equal", "indent_equal"):
+        if screen.get(axis) is False:
+            failing.append(axis)
+    if product_result.get("ansi_parity") is False:
+        failing.append("ansi-parity")
+    if product_result.get("marker_leak"):
+        failing.append("marker-leak")
+    if failing:
+        return "fail", failing
+    if admission in ("native-diagnostics", "recovery"):
+        return "review", []
+    # A screening-level pass never claims full axis assertion (section 5.8).
+    return "pass", []
+
+
+def uncovered_axes(one):
+    """Declared axes still awaiting comparator wiring beyond screening."""
+    policy = one["policy"]
+    axes = []
+    if not str(policy["separators"]).startswith("not-applicable"):
+        axes.append("separators")
+    if policy["identity"] == "rich-inline":
+        axes.append("identity:rich-inline")
+    if policy["rows"] == "exact-hard-rows":
+        axes.append("rows:exact-hard-rows")
+    return axes
+
+
+def build_ledger(cases, cache, product_results, product_binding, frozen):
+    families = {}
+    case_rows = {}
+    terminal = "NEXT"
+    for one in cases:
+        record = cache.get(one["source_sha256"], {})
+        admission_info = admit(one, cache)
+        eof = one.get("tail") == "eof"
+        native_rows = body_rows(record.get("utf8", {}).get("stdout", ""),
+                                terminal, eof_tail=eof)
+        product_result = product_results.get(one["source_sha256"], {})
+        product_rows = product_result.get("product_rows")
+        screen = screening(native_rows, product_rows)
+        status, failing = case_status(admission_info["admission"], screen,
+                                      product_result)
+        row = {
+            "id": one["id"], "cohort": one["cohort"], "family": one["family"],
+            "axes": {k: v for k, v in one.items()
+                     if k not in ("source", "source_sha256", "policy")},
+            "source_sha256": one["source_sha256"],
+            "policy": one["policy"],
+            **admission_info,
+            "screening": screen,
+            "product": {k: v for k, v in product_result.items()
+                        if k not in ("native_rows", "product_rows")},
+            "status": status,
+            "failing_axes": failing,
+            "uncovered_axes": uncovered_axes(one),
+            "consumer_covered": ["cli-text-screening", "cli-ansi-screening"],
+        }
+        if product_result.get("marker_leak") is not None:
+            row["consumer_covered"].append("cli-json-screening")
+        if "markdown_code" in product_result:
+            row["consumer_covered"].append("cli-markdown-screening")
+        case_rows[one["id"]] = row
+
+    for one in cases:
+        row = case_rows[one["id"]]
+        summary = families.setdefault(one["family"], {
+            "cohort": one["cohort"],
+            "generated": 0,
+            "source_unique": set(),
+            "admission": collections.Counter(),
+            "screening": collections.Counter(),
+            "axis_asserted": collections.defaultdict(collections.Counter),
+            "consumer_covered": collections.defaultdict(int),
+            "pass": 0, "fail": 0, "review": 0, "uncovered": 0,
+            "failing": collections.Counter(), "na_reasons": collections.Counter(),
+        })
+        summary["generated"] += 1
+        summary["source_unique"].add(one["source_sha256"])
+        summary["admission"][row["admission"]] += 1
+        for axis, policy in one["policy"].items():
+            summary["axis_asserted"][axis][str(policy).split(":", 1)[0]] += 1
+        for consumer in row["consumer_covered"]:
+            summary["consumer_covered"][consumer] += 1
+        summary[row["status"]] += 1
+        if row["uncovered_axes"]:
+            summary["uncovered"] += 1
+        for axis in row["failing_axes"]:
+            summary["failing"][axis] += 1
+        if row["screening"].get("extraction") != "ok":
+            summary["screening"]["extraction-not-applicable"] += 1
+        else:
+            for axis in ("glyph_equal", "row_equal", "indent_equal"):
+                summary["screening"][f"{axis}={row['screening'][axis]}"] += 1
+
+    for summary in families.values():
+        summary["source_unique"] = len(summary["source_unique"])
+        summary["axis_asserted"] = {axis: dict(counts) for axis, counts
+                                    in summary["axis_asserted"].items()}
+        summary["consumer_covered"] = dict(summary["consumer_covered"])
+        summary["admission"] = dict(summary["admission"])
+        summary["screening"] = dict(summary["screening"])
+        summary["failing"] = dict(summary["failing"])
+        summary["na_reasons"] = dict(summary["na_reasons"])
+
+    coverage = []
+    if frozen:
+        for transition in roff_acceptance_cases.COVERAGE_TRANSITIONS:
+            entries = []
+            for name in transition["selections"]:
+                selection = frozen[name]
+                row = case_rows[selection["case"]["id"]]
+                entries.append({"selection": name, "case_id": row["id"],
+                                "role": selection["role"],
+                                "admission": row["admission"],
+                                "status": row["status"]})
+            coverage.append({"transition": transition["transition"],
+                             "axes": transition["axes"], "cases": entries,
+                             "consumers": ["cli-text-screening",
+                                           "cli-ansi-screening",
+                                           "cli-json-screening",
+                                           "cli-markdown-screening",
+                                           "oracle-five-profiles"]})
+    return {
+        "schema": LEDGER_SCHEMA,
+        "policy_version": POLICY_VERSION,
+        "product_binding": product_binding,
+        "case_count": len(case_rows),
+        "families": dict(sorted(families.items())),
+        "coverage": coverage,
+        "empty_text_witness": roff_acceptance_cases.EMPTY_TEXT_WITNESS,
+        "notes": [
+            "pass/fail are screening-level outcomes (glyph/row/indent equality,",
+            "ansi parity, json marker leak) over the registered pristine oracle;",
+            "they never claim full axis assertion. native-diagnostics and recovery",
+            "cases stay review. uncovered_axes lists axes whose exact assertions",
+            "await the comparator wiring; the frozen subset carries full",
+            "five-profile oracle records for those consumers.",
+        ],
+        "cases": case_rows,
+    }
+
+
+
+
+# ---------------------------------------------------------------------------
+# Freeze: checked-in representatives with full oracle evidence
+# ---------------------------------------------------------------------------
+
+def html_targets(stdout):
+    """Authored Lk href targets from pristine HTML via the shared parser."""
+    from scripts.roff.fixtures.generate_roff_execution_fixtures import Links
+
+    parser = Links()
+    parser.feed(stdout)
+    return parser.targets
+
+
+
+def freeze(frozen, product_binding, reference, ledger_path):
+    cases_dir = ACCEPTANCE / "cases"
+    oracle_dir = ACCEPTANCE / "oracle"
+    cases_dir.mkdir(parents=True, exist_ok=True)
+    if not ledger_path.exists():
+        raise SystemExit("freeze requires the full ledger; run with --ledger")
+    full_ledger = json.loads(ledger_path.read_text())
+    frozen_rows = {}
+    for name, selection in sorted(frozen.items()):
+        one = selection["case"]
+        profiles = full_oracle_profiles(reference, one["source"])
+        source_path = cases_dir / f"{one['id']}.roff"
+        source_path.write_bytes(one["source"].encode())
+        record = {
+            "selection": name,
+            "role": selection["role"],
+            "note": selection["note"],
+            "id": one["id"],
+            "cohort": one["cohort"],
+            "family": one["family"],
+            "axes": {k: v for k, v in one.items()
+                     if k not in ("source", "source_sha256", "policy")},
+            "source_sha256": one["source_sha256"],
+            "policy": one["policy"],
+            "oracle": {
+                profile: {"code": value["code"],
+                          "stdout_sha256": value["stdout_sha256"],
+                          "stderr_sha256": value.get("stderr_sha256"),
+                          "stdout": value["stdout"],
+                          "stderr": value["stderr"]}
+                for profile, value in profiles.items()},
+            "utf8_rows": body_rows(profiles["utf8"]["stdout"], "NEXT"),
+            "ascii_rows": body_rows(profiles["ascii"]["stdout"], "NEXT"),
+            "targets": html_targets(profiles["html"]["stdout"]),
+            "tree_witness": tree_witness(profiles["tree"]["stdout"]),
+            "admission": {k: full_ledger["cases"][one["id"]][k]
+                          for k in ("admission", "reason", "lint_code",
+                                    "lint_classes")},
+            "replay_status": full_ledger["cases"][one["id"]]["status"],
+            "replay_failing_axes": full_ledger["cases"][one["id"]]["failing_axes"],
+            "product_binding": product_binding,
+            "expectations_from_product": False,
+        }
+        (oracle_dir / f"{one['id']}.json").write_text(
+            json.dumps(record, ensure_ascii=False, indent=1, sort_keys=True) + "\n")
+        frozen_rows[name] = {"id": one["id"], "family": one["family"],
+                             "role": selection["role"], "note": selection["note"]}
+    summary = dict(full_ledger)
+    summary["cases"] = {one["id"]: full_ledger["cases"][one["id"]]
+                        for one in (s["case"] for s in frozen.values())}
+    summary["frozen"] = frozen_rows
+    (ACCEPTANCE / "ledger.json").write_text(
+        json.dumps(summary, ensure_ascii=False, indent=1, sort_keys=True) + "\n")
+    print(f"frozen {len(frozen_rows)} selections into {ACCEPTANCE}")
+
+
+def check_frozen(reference):
+    """Verify checked-in frozen records against the current pristine oracle."""
+    failures = []
+    for path in sorted((ACCEPTANCE / "oracle").glob("*.json")):
+        record = json.loads(path.read_text())
+        source = (ACCEPTANCE / "cases" / f"{path.stem}.roff").read_bytes()
+        if digest(source) != record["source_sha256"]:
+            failures.append(f"{path.stem}: source bytes differ from recorded hash")
+            continue
+        for profile in ("ascii", "utf8", "html", "tree", "lint"):
+            arguments = ["-T" + profile]
+            if profile in ("ascii", "utf8"):
+                arguments.append("-Owidth=78")
+            completed = roff_fixture_reference.run_reference(
+                reference, arguments, input_bytes=source, timeout=30,
+                env={"PATH": "/usr/bin:/bin", "LC_ALL": "C.UTF-8", "TZ": "UTC"},
+                check=False)
+            if digest(completed.stdout) != record["oracle"][profile]["stdout_sha256"]:
+                failures.append(f"{path.stem}/{profile}: oracle output differs")
+    if failures:
+        raise SystemExit("frozen record check failed:\n" + "\n".join(failures))
+    print(f"frozen records verified against oracle: "
+          f"{len(list((ACCEPTANCE / 'oracle').glob('*.json')))} cases")
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
+
+def generation_plan(cases):
+    """Canonical deterministic dump for idempotence verification."""
+    return json.dumps([{"id": one["id"], "family": one["family"],
+                        "cohort": one["cohort"],
+                        "source_sha256": one["source_sha256"],
+                        "policy": one["policy"]} for one in cases],
+                      ensure_ascii=False, indent=1, sort_keys=False)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--evidence", type=Path,
+                        default=ROOT / "target/roff-acceptance-replay")
+    parser.add_argument("--reference", type=Path,
+                        default=Path(os.environ.get("MANT_REFERENCE", REFERENCE)))
+    parser.add_argument("--product", type=Path,
+                        default=Path(os.environ.get("MANT_PRODUCT", "")) if
+                        os.environ.get("MANT_PRODUCT") else None)
+    parser.add_argument("--product-head", default=None,
+                        help="commit the product binary was built from when it "
+                             "differs from this checkout's HEAD")
+    parser.add_argument("--workers", type=int, default=8)
+    parser.add_argument("--families", help="comma-separated family filter prefix")
+    parser.add_argument("--check-generation", action="store_true",
+                        help="print canonical generation plan hash and exit")
+    parser.add_argument("--collect", action="store_true",
+                        help="ensure the oracle cache for all sources")
+    parser.add_argument("--replay", action="store_true",
+                        help="run the product screening layer")
+    parser.add_argument("--ledger", action="store_true",
+                        help="write the full admission ledger")
+    parser.add_argument("--freeze", action="store_true",
+                        help="write the checked-in frozen selection")
+    parser.add_argument("--check-frozen", action="store_true",
+                        help="verify checked-in frozen oracle records")
+    args = parser.parse_args()
+
+    cases = all_cases()
+    if args.families:
+        wanted = tuple(args.families.split(","))
+        cases = [one for one in cases if one["family"].startswith(wanted)]
+    frozen = select_frozen(cases) if not args.families else None
+
+    if args.check_generation:
+        plan = generation_plan(cases)
+        print(f"cases: {len(cases)}  plan_sha256: {digest(plan.encode())}")
+        families = collections.Counter(one["family"] for one in cases)
+        print(json.dumps(dict(sorted(families.items())), indent=1))
+        return
+
+    evidence = args.evidence.resolve()
+    if not evidence.is_relative_to(ROOT / "target"):
+        raise SystemExit("evidence must stay below the repository target directory")
+    evidence.mkdir(parents=True, exist_ok=True)
+    reference = args.reference if args.reference.is_absolute() \
+        else ROOT / args.reference
+    if args.check_frozen:
+        check_frozen(reference)
+        return
+
+    modes = [args.collect, args.replay, args.ledger, args.freeze]
+    if not any(modes):
+        parser.error("choose at least one of --collect/--replay/--ledger/--freeze "
+                     "(or --check-generation/--check-frozen)")
+    product = args.product
+    if (args.replay or args.freeze) and product is None:
+        parser.error("--product or MANT_PRODUCT is required for replay/freeze")
+
+    registration = roff_fixture_reference.verified_reference(ROOT, reference)
+    print(f"oracle preflight passed: {registration['identity']}", file=sys.stderr)
+
+    cache_dir, cache_path, cache = load_cache(evidence, registration["identity"])
+    if args.collect:
+        collect_oracle(reference, registration, cases, evidence, args.workers)
+        cache_dir, cache_path, cache = load_cache(evidence, registration["identity"])
+    missing = [one["id"] for one in cases if one["source_sha256"] not in cache]
+    if args.replay and missing:
+        raise SystemExit(f"{len(missing)} sources lack oracle records; "
+                         f"run --collect first (example {missing[0]})")
+
+    product_results = {}
+    if args.replay:
+        product_results = replay_product(product, cases, evidence, args.workers)
+    elif (args.ledger or args.freeze) and (evidence / "replay-results.json").exists():
+        product_results = json.loads(
+            (evidence / "replay-results.json").read_text())
+        print(f"loaded persisted product replay: {len(product_results)} sources")
+
+    ledger_path = evidence / "ledger.json"
+    if args.ledger or args.freeze:
+        product_binding = {
+            "binary": str(product) if product else None,
+            "sha256": digest(Path(product).read_bytes()) if product else None,
+            "head": args.product_head or subprocess.run(
+                ["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True,
+                text=True, check=False).stdout.strip(),
+            "dirty_tree": bool(subprocess.run(
+                ["git", "status", "--porcelain"], cwd=ROOT, capture_output=True,
+                text=True, check=False).stdout.strip()),
+        }
+        ledger = build_ledger(cases, cache, product_results, product_binding,
+                              frozen)
+        ledger_path.write_text(
+            json.dumps(ledger, ensure_ascii=False, indent=1, sort_keys=True) + "\n")
+        counts = collections.Counter(row["status"] for row in ledger["cases"].values())
+        print(f"ledger written: {ledger_path} ({dict(counts)})")
+    if args.freeze:
+        freeze(frozen, product_binding, reference, ledger_path)
+
+
+if __name__ == "__main__":
+    main()

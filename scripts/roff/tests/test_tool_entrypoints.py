@@ -61,7 +61,7 @@ class ToolEntrypointTests(unittest.TestCase):
             (package / "__init__.py").write_text("raise RuntimeError('wrong scripts package')")
             paths = [root / "scripts/rebuild_reference_mandoc.sh",
                      *sorted((root / "scripts/roff/fixtures").glob("regen_*.sh"))]
-            self.assertEqual(len(paths), 6)
+            self.assertEqual(len(paths), 8)
             for path in paths:
                 with self.subTest(entrypoint=path.name):
                     result = subprocess.run(

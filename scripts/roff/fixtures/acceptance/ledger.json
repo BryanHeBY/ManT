@@ -1,0 +1,2936 @@
+{
+ "case_count": 8779,
+ "cases": {
+  "cell-ownership-0030": {
+   "admission": "legal",
+   "axes": {
+    "carrier": "No",
+    "cohort": "adjacent",
+    "context": "filled",
+    "dialect": "mdoc",
+    "family": "cell-ownership",
+    "id": "cell-ownership-0030",
+    "prefix": "",
+    "word": "\\p\\o\\(aqXY\\(aq Z"
+   },
+   "cohort": "adjacent",
+   "consumer_covered": [
+    "cli-text-screening",
+    "cli-ansi-screening"
+   ],
+   "failing_axes": [
+    "glyph_equal",
+    "row_equal",
+    "indent_equal"
+   ],
+   "family": "cell-ownership",
+   "id": "cell-ownership-0030",
+   "lint_classes": {},
+   "lint_code": 0,
+   "policy": {
+    "content": "exact",
+    "identity": "display-and-safety",
+    "indent": "omit-common-margin",
+    "rows": "constrained-events: filled reflow, only authored breaks are hard rows",
+    "separators": "constrained-events"
+   },
+   "product": {
+    "ansi_parity": true,
+    "plain_code": 0,
+    "product_error": false,
+    "stdout_sha256": {
+     "ansi": "060eb7e4aa41dc9a58dcd98b6937ae7f21021528586bee18bb76313a83914909",
+     "plain": "667821e172b88110fb4786ba5a1a49465e9a2e953fb49b69bbeb962d093bcd01"
+    }
+   },
+   "reason": null,
+   "screening": {
+    "extraction": "ok",
+    "glyph_equal": false,
+    "indent_equal": false,
+    "row_equal": false
+   },
+   "source_sha256": "16189ca7324aaccc377b59a33dd7639cbea19d049fe7a12da0964a54ad71d5a7",
+   "status": "fail",
+   "uncovered_axes": [
+    "separators"
+   ]
+  },
+  "cell-ownership-0080": {
+   "admission": "legal",
+   "axes": {
+    "carrier": "Lk",
+    "cohort": "adjacent",
+    "context": "filled",
+    "dialect": "mdoc",
+    "family": "cell-ownership",
+    "id": "cell-ownership-0080",
+    "prefix": "\\zP",
+    "word": "Y\\p\\& \\p Z"
+   },
+   "cohort": "adjacent",
+   "consumer_covered": [
+    "cli-text-screening",
+    "cli-ansi-screening",
+    "cli-json-screening",
+    "cli-markdown-screening"
+   ],
+   "failing_axes": [
+    "glyph_equal",
+    "row_equal",
+    "indent_equal"
+   ],
+   "family": "cell-ownership",
+   "id": "cell-ownership-0080",
+   "lint_classes": {},
+   "lint_code": 0,
+   "policy": {
+    "content": "exact",
+    "identity": "rich-inline",
+    "indent": "omit-common-margin",
+    "rows": "constrained-events: filled reflow, only authored breaks are hard rows",
+    "separators": "constrained-events"
+   },
+   "product": {
+    "ansi_parity": true,
+    "json_code": 0,
+    "markdown_code": 0,
+    "marker_leak": false,
+    "plain_code": 0,
+    "product_error": false,
+    "stdout_sha256": {
+     "ansi": "79263378ae60fb594cca7767ba3bf00eff6260757896174ebf9e4097352f5c0f",
+     "plain": "5dc6b93034fb56d76d4d40d9f5ec962598fb613388d63836e646700d44cf00de"
+    }
+   },
+   "reason": null,
+   "screening": {
+    "extraction": "ok",
+    "glyph_equal": false,
+    "indent_equal": false,
+    "row_equal": false
+   },
+   "source_sha256": "8efd4eecb7cfa7c191332a9c51fce05a1a141b4c176a4c6331bc2b8a3cd700a3",
+   "status": "fail",
+   "uncovered_axes": [
+    "separators",
+    "identity:rich-inline"
+   ]
+  },
+  "cell-ownership-0212": {
+   "admission": "legal",
+   "axes": {
+    "carrier": "Lk",
+    "cohort": "adjacent",
+    "context": "filled",
+    "dialect": "mdoc",
+    "family": "cell-ownership",
+    "id": "cell-ownership-0212",
+    "prefix": "\\zP\\z",
+    "word": "\\p  Y"
+   },
+   "cohort": "adjacent",
+   "consumer_covered": [
+    "cli-text-screening",
+    "cli-ansi-screening",
+    "cli-json-screening",
+    "cli-markdown-screening"
+   ],
+   "failing_axes": [
+    "glyph_equal",
+    "row_equal",
+    "indent_equal"
+   ],
+   "family": "cell-ownership",
+   "id": "cell-ownership-0212",
+   "lint_classes": {},
+   "lint_code": 0,
+   "policy": {
+    "content": "exact",
+    "identity": "rich-inline",
+    "indent": "omit-common-margin",
+    "rows": "constrained-events: filled reflow, only authored breaks are hard rows",
+    "separators": "constrained-events"
+   },
+   "product": {
+    "ansi_parity": true,
+    "json_code": 0,
+    "markdown_code": 0,
+    "marker_leak": false,
+    "plain_code": 0,
+    "product_error": false,
+    "stdout_sha256": {
+     "ansi": "57bb8b6c276861895ac5700ec73f61256110b8ec1a9ec30628f270f654e4d56e",
+     "plain": "37726b0c6b36df159d4d266d2afafb8474b6ff4f1fd0322c53e28541ef3d2f36"
+    }
+   },
+   "reason": null,
+   "screening": {
+    "extraction": "ok",
+    "glyph_equal": false,
+    "indent_equal": false,
+    "row_equal": false
+   },
+   "source_sha256": "f9ee6a75bc98fb8ad811727f375c806a236db756836e0e745c0ad48a68d2aea3",
+   "status": "fail",
+   "uncovered_axes": [
+    "separators",
+    "identity:rich-inline"
+   ]
+  },
+  "column-positions-0300": {
+   "admission": "legal",
+   "axes": {
+    "carrier": "No",
+    "cohort": "expansion",
+    "context": "filled",
+    "dialect": "mdoc",
+    "family": "column-positions",
+    "id": "column-positions-0300",
+    "label": "D\\p \\p",
+    "layout": "inline",
+    "position": "first",
+    "suffix": " No AFTER",
+    "width": 8
+   },
+   "cohort": "expansion",
+   "consumer_covered": [
+    "cli-text-screening",
+    "cli-ansi-screening"
+   ],
+   "failing_axes": [
+    "row_equal",
+    "indent_equal"
+   ],
+   "family": "column-positions",
+   "id": "column-positions-0300",
+   "lint_classes": {},
+   "lint_code": 0,
+   "policy": {
+    "content": "exact",
+    "identity": "display-and-safety",
+    "indent": "responsive: column widths place cells",
+    "rows": "exact-hard-rows",
+    "separators": "not-applicable: column cell placement, not word separation"
+   },
+   "product": {
+    "ansi_parity": true,
+    "plain_code": 0,
+    "product_error": false,
+    "stdout_sha256": {
+     "ansi": "e25c4d9a6c19bcf46c268f40ffd97437a60e9158065c5491ab55f8f6ef486ef9",
+     "plain": "7fe9af8a8a7b391d717401950a1e91e5030cf095f65b3c140b5ba074dc8e065e"
+    }
+   },
+   "reason": null,
+   "screening": {
+    "extraction": "ok",
+    "glyph_equal": true,
+    "indent_equal": false,
+    "row_equal": false
+   },
+   "source_sha256": "8a3dc7b3e8e50e46071daaf82a07c906bc7ffc67b629197b46c8daf8863f943a",
+   "status": "fail",
+   "uncovered_axes": [
+    "rows:exact-hard-rows"
+   ]
+  },
+  "column-positions-0308": {
+   "admission": "legal",
+   "axes": {
+    "carrier": "No",
+    "cohort": "expansion",
+    "context": "filled",
+    "dialect": "mdoc",
+    "family": "column-positions",
+    "id": "column-positions-0308",
+    "label": "D\\p \\p",
+    "layout": "multiline",
+    "position": "middle",
+    "suffix": " No AFTER",
+    "width": 8
+   },
+   "cohort": "expansion",
+   "consumer_covered": [
+    "cli-text-screening",
+    "cli-ansi-screening"
+   ],
+   "failing_axes": [
+    "row_equal",
+    "indent_equal"
+   ],
+   "family": "column-positions",
+   "id": "column-positions-0308",
+   "lint_classes": {},
+   "lint_code": 0,
+   "policy": {
+    "content": "exact",
+    "identity": "display-and-safety",
+    "indent": "responsive: column widths place cells",
+    "rows": "exact-hard-rows",
+    "separators": "not-applicable: column cell placement, not word separation"
+   },
+   "product": {
+    "ansi_parity": true,
+    "plain_code": 0,
+    "product_error": false,
+    "stdout_sha256": {
+     "ansi": "eff47ab24796dc1ba8277fc38bcba414d9fd449bf1d0795e0eec8848634bb1e5",
+     "plain": "bb9372c45656615c43880c9922251e5d91205010286d99e64ae1d618bccca24b"
+    }
+   },
+   "reason": null,
+   "screening": {
+    "extraction": "ok",
+    "glyph_equal": true,
+    "indent_equal": false,
+    "row_equal": false
+   },
+   "source_sha256": "6d38a0f79729e2ce81a58aaf31b20028657ff1a0d15b83f8b7aa233bc1370be4",
+   "status": "fail",
+   "uncovered_axes": [
+    "rows:exact-hard-rows"
+   ]
+  },
+  "column-positions-0816": {
+   "admission": "legal",
+   "axes": {
+    "carrier": "No",
+    "cohort": "expansion",
+    "context": "filled",
+    "dialect": "mdoc",
+    "family": "column-positions",
+    "id": "column-positions-0816",
+    "label": "D",
+    "layout": "inline",
+    "position": "first",
+    "suffix": "",
+    "width": 20
+   },
+   "cohort": "expansion",
+   "consumer_covered": [
+    "cli-text-screening",
+    "cli-ansi-screening"
+   ],
+   "failing_axes": [],
+   "family": "column-positions",
+   "id": "column-positions-0816",
+   "lint_classes": {},
+   "lint_code": 0,
+   "policy": {
+    "content": "exact",
+    "identity": "display-and-safety",
+    "indent": "responsive: column widths place cells",
+    "rows": "exact-hard-rows",
+    "separators": "not-applicable: column cell placement, not word separation"
+   },
+   "product": {
+    "ansi_parity": true,
+    "plain_code": 0,
+    "product_error": false,
+    "stdout_sha256": {
+     "ansi": "335b584524df8f5c0dbfcc716b36df02f80825607ccee53a063602b301767efb",
+     "plain": "4f301021ec42dd8277b90feb646698b0f554b375f07cf91de74a4dd1dae6a9e6"
+    }
+   },
+   "reason": null,
+   "screening": {
+    "extraction": "ok",
+    "glyph_equal": true,
+    "indent_equal": true,
+    "row_equal": true
+   },
+   "source_sha256": "7e439262d515549ba4943095eeaa1ba4312d851d566a8086b63e9ca2ee683974",
+   "status": "pass",
+   "uncovered_axes": [
+    "rows:exact-hard-rows"
+   ]
+  },
+  "column-tail-rows-0050": {
+   "admission": "legal",
+   "axes": {
+    "cohort": "adjacent",
+    "context": "filled",
+    "dialect": "mdoc",
+    "family": "column-tail-rows",
+    "id": "column-tail-rows-0050",
+    "label": "D\\p \\p",
+    "layout": "inline",
+    "suffix": " No AFTER",
+    "width": 8
+   },
+   "cohort": "adjacent",
+   "consumer_covered": [
+    "cli-text-screening",
+    "cli-ansi-screening"
+   ],
+   "failing_axes": [
+    "row_equal",
+    "indent_equal"
+   ],
+   "family": "column-tail-rows",
+   "id": "column-tail-rows-0050",
+   "lint_classes": {},
+   "lint_code": 0,
+   "policy": {
+    "content": "exact",
+    "identity": "display-and-safety",
+    "indent": "responsive: column widths place cells",
+    "rows": "exact-hard-rows",
+    "separators": "not-applicable: column cell placement, not word separation"
+   },
+   "product": {
+    "ansi_parity": true,
+    "plain_code": 0,
+    "product_error": false,
+    "stdout_sha256": {
+     "ansi": "c79d6e01e2260280ea2aa127a8954b83ca91b69bc2ecb28ecfb35e4822b88161",
+     "plain": "91bf146504d018c031997ac87eb159948cc87574fbf8652b6b3ac4c743e1b61c"
+    }
+   },
+   "reason": null,
+   "screening": {
+    "extraction": "ok",
+    "glyph_equal": true,
+    "indent_equal": false,
+    "row_equal": false
+   },
+   "source_sha256": "846c0d60f7c22138ede53a25fbad0de27ff496bef52e05b6254c085a4eb0808d",
+   "status": "fail",
+   "uncovered_axes": [
+    "rows:exact-hard-rows"
+   ]
+  },
+  "cross-owner-words-0096": {
+   "admission": "legal",
+   "axes": {
+    "carrier": "No",
+    "cohort": "expansion",
+    "context": "filled",
+    "dialect": "mdoc",
+    "family": "cross-owner-words",
+    "id": "cross-owner-words-0096",
+    "payload": "Y",
+    "post": "none",
+    "prefix": "\\zP"
+   },
+   "cohort": "expansion",
+   "consumer_covered": [
+    "cli-text-screening",
+    "cli-ansi-screening"
+   ],
+   "failing_axes": [],
+   "family": "cross-owner-words",
+   "id": "cross-owner-words-0096",
+   "lint_classes": {},
+   "lint_code": 0,
+   "policy": {
+    "content": "exact",
+    "identity": "display-and-safety",
+    "indent": "omit-common-margin",
+    "rows": "constrained-events: filled reflow, only authored breaks are hard rows",
+    "separators": "constrained-events"
+   },
+   "product": {
+    "ansi_parity": true,
+    "plain_code": 0,
+    "product_error": false,
+    "stdout_sha256": {
+     "ansi": "cc93cbcbc9d5369fea6b482d133bf8287b9e222156986bb1071b2e06ef61433c",
+     "plain": "da6f7d79fade69a093e447160f4adc262febf7cd30ed2dd282cd200a003c8c74"
+    }
+   },
+   "reason": null,
+   "screening": {
+    "extraction": "ok",
+    "glyph_equal": true,
+    "indent_equal": true,
+    "row_equal": true
+   },
+   "source_sha256": "3d41ce46c5b16878237a0cdfa08b1472be54dea859dbcd47308ec5120d7aac0e",
+   "status": "pass",
+   "uncovered_axes": [
+    "separators"
+   ]
+  },
+  "cross-owner-words-0208": {
+   "admission": "legal",
+   "axes": {
+    "carrier": "No",
+    "cohort": "expansion",
+    "context": "filled",
+    "dialect": "mdoc",
+    "family": "cross-owner-words",
+    "id": "cross-owner-words-0208",
+    "payload": "\\p  Y",
+    "post": "none",
+    "prefix": "\\zP\\z"
+   },
+   "cohort": "expansion",
+   "consumer_covered": [
+    "cli-text-screening",
+    "cli-ansi-screening"
+   ],
+   "failing_axes": [],
+   "family": "cross-owner-words",
+   "id": "cross-owner-words-0208",
+   "lint_classes": {},
+   "lint_code": 0,
+   "policy": {
+    "content": "exact",
+    "identity": "display-and-safety",
+    "indent": "omit-common-margin",
+    "rows": "constrained-events: filled reflow, only authored breaks are hard rows",
+    "separators": "constrained-events"
+   },
+   "product": {
+    "ansi_parity": true,
+    "plain_code": 0,
+    "product_error": false,
+    "stdout_sha256": {
+     "ansi": "da3bfa8079afe67147fb762cb7c3125b9e1b8ee84f56518242fdda36da42dea9",
+     "plain": "7178364154ffb9af5c9a86e6b2695bf5b1f09e2a5dffbbc8c5c535691014e8e3"
+    }
+   },
+   "reason": null,
+   "screening": {
+    "extraction": "ok",
+    "glyph_equal": true,
+    "indent_equal": true,
+    "row_equal": true
+   },
+   "source_sha256": "4c7fede343fd2d463a1da0c9eb6ffd132136c29468754027c59b2480ff11dc6f",
+   "status": "pass",
+   "uncovered_axes": [
+    "separators"
+   ]
+  },
+  "cross-owner-words-0904": {
+   "admission": "legal",
+   "axes": {
+    "carrier": "Lk",
+    "cohort": "expansion",
+    "context": "tag",
+    "dialect": "mdoc",
+    "family": "cross-owner-words",
+    "id": "cross-owner-words-0904",
+    "payload": "Y\\p\\& \\p Z",
+    "post": "none",
+    "prefix": "\\zP"
+   },
+   "cohort": "expansion",
+   "consumer_covered": [
+    "cli-text-screening",
+    "cli-ansi-screening",
+    "cli-json-screening",
+    "cli-markdown-screening"
+   ],
+   "failing_axes": [
+    "glyph_equal",
+    "row_equal",
+    "indent_equal"
+   ],
+   "family": "cross-owner-words",
+   "id": "cross-owner-words-0904",
+   "lint_classes": {},
+   "lint_code": 0,
+   "policy": {
+    "content": "exact",
+    "identity": "rich-inline",
+    "indent": "omit-common-margin",
+    "rows": "exact-hard-rows",
+    "separators": "constrained-events"
+   },
+   "product": {
+    "ansi_parity": true,
+    "json_code": 0,
+    "markdown_code": 0,
+    "marker_leak": false,
+    "plain_code": 0,
+    "product_error": false,
+    "stdout_sha256": {
+     "ansi": "b62500f52a8f2e095c500f577045a7cd6a0c2e9eae6f4c251cb17bb6c8c28c09",
+     "plain": "2f0edc12c18cabaf8a1f7bfe76488cf6e883b4efa5e46f6a48462e8b2908cf10"
+    }
+   },
+   "reason": null,
+   "screening": {
+    "extraction": "ok",
+    "glyph_equal": false,
+    "indent_equal": false,
+    "row_equal": false
+   },
+   "source_sha256": "6ebc6541676f9cbd13c30dd3e740705849dec7ce72216438f45b3357dbe68416",
+   "status": "fail",
+   "uncovered_axes": [
+    "separators",
+    "identity:rich-inline",
+    "rows:exact-hard-rows"
+   ]
+  },
+  "delimiter-arguments-0054": {
+   "admission": "legal",
+   "axes": {
+    "carrier": "No",
+    "cohort": "expansion",
+    "context": "filled",
+    "delimiter": "literal-apostrophe",
+    "dialect": "mdoc",
+    "family": "delimiter-arguments",
+    "id": "delimiter-arguments-0054",
+    "payload": "XY",
+    "prefix": "\\p",
+    "termination": "complete"
+   },
+   "cohort": "expansion",
+   "consumer_covered": [
+    "cli-text-screening",
+    "cli-ansi-screening"
+   ],
+   "failing_axes": [],
+   "family": "delimiter-arguments",
+   "id": "delimiter-arguments-0054",
+   "lint_classes": {},
+   "lint_code": 0,
+   "policy": {
+    "content": "exact",
+    "identity": "display-and-safety",
+    "indent": "omit-common-margin",
+    "rows": "not-applicable: single word expression, no authored row break",
+    "separators": "not-applicable: single delimited expression per operand"
+   },
+   "product": {
+    "ansi_parity": true,
+    "plain_code": 0,
+    "product_error": false,
+    "stdout_sha256": {
+     "ansi": "c72cf1a8d63e00e1c9311d1d59ecf76be1925ef2403400418614dd65bc77a27c",
+     "plain": "76aa05795de441cfa741347c5b629d43ae4bba7b451bee1758db0861c76ee3f1"
+    }
+   },
+   "reason": null,
+   "screening": {
+    "extraction": "ok",
+    "glyph_equal": true,
+    "indent_equal": true,
+    "row_equal": true
+   },
+   "source_sha256": "692da64cb71790dfbaa852ec7a2006c114ef6f7ac35c998b7c59850b9662aeaa",
+   "status": "pass",
+   "uncovered_axes": []
+  },
+  "delimiter-arguments-0198": {
+   "admission": "legal",
+   "axes": {
+    "carrier": "No",
+    "cohort": "expansion",
+    "context": "filled",
+    "delimiter": "literal-pipe",
+    "dialect": "mdoc",
+    "family": "delimiter-arguments",
+    "id": "delimiter-arguments-0198",
+    "payload": "X\\zY",
+    "prefix": "\\p",
+    "termination": "complete"
+   },
+   "cohort": "expansion",
+   "consumer_covered": [
+    "cli-text-screening",
+    "cli-ansi-screening"
+   ],
+   "failing_axes": [],
+   "family": "delimiter-arguments",
+   "id": "delimiter-arguments-0198",
+   "lint_classes": {},
+   "lint_code": 0,
+   "policy": {
+    "content": "exact",
+    "identity": "display-and-safety",
+    "indent": "omit-common-margin",
+    "rows": "not-applicable: single word expression, no authored row break",
+    "separators": "not-applicable: single delimited expression per operand"
+   },
+   "product": {
+    "ansi_parity": true,
+    "plain_code": 0,
+    "product_error": false,
+    "stdout_sha256": {
+     "ansi": "c72cf1a8d63e00e1c9311d1d59ecf76be1925ef2403400418614dd65bc77a27c",
+     "plain": "76aa05795de441cfa741347c5b629d43ae4bba7b451bee1758db0861c76ee3f1"
+    }
+   },
+   "reason": null,
+   "screening": {
+    "extraction": "ok",
+    "glyph_equal": true,
+    "indent_equal": true,
+    "row_equal": true
+   },
+   "source_sha256": "112a567e6d55a1fe768255843438fb1d7cb27a2b959e33a81d1f5cc389d0a7f9",
+   "status": "pass",
+   "uncovered_axes": []
+  },
+  "delimiter-arguments-0378": {
+   "admission": "legal",
+   "axes": {
+    "carrier": "No",
+    "cohort": "expansion",
+    "context": "filled",
+    "delimiter": "escape-aq",
+    "dialect": "mdoc",
+    "family": "delimiter-arguments",
+    "id": "delimiter-arguments-0378",
+    "payload": "XY",
+    "prefix": "\\p",
+    "termination": "complete"
+   },
+   "cohort": "expansion",
+   "consumer_covered": [
+    "cli-text-screening",
+    "cli-ansi-screening"
+   ],
+   "failing_axes": [
+    "glyph_equal",
+    "row_equal",
+    "indent_equal"
+   ],
+   "family": "delimiter-arguments",
+   "id": "delimiter-arguments-0378",
+   "lint_classes": {},
+   "lint_code": 0,
+   "policy": {
+    "content": "exact",
+    "identity": "display-and-safety",
+    "indent": "omit-common-margin",
+    "rows": "not-applicable: single word expression, no authored row break",
+    "separators": "not-applicable: single delimited expression per operand"
+   },
+   "product": {
+    "ansi_parity": true,
+    "plain_code": 0,
+    "product_error": false,
+    "stdout_sha256": {
+     "ansi": "060eb7e4aa41dc9a58dcd98b6937ae7f21021528586bee18bb76313a83914909",
+     "plain": "667821e172b88110fb4786ba5a1a49465e9a2e953fb49b69bbeb962d093bcd01"
+    }
+   },
+   "reason": null,
+   "screening": {
+    "extraction": "ok",
+    "glyph_equal": false,
+    "indent_equal": false,
+    "row_equal": false
+   },
+   "source_sha256": "16189ca7324aaccc377b59a33dd7639cbea19d049fe7a12da0964a54ad71d5a7",
+   "status": "fail",
+   "uncovered_axes": []
+  },
+  "head-control-requests-0116": {
+   "admission": "legal",
+   "axes": {
+    "carrier": "No",
+    "cohort": "adjacent",
+    "context": "filled",
+    "control": ".sp 1\n",
+    "dialect": "mdoc",
+    "family": "head-control-requests",
+    "id": "head-control-requests-0116",
+    "kind": "tag",
+    "label": "LABEL",
+    "width": 8
+   },
+   "cohort": "adjacent",
+   "consumer_covered": [
+    "cli-text-screening",
+    "cli-ansi-screening"
+   ],
+   "failing_axes": [],
+   "family": "head-control-requests",
+   "id": "head-control-requests-0116",
+   "lint_classes": {},
+   "lint_code": 0,
+   "policy": {
+    "content": "exact",
+    "identity": "display-and-safety",
+    "indent": "responsive: list width places HEAD and BODY columns",
+    "rows": "exact-hard-rows",
+    "separators": "constrained-events"
+   },
+   "product": {
+    "ansi_parity": true,
+    "plain_code": 0,
+    "product_error": false,
+    "stdout_sha256": {
+     "ansi": "f70b019073c37dd32d294d6ef643e12a808a6064ad0fa5e71a6019372293afa6",
+     "plain": "6179765d7456c5a7592271f38a191ac07849e6da1c4167934896351a70694f2c"
+    }
+   },
+   "reason": null,
+   "screening": {
+    "extraction": "ok",
+    "glyph_equal": true,
+    "indent_equal": true,
+    "row_equal": true
+   },
+   "source_sha256": "c3491210a73826b3bbe4f888df5625b277ff6a4ba93049f12b76b65b1ee7933c",
+   "status": "pass",
+   "uncovered_axes": [
+    "separators",
+    "rows:exact-hard-rows"
+   ]
+  },
+  "physical-row-handoffs-0210": {
+   "admission": "legal",
+   "axes": {
+    "cohort": "expansion",
+    "context": "definition",
+    "dialect": "mdoc",
+    "empty_input": "empty-operand",
+    "exit": "none",
+    "family": "physical-row-handoffs",
+    "id": "physical-row-handoffs-0210",
+    "input_source_lines": [
+     10
+    ],
+    "tail": "after"
+   },
+   "cohort": "expansion",
+   "consumer_covered": [
+    "cli-text-screening",
+    "cli-ansi-screening"
+   ],
+   "failing_axes": [],
+   "family": "physical-row-handoffs",
+   "id": "physical-row-handoffs-0210",
+   "lint_classes": {},
+   "lint_code": 0,
+   "native_text_event": true,
+   "policy": {
+    "content": "exact",
+    "identity": "display-and-safety",
+    "indent": "omit-common-margin",
+    "rows": "exact-hard-rows",
+    "separators": "constrained-events"
+   },
+   "product": {
+    "ansi_parity": true,
+    "plain_code": 0,
+    "product_error": false,
+    "stdout_sha256": {
+     "ansi": "fa31ed70c6bcc0685d947aee93aaafda626f7d776674879e59d0307ba4d4cf37",
+     "plain": "50eaffae6d7d045f50d666148d3b74e94dba544efe0fa7aa7567e66cabfb2b0c"
+    }
+   },
+   "reason": null,
+   "screening": {
+    "extraction": "ok",
+    "glyph_equal": true,
+    "indent_equal": true,
+    "row_equal": true
+   },
+   "source_sha256": "19694344e2c49915799f02f7c093aad69402e2000dc30ea97495c48bb1e36ac9",
+   "status": "pass",
+   "uncovered_axes": [
+    "separators",
+    "rows:exact-hard-rows"
+   ]
+  },
+  "repeated-link-identities-0078": {
+   "admission": "legal",
+   "axes": {
+    "cohort": "expansion",
+    "context": "filled",
+    "control": "none",
+    "dialect": "mdoc",
+    "family": "repeated-link-identities",
+    "id": "repeated-link-identities-0078",
+    "label": "",
+    "prefix": "\\zP",
+    "targets": "same"
+   },
+   "cohort": "expansion",
+   "consumer_covered": [
+    "cli-text-screening",
+    "cli-ansi-screening",
+    "cli-json-screening",
+    "cli-markdown-screening"
+   ],
+   "failing_axes": [],
+   "family": "repeated-link-identities",
+   "id": "repeated-link-identities-0078",
+   "lint_classes": {},
+   "lint_code": 0,
+   "policy": {
+    "content": "exact",
+    "identity": "rich-inline",
+    "indent": "omit-common-margin",
+    "rows": "constrained-events: filled reflow, only authored breaks are hard rows",
+    "separators": "constrained-events"
+   },
+   "product": {
+    "ansi_parity": true,
+    "json_code": 0,
+    "markdown_code": 0,
+    "marker_leak": false,
+    "plain_code": 0,
+    "product_error": false,
+    "stdout_sha256": {
+     "ansi": "88d1b70fa16355256565f710e207c82b777e90677c7ec47919cb0c2cda223486",
+     "plain": "20582c9dea1deb8632112d38b33f2783ecedcac938f4201ba1d306d9db19440b"
+    }
+   },
+   "reason": null,
+   "screening": {
+    "extraction": "ok",
+    "glyph_equal": true,
+    "indent_equal": true,
+    "row_equal": true
+   },
+   "source_sha256": "26346b426e0855386ab64cea81d5a4f7257611fa44f536dc9f17f48fc1a39780",
+   "status": "pass",
+   "uncovered_axes": [
+    "separators",
+    "identity:rich-inline"
+   ]
+  },
+  "spacing-intervals-0008": {
+   "admission": "legal",
+   "axes": {
+    "body_carrier": "no",
+    "cohort": "expansion",
+    "context": "filled",
+    "control": "sp1",
+    "dialect": "mdoc",
+    "family": "spacing-intervals",
+    "head": "D \\p E",
+    "head_carrier": "No",
+    "id": "spacing-intervals-0008",
+    "kind": "tag",
+    "width": 4
+   },
+   "cohort": "expansion",
+   "consumer_covered": [
+    "cli-text-screening",
+    "cli-ansi-screening"
+   ],
+   "failing_axes": [
+    "row_equal",
+    "indent_equal"
+   ],
+   "family": "spacing-intervals",
+   "id": "spacing-intervals-0008",
+   "lint_classes": {},
+   "lint_code": 0,
+   "policy": {
+    "content": "exact",
+    "identity": "display-and-safety",
+    "indent": "responsive: list width places HEAD and BODY columns",
+    "rows": "exact-hard-rows",
+    "separators": "constrained-events"
+   },
+   "product": {
+    "ansi_parity": true,
+    "plain_code": 0,
+    "product_error": false,
+    "stdout_sha256": {
+     "ansi": "d7b197aa80766599cbd5011c68065b097f0d774bc56c356e26d2d30520ce2c2b",
+     "plain": "27856d56e44500e123ac95875e731438d9886d427b44350fe15e0cab9d576e02"
+    }
+   },
+   "reason": null,
+   "screening": {
+    "extraction": "ok",
+    "glyph_equal": true,
+    "indent_equal": false,
+    "row_equal": false
+   },
+   "source_sha256": "96fb405d4a57a5ebf273af2cd5720d4fce36c11bb9c16f36f7e8a3eebdd95d1c",
+   "status": "fail",
+   "uncovered_axes": [
+    "separators",
+    "rows:exact-hard-rows"
+   ]
+  },
+  "spacing-intervals-0016": {
+   "admission": "legal",
+   "axes": {
+    "body_carrier": "no",
+    "cohort": "expansion",
+    "context": "filled",
+    "control": "sp1-sp2",
+    "dialect": "mdoc",
+    "family": "spacing-intervals",
+    "head": "D \\p E",
+    "head_carrier": "No",
+    "id": "spacing-intervals-0016",
+    "kind": "tag",
+    "width": 4
+   },
+   "cohort": "expansion",
+   "consumer_covered": [
+    "cli-text-screening",
+    "cli-ansi-screening"
+   ],
+   "failing_axes": [
+    "row_equal",
+    "indent_equal"
+   ],
+   "family": "spacing-intervals",
+   "id": "spacing-intervals-0016",
+   "lint_classes": {},
+   "lint_code": 0,
+   "policy": {
+    "content": "exact",
+    "identity": "display-and-safety",
+    "indent": "responsive: list width places HEAD and BODY columns",
+    "rows": "exact-hard-rows",
+    "separators": "constrained-events"
+   },
+   "product": {
+    "ansi_parity": true,
+    "plain_code": 0,
+    "product_error": false,
+    "stdout_sha256": {
+     "ansi": "830680a70f01875ef73ac4d516d7ebfb6f30d7fbd717072449b722e81ce9adea",
+     "plain": "e9afd21203d8e49fd3a6aa44e96db113be900723014a4723eb882a121f2bf907"
+    }
+   },
+   "reason": null,
+   "screening": {
+    "extraction": "ok",
+    "glyph_equal": true,
+    "indent_equal": false,
+    "row_equal": false
+   },
+   "source_sha256": "bef774af55358fd1be121c9f7e697eee11de66fca05641ed824bc013ca4f0c25",
+   "status": "fail",
+   "uncovered_axes": [
+    "separators",
+    "rows:exact-hard-rows"
+   ]
+  },
+  "spacing-intervals-0024": {
+   "admission": "legal",
+   "axes": {
+    "body_carrier": "no",
+    "cohort": "expansion",
+    "context": "filled",
+    "control": "spneg1-sp1",
+    "dialect": "mdoc",
+    "family": "spacing-intervals",
+    "head": "D \\p E",
+    "head_carrier": "No",
+    "id": "spacing-intervals-0024",
+    "kind": "tag",
+    "width": 4
+   },
+   "cohort": "expansion",
+   "consumer_covered": [
+    "cli-text-screening",
+    "cli-ansi-screening"
+   ],
+   "failing_axes": [],
+   "family": "spacing-intervals",
+   "id": "spacing-intervals-0024",
+   "lint_classes": {},
+   "lint_code": 0,
+   "policy": {
+    "content": "exact",
+    "identity": "display-and-safety",
+    "indent": "responsive: list width places HEAD and BODY columns",
+    "rows": "exact-hard-rows",
+    "separators": "constrained-events"
+   },
+   "product": {
+    "ansi_parity": true,
+    "plain_code": 0,
+    "product_error": false,
+    "stdout_sha256": {
+     "ansi": "d7b197aa80766599cbd5011c68065b097f0d774bc56c356e26d2d30520ce2c2b",
+     "plain": "27856d56e44500e123ac95875e731438d9886d427b44350fe15e0cab9d576e02"
+    }
+   },
+   "reason": null,
+   "screening": {
+    "extraction": "ok",
+    "glyph_equal": true,
+    "indent_equal": true,
+    "row_equal": true
+   },
+   "source_sha256": "f5b2a3f8c0a93f793da8cf00b38fe6b80ad6b793e8666a080c4b6279f43d86a0",
+   "status": "pass",
+   "uncovered_axes": [
+    "separators",
+    "rows:exact-hard-rows"
+   ]
+  },
+  "spacing-intervals-0576": {
+   "admission": "legal",
+   "axes": {
+    "body_carrier": "no",
+    "cohort": "expansion",
+    "context": "filled",
+    "control": "br",
+    "dialect": "mdoc",
+    "family": "spacing-intervals",
+    "head": "D \\p E",
+    "head_carrier": "No",
+    "id": "spacing-intervals-0576",
+    "kind": "hang",
+    "width": 4
+   },
+   "cohort": "expansion",
+   "consumer_covered": [
+    "cli-text-screening",
+    "cli-ansi-screening"
+   ],
+   "failing_axes": [
+    "row_equal",
+    "indent_equal"
+   ],
+   "family": "spacing-intervals",
+   "id": "spacing-intervals-0576",
+   "lint_classes": {},
+   "lint_code": 0,
+   "policy": {
+    "content": "exact",
+    "identity": "display-and-safety",
+    "indent": "responsive: list width places HEAD and BODY columns",
+    "rows": "exact-hard-rows",
+    "separators": "constrained-events"
+   },
+   "product": {
+    "ansi_parity": true,
+    "plain_code": 0,
+    "product_error": false,
+    "stdout_sha256": {
+     "ansi": "8a084799a48a2dc2a06c6ff9c589a9cb34f46df71fe053cf8cdf0c23967fa5d1",
+     "plain": "8ad0bcce185cafd199305b7bda5a97f21f88338b10d9c35309536969f34214ec"
+    }
+   },
+   "reason": null,
+   "screening": {
+    "extraction": "ok",
+    "glyph_equal": true,
+    "indent_equal": false,
+    "row_equal": false
+   },
+   "source_sha256": "6259a3e87cd1ccaa979aecf055169629aac1166c9935084a908d5354634b96ab",
+   "status": "fail",
+   "uncovered_axes": [
+    "separators",
+    "rows:exact-hard-rows"
+   ]
+  },
+  "spacing-intervals-0580": {
+   "admission": "legal",
+   "axes": {
+    "body_carrier": "no",
+    "cohort": "expansion",
+    "context": "filled",
+    "control": "sp0",
+    "dialect": "mdoc",
+    "family": "spacing-intervals",
+    "head": "D \\p E",
+    "head_carrier": "No",
+    "id": "spacing-intervals-0580",
+    "kind": "hang",
+    "width": 4
+   },
+   "cohort": "expansion",
+   "consumer_covered": [
+    "cli-text-screening",
+    "cli-ansi-screening"
+   ],
+   "failing_axes": [
+    "row_equal",
+    "indent_equal"
+   ],
+   "family": "spacing-intervals",
+   "id": "spacing-intervals-0580",
+   "lint_classes": {},
+   "lint_code": 0,
+   "policy": {
+    "content": "exact",
+    "identity": "display-and-safety",
+    "indent": "responsive: list width places HEAD and BODY columns",
+    "rows": "exact-hard-rows",
+    "separators": "constrained-events"
+   },
+   "product": {
+    "ansi_parity": true,
+    "plain_code": 0,
+    "product_error": false,
+    "stdout_sha256": {
+     "ansi": "8a084799a48a2dc2a06c6ff9c589a9cb34f46df71fe053cf8cdf0c23967fa5d1",
+     "plain": "8ad0bcce185cafd199305b7bda5a97f21f88338b10d9c35309536969f34214ec"
+    }
+   },
+   "reason": null,
+   "screening": {
+    "extraction": "ok",
+    "glyph_equal": true,
+    "indent_equal": false,
+    "row_equal": false
+   },
+   "source_sha256": "6437746ed020cdbe226edcc7888e0fc5def44bad6e7e42969c6d133c99ada254",
+   "status": "fail",
+   "uncovered_axes": [
+    "separators",
+    "rows:exact-hard-rows"
+   ]
+  },
+  "spacing-reset-contrasts-0000": {
+   "admission": "legal",
+   "axes": {
+    "cohort": "expansion",
+    "context": "filled",
+    "dialect": "mdoc",
+    "family": "spacing-reset-contrasts",
+    "id": "spacing-reset-contrasts-0000",
+    "variant": "wrapper-checkpoint"
+   },
+   "cohort": "expansion",
+   "consumer_covered": [
+    "cli-text-screening",
+    "cli-ansi-screening",
+    "cli-json-screening",
+    "cli-markdown-screening"
+   ],
+   "failing_axes": [],
+   "family": "spacing-reset-contrasts",
+   "id": "spacing-reset-contrasts-0000",
+   "lint_classes": {},
+   "lint_code": 0,
+   "policy": {
+    "content": "exact",
+    "identity": "display-and-safety",
+    "indent": "responsive: list width places HEAD and BODY columns",
+    "rows": "exact-hard-rows",
+    "separators": "constrained-events"
+   },
+   "product": {
+    "ansi_parity": true,
+    "json_code": 0,
+    "markdown_code": 0,
+    "marker_leak": false,
+    "plain_code": 0,
+    "product_error": false,
+    "stdout_sha256": {
+     "ansi": "719e5d8fd7d84373d4bb2cb5ec3b48f66dfa015676d33de37f94f2ea791a1a24",
+     "plain": "027c97b019431ce32f0fa72e2f907ae3467ef93dcb7f97cc5920c21742d6795a"
+    }
+   },
+   "reason": null,
+   "screening": {
+    "extraction": "ok",
+    "glyph_equal": true,
+    "indent_equal": true,
+    "row_equal": true
+   },
+   "source_sha256": "2f77c12643f2e969269ebd32d358cbcba79d84e6cd61b976e5cbed1807081326",
+   "status": "pass",
+   "uncovered_axes": [
+    "separators",
+    "rows:exact-hard-rows"
+   ]
+  },
+  "spacing-reset-contrasts-0001": {
+   "admission": "legal",
+   "axes": {
+    "cohort": "expansion",
+    "context": "filled",
+    "dialect": "mdoc",
+    "family": "spacing-reset-contrasts",
+    "id": "spacing-reset-contrasts-0001",
+    "variant": "empty-operand"
+   },
+   "cohort": "expansion",
+   "consumer_covered": [
+    "cli-text-screening",
+    "cli-ansi-screening"
+   ],
+   "failing_axes": [],
+   "family": "spacing-reset-contrasts",
+   "id": "spacing-reset-contrasts-0001",
+   "lint_classes": {},
+   "lint_code": 0,
+   "policy": {
+    "content": "exact",
+    "identity": "display-and-safety",
+    "indent": "responsive: list width places HEAD and BODY columns",
+    "rows": "exact-hard-rows",
+    "separators": "constrained-events"
+   },
+   "product": {
+    "ansi_parity": true,
+    "plain_code": 0,
+    "product_error": false,
+    "stdout_sha256": {
+     "ansi": "5467b7608b8769c81319155a2548cc353e11d4d3c43ad1eea7d3e9cb9fed599e",
+     "plain": "4d9030c9cbcb3c0eae81f996f8791d55ef02762e9ce674ced5769a9af37ab766"
+    }
+   },
+   "reason": null,
+   "screening": {
+    "extraction": "ok",
+    "glyph_equal": true,
+    "indent_equal": true,
+    "row_equal": true
+   },
+   "source_sha256": "a64944cc1408c3d27b63c8e09fd053f0f2c7de5a68138900df31ed84ae0efd17",
+   "status": "pass",
+   "uncovered_axes": [
+    "separators",
+    "rows:exact-hard-rows"
+   ]
+  },
+  "spacing-reset-contrasts-0002": {
+   "admission": "legal",
+   "axes": {
+    "cohort": "expansion",
+    "context": "filled",
+    "dialect": "mdoc",
+    "family": "spacing-reset-contrasts",
+    "id": "spacing-reset-contrasts-0002",
+    "variant": "zero-width-word"
+   },
+   "cohort": "expansion",
+   "consumer_covered": [
+    "cli-text-screening",
+    "cli-ansi-screening"
+   ],
+   "failing_axes": [],
+   "family": "spacing-reset-contrasts",
+   "id": "spacing-reset-contrasts-0002",
+   "lint_classes": {},
+   "lint_code": 0,
+   "policy": {
+    "content": "exact",
+    "identity": "display-and-safety",
+    "indent": "responsive: list width places HEAD and BODY columns",
+    "rows": "exact-hard-rows",
+    "separators": "constrained-events"
+   },
+   "product": {
+    "ansi_parity": true,
+    "plain_code": 0,
+    "product_error": false,
+    "stdout_sha256": {
+     "ansi": "02774bb6f67eceae27497e281549b67cf7d761094a747edd5e82707a97bf8199",
+     "plain": "c6dbb79ca99b5a9f63755f06ebfc6a4e8188f0f2c18c9147d86845aee977dc13"
+    }
+   },
+   "reason": null,
+   "screening": {
+    "extraction": "ok",
+    "glyph_equal": true,
+    "indent_equal": true,
+    "row_equal": true
+   },
+   "source_sha256": "5c204e312ac1c6b9a69d7d00b50487803242b12ee5710de341d023b724b94b72",
+   "status": "pass",
+   "uncovered_axes": [
+    "separators",
+    "rows:exact-hard-rows"
+   ]
+  },
+  "wrapper-entries-0004": {
+   "admission": "legal",
+   "axes": {
+    "cohort": "expansion",
+    "dialect": "mdoc",
+    "family": "wrapper-entries",
+    "id": "wrapper-entries-0004",
+    "post": "none",
+    "prefix": "\\zP",
+    "wrapper": "Lk"
+   },
+   "cohort": "expansion",
+   "consumer_covered": [
+    "cli-text-screening",
+    "cli-ansi-screening",
+    "cli-json-screening",
+    "cli-markdown-screening"
+   ],
+   "failing_axes": [],
+   "family": "wrapper-entries",
+   "id": "wrapper-entries-0004",
+   "lint_classes": {},
+   "lint_code": 0,
+   "policy": {
+    "content": "exact",
+    "identity": "rich-inline",
+    "indent": "omit-common-margin",
+    "rows": "constrained-events: filled context, authored breaks only",
+    "separators": "constrained-events"
+   },
+   "product": {
+    "ansi_parity": true,
+    "json_code": 0,
+    "markdown_code": 0,
+    "marker_leak": false,
+    "plain_code": 0,
+    "product_error": false,
+    "stdout_sha256": {
+     "ansi": "e18c90037367fc7f6ff3aac720a1162bc2f1fa28c6d0dbf4ab8e5d4269c9fc91",
+     "plain": "2669642765b3a95d41c1656832a7cb76799cce00cc97509c0ad3a78926d29c9c"
+    }
+   },
+   "reason": null,
+   "screening": {
+    "extraction": "ok",
+    "glyph_equal": true,
+    "indent_equal": true,
+    "row_equal": true
+   },
+   "source_sha256": "89c20d4ac808a6234986d143f69ae42b9f1370329224a05377a7cb30ce02b4be",
+   "status": "pass",
+   "uncovered_axes": [
+    "separators",
+    "identity:rich-inline"
+   ]
+  }
+ },
+ "coverage": [
+  {
+   "axes": [
+    "content",
+    "separators",
+    "identity"
+   ],
+   "cases": [
+    {
+     "admission": "legal",
+     "case_id": "cell-ownership-0080",
+     "role": "anchor",
+     "selection": "rr01-anchor-a0080",
+     "status": "fail"
+    },
+    {
+     "admission": "legal",
+     "case_id": "cross-owner-words-0096",
+     "role": "rr-adjacent-positive",
+     "selection": "rr01-adjacent-positive",
+     "status": "pass"
+    }
+   ],
+   "consumers": [
+    "cli-text-screening",
+    "cli-ansi-screening",
+    "cli-json-screening",
+    "cli-markdown-screening",
+    "oracle-five-profiles"
+   ],
+   "transition": "W03 pending glyph crosses owner entry (positive)"
+  },
+  {
+   "axes": [
+    "content",
+    "identity"
+   ],
+   "cases": [
+    {
+     "admission": "legal",
+     "case_id": "cell-ownership-0212",
+     "role": "anchor",
+     "selection": "rr01-anchor-a0212",
+     "status": "fail"
+    },
+    {
+     "admission": "legal",
+     "case_id": "cross-owner-words-0208",
+     "role": "rr-adjacent-negative",
+     "selection": "rr01-adjacent-negative",
+     "status": "pass"
+    }
+   ],
+   "consumers": [
+    "cli-text-screening",
+    "cli-ansi-screening",
+    "cli-json-screening",
+    "cli-markdown-screening",
+    "oracle-five-profiles"
+   ],
+   "transition": "W03 rejected suffix must not revive (negative)"
+  },
+  {
+   "axes": [
+    "rows",
+    "content"
+   ],
+   "cases": [
+    {
+     "admission": "legal",
+     "case_id": "column-positions-0300",
+     "role": "rr-adjacent-positive",
+     "selection": "rr02-adjacent-positive",
+     "status": "fail"
+    },
+    {
+     "admission": "legal",
+     "case_id": "column-tail-rows-0050",
+     "role": "representative",
+     "selection": "representative-column-tail-rows",
+     "status": "fail"
+    }
+   ],
+   "consumers": [
+    "cli-text-screening",
+    "cli-ansi-screening",
+    "cli-json-screening",
+    "cli-markdown-screening",
+    "oracle-five-profiles"
+   ],
+   "transition": "C01 authored hard row separates column cells (positive)"
+  },
+  {
+   "axes": [
+    "rows",
+    "indent"
+   ],
+   "cases": [
+    {
+     "admission": "legal",
+     "case_id": "column-positions-0816",
+     "role": "rr-adjacent-negative",
+     "selection": "rr02-adjacent-negative",
+     "status": "pass"
+    }
+   ],
+   "consumers": [
+    "cli-text-screening",
+    "cli-ansi-screening",
+    "cli-json-screening",
+    "cli-markdown-screening",
+    "oracle-five-profiles"
+   ],
+   "transition": "C01 width-only placement keeps one row (negative)"
+  },
+  {
+   "axes": [
+    "rows",
+    "separators"
+   ],
+   "cases": [
+    {
+     "admission": "legal",
+     "case_id": "spacing-intervals-0008",
+     "role": "rr-adjacent-positive",
+     "selection": "rr03-adjacent-positive",
+     "status": "fail"
+    },
+    {
+     "admission": "legal",
+     "case_id": "spacing-intervals-0016",
+     "role": "representative",
+     "selection": "representative-spacing-intervals",
+     "status": "fail"
+    }
+   ],
+   "consumers": [
+    "cli-text-screening",
+    "cli-ansi-screening",
+    "cli-json-screening",
+    "cli-markdown-screening",
+    "oracle-five-profiles"
+   ],
+   "transition": "V01 explicit vspace counts blank rows (positive)"
+  },
+  {
+   "axes": [
+    "rows"
+   ],
+   "cases": [
+    {
+     "admission": "legal",
+     "case_id": "spacing-intervals-0024",
+     "role": "rr-adjacent-negative",
+     "selection": "rr03-adjacent-negative",
+     "status": "pass"
+    }
+   ],
+   "consumers": [
+    "cli-text-screening",
+    "cli-ansi-screening",
+    "cli-json-screening",
+    "cli-markdown-screening",
+    "oracle-five-profiles"
+   ],
+   "transition": "V01 negative spacing debt cancels request (negative)"
+  },
+  {
+   "axes": [
+    "separators",
+    "rows"
+   ],
+   "cases": [
+    {
+     "admission": "legal",
+     "case_id": "spacing-intervals-0576",
+     "role": "rr-adjacent-positive",
+     "selection": "rr04-adjacent-positive",
+     "status": "fail"
+    }
+   ],
+   "consumers": [
+    "cli-text-screening",
+    "cli-ansi-screening",
+    "cli-json-screening",
+    "cli-markdown-screening",
+    "oracle-five-profiles"
+   ],
+   "transition": "G01 head/body word boundary after control (positive)"
+  },
+  {
+   "axes": [
+    "separators"
+   ],
+   "cases": [
+    {
+     "admission": "legal",
+     "case_id": "spacing-intervals-0580",
+     "role": "rr-adjacent-negative",
+     "selection": "rr04-adjacent-negative",
+     "status": "fail"
+    }
+   ],
+   "consumers": [
+    "cli-text-screening",
+    "cli-ansi-screening",
+    "cli-json-screening",
+    "cli-markdown-screening",
+    "oracle-five-profiles"
+   ],
+   "transition": "G01 zero-space run-in is no glue (negative)"
+  },
+  {
+   "axes": [
+    "content",
+    "identity"
+   ],
+   "cases": [
+    {
+     "admission": "legal",
+     "case_id": "cell-ownership-0030",
+     "role": "anchor",
+     "selection": "rr05-anchor-a0030",
+     "status": "fail"
+    },
+    {
+     "admission": "legal",
+     "case_id": "delimiter-arguments-0378",
+     "role": "rr-adjacent-positive",
+     "selection": "rr05-adjacent-positive",
+     "status": "fail"
+    }
+   ],
+   "consumers": [
+    "cli-text-screening",
+    "cli-ansi-screening",
+    "cli-json-screening",
+    "cli-markdown-screening",
+    "oracle-five-profiles"
+   ],
+   "transition": "E01 escaped delimiter tail bound (positive)"
+  },
+  {
+   "axes": [
+    "content"
+   ],
+   "cases": [
+    {
+     "admission": "legal",
+     "case_id": "delimiter-arguments-0054",
+     "role": "rr-adjacent-negative",
+     "selection": "rr05-adjacent-negative",
+     "status": "pass"
+    }
+   ],
+   "consumers": [
+    "cli-text-screening",
+    "cli-ansi-screening",
+    "cli-json-screening",
+    "cli-markdown-screening",
+    "oracle-five-profiles"
+   ],
+   "transition": "E01 literal delimiter stays literal (negative)"
+  },
+  {
+   "axes": [
+    "content",
+    "separators",
+    "identity"
+   ],
+   "cases": [
+    {
+     "admission": "legal",
+     "case_id": "wrapper-entries-0004",
+     "role": "representative",
+     "selection": "representative-wrapper-entries",
+     "status": "pass"
+    }
+   ],
+   "consumers": [
+    "cli-text-screening",
+    "cli-ansi-screening",
+    "cli-json-screening",
+    "cli-markdown-screening",
+    "oracle-five-profiles"
+   ],
+   "transition": "W04/W05 wrapper entry without extra word execution"
+  },
+  {
+   "axes": [
+    "identity",
+    "content"
+   ],
+   "cases": [
+    {
+     "admission": "legal",
+     "case_id": "repeated-link-identities-0078",
+     "role": "representative",
+     "selection": "representative-repeated-link-identities",
+     "status": "pass"
+    }
+   ],
+   "consumers": [
+    "cli-text-screening",
+    "cli-ansi-screening",
+    "cli-json-screening",
+    "cli-markdown-screening",
+    "oracle-five-profiles"
+   ],
+   "transition": "XI authored occurrences keep independent identities"
+  },
+  {
+   "axes": [
+    "rows",
+    "content"
+   ],
+   "cases": [
+    {
+     "admission": "legal",
+     "case_id": "physical-row-handoffs-0210",
+     "role": "representative",
+     "selection": "representative-physical-row-handoffs",
+     "status": "pass"
+    }
+   ],
+   "consumers": [
+    "cli-text-screening",
+    "cli-ansi-screening",
+    "cli-json-screening",
+    "cli-markdown-screening",
+    "oracle-five-profiles"
+   ],
+   "transition": "XR empty/zero-width input physical row handoff"
+  },
+  {
+   "axes": [
+    "rows",
+    "separators"
+   ],
+   "cases": [
+    {
+     "admission": "legal",
+     "case_id": "spacing-reset-contrasts-0000",
+     "role": "derived-contrast",
+     "selection": "derived-reset-contrast-wrapper-checkpoint",
+     "status": "pass"
+    },
+    {
+     "admission": "legal",
+     "case_id": "spacing-reset-contrasts-0001",
+     "role": "derived-contrast",
+     "selection": "derived-reset-contrast-empty-operand",
+     "status": "pass"
+    },
+    {
+     "admission": "legal",
+     "case_id": "spacing-reset-contrasts-0002",
+     "role": "derived-contrast",
+     "selection": "derived-reset-contrast-zero-width-word",
+     "status": "pass"
+    }
+   ],
+   "consumers": [
+    "cli-text-screening",
+    "cli-ansi-screening",
+    "cli-json-screening",
+    "cli-markdown-screening",
+    "oracle-five-profiles"
+   ],
+   "transition": "XV-derived skipvsp reset by non-word states"
+  }
+ ],
+ "empty_text_witness": {
+  "fact": "Lk empty label keeps an empty TEXT node in the pristine tree",
+  "fixture": "formatter-1536",
+  "matrix": "crates/mant-engine/tests/roff_lowering/native_execution/fixtures/native_formatter_matrix.jsonl"
+ },
+ "families": {
+  "cell-ownership": {
+   "admission": {
+    "legal": 1272,
+    "native-diagnostics": 72
+   },
+   "axis_asserted": {
+    "content": {
+     "exact": 1344
+    },
+    "identity": {
+     "display-and-safety": 896,
+     "rich-inline": 448
+    },
+    "indent": {
+     "omit-common-margin": 1344
+    },
+    "rows": {
+     "constrained-events": 336,
+     "exact-hard-rows": 1008
+    },
+    "separators": {
+     "constrained-events": 1344
+    }
+   },
+   "cohort": "adjacent",
+   "consumer_covered": {
+    "cli-ansi-screening": 1344,
+    "cli-json-screening": 448,
+    "cli-markdown-screening": 448,
+    "cli-text-screening": 1344
+   },
+   "fail": 208,
+   "failing": {
+    "glyph_equal": 99,
+    "indent_equal": 208,
+    "row_equal": 126
+   },
+   "generated": 1344,
+   "na_reasons": {},
+   "pass": 1118,
+   "review": 18,
+   "screening": {
+    "glyph_equal=False": 99,
+    "glyph_equal=True": 1245,
+    "indent_equal=False": 208,
+    "indent_equal=True": 1136,
+    "row_equal=False": 126,
+    "row_equal=True": 1218
+   },
+   "source_unique": 1344,
+   "uncovered": 1344
+  },
+  "column-bodies": {
+   "admission": {
+    "legal": 180
+   },
+   "axis_asserted": {
+    "content": {
+     "exact": 180
+    },
+    "identity": {
+     "display-and-safety": 90,
+     "rich-inline": 90
+    },
+    "indent": {
+     "omit-common-margin": 180
+    },
+    "rows": {
+     "constrained-events": 180
+    },
+    "separators": {
+     "constrained-events": 180
+    }
+   },
+   "cohort": "replay",
+   "consumer_covered": {
+    "cli-ansi-screening": 180,
+    "cli-json-screening": 90,
+    "cli-markdown-screening": 90,
+    "cli-text-screening": 180
+   },
+   "fail": 6,
+   "failing": {
+    "indent_equal": 6,
+    "row_equal": 6
+   },
+   "generated": 180,
+   "na_reasons": {},
+   "pass": 174,
+   "review": 0,
+   "screening": {
+    "glyph_equal=True": 180,
+    "indent_equal=False": 6,
+    "indent_equal=True": 174,
+    "row_equal=False": 6,
+    "row_equal=True": 174
+   },
+   "source_unique": 120,
+   "uncovered": 180
+  },
+  "column-positions": {
+   "admission": {
+    "legal": 864
+   },
+   "axis_asserted": {
+    "content": {
+     "exact": 864
+    },
+    "identity": {
+     "display-and-safety": 432,
+     "rich-inline": 432
+    },
+    "indent": {
+     "responsive": 864
+    },
+    "rows": {
+     "exact-hard-rows": 864
+    },
+    "separators": {
+     "not-applicable": 864
+    }
+   },
+   "cohort": "expansion",
+   "consumer_covered": {
+    "cli-ansi-screening": 864,
+    "cli-json-screening": 432,
+    "cli-markdown-screening": 432,
+    "cli-text-screening": 864
+   },
+   "fail": 114,
+   "failing": {
+    "indent_equal": 114,
+    "row_equal": 108
+   },
+   "generated": 864,
+   "na_reasons": {},
+   "pass": 750,
+   "review": 0,
+   "screening": {
+    "glyph_equal=True": 864,
+    "indent_equal=False": 114,
+    "indent_equal=True": 750,
+    "row_equal=False": 108,
+    "row_equal=True": 756
+   },
+   "source_unique": 864,
+   "uncovered": 864
+  },
+  "column-tail-rows": {
+   "admission": {
+    "legal": 144
+   },
+   "axis_asserted": {
+    "content": {
+     "exact": 144
+    },
+    "identity": {
+     "display-and-safety": 144
+    },
+    "indent": {
+     "responsive": 144
+    },
+    "rows": {
+     "exact-hard-rows": 144
+    },
+    "separators": {
+     "not-applicable": 144
+    }
+   },
+   "cohort": "adjacent",
+   "consumer_covered": {
+    "cli-ansi-screening": 144,
+    "cli-text-screening": 144
+   },
+   "fail": 36,
+   "failing": {
+    "indent_equal": 36,
+    "row_equal": 30
+   },
+   "generated": 144,
+   "na_reasons": {},
+   "pass": 108,
+   "review": 0,
+   "screening": {
+    "glyph_equal=True": 144,
+    "indent_equal=False": 36,
+    "indent_equal=True": 108,
+    "row_equal=False": 30,
+    "row_equal=True": 114
+   },
+   "source_unique": 144,
+   "uncovered": 144
+  },
+  "control-lifecycle": {
+   "admission": {
+    "legal": 168,
+    "native-diagnostics": 48
+   },
+   "axis_asserted": {
+    "content": {
+     "exact": 216
+    },
+    "identity": {
+     "display-and-safety": 216
+    },
+    "indent": {
+     "omit-common-margin": 216
+    },
+    "rows": {
+     "exact-hard-rows": 216
+    },
+    "separators": {
+     "constrained-events": 216
+    }
+   },
+   "cohort": "replay",
+   "consumer_covered": {
+    "cli-ansi-screening": 216,
+    "cli-text-screening": 216
+   },
+   "fail": 0,
+   "failing": {},
+   "generated": 216,
+   "na_reasons": {},
+   "pass": 144,
+   "review": 72,
+   "screening": {
+    "extraction-not-applicable": 24,
+    "glyph_equal=True": 192,
+    "indent_equal=True": 192,
+    "row_equal=True": 192
+   },
+   "source_unique": 216,
+   "uncovered": 216
+  },
+  "cross-owner-words": {
+   "admission": {
+    "legal": 1152
+   },
+   "axis_asserted": {
+    "content": {
+     "exact": 1152
+    },
+    "identity": {
+     "display-and-safety": 768,
+     "rich-inline": 384
+    },
+    "indent": {
+     "omit-common-margin": 1152
+    },
+    "rows": {
+     "constrained-events": 288,
+     "exact-hard-rows": 864
+    },
+    "separators": {
+     "constrained-events": 1152
+    }
+   },
+   "cohort": "expansion",
+   "consumer_covered": {
+    "cli-ansi-screening": 1152,
+    "cli-json-screening": 384,
+    "cli-markdown-screening": 384,
+    "cli-text-screening": 1152
+   },
+   "fail": 243,
+   "failing": {
+    "glyph_equal": 36,
+    "indent_equal": 243,
+    "row_equal": 65
+   },
+   "generated": 1152,
+   "na_reasons": {},
+   "pass": 909,
+   "review": 0,
+   "screening": {
+    "glyph_equal=False": 36,
+    "glyph_equal=True": 1116,
+    "indent_equal=False": 243,
+    "indent_equal=True": 909,
+    "row_equal=False": 65,
+    "row_equal=True": 1087
+   },
+   "source_unique": 1152,
+   "uncovered": 1152
+  },
+  "delimiter-arguments": {
+   "admission": {
+    "legal": 180,
+    "recovery": 360
+   },
+   "axis_asserted": {
+    "content": {
+     "exact": 180,
+     "recovery": 360
+    },
+    "identity": {
+     "display-and-safety": 360,
+     "rich-inline": 180
+    },
+    "indent": {
+     "omit-common-margin": 540
+    },
+    "rows": {
+     "not-applicable": 540
+    },
+    "separators": {
+     "not-applicable": 540
+    }
+   },
+   "cohort": "expansion",
+   "consumer_covered": {
+    "cli-ansi-screening": 540,
+    "cli-json-screening": 180,
+    "cli-markdown-screening": 180,
+    "cli-text-screening": 540
+   },
+   "fail": 168,
+   "failing": {
+    "glyph_equal": 168,
+    "indent_equal": 168,
+    "row_equal": 168
+   },
+   "generated": 540,
+   "na_reasons": {},
+   "pass": 108,
+   "review": 264,
+   "screening": {
+    "glyph_equal=False": 168,
+    "glyph_equal=True": 372,
+    "indent_equal=False": 168,
+    "indent_equal=True": 372,
+    "row_equal=False": 168,
+    "row_equal=True": 372
+   },
+   "source_unique": 540,
+   "uncovered": 180
+  },
+  "head-control-requests": {
+   "admission": {
+    "legal": 360,
+    "native-diagnostics": 60
+   },
+   "axis_asserted": {
+    "content": {
+     "exact": 420
+    },
+    "identity": {
+     "display-and-safety": 210,
+     "rich-inline": 210
+    },
+    "indent": {
+     "responsive": 420
+    },
+    "rows": {
+     "exact-hard-rows": 420
+    },
+    "separators": {
+     "constrained-events": 420
+    }
+   },
+   "cohort": "adjacent",
+   "consumer_covered": {
+    "cli-ansi-screening": 420,
+    "cli-json-screening": 210,
+    "cli-markdown-screening": 210,
+    "cli-text-screening": 420
+   },
+   "fail": 174,
+   "failing": {
+    "indent_equal": 174,
+    "row_equal": 51
+   },
+   "generated": 420,
+   "na_reasons": {},
+   "pass": 212,
+   "review": 34,
+   "screening": {
+    "glyph_equal=True": 420,
+    "indent_equal=False": 174,
+    "indent_equal=True": 246,
+    "row_equal=False": 51,
+    "row_equal=True": 369
+   },
+   "source_unique": 420,
+   "uncovered": 420
+  },
+  "head-requests": {
+   "admission": {
+    "legal": 144
+   },
+   "axis_asserted": {
+    "content": {
+     "exact": 144
+    },
+    "identity": {
+     "display-and-safety": 72,
+     "rich-inline": 72
+    },
+    "indent": {
+     "omit-common-margin": 144
+    },
+    "rows": {
+     "constrained-events": 144
+    },
+    "separators": {
+     "constrained-events": 144
+    }
+   },
+   "cohort": "replay",
+   "consumer_covered": {
+    "cli-ansi-screening": 144,
+    "cli-json-screening": 72,
+    "cli-markdown-screening": 72,
+    "cli-text-screening": 144
+   },
+   "fail": 51,
+   "failing": {
+    "indent_equal": 51,
+    "row_equal": 10
+   },
+   "generated": 144,
+   "na_reasons": {},
+   "pass": 93,
+   "review": 0,
+   "screening": {
+    "glyph_equal=True": 144,
+    "indent_equal=False": 51,
+    "indent_equal=True": 93,
+    "row_equal=False": 10,
+    "row_equal=True": 134
+   },
+   "source_unique": 144,
+   "uncovered": 144
+  },
+  "independent-links": {
+   "admission": {
+    "legal": 45,
+    "native-diagnostics": 9
+   },
+   "axis_asserted": {
+    "content": {
+     "exact": 54
+    },
+    "identity": {
+     "rich-inline": 54
+    },
+    "indent": {
+     "omit-common-margin": 54
+    },
+    "rows": {
+     "constrained-events": 9,
+     "exact-hard-rows": 45
+    },
+    "separators": {
+     "constrained-events": 54
+    }
+   },
+   "cohort": "replay",
+   "consumer_covered": {
+    "cli-ansi-screening": 54,
+    "cli-json-screening": 54,
+    "cli-markdown-screening": 54,
+    "cli-text-screening": 54
+   },
+   "fail": 2,
+   "failing": {
+    "indent_equal": 2
+   },
+   "generated": 54,
+   "na_reasons": {},
+   "pass": 43,
+   "review": 9,
+   "screening": {
+    "glyph_equal=True": 54,
+    "indent_equal=False": 2,
+    "indent_equal=True": 52,
+    "row_equal=True": 54
+   },
+   "source_unique": 54,
+   "uncovered": 54
+  },
+  "link-identities": {
+   "admission": {
+    "legal": 231,
+    "native-diagnostics": 33
+   },
+   "axis_asserted": {
+    "content": {
+     "exact": 264
+    },
+    "identity": {
+     "rich-inline": 264
+    },
+    "indent": {
+     "omit-common-margin": 264
+    },
+    "rows": {
+     "constrained-events": 33,
+     "exact-hard-rows": 231
+    },
+    "separators": {
+     "constrained-events": 264
+    }
+   },
+   "cohort": "replay",
+   "consumer_covered": {
+    "cli-ansi-screening": 264,
+    "cli-json-screening": 264,
+    "cli-markdown-screening": 264,
+    "cli-text-screening": 264
+   },
+   "fail": 15,
+   "failing": {
+    "indent_equal": 15,
+    "row_equal": 5
+   },
+   "generated": 264,
+   "na_reasons": {},
+   "pass": 217,
+   "review": 32,
+   "screening": {
+    "glyph_equal=True": 264,
+    "indent_equal=False": 15,
+    "indent_equal=True": 249,
+    "row_equal=False": 5,
+    "row_equal=True": 259
+   },
+   "source_unique": 264,
+   "uncovered": 264
+  },
+  "link-joins": {
+   "admission": {
+    "legal": 120,
+    "native-diagnostics": 24
+   },
+   "axis_asserted": {
+    "content": {
+     "exact": 144
+    },
+    "identity": {
+     "rich-inline": 144
+    },
+    "indent": {
+     "omit-common-margin": 144
+    },
+    "rows": {
+     "constrained-events": 24,
+     "exact-hard-rows": 120
+    },
+    "separators": {
+     "constrained-events": 144
+    }
+   },
+   "cohort": "replay",
+   "consumer_covered": {
+    "cli-ansi-screening": 144,
+    "cli-json-screening": 144,
+    "cli-markdown-screening": 144,
+    "cli-text-screening": 144
+   },
+   "fail": 1,
+   "failing": {
+    "indent_equal": 1,
+    "row_equal": 1
+   },
+   "generated": 144,
+   "na_reasons": {},
+   "pass": 120,
+   "review": 23,
+   "screening": {
+    "glyph_equal=True": 144,
+    "indent_equal=False": 1,
+    "indent_equal=True": 143,
+    "row_equal=False": 1,
+    "row_equal=True": 143
+   },
+   "source_unique": 144,
+   "uncovered": 144
+  },
+  "macro-operands": {
+   "admission": {
+    "legal": 384,
+    "native-diagnostics": 48,
+    "recovery": 48
+   },
+   "axis_asserted": {
+    "content": {
+     "exact": 480
+    },
+    "identity": {
+     "display-and-safety": 400,
+     "rich-inline": 80
+    },
+    "indent": {
+     "omit-common-margin": 480
+    },
+    "rows": {
+     "exact-hard-rows": 480
+    },
+    "separators": {
+     "constrained-events": 480
+    }
+   },
+   "cohort": "replay",
+   "consumer_covered": {
+    "cli-ansi-screening": 480,
+    "cli-json-screening": 160,
+    "cli-markdown-screening": 160,
+    "cli-text-screening": 480
+   },
+   "fail": 60,
+   "failing": {
+    "glyph_equal": 48,
+    "indent_equal": 60,
+    "row_equal": 54
+   },
+   "generated": 480,
+   "na_reasons": {},
+   "pass": 378,
+   "review": 42,
+   "screening": {
+    "glyph_equal=False": 48,
+    "glyph_equal=True": 432,
+    "indent_equal=False": 60,
+    "indent_equal=True": 420,
+    "row_equal=False": 54,
+    "row_equal=True": 426
+   },
+   "source_unique": 480,
+   "uncovered": 480
+  },
+  "output-owners": {
+   "admission": {
+    "legal": 36,
+    "native-diagnostics": 9,
+    "recovery": 9
+   },
+   "axis_asserted": {
+    "content": {
+     "exact": 54
+    },
+    "identity": {
+     "display-and-safety": 54
+    },
+    "indent": {
+     "omit-common-margin": 54
+    },
+    "rows": {
+     "exact-hard-rows": 54
+    },
+    "separators": {
+     "constrained-events": 54
+    }
+   },
+   "cohort": "replay",
+   "consumer_covered": {
+    "cli-ansi-screening": 54,
+    "cli-text-screening": 54
+   },
+   "fail": 3,
+   "failing": {
+    "indent_equal": 3,
+    "row_equal": 3
+   },
+   "generated": 54,
+   "na_reasons": {},
+   "pass": 36,
+   "review": 15,
+   "screening": {
+    "glyph_equal=True": 54,
+    "indent_equal=False": 3,
+    "indent_equal=True": 51,
+    "row_equal=False": 3,
+    "row_equal=True": 51
+   },
+   "source_unique": 54,
+   "uncovered": 54
+  },
+  "physical-row-handoffs": {
+   "admission": {
+    "legal": 189,
+    "native-diagnostics": 51
+   },
+   "axis_asserted": {
+    "content": {
+     "exact": 240
+    },
+    "identity": {
+     "display-and-safety": 240
+    },
+    "indent": {
+     "omit-common-margin": 240
+    },
+    "rows": {
+     "exact-hard-rows": 240
+    },
+    "separators": {
+     "constrained-events": 240
+    }
+   },
+   "cohort": "expansion",
+   "consumer_covered": {
+    "cli-ansi-screening": 240,
+    "cli-text-screening": 240
+   },
+   "fail": 9,
+   "failing": {
+    "glyph_equal": 2,
+    "indent_equal": 9,
+    "row_equal": 9
+   },
+   "generated": 240,
+   "na_reasons": {},
+   "pass": 180,
+   "review": 51,
+   "screening": {
+    "glyph_equal=False": 2,
+    "glyph_equal=True": 238,
+    "indent_equal=False": 9,
+    "indent_equal=True": 231,
+    "row_equal=False": 9,
+    "row_equal=True": 231
+   },
+   "source_unique": 240,
+   "uncovered": 240
+  },
+  "repeated-link-identities": {
+   "admission": {
+    "legal": 192,
+    "native-diagnostics": 96
+   },
+   "axis_asserted": {
+    "content": {
+     "exact": 288
+    },
+    "identity": {
+     "rich-inline": 288
+    },
+    "indent": {
+     "omit-common-margin": 192,
+     "responsive": 96
+    },
+    "rows": {
+     "constrained-events": 96,
+     "exact-hard-rows": 192
+    },
+    "separators": {
+     "constrained-events": 288
+    }
+   },
+   "cohort": "expansion",
+   "consumer_covered": {
+    "cli-ansi-screening": 288,
+    "cli-json-screening": 288,
+    "cli-markdown-screening": 288,
+    "cli-text-screening": 288
+   },
+   "fail": 18,
+   "failing": {
+    "indent_equal": 18,
+    "row_equal": 18
+   },
+   "generated": 288,
+   "na_reasons": {},
+   "pass": 180,
+   "review": 90,
+   "screening": {
+    "glyph_equal=True": 288,
+    "indent_equal=False": 18,
+    "indent_equal=True": 270,
+    "row_equal=False": 18,
+    "row_equal=True": 270
+   },
+   "source_unique": 288,
+   "uncovered": 288
+  },
+  "shared-words": {
+   "admission": {
+    "legal": 144
+   },
+   "axis_asserted": {
+    "content": {
+     "exact": 144
+    },
+    "identity": {
+     "display-and-safety": 72,
+     "rich-inline": 72
+    },
+    "indent": {
+     "omit-common-margin": 144
+    },
+    "rows": {
+     "constrained-events": 144
+    },
+    "separators": {
+     "constrained-events": 144
+    }
+   },
+   "cohort": "replay",
+   "consumer_covered": {
+    "cli-ansi-screening": 144,
+    "cli-json-screening": 72,
+    "cli-markdown-screening": 72,
+    "cli-text-screening": 144
+   },
+   "fail": 0,
+   "failing": {},
+   "generated": 144,
+   "na_reasons": {},
+   "pass": 144,
+   "review": 0,
+   "screening": {
+    "glyph_equal=True": 144,
+    "indent_equal=True": 144,
+    "row_equal=True": 144
+   },
+   "source_unique": 144,
+   "uncovered": 144
+  },
+  "spacing-intervals": {
+   "admission": {
+    "legal": 1152
+   },
+   "axis_asserted": {
+    "content": {
+     "exact": 1152
+    },
+    "identity": {
+     "display-and-safety": 288,
+     "rich-inline": 864
+    },
+    "indent": {
+     "responsive": 1152
+    },
+    "rows": {
+     "exact-hard-rows": 1152
+    },
+    "separators": {
+     "constrained-events": 1152
+    }
+   },
+   "cohort": "expansion",
+   "consumer_covered": {
+    "cli-ansi-screening": 1152,
+    "cli-json-screening": 864,
+    "cli-markdown-screening": 864,
+    "cli-text-screening": 1152
+   },
+   "fail": 480,
+   "failing": {
+    "indent_equal": 480,
+    "row_equal": 148
+   },
+   "generated": 1152,
+   "na_reasons": {},
+   "pass": 672,
+   "review": 0,
+   "screening": {
+    "glyph_equal=True": 1152,
+    "indent_equal=False": 480,
+    "indent_equal=True": 672,
+    "row_equal=False": 148,
+    "row_equal=True": 1004
+   },
+   "source_unique": 1152,
+   "uncovered": 1152
+  },
+  "spacing-reset-contrasts": {
+   "admission": {
+    "legal": 3
+   },
+   "axis_asserted": {
+    "content": {
+     "exact": 3
+    },
+    "identity": {
+     "display-and-safety": 3
+    },
+    "indent": {
+     "responsive": 3
+    },
+    "rows": {
+     "exact-hard-rows": 3
+    },
+    "separators": {
+     "constrained-events": 3
+    }
+   },
+   "cohort": "expansion",
+   "consumer_covered": {
+    "cli-ansi-screening": 3,
+    "cli-json-screening": 1,
+    "cli-markdown-screening": 1,
+    "cli-text-screening": 3
+   },
+   "fail": 0,
+   "failing": {},
+   "generated": 3,
+   "na_reasons": {},
+   "pass": 3,
+   "review": 0,
+   "screening": {
+    "glyph_equal=True": 3,
+    "indent_equal=True": 3,
+    "row_equal=True": 3
+   },
+   "source_unique": 3,
+   "uncovered": 3
+  },
+  "word-boundaries": {
+   "admission": {
+    "legal": 840
+   },
+   "axis_asserted": {
+    "content": {
+     "exact": 840
+    },
+    "identity": {
+     "display-and-safety": 840
+    },
+    "indent": {
+     "omit-common-margin": 840
+    },
+    "rows": {
+     "constrained-events": 240,
+     "exact-hard-rows": 600
+    },
+    "separators": {
+     "constrained-events": 840
+    }
+   },
+   "cohort": "replay",
+   "consumer_covered": {
+    "cli-ansi-screening": 840,
+    "cli-text-screening": 840
+   },
+   "fail": 0,
+   "failing": {},
+   "generated": 840,
+   "na_reasons": {},
+   "pass": 840,
+   "review": 0,
+   "screening": {
+    "glyph_equal=True": 840,
+    "indent_equal=True": 840,
+    "row_equal=True": 840
+   },
+   "source_unique": 840,
+   "uncovered": 840
+  },
+  "wrapper-entries": {
+   "admission": {
+    "legal": 80,
+    "native-diagnostics": 32
+   },
+   "axis_asserted": {
+    "content": {
+     "exact": 112
+    },
+    "identity": {
+     "rich-inline": 112
+    },
+    "indent": {
+     "omit-common-margin": 112
+    },
+    "rows": {
+     "constrained-events": 112
+    },
+    "separators": {
+     "constrained-events": 112
+    }
+   },
+   "cohort": "expansion",
+   "consumer_covered": {
+    "cli-ansi-screening": 112,
+    "cli-json-screening": 112,
+    "cli-markdown-screening": 112,
+    "cli-text-screening": 112
+   },
+   "fail": 0,
+   "failing": {},
+   "generated": 112,
+   "na_reasons": {},
+   "pass": 80,
+   "review": 32,
+   "screening": {
+    "glyph_equal=True": 112,
+    "indent_equal=True": 112,
+    "row_equal=True": 112
+   },
+   "source_unique": 112,
+   "uncovered": 112
+  }
+ },
+ "frozen": {
+  "derived-reset-contrast-empty-operand": {
+   "family": "spacing-reset-contrasts",
+   "id": "spacing-reset-contrasts-0001",
+   "note": "XV-derived RESET replacement: empty-operand",
+   "role": "derived-contrast"
+  },
+  "derived-reset-contrast-wrapper-checkpoint": {
+   "family": "spacing-reset-contrasts",
+   "id": "spacing-reset-contrasts-0000",
+   "note": "XV-derived RESET replacement: wrapper-checkpoint",
+   "role": "derived-contrast"
+  },
+  "derived-reset-contrast-zero-width-word": {
+   "family": "spacing-reset-contrasts",
+   "id": "spacing-reset-contrasts-0002",
+   "note": "XV-derived RESET replacement: zero-width-word",
+   "role": "derived-contrast"
+  },
+  "representative-column-positions": {
+   "family": "column-positions",
+   "id": "column-positions-0308",
+   "note": "family representative",
+   "role": "representative"
+  },
+  "representative-column-tail-rows": {
+   "family": "column-tail-rows",
+   "id": "column-tail-rows-0050",
+   "note": "family representative",
+   "role": "representative"
+  },
+  "representative-cross-owner-words": {
+   "family": "cross-owner-words",
+   "id": "cross-owner-words-0904",
+   "note": "family representative",
+   "role": "representative"
+  },
+  "representative-delimiter-arguments": {
+   "family": "delimiter-arguments",
+   "id": "delimiter-arguments-0198",
+   "note": "family representative",
+   "role": "representative"
+  },
+  "representative-head-control-requests": {
+   "family": "head-control-requests",
+   "id": "head-control-requests-0116",
+   "note": "family representative",
+   "role": "representative"
+  },
+  "representative-physical-row-handoffs": {
+   "family": "physical-row-handoffs",
+   "id": "physical-row-handoffs-0210",
+   "note": "family representative",
+   "role": "representative"
+  },
+  "representative-repeated-link-identities": {
+   "family": "repeated-link-identities",
+   "id": "repeated-link-identities-0078",
+   "note": "family representative",
+   "role": "representative"
+  },
+  "representative-spacing-intervals": {
+   "family": "spacing-intervals",
+   "id": "spacing-intervals-0016",
+   "note": "family representative (distinct request accumulation)",
+   "role": "representative"
+  },
+  "representative-wrapper-entries": {
+   "family": "wrapper-entries",
+   "id": "wrapper-entries-0004",
+   "note": "family representative",
+   "role": "representative"
+  },
+  "rr01-adjacent-negative": {
+   "family": "cross-owner-words",
+   "id": "cross-owner-words-0208",
+   "note": "W03: rejected suffix must stay rejected",
+   "role": "rr-adjacent-negative"
+  },
+  "rr01-adjacent-positive": {
+   "family": "cross-owner-words",
+   "id": "cross-owner-words-0096",
+   "note": "W03: pending glyph P survives into the next real word",
+   "role": "rr-adjacent-positive"
+  },
+  "rr01-anchor-a0080": {
+   "family": "cell-ownership",
+   "id": "cell-ownership-0080",
+   "note": "RR01 main example A0080: pending P, accepted label, AFTER",
+   "role": "anchor"
+  },
+  "rr01-anchor-a0212": {
+   "family": "cell-ownership",
+   "id": "cell-ownership-0212",
+   "note": "RR01 main example A0212: rejected suffix must not revive",
+   "role": "anchor"
+  },
+  "rr02-adjacent-negative": {
+   "family": "column-positions",
+   "id": "column-positions-0816",
+   "note": "C01: un-wrapped row keeps all cells on one row",
+   "role": "rr-adjacent-negative"
+  },
+  "rr02-adjacent-positive": {
+   "family": "column-positions",
+   "id": "column-positions-0300",
+   "note": "C01: authored row separates tested cell from later cells",
+   "role": "rr-adjacent-positive"
+  },
+  "rr03-adjacent-negative": {
+   "family": "spacing-intervals",
+   "id": "spacing-intervals-0024",
+   "note": "V01: negative debt cancels the following request",
+   "role": "rr-adjacent-negative"
+  },
+  "rr03-adjacent-positive": {
+   "family": "spacing-intervals",
+   "id": "spacing-intervals-0008",
+   "note": "V01: one explicit vspace is one blank row",
+   "role": "rr-adjacent-positive"
+  },
+  "rr04-adjacent-negative": {
+   "family": "spacing-intervals",
+   "id": "spacing-intervals-0580",
+   "note": "G01: zero-space run-in must not glue the words",
+   "role": "rr-adjacent-negative"
+  },
+  "rr04-adjacent-positive": {
+   "family": "spacing-intervals",
+   "id": "spacing-intervals-0576",
+   "note": "G01: AFTER and BodyWord keep a readable word boundary",
+   "role": "rr-adjacent-positive"
+  },
+  "rr05-adjacent-negative": {
+   "family": "delimiter-arguments",
+   "id": "delimiter-arguments-0054",
+   "note": "E01: literal delimiter stays literal",
+   "role": "rr-adjacent-negative"
+  },
+  "rr05-adjacent-positive": {
+   "family": "delimiter-arguments",
+   "id": "delimiter-arguments-0378",
+   "note": "E01: escaped delimiter parses without control leak",
+   "role": "rr-adjacent-positive"
+  },
+  "rr05-anchor-a0030": {
+   "family": "cell-ownership",
+   "id": "cell-ownership-0030",
+   "note": "RR05 main example A0030: escaped delimiter leak",
+   "role": "anchor"
+  }
+ },
+ "notes": [
+  "pass/fail are screening-level outcomes (glyph/row/indent equality,",
+  "ansi parity, json marker leak) over the registered pristine oracle;",
+  "they never claim full axis assertion. native-diagnostics and recovery",
+  "cases stay review. uncovered_axes lists axes whose exact assertions",
+  "await the comparator wiring; the frozen subset carries full",
+  "five-profile oracle records for those consumers."
+ ],
+ "policy_version": 1,
+ "product_binding": {
+  "binary": "/home/hby/dev/tmp/agent-scratch/SpecLand/tgt-spec/debug/mant",
+  "dirty_tree": true,
+  "head": "f2647b8f",
+  "sha256": "aafd73bc6332c7a21f75036603f41435bf21bc47dd04f81100969cd3c51ebc47"
+ },
+ "schema": "mant.roff-acceptance-ledger/v1"
+}
