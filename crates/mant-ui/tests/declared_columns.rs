@@ -1,9 +1,13 @@
 //! Declared field origins survive JSON and viewport changes. Exact native
 //! inputs were recorded before these assertions; `mdoc_term.c::termp_it_pre`
 //! measures the declaration, not the styled/UTF-8 spelling of the cell.
-use crossterm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
-use mant_ui::{App, CopyRequest, DocumentView, ReaderServices};
+use mant_ui::{App, CopyRequest, DocumentView};
 use ratatui::{Terminal, backend::TestBackend, buffer::Buffer, layout::Rect, widgets::Widget};
+
+#[path = "support/reader_actions.rs"]
+mod reader_actions;
+
+use reader_actions::{click, copied_selections, opened_targets, positions, select_span};
 
 const PRE: &str = ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\n";
 
@@ -61,30 +65,10 @@ fn declared_origins_keep_unicode_links_and_search_coordinates_after_json() {
     }
 }
 
-fn pointer(app: &mut App, kind: MouseEventKind, column: u16, row: u16) {
-    app.handle_mouse(MouseEvent {
-        kind,
-        column,
-        row,
-        modifiers: KeyModifiers::NONE,
-    });
-}
-
 fn column_label_position(buffer: &Buffer) -> (u16, u16) {
-    let mut positions = Vec::new();
-    for row in 1..buffer.area.height.saturating_sub(1) {
-        for column in 0..buffer.area.width.saturating_sub(6) {
-            let text: String = (column..column + 6)
-                .map(|x| buffer[(x, row)].symbol())
-                .collect();
-            if text == "SECOND" {
-                positions.push((column, row));
-            }
-        }
-    }
     // Navigation entries occur to the left of the body; actual terminal
     // cells determine the clickable range, rather than sidebar labels.
-    positions
+    positions(buffer, "SECOND")
         .into_iter()
         .max_by_key(|(column, _)| *column)
         .unwrap()
@@ -96,42 +80,16 @@ fn assert_column_pointer_and_copy(query: &mant_ir::ResolvedContent) {
         let mut terminal = Terminal::new(TestBackend::new(width, 32)).unwrap();
         terminal.draw(|frame| app.draw(frame)).unwrap();
         let (column, row) = column_label_position(terminal.backend().buffer());
-        let mut activated = Vec::new();
-        let mut open = |uri: &mant_ui::ExternalUri| {
-            activated.push(uri.as_str().to_owned());
-            Ok(())
-        };
-        pointer(
-            &mut app,
-            MouseEventKind::Down(MouseButton::Left),
-            column,
-            row,
-        );
-        pointer(&mut app, MouseEventKind::Up(MouseButton::Left), column, row);
-        app.service_pending(&mut ReaderServices {
-            open_external: Some(&mut open),
-            ..ReaderServices::default()
-        });
+        click(&mut app, column, row);
+        let activated = opened_targets(&mut app);
         assert_eq!(activated, ["https://e.example/x"], "column link at {width}");
 
-        for (kind, x) in [
-            (MouseEventKind::Down(MouseButton::Left), column),
-            (MouseEventKind::Drag(MouseButton::Left), column + 5),
-            (MouseEventKind::Up(MouseButton::Left), column + 5),
-        ] {
-            pointer(&mut app, kind, x, row);
-        }
-        let mut copied = Vec::new();
-        let mut copy = |request| {
+        select_span(&mut app, column, row, column + 5, None);
+        let copied = copied_selections(&mut app, |request| {
             let CopyRequest::Selection { text } = request else {
                 panic!("column selection must copy its visual glyphs");
             };
-            copied.push(text);
-            Ok(())
-        };
-        app.service_pending(&mut ReaderServices {
-            copy_to_clipboard: Some(&mut copy),
-            ..ReaderServices::default()
+            text
         });
         assert_eq!(copied, ["SECOND"], "column copy at {width}");
     }

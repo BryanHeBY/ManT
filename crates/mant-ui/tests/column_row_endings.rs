@@ -1,9 +1,13 @@
 //! Native row ends remain distinct from completed gaps in declared cells.
 
-use crossterm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use mant_ir::ResolvedContent;
-use mant_ui::{App, CopyRequest, DocumentView, ReaderServices, RenderedDocument};
+use mant_ui::{App, CopyRequest, DocumentView, RenderedDocument};
 use ratatui::{Terminal, backend::TestBackend, buffer::Buffer};
+
+#[path = "support/reader_actions.rs"]
+mod reader_actions;
+
+use reader_actions::{click, copied_selections, opened_targets, positions, select_span};
 
 const HEADER: &str =
     ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n";
@@ -303,29 +307,8 @@ fn nested_paragraph_terminators_do_not_become_completed_cell_rows() {
     }
 }
 
-fn pointer(app: &mut App, kind: MouseEventKind, column: u16, row: u16) {
-    app.handle_mouse(MouseEvent {
-        kind,
-        column,
-        row,
-        modifiers: KeyModifiers::NONE,
-    });
-}
-
 fn word_position(buffer: &Buffer, word: &str) -> (u16, u16) {
-    let width = u16::try_from(word.len()).unwrap();
-    let mut positions = Vec::new();
-    for row in 1..buffer.area.height.saturating_sub(1) {
-        for column in 0..buffer.area.width.saturating_sub(width) {
-            let value: String = (column..column + width)
-                .map(|x| buffer[(x, row)].symbol())
-                .collect();
-            if value == word {
-                positions.push((column, row));
-            }
-        }
-    }
-    positions
+    positions(buffer, word)
         .into_iter()
         .max_by_key(|(column, _)| *column)
         .unwrap()
@@ -338,43 +321,16 @@ fn assert_pointer_and_copy(query: &ResolvedContent, label: &str, target: &str) {
         terminal.backend_mut().resize(width, 40);
         terminal.draw(|frame| app.draw(frame)).unwrap();
         let (column, row) = word_position(terminal.backend().buffer(), label);
-        pointer(
-            &mut app,
-            MouseEventKind::Down(MouseButton::Left),
-            column,
-            row,
-        );
-        pointer(&mut app, MouseEventKind::Up(MouseButton::Left), column, row);
-        let mut activated = Vec::new();
-        let mut open = |uri: &mant_ui::ExternalUri| {
-            activated.push(uri.as_str().to_owned());
-            Ok(())
-        };
-        app.service_pending(&mut ReaderServices {
-            open_external: Some(&mut open),
-            ..Default::default()
-        });
+        click(&mut app, column, row);
+        let activated = opened_targets(&mut app);
         assert_eq!(activated, [target], "width={width}");
         let last = column + u16::try_from(label.len()).unwrap() - 1;
-        pointer(
-            &mut app,
-            MouseEventKind::Down(MouseButton::Left),
-            column,
-            row,
-        );
-        pointer(&mut app, MouseEventKind::Drag(MouseButton::Left), last, row);
-        pointer(&mut app, MouseEventKind::Up(MouseButton::Left), last, row);
-        let mut copied = Vec::new();
-        let mut copy = |request| {
+        select_span(&mut app, column, row, last, None);
+        let copied = copied_selections(&mut app, |request| {
             let CopyRequest::Selection { text } = request else {
                 panic!("visual selection expected")
             };
-            copied.push(text);
-            Ok(())
-        };
-        app.service_pending(&mut ReaderServices {
-            copy_to_clipboard: Some(&mut copy),
-            ..Default::default()
+            text
         });
         assert_eq!(copied, [label], "width={width}");
     }
