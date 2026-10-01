@@ -137,6 +137,11 @@ words remain distinct: `\&` clears the debt, and
 `BR` operands call `term_word()` from their macro handler even when empty.
 Whitespace-only formatter words also occupy a native row even if terminal
 `term_fill()` prints no glyph; their IR row is retained when a paragraph ends.
+In no-fill output, an accepted zero-width graph followed by ordinary trailing
+spaces likewise completes a physical row. Receipt filtering may remove those
+unprinted trailing spaces, but preserves the accepted row even when its
+projected text becomes empty. The row is recorded once at its native close, independently
+of whether a temporary output fragment previously contained visible spaces.
 An empty TEXT's completed `term_vspace()` row stays distinct from a paragraph
 terminator when filled output is split. It adds to a later `PP` distance and
 survives `fi`/`nf`. A later whitespace-only formatter word can occupy one

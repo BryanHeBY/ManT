@@ -61,7 +61,8 @@ impl NoFillInlineState {
         if rejected_row {
             execution.word_end_break = WordEndBreak::Clear;
         }
-        if rejected_row || accepted_invisible_row {
+        if rejected_row || (accepted_invisible_row && !InlineBuilder::has_literal_tail_row(output))
+        {
             // nbr=0 ends the rejected pass's own physical row, independently
             // of any earlier accepted marker pass (term.c:143-146,250-253).
             // An accepted invisible row likewise belongs to the whole

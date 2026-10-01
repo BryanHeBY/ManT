@@ -2,6 +2,10 @@
 use mant_loader::{load_markdown_text, load_roff_bytes};
 use mant_render::{render_excerpt_text, render_query_text, render_query_text_with};
 
+#[cfg(feature = "roff")]
+#[path = "text_source_flow/no_fill_rows.rs"]
+mod no_fill_rows;
+
 #[test]
 fn native_section_pd_and_explicit_requests_compose_once() {
     // mandoc CVS pre_SH consumes pardist; preceding .sp remains independent.

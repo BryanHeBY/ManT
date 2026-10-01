@@ -19,6 +19,7 @@ fn parse_manual_source(
 
 mod equations;
 mod equations_literals;
+mod literal_space_rows;
 mod parser_contracts;
 
 fn temporary_source(label: &str, source: &str) -> std::path::PathBuf {

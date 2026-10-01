@@ -95,17 +95,7 @@ impl InlineBuilder {
             definitive,
         } = receipt
         else {
-            // An accepted unit can still leave ordinary trailing blanks
-            // outside its final nbr. term_field() defers blank output until
-            // another graph (term.c:389-427), so those source cells were not
-            // printed. Use the same native owner intervals as rejection,
-            // without inspecting visible IR to guess the accepted tail.
-            if passes
-                .last()
-                .is_some_and(|pass| buffer.projection_length(pass.end, buffer.cells().len()) > 0)
-            {
-                retain_unit_owner_ranges(nodes, &buffer, &anchors, passes, output_start);
-            }
+            retain_accepted_unit_output(nodes, &buffer, &anchors, passes, output_start);
             Self::restore_retired_buffer(execution, nodes, authorless_definition, buffer, anchors);
             return false;
         };
@@ -137,6 +127,13 @@ impl InlineBuilder {
             Self::clear_plain_flush_unit_at(execution, nodes);
         }
         true
+    }
+
+    /// Output ownership of the current physical row, including a native
+    /// empty-row witness. Earlier rows and nonvisible identities do not
+    /// represent this row merely because they remain in the same IR Vec.
+    pub(in crate::mandoc) fn has_literal_tail_row(nodes: &[Inline]) -> bool {
+        literal_tail_row(nodes).unwrap_or(false)
     }
 
     /// Retire the actual consumed native buffer, not an output fragment.
@@ -184,6 +181,76 @@ impl InlineBuilder {
     }
 }
 
+/// Stop at the most recent physical-row witness or delimiter. The live
+/// literal owner can contain many earlier rows; visiting that complete
+/// history for each invisible source row would make retirement quadratic.
+fn literal_tail_row(nodes: &[Inline]) -> Option<bool> {
+    find_literal_tail_row(nodes, &mut || {})
+}
+
+fn find_literal_tail_row(nodes: &[Inline], visit: &mut impl FnMut()) -> Option<bool> {
+    nodes.iter().rev().find_map(|node| match node {
+        Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. } => {
+            visit();
+            Some(!value.ends_with('\n'))
+        }
+        Inline::Strong { children }
+        | Inline::Emphasis { children }
+        | Inline::PortableDisplay { children, .. }
+        | Inline::Link { children, .. } => {
+            visit();
+            find_literal_tail_row(children, visit)
+        }
+        Inline::LineBreak { .. } => {
+            visit();
+            Some(false)
+        }
+        Inline::Anchor { .. } => {
+            visit();
+            None
+        }
+    })
+}
+
+/// The final accepted pass owns its physical row even if `term_field()`
+/// emitted no characters: `ASCII_NBRZW` sets graph in `term_fill()`340-349,
+/// but `term_field()` skips it and trailing blanks (389-427). Decide row
+/// occupancy after the same receipt has trimmed the unprinted source tail.
+fn retain_accepted_unit_output(
+    nodes: &mut Vec<Inline>,
+    buffer: &super::super::field_buffer::FieldBuffer,
+    anchors: &[(usize, String, usize)],
+    passes: &[super::super::field_buffer::FillPass],
+    output_start: usize,
+) {
+    // An accepted unit can still leave ordinary trailing blanks outside
+    // its final nbr. Use exactly the same native ownership intervals as
+    // rejection; provisional IR spaces do not prove printed native content.
+    if passes
+        .last()
+        .is_some_and(|pass| buffer.projection_length(pass.end, buffer.cells().len()) > 0)
+    {
+        retain_unit_owner_ranges(nodes, buffer, anchors, passes, output_start);
+    }
+    let pending_start = buffer.resume_offset();
+    let accepted_empty_tail = passes.last().is_some_and(|pass| {
+        let start = passes
+            .len()
+            .checked_sub(2)
+            .map_or(pending_start, |previous| {
+                passes[previous].end.max(pending_start)
+            });
+        pass.end > start && buffer.printed_columns(start, pass.end, 0, 0).is_none()
+    });
+    if accepted_empty_tail
+        && !InlineBuilder::has_literal_tail_row(&nodes[output_start.min(nodes.len())..])
+    {
+        nodes.push(Inline::Text {
+            value: String::new(),
+        });
+    }
+}
+
 /// Apply one native receipt to its active output interval. Acceptance and
 /// rejection share this ownership operation; earlier committed output is
 /// outside the supplied interval and cannot be revoked by a later unit.
@@ -205,4 +272,40 @@ fn retain_unit_owner_ranges(
         retain_unprinted_field_targets(&mut pending_output);
     }
     nodes.extend(pending_output);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn literal_tail_queries_stop_before_completed_row_history() {
+        for count in [64, 1024, 4096] {
+            let mut nodes = Vec::new();
+            for _ in 0..count {
+                nodes.push(Inline::Text {
+                    value: String::new(),
+                });
+                nodes.push(Inline::line_break());
+            }
+            let mut visits = 0;
+            assert_eq!(
+                find_literal_tail_row(&nodes, &mut || visits += 1),
+                Some(false)
+            );
+            assert_eq!(visits, 1);
+            nodes.push(Inline::Strong {
+                children: vec![Inline::Text {
+                    value: String::new(),
+                }],
+            });
+            nodes.push(Inline::anchor("identity"));
+            visits = 0;
+            assert_eq!(
+                find_literal_tail_row(&nodes, &mut || visits += 1),
+                Some(true)
+            );
+            assert_eq!(visits, 3);
+        }
+    }
 }
