@@ -12,7 +12,7 @@ use glyphs::{
     dedicated_special_character, documented_groff_composite_character, unicode_special_characters,
 };
 pub(super) use projection::visible_text;
-use scanner::scan_nested_escape_end;
+use scanner::{QuotedOutcome, scan_counted_end, scan_nested_escape_end, scan_quoted_argument};
 
 use crate::text_safety::push_terminal_safe;
 use libmandoc_rs::SpecialCharacter;
@@ -363,6 +363,20 @@ pub(in crate::mandoc) const fn is_formatter_word_blank(character: char) -> bool 
     character == ' '
 }
 
+/// One quoted escape argument, classified the way fixed CVS `roff_escape()`
+/// ends it.
+enum DelimitedArgument {
+    /// Ended at a real closing delimiter, or at `\N`'s first non-digit.
+    Closed(String),
+    /// Input ended first; only `\A`, `\o` and `\w` keep their payload.
+    Unclosed(Option<String>),
+    /// The delimiter itself was rejected (`ESCAPE_DELIM)`: the owning family
+    /// renders nothing and the argument ends right after it.
+    Rejected,
+    /// No delimiter was present at all.
+    Missing,
+}
+
 struct Decoder {
     measurement: bool,
     characters: Vec<char>,
@@ -447,10 +461,7 @@ impl Decoder {
                 let name = self.take_until(']');
                 self.push_special_character(&name, NamedCharacterSyntax::Bracketed);
             }
-            'C' => {
-                let name = self.take_delimited_argument().unwrap_or_default();
-                self.push_special_character(&name, NamedCharacterSyntax::CharacterDescriptor);
-            }
+            'C' => self.decode_character_descriptor(),
             // CVS `roff_escape()` classifies these historical one-character
             // forms as named special characters, not undefined literals.
             // Route them through the pinned catalog just like `\(XX`: in
@@ -493,12 +504,21 @@ impl Decoder {
                 }
             }
             'o' => {
-                let source = self.take_delimited_argument().unwrap_or_default();
+                // An unclosed overstrike keeps its scanned payload (the CVS
+                // "Aow" families); rejected delimiters cannot occur for
+                // `\o`, which never appears in the rejection sets.
+                let source = match self.take_delimited_argument('o') {
+                    DelimitedArgument::Closed(source)
+                    | DelimitedArgument::Unclosed(Some(source)) => source,
+                    DelimitedArgument::Unclosed(None)
+                    | DelimitedArgument::Rejected
+                    | DelimitedArgument::Missing => String::new(),
+                };
                 let terminal = overstrike_terminal_glyph(&source);
                 self.emit(RoffInlineEvent::Overstrike { source, terminal });
             }
             'A' | 'b' | 'D' | 'R' | 'Z' => {
-                let argument = self.take_delimited_argument();
+                let argument = self.take_presentation_argument(trigger);
                 self.emit(RoffInlineEvent::Presentation {
                     kind: PresentationKind::Postprocessor,
                     argument,
@@ -506,7 +526,7 @@ impl Decoder {
             }
             'h' => self.decode_horizontal_motion(),
             'H' | 'L' | 'l' | 'S' | 'v' | 'x' => {
-                let argument = self.take_delimited_argument();
+                let argument = self.take_presentation_argument(trigger);
                 self.emit(RoffInlineEvent::Presentation {
                     kind: PresentationKind::Motion,
                     argument,
@@ -545,7 +565,7 @@ impl Decoder {
     }
 
     fn decode_postprocessor_escape(&mut self) {
-        let command = self.take_delimited_argument();
+        let command = self.take_presentation_argument('X');
         match command.as_deref() {
             Some("tty: link") => self.emit(RoffInlineEvent::Link(None)),
             Some(command) => {
@@ -565,23 +585,39 @@ impl Decoder {
         }
     }
 
+    /// `\C` names one character with its quoted argument.  Only a closed,
+    /// non-empty descriptor reaches the catalog: CVS renders unclosed,
+    /// empty and rejected `\C` arguments as `ESCAPE_ERROR` with no buffer
+    /// footprint.
+    fn decode_character_descriptor(&mut self) {
+        if let DelimitedArgument::Closed(name) = self.take_delimited_argument('C')
+            && !name.is_empty()
+        {
+            self.push_special_character(&name, NamedCharacterSyntax::CharacterDescriptor);
+        }
+    }
     fn decode_numbered_glyph(&mut self) {
         let start = self.index;
-        let delimiter = self.characters.get(start).copied();
-        let argument = if self
+        let (argument, closed) = if self
             .characters
             .get(self.index)
             .is_some_and(char::is_ascii_digit)
         {
-            Some(self.take_counted(1))
+            // The digit form has no delimiter and CVS rejects it outright;
+            // ManT instead retains the spelling visibly, like every other
+            // unaccepted numbered form below.
+            (Some(self.take_counted(1)), false)
         } else {
-            self.take_delimited_argument()
+            match self.take_delimited_argument('N') {
+                DelimitedArgument::Closed(argument) => (Some(argument), true),
+                // Unclosed and rejected delimiters are ESCAPE_ERROR (or a
+                // dropped payload) upstream and render nothing; ManT's
+                // established recovery design keeps the consumed spelling
+                // visible instead.
+                DelimitedArgument::Unclosed(argument) => (argument, false),
+                DelimitedArgument::Rejected | DelimitedArgument::Missing => (None, false),
+            }
         };
-        let closed = delimiter.is_some_and(|delimiter| {
-            !delimiter.is_ascii_digit()
-                && self.index > start + 1
-                && self.characters.get(self.index - 1) == Some(&delimiter)
-        });
         // mandoc's mchars_num2char accepts only the 8-bit terminal range.
         // Preserve unsupported spellings as a terminal fallback event so a
         // link-identity projection can still follow CVS HTML and omit them.
@@ -618,7 +654,9 @@ impl Decoder {
     }
 
     fn decode_horizontal_motion(&mut self) {
-        let argument = self.take_delimited_argument();
+        // A positive literal advance only exists for a closed argument with
+        // a kept payload: unclosed and rejected motion renders nothing.
+        let argument = self.take_presentation_argument('h');
         if !self.measurement && argument.as_deref().is_some_and(is_positive_literal_motion) {
             // ManT does not reproduce formatter geometry, but an explicit
             // positive advance is still a semantic word boundary. Retaining
@@ -721,7 +759,7 @@ impl Decoder {
                 self.index += 1;
                 Some(self.take_counted(2))
             }
-            _ => self.take_character().map(|character| character.to_string()),
+            _ => Some(self.take_counted(1)),
         }
     }
 
@@ -746,8 +784,11 @@ impl Decoder {
                 self.index += 1;
                 value.push_str(&self.take_counted(2));
             }
+            // `\s'...'` is a fixed literal quote upstream: no escaped
+            // delimiter syntax exists for sizes.
             '\'' => {
-                value.push_str(&self.take_delimited_argument().unwrap_or_default());
+                self.index += 1;
+                value.push_str(&self.take_until('\''));
             }
             '1' | '2' | '3'
                 if !has_sign
@@ -758,14 +799,46 @@ impl Decoder {
             {
                 value.push_str(&self.take_counted(2));
             }
-            _ => value.push(self.take_character()?),
+            // CVS maxl counting: one unit, with any nested escape consumed
+            // whole without counting.
+            _ => value.push_str(&self.take_counted(1)),
         }
         Some(value)
     }
 
-    fn take_delimited_argument(&mut self) -> Option<String> {
-        let delimiter = self.take_character()?;
-        Some(self.take_until(delimiter))
+    /// Take the quoted argument of `outer` with the shared bounded scanner,
+    /// applying the fixed CVS delimiter rules: escaped delimiters, literal
+    /// closers, `\N`'s digit rule, and rejected delimiters.
+    fn take_delimited_argument(&mut self, outer: char) -> DelimitedArgument {
+        let (outcome, end) = scan_quoted_argument(&self.characters, self.index, outer);
+        self.index = end;
+        match outcome {
+            QuotedOutcome::Closed { payload } => {
+                DelimitedArgument::Closed(self.range_string(payload))
+            }
+            QuotedOutcome::Unclosed { payload } => {
+                DelimitedArgument::Unclosed(payload.map(|range| self.range_string(range)))
+            }
+            QuotedOutcome::Rejected => DelimitedArgument::Rejected,
+            QuotedOutcome::Missing => DelimitedArgument::Missing,
+        }
+    }
+
+    /// Payload a presentation-only family still reports: closed arguments
+    /// plus the `Aow` unclosed survivors.
+    fn take_presentation_argument(&mut self, outer: char) -> Option<String> {
+        match self.take_delimited_argument(outer) {
+            DelimitedArgument::Closed(argument) | DelimitedArgument::Unclosed(Some(argument)) => {
+                Some(argument)
+            }
+            DelimitedArgument::Unclosed(None)
+            | DelimitedArgument::Rejected
+            | DelimitedArgument::Missing => None,
+        }
+    }
+
+    fn range_string(&self, range: std::ops::Range<usize>) -> String {
+        self.characters[range].iter().collect()
     }
 
     fn take_until(&mut self, delimiter: char) -> String {
@@ -783,7 +856,9 @@ impl Decoder {
     }
 
     fn take_counted(&mut self, count: usize) -> String {
-        let end = (self.index + count).min(self.characters.len());
+        // CVS maxl counting consumes nested escapes whole without counting
+        // them against the expected length.
+        let end = scan_counted_end(&self.characters, self.index, count);
         let value = self.characters[self.index..end].iter().collect();
         self.index = end;
         value
@@ -853,5 +928,7 @@ enum NamedCharacterSyntax {
     CharacterDescriptor,
 }
 
+#[cfg(test)]
+mod delimiter_scanning;
 #[cfg(test)]
 mod tests;
