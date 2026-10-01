@@ -53,8 +53,13 @@ fn run_with_registered_documents(
 const PROTOCOL_REFERENCE: &str = include_str!("../../../docs/manuals/mant-protocol.md");
 
 fn run_text_input(arguments: &[&str], input: &str) -> std::process::Output {
-    let mut child = Command::new(executable())
-        .args(arguments)
+    let mut command = Command::new(executable());
+    command.args(arguments);
+    run_text_command(command, input)
+}
+
+fn run_text_command(mut command: Command, input: &str) -> std::process::Output {
+    let mut child = command
         .env_remove("NO_COLOR")
         .env_remove("CLICOLOR_FORCE")
         .stdin(Stdio::piped())
@@ -69,6 +74,29 @@ fn run_text_input(arguments: &[&str], input: &str) -> std::process::Output {
         .write_all(input.as_bytes())
         .expect("write query input");
     child.wait_with_output().expect("finish query")
+}
+
+#[cfg(all(feature = "roff", target_os = "linux"))]
+#[allow(unsafe_code)] // POSIX child setup: lower only this process's stack rlimit.
+fn restrict_child_stack(command: &mut Command) {
+    use std::os::unix::process::CommandExt;
+
+    // Run the executable on the same 1 MiB main-stack budget that exposed the
+    // debug Windows failure. No global limit changes or linker overrides.
+    unsafe {
+        command.pre_exec(|| {
+            let mut limit = std::mem::MaybeUninit::<libc::rlimit>::uninit();
+            if libc::getrlimit(libc::RLIMIT_STACK, limit.as_mut_ptr()) != 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            let mut limit = limit.assume_init();
+            limit.rlim_cur = limit.rlim_cur.min(1024 * 1024);
+            if libc::setrlimit(libc::RLIMIT_STACK, &raw const limit) != 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
 }
 
 #[test]
@@ -277,27 +305,34 @@ fn incomplete_native_equation_warns_on_stderr_without_changing_document_text() {
         "sqrt { ".repeat(260),
         " }".repeat(260),
     );
-    let output = run_text_input(
-        &[
+    for format in ["text", "markdown", "json"] {
+        let mut command = Command::new(executable());
+        command.args([
             "--input",
             "-",
             "--input-format",
             "roff",
             "--format",
-            "text",
+            format,
             "--color",
             "never",
-        ],
-        &source,
-    );
-    assert!(output.status.success(), "{:?}", output.stderr);
-    let stderr = String::from_utf8(output.stderr).unwrap();
-    let stdout = String::from_utf8(output.stdout).unwrap();
-    assert!(
-        stderr.contains("source document content is incomplete"),
-        "{stderr:?}"
-    );
-    assert!(!stdout.contains("source document content is incomplete"));
+        ]);
+        #[cfg(target_os = "linux")]
+        restrict_child_stack(&mut command);
+        let output = run_text_command(command, &source);
+        assert!(output.status.success(), "{:?}", output.stderr);
+        let stderr = String::from_utf8(output.stderr).unwrap();
+        let stdout = String::from_utf8(output.stdout).unwrap();
+        assert!(
+            stderr.contains("source document content is incomplete"),
+            "{stderr:?}"
+        );
+        assert!(!stdout.contains("source document content is incomplete"));
+        if format == "json" {
+            let _: mant_protocol::QueryBundle = serde_json::from_str(&stdout)
+                .expect("the small-stack producer output must satisfy the actual wire decoder");
+        }
+    }
 }
 
 #[test]
