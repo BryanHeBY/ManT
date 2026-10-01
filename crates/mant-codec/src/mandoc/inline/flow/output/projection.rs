@@ -1,6 +1,6 @@
 //! Pure IR projection after native receipts have already decided output.
 
-use super::{INTERNAL_FIELD_WORD, INTERNAL_LINK_SPLIT, Inline};
+use super::{INTERNAL_FIELD_WORD, INTERNAL_LINK_SPLIT, INTERNAL_OUTPUT_SCOPE, Inline};
 
 /// Semantic identity/styling does not hide the physical output row end.
 /// An empty Text is an occupied row witness and deliberately stops the scan.
@@ -56,13 +56,17 @@ pub(super) fn trim_output_terminators(nodes: &mut Vec<Inline>) -> bool {
 /// Native cell owners are private and must never become visible occupancy
 /// witnesses, authored navigation targets, or serialized IR.
 pub(in crate::mandoc) fn finalize_inline_output(nodes: &mut Vec<Inline>) {
+    super::super::super::links::presentation::finalize_accepted_links(nodes);
     join_authored_links(nodes);
     strip_native_projection_markers(nodes);
 }
 
 fn strip_native_projection_markers(nodes: &mut Vec<Inline>) {
     nodes.retain_mut(|node| match node {
-        Inline::Anchor { id, .. } => !id.as_str().starts_with(INTERNAL_FIELD_WORD),
+        Inline::Anchor { id, .. } => {
+            !id.as_str().starts_with(INTERNAL_FIELD_WORD)
+                && !id.as_str().starts_with(INTERNAL_OUTPUT_SCOPE)
+        }
         Inline::Strong { children }
         | Inline::Emphasis { children }
         | Inline::PortableDisplay { children, .. }

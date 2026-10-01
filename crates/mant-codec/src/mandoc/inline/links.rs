@@ -4,6 +4,8 @@ use super::{
     append_inline_nodes, decode, first_part_children, inline_children, visible_text,
 };
 
+pub(in crate::mandoc::inline) mod presentation;
+
 /// Execute mdoc `.Lk` in the caller's formatter stream, then wrap the visible
 /// label in a typed link. The address is identity data, so it must not force
 /// a private builder that loses pending `\\z` state at the macro boundary.
@@ -29,45 +31,62 @@ pub(super) fn append_link(builder: &mut InlineBuilder, node: &Node, default_name
         // the surrounding source siblings. CVS `termp_lk_pre()` presents the
         // label (underlined), a plain generated `:`, and the URI word,
         // regardless of source operand order.
-        let checkpoint = builder.begin_output_checkpoint();
-        builder.with_font_scope(Font::Emphasis, |builder| {
-            append_inline_nodes(builder, label, default_name);
-        });
-        let label_is_visible = builder.output_since_has_non_whitespace_glyph(checkpoint);
-        if label_is_visible && !address.is_empty() {
-            wrap_external_link_output(builder, checkpoint, &address);
-        }
-        // Presence of description operands, rather than their visible
-        // glyphs or a valid destination, selects this pre handler. Keep
-        // their executed hard boundaries and always execute the colon;
-        // `termp_lk_pre()` also prints it for `.Lk "" ""`.
-        append_terminal_link_suffix(builder, first, default_name);
+        presentation::append_owned_part(
+            builder,
+            node.id,
+            presentation::Part::Description,
+            &address,
+            None,
+            |builder| {
+                builder.with_font_scope(Font::Emphasis, |builder| {
+                    append_inline_nodes(builder, label, default_name);
+                });
+            },
+        );
+        // CVS termp_lk_pre() always executes this suffix for a syntactically
+        // present description. Its portable redundancy is decided only after
+        // the native field receipt has accepted or rejected the owned text.
+        append_terminal_link_suffix(builder, node.id, first, &address, default_name);
     }
     append_inline_nodes(builder, &children[label_end..], default_name);
 }
 
-/// CVS `termp_lk_pre()` font-pops after the label, sets `TERMP_NOSPACE`, and
-/// prints a generated `:` in the plain font before the URI word. Both run
-/// through the real formatter flow so fonts, `\\c`, and `\\z` state stay
-/// native. The suffix is terminal display only: reader-facing projections
-/// already carry the address as the typed target, so its portable
-/// replacement spelling is empty. A syntactically present descr prints its
-/// colon even when zero-width projection erases the label glyphs (oracle
-/// lk12: `.Lk addr ""` and `.Lk addr \&` both show `: addr`).
+/// CVS `termp_lk_pre()` font-pops after the label, selects NOSPACE, then
+/// executes the colon and URI. Annotation never starts another word or
+/// settles a pending glyph merely to decide its portable label.
 fn append_terminal_link_suffix(
     builder: &mut InlineBuilder,
+    owner: u32,
     first: &Node,
+    address: &str,
     default_name: Option<&str>,
 ) {
+    let marker = format!(
+        "{}:all",
+        presentation::scope_marker(owner, presentation::Part::Suffix)
+    );
+    builder.begin_output_scope(&marker);
     builder.tighten_next_boundary();
-    let suffix = builder.begin_output_checkpoint();
-    builder.append_text(":");
-    append_inline_node(builder, first, default_name);
-    builder.wrap_output_since(suffix, |children| {
-        vec![Inline::PortableDisplay {
-            display: String::new(),
-            children,
-        }]
+    presentation::append_owned_part(
+        builder,
+        owner,
+        presentation::Part::Colon,
+        address,
+        Some(presentation::Part::Description),
+        |builder| builder.append_text(":"),
+    );
+    presentation::append_owned_part(
+        builder,
+        owner,
+        presentation::Part::Uri,
+        address,
+        None,
+        |builder| append_inline_node(builder, first, default_name),
+    );
+    // The suffix's colon scope has already been annotated; the outer owner
+    // makes its separator part of the same optional portable replacement.
+    builder.wrap_output_scope(&marker, |children| {
+        presentation::wrap_suffix(owner, address, children)
     });
 }
 
@@ -322,26 +341,6 @@ fn split_text_prefix(
     if split < value.len() {
         suffix.push(inline(value[split..].to_owned()));
     }
-}
-
-/// Attach link identity to an already-executed descriptive label.  The label
-/// must not be lowered a second time merely because its final visible form is
-/// only known after `\\z` and generated colon projection have run.
-fn wrap_external_link_output(
-    builder: &mut InlineBuilder,
-    checkpoint: super::flow::OutputCheckpoint,
-    address: &str,
-) {
-    builder.wrap_output_since(checkpoint, |children| {
-        let (prefix, children) = split_boundary_prefix(children);
-        let mut output = prefix;
-        output.push(Inline::Link {
-            target: external_link_target(address.to_owned(), false),
-            title: None,
-            children,
-        });
-        output
-    });
 }
 
 /// `InlineBuilder` owns inter-word padding. When a new link begins a word,

@@ -298,11 +298,17 @@ fn portable_hidden_source_operand_retains_its_native_owner_range() {
     let item = review_definition_item(
         ".Bl -hang -width 4n\n.It Xo\n.Lk \"https://example.org\\p \\p\" X\n.No Z\n.Xc\n.No BodyWord\n.El\n",
     );
+    // This exact source was rerun before changing the carrier assertion:
+    // CVS prints X/URI and BodyWord on adjacent rows. The pure identity has
+    // an invalid trailing blank, so export must not hide its native URI.
+    // With that suffix visible, the terminal HEAD close transfers once to
+    // Separate instead of being obscured inside a PortableDisplay subtree.
     assert_eq!(
         inline_text(&item.terms[0]),
-        "X: https://example.org\n",
+        "X: https://example.org",
         "{item:#?}"
     );
+    assert_eq!(item.layout.head_body_relation, HeadBodyRelation::Separate);
     assert!(
         item.description.iter().any(|block| matches!(block,
         Block::Paragraph { children, .. } if inline_text(children) == "BodyWord")),

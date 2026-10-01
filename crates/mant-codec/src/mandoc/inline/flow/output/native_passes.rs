@@ -308,6 +308,7 @@ fn trim_native_breakable_tail(nodes: &mut Vec<Inline>) -> bool {
             metadata.push(node);
             continue;
         }
+        let identity = crate::mandoc::inline::links::presentation::retains_authored_identity(&node);
         let consumed = match &mut node {
             Inline::Text { value } | Inline::Code { value } if !value.is_empty() => {
                 while value
@@ -328,7 +329,7 @@ fn trim_native_breakable_tail(nodes: &mut Vec<Inline>) -> bool {
                     metadata.push(node);
                     continue;
                 }
-                if consumed && matches!(node, Inline::Link { .. }) {
+                if consumed && (identity || matches!(node, Inline::Link { .. })) {
                     metadata.push(node);
                     continue;
                 }

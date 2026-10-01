@@ -7,6 +7,7 @@ use super::{
 // term_flushln() fields. It is removed before any IR owner is returned.
 const INTERNAL_LINK_SPLIT: &str = "\0mant:field-link-split";
 pub(in crate::mandoc::inline) const INTERNAL_FIELD_WORD: &str = "\0mant:field-word:";
+pub(in crate::mandoc::inline) const INTERNAL_OUTPUT_SCOPE: &str = "\0mant:output-scope:";
 
 mod boundary;
 mod drain;
@@ -68,6 +69,29 @@ impl InlineBuilder {
         wrap: impl FnMut(Vec<Inline>) -> Vec<Inline>,
     ) {
         self.wrap_output_from(checkpoint.node_count, wrap);
+    }
+
+    /// Mark a local annotation scope without writing a formatter cell. A
+    /// native flush may change its output length; the marker survives that
+    /// receipt, so its owner never relies on a pre-flush vector index.
+    pub(in crate::mandoc::inline) fn begin_output_scope(&mut self, marker: &str) {
+        self.nodes.push(Inline::anchor(marker));
+    }
+
+    /// Find only this scope's new tail, then reuse the native committed/pending
+    /// split. Missing metadata leaves the accepted text unannotated.
+    pub(in crate::mandoc::inline) fn wrap_output_scope(
+        &mut self,
+        marker: &str,
+        wrap: impl FnMut(Vec<Inline>) -> Vec<Inline>,
+    ) {
+        if let Some(start) = self
+            .nodes
+            .iter()
+            .rposition(|node| matches!(node, Inline::Anchor { id, .. } if id.as_str() == marker))
+        {
+            self.wrap_output_from(start, wrap);
+        }
     }
 
     /// Preserve a formatter-requested line boundary without creating empty
@@ -268,7 +292,9 @@ impl InlineBuilder {
             let split_link = matches!((accepted.last(), pending.last()),
                 (Some(Inline::Link { target: left, title: left_title, .. }),
                  Some(Inline::Link { target: right, title: right_title, .. }))
-                    if left == right && left_title == right_title);
+                    if left == right && left_title == right_title)
+                || matches!((accepted.last(), pending.last()), (Some(left), Some(right))
+                    if super::super::links::presentation::same_link_owner(left, right));
             self.nodes.extend(accepted);
             if split_link {
                 // This is one authored link across two native fields. Keep

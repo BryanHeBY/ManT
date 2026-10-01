@@ -793,23 +793,27 @@ impl InlineBuilder {
     }
 }
 pub(super) fn retain_unprinted_field_targets(inlines: &mut Vec<Inline>) {
-    inlines.retain_mut(|inline| match inline {
-        Inline::Anchor { .. } => true,
-        // term_fill() returned nbr=0: a buffered \p line request in this
-        // field never reached the device, even inside a semantic Link.
-        Inline::LineBreak { .. }
-        | Inline::Text { .. }
-        | Inline::Code { .. }
-        | Inline::Equation { .. } => false,
-        Inline::Link { children, .. } => {
-            retain_unprinted_field_targets(children);
-            true
-        }
-        Inline::Strong { children }
-        | Inline::Emphasis { children }
-        | Inline::PortableDisplay { children, .. } => {
-            retain_unprinted_field_targets(children);
-            !children.is_empty()
+    inlines.retain_mut(|inline| {
+        let identity =
+            crate::mandoc::inline::links::presentation::retains_authored_identity(inline);
+        match inline {
+            Inline::Anchor { .. } => true,
+            // term_fill() returned nbr=0: a buffered \p line request in this
+            // field never reached the device, even inside a semantic Link.
+            Inline::LineBreak { .. }
+            | Inline::Text { .. }
+            | Inline::Code { .. }
+            | Inline::Equation { .. } => false,
+            Inline::Link { children, .. } => {
+                retain_unprinted_field_targets(children);
+                true
+            }
+            Inline::Strong { children }
+            | Inline::Emphasis { children }
+            | Inline::PortableDisplay { children, .. } => {
+                retain_unprinted_field_targets(children);
+                identity || !children.is_empty()
+            }
         }
     });
 }

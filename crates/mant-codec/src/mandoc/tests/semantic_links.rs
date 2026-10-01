@@ -217,12 +217,16 @@ fn semantic_links_execute_uri_words_and_distinguish_empty_descriptions() {
             );
         };
         assert_eq!(inline_text(children), expected, "{label}: {children:?}");
-        // CVS termp_lk_pre() uses operand presence for the colon, while
-        // mdoc_lk_pre() anchors the description, even if it has no glyphs.
+        // CVS termp_lk_pre() uses operand presence for the colon. Portable
+        // export may replace that URI only with an accepted readable label;
+        // otherwise the accepted URI is the clickable fallback label.
         let has_visible_anchor = children.iter().any(|inline| {
             matches!(inline, Inline::Link { target: mant_ir::LinkTarget::External { uri }, .. } if uri == "https://example.org")
         });
-        assert_eq!(has_visible_anchor, label == "link-zero-width-label");
+        assert!(
+            has_visible_anchor,
+            "{label}: accepted URI needs a visible anchor"
+        );
     }
 
     let link_controls = parse_manual_bytes(
@@ -321,8 +325,11 @@ fn semantic_links_choose_visible_output_after_executing_operands() {
                 "{label}: the visible link must retain its external target: {children:?}"
             ),
             "projected-empty-label" => assert!(
-                !children.iter().any(|inline| matches!(inline, Inline::Link { .. })),
-                "a pending glyph overprinted by the colon cannot create a visible anchor: {children:?}"
+                children.iter().any(|inline| {
+                    matches!(inline, Inline::Link { children, .. }
+                        if inline_text(children) == "https://example.org")
+                }),
+                "the colon overwrites the description glyph, so only the accepted URI is linked: {children:?}"
             ),
             "empty-target-label" => {
                 assert!(

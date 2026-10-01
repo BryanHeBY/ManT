@@ -49,9 +49,12 @@ fn body_position(buffer: &Buffer, label: &str) -> (u16, u16) {
 }
 
 fn assert_pointer_and_copy(query: &ResolvedContent, label: &str, target: &str) {
-    for width in [80, 128] {
-        let mut app = App::new(query);
-        let mut terminal = Terminal::new(TestBackend::new(width, 32)).unwrap();
+    let mut app = App::new(query);
+    let mut terminal = Terminal::new(TestBackend::new(80, 32)).unwrap();
+    for width in [80, 128, 80] {
+        // Resize the same reader session so cached link ranges and selection
+        // coordinates must follow the newly rendered cells.
+        terminal.backend_mut().resize(width, 32);
         terminal.draw(|frame| app.draw(frame)).unwrap();
         let (column, row) = body_position(terminal.backend().buffer(), label);
         let mut activated = Vec::new();
@@ -152,6 +155,111 @@ fn native_and_markdown_link_labels_keep_pointer_and_copy_ranges() {
             );
         }
         assert_pointer_and_copy(&query, label, target);
+    }
+}
+
+#[test]
+fn invisible_descriptions_keep_the_uri_clickable_and_copyable_after_json() {
+    // These exact sources ran pristine UTF-8/HTML/tree/lint before assertions.
+    // termp_lk_pre executes the description, colon and URI once. An absent
+    // accepted label cannot hide the URI or turn it into an empty Link.
+    for label in ["", r"\&", r"\zX", r"\fB"] {
+        let source =
+            format!("{PRE}.Lk https://example.com \"{label}\"\n.No AFTER\n.Sh NEXT\n.No END\n");
+        let query = roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+        let view = DocumentView::new(&query);
+        for width in [20, 40, 78, 120] {
+            let rendered = view.render(width);
+            assert_eq!(rendered.search("https://example.com").len(), 1, "{source}");
+            assert_eq!(rendered.search("AFTER").len(), 1, "{source}");
+            assert!(!rendered.text.to_string().contains('\u{fffd}'));
+        }
+        assert_pointer_and_copy(&query, "https://example.com", "https://example.com");
+    }
+}
+
+#[test]
+fn zero_column_descriptions_do_not_hide_the_readable_uri_hit_range() {
+    // All three exact unquoted inputs ran pristine profiles before assertions.
+    // Unicode graph cells remain native content even at width zero; portable
+    // replacement eligibility does not change native execution or row count.
+    for operand in [r"\[u200B]", r"\[u200D]", r"\[u0301]"] {
+        let source =
+            format!("{PRE}.Lk https://example.com {operand}\n.No AFTER\n.Sh NEXT\n.No END\n");
+        let query = roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+        let view = DocumentView::new(&query);
+        for width in [20, 40, 78, 120] {
+            let rendered = view.render(width);
+            assert_eq!(rendered.search("https://example.com").len(), 1);
+            assert_eq!(rendered.search("AFTER").len(), 1);
+        }
+        assert_pointer_and_copy(&query, "https://example.com", "https://example.com");
+    }
+}
+
+#[test]
+fn delayed_caller_glyph_and_colon_stay_outside_the_fallback_hit_range() {
+    // This exact input ran pristine first. term_word/encode1 settle the
+    // preceding operand's X before the generated colon. Neither is a URI
+    // label, and annotation must not extend the click range over either.
+    let source =
+        format!("{PRE}.No \\zX\n.Lk https://example.com \"\"\n.No AFTER\n.Sh NEXT\n.No END\n");
+    let query = roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+    for width in [80, 128] {
+        let mut app = App::new(&query);
+        let mut terminal = Terminal::new(TestBackend::new(width, 32)).unwrap();
+        terminal.draw(|frame| app.draw(frame)).unwrap();
+        let (column, row) = body_position(terminal.backend().buffer(), "https://example.com");
+        assert_eq!(terminal.backend().buffer()[(column - 3, row)].symbol(), "X");
+        assert_eq!(terminal.backend().buffer()[(column - 2, row)].symbol(), ":");
+        for outside in [column - 3, column - 2, column - 1] {
+            pointer(
+                &mut app,
+                MouseEventKind::Down(MouseButton::Left),
+                outside,
+                row,
+            );
+            pointer(
+                &mut app,
+                MouseEventKind::Up(MouseButton::Left),
+                outside,
+                row,
+            );
+        }
+        let mut activated = Vec::new();
+        let mut open = |uri: &mant_ui::ExternalUri| {
+            activated.push(uri.as_str().to_owned());
+            Ok(())
+        };
+        app.service_pending(&mut ReaderServices {
+            open_external: Some(&mut open),
+            ..ReaderServices::default()
+        });
+        assert!(activated.is_empty(), "caller output became a link hit");
+    }
+    assert_pointer_and_copy(&query, "https://example.com", "https://example.com");
+}
+
+#[test]
+fn invalid_link_identity_keeps_the_closed_head_row_in_real_cells() {
+    // This complete source ran pristine CVS first: term_fill accepts X/URI,
+    // rejects Z, and It post closes HEAD. Moving the boundary from an inline
+    // suffix to Separate layout must preserve both physical rows.
+    let source = format!(
+        "{PRE}.Bl -hang -width 4n\n.It Xo\n.Lk \"https://example.org\\p \\p\" X\n.No Z\n.Xc\n.No BodyWord\n.El\n"
+    );
+    let query = roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+    let mut app = App::new(&query);
+    let mut terminal = Terminal::new(TestBackend::new(80, 32)).unwrap();
+    for width in [80, 128, 80] {
+        terminal.backend_mut().resize(width, 32);
+        terminal.draw(|frame| app.draw(frame)).unwrap();
+        let buffer = terminal.backend().buffer();
+        let (uri_column, uri_row) = body_position(buffer, "https://example.org");
+        let (body_column, body_row) = body_position(buffer, "BodyWord");
+        assert_eq!(body_row, uri_row + 1);
+        assert_eq!(body_column, uri_column + 3);
+        assert_eq!(buffer[(uri_column - 3, uri_row)].symbol(), "X");
     }
 }
 
