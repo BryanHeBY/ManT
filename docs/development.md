@@ -264,9 +264,9 @@ Focused commands are useful while iterating:
 
 ```sh
 cargo fmt --all --check
+cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
 cargo test --locked --workspace
 cargo test --locked -p mant-ui
-cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
 cargo build --locked --release -p mant
 ```
 
@@ -278,21 +278,81 @@ ordered formatter transitions, FFI/Serde layout, or an explicitly bounded
 numeric conversion. Splitting a function solely to meet a line count is not
 a substitute for a clear execution boundary.
 
-Roff regression modules and fixtures use behavior names rather than review
-or implementation-stage names. Existing source and expected bytes stay intact
-when files move. The snapshot recorders read those checked-in sources as the
-sole case definitions and verify the registered pristine oracle before writing:
+### Regression suites and fixture maintenance
+
+Tests belong to the layer that owns the behavior. Native state tests stay next
+to the private codec implementation; engine tests exercise the complete public
+pipeline; render tests use source-neutral IR; reader and process tests use the
+actual application and executable.
+
+| Responsibility | Location | Inputs and assertions |
+| --- | --- | --- |
+| Formatter state and native field consumption | `mant-codec/src/mandoc/tests` and private inline test modules | Exact small roff literals, native cells and ownership receipts |
+| Public roff pipeline and finite execution matrices | `mant-engine/tests/roff_lowering`, including `native_execution` | JSON string round trips, query/render contracts and pristine fixture records |
+| Published JSON contracts | `tests/contracts` and `mant-protocol/tests` | Versioned schema snapshots and serialized examples |
+| Text layout and reader geometry | Private `mant-render` and `mant-ui` test modules | Source-neutral IR, physical rows and measured coordinates |
+| Native reader interactions | `mant-ui/tests` | Real Buffer cells, activation, selection, copying and resizing |
+| Executable delivery and discovery | `mant/tests/process` | Child-process stdout, stderr, exit codes and isolated document roots |
+| Real manual corpus | `tests/fixtures/roff/real` and distribution suites | Licensed source identities and domain-specific query gold |
+
+Roff modules, functions and fixture directories use behavior names rather than
+review or implementation-stage names. Macro names, immutable case identifiers,
+platform corpus names and protocol versions retain their meaning. Small inputs
+may remain Rust literals. Existing readable `.1`/`.expected` pairs remain pairs;
+finite generated families use JSON arrays, and large independent full-source
+matrices use JSONL. Raw renderer HTML and terminal snapshots have separate
+contracts and are not converted into normalized native word arrays.
+
+When moving tests, record a bijection of files and registered test functions,
+preserve source and expected bytes, and check that relative includes resolve
+to the same fixtures. Run the relevant packaged source-set gate as well as the
+workspace tests. A directory move does not authorize regenerated gold or weaker
+whitespace assertions. Shared helpers may handle reference invocation, real
+JSON decoding or reader actions; margin removal, empty-row handling and allowed
+native recovery remain explicit in the suite that owns the assertion.
+
+Before writing or changing a roff behavior assertion, read its pinned CVS
+execution path and run the exact complete input with the registered pristine
+reference. Restore and preflight it with `scripts/rebuild_reference_mandoc.sh`
+when needed. Keep native warnings, failed profiles and accepted reading-contract
+differences explicit. Never record expectations from ManT output.
+
+The legacy snapshot recorders read their checked-in sources as the sole case
+definitions and verify the registered pristine oracle before writing:
 
 ```sh
 bash scripts/regen_macro_consumer_matrix.sh --check
 bash scripts/regen_shared_execution_matrix.sh --check
 bash scripts/regen_field_retirement_matrix.sh --check
+bash scripts/regen_definition_matrix.sh --check
+bash scripts/regen_escape_matrix.sh --check
 ```
 
-Omit `--check` only to record deliberately reviewed oracle changes. The UTF-8
-matrices preserve internal spaces and blank rows but trim row-edge whitespace;
-the ASCII field matrix checks normalized row groups. Dedicated regressions
-must cover origins, trailing cells and responsive wrapping separately.
+Omit `--check` only to record deliberately reviewed oracle changes. Each legacy
+matrix retains its own historical projection: the definition matrix drops
+empty rows, the escape matrix keeps them but normalizes inline spacing, and
+the newer UTF-8 matrices preserve internal spaces and blank rows while trimming
+row edges. The ASCII field matrix checks normalized row groups. These scopes
+are not interchangeable; dedicated tests cover origins, trailing cells and
+responsive wrapping separately.
+
+The newer matrices have canonical full-source definitions and checked-in
+pristine records. Their source checks run without a local reference binary:
+
+```sh
+python3 scripts/generate_roff_execution_fixtures.py --check-sources
+python3 scripts/generate_roff_compatibility_fixtures.py --check-sources
+python3 scripts/generate_roff_execution_fixtures.py --check \
+  --evidence target/audits/native-execution-fixtures-check
+python3 scripts/generate_roff_compatibility_fixtures.py --check \
+  --evidence target/audits/native-compatibility-fixtures-check
+```
+
+The last two commands preflight the reference and replay the recorded profiles;
+they never rewrite fixtures. See the [native fixture guide](../crates/mant-engine/tests/roff_lowering/native_execution/fixtures/README.md)
+for strict row, accepted-content, recovery and portable-consumer scopes. Raw
+profile evidence and temporary review records stay under `target`; durable
+execution contracts belong in the manuals and contributor documentation.
 
 Dependency policy is declared in `deny.toml`. CI runs cargo-deny across all
 features and every supported target family to reject known vulnerabilities,
