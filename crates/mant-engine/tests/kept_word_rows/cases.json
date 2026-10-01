@@ -1,0 +1,886 @@
+[
+  {
+    "name": "ordinary_plain_same_word",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No A No B No Last\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A B Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "ordinary_plain_same_tight",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No A Ns No B No Last\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "AB Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "ordinary_plain_same_spacing_off",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Sm off\n.No A No B No Last\n.Sm on\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "ABLast",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "ordinary_plain_same_word_end",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No A\\p No B No Last\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A",
+      "B Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "ordinary_plain_same_continued_break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No A\\p\\c No B No Last\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "AB",
+      "Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "ordinary_plain_same_pending_zero",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No A\\zX No B No Last\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "AXB Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "ordinary_plain_cross_word",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No A\n.No B No Last\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A B Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "ordinary_plain_cross_tight",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No A Ns\n.No B No Last\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "AB Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "ordinary_plain_cross_spacing_off",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Sm off\n.No A\n.No B No Last\n.Sm on\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "ABLast",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "ordinary_plain_cross_word_end",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No A\\p\n.No B No Last\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A",
+      "B Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "ordinary_plain_cross_continued_break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No A\\p\\c\n.No B No Last\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "AB",
+      "Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "ordinary_plain_cross_pending_zero",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No A\\zX\n.No B No Last\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "AXB Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "ordinary_empty_same_word",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No A No \"\" No Last\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A  Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "ordinary_empty_same_tight",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No A Ns No \"\" No Last\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "ordinary_empty_same_spacing_off",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Sm off\n.No A No \"\" No Last\n.Sm on\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "ALast",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "ordinary_empty_same_word_end",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No A\\p No \"\" No Last\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A",
+      "Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "ordinary_empty_same_continued_break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No A\\p\\c No \"\" No Last\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A",
+      "Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "ordinary_empty_same_pending_zero",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No A\\zX No \"\" No Last\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "AX Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "ordinary_empty_cross_word",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No A\n.No \"\" No Last\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A  Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "ordinary_empty_cross_tight",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No A Ns\n.No \"\" No Last\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "ordinary_empty_cross_spacing_off",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Sm off\n.No A\n.No \"\" No Last\n.Sm on\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "ALast",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "ordinary_empty_cross_word_end",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No A\\p\n.No \"\" No Last\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A",
+      "Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "ordinary_empty_cross_continued_break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No A\\p\\c\n.No \"\" No Last\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A",
+      "Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "ordinary_empty_cross_pending_zero",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No A\\zX\n.No \"\" No Last\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "AX Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "ordinary_invisible_same_word",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No A No \\& No Last\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A  Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "ordinary_invisible_same_tight",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No A Ns No \\& No Last\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "ordinary_invisible_same_spacing_off",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Sm off\n.No A No \\& No Last\n.Sm on\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "ALast",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "ordinary_invisible_same_word_end",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No A\\p No \\& No Last\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A",
+      " Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "ordinary_invisible_same_continued_break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No A\\p\\c No \\& No Last\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A",
+      "Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "ordinary_invisible_same_pending_zero",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No A\\zX No \\& No Last\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "AX Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "ordinary_invisible_cross_word",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No A\n.No \\& No Last\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A  Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "ordinary_invisible_cross_tight",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No A Ns\n.No \\& No Last\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "ordinary_invisible_cross_spacing_off",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Sm off\n.No A\n.No \\& No Last\n.Sm on\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "ALast",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "ordinary_invisible_cross_word_end",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No A\\p\n.No \\& No Last\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A",
+      " Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "ordinary_invisible_cross_continued_break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No A\\p\\c\n.No \\& No Last\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A",
+      "Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "ordinary_invisible_cross_pending_zero",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No A\\zX\n.No \\& No Last\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "AX Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "ordinary_generated_same_word",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No A Bq B No Last\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A [B Last]",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "ordinary_generated_same_tight",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No A Ns Bq B No Last\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A[B Last]",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "ordinary_generated_same_spacing_off",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Sm off\n.No A Bq B No Last\n.Sm on\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A[BLast]",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "ordinary_generated_same_word_end",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No A\\p Bq B No Last\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A",
+      "[B Last]",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "ordinary_generated_same_continued_break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No A\\p\\c Bq B No Last\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A[B",
+      "Last]",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "ordinary_generated_same_pending_zero",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No A\\zX Bq B No Last\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "AX[B Last]",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "ordinary_generated_cross_word",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No A\n.Bq B No Last\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A [B Last]",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "ordinary_generated_cross_tight",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No A Ns\n.Bq B No Last\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A[B Last]",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "ordinary_generated_cross_spacing_off",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Sm off\n.No A\n.Bq B No Last\n.Sm on\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A[BLast]",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "ordinary_generated_cross_word_end",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No A\\p\n.Bq B No Last\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A",
+      "[B Last]",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "ordinary_generated_cross_continued_break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No A\\p\\c\n.Bq B No Last\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A[B",
+      "Last]",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "ordinary_generated_cross_pending_zero",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No A\\zX\n.Bq B No Last\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "AX[B Last]",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "kept_plain_same_word",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bk -words\n.No A No B No Last\n.Ek\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A B Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "kept_plain_same_tight",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bk -words\n.No A Ns No B No Last\n.Ek\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "AB Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "kept_plain_same_spacing_off",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bk -words\n.Sm off\n.No A No B No Last\n.Ek\n.Sm on\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "ABLast",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "kept_plain_same_word_end",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bk -words\n.No A\\p No B No Last\n.Ek\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A B Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "kept_plain_same_continued_break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bk -words\n.No A\\p\\c No B No Last\n.Ek\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "AB Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "kept_plain_same_pending_zero",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bk -words\n.No A\\zX No B No Last\n.Ek\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "AXB Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "kept_plain_cross_word",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bk -words\n.No A\n.No B No Last\n.Ek\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A B Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "kept_plain_cross_tight",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bk -words\n.No A Ns\n.No B No Last\n.Ek\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "AB Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "kept_plain_cross_spacing_off",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bk -words\n.Sm off\n.No A\n.No B No Last\n.Ek\n.Sm on\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "ABLast",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "kept_plain_cross_word_end",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bk -words\n.No A\\p\n.No B No Last\n.Ek\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A",
+      "B Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "kept_plain_cross_continued_break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bk -words\n.No A\\p\\c\n.No B No Last\n.Ek\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "AB Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "kept_plain_cross_pending_zero",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bk -words\n.No A\\zX\n.No B No Last\n.Ek\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "AXB Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "kept_empty_same_word",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bk -words\n.No A No \"\" No Last\n.Ek\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A  Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "kept_empty_same_tight",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bk -words\n.No A Ns No \"\" No Last\n.Ek\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "kept_empty_same_spacing_off",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bk -words\n.Sm off\n.No A No \"\" No Last\n.Ek\n.Sm on\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "ALast",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "kept_empty_same_word_end",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bk -words\n.No A\\p No \"\" No Last\n.Ek\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A  Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "kept_empty_same_continued_break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bk -words\n.No A\\p\\c No \"\" No Last\n.Ek\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "kept_empty_same_pending_zero",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bk -words\n.No A\\zX No \"\" No Last\n.Ek\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "AX Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "kept_empty_cross_word",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bk -words\n.No A\n.No \"\" No Last\n.Ek\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A  Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "kept_empty_cross_tight",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bk -words\n.No A Ns\n.No \"\" No Last\n.Ek\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "kept_empty_cross_spacing_off",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bk -words\n.Sm off\n.No A\n.No \"\" No Last\n.Ek\n.Sm on\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "ALast",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "kept_empty_cross_word_end",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bk -words\n.No A\\p\n.No \"\" No Last\n.Ek\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A",
+      " Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "kept_empty_cross_continued_break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bk -words\n.No A\\p\\c\n.No \"\" No Last\n.Ek\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "kept_empty_cross_pending_zero",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bk -words\n.No A\\zX\n.No \"\" No Last\n.Ek\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "AX Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "kept_invisible_same_word",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bk -words\n.No A No \\& No Last\n.Ek\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A  Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "kept_invisible_same_tight",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bk -words\n.No A Ns No \\& No Last\n.Ek\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "kept_invisible_same_spacing_off",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bk -words\n.Sm off\n.No A No \\& No Last\n.Ek\n.Sm on\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "ALast",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "kept_invisible_same_word_end",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bk -words\n.No A\\p No \\& No Last\n.Ek\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A  Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "kept_invisible_same_continued_break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bk -words\n.No A\\p\\c No \\& No Last\n.Ek\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "kept_invisible_same_pending_zero",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bk -words\n.No A\\zX No \\& No Last\n.Ek\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "AX Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "kept_invisible_cross_word",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bk -words\n.No A\n.No \\& No Last\n.Ek\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A  Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "kept_invisible_cross_tight",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bk -words\n.No A Ns\n.No \\& No Last\n.Ek\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "kept_invisible_cross_spacing_off",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bk -words\n.Sm off\n.No A\n.No \\& No Last\n.Ek\n.Sm on\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "ALast",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "kept_invisible_cross_word_end",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bk -words\n.No A\\p\n.No \\& No Last\n.Ek\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A",
+      " Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "kept_invisible_cross_continued_break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bk -words\n.No A\\p\\c\n.No \\& No Last\n.Ek\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "kept_invisible_cross_pending_zero",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bk -words\n.No A\\zX\n.No \\& No Last\n.Ek\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "AX Last",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "kept_generated_same_word",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bk -words\n.No A Bq B No Last\n.Ek\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A [B Last]",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "kept_generated_same_tight",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bk -words\n.No A Ns Bq B No Last\n.Ek\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A[B Last]",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "kept_generated_same_spacing_off",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bk -words\n.Sm off\n.No A Bq B No Last\n.Ek\n.Sm on\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A[BLast]",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "kept_generated_same_word_end",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bk -words\n.No A\\p Bq B No Last\n.Ek\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A [B Last]",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "kept_generated_same_continued_break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bk -words\n.No A\\p\\c Bq B No Last\n.Ek\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A[B Last]",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "kept_generated_same_pending_zero",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bk -words\n.No A\\zX Bq B No Last\n.Ek\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "AX[B Last]",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "kept_generated_cross_word",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bk -words\n.No A\n.Bq B No Last\n.Ek\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A [B Last]",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "kept_generated_cross_tight",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bk -words\n.No A Ns\n.Bq B No Last\n.Ek\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A[B Last]",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "kept_generated_cross_spacing_off",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bk -words\n.Sm off\n.No A\n.Bq B No Last\n.Ek\n.Sm on\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A[BLast]",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "kept_generated_cross_word_end",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bk -words\n.No A\\p\n.Bq B No Last\n.Ek\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A",
+      "[B Last]",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "kept_generated_cross_continued_break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bk -words\n.No A\\p\\c\n.Bq B No Last\n.Ek\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A[B Last]",
+      "End",
+      ""
+    ]
+  },
+  {
+    "name": "kept_generated_cross_pending_zero",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bk -words\n.No A\\zX\n.Bq B No Last\n.Ek\n.br\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "AX[B Last]",
+      "End",
+      ""
+    ]
+  }
+]

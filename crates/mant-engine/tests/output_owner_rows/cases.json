@@ -1,0 +1,861 @@
+[
+  {
+    "name": "sink_paragraph_word",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No Word\n.Sh NEXT\n.No END\n",
+    "target": false,
+    "links": 0,
+    "first_label": null,
+    "rows": [
+      "Word",
+      ""
+    ]
+  },
+  {
+    "name": "sink_paragraph_two_words",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No Word NextWord\n.Sh NEXT\n.No END\n",
+    "target": false,
+    "links": 0,
+    "first_label": null,
+    "rows": [
+      "Word NextWord",
+      ""
+    ]
+  },
+  {
+    "name": "sink_paragraph_target",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Tg mant-field-word-2-0\n.No Word\n.Sh NEXT\n.No END\n",
+    "target": true,
+    "links": 0,
+    "first_label": null,
+    "rows": [
+      "Word",
+      ""
+    ]
+  },
+  {
+    "name": "sink_paragraph_link",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Lk https://example.org LABEL\n.Sh NEXT\n.No END\n",
+    "target": false,
+    "links": 1,
+    "first_label": null,
+    "rows": [
+      "LABEL: https://example.org",
+      ""
+    ]
+  },
+  {
+    "name": "sink_paragraph_rejected",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No X\\p\n.No \"\\p DROP\"\n.No Tail\n.Sh NEXT\n.No END\n",
+    "target": false,
+    "links": 0,
+    "first_label": null,
+    "rows": [
+      "X",
+      "",
+      ""
+    ]
+  },
+  {
+    "name": "sink_no_fill_word",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.No Word\n.fi\n.Sh NEXT\n.No END\n",
+    "target": false,
+    "links": 0,
+    "first_label": null,
+    "rows": [
+      "Word",
+      ""
+    ]
+  },
+  {
+    "name": "sink_no_fill_two_words",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.No Word NextWord\n.fi\n.Sh NEXT\n.No END\n",
+    "target": false,
+    "links": 0,
+    "first_label": null,
+    "rows": [
+      "Word NextWord",
+      ""
+    ]
+  },
+  {
+    "name": "sink_no_fill_target",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Tg mant-field-word-2-0\n.No Word\n.fi\n.Sh NEXT\n.No END\n",
+    "target": true,
+    "links": 0,
+    "first_label": null,
+    "rows": [
+      "Word",
+      ""
+    ]
+  },
+  {
+    "name": "sink_no_fill_link",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Lk https://example.org LABEL\n.fi\n.Sh NEXT\n.No END\n",
+    "target": false,
+    "links": 1,
+    "first_label": null,
+    "rows": [
+      "LABEL: https://example.org",
+      ""
+    ]
+  },
+  {
+    "name": "sink_no_fill_rejected",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.No X\\p\n.No \"\\p DROP\"\n.No Tail\n.fi\n.Sh NEXT\n.No END\n",
+    "target": false,
+    "links": 0,
+    "first_label": null,
+    "rows": [
+      "X",
+      "",
+      "Tail",
+      ""
+    ]
+  },
+  {
+    "name": "sink_literal_word",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No Word\n.Ed\n.Sh NEXT\n.No END\n",
+    "target": false,
+    "links": 0,
+    "first_label": null,
+    "rows": [
+      "Word",
+      ""
+    ]
+  },
+  {
+    "name": "sink_literal_two_words",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No Word NextWord\n.Ed\n.Sh NEXT\n.No END\n",
+    "target": false,
+    "links": 0,
+    "first_label": null,
+    "rows": [
+      "Word NextWord",
+      ""
+    ]
+  },
+  {
+    "name": "sink_literal_target",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bd -literal -compact\n.Tg mant-field-word-2-0\n.No Word\n.Ed\n.Sh NEXT\n.No END\n",
+    "target": true,
+    "links": 0,
+    "first_label": null,
+    "rows": [
+      "Word",
+      ""
+    ]
+  },
+  {
+    "name": "sink_literal_link",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bd -literal -compact\n.Lk https://example.org LABEL\n.Ed\n.Sh NEXT\n.No END\n",
+    "target": false,
+    "links": 1,
+    "first_label": null,
+    "rows": [
+      "LABEL: https://example.org",
+      ""
+    ]
+  },
+  {
+    "name": "sink_literal_rejected",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No X\\p\n.No \"\\p DROP\"\n.No Tail\n.Ed\n.Sh NEXT\n.No END\n",
+    "target": false,
+    "links": 0,
+    "first_label": null,
+    "rows": [
+      "X",
+      "",
+      "Tail",
+      ""
+    ]
+  },
+  {
+    "name": "sink_one_line_word",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.D1 Word\n.Sh NEXT\n.No END\n",
+    "target": false,
+    "links": 0,
+    "first_label": null,
+    "rows": [
+      "Word",
+      ""
+    ]
+  },
+  {
+    "name": "sink_one_line_two_words",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.D1 Word NextWord\n.Sh NEXT\n.No END\n",
+    "target": false,
+    "links": 0,
+    "first_label": null,
+    "rows": [
+      "Word NextWord",
+      ""
+    ]
+  },
+  {
+    "name": "sink_one_line_target",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Tg mant-field-word-2-0\n.D1 Word\n.Sh NEXT\n.No END\n",
+    "target": true,
+    "links": 0,
+    "first_label": null,
+    "rows": [
+      "Word",
+      ""
+    ]
+  },
+  {
+    "name": "sink_one_line_link",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.D1 Lk https://example.org LABEL\n.Sh NEXT\n.No END\n",
+    "target": false,
+    "links": 1,
+    "first_label": null,
+    "rows": [
+      "LABEL: https://example.org",
+      ""
+    ]
+  },
+  {
+    "name": "sink_one_line_rejected",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.D1 X\\p\n.D1 \"\\p DROP\"\n.D1 Tail\n.Sh NEXT\n.No END\n",
+    "target": false,
+    "links": 0,
+    "first_label": null,
+    "rows": [
+      "X",
+      "",
+      "Tail",
+      ""
+    ]
+  },
+  {
+    "name": "sink_literal_line_word",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Dl Word\n.Sh NEXT\n.No END\n",
+    "target": false,
+    "links": 0,
+    "first_label": null,
+    "rows": [
+      "Word",
+      ""
+    ]
+  },
+  {
+    "name": "sink_literal_line_two_words",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Dl Word NextWord\n.Sh NEXT\n.No END\n",
+    "target": false,
+    "links": 0,
+    "first_label": null,
+    "rows": [
+      "Word NextWord",
+      ""
+    ]
+  },
+  {
+    "name": "sink_literal_line_target",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Tg mant-field-word-2-0\n.Dl Word\n.Sh NEXT\n.No END\n",
+    "target": true,
+    "links": 0,
+    "first_label": null,
+    "rows": [
+      "Word",
+      ""
+    ]
+  },
+  {
+    "name": "sink_literal_line_link",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Dl Lk https://example.org LABEL\n.Sh NEXT\n.No END\n",
+    "target": false,
+    "links": 1,
+    "first_label": null,
+    "rows": [
+      "LABEL: https://example.org",
+      ""
+    ]
+  },
+  {
+    "name": "sink_literal_line_rejected",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Dl X\\p\n.Dl \"\\p DROP\"\n.Dl Tail\n.Sh NEXT\n.No END\n",
+    "target": false,
+    "links": 0,
+    "first_label": null,
+    "rows": [
+      "X",
+      "",
+      "Tail",
+      ""
+    ]
+  },
+  {
+    "name": "sink_head_word",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 20n -compact\n.It Xo\n.No Word\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "target": false,
+    "links": 0,
+    "first_label": null,
+    "rows": [
+      "Word                  BodyWord",
+      ""
+    ]
+  },
+  {
+    "name": "sink_head_two_words",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 20n -compact\n.It Xo\n.No Word NextWord\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "target": false,
+    "links": 0,
+    "first_label": null,
+    "rows": [
+      "Word NextWord         BodyWord",
+      ""
+    ]
+  },
+  {
+    "name": "sink_head_target",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 20n -compact\n.It Xo\n.Tg mant-field-word-2-0\n.No Word\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "target": true,
+    "links": 0,
+    "first_label": null,
+    "rows": [
+      "Word                  BodyWord",
+      ""
+    ]
+  },
+  {
+    "name": "sink_head_link",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 20n -compact\n.It Xo\n.Lk https://example.org LABEL\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "target": false,
+    "links": 1,
+    "first_label": null,
+    "rows": [
+      "LABEL: https://example.org",
+      "BodyWord",
+      ""
+    ]
+  },
+  {
+    "name": "sink_head_rejected",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 20n -compact\n.It Xo\n.No X\\p\n.No \"\\p DROP\"\n.No Tail\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "target": false,
+    "links": 0,
+    "first_label": null,
+    "rows": [
+      "X",
+      "",
+      "BodyWord",
+      ""
+    ]
+  },
+  {
+    "name": "sink_body_word",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 20n -compact\n.It HeadWord\n.No Word\n.El\n.Sh NEXT\n.No END\n",
+    "target": false,
+    "links": 0,
+    "first_label": null,
+    "rows": [
+      "HeadWord              Word",
+      ""
+    ]
+  },
+  {
+    "name": "sink_body_two_words",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 20n -compact\n.It HeadWord\n.No Word NextWord\n.El\n.Sh NEXT\n.No END\n",
+    "target": false,
+    "links": 0,
+    "first_label": null,
+    "rows": [
+      "HeadWord              Word NextWord",
+      ""
+    ]
+  },
+  {
+    "name": "sink_body_target",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 20n -compact\n.It HeadWord\n.Tg mant-field-word-2-0\n.No Word\n.El\n.Sh NEXT\n.No END\n",
+    "target": true,
+    "links": 0,
+    "first_label": null,
+    "rows": [
+      "HeadWord              Word",
+      ""
+    ]
+  },
+  {
+    "name": "sink_body_link",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 20n -compact\n.It HeadWord\n.Lk https://example.org LABEL\n.El\n.Sh NEXT\n.No END\n",
+    "target": false,
+    "links": 1,
+    "first_label": null,
+    "rows": [
+      "HeadWord              LABEL: https://example.org",
+      ""
+    ]
+  },
+  {
+    "name": "sink_body_rejected",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 20n -compact\n.It HeadWord\n.No X\\p\n.No \"\\p DROP\"\n.No Tail\n.El\n.Sh NEXT\n.No END\n",
+    "target": false,
+    "links": 0,
+    "first_label": null,
+    "rows": [
+      "HeadWord              X",
+      "",
+      ""
+    ]
+  },
+  {
+    "name": "sink_table_word",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.TS\nl.\nT{\n.No Word\nT}\n.TE\n.Sh NEXT\n.No END\n",
+    "target": false,
+    "links": 0,
+    "first_label": null,
+    "rows": [
+      "Word",
+      ""
+    ],
+    "scope": "table-macro-recovery",
+    "reference_fragment": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No Word\n.Sh NEXT\n.No END\n",
+    "fragment_rows": [
+      "Word",
+      ""
+    ]
+  },
+  {
+    "name": "sink_table_two_words",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.TS\nl.\nT{\n.No Word NextWord\nT}\n.TE\n.Sh NEXT\n.No END\n",
+    "target": false,
+    "links": 0,
+    "first_label": null,
+    "rows": [
+      "Word NextWord",
+      ""
+    ],
+    "scope": "table-macro-recovery",
+    "reference_fragment": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No Word NextWord\n.Sh NEXT\n.No END\n",
+    "fragment_rows": [
+      "Word NextWord",
+      ""
+    ]
+  },
+  {
+    "name": "sink_table_target",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Tg mant-field-word-2-0\n.TS\nl.\nT{\n.No Word\nT}\n.TE\n.Sh NEXT\n.No END\n",
+    "target": true,
+    "links": 0,
+    "first_label": null,
+    "rows": [
+      "Word",
+      ""
+    ],
+    "scope": "table-macro-recovery",
+    "reference_fragment": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No Word\n.Sh NEXT\n.No END\n",
+    "fragment_rows": [
+      "Word",
+      ""
+    ]
+  },
+  {
+    "name": "sink_table_link",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.TS\nl.\nT{\n.Lk https://example.org\nT}\n.TE\n.Sh NEXT\n.No END\n",
+    "target": false,
+    "links": 1,
+    "first_label": null,
+    "rows": [
+      "https://example.org",
+      ""
+    ],
+    "scope": "table-macro-recovery",
+    "reference_fragment": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Lk https://example.org\n.Sh NEXT\n.No END\n",
+    "fragment_rows": [
+      "https://example.org",
+      ""
+    ]
+  },
+  {
+    "name": "sink_table_rejected",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.TS\nl.\nT{\n.No X\\p\n.No \"\\p DROP\"\n.No Tail\nT}\n.TE\n.Sh NEXT\n.No END\n",
+    "target": false,
+    "links": 0,
+    "first_label": null,
+    "rows": [
+      "X",
+      "\"",
+      "DROP\" Tail",
+      ""
+    ],
+    "scope": "table-macro-recovery",
+    "reference_fragment": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No X\\p\n.No \"\\p DROP\"\n.No Tail\n.Sh NEXT\n.No END\n",
+    "fragment_rows": [
+      "X",
+      "",
+      ""
+    ]
+  },
+  {
+    "name": "sink_heading_word",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Ss Word\n.No BodyWord\n.Sh NEXT\n.No END\n",
+    "target": false,
+    "links": 0,
+    "first_label": null,
+    "rows": [
+      "Word",
+      "BodyWord",
+      ""
+    ]
+  },
+  {
+    "name": "sink_heading_two_words",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Ss Word NextWord\n.No BodyWord\n.Sh NEXT\n.No END\n",
+    "target": false,
+    "links": 0,
+    "first_label": null,
+    "rows": [
+      "Word NextWord",
+      "BodyWord",
+      ""
+    ]
+  },
+  {
+    "name": "sink_heading_target",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Tg mant-field-word-2-0\n.Ss Word\n.No BodyWord\n.Sh NEXT\n.No END\n",
+    "target": true,
+    "links": 0,
+    "first_label": null,
+    "rows": [
+      "Word",
+      "BodyWord",
+      ""
+    ]
+  },
+  {
+    "name": "sink_heading_link",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Ss Lk https://example.org LABEL\n.No BodyWord\n.Sh NEXT\n.No END\n",
+    "target": false,
+    "links": 1,
+    "first_label": null,
+    "rows": [
+      "LABEL: https://example.org",
+      "BodyWord",
+      ""
+    ]
+  },
+  {
+    "name": "sink_heading_rejected",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Ss No \"X\\p \\p DROP\"\n.No BodyWord\n.Sh NEXT\n.No END\n",
+    "target": false,
+    "links": 0,
+    "first_label": null,
+    "rows": [
+      "X",
+      "",
+      "BodyWord",
+      ""
+    ]
+  },
+  {
+    "name": "link_UR_none_none",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.UR https://example.org\nfirst\n.UE\nafter\n.SH NEXT\nEND\n",
+    "target": false,
+    "links": 1,
+    "first_label": "first",
+    "rows": [
+      "first <https://example.org> after",
+      ""
+    ]
+  },
+  {
+    "name": "link_UR_none_paragraph",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.UR https://example.org\nfirst\n.PP\nbody\n.UE\nafter\n.SH NEXT\nEND\n",
+    "target": false,
+    "links": 1,
+    "first_label": "first",
+    "rows": [
+      "first",
+      "",
+      "body <https://example.org> after",
+      ""
+    ]
+  },
+  {
+    "name": "link_UR_none_item",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.UR https://example.org\nfirst\n.IP item 4\nbody\n.UE\nafter\n.SH NEXT\nEND\n",
+    "target": false,
+    "links": 1,
+    "first_label": "first",
+    "rows": [
+      "first",
+      "",
+      "item",
+      "body",
+      "<https://example.org> after",
+      ""
+    ]
+  },
+  {
+    "name": "link_UR_none_fill",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.UR https://example.org\nfirst\n.nf\nbody\n.fi\n.UE\nafter\n.SH NEXT\nEND\n",
+    "target": false,
+    "links": 1,
+    "first_label": "first",
+    "rows": [
+      "first",
+      "body",
+      "<https://example.org> after",
+      ""
+    ]
+  },
+  {
+    "name": "link_UR_word_none",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\nprefix\n.UR https://example.org\nfirst\n.UE\nafter\n.SH NEXT\nEND\n",
+    "target": false,
+    "links": 1,
+    "first_label": "first",
+    "rows": [
+      "prefix first <https://example.org> after",
+      ""
+    ]
+  },
+  {
+    "name": "link_UR_word_paragraph",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\nprefix\n.UR https://example.org\nfirst\n.PP\nbody\n.UE\nafter\n.SH NEXT\nEND\n",
+    "target": false,
+    "links": 1,
+    "first_label": "first",
+    "rows": [
+      "prefix first",
+      "",
+      "body <https://example.org> after",
+      ""
+    ]
+  },
+  {
+    "name": "link_UR_word_item",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\nprefix\n.UR https://example.org\nfirst\n.IP item 4\nbody\n.UE\nafter\n.SH NEXT\nEND\n",
+    "target": false,
+    "links": 1,
+    "first_label": "first",
+    "rows": [
+      "prefix first",
+      "",
+      "item",
+      "body",
+      "<https://example.org> after",
+      ""
+    ]
+  },
+  {
+    "name": "link_UR_word_fill",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\nprefix\n.UR https://example.org\nfirst\n.nf\nbody\n.fi\n.UE\nafter\n.SH NEXT\nEND\n",
+    "target": false,
+    "links": 1,
+    "first_label": "first",
+    "rows": [
+      "prefix first",
+      "body",
+      "<https://example.org> after",
+      ""
+    ]
+  },
+  {
+    "name": "link_UR_styled_none",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.B prefix\n.I words\n.UR https://example.org\nfirst\n.UE\nafter\n.SH NEXT\nEND\n",
+    "target": false,
+    "links": 1,
+    "first_label": "first",
+    "rows": [
+      "prefix words first <https://example.org> after",
+      ""
+    ]
+  },
+  {
+    "name": "link_UR_styled_paragraph",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.B prefix\n.I words\n.UR https://example.org\nfirst\n.PP\nbody\n.UE\nafter\n.SH NEXT\nEND\n",
+    "target": false,
+    "links": 1,
+    "first_label": "first",
+    "rows": [
+      "prefix words first",
+      "",
+      "body <https://example.org> after",
+      ""
+    ]
+  },
+  {
+    "name": "link_UR_styled_item",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.B prefix\n.I words\n.UR https://example.org\nfirst\n.IP item 4\nbody\n.UE\nafter\n.SH NEXT\nEND\n",
+    "target": false,
+    "links": 1,
+    "first_label": "first",
+    "rows": [
+      "prefix words first",
+      "",
+      "item",
+      "body",
+      "<https://example.org> after",
+      ""
+    ]
+  },
+  {
+    "name": "link_UR_styled_fill",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.B prefix\n.I words\n.UR https://example.org\nfirst\n.nf\nbody\n.fi\n.UE\nafter\n.SH NEXT\nEND\n",
+    "target": false,
+    "links": 1,
+    "first_label": "first",
+    "rows": [
+      "prefix words first",
+      "body",
+      "<https://example.org> after",
+      ""
+    ]
+  },
+  {
+    "name": "link_MT_none_none",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.MT user@example.org\nfirst\n.ME\nafter\n.SH NEXT\nEND\n",
+    "target": false,
+    "links": 1,
+    "first_label": "first",
+    "rows": [
+      "first <user@example.org> after",
+      ""
+    ]
+  },
+  {
+    "name": "link_MT_none_paragraph",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.MT user@example.org\nfirst\n.PP\nbody\n.ME\nafter\n.SH NEXT\nEND\n",
+    "target": false,
+    "links": 1,
+    "first_label": "first",
+    "rows": [
+      "first",
+      "",
+      "body <user@example.org> after",
+      ""
+    ]
+  },
+  {
+    "name": "link_MT_none_item",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.MT user@example.org\nfirst\n.IP item 4\nbody\n.ME\nafter\n.SH NEXT\nEND\n",
+    "target": false,
+    "links": 1,
+    "first_label": "first",
+    "rows": [
+      "first",
+      "",
+      "item",
+      "body",
+      "<user@example.org> after",
+      ""
+    ]
+  },
+  {
+    "name": "link_MT_none_fill",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.MT user@example.org\nfirst\n.nf\nbody\n.fi\n.ME\nafter\n.SH NEXT\nEND\n",
+    "target": false,
+    "links": 1,
+    "first_label": "first",
+    "rows": [
+      "first",
+      "body",
+      "<user@example.org> after",
+      ""
+    ]
+  },
+  {
+    "name": "link_MT_word_none",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\nprefix\n.MT user@example.org\nfirst\n.ME\nafter\n.SH NEXT\nEND\n",
+    "target": false,
+    "links": 1,
+    "first_label": "first",
+    "rows": [
+      "prefix first <user@example.org> after",
+      ""
+    ]
+  },
+  {
+    "name": "link_MT_word_paragraph",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\nprefix\n.MT user@example.org\nfirst\n.PP\nbody\n.ME\nafter\n.SH NEXT\nEND\n",
+    "target": false,
+    "links": 1,
+    "first_label": "first",
+    "rows": [
+      "prefix first",
+      "",
+      "body <user@example.org> after",
+      ""
+    ]
+  },
+  {
+    "name": "link_MT_word_item",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\nprefix\n.MT user@example.org\nfirst\n.IP item 4\nbody\n.ME\nafter\n.SH NEXT\nEND\n",
+    "target": false,
+    "links": 1,
+    "first_label": "first",
+    "rows": [
+      "prefix first",
+      "",
+      "item",
+      "body",
+      "<user@example.org> after",
+      ""
+    ]
+  },
+  {
+    "name": "link_MT_word_fill",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\nprefix\n.MT user@example.org\nfirst\n.nf\nbody\n.fi\n.ME\nafter\n.SH NEXT\nEND\n",
+    "target": false,
+    "links": 1,
+    "first_label": "first",
+    "rows": [
+      "prefix first",
+      "body",
+      "<user@example.org> after",
+      ""
+    ]
+  },
+  {
+    "name": "link_MT_styled_none",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.B prefix\n.I words\n.MT user@example.org\nfirst\n.ME\nafter\n.SH NEXT\nEND\n",
+    "target": false,
+    "links": 1,
+    "first_label": "first",
+    "rows": [
+      "prefix words first <user@example.org> after",
+      ""
+    ]
+  },
+  {
+    "name": "link_MT_styled_paragraph",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.B prefix\n.I words\n.MT user@example.org\nfirst\n.PP\nbody\n.ME\nafter\n.SH NEXT\nEND\n",
+    "target": false,
+    "links": 1,
+    "first_label": "first",
+    "rows": [
+      "prefix words first",
+      "",
+      "body <user@example.org> after",
+      ""
+    ]
+  },
+  {
+    "name": "link_MT_styled_item",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.B prefix\n.I words\n.MT user@example.org\nfirst\n.IP item 4\nbody\n.ME\nafter\n.SH NEXT\nEND\n",
+    "target": false,
+    "links": 1,
+    "first_label": "first",
+    "rows": [
+      "prefix words first",
+      "",
+      "item",
+      "body",
+      "<user@example.org> after",
+      ""
+    ]
+  },
+  {
+    "name": "link_MT_styled_fill",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.B prefix\n.I words\n.MT user@example.org\nfirst\n.nf\nbody\n.fi\n.ME\nafter\n.SH NEXT\nEND\n",
+    "target": false,
+    "links": 1,
+    "first_label": "first",
+    "rows": [
+      "prefix words first",
+      "body",
+      "<user@example.org> after",
+      ""
+    ]
+  }
+]

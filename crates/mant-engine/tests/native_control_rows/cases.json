@@ -1,0 +1,2554 @@
+[
+  {
+    "name": "mdoc_word_none_control_none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_none_control_font",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.ft B\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_none_control_tabs",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.ta 4n 8n\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_none_control_target",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Tg marker\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_none_control_break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.br\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_none_control_space_zero",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.sp 0\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_none_control_space_one",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.sp 1\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_none_control_space_negative",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.sp -1\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_none_control_margin",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.mc\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_none_control_paragraph",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Pp\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_none_control_no_fill",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_none_control_indent",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.ti 2n\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_empty_control_none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\"\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_empty_control_font",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\"\n.ft B\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_empty_control_tabs",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\"\n.ta 4n 8n\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_empty_control_target",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\"\n.Tg marker\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_empty_control_break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\"\n.br\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_empty_control_space_zero",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\"\n.sp 0\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_empty_control_space_one",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\"\n.sp 1\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_empty_control_space_negative",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\"\n.sp -1\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_empty_control_margin",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\"\n.mc\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_empty_control_paragraph",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\"\n.Pp\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_empty_control_no_fill",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\"\n.nf\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_empty_control_indent",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\"\n.ti 2n\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_bare_zero_control_none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\z\"\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "ail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_bare_zero_control_font",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\z\"\n.ft B\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "ail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_bare_zero_control_tabs",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\z\"\n.ta 4n 8n\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "ail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_bare_zero_control_target",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\z\"\n.Tg marker\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "ail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_bare_zero_control_break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\z\"\n.br\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "ail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_bare_zero_control_space_zero",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\z\"\n.sp 0\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "ail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_bare_zero_control_space_one",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\z\"\n.sp 1\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "",
+      "ail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_bare_zero_control_space_negative",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\z\"\n.sp -1\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "ail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_bare_zero_control_margin",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\z\"\n.mc\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "ail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_bare_zero_control_paragraph",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\z\"\n.Pp\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "",
+      "ail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_bare_zero_control_no_fill",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\z\"\n.nf\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "ail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_bare_zero_control_indent",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\z\"\n.ti 2n\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "ail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_pending_zero_control_none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\zX\"\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "XTail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_pending_zero_control_font",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\zX\"\n.ft B\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "XTail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_pending_zero_control_tabs",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\zX\"\n.ta 4n 8n\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "XTail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_pending_zero_control_target",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\zX\"\n.Tg marker\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "XTail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_pending_zero_control_break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\zX\"\n.br\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "X",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_pending_zero_control_space_zero",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\zX\"\n.sp 0\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "X",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_pending_zero_control_space_one",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\zX\"\n.sp 1\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "X",
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_pending_zero_control_space_negative",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\zX\"\n.sp -1\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "X",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_pending_zero_control_margin",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\zX\"\n.mc\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "X Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_pending_zero_control_paragraph",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\zX\"\n.Pp\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "X",
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_pending_zero_control_no_fill",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\zX\"\n.nf\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "X",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_pending_zero_control_indent",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\zX\"\n.ti 2n\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "X",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_invisible_control_none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\&\"\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_invisible_control_font",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\&\"\n.ft B\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_invisible_control_tabs",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\&\"\n.ta 4n 8n\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_invisible_control_target",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\&\"\n.Tg marker\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_invisible_control_break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\&\"\n.br\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_invisible_control_space_zero",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\&\"\n.sp 0\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_invisible_control_space_one",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\&\"\n.sp 1\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "",
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_invisible_control_space_negative",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\&\"\n.sp -1\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_invisible_control_margin",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\&\"\n.mc\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_invisible_control_paragraph",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\&\"\n.Pp\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "",
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_invisible_control_no_fill",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\&\"\n.nf\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_invisible_control_indent",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\&\"\n.ti 2n\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_rejected_control_none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\p X\"\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_rejected_control_font",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\p X\"\n.ft B\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_rejected_control_tabs",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\p X\"\n.ta 4n 8n\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_rejected_control_target",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\p X\"\n.Tg marker\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_rejected_control_break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\p X\"\n.br\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_rejected_control_space_zero",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\p X\"\n.sp 0\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_rejected_control_space_one",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\p X\"\n.sp 1\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "",
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_rejected_control_space_negative",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\p X\"\n.sp -1\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_rejected_control_margin",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\p X\"\n.mc\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_rejected_control_paragraph",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\p X\"\n.Pp\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "",
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_rejected_control_no_fill",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\p X\"\n.nf\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_rejected_control_indent",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\p X\"\n.ti 2n\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_partial_control_none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No X\n.No \"\\p\"\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "X",
+      "",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_partial_control_font",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No X\n.No \"\\p\"\n.ft B\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "X",
+      "",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_partial_control_tabs",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No X\n.No \"\\p\"\n.ta 4n 8n\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "X",
+      "",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_partial_control_target",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No X\n.No \"\\p\"\n.Tg marker\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "X",
+      "",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_partial_control_break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No X\n.No \"\\p\"\n.br\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "X",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_partial_control_space_zero",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No X\n.No \"\\p\"\n.sp 0\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "X",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_partial_control_space_one",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No X\n.No \"\\p\"\n.sp 1\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "X",
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_partial_control_space_negative",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No X\n.No \"\\p\"\n.sp -1\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "X",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_partial_control_margin",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No X\n.No \"\\p\"\n.mc\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "X Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_partial_control_paragraph",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No X\n.No \"\\p\"\n.Pp\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "X",
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_partial_control_no_fill",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No X\n.No \"\\p\"\n.nf\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "X",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_partial_control_indent",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No X\n.No \"\\p\"\n.ti 2n\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "X",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_embedded_control_none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"X\\p Y\"\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "X",
+      "Y Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_embedded_control_font",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"X\\p Y\"\n.ft B\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "X",
+      "Y Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_embedded_control_tabs",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"X\\p Y\"\n.ta 4n 8n\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "X",
+      "Y Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_embedded_control_target",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"X\\p Y\"\n.Tg marker\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "X",
+      "Y Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_embedded_control_break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"X\\p Y\"\n.br\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "X",
+      "Y",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_embedded_control_space_zero",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"X\\p Y\"\n.sp 0\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "X",
+      "Y",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_embedded_control_space_one",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"X\\p Y\"\n.sp 1\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "X",
+      "Y",
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_embedded_control_space_negative",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"X\\p Y\"\n.sp -1\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "X",
+      "Y",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_embedded_control_margin",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"X\\p Y\"\n.mc\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "X",
+      "Y Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_embedded_control_paragraph",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"X\\p Y\"\n.Pp\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "X",
+      "Y",
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_embedded_control_no_fill",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"X\\p Y\"\n.nf\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "X",
+      "Y",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_embedded_control_indent",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"X\\p Y\"\n.ti 2n\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "X",
+      "Y",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_pending_zero_exit_fill",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\zX\"\n.fi\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "X",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_pending_zero_exit_two_margin",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\zX\"\n.mc\n.mc\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "X Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_pending_zero_exit_two_break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\zX\"\n.br\n.br\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "X",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_pending_zero_exit_two_space",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\zX\"\n.sp 1\n.sp 2\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "X",
+      "",
+      "",
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_pending_zero_exit_paragraph",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\zX\"\n.Pp\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "X",
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_pending_zero_exit_section",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\zX\"\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "X",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_pending_zero_exit_eof",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\zX\"\n",
+    "eof": true,
+    "rows": [
+      "X"
+    ]
+  },
+  {
+    "name": "mdoc_word_rejected_exit_fill",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\p X\"\n.fi\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_rejected_exit_two_margin",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\p X\"\n.mc\n.mc\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_rejected_exit_two_break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\p X\"\n.br\n.br\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_rejected_exit_two_space",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\p X\"\n.sp 1\n.sp 2\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "",
+      "",
+      "",
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_rejected_exit_paragraph",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\p X\"\n.Pp\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "",
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_rejected_exit_section",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\p X\"\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_rejected_exit_eof",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\p X\"\n",
+    "eof": true,
+    "rows": [
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_embedded_exit_fill",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"X\\p Y\"\n.fi\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "X",
+      "Y",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_embedded_exit_two_margin",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"X\\p Y\"\n.mc\n.mc\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "X",
+      "Y Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_embedded_exit_two_break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"X\\p Y\"\n.br\n.br\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "X",
+      "Y",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_embedded_exit_two_space",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"X\\p Y\"\n.sp 1\n.sp 2\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "X",
+      "Y",
+      "",
+      "",
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_embedded_exit_paragraph",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"X\\p Y\"\n.Pp\n.No Tail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "X",
+      "Y",
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_embedded_exit_section",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"X\\p Y\"\n.Sh NEXT\n.No END\n",
+    "eof": false,
+    "rows": [
+      "X",
+      "Y",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_word_embedded_exit_eof",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"X\\p Y\"\n",
+    "eof": true,
+    "rows": [
+      "X",
+      "Y"
+    ]
+  },
+  {
+    "name": "man_word_none_control_none",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_none_control_font",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.ft B\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_none_control_tabs",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.ta 4n 8n\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_none_control_target",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.ft R\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_none_control_break",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.br\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_none_control_space_zero",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.sp 0\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_none_control_space_one",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.sp 1\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_none_control_space_negative",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.sp -1\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_none_control_margin",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.mc\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_none_control_paragraph",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.PP\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_none_control_no_fill",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_none_control_indent",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.ti 2n\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_empty_control_none",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.B \"\"\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_empty_control_font",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.B \"\"\n.ft B\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_empty_control_tabs",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.B \"\"\n.ta 4n 8n\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_empty_control_target",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.B \"\"\n.ft R\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_empty_control_break",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.B \"\"\n.br\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_empty_control_space_zero",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.B \"\"\n.sp 0\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_empty_control_space_one",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.B \"\"\n.sp 1\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "",
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_empty_control_space_negative",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.B \"\"\n.sp -1\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_empty_control_margin",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.B \"\"\n.mc\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_empty_control_paragraph",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.B \"\"\n.PP\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "",
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_empty_control_no_fill",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.B \"\"\n.nf\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_empty_control_indent",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.B \"\"\n.ti 2n\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_bare_zero_control_none",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\z\"\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"\"Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_bare_zero_control_font",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\z\"\n.ft B\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"\"Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_bare_zero_control_tabs",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\z\"\n.ta 4n 8n\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"\"Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_bare_zero_control_target",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\z\"\n.ft R\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"\"Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_bare_zero_control_break",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\z\"\n.br\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"\"",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_bare_zero_control_space_zero",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\z\"\n.sp 0\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"\"",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_bare_zero_control_space_one",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\z\"\n.sp 1\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"\"",
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_bare_zero_control_space_negative",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\z\"\n.sp -1\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"\"",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_bare_zero_control_margin",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\z\"\n.mc\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"\" Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_bare_zero_control_paragraph",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\z\"\n.PP\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"\"",
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_bare_zero_control_no_fill",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\z\"\n.nf\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"\"",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_bare_zero_control_indent",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\z\"\n.ti 2n\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"\"",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_pending_zero_control_none",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\zX\"\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"\" Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_pending_zero_control_font",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\zX\"\n.ft B\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"\" Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_pending_zero_control_tabs",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\zX\"\n.ta 4n 8n\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"\" Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_pending_zero_control_target",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\zX\"\n.ft R\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"\" Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_pending_zero_control_break",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\zX\"\n.br\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"\"",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_pending_zero_control_space_zero",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\zX\"\n.sp 0\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"\"",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_pending_zero_control_space_one",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\zX\"\n.sp 1\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"\"",
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_pending_zero_control_space_negative",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\zX\"\n.sp -1\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"\"",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_pending_zero_control_margin",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\zX\"\n.mc\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"\" Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_pending_zero_control_paragraph",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\zX\"\n.PP\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"\"",
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_pending_zero_control_no_fill",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\zX\"\n.nf\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"\"",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_pending_zero_control_indent",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\zX\"\n.ti 2n\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"\"",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_invisible_control_none",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\&\"\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"\" Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_invisible_control_font",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\&\"\n.ft B\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"\" Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_invisible_control_tabs",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\&\"\n.ta 4n 8n\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"\" Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_invisible_control_target",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\&\"\n.ft R\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"\" Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_invisible_control_break",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\&\"\n.br\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"\"",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_invisible_control_space_zero",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\&\"\n.sp 0\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"\"",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_invisible_control_space_one",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\&\"\n.sp 1\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"\"",
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_invisible_control_space_negative",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\&\"\n.sp -1\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"\"",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_invisible_control_margin",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\&\"\n.mc\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"\" Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_invisible_control_paragraph",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\&\"\n.PP\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"\"",
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_invisible_control_no_fill",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\&\"\n.nf\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"\"",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_invisible_control_indent",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\&\"\n.ti 2n\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"\"",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_rejected_control_none",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\p X\"\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"",
+      "X\" Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_rejected_control_font",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\p X\"\n.ft B\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"",
+      "X\" Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_rejected_control_tabs",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\p X\"\n.ta 4n 8n\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"",
+      "X\" Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_rejected_control_target",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\p X\"\n.ft R\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"",
+      "X\" Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_rejected_control_break",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\p X\"\n.br\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"",
+      "X\"",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_rejected_control_space_zero",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\p X\"\n.sp 0\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"",
+      "X\"",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_rejected_control_space_one",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\p X\"\n.sp 1\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"",
+      "X\"",
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_rejected_control_space_negative",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\p X\"\n.sp -1\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"",
+      "X\"",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_rejected_control_margin",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\p X\"\n.mc\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"",
+      "X\" Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_rejected_control_paragraph",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\p X\"\n.PP\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"",
+      "X\"",
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_rejected_control_no_fill",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\p X\"\n.nf\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"",
+      "X\"",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_rejected_control_indent",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\p X\"\n.ti 2n\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"",
+      "X\"",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_partial_control_none",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\nX\n\"\\p\"\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "X \"\"",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_partial_control_font",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\nX\n\"\\p\"\n.ft B\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "X \"\"",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_partial_control_tabs",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\nX\n\"\\p\"\n.ta 4n 8n\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "X \"\"",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_partial_control_target",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\nX\n\"\\p\"\n.ft R\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "X \"\"",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_partial_control_break",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\nX\n\"\\p\"\n.br\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "X \"\"",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_partial_control_space_zero",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\nX\n\"\\p\"\n.sp 0\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "X \"\"",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_partial_control_space_one",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\nX\n\"\\p\"\n.sp 1\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "X \"\"",
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_partial_control_space_negative",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\nX\n\"\\p\"\n.sp -1\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "X \"\"",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_partial_control_margin",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\nX\n\"\\p\"\n.mc\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "X \"\" Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_partial_control_paragraph",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\nX\n\"\\p\"\n.PP\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "X \"\"",
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_partial_control_no_fill",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\nX\n\"\\p\"\n.nf\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "X \"\"",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_partial_control_indent",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\nX\n\"\\p\"\n.ti 2n\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "X \"\"",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_embedded_control_none",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"X\\p Y\"\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"X",
+      "Y\" Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_embedded_control_font",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"X\\p Y\"\n.ft B\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"X",
+      "Y\" Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_embedded_control_tabs",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"X\\p Y\"\n.ta 4n 8n\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"X",
+      "Y\" Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_embedded_control_target",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"X\\p Y\"\n.ft R\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"X",
+      "Y\" Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_embedded_control_break",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"X\\p Y\"\n.br\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"X",
+      "Y\"",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_embedded_control_space_zero",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"X\\p Y\"\n.sp 0\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"X",
+      "Y\"",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_embedded_control_space_one",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"X\\p Y\"\n.sp 1\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"X",
+      "Y\"",
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_embedded_control_space_negative",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"X\\p Y\"\n.sp -1\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"X",
+      "Y\"",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_embedded_control_margin",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"X\\p Y\"\n.mc\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"X",
+      "Y\" Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_embedded_control_paragraph",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"X\\p Y\"\n.PP\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"X",
+      "Y\"",
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_embedded_control_no_fill",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"X\\p Y\"\n.nf\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"X",
+      "Y\"",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_embedded_control_indent",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"X\\p Y\"\n.ti 2n\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"X",
+      "Y\"",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_pending_zero_exit_fill",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\zX\"\n.fi\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"\"",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_pending_zero_exit_two_margin",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\zX\"\n.mc\n.mc\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"\" Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_pending_zero_exit_two_break",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\zX\"\n.br\n.br\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"\"",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_pending_zero_exit_two_space",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\zX\"\n.sp 1\n.sp 2\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"\"",
+      "",
+      "",
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_pending_zero_exit_paragraph",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\zX\"\n.PP\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"\"",
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_pending_zero_exit_section",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\zX\"\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"\"",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_pending_zero_exit_eof",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\zX\"\n",
+    "eof": true,
+    "rows": [
+      "\"\""
+    ]
+  },
+  {
+    "name": "man_word_rejected_exit_fill",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\p X\"\n.fi\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"",
+      "X\"",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_rejected_exit_two_margin",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\p X\"\n.mc\n.mc\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"",
+      "X\" Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_rejected_exit_two_break",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\p X\"\n.br\n.br\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"",
+      "X\"",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_rejected_exit_two_space",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\p X\"\n.sp 1\n.sp 2\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"",
+      "X\"",
+      "",
+      "",
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_rejected_exit_paragraph",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\p X\"\n.PP\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"",
+      "X\"",
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_rejected_exit_section",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\p X\"\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"",
+      "X\"",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_rejected_exit_eof",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"\\p X\"\n",
+    "eof": true,
+    "rows": [
+      "\"",
+      "X\""
+    ]
+  },
+  {
+    "name": "man_word_embedded_exit_fill",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"X\\p Y\"\n.fi\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"X",
+      "Y\"",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_embedded_exit_two_margin",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"X\\p Y\"\n.mc\n.mc\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"X",
+      "Y\" Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_embedded_exit_two_break",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"X\\p Y\"\n.br\n.br\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"X",
+      "Y\"",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_embedded_exit_two_space",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"X\\p Y\"\n.sp 1\n.sp 2\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"X",
+      "Y\"",
+      "",
+      "",
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_embedded_exit_paragraph",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"X\\p Y\"\n.PP\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"X",
+      "Y\"",
+      "",
+      "Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_embedded_exit_section",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"X\\p Y\"\n.SH NEXT\nEND\n",
+    "eof": false,
+    "rows": [
+      "\"X",
+      "Y\"",
+      ""
+    ]
+  },
+  {
+    "name": "man_word_embedded_exit_eof",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\"X\\p Y\"\n",
+    "eof": true,
+    "rows": [
+      "\"X",
+      "Y\""
+    ]
+  }
+]

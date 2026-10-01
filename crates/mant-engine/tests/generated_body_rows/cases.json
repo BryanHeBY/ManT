@@ -1,0 +1,1548 @@
+[
+  {
+    "name": "link_UR_plain_normal_word_end",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\nprefix\\p\n.UR https://example.org\nlabel\n.UE\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "prefix",
+      "label <https://example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_UR_plain_normal_bare_zero",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\n\\z\n.UR https://example.org\nlabel\n.UE\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "abel <https://example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_UR_plain_normal_same_coordinate",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.de XX\nfirst\nsecond\n..\n.nf\n.UR https://example.org\n.XX\nlabel\n.UE\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": true,
+    "rows": [
+      "first",
+      "second",
+      "label <https://example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_UR_plain_empty_word_end",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\nprefix\\p\n.UR \\&\nlabel\n.UE\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "prefix",
+      "label <>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_UR_plain_empty_bare_zero",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\n\\z\n.UR \\&\nlabel\n.UE\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "abel <>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_UR_plain_empty_same_coordinate",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.de XX\nfirst\nsecond\n..\n.nf\n.UR \\&\n.XX\nlabel\n.UE\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": true,
+    "rows": [
+      "first",
+      "second",
+      "label <>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_UR_bold_normal_word_end",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\nprefix\\p\n.UR https://example.org\n.B label\n.UE\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "prefix",
+      "label <https://example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_UR_bold_normal_bare_zero",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\n\\z\n.UR https://example.org\n.B label\n.UE\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "abel <https://example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_UR_bold_normal_same_coordinate",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.de XX\nfirst\nsecond\n..\n.nf\n.UR https://example.org\n.XX\n.B label\n.UE\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": true,
+    "rows": [
+      "first",
+      "second",
+      "label <https://example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_UR_bold_empty_word_end",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\nprefix\\p\n.UR \\&\n.B label\n.UE\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "prefix",
+      "label <>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_UR_bold_empty_bare_zero",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\n\\z\n.UR \\&\n.B label\n.UE\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "abel <>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_UR_bold_empty_same_coordinate",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.de XX\nfirst\nsecond\n..\n.nf\n.UR \\&\n.XX\n.B label\n.UE\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": true,
+    "rows": [
+      "first",
+      "second",
+      "label <>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_UR_empty_normal_word_end",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\nprefix\\p\n.UR https://example.org\n.UE\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "prefix",
+      "<https://example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_UR_empty_normal_bare_zero",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\n\\z\n.UR https://example.org\n.UE\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "https://example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_UR_empty_normal_same_coordinate",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.de XX\nfirst\nsecond\n..\n.nf\n.UR https://example.org\n.XX\n.UE\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": true,
+    "rows": [
+      "first",
+      "second <https://example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_UR_empty_empty_word_end",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\nprefix\\p\n.UR \\&\n.UE\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "prefix",
+      "<>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_UR_empty_empty_bare_zero",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\n\\z\n.UR \\&\n.UE\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      ">",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_UR_empty_empty_same_coordinate",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.de XX\nfirst\nsecond\n..\n.nf\n.UR \\&\n.XX\n.UE\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": true,
+    "rows": [
+      "first",
+      "second <>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_UR_invisible_normal_word_end",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\nprefix\\p\n.UR https://example.org\n\\&\n.UE\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "prefix",
+      "<https://example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_UR_invisible_normal_bare_zero",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\n\\z\n.UR https://example.org\n\\&\n.UE\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "https://example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_UR_invisible_normal_same_coordinate",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.de XX\nfirst\nsecond\n..\n.nf\n.UR https://example.org\n.XX\n\\&\n.UE\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": true,
+    "rows": [
+      "first",
+      "second",
+      "<https://example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_UR_invisible_empty_word_end",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\nprefix\\p\n.UR \\&\n\\&\n.UE\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "prefix",
+      "<>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_UR_invisible_empty_bare_zero",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\n\\z\n.UR \\&\n\\&\n.UE\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      ">",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_UR_invisible_empty_same_coordinate",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.de XX\nfirst\nsecond\n..\n.nf\n.UR \\&\n.XX\n\\&\n.UE\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": true,
+    "rows": [
+      "first",
+      "second",
+      "<>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_MT_plain_normal_word_end",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\nprefix\\p\n.MT user@example.org\nlabel\n.ME\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "prefix",
+      "label <user@example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_MT_plain_normal_bare_zero",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\n\\z\n.MT user@example.org\nlabel\n.ME\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "abel <user@example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_MT_plain_normal_same_coordinate",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.de XX\nfirst\nsecond\n..\n.nf\n.MT user@example.org\n.XX\nlabel\n.ME\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": true,
+    "rows": [
+      "first",
+      "second",
+      "label <user@example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_MT_plain_empty_word_end",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\nprefix\\p\n.MT \\&\nlabel\n.ME\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "prefix",
+      "label <>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_MT_plain_empty_bare_zero",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\n\\z\n.MT \\&\nlabel\n.ME\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "abel <>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_MT_plain_empty_same_coordinate",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.de XX\nfirst\nsecond\n..\n.nf\n.MT \\&\n.XX\nlabel\n.ME\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": true,
+    "rows": [
+      "first",
+      "second",
+      "label <>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_MT_bold_normal_word_end",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\nprefix\\p\n.MT user@example.org\n.B label\n.ME\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "prefix",
+      "label <user@example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_MT_bold_normal_bare_zero",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\n\\z\n.MT user@example.org\n.B label\n.ME\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "abel <user@example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_MT_bold_normal_same_coordinate",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.de XX\nfirst\nsecond\n..\n.nf\n.MT user@example.org\n.XX\n.B label\n.ME\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": true,
+    "rows": [
+      "first",
+      "second",
+      "label <user@example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_MT_bold_empty_word_end",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\nprefix\\p\n.MT \\&\n.B label\n.ME\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "prefix",
+      "label <>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_MT_bold_empty_bare_zero",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\n\\z\n.MT \\&\n.B label\n.ME\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "abel <>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_MT_bold_empty_same_coordinate",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.de XX\nfirst\nsecond\n..\n.nf\n.MT \\&\n.XX\n.B label\n.ME\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": true,
+    "rows": [
+      "first",
+      "second",
+      "label <>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_MT_empty_normal_word_end",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\nprefix\\p\n.MT user@example.org\n.ME\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "prefix",
+      "<user@example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_MT_empty_normal_bare_zero",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\n\\z\n.MT user@example.org\n.ME\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "user@example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_MT_empty_normal_same_coordinate",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.de XX\nfirst\nsecond\n..\n.nf\n.MT user@example.org\n.XX\n.ME\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": true,
+    "rows": [
+      "first",
+      "second <user@example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_MT_empty_empty_word_end",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\nprefix\\p\n.MT \\&\n.ME\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "prefix",
+      "<>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_MT_empty_empty_bare_zero",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\n\\z\n.MT \\&\n.ME\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      ">",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_MT_empty_empty_same_coordinate",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.de XX\nfirst\nsecond\n..\n.nf\n.MT \\&\n.XX\n.ME\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": true,
+    "rows": [
+      "first",
+      "second <>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_MT_invisible_normal_word_end",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\nprefix\\p\n.MT user@example.org\n\\&\n.ME\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "prefix",
+      "<user@example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_MT_invisible_normal_bare_zero",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\n\\z\n.MT user@example.org\n\\&\n.ME\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "user@example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_MT_invisible_normal_same_coordinate",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.de XX\nfirst\nsecond\n..\n.nf\n.MT user@example.org\n.XX\n\\&\n.ME\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": true,
+    "rows": [
+      "first",
+      "second",
+      "<user@example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_MT_invisible_empty_word_end",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\nprefix\\p\n.MT \\&\n\\&\n.ME\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "prefix",
+      "<>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_MT_invisible_empty_bare_zero",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\n\\z\n.MT \\&\n\\&\n.ME\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      ">",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_MT_invisible_empty_same_coordinate",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.de XX\nfirst\nsecond\n..\n.nf\n.MT \\&\n.XX\n\\&\n.ME\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": true,
+    "rows": [
+      "first",
+      "second",
+      "<>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_UR_paragraph_word_end",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\nprefix\\p\n.UR https://example.org\nfirst\n.PP\nbody\n.UE\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "prefix",
+      "first",
+      "",
+      "body <https://example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_UR_paragraph_bare_zero",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\n\\z\n.UR https://example.org\nfirst\n.PP\nbody\n.UE\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "irst",
+      "",
+      "body <https://example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_UR_paragraph_same_coordinate",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.de XX\nfirst\nsecond\n..\n.nf\n.UR https://example.org\n.XX\nfirst\n.PP\nbody\n.UE\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": true,
+    "rows": [
+      "first",
+      "second",
+      "first",
+      "",
+      "body <https://example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_UR_item_word_end",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\nprefix\\p\n.UR https://example.org\nfirst\n.IP item 4\nbody\n.UE\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "prefix",
+      "first",
+      "",
+      "item",
+      "body",
+      "<https://example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_UR_item_bare_zero",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\n\\z\n.UR https://example.org\nfirst\n.IP item 4\nbody\n.UE\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "irst",
+      "",
+      "item",
+      "body",
+      "<https://example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_UR_item_same_coordinate",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.de XX\nfirst\nsecond\n..\n.nf\n.UR https://example.org\n.XX\nfirst\n.IP item 4\nbody\n.UE\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": true,
+    "rows": [
+      "first",
+      "second",
+      "first",
+      "",
+      "item",
+      "body",
+      "<https://example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_UR_relative_word_end",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\nprefix\\p\n.UR https://example.org\nfirst\n.RS 4\nbody\n.RE\n.UE\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "prefix",
+      "first",
+      "body",
+      "<https://example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_UR_relative_bare_zero",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\n\\z\n.UR https://example.org\nfirst\n.RS 4\nbody\n.RE\n.UE\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "irst",
+      "body",
+      "<https://example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_UR_relative_same_coordinate",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.de XX\nfirst\nsecond\n..\n.nf\n.UR https://example.org\n.XX\nfirst\n.RS 4\nbody\n.RE\n.UE\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": true,
+    "rows": [
+      "first",
+      "second",
+      "first",
+      "body",
+      "<https://example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_UR_fill_word_end",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\nprefix\\p\n.UR https://example.org\nfirst\n.fi\nbody\n.nf\nsecond\n.UE\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "prefix",
+      "first",
+      "body",
+      "second <https://example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_UR_fill_bare_zero",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\n\\z\n.UR https://example.org\nfirst\n.fi\nbody\n.nf\nsecond\n.UE\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "irst",
+      "body",
+      "second <https://example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_UR_fill_same_coordinate",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.de XX\nfirst\nsecond\n..\n.nf\n.UR https://example.org\n.XX\nfirst\n.fi\nbody\n.nf\nsecond\n.UE\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": true,
+    "rows": [
+      "first",
+      "second",
+      "first",
+      "body",
+      "second <https://example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_UR_nested_word_end",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\nprefix\\p\n.UR https://example.org\nfirst\n.UR https://inner.example.org\ninner\n.UE\n.UE\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "prefix",
+      "first",
+      "inner <https://inner.example.org> <https://example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_UR_nested_bare_zero",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\n\\z\n.UR https://example.org\nfirst\n.UR https://inner.example.org\ninner\n.UE\n.UE\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "irst",
+      "inner <https://inner.example.org> <https://example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_UR_nested_same_coordinate",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.de XX\nfirst\nsecond\n..\n.nf\n.UR https://example.org\n.XX\nfirst\n.UR https://inner.example.org\ninner\n.UE\n.UE\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": true,
+    "rows": [
+      "first",
+      "second",
+      "first",
+      "inner <https://inner.example.org> <https://example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_MT_paragraph_word_end",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\nprefix\\p\n.MT user@example.org\nfirst\n.PP\nbody\n.ME\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "prefix",
+      "first",
+      "",
+      "body <user@example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_MT_paragraph_bare_zero",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\n\\z\n.MT user@example.org\nfirst\n.PP\nbody\n.ME\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "irst",
+      "",
+      "body <user@example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_MT_paragraph_same_coordinate",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.de XX\nfirst\nsecond\n..\n.nf\n.MT user@example.org\n.XX\nfirst\n.PP\nbody\n.ME\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": true,
+    "rows": [
+      "first",
+      "second",
+      "first",
+      "",
+      "body <user@example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_MT_item_word_end",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\nprefix\\p\n.MT user@example.org\nfirst\n.IP item 4\nbody\n.ME\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "prefix",
+      "first",
+      "",
+      "item",
+      "body",
+      "<user@example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_MT_item_bare_zero",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\n\\z\n.MT user@example.org\nfirst\n.IP item 4\nbody\n.ME\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "irst",
+      "",
+      "item",
+      "body",
+      "<user@example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_MT_item_same_coordinate",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.de XX\nfirst\nsecond\n..\n.nf\n.MT user@example.org\n.XX\nfirst\n.IP item 4\nbody\n.ME\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": true,
+    "rows": [
+      "first",
+      "second",
+      "first",
+      "",
+      "item",
+      "body",
+      "<user@example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_MT_relative_word_end",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\nprefix\\p\n.MT user@example.org\nfirst\n.RS 4\nbody\n.RE\n.ME\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "prefix",
+      "first",
+      "body",
+      "<user@example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_MT_relative_bare_zero",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\n\\z\n.MT user@example.org\nfirst\n.RS 4\nbody\n.RE\n.ME\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "irst",
+      "body",
+      "<user@example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_MT_relative_same_coordinate",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.de XX\nfirst\nsecond\n..\n.nf\n.MT user@example.org\n.XX\nfirst\n.RS 4\nbody\n.RE\n.ME\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": true,
+    "rows": [
+      "first",
+      "second",
+      "first",
+      "body",
+      "<user@example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_MT_fill_word_end",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\nprefix\\p\n.MT user@example.org\nfirst\n.fi\nbody\n.nf\nsecond\n.ME\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "prefix",
+      "first",
+      "body",
+      "second <user@example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_MT_fill_bare_zero",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\n\\z\n.MT user@example.org\nfirst\n.fi\nbody\n.nf\nsecond\n.ME\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "irst",
+      "body",
+      "second <user@example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_MT_fill_same_coordinate",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.de XX\nfirst\nsecond\n..\n.nf\n.MT user@example.org\n.XX\nfirst\n.fi\nbody\n.nf\nsecond\n.ME\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": true,
+    "rows": [
+      "first",
+      "second",
+      "first",
+      "body",
+      "second <user@example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_MT_nested_word_end",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\nprefix\\p\n.MT user@example.org\nfirst\n.UR https://inner.example.org\ninner\n.UE\n.ME\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "prefix",
+      "first",
+      "inner <https://inner.example.org> <user@example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_MT_nested_bare_zero",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\n\\z\n.MT user@example.org\nfirst\n.UR https://inner.example.org\ninner\n.UE\n.ME\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "irst",
+      "inner <https://inner.example.org> <user@example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_MT_nested_same_coordinate",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.de XX\nfirst\nsecond\n..\n.nf\n.MT user@example.org\n.XX\nfirst\n.UR https://inner.example.org\ninner\n.UE\n.ME\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": true,
+    "rows": [
+      "first",
+      "second",
+      "first",
+      "inner <https://inner.example.org> <user@example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_UR_before_zero_ordinary",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\n\\zX\n.UR https://example.org\nlabel\n.UE\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "X",
+      "label <https://example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_UR_before_zero_continued",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\n\\zX\\c\n.UR https://example.org\nlabel\n.UE\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "label <https://example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_UR_tail_zero_ordinary",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\n.UR https://example.org\nlabel\n\\zX\n.UE\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "label",
+      "X<https://example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_UR_tail_zero_continued",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\n.UR https://example.org\nlabel\n\\zX\\c\n.UE\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "label",
+      "<https://example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_MT_before_zero_ordinary",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\n\\zX\n.MT user@example.org\nlabel\n.ME\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "X",
+      "label <user@example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_MT_before_zero_continued",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\n\\zX\\c\n.MT user@example.org\nlabel\n.ME\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "label <user@example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_MT_tail_zero_ordinary",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\n.MT user@example.org\nlabel\n\\zX\n.ME\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "label",
+      "X<user@example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "link_MT_tail_zero_continued",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\n.MT user@example.org\nlabel\n\\zX\\c\n.ME\nafter\n.fi\n.SH NEXT\nEND\n",
+    "same_coordinate": false,
+    "rows": [
+      "label",
+      "<user@example.org>",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_no_fill_angle_word_end",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Ao\n.No X\\p\n.Ac\n.No after\n.fi\n.Sh NEXT\n.No END\n",
+    "same_coordinate": false,
+    "rows": [
+      "⟨",
+      "X⟩",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_no_fill_angle_bare_zero",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Ao\n.No \\z\n.Ac\n.No after\n.fi\n.Sh NEXT\n.No END\n",
+    "same_coordinate": false,
+    "rows": [
+      "⟨",
+      "⟩",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_no_fill_angle_same_coordinate",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.de XX\n.No first\n.No second\n..\n.nf\n.Ao\n.XX\n.Ac\n.No after\n.fi\n.Sh NEXT\n.No END\n",
+    "same_coordinate": true,
+    "rows": [
+      "⟨",
+      "first",
+      "second⟩",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_no_fill_square_word_end",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bo\n.No X\\p\n.Bc\n.No after\n.fi\n.Sh NEXT\n.No END\n",
+    "same_coordinate": false,
+    "rows": [
+      "[",
+      "X]",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_no_fill_square_bare_zero",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bo\n.No \\z\n.Bc\n.No after\n.fi\n.Sh NEXT\n.No END\n",
+    "same_coordinate": false,
+    "rows": [
+      "[",
+      "]",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_no_fill_square_same_coordinate",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.de XX\n.No first\n.No second\n..\n.nf\n.Bo\n.XX\n.Bc\n.No after\n.fi\n.Sh NEXT\n.No END\n",
+    "same_coordinate": true,
+    "rows": [
+      "[",
+      "first",
+      "second]",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_no_fill_function_word_end",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Fo call\n.No X\\p\n.Fc\n.No after\n.fi\n.Sh NEXT\n.No END\n",
+    "same_coordinate": false,
+    "rows": [
+      "call(",
+      "X)",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_no_fill_function_bare_zero",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Fo call\n.No \\z\n.Fc\n.No after\n.fi\n.Sh NEXT\n.No END\n",
+    "same_coordinate": false,
+    "rows": [
+      "call(",
+      ")",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_no_fill_function_same_coordinate",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.de XX\n.No first\n.No second\n..\n.nf\n.Fo call\n.XX\n.Fc\n.No after\n.fi\n.Sh NEXT\n.No END\n",
+    "same_coordinate": true,
+    "rows": [
+      "call(",
+      "first",
+      "second)",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_no_fill_author_word_end",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.No An X\\p\n.No after\n.fi\n.Sh NEXT\n.No END\n",
+    "same_coordinate": false,
+    "rows": [
+      "X",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_no_fill_author_bare_zero",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.No An \\z\n.No after\n.fi\n.Sh NEXT\n.No END\n",
+    "same_coordinate": false,
+    "rows": [
+      "fter",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_no_fill_author_same_coordinate",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.de XX\n.No An first\n.No An second\n..\n.nf\n.XX\n.No after\n.fi\n.Sh NEXT\n.No END\n",
+    "same_coordinate": true,
+    "rows": [
+      "first",
+      "second",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_literal_angle_word_end",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bd -literal -compact\n.Ao\n.No X\\p\n.Ac\n.Ed\n.No after\n.fi\n.Sh NEXT\n.No END\n",
+    "same_coordinate": false,
+    "rows": [
+      "⟨",
+      "X⟩",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_literal_angle_bare_zero",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bd -literal -compact\n.Ao\n.No \\z\n.Ac\n.Ed\n.No after\n.fi\n.Sh NEXT\n.No END\n",
+    "same_coordinate": false,
+    "rows": [
+      "⟨",
+      "⟩",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_literal_angle_same_coordinate",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.de XX\n.No first\n.No second\n..\n.nf\n.Bd -literal -compact\n.Ao\n.XX\n.Ac\n.Ed\n.No after\n.fi\n.Sh NEXT\n.No END\n",
+    "same_coordinate": true,
+    "rows": [
+      "⟨",
+      "first",
+      "second⟩",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_literal_square_word_end",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bd -literal -compact\n.Bo\n.No X\\p\n.Bc\n.Ed\n.No after\n.fi\n.Sh NEXT\n.No END\n",
+    "same_coordinate": false,
+    "rows": [
+      "[",
+      "X]",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_literal_square_bare_zero",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bd -literal -compact\n.Bo\n.No \\z\n.Bc\n.Ed\n.No after\n.fi\n.Sh NEXT\n.No END\n",
+    "same_coordinate": false,
+    "rows": [
+      "[",
+      "]",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_literal_square_same_coordinate",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.de XX\n.No first\n.No second\n..\n.nf\n.Bd -literal -compact\n.Bo\n.XX\n.Bc\n.Ed\n.No after\n.fi\n.Sh NEXT\n.No END\n",
+    "same_coordinate": true,
+    "rows": [
+      "[",
+      "first",
+      "second]",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_literal_function_word_end",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bd -literal -compact\n.Fo call\n.No X\\p\n.Fc\n.Ed\n.No after\n.fi\n.Sh NEXT\n.No END\n",
+    "same_coordinate": false,
+    "rows": [
+      "call(",
+      "X)",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_literal_function_bare_zero",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bd -literal -compact\n.Fo call\n.No \\z\n.Fc\n.Ed\n.No after\n.fi\n.Sh NEXT\n.No END\n",
+    "same_coordinate": false,
+    "rows": [
+      "call(",
+      ")",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_literal_function_same_coordinate",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.de XX\n.No first\n.No second\n..\n.nf\n.Bd -literal -compact\n.Fo call\n.XX\n.Fc\n.Ed\n.No after\n.fi\n.Sh NEXT\n.No END\n",
+    "same_coordinate": true,
+    "rows": [
+      "call(",
+      "first",
+      "second)",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_literal_author_word_end",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bd -literal -compact\n.No An X\\p\n.Ed\n.No after\n.fi\n.Sh NEXT\n.No END\n",
+    "same_coordinate": false,
+    "rows": [
+      "X",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_literal_author_bare_zero",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bd -literal -compact\n.No An \\z\n.Ed\n.No after\n.fi\n.Sh NEXT\n.No END\n",
+    "same_coordinate": false,
+    "rows": [
+      "fter",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_literal_author_same_coordinate",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.de XX\n.No An first\n.No An second\n..\n.nf\n.Bd -literal -compact\n.XX\n.Ed\n.No after\n.fi\n.Sh NEXT\n.No END\n",
+    "same_coordinate": true,
+    "rows": [
+      "first",
+      "second",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_one_line_angle_word_end",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Ao\n.D1 X\\p\n.Ac\n.No after\n.fi\n.Sh NEXT\n.No END\n",
+    "same_coordinate": false,
+    "rows": [
+      "⟨",
+      "X",
+      "⟩",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_one_line_angle_bare_zero",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Ao\n.D1 \\z\n.Ac\n.No after\n.fi\n.Sh NEXT\n.No END\n",
+    "same_coordinate": false,
+    "rows": [
+      "⟨",
+      "⟩",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_one_line_angle_same_coordinate",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.de XX\n.D1 first\n.D1 second\n..\n.nf\n.Ao\n.XX\n.Ac\n.No after\n.fi\n.Sh NEXT\n.No END\n",
+    "same_coordinate": true,
+    "rows": [
+      "⟨",
+      "first",
+      "second",
+      "⟩",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_one_line_square_word_end",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bo\n.D1 X\\p\n.Bc\n.No after\n.fi\n.Sh NEXT\n.No END\n",
+    "same_coordinate": false,
+    "rows": [
+      "[",
+      "X",
+      "]",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_one_line_square_bare_zero",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bo\n.D1 \\z\n.Bc\n.No after\n.fi\n.Sh NEXT\n.No END\n",
+    "same_coordinate": false,
+    "rows": [
+      "[",
+      "]",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_one_line_square_same_coordinate",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.de XX\n.D1 first\n.D1 second\n..\n.nf\n.Bo\n.XX\n.Bc\n.No after\n.fi\n.Sh NEXT\n.No END\n",
+    "same_coordinate": true,
+    "rows": [
+      "[",
+      "first",
+      "second",
+      "]",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_one_line_function_word_end",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Fo call\n.D1 X\\p\n.Fc\n.No after\n.fi\n.Sh NEXT\n.No END\n",
+    "same_coordinate": false,
+    "rows": [
+      "call(",
+      "X",
+      ")",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_one_line_function_bare_zero",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Fo call\n.D1 \\z\n.Fc\n.No after\n.fi\n.Sh NEXT\n.No END\n",
+    "same_coordinate": false,
+    "rows": [
+      "call(",
+      ")",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_one_line_function_same_coordinate",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.de XX\n.D1 first\n.D1 second\n..\n.nf\n.Fo call\n.XX\n.Fc\n.No after\n.fi\n.Sh NEXT\n.No END\n",
+    "same_coordinate": true,
+    "rows": [
+      "call(",
+      "first",
+      "second",
+      ")",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_one_line_author_word_end",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.D1 An X\\p\n.No after\n.fi\n.Sh NEXT\n.No END\n",
+    "same_coordinate": false,
+    "rows": [
+      "X",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_one_line_author_bare_zero",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.D1 An \\z\n.No after\n.fi\n.Sh NEXT\n.No END\n",
+    "same_coordinate": false,
+    "rows": [
+      "fter",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_one_line_author_same_coordinate",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.de XX\n.D1 An first\n.D1 An second\n..\n.nf\n.XX\n.No after\n.fi\n.Sh NEXT\n.No END\n",
+    "same_coordinate": true,
+    "rows": [
+      "first",
+      "second",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_literal_line_angle_word_end",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Ao\n.Dl X\\p\n.Ac\n.No after\n.fi\n.Sh NEXT\n.No END\n",
+    "same_coordinate": false,
+    "rows": [
+      "⟨",
+      "X",
+      "⟩",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_literal_line_angle_bare_zero",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Ao\n.Dl \\z\n.Ac\n.No after\n.fi\n.Sh NEXT\n.No END\n",
+    "same_coordinate": false,
+    "rows": [
+      "⟨",
+      "⟩",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_literal_line_angle_same_coordinate",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.de XX\n.Dl first\n.Dl second\n..\n.nf\n.Ao\n.XX\n.Ac\n.No after\n.fi\n.Sh NEXT\n.No END\n",
+    "same_coordinate": true,
+    "rows": [
+      "⟨",
+      "first",
+      "second",
+      "⟩",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_literal_line_square_word_end",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bo\n.Dl X\\p\n.Bc\n.No after\n.fi\n.Sh NEXT\n.No END\n",
+    "same_coordinate": false,
+    "rows": [
+      "[",
+      "X",
+      "]",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_literal_line_square_bare_zero",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bo\n.Dl \\z\n.Bc\n.No after\n.fi\n.Sh NEXT\n.No END\n",
+    "same_coordinate": false,
+    "rows": [
+      "[",
+      "]",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_literal_line_square_same_coordinate",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.de XX\n.Dl first\n.Dl second\n..\n.nf\n.Bo\n.XX\n.Bc\n.No after\n.fi\n.Sh NEXT\n.No END\n",
+    "same_coordinate": true,
+    "rows": [
+      "[",
+      "first",
+      "second",
+      "]",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_literal_line_function_word_end",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Fo call\n.Dl X\\p\n.Fc\n.No after\n.fi\n.Sh NEXT\n.No END\n",
+    "same_coordinate": false,
+    "rows": [
+      "call(",
+      "X",
+      ")",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_literal_line_function_bare_zero",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Fo call\n.Dl \\z\n.Fc\n.No after\n.fi\n.Sh NEXT\n.No END\n",
+    "same_coordinate": false,
+    "rows": [
+      "call(",
+      ")",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_literal_line_function_same_coordinate",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.de XX\n.Dl first\n.Dl second\n..\n.nf\n.Fo call\n.XX\n.Fc\n.No after\n.fi\n.Sh NEXT\n.No END\n",
+    "same_coordinate": true,
+    "rows": [
+      "call(",
+      "first",
+      "second",
+      ")",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_literal_line_author_word_end",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Dl An X\\p\n.No after\n.fi\n.Sh NEXT\n.No END\n",
+    "same_coordinate": false,
+    "rows": [
+      "X",
+      "after",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_literal_line_author_bare_zero",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Dl An \\z\n.No after\n.fi\n.Sh NEXT\n.No END\n",
+    "same_coordinate": false,
+    "rows": [
+      "fter",
+      ""
+    ]
+  },
+  {
+    "name": "mdoc_literal_line_author_same_coordinate",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.de XX\n.Dl An first\n.Dl An second\n..\n.nf\n.XX\n.No after\n.fi\n.Sh NEXT\n.No END\n",
+    "same_coordinate": true,
+    "rows": [
+      "first",
+      "second",
+      "after",
+      ""
+    ]
+  }
+]

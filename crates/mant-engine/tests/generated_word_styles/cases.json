@@ -1,0 +1,498 @@
+[
+  {
+    "name": "no_held_No_mail_tight",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\zA\" Ns Mt user@example.org\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "user@example.org End",
+      ""
+    ],
+    "accepted_a_styles": []
+  },
+  {
+    "name": "no_held_No_mail_word",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\zA\" Mt user@example.org\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "Auser@example.org End",
+      ""
+    ],
+    "accepted_a_styles": [
+      0
+    ]
+  },
+  {
+    "name": "no_held_No_mail_spacing_off",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Sm off\n.No \"\\zA\" Mt user@example.org\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "user@example.orgEnd",
+      ""
+    ],
+    "accepted_a_styles": []
+  },
+  {
+    "name": "no_held_No_link_tight",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\zA\" Ns Lk https://example.org B\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "B: https://example.org End",
+      ""
+    ],
+    "accepted_a_styles": []
+  },
+  {
+    "name": "no_held_No_link_word",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\zA\" Lk https://example.org B\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "AB: https://example.org End",
+      ""
+    ],
+    "accepted_a_styles": [
+      0
+    ]
+  },
+  {
+    "name": "no_held_No_link_spacing_off",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Sm off\n.No \"\\zA\" Lk https://example.org B\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "B:https://example.orgEnd",
+      ""
+    ],
+    "accepted_a_styles": []
+  },
+  {
+    "name": "no_held_Sy_mail_tight",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Sy \"\\zA\" Ns Mt user@example.org\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "user@example.org End",
+      ""
+    ],
+    "accepted_a_styles": []
+  },
+  {
+    "name": "no_held_Sy_mail_word",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Sy \"\\zA\" Mt user@example.org\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "Auser@example.org End",
+      ""
+    ],
+    "accepted_a_styles": [
+      1
+    ]
+  },
+  {
+    "name": "no_held_Sy_mail_spacing_off",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Sm off\n.Sy \"\\zA\" Mt user@example.org\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "user@example.orgEnd",
+      ""
+    ],
+    "accepted_a_styles": []
+  },
+  {
+    "name": "no_held_Sy_link_tight",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Sy \"\\zA\" Ns Lk https://example.org B\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "B: https://example.org End",
+      ""
+    ],
+    "accepted_a_styles": []
+  },
+  {
+    "name": "no_held_Sy_link_word",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Sy \"\\zA\" Lk https://example.org B\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "AB: https://example.org End",
+      ""
+    ],
+    "accepted_a_styles": [
+      1
+    ]
+  },
+  {
+    "name": "no_held_Sy_link_spacing_off",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Sm off\n.Sy \"\\zA\" Lk https://example.org B\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "B:https://example.orgEnd",
+      ""
+    ],
+    "accepted_a_styles": []
+  },
+  {
+    "name": "no_held_Em_mail_tight",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Em \"\\zA\" Ns Mt user@example.org\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "user@example.org End",
+      ""
+    ],
+    "accepted_a_styles": []
+  },
+  {
+    "name": "no_held_Em_mail_word",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Em \"\\zA\" Mt user@example.org\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "Auser@example.org End",
+      ""
+    ],
+    "accepted_a_styles": [
+      2
+    ]
+  },
+  {
+    "name": "no_held_Em_mail_spacing_off",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Sm off\n.Em \"\\zA\" Mt user@example.org\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "user@example.orgEnd",
+      ""
+    ],
+    "accepted_a_styles": []
+  },
+  {
+    "name": "no_held_Em_link_tight",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Em \"\\zA\" Ns Lk https://example.org B\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "B: https://example.org End",
+      ""
+    ],
+    "accepted_a_styles": []
+  },
+  {
+    "name": "no_held_Em_link_word",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Em \"\\zA\" Lk https://example.org B\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "AB: https://example.org End",
+      ""
+    ],
+    "accepted_a_styles": [
+      2
+    ]
+  },
+  {
+    "name": "no_held_Em_link_spacing_off",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Sm off\n.Em \"\\zA\" Lk https://example.org B\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "B:https://example.orgEnd",
+      ""
+    ],
+    "accepted_a_styles": []
+  },
+  {
+    "name": "no_held_Li_mail_tight",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Li \"\\zA\" Ns Mt user@example.org\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "user@example.org End",
+      ""
+    ],
+    "accepted_a_styles": []
+  },
+  {
+    "name": "no_held_Li_mail_word",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Li \"\\zA\" Mt user@example.org\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "Auser@example.org End",
+      ""
+    ],
+    "accepted_a_styles": [
+      0
+    ]
+  },
+  {
+    "name": "no_held_Li_mail_spacing_off",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Sm off\n.Li \"\\zA\" Mt user@example.org\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "user@example.orgEnd",
+      ""
+    ],
+    "accepted_a_styles": []
+  },
+  {
+    "name": "no_held_Li_link_tight",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Li \"\\zA\" Ns Lk https://example.org B\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "B: https://example.org End",
+      ""
+    ],
+    "accepted_a_styles": []
+  },
+  {
+    "name": "no_held_Li_link_word",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Li \"\\zA\" Lk https://example.org B\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "AB: https://example.org End",
+      ""
+    ],
+    "accepted_a_styles": [
+      0
+    ]
+  },
+  {
+    "name": "no_held_Li_link_spacing_off",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Sm off\n.Li \"\\zA\" Lk https://example.org B\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "B:https://example.orgEnd",
+      ""
+    ],
+    "accepted_a_styles": []
+  },
+  {
+    "name": "held_rearmed_No_mail_tight",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\zA \\z\" Ns Mt user@example.org\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "Aser@example.org End",
+      ""
+    ],
+    "accepted_a_styles": [
+      0
+    ]
+  },
+  {
+    "name": "held_rearmed_No_mail_word",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\zA \\z\" Mt user@example.org\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A ser@example.org End",
+      ""
+    ],
+    "accepted_a_styles": [
+      0
+    ]
+  },
+  {
+    "name": "held_rearmed_No_mail_spacing_off",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Sm off\n.No \"\\zA \\z\" Mt user@example.org\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "Aser@example.orgEnd",
+      ""
+    ],
+    "accepted_a_styles": [
+      0
+    ]
+  },
+  {
+    "name": "held_rearmed_No_link_tight",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\zA \\z\" Ns Lk https://example.org B\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A: https://example.org End",
+      ""
+    ],
+    "accepted_a_styles": [
+      0
+    ]
+  },
+  {
+    "name": "held_rearmed_No_link_word",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\zA \\z\" Lk https://example.org B\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A : https://example.org End",
+      ""
+    ],
+    "accepted_a_styles": [
+      0
+    ]
+  },
+  {
+    "name": "held_rearmed_No_link_spacing_off",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Sm off\n.No \"\\zA \\z\" Lk https://example.org B\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A:https://example.orgEnd",
+      ""
+    ],
+    "accepted_a_styles": [
+      0
+    ]
+  },
+  {
+    "name": "held_rearmed_Sy_mail_tight",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Sy \"\\zA \\z\" Ns Mt user@example.org\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "Aser@example.org End",
+      ""
+    ],
+    "accepted_a_styles": [
+      1
+    ]
+  },
+  {
+    "name": "held_rearmed_Sy_mail_word",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Sy \"\\zA \\z\" Mt user@example.org\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A ser@example.org End",
+      ""
+    ],
+    "accepted_a_styles": [
+      1
+    ]
+  },
+  {
+    "name": "held_rearmed_Sy_mail_spacing_off",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Sm off\n.Sy \"\\zA \\z\" Mt user@example.org\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "Aser@example.orgEnd",
+      ""
+    ],
+    "accepted_a_styles": [
+      1
+    ]
+  },
+  {
+    "name": "held_rearmed_Sy_link_tight",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Sy \"\\zA \\z\" Ns Lk https://example.org B\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A: https://example.org End",
+      ""
+    ],
+    "accepted_a_styles": [
+      1
+    ]
+  },
+  {
+    "name": "held_rearmed_Sy_link_word",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Sy \"\\zA \\z\" Lk https://example.org B\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A : https://example.org End",
+      ""
+    ],
+    "accepted_a_styles": [
+      1
+    ]
+  },
+  {
+    "name": "held_rearmed_Sy_link_spacing_off",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Sm off\n.Sy \"\\zA \\z\" Lk https://example.org B\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A:https://example.orgEnd",
+      ""
+    ],
+    "accepted_a_styles": [
+      1
+    ]
+  },
+  {
+    "name": "held_rearmed_Em_mail_tight",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Em \"\\zA \\z\" Ns Mt user@example.org\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "Aser@example.org End",
+      ""
+    ],
+    "accepted_a_styles": [
+      2
+    ]
+  },
+  {
+    "name": "held_rearmed_Em_mail_word",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Em \"\\zA \\z\" Mt user@example.org\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A ser@example.org End",
+      ""
+    ],
+    "accepted_a_styles": [
+      2
+    ]
+  },
+  {
+    "name": "held_rearmed_Em_mail_spacing_off",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Sm off\n.Em \"\\zA \\z\" Mt user@example.org\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "Aser@example.orgEnd",
+      ""
+    ],
+    "accepted_a_styles": [
+      2
+    ]
+  },
+  {
+    "name": "held_rearmed_Em_link_tight",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Em \"\\zA \\z\" Ns Lk https://example.org B\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A: https://example.org End",
+      ""
+    ],
+    "accepted_a_styles": [
+      2
+    ]
+  },
+  {
+    "name": "held_rearmed_Em_link_word",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Em \"\\zA \\z\" Lk https://example.org B\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A : https://example.org End",
+      ""
+    ],
+    "accepted_a_styles": [
+      2
+    ]
+  },
+  {
+    "name": "held_rearmed_Em_link_spacing_off",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Sm off\n.Em \"\\zA \\z\" Lk https://example.org B\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A:https://example.orgEnd",
+      ""
+    ],
+    "accepted_a_styles": [
+      2
+    ]
+  },
+  {
+    "name": "held_rearmed_Li_mail_tight",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Li \"\\zA \\z\" Ns Mt user@example.org\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "Aser@example.org End",
+      ""
+    ],
+    "accepted_a_styles": [
+      0
+    ]
+  },
+  {
+    "name": "held_rearmed_Li_mail_word",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Li \"\\zA \\z\" Mt user@example.org\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A ser@example.org End",
+      ""
+    ],
+    "accepted_a_styles": [
+      0
+    ]
+  },
+  {
+    "name": "held_rearmed_Li_mail_spacing_off",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Sm off\n.Li \"\\zA \\z\" Mt user@example.org\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "Aser@example.orgEnd",
+      ""
+    ],
+    "accepted_a_styles": [
+      0
+    ]
+  },
+  {
+    "name": "held_rearmed_Li_link_tight",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Li \"\\zA \\z\" Ns Lk https://example.org B\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A: https://example.org End",
+      ""
+    ],
+    "accepted_a_styles": [
+      0
+    ]
+  },
+  {
+    "name": "held_rearmed_Li_link_word",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Li \"\\zA \\z\" Lk https://example.org B\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A : https://example.org End",
+      ""
+    ],
+    "accepted_a_styles": [
+      0
+    ]
+  },
+  {
+    "name": "held_rearmed_Li_link_spacing_off",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Sm off\n.Li \"\\zA \\z\" Lk https://example.org B\n.No End\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "A:https://example.orgEnd",
+      ""
+    ],
+    "accepted_a_styles": [
+      0
+    ]
+  }
+]

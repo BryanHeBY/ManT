@@ -1,0 +1,208 @@
+[
+  {
+    "name": "nested_list_accepted",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It Outer\n.Bl -inset -compact\n.It Inner\n.No \"X\\p Y\"\n.No Tail\n.El\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "Outer",
+      "Inner X",
+      "Y Tail",
+      ""
+    ]
+  },
+  {
+    "name": "nested_list_rejected",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It Outer\n.Bl -inset -compact\n.It Inner\n.No \"\\p DROP\"\n.No Tail\n.El\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "Outer",
+      "Inner",
+      "DROP Tail",
+      ""
+    ]
+  },
+  {
+    "name": "nested_list_pending",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It Outer\n.Bl -inset -compact\n.It Inner\n.No \"\\zX\"\n.No Tail\n.El\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "Outer",
+      "Inner XTail",
+      ""
+    ]
+  },
+  {
+    "name": "table_accepted",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.TS\nl.\nT{\nX\\p Y\nTail\nT}\n.TE\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "X",
+      "Y Tail",
+      ""
+    ]
+  },
+  {
+    "name": "table_rejected",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.TS\nl.\nT{\n\\p DROP\nTail\nT}\n.TE\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "",
+      ""
+    ]
+  },
+  {
+    "name": "table_pending",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.TS\nl.\nT{\n\\zX\nTail\nT}\n.TE\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "XTail",
+      ""
+    ]
+  },
+  {
+    "name": "equation_accepted",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"X\\p Y\"\n.No Tail\n.EQ\nx\n.EN\n.No Following\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "X",
+      "Y Tail x Following",
+      ""
+    ],
+    "scope": "display-equation"
+  },
+  {
+    "name": "equation_rejected",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\p DROP\"\n.No Tail\n.EQ\nx\n.EN\n.No Following\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "",
+      ""
+    ],
+    "scope": "display-equation"
+  },
+  {
+    "name": "equation_pending",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\zX\"\n.No Tail\n.EQ\nx\n.EN\n.No Following\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "XTail x Following",
+      ""
+    ],
+    "scope": "display-equation"
+  },
+  {
+    "name": "display_scope_accepted",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Ao\n.Bd -literal -compact\n.No \"X\\p Y\"\n.No Tail\n.Ac\n.No Following\n.Ed\n.No Final\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "⟨",
+      "X",
+      "Y",
+      "Tail",
+      "⟩",
+      "Following",
+      "Final",
+      ""
+    ]
+  },
+  {
+    "name": "display_scope_rejected",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Ao\n.Bd -literal -compact\n.No \"\\p DROP\"\n.No Tail\n.Ac\n.No Following\n.Ed\n.No Final\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "⟨",
+      "",
+      "Tail",
+      "⟩",
+      "Following",
+      "Final",
+      ""
+    ]
+  },
+  {
+    "name": "display_scope_pending",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Ao\n.Bd -literal -compact\n.No \"\\zX\"\n.No Tail\n.Ac\n.No Following\n.Ed\n.No Final\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "⟨",
+      "X",
+      "Tail",
+      "⟩",
+      "Following",
+      "Final",
+      ""
+    ]
+  },
+  {
+    "name": "man_B_accepted",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.B \"X\\p Y\" \"Next\"\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "rows": [
+      "X",
+      "Y Next Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_B_rejected",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.B \"\\p DROP\" \"Next\"\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "rows": [
+      "",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_B_pending",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.B \"\\zX\" \"Next\"\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "rows": [
+      "XNext Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_BI_accepted",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.BI \"X\\p Y\" \"Next\"\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "rows": [
+      "X",
+      "YNext Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_BI_rejected",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.BI \"\\p DROP\" \"Next\"\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "rows": [
+      "",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_BI_pending",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.BI \"\\zX\" \"Next\"\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "rows": [
+      "Next Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_BR_accepted",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.BR \"X\\p Y\" \"Next\"\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "rows": [
+      "X",
+      "YNext Tail",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_BR_rejected",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.BR \"\\p DROP\" \"Next\"\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "rows": [
+      "",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "man_BR_pending",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.BR \"\\zX\" \"Next\"\nTail\n.br\nAfter\n.SH NEXT\nEND\n",
+    "rows": [
+      "Next Tail",
+      "After",
+      ""
+    ]
+  }
+]

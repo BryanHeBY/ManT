@@ -1,0 +1,1832 @@
+[
+  {
+    "name": "alpha_paragraph_plain",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No Before\n.Bx -alpha\\p\n.No After\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "Before -alphaBSD",
+      "After",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "Before -alphaBSD",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "alpha_paragraph_typed",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Lk https://before.example BEFORE\n.Tg mant-field-word-2-0\n.Bf -emphasis\n.Bx -alpha\\p\n.Ef\n.Lk https://after.example AFTER\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "BEFORE: https://before.example -alphaBSD",
+      "AFTER: https://after.example",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "BEFORE: https://before.example -alphaBSD",
+      "AFTER: https://after.example",
+      ""
+    ]
+  },
+  {
+    "name": "alpha_paragraph_partial",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No X\\p\n.Bx -alpha\\p\n.No \"\\p DROP\"\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "X",
+      "-alphaBSD",
+      "",
+      "After",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "X",
+      "-alphaBSD",
+      "",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "alpha_head_plain",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It Xo\n.No Before\n.Bx -alpha\\p\n.No After\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "Before -alphaBSD",
+      "After BodyWord",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "Before -alphaBSD",
+      "After BodyWord",
+      ""
+    ]
+  },
+  {
+    "name": "alpha_head_typed",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It Xo\n.Lk https://before.example BEFORE\n.Tg mant-field-word-2-0\n.Bf -emphasis\n.Bx -alpha\\p\n.Ef\n.Lk https://after.example AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "BEFORE: https://before.example -alphaBSD",
+      "AFTER: https://after.example BodyWord",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "BEFORE: https://before.example -alphaBSD",
+      "AFTER: https://after.example BodyWord",
+      ""
+    ]
+  },
+  {
+    "name": "alpha_head_partial",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It Xo\n.No X\\p\n.Bx -alpha\\p\n.No \"\\p DROP\"\n.br\n.No After\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "X",
+      "-alphaBSD",
+      "",
+      "After BodyWord",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "X",
+      "-alphaBSD",
+      "",
+      "After BodyWord",
+      ""
+    ]
+  },
+  {
+    "name": "alpha_body_plain",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It HeadWord\n.No Before\n.Bx -alpha\\p\n.No After\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "HeadWord Before -alphaBSD",
+      "After",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "HeadWord Before -alphaBSD",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "alpha_body_typed",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It HeadWord\n.Lk https://before.example BEFORE\n.Tg mant-field-word-2-0\n.Bf -emphasis\n.Bx -alpha\\p\n.Ef\n.Lk https://after.example AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "HeadWord BEFORE: https://before.example -alphaBSD",
+      "AFTER: https://after.example",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "HeadWord BEFORE: https://before.example -alphaBSD",
+      "AFTER: https://after.example",
+      ""
+    ]
+  },
+  {
+    "name": "alpha_body_partial",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It HeadWord\n.No X\\p\n.Bx -alpha\\p\n.No \"\\p DROP\"\n.br\n.No After\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "HeadWord X",
+      "-alphaBSD",
+      "",
+      "After",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "HeadWord X",
+      "-alphaBSD",
+      "",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "alpha_no_fill_plain",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.No Before\n.Bx -alpha\\p\n.No After\n.fi\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "Before",
+      "-alphaBSD",
+      "After",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "Before",
+      "-alphaBSD",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "alpha_no_fill_typed",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Lk https://before.example BEFORE\n.Tg mant-field-word-2-0\n.Bf -emphasis\n.Bx -alpha\\p\n.Ef\n.Lk https://after.example AFTER\n.fi\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "BEFORE: https://before.example",
+      "-alphaBSD",
+      "AFTER: https://after.example",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "BEFORE: https://before.example",
+      "-alphaBSD",
+      "AFTER: https://after.example",
+      ""
+    ]
+  },
+  {
+    "name": "alpha_no_fill_partial",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.No X\\p\n.Bx -alpha\\p\n.No \"\\p DROP\"\n.br\n.No After\n.fi\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "X",
+      "-alphaBSD",
+      "",
+      "After",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "X",
+      "-alphaBSD",
+      "",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "beta_paragraph_plain",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No Before\n.Bx -beta\\c\n.No After\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "Before -betaBSD After",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "Before -betaBSD After",
+      ""
+    ]
+  },
+  {
+    "name": "beta_paragraph_typed",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Lk https://before.example BEFORE\n.Tg mant-field-word-2-0\n.Bf -emphasis\n.Bx -beta\\c\n.Ef\n.Lk https://after.example AFTER\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "BEFORE: https://before.example -betaBSD AFTER: https://after.example",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "BEFORE: https://before.example -betaBSD AFTER: https://after.example",
+      ""
+    ]
+  },
+  {
+    "name": "beta_paragraph_partial",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No X\\p\n.Bx -beta\\c\n.No \"\\p DROP\"\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "X",
+      "-betaBSD",
+      "",
+      "After",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "X",
+      "-betaBSD",
+      "",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "beta_head_plain",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It Xo\n.No Before\n.Bx -beta\\c\n.No After\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "Before -betaBSD After BodyWord",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "Before -betaBSD After BodyWord",
+      ""
+    ]
+  },
+  {
+    "name": "beta_head_typed",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It Xo\n.Lk https://before.example BEFORE\n.Tg mant-field-word-2-0\n.Bf -emphasis\n.Bx -beta\\c\n.Ef\n.Lk https://after.example AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "BEFORE: https://before.example -betaBSD AFTER:",
+      "https://after.example BodyWord",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "BEFORE: https://before.example -betaBSD AFTER: https://after.example BodyWord",
+      ""
+    ]
+  },
+  {
+    "name": "beta_head_partial",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It Xo\n.No X\\p\n.Bx -beta\\c\n.No \"\\p DROP\"\n.br\n.No After\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "X",
+      "-betaBSD",
+      "",
+      "After BodyWord",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "X",
+      "-betaBSD",
+      "",
+      "After BodyWord",
+      ""
+    ]
+  },
+  {
+    "name": "beta_body_plain",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It HeadWord\n.No Before\n.Bx -beta\\c\n.No After\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "HeadWord Before -betaBSD After",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "HeadWord Before -betaBSD After",
+      ""
+    ]
+  },
+  {
+    "name": "beta_body_typed",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It HeadWord\n.Lk https://before.example BEFORE\n.Tg mant-field-word-2-0\n.Bf -emphasis\n.Bx -beta\\c\n.Ef\n.Lk https://after.example AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "HeadWord BEFORE: https://before.example -betaBSD AFTER:",
+      "https://after.example",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "HeadWord BEFORE: https://before.example -betaBSD AFTER: https://after.example",
+      ""
+    ]
+  },
+  {
+    "name": "beta_body_partial",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It HeadWord\n.No X\\p\n.Bx -beta\\c\n.No \"\\p DROP\"\n.br\n.No After\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "HeadWord X",
+      "-betaBSD",
+      "",
+      "After",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "HeadWord X",
+      "-betaBSD",
+      "",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "beta_no_fill_plain",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.No Before\n.Bx -beta\\c\n.No After\n.fi\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "Before",
+      "-betaBSD",
+      "After",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "Before",
+      "-betaBSD",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "beta_no_fill_typed",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Lk https://before.example BEFORE\n.Tg mant-field-word-2-0\n.Bf -emphasis\n.Bx -beta\\c\n.Ef\n.Lk https://after.example AFTER\n.fi\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "BEFORE: https://before.example",
+      "-betaBSD",
+      "AFTER: https://after.example",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "BEFORE: https://before.example",
+      "-betaBSD",
+      "AFTER: https://after.example",
+      ""
+    ]
+  },
+  {
+    "name": "beta_no_fill_partial",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.No X\\p\n.Bx -beta\\c\n.No \"\\p DROP\"\n.br\n.No After\n.fi\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "X",
+      "-betaBSD",
+      "",
+      "After",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "X",
+      "-betaBSD",
+      "",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "development_paragraph_plain",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No Before\n.Bx -devel\\zX\n.No After\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "Before -develBSD After",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "Before -develBSD After",
+      ""
+    ]
+  },
+  {
+    "name": "development_paragraph_typed",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Lk https://before.example BEFORE\n.Tg mant-field-word-2-0\n.Bf -emphasis\n.Bx -devel\\zX\n.Ef\n.Lk https://after.example AFTER\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "BEFORE: https://before.example -develBSD AFTER: https://after.example",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "BEFORE: https://before.example -develBSD AFTER: https://after.example",
+      ""
+    ]
+  },
+  {
+    "name": "development_paragraph_partial",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No X\\p\n.Bx -devel\\zX\n.No \"\\p DROP\"\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "X",
+      "-develBSD",
+      "",
+      "After",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "X",
+      "-develBSD",
+      "",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "development_head_plain",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It Xo\n.No Before\n.Bx -devel\\zX\n.No After\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "Before -develBSD After BodyWord",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "Before -develBSD After BodyWord",
+      ""
+    ]
+  },
+  {
+    "name": "development_head_typed",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It Xo\n.Lk https://before.example BEFORE\n.Tg mant-field-word-2-0\n.Bf -emphasis\n.Bx -devel\\zX\n.Ef\n.Lk https://after.example AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "BEFORE: https://before.example -develBSD AFTER:",
+      "https://after.example BodyWord",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "BEFORE: https://before.example -develBSD AFTER: https://after.example BodyWord",
+      ""
+    ]
+  },
+  {
+    "name": "development_head_partial",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It Xo\n.No X\\p\n.Bx -devel\\zX\n.No \"\\p DROP\"\n.br\n.No After\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "X",
+      "-develBSD",
+      "",
+      "After BodyWord",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "X",
+      "-develBSD",
+      "",
+      "After BodyWord",
+      ""
+    ]
+  },
+  {
+    "name": "development_body_plain",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It HeadWord\n.No Before\n.Bx -devel\\zX\n.No After\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "HeadWord Before -develBSD After",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "HeadWord Before -develBSD After",
+      ""
+    ]
+  },
+  {
+    "name": "development_body_typed",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It HeadWord\n.Lk https://before.example BEFORE\n.Tg mant-field-word-2-0\n.Bf -emphasis\n.Bx -devel\\zX\n.Ef\n.Lk https://after.example AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "HeadWord BEFORE: https://before.example -develBSD AFTER:",
+      "https://after.example",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "HeadWord BEFORE: https://before.example -develBSD AFTER: https://after.example",
+      ""
+    ]
+  },
+  {
+    "name": "development_body_partial",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It HeadWord\n.No X\\p\n.Bx -devel\\zX\n.No \"\\p DROP\"\n.br\n.No After\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "HeadWord X",
+      "-develBSD",
+      "",
+      "After",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "HeadWord X",
+      "-develBSD",
+      "",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "development_no_fill_plain",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.No Before\n.Bx -devel\\zX\n.No After\n.fi\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "Before",
+      "-develBSD",
+      "After",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "Before",
+      "-develBSD",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "development_no_fill_typed",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Lk https://before.example BEFORE\n.Tg mant-field-word-2-0\n.Bf -emphasis\n.Bx -devel\\zX\n.Ef\n.Lk https://after.example AFTER\n.fi\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "BEFORE: https://before.example",
+      "-develBSD",
+      "AFTER: https://after.example",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "BEFORE: https://before.example",
+      "-develBSD",
+      "AFTER: https://after.example",
+      ""
+    ]
+  },
+  {
+    "name": "development_no_fill_partial",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.No X\\p\n.Bx -devel\\zX\n.No \"\\p DROP\"\n.br\n.No After\n.fi\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "X",
+      "-develBSD",
+      "",
+      "After",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "X",
+      "-develBSD",
+      "",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "word_end_paragraph_plain",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No Before\n.Bx \\p\n.No After\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "Before BSD",
+      "After",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "Before BSD",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "word_end_paragraph_typed",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Lk https://before.example BEFORE\n.Tg mant-field-word-2-0\n.Bf -emphasis\n.Bx \\p\n.Ef\n.Lk https://after.example AFTER\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "BEFORE: https://before.example BSD",
+      "AFTER: https://after.example",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "BEFORE: https://before.example BSD",
+      "AFTER: https://after.example",
+      ""
+    ]
+  },
+  {
+    "name": "word_end_paragraph_partial",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No X\\p\n.Bx \\p\n.No \"\\p DROP\"\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "X",
+      "BSD",
+      "",
+      "After",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "X",
+      "BSD",
+      "",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "word_end_head_plain",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It Xo\n.No Before\n.Bx \\p\n.No After\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "Before BSD",
+      "After BodyWord",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "Before BSD",
+      "After BodyWord",
+      ""
+    ]
+  },
+  {
+    "name": "word_end_head_typed",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It Xo\n.Lk https://before.example BEFORE\n.Tg mant-field-word-2-0\n.Bf -emphasis\n.Bx \\p\n.Ef\n.Lk https://after.example AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "BEFORE: https://before.example BSD",
+      "AFTER: https://after.example BodyWord",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "BEFORE: https://before.example BSD",
+      "AFTER: https://after.example BodyWord",
+      ""
+    ]
+  },
+  {
+    "name": "word_end_head_partial",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It Xo\n.No X\\p\n.Bx \\p\n.No \"\\p DROP\"\n.br\n.No After\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "X",
+      "BSD",
+      "",
+      "After BodyWord",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "X",
+      "BSD",
+      "",
+      "After BodyWord",
+      ""
+    ]
+  },
+  {
+    "name": "word_end_body_plain",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It HeadWord\n.No Before\n.Bx \\p\n.No After\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "HeadWord Before BSD",
+      "After",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "HeadWord Before BSD",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "word_end_body_typed",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It HeadWord\n.Lk https://before.example BEFORE\n.Tg mant-field-word-2-0\n.Bf -emphasis\n.Bx \\p\n.Ef\n.Lk https://after.example AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "HeadWord BEFORE: https://before.example BSD",
+      "AFTER: https://after.example",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "HeadWord BEFORE: https://before.example BSD",
+      "AFTER: https://after.example",
+      ""
+    ]
+  },
+  {
+    "name": "word_end_body_partial",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It HeadWord\n.No X\\p\n.Bx \\p\n.No \"\\p DROP\"\n.br\n.No After\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "HeadWord X",
+      "BSD",
+      "",
+      "After",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "HeadWord X",
+      "BSD",
+      "",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "word_end_no_fill_plain",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.No Before\n.Bx \\p\n.No After\n.fi\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "Before",
+      "BSD",
+      "After",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "Before",
+      "BSD",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "word_end_no_fill_typed",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Lk https://before.example BEFORE\n.Tg mant-field-word-2-0\n.Bf -emphasis\n.Bx \\p\n.Ef\n.Lk https://after.example AFTER\n.fi\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "BEFORE: https://before.example",
+      "BSD",
+      "AFTER: https://after.example",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "BEFORE: https://before.example",
+      "BSD",
+      "AFTER: https://after.example",
+      ""
+    ]
+  },
+  {
+    "name": "word_end_no_fill_partial",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.No X\\p\n.Bx \\p\n.No \"\\p DROP\"\n.br\n.No After\n.fi\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "X",
+      "BSD",
+      "",
+      "After",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "X",
+      "BSD",
+      "",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "bare_zero_paragraph_plain",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No Before\n.Bx \\z\n.No After\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "Before SD After",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "Before SD After",
+      ""
+    ]
+  },
+  {
+    "name": "bare_zero_paragraph_typed",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Lk https://before.example BEFORE\n.Tg mant-field-word-2-0\n.Bf -emphasis\n.Bx \\z\n.Ef\n.Lk https://after.example AFTER\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "BEFORE: https://before.example SD AFTER: https://after.example",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "BEFORE: https://before.example SD AFTER: https://after.example",
+      ""
+    ]
+  },
+  {
+    "name": "bare_zero_paragraph_partial",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No X\\p\n.Bx \\z\n.No \"\\p DROP\"\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "X",
+      "SD",
+      "",
+      "After",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "X",
+      "SD",
+      "",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "bare_zero_head_plain",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It Xo\n.No Before\n.Bx \\z\n.No After\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "Before SD After BodyWord",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "Before SD After BodyWord",
+      ""
+    ]
+  },
+  {
+    "name": "bare_zero_head_typed",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It Xo\n.Lk https://before.example BEFORE\n.Tg mant-field-word-2-0\n.Bf -emphasis\n.Bx \\z\n.Ef\n.Lk https://after.example AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "BEFORE: https://before.example SD AFTER: https://after.example BodyWord",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "BEFORE: https://before.example SD AFTER: https://after.example BodyWord",
+      ""
+    ]
+  },
+  {
+    "name": "bare_zero_head_partial",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It Xo\n.No X\\p\n.Bx \\z\n.No \"\\p DROP\"\n.br\n.No After\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "X",
+      "SD",
+      "",
+      "After BodyWord",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "X",
+      "SD",
+      "",
+      "After BodyWord",
+      ""
+    ]
+  },
+  {
+    "name": "bare_zero_body_plain",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It HeadWord\n.No Before\n.Bx \\z\n.No After\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "HeadWord Before SD After",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "HeadWord Before SD After",
+      ""
+    ]
+  },
+  {
+    "name": "bare_zero_body_typed",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It HeadWord\n.Lk https://before.example BEFORE\n.Tg mant-field-word-2-0\n.Bf -emphasis\n.Bx \\z\n.Ef\n.Lk https://after.example AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "HeadWord BEFORE: https://before.example SD AFTER: https://after.example",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "HeadWord BEFORE: https://before.example SD AFTER: https://after.example",
+      ""
+    ]
+  },
+  {
+    "name": "bare_zero_body_partial",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It HeadWord\n.No X\\p\n.Bx \\z\n.No \"\\p DROP\"\n.br\n.No After\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "HeadWord X",
+      "SD",
+      "",
+      "After",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "HeadWord X",
+      "SD",
+      "",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "bare_zero_no_fill_plain",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.No Before\n.Bx \\z\n.No After\n.fi\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "Before",
+      "SD",
+      "After",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "Before",
+      "SD",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "bare_zero_no_fill_typed",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Lk https://before.example BEFORE\n.Tg mant-field-word-2-0\n.Bf -emphasis\n.Bx \\z\n.Ef\n.Lk https://after.example AFTER\n.fi\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "BEFORE: https://before.example",
+      "SD",
+      "AFTER: https://after.example",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "BEFORE: https://before.example",
+      "SD",
+      "AFTER: https://after.example",
+      ""
+    ]
+  },
+  {
+    "name": "bare_zero_no_fill_partial",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.No X\\p\n.Bx \\z\n.No \"\\p DROP\"\n.br\n.No After\n.fi\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "X",
+      "SD",
+      "",
+      "After",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "X",
+      "SD",
+      "",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "pending_zero_paragraph_plain",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No Before\n.Bx \\zX\n.No After\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "Before BSD After",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "Before BSD After",
+      ""
+    ]
+  },
+  {
+    "name": "pending_zero_paragraph_typed",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Lk https://before.example BEFORE\n.Tg mant-field-word-2-0\n.Bf -emphasis\n.Bx \\zX\n.Ef\n.Lk https://after.example AFTER\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "BEFORE: https://before.example BSD AFTER: https://after.example",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "BEFORE: https://before.example BSD AFTER: https://after.example",
+      ""
+    ]
+  },
+  {
+    "name": "pending_zero_paragraph_partial",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No X\\p\n.Bx \\zX\n.No \"\\p DROP\"\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "X",
+      "BSD",
+      "",
+      "After",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "X",
+      "BSD",
+      "",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "pending_zero_head_plain",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It Xo\n.No Before\n.Bx \\zX\n.No After\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "Before BSD After BodyWord",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "Before BSD After BodyWord",
+      ""
+    ]
+  },
+  {
+    "name": "pending_zero_head_typed",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It Xo\n.Lk https://before.example BEFORE\n.Tg mant-field-word-2-0\n.Bf -emphasis\n.Bx \\zX\n.Ef\n.Lk https://after.example AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "BEFORE: https://before.example BSD AFTER: https://after.example BodyWord",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "BEFORE: https://before.example BSD AFTER: https://after.example BodyWord",
+      ""
+    ]
+  },
+  {
+    "name": "pending_zero_head_partial",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It Xo\n.No X\\p\n.Bx \\zX\n.No \"\\p DROP\"\n.br\n.No After\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "X",
+      "BSD",
+      "",
+      "After BodyWord",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "X",
+      "BSD",
+      "",
+      "After BodyWord",
+      ""
+    ]
+  },
+  {
+    "name": "pending_zero_body_plain",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It HeadWord\n.No Before\n.Bx \\zX\n.No After\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "HeadWord Before BSD After",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "HeadWord Before BSD After",
+      ""
+    ]
+  },
+  {
+    "name": "pending_zero_body_typed",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It HeadWord\n.Lk https://before.example BEFORE\n.Tg mant-field-word-2-0\n.Bf -emphasis\n.Bx \\zX\n.Ef\n.Lk https://after.example AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "HeadWord BEFORE: https://before.example BSD AFTER: https://after.example",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "HeadWord BEFORE: https://before.example BSD AFTER: https://after.example",
+      ""
+    ]
+  },
+  {
+    "name": "pending_zero_body_partial",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It HeadWord\n.No X\\p\n.Bx \\zX\n.No \"\\p DROP\"\n.br\n.No After\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "HeadWord X",
+      "BSD",
+      "",
+      "After",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "HeadWord X",
+      "BSD",
+      "",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "pending_zero_no_fill_plain",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.No Before\n.Bx \\zX\n.No After\n.fi\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "Before",
+      "BSD",
+      "After",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "Before",
+      "BSD",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "pending_zero_no_fill_typed",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Lk https://before.example BEFORE\n.Tg mant-field-word-2-0\n.Bf -emphasis\n.Bx \\zX\n.Ef\n.Lk https://after.example AFTER\n.fi\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "BEFORE: https://before.example",
+      "BSD",
+      "AFTER: https://after.example",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "BEFORE: https://before.example",
+      "BSD",
+      "AFTER: https://after.example",
+      ""
+    ]
+  },
+  {
+    "name": "pending_zero_no_fill_partial",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.No X\\p\n.Bx \\zX\n.No \"\\p DROP\"\n.br\n.No After\n.fi\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "X",
+      "BSD",
+      "",
+      "After",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "X",
+      "BSD",
+      "",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "continued_zero_paragraph_plain",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No Before\n.Bx \\z\\c\n.No After\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "Before BSD After",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "Before BSD After",
+      ""
+    ]
+  },
+  {
+    "name": "continued_zero_paragraph_typed",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Lk https://before.example BEFORE\n.Tg mant-field-word-2-0\n.Bf -emphasis\n.Bx \\z\\c\n.Ef\n.Lk https://after.example AFTER\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "BEFORE: https://before.example BSD AFTER: https://after.example",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "BEFORE: https://before.example BSD AFTER: https://after.example",
+      ""
+    ]
+  },
+  {
+    "name": "continued_zero_paragraph_partial",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No X\\p\n.Bx \\z\\c\n.No \"\\p DROP\"\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "X",
+      "BSD",
+      "",
+      "After",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "X",
+      "BSD",
+      "",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "continued_zero_head_plain",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It Xo\n.No Before\n.Bx \\z\\c\n.No After\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "Before BSD After BodyWord",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "Before BSD After BodyWord",
+      ""
+    ]
+  },
+  {
+    "name": "continued_zero_head_typed",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It Xo\n.Lk https://before.example BEFORE\n.Tg mant-field-word-2-0\n.Bf -emphasis\n.Bx \\z\\c\n.Ef\n.Lk https://after.example AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "BEFORE: https://before.example BSD AFTER: https://after.example BodyWord",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "BEFORE: https://before.example BSD AFTER: https://after.example BodyWord",
+      ""
+    ]
+  },
+  {
+    "name": "continued_zero_head_partial",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It Xo\n.No X\\p\n.Bx \\z\\c\n.No \"\\p DROP\"\n.br\n.No After\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "X",
+      "BSD",
+      "",
+      "After BodyWord",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "X",
+      "BSD",
+      "",
+      "After BodyWord",
+      ""
+    ]
+  },
+  {
+    "name": "continued_zero_body_plain",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It HeadWord\n.No Before\n.Bx \\z\\c\n.No After\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "HeadWord Before BSD After",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "HeadWord Before BSD After",
+      ""
+    ]
+  },
+  {
+    "name": "continued_zero_body_typed",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It HeadWord\n.Lk https://before.example BEFORE\n.Tg mant-field-word-2-0\n.Bf -emphasis\n.Bx \\z\\c\n.Ef\n.Lk https://after.example AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "HeadWord BEFORE: https://before.example BSD AFTER: https://after.example",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "HeadWord BEFORE: https://before.example BSD AFTER: https://after.example",
+      ""
+    ]
+  },
+  {
+    "name": "continued_zero_body_partial",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It HeadWord\n.No X\\p\n.Bx \\z\\c\n.No \"\\p DROP\"\n.br\n.No After\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "HeadWord X",
+      "BSD",
+      "",
+      "After",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "HeadWord X",
+      "BSD",
+      "",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "continued_zero_no_fill_plain",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.No Before\n.Bx \\z\\c\n.No After\n.fi\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "Before",
+      "BSD",
+      "After",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "Before",
+      "BSD",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "continued_zero_no_fill_typed",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Lk https://before.example BEFORE\n.Tg mant-field-word-2-0\n.Bf -emphasis\n.Bx \\z\\c\n.Ef\n.Lk https://after.example AFTER\n.fi\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "BEFORE: https://before.example",
+      "BSD",
+      "AFTER: https://after.example",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "BEFORE: https://before.example",
+      "BSD",
+      "AFTER: https://after.example",
+      ""
+    ]
+  },
+  {
+    "name": "continued_zero_no_fill_partial",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.No X\\p\n.Bx \\z\\c\n.No \"\\p DROP\"\n.br\n.No After\n.fi\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "X",
+      "BSD",
+      "",
+      "After",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "X",
+      "BSD",
+      "",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "font_paragraph_plain",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No Before\n.Bx \\fB\n.No After\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "Before BSD After",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "Before BSD After",
+      ""
+    ]
+  },
+  {
+    "name": "font_paragraph_typed",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Lk https://before.example BEFORE\n.Tg mant-field-word-2-0\n.Bf -emphasis\n.Bx \\fB\n.Ef\n.Lk https://after.example AFTER\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "BEFORE: https://before.example BSD AFTER: https://after.example",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "BEFORE: https://before.example BSD AFTER: https://after.example",
+      ""
+    ]
+  },
+  {
+    "name": "font_paragraph_partial",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No X\\p\n.Bx \\fB\n.No \"\\p DROP\"\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "X",
+      "BSD",
+      "",
+      "After",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "X",
+      "BSD",
+      "",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "font_head_plain",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It Xo\n.No Before\n.Bx \\fB\n.No After\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "Before BSD After BodyWord",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "Before BSD After BodyWord",
+      ""
+    ]
+  },
+  {
+    "name": "font_head_typed",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It Xo\n.Lk https://before.example BEFORE\n.Tg mant-field-word-2-0\n.Bf -emphasis\n.Bx \\fB\n.Ef\n.Lk https://after.example AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "BEFORE: https://before.example BSD AFTER: https://after.example BodyWord",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "BEFORE: https://before.example BSD AFTER: https://after.example BodyWord",
+      ""
+    ]
+  },
+  {
+    "name": "font_head_partial",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It Xo\n.No X\\p\n.Bx \\fB\n.No \"\\p DROP\"\n.br\n.No After\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "X",
+      "BSD",
+      "",
+      "After BodyWord",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "X",
+      "BSD",
+      "",
+      "After BodyWord",
+      ""
+    ]
+  },
+  {
+    "name": "font_body_plain",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It HeadWord\n.No Before\n.Bx \\fB\n.No After\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "HeadWord Before BSD After",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "HeadWord Before BSD After",
+      ""
+    ]
+  },
+  {
+    "name": "font_body_typed",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It HeadWord\n.Lk https://before.example BEFORE\n.Tg mant-field-word-2-0\n.Bf -emphasis\n.Bx \\fB\n.Ef\n.Lk https://after.example AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "HeadWord BEFORE: https://before.example BSD AFTER: https://after.example",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "HeadWord BEFORE: https://before.example BSD AFTER: https://after.example",
+      ""
+    ]
+  },
+  {
+    "name": "font_body_partial",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It HeadWord\n.No X\\p\n.Bx \\fB\n.No \"\\p DROP\"\n.br\n.No After\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "HeadWord X",
+      "BSD",
+      "",
+      "After",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "HeadWord X",
+      "BSD",
+      "",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "font_no_fill_plain",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.No Before\n.Bx \\fB\n.No After\n.fi\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "Before",
+      "BSD",
+      "After",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "Before",
+      "BSD",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "font_no_fill_typed",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Lk https://before.example BEFORE\n.Tg mant-field-word-2-0\n.Bf -emphasis\n.Bx \\fB\n.Ef\n.Lk https://after.example AFTER\n.fi\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "BEFORE: https://before.example",
+      "BSD",
+      "AFTER: https://after.example",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "BEFORE: https://before.example",
+      "BSD",
+      "AFTER: https://after.example",
+      ""
+    ]
+  },
+  {
+    "name": "font_no_fill_partial",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.No X\\p\n.Bx \\fB\n.No \"\\p DROP\"\n.br\n.No After\n.fi\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "X",
+      "BSD",
+      "",
+      "After",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "X",
+      "BSD",
+      "",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "version_release_paragraph_plain",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No Before\n.Bx 4.4 Lite\n.No After\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "Before 4.4BSD-Lite After",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "Before 4.4BSD-Lite After",
+      ""
+    ]
+  },
+  {
+    "name": "version_release_paragraph_typed",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Lk https://before.example BEFORE\n.Tg mant-field-word-2-0\n.Bf -emphasis\n.Bx 4.4 Lite\n.Ef\n.Lk https://after.example AFTER\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "BEFORE: https://before.example 4.4BSD-Lite AFTER: https://after.example",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "BEFORE: https://before.example 4.4BSD-Lite AFTER: https://after.example",
+      ""
+    ]
+  },
+  {
+    "name": "version_release_paragraph_partial",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No X\\p\n.Bx 4.4 Lite\n.No \"\\p DROP\"\n.br\n.No After\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "X",
+      "4.4BSD-Lite",
+      "",
+      "After",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "X",
+      "4.4BSD-Lite",
+      "",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "version_release_head_plain",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It Xo\n.No Before\n.Bx 4.4 Lite\n.No After\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "Before 4.4BSD-Lite After BodyWord",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "Before 4.4BSD-Lite After BodyWord",
+      ""
+    ]
+  },
+  {
+    "name": "version_release_head_typed",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It Xo\n.Lk https://before.example BEFORE\n.Tg mant-field-word-2-0\n.Bf -emphasis\n.Bx 4.4 Lite\n.Ef\n.Lk https://after.example AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "BEFORE: https://before.example 4.4BSD-Lite AFTER:",
+      "https://after.example BodyWord",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "BEFORE: https://before.example 4.4BSD-Lite AFTER: https://after.example BodyWord",
+      ""
+    ]
+  },
+  {
+    "name": "version_release_head_partial",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It Xo\n.No X\\p\n.Bx 4.4 Lite\n.No \"\\p DROP\"\n.br\n.No After\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "X",
+      "4.4BSD-Lite",
+      "",
+      "After BodyWord",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "X",
+      "4.4BSD-Lite",
+      "",
+      "After BodyWord",
+      ""
+    ]
+  },
+  {
+    "name": "version_release_body_plain",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It HeadWord\n.No Before\n.Bx 4.4 Lite\n.No After\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "HeadWord Before 4.4BSD-Lite After",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "HeadWord Before 4.4BSD-Lite After",
+      ""
+    ]
+  },
+  {
+    "name": "version_release_body_typed",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It HeadWord\n.Lk https://before.example BEFORE\n.Tg mant-field-word-2-0\n.Bf -emphasis\n.Bx 4.4 Lite\n.Ef\n.Lk https://after.example AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "HeadWord BEFORE: https://before.example 4.4BSD-Lite AFTER:",
+      "https://after.example",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "HeadWord BEFORE: https://before.example 4.4BSD-Lite AFTER: https://after.example",
+      ""
+    ]
+  },
+  {
+    "name": "version_release_body_partial",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -compact\n.It HeadWord\n.No X\\p\n.Bx 4.4 Lite\n.No \"\\p DROP\"\n.br\n.No After\n.El\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "HeadWord X",
+      "4.4BSD-Lite",
+      "",
+      "After",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "HeadWord X",
+      "4.4BSD-Lite",
+      "",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "version_release_no_fill_plain",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.No Before\n.Bx 4.4 Lite\n.No After\n.fi\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "Before",
+      "4.4BSD-Lite",
+      "After",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "Before",
+      "4.4BSD-Lite",
+      "After",
+      ""
+    ]
+  },
+  {
+    "name": "version_release_no_fill_typed",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Lk https://before.example BEFORE\n.Tg mant-field-word-2-0\n.Bf -emphasis\n.Bx 4.4 Lite\n.Ef\n.Lk https://after.example AFTER\n.fi\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "BEFORE: https://before.example",
+      "4.4BSD-Lite",
+      "AFTER: https://after.example",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "BEFORE: https://before.example",
+      "4.4BSD-Lite",
+      "AFTER: https://after.example",
+      ""
+    ]
+  },
+  {
+    "name": "version_release_no_fill_partial",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.No X\\p\n.Bx 4.4 Lite\n.No \"\\p DROP\"\n.br\n.No After\n.fi\n.Sh NEXT\n.No END\n",
+    "rows": [
+      "X",
+      "4.4BSD-Lite",
+      "",
+      "After",
+      ""
+    ],
+    "scope": "responsive-hard-rows",
+    "wide_width": 1000,
+    "wide_rows": [
+      "X",
+      "4.4BSD-Lite",
+      "",
+      "After",
+      ""
+    ]
+  }
+]
