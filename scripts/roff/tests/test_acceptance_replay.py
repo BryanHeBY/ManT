@@ -310,5 +310,120 @@ class AcceptanceAxisTests(unittest.TestCase):
                 self.assertFalse(comparison.compare_axes(expected, wrong, card)["separators"])
 
 
+class AcceptanceBoundaryPolicyTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.records = json.loads(FIXTURES.with_name("zero_advance_boundaries.json").read_text())
+        cls.cards = comparison.load_policies()
+        cls.cases = {case["id"]: case for case in replay.all_cases()}
+
+    @staticmethod
+    def binding(record):
+        return {"identity": record["oracle_identity"],
+                "reference_sha256": record["oracle_sha256"]}
+
+    def test_exact_boundary_cards_keep_every_native_content_row(self):
+        # All eighteen complete sources ran the registered five pristine
+        # profiles first. ESCAPE_SKIPCHAR carries BACKAFTER into a generated
+        # word (term.c:771-773,901-928): pre_SH/print_mdoc_foot then overwrite
+        # its first scalar. Authenticate this exact raw scope, not a guessed
+        # heading or host footer; the generic selector remains conservative.
+        self.assertEqual(len(self.records), 18)
+        for record in self.records:
+            with self.subTest(case=record["id"]):
+                case = self.cases[record["id"]]
+                self.assertEqual(case["source"], record["source"])
+                self.assertEqual(sha(record["source"]), record["source_sha256"])
+                for name, profile in record["oracle"].items():
+                    # post_section() may remove a trailing
+                    # br/Pp and emit a warning; it never waives a row check
+                    # (mdoc_validate.c:2666-2672).
+                    self.assertIn(profile["code"], (0, 2) if name == "lint" else (0,))
+                    self.assertEqual(sha(profile["stdout"]), profile["stdout_sha256"])
+                    self.assertEqual(sha(profile["stderr"]), profile["stderr_sha256"])
+                oracle = record["oracle"]
+                raw, tree = oracle["utf8"]["stdout"], oracle["tree"]["stdout"]
+                self.assertEqual(regions.select_native_region(raw, tree),
+                                 record["unqualified_region"])
+                card, error = comparison.qualified_policy(
+                    case, oracle, self.binding(record), self.cards)
+                self.assertIsNone(error)
+                rows = regions.visible_text(raw).splitlines()
+                scope = record["native_slice"]
+                self.assertEqual(rows[scope["start"]:scope["end"]],
+                                 card["expected_region"]["rows"])
+                self.assertEqual(rows[scope["end"]], "")
+                self.assertEqual(card["original_region_failure"], record["unqualified_region"])
+                self.assertEqual(card["expected_region"], record["expected_region"])
+                witness = record["boundary_witness"]
+                if witness["kind"] == "section":
+                    self.assertEqual(raw.splitlines()[witness["row"]], witness["raw_row"])
+                    self.assertEqual(rows[witness["row"]], witness["visible_heading"])
+                else:
+                    self.assertEqual(regions.metadata(tree), witness["metadata"])
+                    self.assertEqual(raw.splitlines()[witness["start"]:], witness["raw_rows"])
+
+    def test_boundary_permission_expires_when_any_source_or_oracle_binding_changes(self):
+        for record in self.records:
+            case, oracle = self.cases[record["id"]], record["oracle"]
+            binding = self.binding(record)
+            changes = [
+                ({**case, "source": case["source"] + "\n"}, oracle, binding, "complete_source"),
+                ({**case, "source_sha256": "different"}, oracle, binding, "source_sha256"),
+                (case, {**oracle, "utf8": {**oracle["utf8"],
+                                          "stdout": oracle["utf8"]["stdout"] + "\n"}},
+                 binding, "native_utf8_sha256"),
+                (case, {**oracle, "tree": {**oracle["tree"],
+                                          "stdout": oracle["tree"]["stdout"] + "\n"}},
+                 binding, "native_tree_sha256"),
+                (case, oracle, {**binding, "identity": "different"}, "oracle_identity"),
+                (case, oracle, {**binding, "reference_sha256": "different"}, "oracle_sha256"),
+            ]
+            for changed_case, changed_oracle, changed_binding, axis in changes:
+                with self.subTest(case=record["id"], binding=axis):
+                    policy, error = comparison.qualified_policy(
+                        changed_case, changed_oracle, changed_binding, self.cards)
+                    self.assertEqual(policy, {})
+                    self.assertIn(axis, error)
+                    result = {"product_region": record["expected_region"],
+                              "product_rows": record["expected_region"]["rows"],
+                              "external_targets": [], "ansi_parity": True, "marker_leak": False}
+                    ledger = replay.build_ledger([changed_case],
+                        {changed_case["source_sha256"]: changed_oracle},
+                        {changed_case["source_sha256"]: result}, {}, {}, changed_binding)
+                    observed = ledger["cases"][record["id"]]
+                    self.assertFalse(observed["axis_report"]["policy-binding"])
+                    self.assertIn("policy-binding", observed["failing_axes"])
+                    self.assertEqual(observed["status"], "fail")
+
+    def test_scope_cards_assert_added_and_missing_eof_rows_in_the_real_ledger(self):
+        for record in self.records:
+            case, oracle = self.cases[record["id"]], record["oracle"]
+            expected = record["expected_region"]["rows"]
+            actual = [row[5:] if row.startswith("     ") else row for row in expected]
+            variants = [("exact", actual), ("added-row", actual + [""])]
+            if actual and actual[-1] == "":
+                variants.append(("missing-row", actual[:-1]))
+            for mutation, rows in variants:
+                with self.subTest(case=record["id"], mutation=mutation):
+                    result = {"product_region": asserted(rows), "product_rows": rows,
+                              "external_targets": [], "ansi_parity": True, "marker_leak": False}
+                    ledger = replay.build_ledger([case], {case["source_sha256"]: oracle},
+                        {case["source_sha256"]: result}, {}, {}, self.binding(record))
+                    observed = ledger["cases"][case["id"]]
+                    self.assertEqual(observed["region"], record["unqualified_region"])
+                    self.assertTrue(observed["axis_report"]["content"])
+                    self.assertTrue(observed["axis_report"]["separators"])
+                    if mutation == "exact":
+                        self.assertTrue(observed["axis_report"]["rows"])
+                        self.assertNotIn("rows", observed["uncovered_axes"])
+                        # These cards never manufacture style/query/TUI coverage.
+                        self.assertEqual(observed["status"], "review")
+                    else:
+                        self.assertFalse(observed["axis_report"]["rows"])
+                        self.assertEqual(observed["status"], "fail")
+                        self.assertIn("rows", observed["failing_axes"])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -549,6 +549,11 @@ def build_ledger(cases, cache, product_results, product_binding, frozen,
         expected_region = policy.get("expected_region", native_region)
         report = acceptance_comparison.compare_axes(
             expected_region, product_result.get("product_region", {}), policy)
+        if policy_error:
+            # A changed source or oracle cannot reuse a bound expectation.
+            # This is failed evidence authentication, not an unimplemented
+            # consumer axis that can merely remain review/uncovered.
+            report["policy-binding"] = False
         if "external_targets" in product_result and "html" in record:
             expected_targets = policy.get("external_targets",
                 acceptance_comparison.native_external_targets(record["html"]["stdout"]))
