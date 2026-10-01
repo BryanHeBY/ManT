@@ -16,6 +16,8 @@
 
 mod acceptance_cases;
 mod axis_model;
+mod consumer_ownership;
+mod consumer_projections;
 mod main_examples;
 mod mutations;
 

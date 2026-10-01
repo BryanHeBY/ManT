@@ -374,7 +374,7 @@ The parser recognizes several CommonMark or GFM extensions that ManT does not as
 | Construct | Preservation behavior |
 | --- | --- |
 | Block quote | Complete source block |
-| Raw HTML block or span | Exact source |
+| Raw HTML block or span | Exact source, except standard inline `br` line breaks |
 | Image | Exact Markdown source, not fetched |
 | Task list | Complete list source |
 | Footnote definition or reference | Exact source |
@@ -387,6 +387,13 @@ The parser recognizes several CommonMark or GFM extensions that ManT does not as
 
 Preserved source is rendered as visible text, not interpreted HTML, executable code, remote media, or mathematics. This behavior is intentionally safe and deterministic.
 
+An inline `br` tag without attributes becomes a hard line break. The name is
+case-insensitive; ordinary HTML whitespace before `>` or `/>` is accepted.
+This includes the `<br>` spelling used when exporting consecutive hard breaks
+and edge breaks inside an inline container. Its following source newline does not add
+another space or row. Other HTML, including attributed tags and complete HTML
+blocks, retains the source-preservation behavior above.
+
 ## Input Safety
 
 Generated Markdown is a presentation of IR, not a lossless serialization of
@@ -396,6 +403,11 @@ escaping, and source-specific semantic annotations can change. Search
 coordinates refer to the exact generated output from the same query, not to
 the output of a later parse/render cycle. Use structured IR for semantic
 inspection and retain the original generated Markdown to reuse its offsets.
+
+A native definition whose label has completed its row uses a CommonMark hard
+break before a prose description. A label sharing the active row remains
+inline. A code block, table or nested list uses its ordinary block boundary.
+The native and portable text projections retain the same row decision.
 
 A leading UTF-8 byte-order mark is masked so it cannot hide the embedded tldr marker or demote the first heading. Terminal-unsafe control characters are replaced with spaces. Both cases produce diagnostics while preserving source offsets.
 

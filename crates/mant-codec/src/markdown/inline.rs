@@ -66,13 +66,23 @@ fn parse_inline_sequence(
         end_offset = range.end;
         match event {
             Event::End(actual) if Some(actual) == expected_end => break,
-            Event::End(_) => {}
             Event::Text(value) => push_text(&mut output, value.into_string()),
             Event::Code(value) => output.push(Inline::Code {
                 value: value.into_string(),
             }),
-            Event::SoftBreak => push_text(&mut output, " ".to_owned()),
+            Event::SoftBreak if mant_ir::last_visible_character(&output) != Some('\n') => {
+                push_text(&mut output, " ".to_owned());
+            }
+            Event::End(_) | Event::SoftBreak => {}
             Event::HardBreak => output.push(Inline::line_break()),
+            Event::InlineHtml(ref raw) | Event::Html(ref raw) if is_html_line_break(raw) => {
+                // The exporter uses this standard spelling for edge or
+                // consecutive breaks that CommonMark's two-space form cannot
+                // represent. Its following source newline is not another
+                // formatter space or line, including through style or link
+                // wrappers. Other HTML remains visible source.
+                output.push(Inline::line_break());
+            }
             Event::Start(tag @ (Tag::Strong | Tag::Emphasis)) if !cursor.try_descend() => {
                 let name = unsupported_tag_name(&tag);
                 let whole = cursor.consume_balanced(range);
@@ -136,6 +146,20 @@ fn parse_inline_sequence(
     }
 
     (output, end_offset)
+}
+
+fn is_html_line_break(raw: &str) -> bool {
+    let Some(body) = raw.strip_prefix('<').and_then(|raw| raw.strip_suffix('>')) else {
+        return false;
+    };
+    let Some(name) = body.get(..2) else {
+        return false;
+    };
+    name.eq_ignore_ascii_case("br")
+        && matches!(
+            body[2..].trim_start_matches([' ', '\t', '\n', '\r', '\x0c']),
+            "" | "/"
+        )
 }
 
 fn unescape_commonmark_punctuation(value: &str) -> String {

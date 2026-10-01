@@ -207,6 +207,67 @@ fn protects_hanging_definition_terms_from_becoming_nested_lists() {
 }
 
 #[test]
+fn preserves_definition_prose_row_relation_in_both_markdown_projections() {
+    // mdoc_term.c::termp_it_post executes term_newln for a completed TAG
+    // HEAD. The exact tag_explicit_vspace source is independently exercised
+    // by engine consumer tests; here the exporter must preserve the final
+    // IR's row decision even with styled prose and both display projections.
+    for inline in [false, true] {
+        let query = ResolvedContent {
+            address: None,
+            label: "definition-rows".to_owned(),
+            document: Some(manual(vec![section(
+                "TEXT",
+                vec![Block::DefinitionList {
+                    declaration_groups: Vec::new(),
+                    items: vec![DefinitionItem {
+                        source: None,
+                        entry: None,
+                        layout: mant_ir::DefinitionLayout {
+                            head_body_relation: mant_ir::HeadBodyRelation::from(inline),
+                            ..Default::default()
+                        },
+                        terms: vec![vec![Inline::Text {
+                            value: "HeadWord".to_owned(),
+                        }]],
+                        description: vec![paragraph(vec![Inline::Emphasis {
+                            children: vec![Inline::Text {
+                                value: "BodyWord".to_owned(),
+                            }],
+                        }])],
+                    }],
+                    compact: true,
+                    layout: LayoutHint::default(),
+                    source: None,
+                }],
+                Vec::new(),
+            )])),
+            tldr: None,
+        };
+        for native_text in [false, true] {
+            let markdown = render_markdown_with_options(
+                &query,
+                MarkdownOptions {
+                    native_text,
+                    ..Default::default()
+                },
+            );
+            assert_eq!(
+                Parser::new(&markdown)
+                    .filter(|event| matches!(event, Event::HardBreak))
+                    .count(),
+                usize::from(!inline),
+                "inline={inline}, native={native_text}: {markdown}"
+            );
+            assert!(
+                !Parser::new(&markdown).any(|event| matches!(event, Event::SoftBreak)),
+                "inline={inline}, native={native_text}: {markdown}"
+            );
+        }
+    }
+}
+
+#[test]
 fn keeps_block_definition_descriptions_on_their_own_commonmark_line() {
     let definitions = Block::DefinitionList {
         declaration_groups: Vec::new(),

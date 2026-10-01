@@ -2,6 +2,75 @@
 use super::*;
 
 #[test]
+fn standard_inline_html_breaks_preserve_rows_without_interpreting_other_html() {
+    for tag in ["<br>", "<BR>", "<br >", "<br/>", "<bR />", "<br\t/>"] {
+        let source = format!("# Tool\n\n## TEXT\n\nbefore{tag}\n{tag}\nafter\n");
+        let parsed = parse_markdown(&source, None).unwrap();
+        let [Block::Paragraph { children, .. }] = parsed.document.sections[0].blocks.as_slice()
+        else {
+            panic!("{tag}: {:?}", parsed.document);
+        };
+        let text = mant_ir::inline_plain_text(children);
+        assert_eq!(text, "before\n\nafter", "{tag}");
+        assert!(parsed.document.diagnostics.is_empty(), "{tag}");
+    }
+    for tag in [
+        "<brx>",
+        "</br>",
+        "<br title=\"literal\">",
+        "<br/ >",
+        "< br>",
+        "<br\u{00a0}/>",
+        "<script>alert(1)</script>",
+        "<a href=\"https://example.org\">literal</a>",
+    ] {
+        let source = format!("# Tool\n\n## TEXT\n\nbefore {tag} after\n");
+        let parsed = parse_markdown(&source, None).unwrap();
+        let [Block::Paragraph { children, .. }] = parsed.document.sections[0].blocks.as_slice()
+        else {
+            panic!("{tag}: {:?}", parsed.document);
+        };
+        let text = mant_ir::inline_plain_text(children);
+        assert_eq!(text, format!("before {tag} after"), "{tag}");
+        assert!(
+            children
+                .iter()
+                .all(|child| !matches!(child, Inline::LineBreak { .. })),
+            "{tag}"
+        );
+    }
+    for body in [
+        "*before<br>*\nafter",
+        "[before<br>](https://example.org)\nafter",
+        "before<br>**<br>**\nafter",
+    ] {
+        let source = format!("# Tool\n\n## TEXT\n\n{body}\n");
+        let parsed = parse_markdown(&source, None).unwrap();
+        let [Block::Paragraph { children, .. }] = parsed.document.sections[0].blocks.as_slice()
+        else {
+            panic!("{body}: {:?}", parsed.document);
+        };
+        let breaks = if body.contains("**<br>**") { 2 } else { 1 };
+        assert_eq!(
+            mant_ir::inline_plain_text(children),
+            format!("before{}after", "\n".repeat(breaks)),
+            "{body}"
+        );
+        assert!(parsed.document.diagnostics.is_empty(), "{body}");
+    }
+    let parsed = parse_markdown("# Tool\n\n<br>\n\n<div>literal</div>\n", None).unwrap();
+    assert!(
+        matches!(
+            parsed.document.blocks.as_slice(),
+            [Block::Unsupported { text: first, .. }, Block::Unsupported { text: second, .. }]
+                if first == "<br>\n" && second == "<div>literal</div>\n"
+        ),
+        "{:?}",
+        parsed.document.blocks
+    );
+}
+
+#[test]
 fn thematic_rule_source_gaps_survive_root_section_and_nested_list_lowering() {
     for prefix in [
         "",

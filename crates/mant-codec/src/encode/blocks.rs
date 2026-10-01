@@ -236,12 +236,14 @@ fn render_definition_list(
                     // inline prose. Gluing a fenced code block, nested list,
                     // table, or display equation to the term produces invalid
                     // CommonMark and changes the block's meaning.
-                    let sep = if item.layout.inline_term()
-                        && matches!(item.description.first(), Some(Block::Paragraph { .. }))
-                    {
-                        " "
-                    } else {
-                        "\n"
+                    let prose = matches!(item.description.first(), Some(Block::Paragraph { .. }));
+                    let sep = match (item.layout.inline_term(), prose) {
+                        (true, true) => " ",
+                        // A completed HEAD/BODY row boundary must survive
+                        // CommonMark parsing. A plain newline is a soft break
+                        // and would merge prose back into the label's line.
+                        (false, true) => "  \n",
+                        (_, false) => "\n",
                     };
                     MappedText::join([terms.into(), description], sep)
                 }
