@@ -1,0 +1,318 @@
+[
+ {
+  "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It Xo\n.No \"D \\p E\"\n.sp 1\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+  "prefix_rows": [
+   "D",
+   "",
+   ""
+  ],
+  "after_rows_words": [
+   [
+    "AFTER"
+   ],
+   [
+    "BodyWord"
+   ]
+  ]
+ },
+ {
+  "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It Xo\n.No \"D \\p E\"\n.sp 2\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+  "prefix_rows": [
+   "D",
+   "",
+   "",
+   ""
+  ],
+  "after_rows_words": [
+   [
+    "AFTER"
+   ],
+   [
+    "BodyWord"
+   ]
+  ]
+ },
+ {
+  "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It Xo\n.No \"D \\p E\"\n.sp 1\n.sp 1\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+  "prefix_rows": [
+   "D",
+   "",
+   "",
+   ""
+  ],
+  "after_rows_words": [
+   [
+    "AFTER"
+   ],
+   [
+    "BodyWord"
+   ]
+  ]
+ },
+ {
+  "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It Xo\n.No \"D \\p E\"\n.sp 1\n.sp 2\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+  "prefix_rows": [
+   "D",
+   "",
+   "",
+   "",
+   ""
+  ],
+  "after_rows_words": [
+   [
+    "AFTER"
+   ],
+   [
+    "BodyWord"
+   ]
+  ]
+ },
+ {
+  "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo\n.No \"D \\p E\"\n.sp 2\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+  "prefix_rows": [
+   "D",
+   "",
+   ""
+  ],
+  "after_rows_words": [
+   [
+    "AFTER",
+    "BodyWord"
+   ]
+  ]
+ },
+ {
+  "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It Xo\n.No \"D \\p E\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+  "prefix_rows": [
+   "D",
+   ""
+  ],
+  "after_rows_words": [
+   [
+    "AFTER"
+   ],
+   [
+    "BodyWord"
+   ]
+  ]
+ },
+ {
+  "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It Xo\n.No \"D \\p E\"\n.sp -1\n.No RESET\n.sp 1\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+  "prefix_rows": [
+   "D",
+   "",
+   "RESET",
+   ""
+  ],
+  "after_rows_words": [
+   [
+    "AFTER"
+   ],
+   [
+    "BodyWord"
+   ]
+  ]
+ },
+ {
+  "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It Xo\n.No \"D \\p E\"\n.br\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+  "prefix_rows": [
+   "D",
+   ""
+  ],
+  "after_rows_words": [
+   [
+    "AFTER"
+   ],
+   [
+    "BodyWord"
+   ]
+  ]
+ },
+ {
+  "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo\n.No \"D \\p E\"\n.sp 0\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+  "prefix_rows": [
+   "D"
+  ],
+  "after_rows_words": [
+   [
+    "AFTER",
+    "BodyWord"
+   ]
+  ]
+ },
+ {
+  "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It Xo\n.No \"LABEL\"\n.br\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+  "prefix_rows": [],
+  "after_rows_words": [
+   [
+    "LABEL",
+    "AFTER"
+   ],
+   [
+    "BodyWord"
+   ]
+  ]
+ },
+ {
+  "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It Xo\n.No \"LABEL\"\n.sp 1\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+  "prefix_rows": [
+   "LABEL"
+  ],
+  "after_rows_words": [
+   [
+    "AFTER"
+   ],
+   [
+    "BodyWord"
+   ]
+  ]
+ },
+ {
+  "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It Xo\n.No \"LABEL\"\n.sp 2\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+  "prefix_rows": [
+   "LABEL",
+   ""
+  ],
+  "after_rows_words": [
+   [
+    "AFTER"
+   ],
+   [
+    "BodyWord"
+   ]
+  ]
+ },
+ {
+  "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It Xo\n.No \"LABEL\"\n.sp 1\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+  "prefix_rows": [
+   "LABEL"
+  ],
+  "after_rows_words": [
+   [
+    "AFTER",
+    "BodyWord"
+   ]
+  ]
+ },
+ {
+  "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo\n.No \"D \\p E\"\n.sp 1\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+  "prefix_rows": [
+   "D",
+   ""
+  ],
+  "after_rows_words": [
+   [
+    "AFTER",
+    "BodyWord"
+   ]
+  ]
+ },
+ {
+  "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 32n\n.It Xo\n.No \"D \\p E\"\n.br\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+  "prefix_rows": [
+   "D"
+  ],
+  "after_rows_words": [
+   [
+    "AFTER",
+    "BodyWord"
+   ]
+  ]
+ },
+ {
+  "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo\n.No \"\"\n.sp 1\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+  "prefix_rows": [
+   ""
+  ],
+  "after_rows_words": [
+   [
+    "AFTER",
+    "BodyWord"
+   ]
+  ]
+ },
+ {
+  "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It Xo\n.No \"D\\p E\"\n.sp 1\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+  "prefix_rows": [
+   "D",
+   "E",
+   ""
+  ],
+  "after_rows_words": [
+   [
+    "AFTER"
+   ],
+   [
+    "BodyWord"
+   ]
+  ]
+ },
+ {
+  "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It Xo\n.No \"D \\p E\"\n.Tg gap\n.sp 1\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+  "prefix_rows": [
+   "D",
+   "",
+   ""
+  ],
+  "after_rows_words": [
+   [
+    "AFTER"
+   ],
+   [
+    "BodyWord"
+   ]
+  ]
+ },
+ {
+  "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo\n.No \"D \\p E\"\n.br\n.No AFTER\n.Xc\n.Lk https://body.example BodyWord\n.El\n.Sh NEXT\n.No END\n",
+  "prefix_rows": [
+   "D"
+  ],
+  "after_rows_words": [
+   [
+    "AFTER",
+    "BodyWord:",
+    "https://body.example"
+   ]
+  ]
+ },
+ {
+  "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo\n.No \"D \\p E\"\n.br\n.No AFTER\n.Xc\n.El\n.Sh NEXT\n.No END\n",
+  "prefix_rows": [
+   "D"
+  ],
+  "after_rows_words": [
+   [
+    "AFTER"
+   ]
+  ]
+ },
+ {
+  "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It Xo\n.No \"D \\p E\"\n.Pp\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+  "prefix_rows": [
+   "D",
+   "",
+   ""
+  ],
+  "after_rows_words": [
+   [
+    "AFTER"
+   ],
+   [
+    "BodyWord"
+   ]
+  ]
+ },
+ {
+  "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo\n.Lk https://ex.org \"D \\p E\"\n.br\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+  "prefix_rows": [
+   "D"
+  ],
+  "after_rows_words": [
+   [
+    "AFTER",
+    "BodyWord"
+   ]
+  ]
+ }
+]

@@ -159,7 +159,7 @@ fn column_tail_hard_row() -> AcceptanceCase {
         gold: GoldCard {
             accepted_units: Some(Axis::must(vec!["D", "RightWord"])),
             forbidden_units: Some(Axis::must(vec!["AFTER"])),
-            hard_rows: Some(Axis::must(vec![HardRowExpect {
+            hard_rows: Some(Axis::after_repair(vec![HardRowExpect {
                 left: "D",
                 right: "RightWord",
                 relation: HardRowRelation::DifferentRows,
@@ -169,7 +169,7 @@ fn column_tail_hard_row() -> AcceptanceCase {
                 before: "RightWord",
                 count: 0,
             }])),
-            row_count: Some(Axis::must(3)),
+            row_count: Some(Axis::after_repair(3)),
             identities: Some(Axis::must(vec![])),
             ..GoldCard::none()
         },
@@ -214,7 +214,7 @@ fn tag_explicit_vspace() -> AcceptanceCase {
             // The explicit vertical spacing between D and AFTER is the
             // registered divergence; the AFTER/BodyWord adjacency rides on
             // the same axis and must hold once the repair flips this.
-            blank_counts: Some(Axis::after_repair(vec![
+            blank_counts: Some(Axis::must(vec![
                 BlankCountExpect {
                     after: "D",
                     before: "AFTER",
@@ -226,7 +226,7 @@ fn tag_explicit_vspace() -> AcceptanceCase {
                     count: 0,
                 },
             ])),
-            row_count: Some(Axis::after_repair(6)),
+            row_count: Some(Axis::must(6)),
             identities: Some(Axis::must(vec![])),
             ..GoldCard::none()
         },
@@ -256,8 +256,8 @@ fn hang_final_gap() -> AcceptanceCase {
             identity: IdentityPolicy::RichInline,
         },
         gold: GoldCard {
-            accepted_units: Some(Axis::after_repair(vec!["D", "AFTER", "BodyWord"])),
-            separators: Some(Axis::after_repair(vec![SeparatorExpect {
+            accepted_units: Some(Axis::must(vec!["D", "AFTER", "BodyWord"])),
+            separators: Some(Axis::must(vec![SeparatorExpect {
                 left: "AFTER",
                 right: "BodyWord",
                 relation: SeparatorRelation::ResponsiveBreak,

@@ -105,6 +105,12 @@ impl InlineBuilder {
                 AuthorBreakEffect::Line => None,
             });
         if let Some((body_width_columns, field_width_columns, flags)) = field {
+            // roff_term.c::roff_term_pre_sp() runs its term_vspace() rows
+            // BEFORE the trailing roff_term_pre_br() clears NOBREAK/BRIND
+            // and trailspace. Evaluate the leading term_newln()'s tail rule
+            // (term.c:250-253) from the still-live device first; the clear
+            // and its spent-minbl bookkeeping only run afterwards.
+            let leading_newln_closed_row = self.leading_sp_newln_closed_row(flags);
             self.note_field_control_cleared_no_break(
                 flags.contains(FieldFlag::Brind),
                 field_width_columns,
@@ -115,6 +121,7 @@ impl InlineBuilder {
                     body_width_columns,
                     field_width_columns,
                     flags,
+                    leading_newln_closed_row,
                 );
                 return;
             }
@@ -123,6 +130,7 @@ impl InlineBuilder {
                 body_width_columns,
                 field_width_columns,
                 flags,
+                leading_newln_closed_row,
             );
         } else {
             self.hard_break();
@@ -151,45 +159,53 @@ impl InlineBuilder {
         self.execution.final_source_continuation = Some(false);
     }
 
+    /// The row fact of the `term_newln()` leading the `term_vspace()` rows
+    /// of `roff_term_pre_sp()`: it only flushes a live buffer or an
+    /// occupied device row, and its `term_flushln()` tail then ends the
+    /// row unless HANG holds it open. With this request's own
+    /// `roff_term_pre_br()` still pending, NOBREAK is live unless an
+    /// earlier request already cleared it, so only an overrun — or that
+    /// earlier clear — closes the row here (term.c:250-253).
+    fn leading_sp_newln_closed_row(&self, flags: super::super::native_field::FieldFlags) -> bool {
+        let Some(state) = self.execution.definition.as_ref() else {
+            return false;
+        };
+        let flushes_live_field = state.hang_row.viscol > 0
+            || state.field_buffer.resume_offset() < state.field_buffer.cells().len();
+        flushes_live_field
+            && !flags.contains(FieldFlag::Hang)
+            && (state.no_break_cleared
+                || self
+                    .native_field_device(false)
+                    .is_some_and(|device| device.overruns))
+    }
+
     fn vertical_space_after_occupied_field(
         &mut self,
         rows: usize,
         body_width_columns: u16,
         field_width_columns: u16,
         flags: super::super::native_field::FieldFlags,
+        leading_newln_closed_row: bool,
     ) {
-        // `roff_term_pre_sp()` executes term_vspace() before the final
-        // BRIND transition. HANG can suppress term_newln(), but the
-        // vertical request still ends the row; field padding is trailing
-        // geometry and must not leak onto the empty row.
-        // roff_term_pre_sp() executes term_vspace() before the final
-        // BRIND transition. The CVS-pinned occupied-head rows keep
-        // term_newln()'s close consuming the first requested row for
-        // wrappable fields; HANG suppresses that close only when the
-        // field did not overrun (term.c:250-252).
-        let start = self
-            .author_execution
-            .as_ref()
-            .map_or(self.nodes.len(), |execution| execution.field_output_start);
+        // `roff_term_pre_sp()` runs term_vspace() while the field still
+        // carries its NOBREAK/BRIND/HANG flags and trailspace; pre_br()
+        // only afterwards clears them and moves the origin
+        // (roff_term.c:195-215, 69-78). Every requested row is one
+        // endline() (term.c:489-497), and the leading term_newln()'s
+        // term_flushln() can itself end a row through its tail decision
+        // (term.c:250-253): with NOBREAK still live, that decision is the
+        // overrun rule the device receipt already evaluated. Count the
+        // endline events from those device facts. The projected width of
+        // the field's IR nodes is a second row authority: rejected
+        // prefixes and rows an in-field `\p` break already closed make it
+        // disagree with the device, so it is not consulted here.
+        let endlines = usize::from(leading_newln_closed_row) + rows;
+        let nodes_before = self.nodes.len();
         self.flush_zero_advance();
-        let width = mant_ir::geometry::text_width(&super::super::super::plain_text(
-            self.nodes.get(start..).unwrap_or_default(),
-        ));
-        let trailspace =
-            self.author_execution
-                .as_ref()
-                .map_or(0, |execution| match execution.break_effect {
-                    AuthorBreakEffect::Field { gap_cells, .. } => usize::from(gap_cells),
-                    AuthorBreakEffect::Line => 0,
-                });
-        let term_newln_ended_row =
-            flags.wraps() && width.saturating_add(trailspace) > usize::from(body_width_columns);
         self.hard_break();
-        self.retain_line_breaks(if term_newln_ended_row {
-            rows
-        } else {
-            rows.saturating_sub(1)
-        });
+        let hard_break_ended_row = self.nodes.len() > nodes_before;
+        self.retain_line_breaks(endlines - usize::from(hard_break_ended_row));
         self.definition_state_mut().pending_indent = Some(usize::from(body_width_columns));
         if let Some(execution) = &mut self.execution.author_execution {
             execution.field_output_start = self.nodes.len();
@@ -230,6 +246,7 @@ impl InlineBuilder {
         body_width_columns: u16,
         field_width_columns: u16,
         flags: super::super::native_field::FieldFlags,
+        leading_newln_closed_row: bool,
     ) {
         // `term_vspace()` always emits its requested empty row, but
         // its leading `term_newln()` leaves a bare BACKAFTER armed
@@ -238,9 +255,11 @@ impl InlineBuilder {
         // body contract.  Preserve those independent effects.
         // term.c:475-480,489-497: the conditional term_newln()
         // emits nothing with no buffered cell or occupied row.
-        // Only the requested endline events exist; an IR helper
-        // return must not contribute another row close.
-        self.retain_line_breaks(rows);
+        // Only the requested endline events exist — plus, when the
+        // leading newln did flush a live field and its tail ended the
+        // row, that one earlier endline; an IR helper return must not
+        // contribute another row close.
+        self.retain_line_breaks(rows + usize::from(leading_newln_closed_row));
         self.execution.boundary = PendingBoundary::Tight;
         if flags.wraps() {
             self.execution

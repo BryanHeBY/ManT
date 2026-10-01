@@ -2,6 +2,7 @@
 
 mod column_execution_boundaries;
 mod container_word_rows;
+mod definition_spacing_gaps;
 mod generated_body_rows;
 mod generated_word_rows;
 mod generated_word_styles;
