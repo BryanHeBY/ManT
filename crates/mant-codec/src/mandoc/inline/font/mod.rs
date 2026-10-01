@@ -11,7 +11,8 @@ mod zero_advance;
 
 pub(super) use style::coalesce_font_runs;
 pub(in crate::mandoc) use text_execution::{
-    FormatterWordPart, parse_formatter_word_parts_with_zero_advance, parse_roff_text_with_state,
+    FormatterWordPart, TextExecutionContext, TextExecutionPolicy,
+    parse_formatter_word_parts_with_zero_advance, parse_roff_text_with_state,
     parse_roff_text_with_zero_advance,
 };
 pub(in crate::mandoc) use zero_advance::ZeroAdvanceState;

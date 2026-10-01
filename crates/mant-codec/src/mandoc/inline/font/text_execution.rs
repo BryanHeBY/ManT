@@ -5,6 +5,35 @@ use super::{
     is_formatter_word_blank,
 };
 
+/// Independent text-word policies, chosen by the caller's native sink.
+/// Recording does not select another executor, and a field receipt may own
+/// acceptance while generated-reference recognition remains independently on.
+#[derive(Clone, Copy)]
+pub(in crate::mandoc) struct TextExecutionPolicy {
+    pub(in crate::mandoc) recognize_generated_references: bool,
+    pub(in crate::mandoc) record_native_cells: bool,
+    pub(in crate::mandoc) field_authoritative: bool,
+}
+
+/// Borrow the caller's registers for one word; output ownership never creates
+/// a second font or zero-advance execution state.
+pub(in crate::mandoc) struct TextExecutionContext<'state> {
+    pub(in crate::mandoc) font: &'state mut FontState,
+    pub(in crate::mandoc) zero_advance: &'state mut ZeroAdvanceState,
+    pub(in crate::mandoc) pending_word_end_break: bool,
+    pub(in crate::mandoc) policy: TextExecutionPolicy,
+}
+
+/// A presentation write borrows one word's output and the caller's pending
+/// glyph state. Code can change this display font without changing registers.
+struct WordOutput<'word> {
+    output: &'word mut Vec<Inline>,
+    buffer: &'word mut String,
+    font: Font,
+    link: Option<&'word str>,
+    zero_advance: &'word mut ZeroAdvanceState,
+}
+
 pub(in crate::mandoc) fn parse_roff_text_with_state(
     source: &str,
     state: &mut FontState,
@@ -13,12 +42,16 @@ pub(in crate::mandoc) fn parse_roff_text_with_state(
     let mut zero_advance = ZeroAdvanceState::default();
     let execution = parse_roff_text_with_zero_advance(
         source,
-        state,
-        recognize_generated_references,
-        &mut zero_advance,
-        false,
-        false,
-        false,
+        TextExecutionContext {
+            font: state,
+            zero_advance: &mut zero_advance,
+            pending_word_end_break: false,
+            policy: TextExecutionPolicy {
+                recognize_generated_references,
+                record_native_cells: false,
+                field_authoritative: false,
+            },
+        },
     );
     let mut output = execution.output;
     if execution.pending_word_end_break {
@@ -28,6 +61,7 @@ pub(in crate::mandoc) fn parse_roff_text_with_state(
     output
 }
 
+// Native joining, continuation, breaks and acceptance are independent results.
 #[allow(clippy::struct_excessive_bools)]
 pub(in crate::mandoc) struct TextExecution {
     pub(in crate::mandoc) output: Vec<Inline>,
@@ -62,7 +96,7 @@ enum FormatterWordEvent {
     Code(String),
 }
 
-// Decoder controls and field-proof observations coexist during one word.
+// Native graph, break, blank and rejection flags can coexist during one word.
 #[allow(clippy::struct_excessive_bools)]
 struct TextEventState {
     pending_word_end_break: bool,
@@ -90,6 +124,14 @@ struct TextEventState {
 }
 
 impl TextEventState {
+    fn note_graph(&mut self) {
+        self.graph_seen = true;
+        self.graph_since_blank = true;
+        self.graph_since_break |= self.pending_word_end_break;
+        self.last_breakable_blank = false;
+        self.trailing_breakable_blanks = 0;
+    }
+
     const fn new(pending_word_end_break: bool) -> Self {
         Self {
             pending_word_end_break,
@@ -109,17 +151,19 @@ impl TextEventState {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 fn append_text_event(
     value: &str,
-    output: &mut Vec<Inline>,
-    buffer: &mut String,
-    font: Font,
-    link: Option<&str>,
-    zero_advance: &mut ZeroAdvanceState,
+    destination: WordOutput<'_>,
     state: &mut TextEventState,
     field_authoritative: bool,
 ) {
+    let WordOutput {
+        output,
+        buffer,
+        font,
+        link,
+        zero_advance,
+    } = destination;
     let mut chunk = String::new();
     for character in value.chars() {
         if state.wiped {
@@ -221,42 +265,21 @@ fn append_text_event(
 }
 
 /// Decode a text node while retaining formatter state in its caller's inline
-/// stream.  The result reports cross-node zero-advance joining, the final
-/// physical-line decision, and a deferred word-end break independently.
-#[allow(clippy::too_many_arguments, clippy::fn_params_excessive_bools)]
+/// stream. Joining, source continuation and word-end breaks remain independent.
 pub(in crate::mandoc) fn parse_roff_text_with_zero_advance(
     source: &str,
-    state: &mut FontState,
-    recognize_generated_references: bool,
-    zero_advance: &mut ZeroAdvanceState,
-    pending_word_end_break: bool,
-    record_native_cells: bool,
-    field_authoritative: bool,
+    context: TextExecutionContext<'_>,
 ) -> TextExecution {
     let events = decode(source)
         .into_iter()
         .map(FormatterWordEvent::Source)
         .collect::<Vec<_>>();
-    execute_formatter_word_events(
-        &events,
-        state,
-        recognize_generated_references,
-        zero_advance,
-        pending_word_end_break,
-        record_native_cells,
-        field_authoritative,
-    )
+    execute_formatter_word_events(&events, context)
 }
 
-#[allow(clippy::too_many_arguments, clippy::fn_params_excessive_bools)]
 pub(in crate::mandoc) fn parse_formatter_word_parts_with_zero_advance(
     parts: &[FormatterWordPart<'_>],
-    state: &mut FontState,
-    recognize_generated_references: bool,
-    zero_advance: &mut ZeroAdvanceState,
-    pending_word_end_break: bool,
-    record_native_cells: bool,
-    field_authoritative: bool,
+    context: TextExecutionContext<'_>,
 ) -> TextExecution {
     let events = parts
         .iter()
@@ -265,215 +288,223 @@ pub(in crate::mandoc) fn parse_formatter_word_parts_with_zero_advance(
                 .into_iter()
                 .map(FormatterWordEvent::Source)
                 .collect::<Vec<_>>(),
-            FormatterWordPart::Code(value) => {
-                vec![FormatterWordEvent::Code(value.clone())]
-            }
+            FormatterWordPart::Code(value) => vec![FormatterWordEvent::Code(value.clone())],
         })
         .collect::<Vec<_>>();
-    execute_formatter_word_events(
-        &events,
-        state,
-        recognize_generated_references,
-        zero_advance,
-        pending_word_end_break,
-        record_native_cells,
-        field_authoritative,
-    )
+    execute_formatter_word_events(&events, context)
 }
 
-// Keep the decoded escape events in their native term_word() order.
-#[allow(
-    clippy::too_many_lines,
-    clippy::too_many_arguments,
-    clippy::fn_params_excessive_bools
-)]
-fn execute_formatter_word_events(
-    events: &[FormatterWordEvent],
-    state: &mut FontState,
-    recognize_generated_references: bool,
-    zero_advance: &mut ZeroAdvanceState,
-    pending_word_end_break: bool,
-    record_native_cells: bool,
-    // The definition-field session owns the pass arithmetic for this word
-    // (`FieldBuffer::flush_receipt`): a marker's break blank defers to it
-    // instead of the ordinary-flow wipe decision here.
-    field_authoritative: bool,
-) -> TextExecution {
-    let (mut output, mut buffer) = (Vec::new(), String::new());
-    let mut font = state.display_current();
-    let mut link: Option<String> = None;
-    let mut explicit_line_continuation = None;
-    let mut text_state = TextEventState::new(pending_word_end_break);
-    let mut native_writes = Vec::new();
-    zero_advance.begin_fragment();
-    for (index, event) in events.iter().enumerate() {
-        if record_native_cells {
-            record_native_event(
-                event,
-                &mut native_writes,
-                zero_advance.fallback_is_projected(),
-            );
-        }
-        match event {
-            FormatterWordEvent::Code(value) => {
-                append_code_event(
-                    value,
-                    &mut output,
-                    &mut buffer,
-                    font,
-                    link.as_deref(),
-                    zero_advance,
-                    &mut text_state,
-                );
-            }
-            FormatterWordEvent::Source(RoffInlineEvent::Text(value)) => {
-                append_text_event(
-                    value,
-                    &mut output,
-                    &mut buffer,
-                    font,
-                    link.as_deref(),
-                    zero_advance,
-                    &mut text_state,
-                    field_authoritative,
-                );
-            }
-            FormatterWordEvent::Source(
-                RoffInlineEvent::Glyph(value)
-                | RoffInlineEvent::Overstrike {
-                    terminal: Some(value),
-                    ..
-                },
-            ) => {
-                text_state.suppress_break_whitespace = false;
-                text_state.graph_seen = true;
-                text_state.graph_since_blank = true;
-                text_state.graph_since_break |= text_state.pending_word_end_break;
-                text_state.last_breakable_blank = false;
-                text_state.trailing_breakable_blanks = 0;
-                text_state.graph_count += 1;
-                if !text_state.wiped {
-                    zero_advance.append_glyph(
-                        value,
-                        &mut output,
-                        &mut buffer,
-                        font,
-                        link.as_deref(),
-                    );
-                }
-            }
-            FormatterWordEvent::Source(RoffInlineEvent::FallbackGlyph(value)) => {
-                if !text_state.wiped {
-                    zero_advance.append_fallback_glyph(value, &mut buffer, font, link.as_deref());
-                }
-                text_state.graph_since_blank = true;
-                // Native recovery is still a zero-width graph even when its
-                // source spelling has no semantic contribution after \z.
-                text_state.suppress_break_whitespace = false;
-                text_state.graph_seen = true;
-                text_state.graph_since_break |= text_state.pending_word_end_break;
-                text_state.last_breakable_blank = false;
-                text_state.trailing_breakable_blanks = 0;
-                text_state.graph_count += 1;
-            }
-            FormatterWordEvent::Source(RoffInlineEvent::DeviceName) => {
-                text_state.suppress_break_whitespace = false;
-                text_state.graph_seen = true;
-                text_state.graph_since_blank = true;
-                text_state.graph_since_break |= text_state.pending_word_end_break;
-                text_state.last_breakable_blank = false;
-                text_state.trailing_breakable_blanks = 0;
-                if !text_state.wiped {
-                    zero_advance.append_text(
-                        "utf8",
-                        &mut output,
-                        &mut buffer,
-                        font,
-                        link.as_deref(),
-                    );
-                }
-            }
-            FormatterWordEvent::Source(RoffInlineEvent::ZeroAdvance) => zero_advance.arm(),
-            FormatterWordEvent::Source(RoffInlineEvent::NoSpace) => {
-                let canceled_armed = zero_advance.cancel_armed_for_no_space();
-                if index + 1 == events.len() {
-                    explicit_line_continuation = Some(!canceled_armed);
-                }
-            }
-            FormatterWordEvent::Source(RoffInlineEvent::Font(next_font)) => {
-                flush_segment(&mut output, &mut buffer, font, link.as_deref());
-                state.select(*next_font);
-                font = state.display_current();
-            }
-            FormatterWordEvent::Source(RoffInlineEvent::PreviousFont) => {
-                flush_segment(&mut output, &mut buffer, font, link.as_deref());
-                state.restore();
-                font = state.display_current();
-            }
-            FormatterWordEvent::Source(RoffInlineEvent::Link(target)) => {
-                flush_segment(&mut output, &mut buffer, font, link.as_deref());
-                link.clone_from(target);
-            }
-            FormatterWordEvent::Source(RoffInlineEvent::EmptyDestination) => {
-                if !text_state.wiped {
-                    append_empty_destination(
-                        &mut output,
-                        &mut buffer,
-                        font,
-                        link.as_deref(),
-                        recognize_generated_references,
-                        &mut text_state,
-                    );
-                }
-            }
-            FormatterWordEvent::Source(RoffInlineEvent::LineBreak) => {
-                text_state.pending_word_end_break = true;
-                text_state.break_started_after_blank =
-                    text_state.last_breakable_blank && text_state.graph_seen;
-                text_state.break_trailing_blanks = text_state.trailing_breakable_blanks;
-                text_state.graph_since_break = false;
-            }
-            FormatterWordEvent::Source(RoffInlineEvent::ZeroWidthGlyph) => {
-                text_state.graph_seen = true;
-                text_state.graph_since_blank = true;
-                text_state.graph_since_break |= text_state.pending_word_end_break;
-                text_state.last_breakable_blank = false;
-                text_state.trailing_breakable_blanks = 0;
-                text_state.zero_graph_seen = true;
-            }
+/// One word's presentation and native-write sink, before the caller receives
+/// its outcome. The borrowed context continues to own persistent registers.
+struct WordExecution {
+    output: Vec<Inline>,
+    buffer: String,
+    font: Font,
+    link: Option<String>,
+    source_continuation: Option<bool>,
+    text_state: TextEventState,
+    native_writes: Vec<super::super::flow::field_buffer::FieldWrite>,
+}
 
-            FormatterWordEvent::Source(RoffInlineEvent::Presentation {
-                kind: crate::mandoc::roff_escape::PresentationKind::HorizontalMotion,
-                ..
-            }) => {
-                // A positive `\h` consumed by TERMP_BACKAFTER clears the arm
-                // and skips the advance entirely (term.c:677-680): the
-                // decoder's semantic boundary space must not print either.
-                if zero_advance.take_armed() && buffer.ends_with(' ') {
-                    buffer.pop();
-                }
-            }
-            FormatterWordEvent::Source(
-                RoffInlineEvent::Presentation { .. }
-                | RoffInlineEvent::Overstrike { terminal: None, .. },
-            ) => {}
+impl WordExecution {
+    fn new(context: &TextExecutionContext<'_>) -> Self {
+        Self {
+            output: Vec::new(),
+            buffer: String::new(),
+            font: context.font.display_current(),
+            link: None,
+            source_continuation: None,
+            text_state: TextEventState::new(context.pending_word_end_break),
+            native_writes: Vec::new(),
         }
     }
-    flush_segment(&mut output, &mut buffer, font, link.as_deref());
-    zero_advance.clear_marker_blank_separator();
-    finish_text_execution(
-        events,
-        output,
-        zero_advance,
-        explicit_line_continuation,
-        text_state.pending_word_end_break,
-        text_state.pending_word_end_break
-            && text_state.saw_source_cell
-            && !text_state.graph_since_blank,
-        text_state.wiped,
-        text_state.zero_graph_seen,
-        native_writes,
-    )
+
+    fn append_event(
+        &mut self,
+        event: &FormatterWordEvent,
+        context: &mut TextExecutionContext<'_>,
+        is_last: bool,
+    ) {
+        match event {
+            FormatterWordEvent::Code(value) => append_code_event(
+                value,
+                WordOutput {
+                    output: &mut self.output,
+                    buffer: &mut self.buffer,
+                    font: self.font,
+                    link: self.link.as_deref(),
+                    zero_advance: context.zero_advance,
+                },
+                &mut self.text_state,
+            ),
+            FormatterWordEvent::Source(event) => self.append_source_event(event, context, is_last),
+        }
+    }
+
+    fn append_source_event(
+        &mut self,
+        event: &RoffInlineEvent,
+        context: &mut TextExecutionContext<'_>,
+        is_last: bool,
+    ) {
+        match event {
+            RoffInlineEvent::Text(value) => append_text_event(
+                value,
+                WordOutput {
+                    output: &mut self.output,
+                    buffer: &mut self.buffer,
+                    font: self.font,
+                    link: self.link.as_deref(),
+                    zero_advance: context.zero_advance,
+                },
+                &mut self.text_state,
+                context.policy.field_authoritative,
+            ),
+            RoffInlineEvent::Glyph(value)
+            | RoffInlineEvent::Overstrike {
+                terminal: Some(value),
+                ..
+            } => {
+                self.append_glyph(value, context.zero_advance);
+            }
+            RoffInlineEvent::FallbackGlyph(value) => {
+                self.append_fallback_glyph(value, context.zero_advance);
+            }
+            RoffInlineEvent::DeviceName => self.append_device_name(context.zero_advance),
+            RoffInlineEvent::ZeroAdvance => context.zero_advance.arm(),
+            RoffInlineEvent::NoSpace => {
+                let canceled_armed = context.zero_advance.cancel_armed_for_no_space();
+                if is_last {
+                    self.source_continuation = Some(!canceled_armed);
+                }
+            }
+            RoffInlineEvent::Font(next_font) => {
+                self.flush_segment();
+                context.font.select(*next_font);
+                self.font = context.font.display_current();
+            }
+            RoffInlineEvent::PreviousFont => {
+                self.flush_segment();
+                context.font.restore();
+                self.font = context.font.display_current();
+            }
+            RoffInlineEvent::Link(target) => {
+                self.flush_segment();
+                self.link.clone_from(target);
+            }
+            RoffInlineEvent::EmptyDestination => {
+                if !self.text_state.wiped {
+                    append_empty_destination(
+                        &mut self.output,
+                        &mut self.buffer,
+                        self.font,
+                        self.link.as_deref(),
+                        context.policy.recognize_generated_references,
+                        &mut self.text_state,
+                    );
+                }
+            }
+            RoffInlineEvent::LineBreak => {
+                self.text_state.pending_word_end_break = true;
+                self.text_state.break_started_after_blank =
+                    self.text_state.last_breakable_blank && self.text_state.graph_seen;
+                self.text_state.break_trailing_blanks = self.text_state.trailing_breakable_blanks;
+                self.text_state.graph_since_break = false;
+            }
+            RoffInlineEvent::ZeroWidthGlyph => {
+                self.text_state.note_graph();
+                self.text_state.zero_graph_seen = true;
+            }
+            RoffInlineEvent::Presentation {
+                kind: crate::mandoc::roff_escape::PresentationKind::HorizontalMotion,
+                ..
+            } => {
+                // Positive \h under BACKAFTER clears the arm and skips the
+                // advance (term.c:677-680), including its projected blank.
+                if context.zero_advance.take_armed() && self.buffer.ends_with(' ') {
+                    self.buffer.pop();
+                }
+            }
+            RoffInlineEvent::Presentation { .. }
+            | RoffInlineEvent::Overstrike { terminal: None, .. } => {}
+        }
+    }
+
+    fn append_glyph(&mut self, value: &str, zero_advance: &mut ZeroAdvanceState) {
+        self.text_state.suppress_break_whitespace = false;
+        self.text_state.note_graph();
+        self.text_state.graph_count += 1;
+        if !self.text_state.wiped {
+            zero_advance.append_glyph(
+                value,
+                &mut self.output,
+                &mut self.buffer,
+                self.font,
+                self.link.as_deref(),
+            );
+        }
+    }
+
+    fn append_fallback_glyph(&mut self, value: &str, zero_advance: &mut ZeroAdvanceState) {
+        if !self.text_state.wiped {
+            zero_advance.append_fallback_glyph(
+                value,
+                &mut self.buffer,
+                self.font,
+                self.link.as_deref(),
+            );
+        }
+        // Native recovery is graph even when \z erases its source spelling.
+        self.text_state.suppress_break_whitespace = false;
+        self.text_state.note_graph();
+        self.text_state.graph_count += 1;
+    }
+
+    fn append_device_name(&mut self, zero_advance: &mut ZeroAdvanceState) {
+        self.text_state.suppress_break_whitespace = false;
+        self.text_state.note_graph();
+        if !self.text_state.wiped {
+            zero_advance.append_text(
+                "utf8",
+                &mut self.output,
+                &mut self.buffer,
+                self.font,
+                self.link.as_deref(),
+            );
+        }
+    }
+
+    fn flush_segment(&mut self) {
+        flush_segment(
+            &mut self.output,
+            &mut self.buffer,
+            self.font,
+            self.link.as_deref(),
+        );
+    }
+}
+
+// Record each decoded native write before its presentation action, in the
+// same term_word() order. Final flush precedes taking the joining receipt.
+fn execute_formatter_word_events(
+    events: &[FormatterWordEvent],
+    mut context: TextExecutionContext<'_>,
+) -> TextExecution {
+    let mut word = WordExecution::new(&context);
+    context.zero_advance.begin_fragment();
+    for (index, event) in events.iter().enumerate() {
+        if context.policy.record_native_cells {
+            record_native_event(
+                event,
+                &mut word.native_writes,
+                context.zero_advance.fallback_is_projected(),
+            );
+        }
+        word.append_event(event, &mut context, index + 1 == events.len());
+    }
+    word.flush_segment();
+    context.zero_advance.clear_marker_blank_separator();
+    finish_text_execution(events, context.zero_advance, word)
 }
 
 /// `term.c::term_word()` buffers controls and invisible cells before
@@ -542,18 +573,18 @@ fn append_empty_destination(
     }
 }
 
-#[allow(clippy::too_many_arguments, clippy::fn_params_excessive_bools)]
 fn finish_text_execution(
     events: &[FormatterWordEvent],
-    output: Vec<Inline>,
     zero_advance: &mut ZeroAdvanceState,
-    source_continuation: Option<bool>,
-    pending_word_end_break: bool,
-    pending_word_end_break_separated: bool,
-    definitive_reject: bool,
-    word_zero_graph: bool,
-    native_writes: Vec<super::super::flow::field_buffer::FieldWrite>,
+    word: WordExecution,
 ) -> TextExecution {
+    let WordExecution {
+        output,
+        native_writes,
+        source_continuation,
+        text_state,
+        ..
+    } = word;
     let trailing_output = match mant_ir::last_visible_character(&output) {
         None | Some('\n') => TrailingOutput::None,
         Some(character) if !character.is_whitespace() => TrailingOutput::NonBlank,
@@ -572,10 +603,12 @@ fn finish_text_execution(
         native_writes,
         joins_preceding_node: zero_advance.take_preceding_join(),
         source_continuation,
-        pending_word_end_break,
-        pending_word_end_break_separated,
-        definitive_reject,
-        word_zero_graph,
+        pending_word_end_break: text_state.pending_word_end_break,
+        pending_word_end_break_separated: text_state.pending_word_end_break
+            && text_state.saw_source_cell
+            && !text_state.graph_since_blank,
+        definitive_reject: text_state.wiped,
+        word_zero_graph: text_state.zero_graph_seen,
         trailing_output,
     }
 }
@@ -622,25 +655,42 @@ fn trailing_breakable_spaces(events: &[FormatterWordEvent]) -> usize {
 
 fn append_code_event(
     value: &str,
-    output: &mut Vec<Inline>,
-    buffer: &mut String,
-    current_font: Font,
-    link: Option<&str>,
-    zero_advance: &mut ZeroAdvanceState,
+    mut destination: WordOutput<'_>,
     text_state: &mut TextEventState,
 ) {
-    flush_segment(output, buffer, current_font, link);
-    append_text_event(
-        value,
+    flush_segment(
+        destination.output,
+        destination.buffer,
+        destination.font,
+        destination.link,
+    );
+    let WordOutput {
         output,
         buffer,
-        Font::Code,
         link,
         zero_advance,
+        ..
+    } = &mut destination;
+    // Code contributes generated glyphs, without changing source registers or
+    // delegating its presentation break decision to a definition field.
+    append_text_event(
+        value,
+        WordOutput {
+            output,
+            buffer,
+            font: Font::Code,
+            link: *link,
+            zero_advance,
+        },
         text_state,
         false,
     );
-    flush_segment(output, buffer, Font::Code, link);
+    flush_segment(
+        destination.output,
+        destination.buffer,
+        Font::Code,
+        destination.link,
+    );
 }
 
 fn promote_sphinx_manual_reference(
@@ -686,7 +736,17 @@ mod tests {
             let mut font = FontState::new();
             let mut zero = ZeroAdvanceState::new();
             parse_roff_text_with_zero_advance(
-                "X\\p\\&", &mut font, false, &mut zero, false, record, false,
+                "X\\p\\&",
+                TextExecutionContext {
+                    font: &mut font,
+                    zero_advance: &mut zero,
+                    pending_word_end_break: false,
+                    policy: TextExecutionPolicy {
+                        recognize_generated_references: false,
+                        record_native_cells: record,
+                        field_authoritative: false,
+                    },
+                },
             )
         };
         let ordinary = run(false);

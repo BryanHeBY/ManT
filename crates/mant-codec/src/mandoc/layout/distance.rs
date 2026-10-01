@@ -36,6 +36,8 @@ impl Distance {
         }
         // The source character device truncates basic units, not cells. Its
         // tiny bias protects exact physical-unit conversions from FP noise.
+        // Finite magnitude is bounded by LIMIT (98,304 basic units) above;
+        // the signed bias remains in i32 range and truncation is intentional.
         #[allow(clippy::cast_possible_truncation)]
         let units = (units + units.signum() * 0.01) as i32;
         Some(Self(units))

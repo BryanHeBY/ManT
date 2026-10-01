@@ -131,7 +131,6 @@ fn distance_lines(argument: &str) -> Option<u16> {
     Some(u16::try_from(signed.max(0)).unwrap_or(u16::MAX))
 }
 
-#[allow(clippy::cast_possible_truncation)]
 fn signed_distance_lines(argument: &str) -> Option<i32> {
     let argument = argument.trim();
     let number_end = argument
@@ -169,7 +168,10 @@ fn signed_distance_lines(argument: &str) -> Option<i32> {
     } else {
         // The finite value is integral after `trunc()` and was explicitly
         // clamped to the complete i32 range above.
-        rounded as i32
+        #[allow(clippy::cast_possible_truncation)]
+        // intentional integral conversion after the i32 clamps
+        let rows = rounded as i32;
+        rows
     };
     Some(if rounded < 66 { rounded } else { 1 })
 }

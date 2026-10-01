@@ -4,12 +4,17 @@
 //! Siblings only read this state through `InlineExecutionState::definition`;
 //! the row invariants themselves stay private to this module.
 
+mod consumption;
 mod controls;
 mod device;
+mod fill_mode;
 mod flush;
+mod geometry;
 mod head_row;
 mod list_scope;
+mod retirement;
 mod state;
+mod vertical_space;
 
 pub(in crate::mandoc) use state::PreservedDefinitionField;
 pub(super) use state::{DefinitionFieldState, PendingFieldGapOrigin};

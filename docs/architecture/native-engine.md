@@ -206,6 +206,12 @@ route borrowed children to inline or structural consumers; physical-line cursors
 advance at executed words, independently of font wrappers. List controls execute
 in source order instead of being replayed by a second spacing scan.
 
+The text executor borrows the existing font and zero-advance registers through
+one execution context. Named policy fields select source interpretation;
+they do not replace independent native flags with an exclusive mode. Word
+projection borrows its destination and registers for the duration of a write.
+Changing an output owner therefore does not construct another text executor.
+
 Definition fields record native cells at text execution, before semantic
 projection. One incremental buffer decides accepted passes and rejected
 suffixes; private output-owner markers map that decision through styles and
@@ -220,6 +226,19 @@ Nested list phases in a definition HEAD borrow that same field and word
 execution state. List pre/post and generated labels execute in source order;
 only their local geometry is saved. Item post clears the native list flags,
 so returning from a nested list cannot resurrect the outer HEAD's old flags.
+
+The private definition modules separate cell consumption, output retirement,
+fill-mode transitions, vertical rows and geometry checkpoints. Their methods
+operate on the same execution state. Moving a handler between these modules
+does not add a new state-transfer or restoration boundary.
+
+Text table layout prepares each admitted cell once. That result carries both
+rendered rows and their visible counterparts, so width calculation and final
+placement reuse the same content traversal. Visible rows supply display-cell
+geometry; rendered rows retain opaque caller decoration, including closing
+sequences on otherwise empty tails. Dense and sparse placement share this
+prepared result. A placement fallback reuses it rather than lowering the cells
+again; geometry and output budgets are checked before recursive cell layout.
 
 The native wrapper copies borrowed libmandoc nodes before freeing the parse
 session. It retains raw text sentinels beside printable text, table cell fonts,

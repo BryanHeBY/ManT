@@ -350,12 +350,16 @@ impl<'a> LoweringContext<'a> {
         zero_advance.inherit_armed(formatter.take_zero_advance_armed());
         let execution = inline::parse_roff_text_with_zero_advance(
             source,
-            &mut formatter.font,
-            self.macro_set == MacroSet::Mdoc,
-            &mut zero_advance,
-            false,
-            false,
-            false,
+            inline::TextExecutionContext {
+                font: &mut formatter.font,
+                zero_advance: &mut zero_advance,
+                pending_word_end_break: false,
+                policy: inline::TextExecutionPolicy {
+                    recognize_generated_references: self.macro_set == MacroSet::Mdoc,
+                    record_native_cells: false,
+                    field_authoritative: false,
+                },
+            },
         );
         let mut output = execution.output;
         if execution.pending_word_end_break {
@@ -382,12 +386,16 @@ impl<'a> LoweringContext<'a> {
         zero_advance.inherit_armed(formatter.take_zero_advance_armed());
         let execution = inline::parse_formatter_word_parts_with_zero_advance(
             parts,
-            &mut formatter.font,
-            self.macro_set == MacroSet::Mdoc,
-            &mut zero_advance,
-            false,
-            false,
-            false,
+            inline::TextExecutionContext {
+                font: &mut formatter.font,
+                zero_advance: &mut zero_advance,
+                pending_word_end_break: false,
+                policy: inline::TextExecutionPolicy {
+                    recognize_generated_references: self.macro_set == MacroSet::Mdoc,
+                    record_native_cells: false,
+                    field_authoritative: false,
+                },
+            },
         );
         let mut output = execution.output;
         if execution.pending_word_end_break {
