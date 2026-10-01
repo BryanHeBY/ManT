@@ -1,4 +1,4 @@
-//! Wave-3 macro-gap contracts: generated glyphs, declaration fonts, and
+//! Generated macro contracts: generated glyphs, declaration fonts, and
 //! typed reference links.
 //!
 //! Every expectation was first reproduced with the pristine pinned reference

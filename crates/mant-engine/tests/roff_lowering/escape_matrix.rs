@@ -1,6 +1,6 @@
 //! Escape/device-semantics matrix against pinned CVS mandoc `-Tutf8` output.
 //!
-//! Wave-1 regression corpus: native write receipts (`\z` BACKBEFORE retreat
+//! Native escape regression corpus: native write receipts (`\z` BACKBEFORE retreat
 //! over a word separator, term.c:901-908), single-device UTF-8 escape
 //! semantics (`\:` buffers `ASCII_NBRZW`, chars.c:53 with term.c:631-632;
 //! `\!`/`\?`/`\r` leave no footprint, roff_escape.c:156-160), the `\p`
