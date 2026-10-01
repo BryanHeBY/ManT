@@ -149,7 +149,7 @@ comparable visible tokens is a `hard-failure`, never a silent skip.
 Migrate only historical skips after upgrading the audit logic with:
 
 ```sh
-python3 scripts/audit-roff-fidelity.py --manpath /usr/share/man \
+python3 -m scripts.roff.audit.audit_roff_fidelity --manpath /usr/share/man \
   --retry-skipped \
   --audit-db tests/fixtures/roff/FIDELITY_AUDIT.csv \
   --corpus archlinux-host
@@ -163,7 +163,7 @@ automated `pending` state; human `false-positive`, `confirmed-open`, and
 Re-run all recorded content, including historical skips, with:
 
 ```sh
-python3 scripts/audit-roff-fidelity.py --manpath /usr/share/man \
+python3 -m scripts.roff.audit.audit_roff_fidelity --manpath /usr/share/man \
   --recorded-only \
   --audit-db tests/fixtures/roff/FIDELITY_AUDIT.csv \
   --corpus archlinux-host
@@ -179,7 +179,7 @@ ledger with a compressed local profile cache:
 
 ```sh
 cargo build --package libmandoc-rs --example roff_ast_profile
-python3 scripts/audit-roff-fidelity.py --manpath /usr/share/man \
+python3 -m scripts.roff.audit.audit_roff_fidelity --manpath /usr/share/man \
   --max-pages-per-section 25 --syntax-priority \
   --syntax-cache /tmp/mant-roff-syntax.json.gz \
   --syntax-report /tmp/mant-roff-syntax-report.json \
@@ -207,7 +207,7 @@ When adding another distribution or release tree, avoid spending the review
 budget on byte-identical copies already represented by a completed corpus:
 
 ```sh
-python3 scripts/audit-roff-fidelity.py --manpath /tmp/other/share/man \
+python3 -m scripts.roff.audit.audit_roff_fidelity --manpath /tmp/other/share/man \
   --max-pages 200 --syntax-priority --dedupe-across-corpora \
   --syntax-cache /tmp/other-roff-syntax.json.gz \
   --audit-db tests/fixtures/roff/FIDELITY_AUDIT.csv \
@@ -224,7 +224,7 @@ When a syntax family is rare or a known lowering policy must be rechecked over
 every occurrence, select it from the decompressed source before sampling:
 
 ```sh
-python3 scripts/audit-roff-fidelity.py --manpath /usr/share/man \
+python3 -m scripts.roff.audit.audit_roff_fidelity --manpath /usr/share/man \
   --source-pattern '^[.]Dd' --recheck-recorded \
   --audit-db tests/fixtures/roff/FIDELITY_AUDIT.csv \
   --corpus archlinux-host --findings-only
@@ -321,28 +321,28 @@ fedora_roots=(
 )
 out=target/release-audit-v0.10.0
 
-python3 scripts/audit-roff-fidelity.py "${fedora_roots[@]}" \
+python3 -m scripts.roff.audit.audit_roff_fidelity "${fedora_roots[@]}" \
   --corpus fedora44-2026-07-20-x86_64 --replay-source-records \
   --source-ledger tests/fixtures/roff/FIDELITY_AUDIT.csv \
   --audit-db "$out/fedora-fidelity.csv" \
   --json "$out/fedora-fidelity.json" \
   --review-dir "$out/fedora-fidelity-review" --findings-only
-python3 scripts/audit-roff-structure.py "${fedora_roots[@]}" \
+python3 -m scripts.roff.audit.audit_roff_structure "${fedora_roots[@]}" \
   --corpus fedora44-2026-07-20-x86_64 --replay-fidelity-records \
   --fidelity-db "$out/fedora-fidelity.csv" \
   --audit-db "$out/fedora-structure.csv" \
   --json "$out/fedora-structure.json" --findings-only
-python3 scripts/audit-roff-projection.py "${fedora_roots[@]}" \
+python3 -m scripts.roff.audit.audit_roff_projection "${fedora_roots[@]}" \
   --corpus fedora44-2026-07-20-x86_64 --replay-fidelity-records \
   --fidelity-db "$out/fedora-fidelity.csv" \
   --audit-db "$out/fedora-projection.csv" \
   --json "$out/fedora-projection.json" --findings-only
-python3 scripts/audit-roff-layout.py "${fedora_roots[@]}" \
+python3 -m scripts.roff.audit.audit_roff_layout "${fedora_roots[@]}" \
   --corpus fedora44-2026-07-20-x86_64 --replay-fidelity-records \
   --fidelity-db "$out/fedora-fidelity.csv" \
   --audit-db "$out/fedora-layout.csv" \
   --json "$out/fedora-layout.json" --findings-only
-python3 scripts/audit-roff-fidelity.py "${fedora_roots[@]}" \
+python3 -m scripts.roff.audit.audit_roff_fidelity "${fedora_roots[@]}" \
   --corpus fedora44-2026-07-20-x86_64 --replay-source-records \
   --source-ledger tests/fixtures/roff/FIDELITY_AUDIT.csv \
   --reference-kind mandoc --reference mandoc \
@@ -350,7 +350,7 @@ python3 scripts/audit-roff-fidelity.py "${fedora_roots[@]}" \
   --audit-db "$out/fedora-mandoc-fidelity.csv" \
   --json "$out/fedora-mandoc-fidelity.json" \
   --review-dir "$out/fedora-mandoc-fidelity-review" --findings-only
-python3 scripts/audit-roff-layout.py "${fedora_roots[@]}" \
+python3 -m scripts.roff.audit.audit_roff_layout "${fedora_roots[@]}" \
   --corpus fedora44-2026-07-20-x86_64 --replay-fidelity-records \
   --fidelity-db "$out/fedora-mandoc-fidelity.csv" \
   --reference-kind mandoc --reference mandoc \

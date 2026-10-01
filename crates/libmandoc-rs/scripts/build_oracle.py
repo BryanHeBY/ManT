@@ -16,8 +16,8 @@ import sync_vendor
 
 
 ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(ROOT / "scripts"))
-import mandoc_oracle  # noqa: E402
+sys.path.insert(0, str(ROOT))
+from scripts.roff.oracle import mandoc_oracle  # noqa: E402
 
 
 RECIPE = "crates/libmandoc-rs/upstream/oracle/recipe.json"

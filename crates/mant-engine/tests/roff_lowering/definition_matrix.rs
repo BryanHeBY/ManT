@@ -5,7 +5,7 @@
 //! `.br`, `.nf`/`.fi`, width sweeps, and `\p` markers). The sibling
 //! `.expected` file holds the **row-grouped** output of the fixed CVS
 //! reference binary (`target/mandoc-migration/reference/mandoc -Tascii`),
-//! recorded once by `scripts/regen_definition_matrix.sh`: which words
+//! recorded once by `scripts/roff/fixtures/regen_definition_matrix.sh`: which words
 //! share a physical row is the row machine's observable decision, so page
 //! furniture drops by position window — row 0 (plus an optional wrapped
 //! center line) and the trailing footer block — never by content, and
@@ -16,7 +16,7 @@
 //! ascii/UTF-8 device fork (chars.c:53 — `ASCII_BREAK` byte versus `NBRZW`),
 //! and this matrix is recorded `-Tascii`. The UTF-8 side of that fork and
 //! the rest of the escape semantics live in `escape_matrix`, recorded
-//! `-Tutf8` by `scripts/regen_escape_matrix.sh`.
+//! `-Tutf8` by `scripts/roff/fixtures/regen_escape_matrix.sh`.
 
 use std::fmt::Write as _;
 
@@ -208,7 +208,7 @@ fn definition_matrix_rows_match_the_pinned_reference() {
     }
     assert_eq!(
         total, 54,
-        "case set changed; regen via scripts/regen_definition_matrix.sh"
+        "case set changed; regen via scripts/roff/fixtures/regen_definition_matrix.sh"
     );
     assert!(
         failures.is_empty(),

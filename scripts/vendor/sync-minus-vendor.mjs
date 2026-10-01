@@ -1,0 +1,109 @@
+#!/usr/bin/env node
+// Reproduce the private static/search pager module from the pinned crate archive.
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const [source, flag] = process.argv.slice(2);
+if (!source || !['--verify', '--patch'].includes(flag)) throw new Error('usage: sync-minus-vendor.mjs EXTRACTED_MINUS_5_7_2 --verify|--patch');
+const manifest = fs.readFileSync(path.join(source, 'Cargo.toml'), 'utf8');
+if (!manifest.includes('version = "5.7.2"')) throw new Error('expected minus 5.7.2');
+const destination = path.join(root, 'crates/mant/src/delivery/pager/vendor');
+
+export function adapted(name, input) {
+  let text = input.replaceAll('crate::', 'crate::pager::native::');
+  // These examples describe the upstream public minus crate, not our private
+  // embedding. Preserve them as documentation without compiling nonexistent
+  // minus imports as mant consumer examples. Native unit/PTY tests still run.
+  let codeFence = false;
+  text = text.split('\n').map(line => {
+    const comment = /^([ \t]*\/\/[/!][ \t]*)(.*)$/.exec(line);
+    if (!comment) { codeFence = false; return line; }
+    if (!comment[2].startsWith('```')) return line;
+    codeFence = !codeFence;
+    const language = comment[2].slice(3);
+    const rust = !language || /^(rust|no_run|should_panic|compile_fail|ignore)/.test(language);
+    return `${comment[1]}\`\`\`${codeFence && rust ? 'rust,ignore' : language}`;
+  }).join('\n');
+  text = text.replace(/feature = "(search|static_output)"/g, 'all()')
+    .replace(/feature = "(dynamic_output|clipboard)"/g, 'any()')
+    .replaceAll('any(any(), all())', 'all()')
+    .replaceAll('all(all(), not(test))', 'not(test)')
+    .replace(/^#!?\[cfg_attr\(docsrs,.*\)\]\n/gm, '')
+    .replace(/^[ \t]*#\[cfg\(all\(\)\)\]\n/gm, '')
+    .replaceAll('#[cfg(all())] ', '');
+  if (name === 'lib.rs') {
+    text = text.replace(/^#!\[(deny|warn)\(clippy::\w+\)\]\n/gm, '')
+      .replace(/^#!\[cfg_attr\(doctest,.*\)\]\n/gm, '');
+  }
+  if (name === 'screen/mod.rs') {
+    text = text.replace('    let (last_idx, last_line_text)', '    let mut sgr = crate::pager::sgr::SgrState::default();\n    let (last_idx, last_line_text)')
+      .replace('        let rows = format_line(\n            line,', '        let logical_line = sgr.logical_line(line);\n        let rows = format_line(\n            &logical_line,')
+      .replace('    let last_line = format_line(\n        last_line_text,', '    let logical_line = sgr.logical_line(last_line_text);\n    let last_line = format_line(\n        &logical_line,');
+    const needle = '    let enumerated_rows = if line_wrapping {';
+    if (!text.includes(needle)) throw new Error('upstream wrapping boundary changed');
+    text = text.replace(needle, '    let wrapped_rows = if line_wrapping {');
+    const end = '    }\n    .into_iter()\n    .enumerate();';
+    if (!text.includes(end)) throw new Error('upstream row iterator changed');
+    text = text.replace(end, '    };\n    let enumerated_rows = crate::pager::sgr::independent_rows(wrapped_rows).into_iter().enumerate();');
+  }
+  if (name === 'core/utils/display/tests.rs') text = text.replace('let res = Vec::new();', 'let res: Vec<u8> = Vec::new();').replace('res.contains("minus")', 'res.contains("mant")');
+  // Apply the original behavioral patch byte-for-byte before relocating its
+  // crate-local paths; ownership changes do not rewrite the patch history.
+  text = applyLocalPatch(name, text, '0001-visible-search.patch')
+    .replaceAll('crate::pager::', 'crate::delivery::pager::');
+  return applyLocalPatch(name, text, '0002-host-terminal-lease.patch');
+}
+
+// Exact-context local behavioral patch. Fail closed on upstream drift; this
+// includes the corrected upstream test expectations as well as production code.
+function applyLocalPatch(name, text, filename) {
+  const patch = fs.readFileSync(path.join(root, 'crates/mant/src/delivery/pager/patches', filename), 'utf8');
+  let selected = false, before = [], after = [];
+  function flush() {
+    if (!before.length && !after.length) return;
+    const old = before.join('\n') + '\n', replacement = after.join('\n') + '\n';
+    const at = text.indexOf(old);
+    if (at < 0 || text.indexOf(old, at + 1) >= 0) throw new Error(`ambiguous/missing patch context: ${name}`);
+    text = text.slice(0, at) + replacement + text.slice(at + old.length);
+    before = []; after = [];
+  }
+  for (const line of patch.trimEnd().split('\n')) {
+    if (line.startsWith('--- ')) { flush(); selected = line.slice(4) === name; }
+    else if (line.startsWith('+++ ')) continue;
+    else if (line.startsWith('@@')) flush();
+    else if (selected) {
+      if (line.startsWith(' ') || line.startsWith('-')) before.push(line.slice(1));
+      if (line.startsWith(' ') || line.startsWith('+')) after.push(line.slice(1));
+    }
+  }
+  flush();
+  return text;
+}
+
+let checked = 0;
+const patch = ['*** Begin Patch'];
+function check(name, expected) {
+  expected = expected.trimEnd() + '\n';
+  if (flag === '--patch') {
+    patch.push(`*** Add File: ${path.join(destination, name)}`, ...expected.trimEnd().split('\n').map(line => `+${line}`));
+  } else if (fs.readFileSync(path.join(destination, name), 'utf8') !== expected) throw new Error(`vendor differs: ${name}`);
+}
+function verifyTree(relative = '') {
+  for (const entry of fs.readdirSync(path.join(source, 'src', relative), { withFileTypes: true })) {
+    const name = path.posix.join(relative, entry.name);
+    if (entry.isDirectory()) verifyTree(name);
+    else {
+      const expected = adapted(name, fs.readFileSync(path.join(source, 'src', name), 'utf8'));
+      check(name, expected);
+      checked++;
+    }
+  }
+}
+verifyTree();
+for (const name of ['LICENSE-APACHE', 'LICENSE-MIT']) {
+  check(name, fs.readFileSync(path.join(source, name), 'utf8'));
+}
+patch.push('*** End Patch');
+process.stdout.write(flag === '--patch' ? patch.join('\n') : `verified minus 5.7.2 private module (${checked} source files)\n`);

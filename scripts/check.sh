@@ -34,48 +34,52 @@ run "check Rust formatting" cargo fmt --all --check
 run "lint Rust workspace" \
   env CARGO_INCREMENTAL=0 cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
 run "check Unix installer syntax" sh -n scripts/install.sh
-run "check manual packaging script syntax" bash -n scripts/package-manuals.sh
-run "check protocol snapshot script syntax" bash -n scripts/update-protocol-schema-snapshot.sh
-run "check screenshot script syntax" bash -n scripts/update-reader-screenshot.sh
-run "check product build script syntax" bash -n scripts/build-and-smoke.sh
-run "check CI verification script syntax" bash -n scripts/find-successful-ci.sh
+run "check manual packaging script syntax" bash -n scripts/release/package-manuals.sh
+run "check protocol snapshot script syntax" bash -n scripts/dev/update-protocol-schema-snapshot.sh
+run "check screenshot script syntax" bash -n scripts/dev/update-reader-screenshot.sh
+run "check product build script syntax" bash -n scripts/build/build-and-smoke.sh
+run "check CI verification script syntax" bash -n scripts/ci/find-successful-ci.sh
 run "check CI native dependency script syntax" \
-  bash -n scripts/install-ci-native-dependencies.sh
+  bash -n scripts/ci/install-ci-native-dependencies.sh
 run "test locked vendor source replay" \
   python3 crates/libmandoc-rs/scripts/test_sync_vendor.py
 run "test CVS snapshot freezing" \
   python3 crates/libmandoc-rs/scripts/test_freeze_cvs_snapshot.py
 run "test registered mandoc oracle identity" \
-  python3 scripts/test_mandoc_oracle.py
-run "check roff fidelity audit" python3 scripts/audit-roff-fidelity.py --self-check
-run "test bidirectional roff content comparison" python3 scripts/roff_content_compare.py
-run "test source-bound presentation explanations" python3 scripts/test_roff_content_explanations.py
-run "test source-bound roff layout geometry" python3 scripts/test-roff-layout-geometry.py
-run "test rendering matrix mutation sensitivity" python3 scripts/check-roff-behavior-matrix.py --self-test
-run "test bounded rendering census" python3 scripts/audit-roff-rendering.py --self-test
-run "test roff audit parallelism planning" python3 scripts/test_roff_audit_common.py
-run "test full-corpus audit orchestration" python3 scripts/test_audit_roff_all.py
-run "check roff structure audit" python3 scripts/audit-roff-structure.py --self-check
+  python3 -m scripts.roff.tests.test_mandoc_oracle
+run "test repository tool entrypoints" \
+  python3 -m unittest scripts.roff.tests.test_tool_entrypoints
+run "test tagged release tool paths" \
+  python3 -m unittest scripts.release.tests.test_source_tool_paths
+run "check roff fidelity audit" python3 -m scripts.roff.audit.audit_roff_fidelity --self-check
+run "test bidirectional roff content comparison" python3 -m scripts.roff.lib.roff_content_compare
+run "test source-bound presentation explanations" python3 -m scripts.roff.tests.test_roff_content_explanations
+run "test source-bound roff layout geometry" python3 -m scripts.roff.tests.test_roff_layout_geometry
+run "test rendering matrix mutation sensitivity" python3 -m scripts.roff.audit.check_roff_behavior_matrix --self-test
+run "test bounded rendering census" python3 -m scripts.roff.audit.audit_roff_rendering --self-test
+run "test roff audit parallelism planning" python3 -m scripts.roff.tests.test_roff_audit_common
+run "test full-corpus audit orchestration" python3 -m scripts.roff.tests.test_audit_roff_all
+run "check roff structure audit" python3 -m scripts.roff.audit.audit_roff_structure --self-check
 run "check roff CommonMark projection audit" \
-  python3 scripts/audit-roff-projection.py --self-check
-run "check roff renderer-layout audit" python3 scripts/audit-roff-layout.py --self-check
-run "check roff target-conservation audit" python3 scripts/audit-roff-targets.py --self-check
-run "check roff semantic-entry audit" python3 scripts/audit-roff-semantics.py --self-check
-run "test roff audit coverage admission" python3 scripts/check-roff-audit-coverage.py --self-check
-run "check roff audit coverage contract" python3 scripts/check-roff-audit-coverage.py
+  python3 -m scripts.roff.audit.audit_roff_projection --self-check
+run "check roff renderer-layout audit" python3 -m scripts.roff.audit.audit_roff_layout --self-check
+run "check roff target-conservation audit" python3 -m scripts.roff.audit.audit_roff_targets --self-check
+run "check roff semantic-entry audit" python3 -m scripts.roff.audit.audit_roff_semantics --self-check
+run "test roff audit coverage admission" python3 -m scripts.roff.audit.check_roff_audit_coverage --self-check
+run "check roff audit coverage contract" python3 -m scripts.roff.audit.check_roff_audit_coverage
 run "test Rust workspace" cargo test --locked --workspace
 run "test Markdown-only codec" cargo test --locked --package mant-codec --no-default-features
 run "test roff codec" cargo test --locked --package mant-codec --features roff
-run "check independent Markdown codec consumer" bash scripts/check-codec-consumer.sh
+run "check independent Markdown codec consumer" bash scripts/checks/check-codec-consumer.sh
 run "test Markdown-only loader" cargo test --locked --package mant-loader --no-default-features
 run "test native manual loader" cargo test --locked --package mant-loader --features roff
-run "check independent Markdown loader consumer" bash scripts/check-loader-consumer.sh
+run "check independent Markdown loader consumer" bash scripts/checks/check-loader-consumer.sh
 run "test independent query package" cargo test --locked --package mant-query --no-default-features
-run "check independent IR query consumer" bash scripts/check-query-consumer.sh
+run "check independent IR query consumer" bash scripts/checks/check-query-consumer.sh
 run "test independent render package" cargo test --locked --package mant-render --no-default-features
-run "check independent DTO render consumer" bash scripts/check-render-consumer.sh
-run "check independent embedded reader consumer" bash scripts/check-ui-consumer.sh
-run "check isolated CLI capability combinations" python3 scripts/check-cli-features.py
+run "check independent DTO render consumer" bash scripts/checks/check-render-consumer.sh
+run "check independent embedded reader consumer" bash scripts/checks/check-ui-consumer.sh
+run "check isolated CLI capability combinations" python3 -m scripts.checks.check_cli_features
 run "test roff audit profilers" \
   cargo test --locked --package mant-engine --examples
 run "test real terminal-cell geometry probe" \
@@ -83,8 +87,8 @@ run "test real terminal-cell geometry probe" \
 run "test optional libmandoc features" \
   cargo test --locked --package libmandoc-rs --all-features
 run "check libmandoc native symbol namespace" \
-  bash scripts/check-libmandoc-symbols.sh
-run "test published crate source sets" bash scripts/check-packaged-crates.sh
+  bash scripts/checks/check-libmandoc-symbols.sh
+run "test published crate source sets" bash scripts/checks/check-packaged-crates.sh
 run "build roff CommonMark projection profiler" \
   cargo build --locked --package mant-engine --example roff_projection_profile
 run "build roff target-conservation profiler" \
@@ -92,16 +96,16 @@ run "build roff target-conservation profiler" \
 run "build roff semantic-entry profiler" \
   cargo build --locked --package mant-engine --example roff_semantic_profile
 run "gate roff fixtures through the CommonMark projection" \
-  python3 scripts/audit-roff-projection.py --fixtures --recheck-recorded \
+  python3 -m scripts.roff.audit.audit_roff_projection --fixtures --recheck-recorded \
   --verify --findings-only
 run "gate roff fixtures through target conservation" \
-  python3 scripts/audit-roff-targets.py --fixtures --recheck-recorded \
+  python3 -m scripts.roff.audit.audit_roff_targets --fixtures --recheck-recorded \
   --verify --findings-only
 run "gate roff fixtures through semantic-entry precision" \
-  python3 scripts/audit-roff-semantics.py --fixtures --recheck-recorded \
+  python3 -m scripts.roff.audit.audit_roff_semantics --fixtures --recheck-recorded \
   --verify --findings-only
 run "gate source-bound fixture explanation queries" \
-  python3 scripts/audit-roff-semantics.py --fixtures \
+  python3 -m scripts.roff.audit.audit_roff_semantics --fixtures \
   --query-gold tests/fixtures/roff/ENTRY_QUERY_GOLD.json
 run "check read-only engine feature boundary" \
   cargo check --locked --package mant-engine --no-default-features
@@ -110,6 +114,6 @@ run "build docs.rs documentation" \
 run "compile fuzz targets" \
   cargo check --locked --manifest-path fuzz/Cargo.toml --bins
 
-bash scripts/build-and-smoke.sh "$profile"
+bash scripts/build/build-and-smoke.sh "$profile"
 
 printf '\nlocal verification succeeded\n'

@@ -2,7 +2,7 @@
 
 `native_formatter_matrix.jsonl` contains 2,520 complete formatter inputs.
 `native_links_matrix.jsonl` contains 868 complete link inputs. The canonical
-definitions are in `scripts/roff_execution_cases.py`; quoting, historical page
+definitions are in `scripts/roff/fixtures/roff_execution_cases.py`; quoting, historical page
 headers, control placement and recovery inputs are intentionally unchanged.
 Each record retains its complete source, source SHA-256, pristine profile
 SHA-256 values, original lint output, native ASCII/UTF-8 physical rows and
@@ -14,11 +14,11 @@ Run from the repository root after restoring the registered pristine oracle:
 
 ```sh
 scripts/rebuild_reference_mandoc.sh
-python3 scripts/generate_roff_execution_fixtures.py \
+python3 -m scripts.roff.fixtures.generate_roff_execution_fixtures \
   --evidence target/audits/native-execution-fixtures
-python3 scripts/generate_roff_execution_fixtures.py --check \
+python3 -m scripts.roff.fixtures.generate_roff_execution_fixtures --check \
   --evidence target/audits/native-execution-fixtures-check
-python3 scripts/generate_roff_execution_fixtures.py --check-sources
+python3 -m scripts.roff.fixtures.generate_roff_execution_fixtures --check-sources
 ```
 
 The generator checks the active registry identity in ASCII, UTF-8 and HTML
@@ -34,7 +34,7 @@ Updating expectations from product output is forbidden.
 
 The nine smaller compatibility families retain complete source records in
 `<family>/cases.json` beneath this directory. Their canonical definitions are
-in `scripts/roff_compatibility_cases.py`; the acceptance family also reads the
+in `scripts/roff/fixtures/roff_compatibility_cases.py`; the acceptance family also reads the
 immutable source files in `shared_execution_matrix/cases`.
 
 | Family | Inputs | Main contract |
@@ -50,8 +50,8 @@ immutable source files in `shared_execution_matrix/cases`.
 | `container_word_rows` | 21 | Container pre/post and word order |
 
 ```sh
-python3 scripts/generate_roff_compatibility_fixtures.py --check-sources
-python3 scripts/generate_roff_compatibility_fixtures.py --check \
+python3 -m scripts.roff.fixtures.generate_roff_compatibility_fixtures --check-sources
+python3 -m scripts.roff.fixtures.generate_roff_compatibility_fixtures --check \
   --evidence target/audits/native-compatibility-fixtures-check
 ```
 

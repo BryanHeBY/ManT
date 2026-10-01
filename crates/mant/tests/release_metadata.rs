@@ -99,13 +99,13 @@ fn binstall_targets_match_the_published_archive_contract() {
 
 #[test]
 fn release_scripts_keep_the_binary_under_the_binstall_archive_root() {
-    let unix = include_str!("../../../scripts/package-release.sh");
+    let unix = include_str!("../../../scripts/release/package-release.sh");
     assert!(unix.contains("id=$(cargo pkgid -p mant)"));
     assert!(!unix.contains("workspace_version"));
     assert!(unix.contains(r#"archive_root="mant-$version-$target""#));
     assert!(unix.contains(r#"install -m 0755 "$binary" "$package/mant""#));
 
-    let windows = include_str!("../../../scripts/package-release.ps1");
+    let windows = include_str!("../../../scripts/release/package-release.ps1");
     assert!(windows.contains("cargo metadata --no-deps --format-version 1"));
     assert!(windows.contains("Where-Object { $_.name -eq \"mant\" }"));
     assert!(windows.contains(r#"$ArchiveRoot = "mant-$Version-$Target""#));
@@ -120,12 +120,13 @@ fn release_workflow_publishes_and_attests_target_specific_sboms() {
     let workflow = include_str!("../../../.github/workflows/release.yml");
     assert!(workflow.contains("name: Verify release commit"));
     assert!(workflow.contains("LIBMANDOC_RS_DENY_WARNINGS: \"1\""));
-    assert!(workflow.contains("scripts/find-successful-ci.sh \"$source_sha\""));
+    assert!(workflow.contains("scripts/ci/find-successful-ci.sh \"$source_sha\""));
     assert!(workflow.contains("needs: verify"));
-    assert!(workflow.contains("bash .release-automation/scripts/build-and-smoke.sh release"));
+    assert!(workflow.contains("bash .release-automation/scripts/build/build-and-smoke.sh release"));
     assert!(
-        workflow
-            .contains("./.release-automation/scripts/build-and-smoke.ps1 -BuildProfile release")
+        workflow.contains(
+            "./.release-automation/scripts/build/build-and-smoke.ps1 -BuildProfile release"
+        )
     );
     assert_eq!(
         workflow
@@ -142,21 +143,21 @@ fn release_workflow_publishes_and_attests_target_specific_sboms() {
     assert!(workflow.contains("SOURCE_DATE_EPOCH=0"));
     assert_eq!(
         workflow
-            .matches("node .release-automation/scripts/finalize-cyclonedx.mjs")
+            .matches("node .release-automation/scripts/release/finalize-cyclonedx.mjs")
             .count(),
         2
     );
     assert!(workflow.contains("ref: ${{ github.sha }}"));
     assert!(workflow.contains("path: .release-automation"));
     for helper in [
-        "scripts/build-and-smoke.sh",
-        "scripts/build-and-smoke.ps1",
-        "scripts/finalize-cyclonedx.mjs",
+        "scripts/build/build-and-smoke.sh",
+        "scripts/build/build-and-smoke.ps1",
+        "scripts/release/finalize-cyclonedx.mjs",
     ] {
         assert!(workflow.lines().any(|line| line.trim() == helper));
     }
     assert!(workflow.contains("dist/mant-*.cdx.json"));
-    assert!(workflow.contains("bash scripts/package-manuals.sh"));
+    assert!(workflow.contains("script=scripts/release/package-manuals.sh"));
     assert!(workflow.contains("subject-path: dist/mant-*-manuals.tar.gz*"));
     assert!(workflow.contains("mant-${version}-manuals.sigstore.json"));
     assert!(workflow.contains(r#"echo "MANT_SBOM_PATH=dist/$sbom" >> "$GITHUB_ENV""#));
@@ -170,7 +171,7 @@ fn release_workflow_publishes_and_attests_target_specific_sboms() {
     assert!(!workflow.contains("sbom-path: dist/mant-*.cdx.json"));
     assert!(workflow.contains("uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6"));
 
-    let finalizer = include_str!("../../../scripts/finalize-cyclonedx.mjs");
+    let finalizer = include_str!("../../../scripts/release/finalize-cyclonedx.mjs");
     assert!(finalizer.contains(r#"bom.bomFormat !== "CycloneDX""#));
     assert!(finalizer.contains("bom.serialNumber = `urn:uuid:"));
     assert!(finalizer.contains("delete bom.serialNumber"));
@@ -267,13 +268,14 @@ fn one_line_installers_follow_the_published_release_contract() {
         ]
     );
     assert!(
-        include_str!("../../../scripts/package-release.sh")
+        include_str!("../../../scripts/release/package-release.sh")
             .contains("done < docs/manuals/manifest.txt")
     );
     assert!(
-        include_str!("../../../scripts/package-release.ps1").contains("docs/manuals/manifest.txt")
+        include_str!("../../../scripts/release/package-release.ps1")
+            .contains("docs/manuals/manifest.txt")
     );
-    let manual_package = include_str!("../../../scripts/package-manuals.sh");
+    let manual_package = include_str!("../../../scripts/release/package-manuals.sh");
     assert!(manual_package.contains("id=$(cargo pkgid -p mant)"));
     assert!(!manual_package.contains("workspace_version"));
     assert!(manual_package.contains(r#"archive_root="mant-$version-manuals""#));
@@ -440,7 +442,7 @@ fn mcp_sdk_and_generated_macros_use_the_same_exact_release() {
 
 #[test]
 fn selected_crates_are_published_in_dependency_order_at_their_own_versions() {
-    let publish = include_str!("../../../scripts/publish-crates.sh").replace("\r\n", "\n");
+    let publish = include_str!("../../../scripts/release/publish-crates.sh").replace("\r\n", "\n");
     assert!(publish.contains(
         "ALL_PACKAGES=(mant-ir mant-protocol libmandoc-rs mant-sources mant-codec mant-loader mant-query mant-render mant-engine mant-ui mant)"
     ));
@@ -471,7 +473,8 @@ fn selected_crates_are_published_in_dependency_order_at_their_own_versions() {
 
 #[test]
 fn packaged_and_windows_checks_include_extracted_package_test_surfaces() {
-    let packaged = include_str!("../../../scripts/check-packaged-crates.sh").replace("\r\n", "\n");
+    let packaged =
+        include_str!("../../../scripts/checks/check-packaged-crates.sh").replace("\r\n", "\n");
     assert!(packaged.contains(
         "PACKAGES=(mant-ir mant-protocol libmandoc-rs mant-sources mant-codec mant-loader mant-query mant-render mant-engine mant-ui mant)"
     ));
@@ -519,10 +522,10 @@ fn packaged_and_windows_checks_include_extracted_package_test_surfaces() {
     );
 
     let check = include_str!("../../../scripts/check.sh");
-    assert!(check.contains("bash scripts/check-loader-consumer.sh"));
-    assert!(check.contains("bash scripts/check-query-consumer.sh"));
-    assert!(check.contains("bash scripts/check-render-consumer.sh"));
-    assert!(check.contains("bash scripts/check-ui-consumer.sh"));
+    assert!(check.contains("bash scripts/checks/check-loader-consumer.sh"));
+    assert!(check.contains("bash scripts/checks/check-query-consumer.sh"));
+    assert!(check.contains("bash scripts/checks/check-render-consumer.sh"));
+    assert!(check.contains("bash scripts/checks/check-ui-consumer.sh"));
 }
 
 #[test]
@@ -530,15 +533,17 @@ fn cli_capability_matrix_runs_on_every_product_platform() {
     let unix = include_str!("../../../scripts/check.sh").replace("\r\n", "\n");
     let windows = include_str!("../../../scripts/check-windows.ps1").replace("\r\n", "\n");
     let ci = include_str!("../../../.github/workflows/ci.yml").replace("\r\n", "\n");
-    assert!(unix.contains("python3 scripts/check-cli-features.py"));
+    assert!(unix.contains("python3 -m scripts.checks.check_cli_features"));
     assert!(
-        unix.find("bash scripts/check-ui-consumer.sh").unwrap()
-            < unix.find("python3 scripts/check-cli-features.py").unwrap()
+        unix.find("bash scripts/checks/check-ui-consumer.sh")
+            .unwrap()
+            < unix
+                .find("python3 -m scripts.checks.check_cli_features")
+                .unwrap()
     );
-    assert!(
-        windows
-            .contains("-Program \"python\" `\n    -Arguments @(\"scripts/check-cli-features.py\")")
-    );
+    assert!(windows.contains(
+        "-Program \"python\" `\n    -Arguments @(\"-m\", \"scripts.checks.check_cli_features\")"
+    ));
     let mac = ci
         .split_once("  macos-native:")
         .unwrap()
@@ -546,22 +551,23 @@ fn cli_capability_matrix_runs_on_every_product_platform() {
         .split_once("  windows-native:")
         .unwrap()
         .0;
-    assert!(mac.contains("run: python3 scripts/check-cli-features.py"));
+    assert!(mac.contains("run: python3 -m scripts.checks.check_cli_features"));
     // Production smoke must rebuild the default product after isolated builds.
     assert!(
-        windows.find("scripts/check-cli-features.py").unwrap()
+        windows.find("scripts.checks.check_cli_features").unwrap()
             < windows.find("build-and-smoke.ps1").unwrap()
     );
     assert!(
-        unix.find("scripts/check-cli-features.py").unwrap()
-            < unix.find("bash scripts/build-and-smoke.sh").unwrap()
+        unix.find("scripts.checks.check_cli_features").unwrap()
+            < unix.find("bash scripts/build/build-and-smoke.sh").unwrap()
     );
 }
 
 #[cfg(unix)]
 #[test]
 fn publication_tags_are_validated_before_registry_authentication() {
-    let script = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../scripts/publish-crates.sh");
+    let script =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../scripts/release/publish-crates.sh");
     let ir_manifest = include_str!("../../mant-ir/Cargo.toml");
     let ir_version = ir_manifest
         .lines()

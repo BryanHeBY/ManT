@@ -103,18 +103,18 @@ Check the set relationship without invoking a renderer or reparsing the local
 distribution corpora:
 
 ```sh
-python3 scripts/check-roff-audit-coverage.py
+python3 -m scripts.roff.audit.check_roff_audit_coverage
 ```
 
 When the check reports a missing corpus, replay that corpus from the same roots
 and corpus name used for fidelity:
 
 ```sh
-python3 scripts/audit-roff-structure.py --manpath /path/to/man-root \
+python3 -m scripts.roff.audit.audit_roff_structure --manpath /path/to/man-root \
   --corpus corpus-name --replay-fidelity-records --findings-only
-python3 scripts/audit-roff-projection.py --manpath /path/to/man-root \
+python3 -m scripts.roff.audit.audit_roff_projection --manpath /path/to/man-root \
   --corpus corpus-name --replay-fidelity-records --findings-only
-python3 scripts/audit-roff-layout.py --manpath /path/to/man-root \
+python3 -m scripts.roff.audit.audit_roff_layout --manpath /path/to/man-root \
   --corpus corpus-name --replay-fidelity-records --findings-only
 ```
 

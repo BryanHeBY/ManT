@@ -46,7 +46,7 @@ jobs:
         run: |
           run_full=true
           if [[ "$GITHUB_EVENT_NAME" == push && "$GITHUB_REF" == refs/heads/main ]]; then
-            if ci_url=$(bash scripts/find-successful-ci.sh "$GITHUB_SHA" dev); then
+            if ci_url=$(bash scripts/ci/find-successful-ci.sh "$GITHUB_SHA" dev); then
               run_full=false
               echo "reusing complete dev CI: $ci_url"
             fi
@@ -84,7 +84,7 @@ jobs:
       - name: Verify distributable Rust dependency notices
         run: |
           cargo fetch --locked
-          scripts/generate-rust-licenses.sh --check
+          scripts/release/generate-rust-licenses.sh --check
 
   dependency-review:
     name: Dependency review
@@ -117,7 +117,7 @@ jobs:
           persist-credentials: false
 
       - name: Install native dependencies
-        run: bash scripts/install-ci-native-dependencies.sh
+        run: bash scripts/ci/install-ci-native-dependencies.sh
 
       - name: Install stable Rust toolchain
         run: |
@@ -191,7 +191,7 @@ jobs:
       # Hosted macOS includes Python 3; this gate uses its standard library only.
       # Select mant alone so workspace defaults cannot conceal missing features.
       - name: Test isolated CLI capability combinations on macOS
-        run: python3 scripts/check-cli-features.py
+        run: python3 -m scripts.checks.check_cli_features
 
   windows-native:
     # Windows builds the same memory-only libmandoc parser and manual fixtures
@@ -239,7 +239,7 @@ jobs:
           persist-credentials: false
 
       - name: Install native dependencies
-        run: bash scripts/install-ci-native-dependencies.sh
+        run: bash scripts/ci/install-ci-native-dependencies.sh
 
       - name: Install minimum supported Rust toolchain
         run: rustup toolchain install "$RUST_MSRV" --profile minimal
@@ -274,7 +274,7 @@ jobs:
           persist-credentials: false
 
       - name: Install native dependencies
-        run: bash scripts/install-ci-native-dependencies.sh
+        run: bash scripts/ci/install-ci-native-dependencies.sh
 
       - name: Install stable Rust toolchain
         run: |

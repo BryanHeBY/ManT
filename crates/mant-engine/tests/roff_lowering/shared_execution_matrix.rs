@@ -21,7 +21,7 @@
 //!   generated prefixes and keep scopes. Every oracle snapshot is required.
 //!
 //! The sibling `.expected` file holds the oracle projection, recorded by
-//! `scripts/regen_shared_execution_matrix.sh`: backspace-pop projection,
+//! `scripts/roff/fixtures/regen_shared_execution_matrix.sh`: backspace-pop projection,
 //! NBSP read as the blank it occupies, furniture removed by position
 //! windows only (row 0 header, trailing footer block). Interior blank rows
 //! are paragraph structure and stay pinned; intra-row spacing survives
@@ -129,7 +129,7 @@ fn matrix_case_names() -> Vec<String> {
     assert_eq!(
         names.len(),
         209,
-        "case set changed; regen via scripts/regen_shared_execution_matrix.sh"
+        "case set changed; regen via scripts/roff/fixtures/regen_shared_execution_matrix.sh"
     );
     names
 }

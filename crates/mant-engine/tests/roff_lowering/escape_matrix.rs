@@ -9,7 +9,7 @@
 //!
 //! Each case under `escape_matrix/cases/*.1` records the **row-grouped**
 //! output of the pinned reference (`-Tutf8`), produced only by
-//! `scripts/regen_escape_matrix.sh` — never by hand. Unlike
+//! `scripts/roff/fixtures/regen_escape_matrix.sh` — never by hand. Unlike
 //! `definition_matrix` (recorded `-Tascii`), this matrix MUST stay UTF-8:
 //! its cases sit exactly on the device fork. Row grouping preserves every
 //! body row — section heads included — and every blank row between body
@@ -280,7 +280,7 @@ fn escape_matrix_rows_match_the_pinned_utf8_reference() {
     }
     assert_eq!(
         total, 80,
-        "case set changed; regen via scripts/regen_escape_matrix.sh"
+        "case set changed; regen via scripts/roff/fixtures/regen_escape_matrix.sh"
     );
     assert!(
         failures.is_empty(),

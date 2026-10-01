@@ -31,7 +31,7 @@ integrators must act.
 2. Regenerate and visually inspect the README screenshot:
 
    ```sh
-   scripts/update-reader-screenshot.sh
+   scripts/dev/update-reader-screenshot.sh
    ```
 
    Commit the resulting `docs/assets/screenshots/mant-reader.png`. The script
@@ -47,7 +47,7 @@ integrators must act.
 
    If a deliberate protocol version change modified a generated structural
    schema, update every affected discriminator first and then regenerate its
-   versioned snapshot with `scripts/update-protocol-schema-snapshot.sh`. Never
+   versioned snapshot with `scripts/dev/update-protocol-schema-snapshot.sh`. Never
    refresh a released or frozen version snapshot merely to silence a
    compatibility failure. An explicitly unreleased protocol family may be
    regenerated while its design is still being finalized, but its changelog
@@ -69,7 +69,7 @@ integrators must act.
 
    Exercise both the primary man/groff routes and the aligned mandoc fidelity
    and layout routes for their recorded source identities. Run
-   `python3 scripts/check-roff-audit-coverage.py`, review every new
+   `python3 -m scripts.roff.audit.check_roff_audit_coverage`, review every new
    source-hash-specific reference deviation, and retain a deviation only when
    the evidence shows that ManT preserves the source semantics more usefully
    than that exact reference renderer.
@@ -120,7 +120,7 @@ Here an arrow means the package on the left must be visible in crates.io before
 the package on the right is validated. The `mant-engine` edge into `mant-ui` is
 a development dependency used by doctests and integration tests, not a runtime
 frontend dependency. Likewise, the engine's render edge is test-only; the host
-combines query execution with rendering. `scripts/publish-crates.sh` encodes the complete linear
+combines query execution with rendering. `scripts/release/publish-crates.sh` encodes the complete linear
 order: `mant-ir`, `mant-protocol`, `libmandoc-rs`, `mant-sources`,
 `mant-codec`, `mant-loader`, `mant-query`, `mant-render`, `mant-engine`, `mant-ui`, then `mant`. Optional registry
 dependencies must also be available before a package manifest can be published;
@@ -142,7 +142,7 @@ non-release refs, and contain no long-lived Cargo token. The release job has
 only `contents: read` and `id-token: write`; the official crates.io action
 exchanges that identity for a short-lived credential.
 
-On a product tag push, `scripts/publish-crates.sh` inspects the version of each
+On a product tag push, `scripts/release/publish-crates.sh` inspects the version of each
 crate, packages every version not already present, and publishes in dependency
 order. A package tag selects only that package. Each selected package is
 validated immediately before upload, and the script waits for its own version
@@ -291,9 +291,12 @@ the protected `crates-io` Environment still requires approval. Leave it
 disabled for artifact-only product rebuilds. If publication partially
 succeeded, rerun the original failed job so the release script can detect and
 skip versions already present on crates.io. Manual retries always use the
-immutable tag's product tree while taking the release helpers from the trusted
-workflow revision on `main`. Automation fixes can therefore recover older tags
-without changing their product input.
+immutable tag's product tree. CI verification, native builds and SBOM
+finalization use the separate trusted workflow revision on `main`.
+Packaging and publication tools come from the tag itself; the workflow selects
+their organized paths when present and their former root paths for older tags.
+Automation fixes can therefore recover older tags without changing their
+product input or replacing those source-owned tools.
 
 Each native archive keeps the versioned `manuals/` set beside the executable,
 and the release also publishes the same documents as the platform-independent
@@ -334,7 +337,7 @@ and native platform identity, then archives the already-built executable:
 
 ```sh
 bash scripts/check.sh
-MANT_RELEASE_TAG=vMAJOR.MINOR.PATCH bash scripts/package-release.sh
+MANT_RELEASE_TAG=vMAJOR.MINOR.PATCH bash scripts/release/package-release.sh
 ```
 
 Set `MANT_RELEASE_TARGET=linux-x64` or `linux-arm64` to assert the expected
@@ -345,7 +348,7 @@ The platform-independent manual archive can be reproduced without first
 building a binary:
 
 ```sh
-MANT_RELEASE_TAG=vMAJOR.MINOR.PATCH bash scripts/package-manuals.sh
+MANT_RELEASE_TAG=vMAJOR.MINOR.PATCH bash scripts/release/package-manuals.sh
 ```
 
 The equivalent Windows commands for a native package are:
@@ -353,12 +356,12 @@ The equivalent Windows commands for a native package are:
 ```powershell
 .\scripts\check-windows.ps1
 $env:MANT_RELEASE_TAG = "vMAJOR.MINOR.PATCH"
-.\scripts\package-release.ps1
+.\scripts\release\package-release.ps1
 ```
 
 Before publishing, regenerate `THIRD_PARTY_LICENSES.html` with cargo-about
 0.9.2, review the diff, and run
-`scripts/generate-rust-licenses.sh --check`. Then inspect that the executable,
+`scripts/release/generate-rust-licenses.sh --check`. Then inspect that the executable,
 self-hosted document, project license, generated Rust dependency report,
 parser third-party notice, upstream inventory, and complete reusable license
 texts are present:

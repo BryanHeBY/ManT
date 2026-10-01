@@ -123,28 +123,28 @@ its default-off reference renderers and Serde contract execute on every
 supported target without enabling unrelated workspace maintenance features.
 
 The default `mant-codec` feature set is independently checked by
-`scripts/check-codec-consumer.sh`. Its separate consumer workspace exercises
+`scripts/checks/check-codec-consumer.sh`. Its separate consumer workspace exercises
 the public Markdown/tldr/encoding APIs and rejects enabled native, protocol,
 engine or frontend dependencies in its normal/build graph. This is distinct
 from workspace tests, where the product enables the codec's `roff` feature.
 Both packaged codec feature surfaces are tested as well. All consumer build
 products use the repository `target/` directory, not a temporary build directory.
 
-`scripts/check-loader-consumer.sh` independently exercises read-only Markdown
+`scripts/checks/check-loader-consumer.sh` independently exercises read-only Markdown
 file loading with `mant-loader`'s default features. Its normal/build dependency
 graph excludes native parsers, compression, source acquisition, engine queries,
 and frontends. The default and `roff` loader surfaces also run as separate test
 and packaged-source checks; workspace feature unification is not evidence for
 the default-only boundary.
 
-`scripts/check-query-consumer.sh` builds an independent consumer that supplies
+`scripts/checks/check-query-consumer.sh` builds an independent consumer that supplies
 its own semantic IR and graph. It exercises single-document queries and borrowed
 collection queries, and rejects enabled loader, renderer, frontend, native and
 update dependencies. This guards against accidentally restoring host authority
 through a query convenience API.
 
 `mant-render` is tested independently and in the packaged-source workspace.
-`scripts/check-render-consumer.sh` exercises authored IR/DTO rendering from an
+`scripts/checks/check-render-consumer.sh` exercises authored IR/DTO rendering from an
 independent consumer and rejects query, loader, native and terminal dependencies.
 It renders caller-supplied IR and protocol results without executing queries or
 loading sources. Its codec dependency is Markdown-only; workspace feature
@@ -152,12 +152,12 @@ unification must not be mistaken for a native dependency of the renderer.
 UI integration tests separately assert real terminal cells, because unchanged
 concatenated text alone cannot prove correct grapheme rendering or hit maps.
 
-`scripts/check-ui-consumer.sh` embeds the reader with authored IR and explicit
+`scripts/checks/check-ui-consumer.sh` embeds the reader with authored IR and explicit
 host services. Its independent normal/build graph rejects loaders, queries,
 native parsers, source updates and the static pager. Crossterm's own transitive
 event dependencies do not grant this component terminal acquisition authority.
 
-`scripts/check-cli-features.py` runs eight isolated product builds: no default
+`scripts/checks/check_cli_features.py` runs eight isolated product builds: no default
 features, each of `roff`, `tui`, `pager`, `mcp`, and `update` alone, the default
 product, and all features. It inspects normal/build dependency graphs, exercises
 the actual help and structured input/output boundary, and checks that schemas
@@ -280,6 +280,12 @@ a substitute for a clear execution boundary.
 
 ### Regression suites and fixture maintenance
 
+Repository tools are grouped by responsibility under `scripts/`; see the
+[tool directory guide](../scripts/README.md) for ownership and entrypoints.
+Python tools run as modules from the checkout root. Keep CI sparse-checkout
+lists, shell/PowerShell callers and embedded metadata tests synchronized with
+tool paths.
+
 Tests belong to the layer that owns the behavior. Native state tests stay next
 to the private codec implementation; engine tests exercise the complete public
 pipeline; render tests use source-neutral IR; reader and process tests use the
@@ -294,6 +300,11 @@ actual application and executable.
 | Native reader interactions | `mant-ui/tests` | Real Buffer cells, activation, selection, copying and resizing |
 | Executable delivery and discovery | `mant/tests/process` | Child-process stdout, stderr, exit codes and isolated document roots |
 | Real manual corpus | `tests/fixtures/roff/real` and distribution suites | Licensed source identities and domain-specific query gold |
+| Shared engine test helpers | `mant-engine/tests/support` | Semantic reads and corpus assertions; helpers have no production API |
+
+Only the semantic-read helper required by the packaged deterministic suites is
+included in the engine source archive. Corpus helpers retain their checkout-only
+boundary. Keep test helpers out of `src/` unless production actually uses them.
 
 Roff modules, functions and fixture directories use behavior names rather than
 review or implementation-stage names. Macro names, immutable case identifiers,
@@ -321,11 +332,11 @@ The legacy snapshot recorders read their checked-in sources as the sole case
 definitions and verify the registered pristine oracle before writing:
 
 ```sh
-bash scripts/regen_macro_consumer_matrix.sh --check
-bash scripts/regen_shared_execution_matrix.sh --check
-bash scripts/regen_field_retirement_matrix.sh --check
-bash scripts/regen_definition_matrix.sh --check
-bash scripts/regen_escape_matrix.sh --check
+bash scripts/roff/fixtures/regen_macro_consumer_matrix.sh --check
+bash scripts/roff/fixtures/regen_shared_execution_matrix.sh --check
+bash scripts/roff/fixtures/regen_field_retirement_matrix.sh --check
+bash scripts/roff/fixtures/regen_definition_matrix.sh --check
+bash scripts/roff/fixtures/regen_escape_matrix.sh --check
 ```
 
 Omit `--check` only to record deliberately reviewed oracle changes. Each legacy
@@ -340,11 +351,11 @@ The newer matrices have canonical full-source definitions and checked-in
 pristine records. Their source checks run without a local reference binary:
 
 ```sh
-python3 scripts/generate_roff_execution_fixtures.py --check-sources
-python3 scripts/generate_roff_compatibility_fixtures.py --check-sources
-python3 scripts/generate_roff_execution_fixtures.py --check \
+python3 -m scripts.roff.fixtures.generate_roff_execution_fixtures --check-sources
+python3 -m scripts.roff.fixtures.generate_roff_compatibility_fixtures --check-sources
+python3 -m scripts.roff.fixtures.generate_roff_execution_fixtures --check \
   --evidence target/audits/native-execution-fixtures-check
-python3 scripts/generate_roff_compatibility_fixtures.py --check \
+python3 -m scripts.roff.fixtures.generate_roff_compatibility_fixtures --check \
   --evidence target/audits/native-compatibility-fixtures-check
 ```
 
@@ -369,8 +380,8 @@ graph with cargo-about 0.9.2. After changing dependencies, regenerate the
 checked-in report and review its package and license mapping:
 
 ```sh
-scripts/generate-rust-licenses.sh
-scripts/generate-rust-licenses.sh --check
+scripts/release/generate-rust-licenses.sh
+scripts/release/generate-rust-licenses.sh --check
 ```
 
 The first command refreshes the checked-in report; `--check` regenerates it
@@ -411,42 +422,42 @@ tests/fixtures/              Fixed Markdown and real roff integration sources
 tests/consumers/codec-markdown/  Independent default-codec consumer and feature resolver
 scripts/check.sh             Canonical local and CI verification sequence
 scripts/check-windows.ps1    Native Windows verification sequence
-scripts/check-libmandoc-symbols.sh  Reject downstream-visible unprefixed C symbols
-scripts/check-packaged-crates.sh  Build and test exact published crate source sets
-scripts/check-codec-consumer.sh  Verify the standalone codec's pure-Rust dependency boundary
-scripts/check-loader-consumer.sh  Verify read-only, default-feature source loading
-scripts/check-query-consumer.sh  Verify pure queries over authored IR and borrowed scopes
-scripts/check-render-consumer.sh  Verify pure IR/DTO reports without query or host authority
-scripts/check-ui-consumer.sh  Verify reader embedding without loaders or terminal delivery
-scripts/check-cli-features.py  Eight isolated capability builds and process contract probes
-scripts/build-and-smoke.sh   Unix debug/release product build and smoke test
-scripts/build-and-smoke.ps1 Windows debug/release product build and smoke test
-scripts/find-successful-ci.sh  Exact-commit full CI verification for automation
-scripts/generate-rust-licenses.sh  Rebuild the locked Rust license report
-scripts/finalize-cyclonedx.mjs  Normalize generated release SBOMs reproducibly
-scripts/install-ci-native-dependencies.sh  Install native Linux CI prerequisites
+scripts/checks/check-libmandoc-symbols.sh  Reject downstream-visible unprefixed C symbols
+scripts/checks/check-packaged-crates.sh  Build and test exact published crate source sets
+scripts/checks/check-codec-consumer.sh  Verify the standalone codec's pure-Rust dependency boundary
+scripts/checks/check-loader-consumer.sh  Verify read-only, default-feature source loading
+scripts/checks/check-query-consumer.sh  Verify pure queries over authored IR and borrowed scopes
+scripts/checks/check-render-consumer.sh  Verify pure IR/DTO reports without query or host authority
+scripts/checks/check-ui-consumer.sh  Verify reader embedding without loaders or terminal delivery
+scripts/checks/check_cli_features.py  Eight isolated capability builds and process contract probes
+scripts/build/build-and-smoke.sh   Unix debug/release product build and smoke test
+scripts/build/build-and-smoke.ps1 Windows debug/release product build and smoke test
+scripts/ci/find-successful-ci.sh  Exact-commit full CI verification for automation
+scripts/release/generate-rust-licenses.sh  Rebuild the locked Rust license report
+scripts/release/finalize-cyclonedx.mjs  Normalize generated release SBOMs reproducibly
+scripts/ci/install-ci-native-dependencies.sh  Install native Linux CI prerequisites
 scripts/install.sh           Latest-release installer for Linux and macOS
 scripts/install.ps1          Latest-release installer for Windows x64
-scripts/fuzz.sh              Run selected cargo-fuzz targets for a bounded time
-scripts/package-release.sh   Reproducible Linux release archive assembly
-scripts/package-release.ps1 Windows x64 ZIP assembly
-scripts/package-manuals.sh   Reproducible platform-independent manual archive
-scripts/publish-crates.sh    Ordered independent-version crates.io publication
-scripts/update-protocol-schema-snapshot.sh  Regenerate a deliberate protocol snapshot
-scripts/update-reader-screenshot.sh  Host-stable Linux README screenshot capture
-scripts/audit-roff-fidelity.py  Visible-content differential audit
-scripts/audit-roff-all.py       Manifest-bound replay of all eight legacy dimensions
-scripts/audit-roff-rendering.py  Source-bound content and exact-geometry census
-scripts/check-roff-behavior-matrix.py  Reduced multi-width CLI/reader regression audit
-scripts/roff_reference.py      Bounded POSIX reference-renderer execution
-scripts/audit-roff-structure.py  Native AST-to-IR topology audit
-scripts/audit-roff-projection.py  CommonMark round-trip topology audit
-scripts/audit-roff-layout.py  Source-gated renderer layout audit
-scripts/audit-roff-targets.py  Native zero-width target-conservation audit
-scripts/audit-roff-semantics.py  Semantic-entry precision audit
-scripts/roff_query_gold.py      Source-bound explanation gold comparisons
-scripts/check-roff-audit-coverage.py  Cross-ledger corpus coverage verification
-scripts/roff_audit_common.py  Shared roff audit identities and helpers
+scripts/dev/fuzz.sh              Run selected cargo-fuzz targets for a bounded time
+scripts/release/package-release.sh   Reproducible Linux release archive assembly
+scripts/release/package-release.ps1 Windows x64 ZIP assembly
+scripts/release/package-manuals.sh   Reproducible platform-independent manual archive
+scripts/release/publish-crates.sh    Ordered independent-version crates.io publication
+scripts/dev/update-protocol-schema-snapshot.sh  Regenerate a deliberate protocol snapshot
+scripts/dev/update-reader-screenshot.sh  Host-stable Linux README screenshot capture
+scripts/roff/audit/audit_roff_fidelity.py  Visible-content differential audit
+scripts/roff/audit/audit_roff_all.py       Manifest-bound replay of all eight legacy dimensions
+scripts/roff/audit/audit_roff_rendering.py  Source-bound content and exact-geometry census
+scripts/roff/audit/check_roff_behavior_matrix.py  Reduced multi-width CLI/reader regression audit
+scripts/roff/lib/roff_reference.py      Bounded POSIX reference-renderer execution
+scripts/roff/audit/audit_roff_structure.py  Native AST-to-IR topology audit
+scripts/roff/audit/audit_roff_projection.py  CommonMark round-trip topology audit
+scripts/roff/audit/audit_roff_layout.py  Source-gated renderer layout audit
+scripts/roff/audit/audit_roff_targets.py  Native zero-width target-conservation audit
+scripts/roff/audit/audit_roff_semantics.py  Semantic-entry precision audit
+scripts/roff/lib/roff_query_gold.py      Source-bound explanation gold comparisons
+scripts/roff/audit/check_roff_audit_coverage.py  Cross-ledger corpus coverage verification
+scripts/roff/lib/roff_audit_common.py  Shared roff audit identities and helpers
 crates/mant-engine/examples/support/  Shared profiler framing, not semantic oracles
 docs/architecture/           Design decisions and stable-boundary documentation
 docs/installation.md         User installation methods and platform requirements
@@ -544,8 +555,8 @@ select individual targets:
 ```sh
 cargo install cargo-fuzz --locked
 rustup toolchain install nightly --profile minimal
-scripts/fuzz.sh 60
-scripts/fuzz.sh 300 roff_pipeline markdown_pipeline
+scripts/dev/fuzz.sh 60
+scripts/dev/fuzz.sh 300 roff_pipeline markdown_pipeline
 ```
 
 Minimize any artifact with `cargo fuzz tmin`, turn the minimized input into a
@@ -554,7 +565,7 @@ named regression test, and only then discard or archive the generated corpus.
 On Linux, regenerate the README reader image with:
 
 ```sh
-scripts/update-reader-screenshot.sh
+scripts/dev/update-reader-screenshot.sh
 ```
 
 The script builds the release executable, registers the repository's ManT
@@ -645,30 +656,30 @@ The existing real-fixture catalogue also feeds an optional differential audit ag
 ```sh
 cargo build --package mant
 cargo build --package libmandoc-rs --example roff_ast_profile
-python3 scripts/audit-roff-fidelity.py --fixtures --json /tmp/mant-fidelity.json
-python3 scripts/audit-roff-fidelity.py --manpath /usr/share/man --max-pages 100
-python3 scripts/audit-roff-fidelity.py --manpath /usr/share/man --max-pages-per-section 25 --findings-only
-python3 scripts/audit-roff-fidelity.py --manpath /usr/share/man \
+python3 -m scripts.roff.audit.audit_roff_fidelity --fixtures --json /tmp/mant-fidelity.json
+python3 -m scripts.roff.audit.audit_roff_fidelity --manpath /usr/share/man --max-pages 100
+python3 -m scripts.roff.audit.audit_roff_fidelity --manpath /usr/share/man --max-pages-per-section 25 --findings-only
+python3 -m scripts.roff.audit.audit_roff_fidelity --manpath /usr/share/man \
   --source-pattern '^[.]Dd' --recheck-recorded --findings-only
-python3 scripts/audit-roff-fidelity.py --manpath /usr/share/man \
+python3 -m scripts.roff.audit.audit_roff_fidelity --manpath /usr/share/man \
   --max-pages-per-section 25 --syntax-priority \
   --syntax-cache /tmp/mant-roff-syntax.json.gz \
   --syntax-report /tmp/mant-roff-syntax-report.json --findings-only
-python3 scripts/audit-roff-fidelity.py --manpath /usr/share/man \
+python3 -m scripts.roff.audit.audit_roff_fidelity --manpath /usr/share/man \
   --max-pages-per-section 12 --syntax-priority \
   --review-dir /tmp/mant-roff-review
-python3 scripts/audit-roff-fidelity.py --manpath /tmp/debian-man \
+python3 -m scripts.roff.audit.audit_roff_fidelity --manpath /tmp/debian-man \
   --max-pages 200 --syntax-priority --dedupe-across-corpora \
   --syntax-cache /tmp/mant-debian-syntax.json.gz \
   --audit-db tests/fixtures/roff/FIDELITY_AUDIT.csv \
   --corpus debian-sid-amd64 --findings-only
-python3 scripts/audit-roff-fidelity.py --manpath /usr/share/man --max-pages-per-section 25 \
+python3 -m scripts.roff.audit.audit_roff_fidelity --manpath /usr/share/man --max-pages-per-section 25 \
   --audit-db tests/fixtures/roff/FIDELITY_AUDIT.csv --corpus archlinux-host
-python3 scripts/audit-roff-fidelity.py --manpath /usr/share/man --recorded-only \
+python3 -m scripts.roff.audit.audit_roff_fidelity --manpath /usr/share/man --recorded-only \
   --audit-db tests/fixtures/roff/FIDELITY_AUDIT.csv --corpus archlinux-host
-python3 scripts/audit-roff-fidelity.py --manpath /usr/share/man --retry-skipped \
+python3 -m scripts.roff.audit.audit_roff_fidelity --manpath /usr/share/man --retry-skipped \
   --audit-db tests/fixtures/roff/FIDELITY_AUDIT.csv --corpus archlinux-host
-python3 scripts/audit-roff-fidelity.py --manpath /usr/share/man --pending-only \
+python3 -m scripts.roff.audit.audit_roff_fidelity --manpath /usr/share/man --pending-only \
   --audit-db tests/fixtures/roff/FIDELITY_AUDIT.csv --corpus archlinux-host
 ```
 
@@ -680,10 +691,10 @@ Content comparison intentionally normalizes away line wrapping and layout, so it
 
 ```sh
 cargo build --package mant-engine --example roff_structure_profile
-python3 scripts/audit-roff-structure.py --fixtures --json /tmp/mant-structure.json
-python3 scripts/audit-roff-structure.py --manpath /usr/share/man \
+python3 -m scripts.roff.audit.audit_roff_structure --fixtures --json /tmp/mant-structure.json
+python3 -m scripts.roff.audit.audit_roff_structure --manpath /usr/share/man \
   --corpus archlinux-host --replay-fidelity-records --findings-only
-python3 scripts/audit-roff-structure.py --manpath /usr/share/man \
+python3 -m scripts.roff.audit.audit_roff_structure --manpath /usr/share/man \
   --source-pattern '^[.]nf$' --recheck-recorded --findings-only
 ```
 
@@ -694,11 +705,11 @@ topology after lowering has already succeeded:
 
 ```sh
 cargo build --package mant-engine --example roff_projection_profile
-python3 scripts/audit-roff-projection.py --fixtures \
+python3 -m scripts.roff.audit.audit_roff_projection --fixtures \
   --json /tmp/mant-projection.json
-python3 scripts/audit-roff-projection.py --fixtures --recheck-recorded \
+python3 -m scripts.roff.audit.audit_roff_projection --fixtures --recheck-recorded \
   --verify --findings-only
-python3 scripts/audit-roff-projection.py --manpath /usr/share/man \
+python3 -m scripts.roff.audit.audit_roff_projection --manpath /usr/share/man \
   --corpus archlinux-host --replay-fidelity-records --findings-only
 ```
 
@@ -728,7 +739,7 @@ completed `FIDELITY_AUDIT.csv` or `STRUCTURE_AUDIT.csv` rows.
 
 ```sh
 cargo build --package mant
-python3 scripts/audit-roff-layout.py --manpath /tmp/new-release/share/man \
+python3 -m scripts.roff.audit.audit_roff_layout --manpath /tmp/new-release/share/man \
   --corpus new-release-amd64 --max-pages-per-section 20 \
   --json /tmp/mant-layout.json --findings-only
 ```
@@ -758,7 +769,7 @@ semantic profiles plus fidelity/layout against both mandoc and groff, use:
 cargo build --locked --release -p mant --bin mant -p mant-engine \
   --example roff_structure_profile --example roff_projection_profile \
   --example roff_target_profile --example roff_semantic_profile
-python3 scripts/audit-roff-all.py --manifest /path/to/source-manifest.jsonl \
+python3 -m scripts.roff.audit.audit_roff_all --manifest /path/to/source-manifest.jsonl \
   --output target/all-roff-audits --mant target/release/mant \
   --mandoc /path/to/fixed-cvs/mandoc --groff /usr/bin/groff \
   --profiler-dir target/release/examples
@@ -819,11 +830,11 @@ are not parser-leak candidates by themselves.
 ```sh
 cargo build --release -p mant
 cargo build --release -p mant-ui --example geometry_audit
-python3 scripts/check-roff-behavior-matrix.py \
+python3 -m scripts.roff.audit.check_roff_behavior_matrix \
   --mant target/release/mant --reference /path/to/fixed-cvs/mandoc \
   --geometry-probe target/release/examples/geometry_audit \
   --output target/rendering-matrix
-python3 scripts/audit-roff-rendering.py \
+python3 -m scripts.roff.audit.audit_roff_rendering \
   --reference /path/to/fixed-cvs/mandoc --reference-id cvs-YYYYMMDD \
   --manifest /path/to/source-manifest.jsonl --output target/rendering-corpus
 ```
@@ -899,9 +910,9 @@ still agree:
 
 ```sh
 cargo build --package mant-engine --example roff_target_profile
-python3 scripts/audit-roff-targets.py --fixtures --recheck-recorded \
+python3 -m scripts.roff.audit.audit_roff_targets --fixtures --recheck-recorded \
   --verify --findings-only
-python3 scripts/audit-roff-targets.py --manpath /usr/share/man \
+python3 -m scripts.roff.audit.audit_roff_targets --manpath /usr/share/man \
   --corpus archlinux-host --recheck-recorded --findings-only \
   --json /tmp/mant-roff-targets.json
 ```
@@ -947,9 +958,9 @@ not share the historical `unresolvedRuns` failure counter.
 
 ```sh
 cargo build --package mant-engine --example roff_semantic_profile
-python3 scripts/audit-roff-semantics.py --fixtures --recheck-recorded \
+python3 -m scripts.roff.audit.audit_roff_semantics --fixtures --recheck-recorded \
   --verify --findings-only
-python3 scripts/audit-roff-semantics.py --manpath /usr/share/man \
+python3 -m scripts.roff.audit.audit_roff_semantics --manpath /usr/share/man \
   --corpus archlinux-host --recheck-recorded --findings-only \
   --json /tmp/mant-roff-semantics.json
 ```
@@ -976,10 +987,10 @@ forbidden direct evidence. Counts alone are not a correctness oracle.
 
 ```sh
 # Network-free checked-in sources only; part of scripts/check.sh.
-python3 scripts/audit-roff-semantics.py --fixtures \
+python3 -m scripts.roff.audit.audit_roff_semantics --fixtures \
   --query-gold tests/fixtures/roff/ENTRY_QUERY_GOLD.json
 # Optional local panel; missing/drifted sources remain unresolved, never clean.
-python3 scripts/audit-roff-semantics.py \
+python3 -m scripts.roff.audit.audit_roff_semantics \
   --query-gold tests/fixtures/roff/ENTRY_QUERY_GOLD.json \
   --query-root corpus=/path/to/fixed-manual-corpus \
   --json target/entry-query-audit.json
@@ -1020,12 +1031,12 @@ punctuation and formatter behavior, but it does not replace groff as an
 independent parser-family oracle.
 
 ```sh
-python3 scripts/audit-roff-fidelity.py --manpath /tmp/exact/share/man \
+python3 -m scripts.roff.audit.audit_roff_fidelity --manpath /tmp/exact/share/man \
   --corpus exact-corpus --replay-source-records \
   --reference-kind mandoc --reference mandoc \
   --reference-id mandoc-1.14.6-1 \
   --audit-db tests/fixtures/roff/MANDOC_FIDELITY_AUDIT.csv --findings-only
-python3 scripts/audit-roff-layout.py --manpath /tmp/exact/share/man \
+python3 -m scripts.roff.audit.audit_roff_layout --manpath /tmp/exact/share/man \
   --corpus exact-corpus --replay-fidelity-records \
   --reference-kind mandoc --reference mandoc \
   --reference-id mandoc-1.14.6-1 \
@@ -1081,7 +1092,7 @@ each cover every checked-in fixture while their broader distribution sweeps
 remain independent. Other targeted groff/structure sweeps may remain
 supersets. See
 the [coverage contract](../tests/fixtures/roff/AUDIT_COVERAGE.md) and run
-`python3 scripts/check-roff-audit-coverage.py` before concluding a local audit
+`python3 -m scripts.roff.audit.check_roff_audit_coverage` before concluding a local audit
 expansion.
 
 ManT intentionally does not expose this comparison as a user-facing

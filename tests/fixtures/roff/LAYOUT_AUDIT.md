@@ -40,7 +40,7 @@ does not call it. A normal run is incremental against this ledger alone:
 
 ```sh
 cargo build -p mant
-python3 scripts/audit-roff-layout.py --manpath /tmp/new-release/share/man \
+python3 -m scripts.roff.audit.audit_roff_layout --manpath /tmp/new-release/share/man \
   --corpus new-release-amd64 --max-pages-per-section 20 \
   --json /tmp/mant-layout.json --findings-only
 ```
@@ -52,7 +52,7 @@ only read as an immutable identity index; its historical `skipped` and
 is neither re-rendered nor rewritten:
 
 ```sh
-python3 scripts/audit-roff-layout.py --manpath /tmp/old-release/share/man \
+python3 -m scripts.roff.audit.audit_roff_layout --manpath /tmp/old-release/share/man \
   --corpus old-release-amd64 --replay-fidelity-records \
   --json /tmp/mant-layout-old-release.json --findings-only
 ```

@@ -5,7 +5,7 @@ fn ci_reuses_only_complete_exact_sha_runs_and_avoids_release_rebuilds() {
     let workflow = include_str!("../../../.github/workflows/ci.yml");
     assert!(workflow.contains("actions: read"));
     assert!(workflow.contains("name: Plan CI"));
-    assert!(workflow.contains("scripts/find-successful-ci.sh \"$GITHUB_SHA\" dev"));
+    assert!(workflow.contains("scripts/ci/find-successful-ci.sh \"$GITHUB_SHA\" dev"));
     assert_eq!(
         workflow
             .matches("if: needs.scope.outputs.run_full == 'true'")
@@ -30,12 +30,12 @@ fn ci_reuses_only_complete_exact_sha_runs_and_avoids_release_rebuilds() {
 
     let unix = include_str!("../../../scripts/check.sh");
     assert!(unix.contains("export LIBMANDOC_RS_DENY_WARNINGS=1"));
-    assert!(unix.contains("bash scripts/build-and-smoke.sh \"$profile\""));
+    assert!(unix.contains("bash scripts/build/build-and-smoke.sh \"$profile\""));
     let windows = include_str!("../../../scripts/check-windows.ps1");
     assert!(windows.contains("$env:LIBMANDOC_RS_DENY_WARNINGS = \"1\""));
     assert!(windows.contains("build-and-smoke.ps1\") -BuildProfile $BuildProfile"));
 
-    let verifier = include_str!("../../../scripts/find-successful-ci.sh");
+    let verifier = include_str!("../../../scripts/ci/find-successful-ci.sh");
     assert!(verifier.contains(r#"[[ "$run_event" != "push" ]]"#));
     assert!(verifier.contains(".head_branch, .event, .html_url"));
     for job in [

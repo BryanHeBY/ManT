@@ -101,7 +101,7 @@ Build the profiler and scan the reproducible real fixtures:
 
 ```sh
 cargo build -p mant-engine --example roff_structure_profile
-python3 scripts/audit-roff-structure.py --fixtures --json /tmp/mant-structure.json
+python3 -m scripts.roff.audit.audit_roff_structure --fixtures --json /tmp/mant-structure.json
 ```
 
 The ManT-authored `real/mant-audit/equation-contexts.7` fixture makes every
@@ -110,9 +110,9 @@ host sweep, select every `.EQ` page; combine `.TS` with exact eqn operator
 tokens for the table-focused intersection:
 
 ```sh
-python3 scripts/audit-roff-structure.py --manpath /usr/share/man \
+python3 -m scripts.roff.audit.audit_roff_structure --manpath /usr/share/man \
   --corpus current-host-eqn --source-pattern '^\.EQ(?:\s|$)' --findings-only
-python3 scripts/audit-roff-structure.py --manpath /usr/share/man \
+python3 -m scripts.roff.audit.audit_roff_structure --manpath /usr/share/man \
   --corpus current-host-table-eqn --source-pattern '^\.TS(?:\s|$)' \
   --source-pattern '(^|[^A-Za-z])(sub|sup|over|ldots)([^A-Za-z]|$)' \
   --findings-only
@@ -122,7 +122,7 @@ For a local corpus whose previous content-audit rows should be replayed under
 the new structural checks, use the same corpus identity and manual root:
 
 ```sh
-python3 scripts/audit-roff-structure.py --manpath /usr/share/man \
+python3 -m scripts.roff.audit.audit_roff_structure --manpath /usr/share/man \
   --corpus archlinux-host --replay-fidelity-records --findings-only
 ```
 

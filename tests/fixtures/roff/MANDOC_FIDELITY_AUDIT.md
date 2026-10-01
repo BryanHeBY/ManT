@@ -38,7 +38,7 @@ Use the historical groff ledger as a read-only source index:
 
 ```sh
 cargo build -p mant
-python3 scripts/audit-roff-fidelity.py \
+python3 -m scripts.roff.audit.audit_roff_fidelity \
   --manpath /path/to/exact/manual-root \
   --corpus corpus-name --replay-source-records \
   --source-ledger tests/fixtures/roff/FIDELITY_AUDIT.csv \
@@ -103,5 +103,5 @@ positives or the layout route's intentional blank-run normalization.
 
 The audit script checkpoints large databases atomically. It does not make
 concurrent writers to one CSV safe; replay corpora serially. Run
-`python3 scripts/check-roff-audit-coverage.py` after every expansion to prove
+`python3 -m scripts.roff.audit.check_roff_audit_coverage` after every expansion to prove
 that the historical and fixture baselines remain aligned.

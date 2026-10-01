@@ -50,7 +50,7 @@ spans poll/read together, preventing search from stealing a reader's polled even
 Verify against an extracted, checksum-verified upstream crate:
 
 ```sh
-node scripts/sync-minus-vendor.mjs /path/to/minus-5.7.2 --verify
+node scripts/vendor/sync-minus-vendor.mjs /path/to/minus-5.7.2 --verify
 ```
 
 The verifier specifies every adaptation and checks all source and license files.

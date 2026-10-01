@@ -8,7 +8,7 @@
 //! The sibling `.expected` file holds the **row-grouped** output of the
 //! fixed CVS reference binary
 //! (`target/mandoc-migration/reference/mandoc -Tascii`), recorded once by
-//! `scripts/regen_field_retirement_matrix.sh`: which words
+//! `scripts/roff/fixtures/regen_field_retirement_matrix.sh`: which words
 //! share a physical row is the row machine's observable decision. The
 //! `.mc <arg>` margin-note cases are deliberately absent: the per-line
 //! trailing margin character (term.c:450-465) is a registered deviation,
@@ -121,7 +121,7 @@ fn field_retirement_matrix_rows_match_the_pinned_reference() {
     }
     assert_eq!(
         total, 161,
-        "case set changed; regen via scripts/regen_field_retirement_matrix.sh"
+        "case set changed; regen via scripts/roff/fixtures/regen_field_retirement_matrix.sh"
     );
     assert!(
         failures.is_empty(),

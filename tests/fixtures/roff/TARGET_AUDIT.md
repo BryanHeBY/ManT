@@ -76,7 +76,7 @@ occurrence-aware contract. The profiler binary SHA-256 was
 
 ```sh
 cargo build --locked -p mant-engine --example roff_target_profile
-python3 scripts/audit-roff-targets.py --manpath /usr/share/man \
+python3 -m scripts.roff.audit.audit_roff_targets --manpath /usr/share/man \
   --corpus archlinux-host --recheck-recorded --findings-only \
   --json /tmp/mant-target-archlinux-v3-c51be9d.json
 ```
@@ -155,6 +155,6 @@ CI does not depend on `/usr/share/man`. It builds the profiler and verifies the
 small checked-in fixture corpus against recorded rows:
 
 ```sh
-python3 scripts/audit-roff-targets.py --fixtures --recheck-recorded \
+python3 -m scripts.roff.audit.audit_roff_targets --fixtures --recheck-recorded \
   --verify --findings-only
 ```

@@ -13,7 +13,7 @@ two-output layout baseline.
 Run a full aligned replay with:
 
 ```sh
-python3 scripts/audit-roff-layout.py \
+python3 -m scripts.roff.audit.audit_roff_layout \
   --manpath /path/to/exact/manual-root \
   --corpus corpus-name --replay-fidelity-records \
   --fidelity-db tests/fixtures/roff/MANDOC_FIDELITY_AUDIT.csv \

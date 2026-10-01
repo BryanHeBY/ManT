@@ -70,9 +70,9 @@ Replay the current panel and repository-only subset with:
 
 ```sh
 cargo build --locked -p mant-engine --example roff_semantic_profile
-python3 scripts/audit-roff-semantics.py \
+python3 -m scripts.roff.audit.audit_roff_semantics \
   --query-gold tests/fixtures/roff/ENTRY_QUERY_GOLD.json
-python3 scripts/audit-roff-semantics.py --fixtures \
+python3 -m scripts.roff.audit.audit_roff_semantics --fixtures \
   --query-gold tests/fixtures/roff/ENTRY_QUERY_GOLD.json
 ```
 
@@ -263,7 +263,7 @@ The checked-in corpus is part of the Unix verification boundary:
 
 ```sh
 cargo build --locked -p mant-engine --example roff_semantic_profile
-python3 scripts/audit-roff-semantics.py --fixtures --recheck-recorded \
+python3 -m scripts.roff.audit.audit_roff_semantics --fixtures --recheck-recorded \
   --verify --findings-only
 ```
 
@@ -282,7 +282,7 @@ Run a complete local hierarchy as release-time evidence rather than making
 host manuals a CI dependency:
 
 ```sh
-python3 scripts/audit-roff-semantics.py --manpath /usr/share/man \
+python3 -m scripts.roff.audit.audit_roff_semantics --manpath /usr/share/man \
   --corpus archlinux-host --recheck-recorded --findings-only \
   --json /tmp/mant-semantic-archlinux-v2.json
 ```

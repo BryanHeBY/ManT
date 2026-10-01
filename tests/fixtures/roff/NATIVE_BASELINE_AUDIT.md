@@ -56,12 +56,12 @@ no-fill occurrences; global matching against other flowed prose caused them.
    changing logical IDs; separately record changed or unavailable source bytes.
 2. Preserve recorded old/current executable hashes and source diffs. A different
    build is a new producer, not automatically the binary audited here.
-3. Run `scripts/audit-roff-targets.py` and `scripts/audit-roff-semantics.py` with
+3. Run `scripts/roff/audit/audit_roff_targets.py` and `scripts/roff/audit/audit_roff_semantics.py` with
    explicit manual roots and new output ledgers under `target`. Preserve the
    generator and alias handling above; local orchestration scripts are hashed.
 4. Compare old/current `--input PATH --input-format roff --format json --compact`
    outputs, including separate diagnostics. Review differences before approval.
-5. Run `scripts/audit-roff-fidelity.py` and `scripts/audit-roff-layout.py` on the
+5. Run `scripts/roff/audit/audit_roff_fidelity.py` and `scripts/roff/audit/audit_roff_layout.py` on the
    fixtures against a pristine renderer pinned by `crates/libmandoc-rs/upstream/SOURCE`.
    Use an explicit reference identity and new ledgers; preserve old provenance.
 

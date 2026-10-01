@@ -99,6 +99,8 @@ try {
 
 Invoke-Native -Label "check Rust formatting" -Program "cargo" `
     -Arguments @("fmt", "--all", "--check")
+Invoke-Native -Label "test tagged release tool paths" -Program "python" `
+    -Arguments @("-m", "unittest", "scripts.release.tests.test_source_tool_paths")
 Invoke-Native -Label "test portable Rust packages" -Program "cargo" `
     -Arguments (@("test", "--locked") + $Packages)
 Invoke-Native -Label "test optional libmandoc features" -Program "cargo" `
@@ -126,7 +128,7 @@ try {
     }
 }
 Invoke-Native -Label "check isolated CLI capability combinations" -Program "python" `
-    -Arguments @("scripts/check-cli-features.py")
-& (Join-Path $PSScriptRoot "build-and-smoke.ps1") -BuildProfile $BuildProfile
+    -Arguments @("-m", "scripts.checks.check_cli_features")
+& (Join-Path $Root "scripts/build/build-and-smoke.ps1") -BuildProfile $BuildProfile
 
 Write-Host "`nWindows verification succeeded"

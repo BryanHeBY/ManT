@@ -3,7 +3,7 @@
 //!
 //! `macro_consumer_matrix/cases/*.1` and sibling snapshots pin the CVS
 //! `-Tutf8 -Owidth=78` output. Record expectations only through
-//! `scripts/regen_macro_consumer_matrix.sh`. The projection applies
+//! `scripts/roff/fixtures/regen_macro_consumer_matrix.sh`. The projection applies
 //! backspace replacement, maps NBSP to its occupied blank, removes page
 //! furniture by position, and trims each row's outer whitespace. Internal
 //! spaces and blank rows remain exact; these snapshots do not measure row
@@ -95,7 +95,7 @@ pub(super) fn case_names(prefix: &str, expected_count: usize) -> Vec<String> {
     assert_eq!(
         names.len(),
         expected_count,
-        "{prefix} case set changed; regen via scripts/regen_macro_consumer_matrix.sh"
+        "{prefix} case set changed; regen via scripts/roff/fixtures/regen_macro_consumer_matrix.sh"
     );
     names
 }

@@ -26,7 +26,7 @@ ManT's bundled libmandoc path. Its header records the total scan breadth; the
 neighbouring README records the package provenance and observed parser
 behaviour.
 
-The same fixed pages can be compared with a local `man(1)`/groff renderer by running `python3 scripts/audit-roff-fidelity.py --fixtures` from the repository root. This optional audit searches for missing visible tokens, broken token continuity, and known control-syntax leaks without treating reference layout as a ManT contract. Confirmed findings become focused tests in the existing source-specific Rust modules; the external reference renderer is intentionally not required by ordinary CI.
+The same fixed pages can be compared with a local `man(1)`/groff renderer by running `python3 -m scripts.roff.audit.audit_roff_fidelity --fixtures` from the repository root. This optional audit searches for missing visible tokens, broken token continuity, and known control-syntax leaks without treating reference layout as a ManT contract. Confirmed findings become focused tests in the existing source-specific Rust modules; the external reference renderer is intentionally not required by ordinary CI.
 
 [`../FIDELITY_AUDIT.csv`](../FIDELITY_AUDIT.csv) is the incremental catalogue for wider host-corpus scans; its [ledger guide](../FIDELITY_AUDIT.md) defines the fields and review lifecycle. Unlike the source-specific `VERIFIED_TOPICS.txt` files, which summarize successful parser breadth for reproducible snapshots, the CSV identifies every audited source by corpus, relative path, section, and decompressed-source hash. It also separates the automated signal from the human disposition, so known reference-renderer false positives are not re-investigated on later expansion runs.
 

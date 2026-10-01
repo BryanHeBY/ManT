@@ -154,7 +154,7 @@ fn vendored_license_mapping_tracks_authoritative_headers() {
 
 #[test]
 fn native_archives_copy_the_complete_parser_notice_set() {
-    let unix = include_str!("../../../scripts/package-release.sh");
+    let unix = include_str!("../../../scripts/release/package-release.sh");
     assert!(unix.contains("THIRD_PARTY_LICENSES.html"));
     assert!(unix.contains("LICENSES/RUST_DEPENDENCIES.html"));
     assert!(unix.contains("crates/libmandoc-rs/LICENSES/*"));
@@ -162,7 +162,7 @@ fn native_archives_copy_the_complete_parser_notice_set() {
     assert!(unix.contains("LICENSES/CC-BY-4.0.txt"));
     assert!(unix.contains("LICENSES/PRODUCT_THIRD_PARTY_NOTICES.md"));
 
-    let windows = include_str!("../../../scripts/package-release.ps1");
+    let windows = include_str!("../../../scripts/release/package-release.ps1");
     assert!(windows.contains("THIRD_PARTY_LICENSES.html"));
     assert!(windows.contains("LICENSES/RUST_DEPENDENCIES.html"));
     assert!(windows.contains("crates/libmandoc-rs/LICENSES/*"));
@@ -183,7 +183,7 @@ fn rust_dependency_notice_is_generated_from_the_locked_product_graph() {
         assert!(about.contains(target), "cargo-about must cover {target}");
     }
 
-    let generator = include_str!("../../../scripts/generate-rust-licenses.sh");
+    let generator = include_str!("../../../scripts/release/generate-rust-licenses.sh");
     assert!(generator.contains(r#"about_version == "cargo-about 0.9.2""#));
     assert!(generator.contains("--frozen"));
     assert!(generator.contains("--manifest-path crates/mant/Cargo.toml"));
@@ -192,7 +192,7 @@ fn rust_dependency_notice_is_generated_from_the_locked_product_graph() {
     assert!(generator.contains("--check"));
 
     let workflow = include_str!("../../../.github/workflows/ci.yml");
-    assert!(workflow.contains("scripts/generate-rust-licenses.sh --check"));
+    assert!(workflow.contains("scripts/release/generate-rust-licenses.sh --check"));
 
     let licenses = include_str!("../../../THIRD_PARTY_LICENSES.html");
     assert!(licenses.contains("ManT Rust dependency licenses"));

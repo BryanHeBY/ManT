@@ -45,7 +45,7 @@ Build the profiler and scan the reproducible fixtures:
 
 ```sh
 cargo build -p mant-engine --example roff_projection_profile
-python3 scripts/audit-roff-projection.py --fixtures \
+python3 -m scripts.roff.audit.audit_roff_projection --fixtures \
   --json /tmp/mant-projection.json
 ```
 
@@ -54,7 +54,7 @@ candidates for human disposition. The Unix verification boundary instead runs
 the complete checked-in corpus as a read-only gate:
 
 ```sh
-python3 scripts/audit-roff-projection.py --fixtures --recheck-recorded \
+python3 -m scripts.roff.audit.audit_roff_projection --fixtures --recheck-recorded \
   --verify --findings-only
 ```
 
@@ -66,7 +66,7 @@ oracle.
 Replay the exact unchanged inputs already recorded for a local corpus:
 
 ```sh
-python3 scripts/audit-roff-projection.py --manpath /usr/share/man \
+python3 -m scripts.roff.audit.audit_roff_projection --manpath /usr/share/man \
   --corpus archlinux-host --replay-fidelity-records --findings-only
 ```
 

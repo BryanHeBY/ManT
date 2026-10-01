@@ -1,6 +1,6 @@
 //! Batch profiler for the real libmandoc syntax tree.
 //!
-//! This is a development tool used by `scripts/audit-roff-fidelity.py`, not a
+//! This is a development tool used by `scripts/roff/audit/audit_roff_fidelity.py`, not a
 //! user-facing `ManT` command. It accepts one JSON object per stdin line:
 //!
 //! `{ "id": "...", "path": "/.../git.1.gz", "root": "/usr/share/man" }`
