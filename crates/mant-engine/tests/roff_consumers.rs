@@ -1,5 +1,6 @@
 //! Complete corpus regressions stay outside the published crate source set.
 #[allow(dead_code)]
+#[path = "support/fixtures.rs"]
 mod common;
 use mant_ir::{
     DefinitionItem,

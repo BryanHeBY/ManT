@@ -8,7 +8,7 @@ use mant_ir::{
 
 use mant_loader::parse_manual_bytes;
 
-#[path = "../src/semantic_test_read.rs"]
+#[path = "support/semantic_read.rs"]
 mod semantic_test_read;
 
 // Integration fixtures are read by the harness; product parsing uses public APIs.

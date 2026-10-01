@@ -1,6 +1,6 @@
 //! Regressions promoted from the final NetBSD and `DragonFly` BSD release audit.
 
-#[path = "../common/mod.rs"]
+#[path = "../support/fixtures.rs"]
 #[allow(dead_code)]
 mod common;
 mod fixtures;

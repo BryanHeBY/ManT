@@ -1,5 +1,5 @@
 //! A producer's rejected child cannot leave a false local exhaustive claim.
-#[path = "../src/semantic_test_read.rs"]
+#[path = "support/semantic_read.rs"]
 mod semantic_read;
 use mant_ir::{Block, Document, SemanticIndex, ValueDomain};
 use mant_loader::load_markdown_text;

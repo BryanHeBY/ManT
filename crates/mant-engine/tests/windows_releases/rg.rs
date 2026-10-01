@@ -1,5 +1,5 @@
 //! Tests for ripgrep's official MSVC Windows release manual.
-#[path = "../../src/semantic_test_read.rs"]
+#[path = "../support/semantic_read.rs"]
 mod semantic_read;
 
 use mant_ir::{Block, ListKind};

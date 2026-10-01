@@ -1,5 +1,5 @@
 //! Classification is an owner fact, never inferred from budgeted details.
-#[path = "../src/semantic_test_read.rs"]
+#[path = "support/semantic_read.rs"]
 mod semantic_read;
 use mant_loader::load_markdown_text;
 use mant_protocol::{

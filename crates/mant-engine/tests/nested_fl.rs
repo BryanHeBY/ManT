@@ -9,7 +9,7 @@ use std::path::PathBuf;
 
 use mant_loader::parse_manual_source;
 
-#[path = "common/mod.rs"]
+#[path = "support/fixtures.rs"]
 #[allow(dead_code)]
 mod common;
 

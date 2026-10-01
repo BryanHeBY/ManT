@@ -16,7 +16,7 @@ use mant_ir::{Block, Document};
 use mant_loader::parse_manual_source;
 use mant_render::{render_query_man, render_query_text};
 
-#[path = "common/mod.rs"]
+#[path = "support/fixtures.rs"]
 #[allow(dead_code)]
 mod common;
 

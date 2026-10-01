@@ -1,5 +1,5 @@
 //! Entry projections must borrow ordinary content, not reconstruct definitions.
-#[path = "../src/semantic_test_read.rs"]
+#[path = "support/semantic_read.rs"]
 mod semantic_read;
 use mant_codec::encode::render_markdown;
 use mant_ir::{

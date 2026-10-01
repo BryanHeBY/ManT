@@ -2,10 +2,10 @@
 //!
 //! Each page module covers roff bytes extracted from an immutable Arch Linux
 //! Archive package and exercises the full libmandoc lowering pipeline.
-#[path = "../../src/semantic_test_read.rs"]
+#[path = "../support/semantic_read.rs"]
 mod semantic_read;
 
-#[path = "../common/mod.rs"]
+#[path = "../support/fixtures.rs"]
 #[allow(dead_code)]
 mod common;
 mod fixtures;

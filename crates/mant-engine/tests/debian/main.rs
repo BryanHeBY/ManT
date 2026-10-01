@@ -4,7 +4,7 @@
 //! pages) and a section-1 page from cpio that exercises escape-heavy man(7)
 //! option lists with libmandoc-generated anchor tags.
 
-#[path = "../common/mod.rs"]
+#[path = "../support/fixtures.rs"]
 #[allow(dead_code)]
 mod common;
 mod fixtures;

@@ -1,5 +1,5 @@
 //! All man paragraph forms resolve native predecessor evidence before IR emission.
-#[path = "../src/semantic_test_read.rs"]
+#[path = "support/semantic_read.rs"]
 mod semantic_read;
 use mant_ir::Block;
 use mant_loader::load_roff_bytes;

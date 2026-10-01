@@ -19,7 +19,7 @@ mod entries;
 mod entry_forms;
 #[path = "markdown_pipeline/navigation.rs"]
 mod navigation;
-#[path = "../src/semantic_test_read.rs"]
+#[path = "support/semantic_read.rs"]
 mod semantic_test_read;
 #[path = "markdown_pipeline/source_contracts.rs"]
 mod source_contracts;

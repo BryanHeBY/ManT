@@ -3,7 +3,7 @@
 //! The corpus preserves the upstream CRLF bytes after decompression and runs
 //! on every CI host, including native Windows.
 
-#[path = "../common/mod.rs"]
+#[path = "../support/fixtures.rs"]
 #[allow(dead_code)]
 mod common;
 mod fixtures;

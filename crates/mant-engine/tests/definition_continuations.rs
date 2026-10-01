@@ -1,5 +1,5 @@
 //! Whitespace is presentation, not proof that a definition's continuation ended.
-#[path = "../src/semantic_test_read.rs"]
+#[path = "support/semantic_read.rs"]
 mod semantic_read;
 use std::path::Path;
 
