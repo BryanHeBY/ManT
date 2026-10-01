@@ -69,7 +69,11 @@ impl InlineBuilder {
             return false;
         };
 
-        let empty_pass_ends = if owner_boundary {
+        // term_flushln() only reaches loop endline (term.c:217) when an
+        // accepted pass has a remaining field. Its single accepted pass or
+        // first-pass rejection has no loop rows to classify; the actual
+        // device-tail retirement below still runs with its original flags.
+        let empty_pass_ends = if owner_boundary || !receipt_has_loop_rows(&receipt) {
             Vec::new()
         } else {
             self.native_field_device(no_break_flush)
@@ -448,5 +452,67 @@ impl InlineBuilder {
         self.execution.empty_word = false;
         self.execution.final_word_join = Some(false);
         self.retire_consumed_native_field();
+    }
+}
+
+fn receipt_has_loop_rows(receipt: &super::super::field_buffer::FlushReceipt) -> bool {
+    use super::super::field_buffer::FlushReceipt;
+    match receipt {
+        FlushReceipt::Accepted { passes } => passes.len() > 1,
+        FlushReceipt::Rejected { passes, .. } => !passes.is_empty(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::super::field_buffer::{FieldBuffer, FieldCell, FieldWrite, FillTargets};
+    use super::*;
+
+    #[test]
+    fn device_loop_views_are_needed_only_after_an_accepted_prefix() {
+        // Complete accepted, NBRZW/p and bare-p refused sources ran fixed
+        // CVS first. No actual remaining field means no loop endline at
+        // term.c:217; first-pass nbr=0 likewise exits before that event.
+        for (writes, expected) in [
+            (FieldWrite::literal("ACCEPTED"), false),
+            (vec![FieldWrite::Cell(FieldCell::ZeroWidthGraph)], false),
+            (
+                vec![
+                    FieldWrite::Cell(FieldCell::BreakMarker),
+                    FieldWrite::UnprojectedBlank,
+                    FieldWrite::Cell(FieldCell::Graph {
+                        text: 'R',
+                        width: 1,
+                    }),
+                ],
+                false,
+            ),
+            (
+                vec![
+                    FieldWrite::Cell(FieldCell::ZeroWidthGraph),
+                    FieldWrite::Cell(FieldCell::BreakMarker),
+                    FieldWrite::UnprojectedBlank,
+                    FieldWrite::Cell(FieldCell::BreakMarker),
+                    FieldWrite::UnprojectedBlank,
+                    FieldWrite::Cell(FieldCell::Graph {
+                        text: 'R',
+                        width: 1,
+                    }),
+                ],
+                true,
+            ),
+        ] {
+            let mut buffer = FieldBuffer::default();
+            buffer.apply_writes(&writes);
+            let receipt = buffer.flush_receipt(
+                FillTargets {
+                    first: usize::MAX / 2,
+                    rest: usize::MAX / 2,
+                    unbounded: true,
+                },
+                false,
+            );
+            assert_eq!(receipt_has_loop_rows(&receipt), expected);
+        }
     }
 }

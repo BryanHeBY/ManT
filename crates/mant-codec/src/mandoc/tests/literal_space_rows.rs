@@ -154,6 +154,66 @@ fn repeated_accepted_zero_width_rows_keep_every_content_row() {
     }
 }
 
+#[test]
+fn native_marker_passes_keep_printed_prefixes_and_separate_empty_rows() {
+    // All complete sources ran fixed CVS ASCII/UTF-8/HTML/tree/lint first.
+    // NBRZW sets graph without printing (term.c:340-349,397). Each genuine
+    // remaining field executes loop endline once (217), followed by the
+    // rejected suffix's own tail endline (143-146,250-253). A preceding
+    // continued word occupies only the first accepted physical row.
+    for count in [1, 2, 64, 1024] {
+        let prefix = "\\&\\p ".repeat(count);
+        for (inherited, before) in [(false, ""), (true, ".No BEFORE\\c\n")] {
+            let rows_before = if inherited { "BEFORE" } else { "" };
+            for (tail, expected) in [
+                (
+                    "\\p REJECTED",
+                    format!("{rows_before}{}AFTER", "\n".repeat(count + 1)),
+                ),
+                (
+                    "ACCEPTED",
+                    format!("{rows_before}{}ACCEPTED\nAFTER", "\n".repeat(count)),
+                ),
+                ("", format!("{rows_before}\nAFTER")),
+            ] {
+                let body = format!("{before}.No \"{prefix}{tail}\"\n.No AFTER\n");
+                assert_eq!(literal_text(MDOC_HEADER, &body), expected, "{body:?}");
+            }
+        }
+    }
+}
+
+#[test]
+fn retired_prefixes_and_semantic_wrappers_do_not_replay_empty_pass_rows() {
+    // Exact sources ran all five fixed profiles first. Lk executes its
+    // label/colon/target through term_word (mdoc_term.c:1881-1915), so
+    // rejected visible ranges must keep the link identity. The complete
+    // br/sp/mc layout matrix is exercised by the final engine consumer.
+    for count in [1, 2, 64, 1024] {
+        let word = format!("{}\\p REJECTED", "\\&\\p ".repeat(count));
+        for (wrapper, argument) in [("No", ""), ("Em", ""), ("Lk", "https://example.org ")] {
+            let body = format!(".No BEFORE\\c\n.{wrapper} {argument}\"{word}\"\n.No AFTER\n");
+            assert_eq!(
+                literal_text(MDOC_HEADER, &body),
+                format!("BEFORE{}AFTER", "\n".repeat(count + 1)),
+                "{body:?}"
+            );
+            if wrapper == "Lk" {
+                let document = literal_document(MDOC_HEADER, &body);
+                let targets = super::control_boundaries::document_link_targets(&document);
+                assert_eq!(targets.len(), 1, "{body:?}");
+                assert_eq!(
+                    targets[0],
+                    mant_ir::LinkTarget::External {
+                        uri: "https://example.org".to_owned()
+                    },
+                    "{body:?}"
+                );
+            }
+        }
+    }
+}
+
 const LITERAL_ROW_CASES: [(&str, [&str; 3]); 12] = [
     ("\\&        \n", ["ALPHA\n\nBETA", "\nBETA", "ALPHA\n"]),
     ("\\&\n", ["ALPHA\n\nBETA", "\nBETA", "ALPHA\n"]),

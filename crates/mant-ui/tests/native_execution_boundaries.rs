@@ -122,6 +122,53 @@ fn assert_pointer_and_copy(query: &ResolvedContent, word: &str, target: Option<&
     }
 }
 
+#[test]
+fn accepted_empty_loop_rows_have_one_representation_after_json_and_resize() {
+    // All twelve exact complete sources ran pristine ASCII/UTF-8/HTML/tree/
+    // lint before these assertions, all lint=0. term_flushln() accepts the
+    // NBRZW passes, then rejects the graphless marker suffix (term.c:143-217).
+    // End-only mc flushes under temporary NOBREAK (roff_term.c:147-156).
+    // Its continued field still needs the new word's stable output owner.
+    // Earlier br/sp retire their unit before this one and remain immutable.
+    for (macro_name, argument) in [("No", ""), ("Em", ""), ("Lk", "https://example.org ")] {
+        for (control, distance) in [("", 3), (".mc\n", 3), (".br\n", 4), (".sp 1\n", 5)] {
+            let word = r"\&\p \&\p \p REJECTED";
+            let body = format!(
+                ".nf\n.No BEFORE\\c\n{control}.{macro_name} {argument}\"{word}\"\n.No AFTER\n.fi\n"
+            );
+            let query = round_trip(&body);
+            for width in [20, 40, 78, 120, 20] {
+                let rendered = DocumentView::new(&query).render(width);
+                let before = body_hit(&rendered, "BEFORE");
+                let after = body_hit(&rendered, "AFTER");
+                assert_eq!(after.row - before.row, distance, "{body}");
+                assert_missing(&rendered, "REJECTED");
+                for row in &rendered.text.lines[before.row + 1..after.row] {
+                    assert!(row.to_string().trim().is_empty(), "{body}");
+                }
+            }
+
+            let mut app = App::new(&query);
+            let mut terminal = Terminal::new(TestBackend::new(80, 40)).unwrap();
+            for width in [20, 40, 78, 120, 20] {
+                terminal.backend_mut().resize(width, 40);
+                terminal.draw(|frame| app.draw(frame)).unwrap();
+                let buffer = terminal.backend().buffer();
+                let (_, before) = body_position(buffer, "BEFORE");
+                let (_, after) = body_position(buffer, "AFTER");
+                assert_eq!(usize::from(after - before), distance, "{body}");
+            }
+            assert_pointer_and_copy(&query, "AFTER", None);
+            if macro_name == "Lk" {
+                assert_eq!(
+                    inventory(&query).occurrences,
+                    ReferenceCount::Exact { value: 1 }
+                );
+            }
+        }
+    }
+}
+
 fn portable(query: &ResolvedContent) -> RenderedDocument {
     let markdown = mant_codec::encode::render_markdown(query);
     let reparsed = mant_loader::load_markdown_text(&markdown, None).unwrap();

@@ -288,9 +288,12 @@ impl InlineBuilder {
         }
         .map(|anchor| anchor.owner.clone());
         if word
-            && self.execution.pending_field_spaces == 0
+            && (self.execution.pending_field_spaces == 0 || accepted_row_break > 0)
             && let Some(marker) = native_anchor_marker.as_ref()
         {
+            // An accepted marker pass consumes incoming blank positioning
+            // at its real endline (term.c:205-217). It bypasses the padding
+            // branch below, but still needs this word's stable output owner.
             self.nodes.push(Inline::anchor(marker.clone()));
         }
         if accepted_row_break > 0 {

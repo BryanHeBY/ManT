@@ -143,6 +143,24 @@ pub(in crate::mandoc::inline::flow) fn split_native_field_passes(
     nodes: &[Inline],
     boundaries: &BTreeMap<String, Vec<usize>>,
 ) -> Vec<Inline> {
+    split_native_field_passes_mode(nodes, boundaries, false)
+}
+
+/// Rebuild one complete active native interval, including loop events at the
+/// last accepted scalar of an owner. Incremental projection leaves those
+/// edges to existing word-time hints; a retired receipt has replaced them.
+pub(in crate::mandoc::inline::flow) fn split_retired_native_field_passes(
+    nodes: &[Inline],
+    boundaries: &BTreeMap<String, Vec<usize>>,
+) -> Vec<Inline> {
+    split_native_field_passes_mode(nodes, boundaries, true)
+}
+
+fn split_native_field_passes_mode(
+    nodes: &[Inline],
+    boundaries: &BTreeMap<String, Vec<usize>>,
+    complete: bool,
+) -> Vec<Inline> {
     let mut ordered = boundaries.clone();
     for positions in ordered.values_mut() {
         positions.sort_unstable();
@@ -156,8 +174,12 @@ pub(in crate::mandoc::inline::flow) fn split_native_field_passes(
         next_boundary: 0,
         owner: None,
         positions: BTreeMap::new(),
+        complete,
     };
     let mut output = project_native_pass_nodes(nodes, &ordered, &mut cursor);
+    if complete {
+        project_owner_tail_events(&mut cursor, &mut output);
+    }
     trim_native_pass_rows(&mut output);
     output
 }
@@ -168,6 +190,17 @@ struct NativePassCursor<'a> {
     next_boundary: usize,
     owner: Option<String>,
     positions: BTreeMap<String, (usize, usize)>,
+    complete: bool,
+}
+
+/// `term_flushln()`217 emits the accepted pass's endline even if its final
+/// graph is the final scalar before a rejected suffix (term_fill()299-312).
+/// Equal scalar positions can still carry separate physical row events.
+fn project_owner_tail_events(cursor: &mut NativePassCursor<'_>, output: &mut Vec<Inline>) {
+    while cursor.boundaries.get(cursor.next_boundary) == Some(&cursor.scalar) {
+        output.push(Inline::line_break());
+        cursor.next_boundary += 1;
+    }
 }
 
 fn native_word_marker(node: &Inline) -> Option<&str> {
@@ -191,6 +224,9 @@ fn project_native_pass_nodes<'a>(
         #[cfg(test)]
         OWNER_NODES_VISITED.with(|work| work.set(work.get().saturating_add(1)));
         if let Some(marker) = native_word_marker(node) {
+            if cursor.complete && cursor.owner.as_deref() != Some(marker) {
+                project_owner_tail_events(cursor, &mut output);
+            }
             if let Some(owner) = cursor.owner.take() {
                 cursor
                     .positions
