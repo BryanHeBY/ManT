@@ -223,6 +223,151 @@ pub(super) fn advance_boundary(cell: &mut usize, next_boundary: &mut usize, boun
     }
 }
 
+/// Split delayed glyphs out of a semantic wrapper's projected annotation.
+///
+/// A `\z` glyph armed before a wrapper macro stays pending until the
+/// wrapper's first real formatter word settles it (its own boundary, its
+/// marker blank, or a later graph's retreat, term.c:573-589 with 901-927).
+/// Wrappers that compact their whole operand stream into one Code, Link,
+/// or `PortableDisplay` node capture that projection, so this ejects the
+/// first `remaining` visible characters back out of the annotation. The
+/// extracted glyphs keep their own node identity: an arm-time style run
+/// stays wrapped in its Strong/Emphasis container (mirroring the pre-wrap
+/// ledger split in `inline/links.rs`), while an annotation container
+/// (Link, `PortableDisplay`) is rebuilt from its unclaimed remainder only,
+/// because the delayed glyphs were never part of that annotation. A
+/// wrapper emptied by the split still survives when its typed identity is
+/// meaningful on its own.
+pub(in crate::mandoc) fn split_owned_glyph_prefix(
+    nodes: Vec<Inline>,
+    remaining: &mut usize,
+) -> (Vec<Inline>, Vec<Inline>) {
+    let mut prefix = Vec::new();
+    let mut suffix = Vec::new();
+    for node in nodes {
+        if *remaining == 0 {
+            suffix.push(node);
+            continue;
+        }
+        if visible_character_count(&node) <= *remaining {
+            // A node whose whole visible payload is the delayed glyph is
+            // the glyph's own projection (an arm-time styled run or link
+            // fallback). Eject it intact; annotation containers wrapping
+            // more than the glyph still split below.
+            let owned = visible_character_count(&node);
+            *remaining -= owned;
+            prefix.push(node);
+            continue;
+        }
+        match node {
+            Inline::Text { value } => {
+                split_value_prefix(&value, false, remaining, &mut prefix, &mut suffix);
+            }
+            Inline::Code { value } => {
+                split_value_prefix(&value, true, remaining, &mut prefix, &mut suffix);
+            }
+            Inline::Strong { children } => {
+                let (before, after) = split_owned_glyph_prefix(children, remaining);
+                if !before.is_empty() {
+                    prefix.push(Inline::Strong { children: before });
+                }
+                if !after.is_empty() {
+                    suffix.push(Inline::Strong { children: after });
+                }
+            }
+            Inline::Emphasis { children } => {
+                let (before, after) = split_owned_glyph_prefix(children, remaining);
+                if !before.is_empty() {
+                    prefix.push(Inline::Emphasis { children: before });
+                }
+                if !after.is_empty() {
+                    suffix.push(Inline::Emphasis { children: after });
+                }
+            }
+            Inline::Link {
+                target,
+                title,
+                children,
+            } => {
+                let (owned, after) = split_owned_glyph_prefix(children, remaining);
+                prefix.extend(owned);
+                // A typed destination is identity data: the node survives
+                // even when every visible cell returned to its real owner.
+                suffix.push(Inline::Link {
+                    target,
+                    title,
+                    children: after,
+                });
+            }
+            Inline::PortableDisplay { display, children } => {
+                let (owned, after) = split_owned_glyph_prefix(children, remaining);
+                prefix.extend(owned);
+                suffix.push(Inline::PortableDisplay {
+                    display,
+                    children: after,
+                });
+            }
+            Inline::Equation { .. } => {
+                // A delayed zero-advance glyph is never equation payload.
+                // Preserve the node intact to keep the visit order.
+                prefix.push(node);
+            }
+            Inline::Anchor { .. } | Inline::LineBreak { .. } => prefix.push(node),
+        }
+    }
+    (prefix, suffix)
+}
+
+/// Split one text or code value at the `remaining`-th visible character.
+/// The delayed prefix keeps its authored node type; only a code suffix
+/// stays code, because that styling belongs to the wrapper's own run.
+fn split_value_prefix(
+    value: &str,
+    code: bool,
+    remaining: &mut usize,
+    prefix: &mut Vec<Inline>,
+    suffix: &mut Vec<Inline>,
+) {
+    let split = value
+        .char_indices()
+        .find_map(|(index, character)| {
+            if !character.is_whitespace() {
+                *remaining -= 1;
+            }
+            (*remaining == 0).then_some(index + character.len_utf8())
+        })
+        .unwrap_or(value.len());
+    if split > 0 {
+        prefix.push(Inline::Text {
+            value: value[..split].to_owned(),
+        });
+    }
+    if split < value.len() {
+        let tail = value[split..].to_owned();
+        suffix.push(if code {
+            Inline::Code { value: tail }
+        } else {
+            Inline::Text { value: tail }
+        });
+    }
+}
+
+/// Non-whitespace scalar count of one node tree, matching the count the
+/// zero-advance ledger reports for a pending glyph.
+fn visible_character_count(node: &Inline) -> usize {
+    match node {
+        Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. } => value
+            .chars()
+            .filter(|character| !character.is_whitespace())
+            .count(),
+        Inline::Strong { children }
+        | Inline::Emphasis { children }
+        | Inline::PortableDisplay { children, .. }
+        | Inline::Link { children, .. } => children.iter().map(visible_character_count).sum(),
+        Inline::Anchor { .. } | Inline::LineBreak { .. } => 0,
+    }
+}
+
 fn push_split_text(run: &mut String, node: &Inline, output: &mut Vec<Inline>) {
     if run.is_empty() {
         return;

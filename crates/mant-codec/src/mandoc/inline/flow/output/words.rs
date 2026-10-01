@@ -8,6 +8,14 @@ use super::super::{
 use super::projection::has_non_whitespace_glyph;
 use crate::mandoc::inline::is_formatter_word_blank;
 
+/// Ownership receipt for one semantic wrapper macro (`Lk`, `Mt`, `Sx`,
+/// `In`, `Bx`, `Xr`, `MR`).
+#[derive(Clone, Copy)]
+pub(in crate::mandoc) struct SemanticOwnerCheckpoint {
+    nodes_start: usize,
+    pending: usize,
+}
+
 impl InlineBuilder {
     /// Mint projection identity before decoding, so a cached BACKBEFORE
     /// glyph remains attached to its source word after a later word emits it.
@@ -135,6 +143,68 @@ impl InlineBuilder {
             self.execution.final_word_join = Some(false);
             self.execution.final_source_continuation = Some(false);
         }
+    }
+
+    /// Projection-only ownership checkpoint at a semantic wrapper's entry.
+    ///
+    /// Native wrapper entry executes no `term_word()`: `termp_lk_pre()`
+    /// only font-pushes before its first real operand (`mdoc_term.c:1881`),
+    /// so no word register, boundary decision, or pending-break settlement
+    /// may run here — those belong to the wrapper's first real operand or
+    /// generated word, which enters through its own word methods above.
+    /// The checkpoint's single duty is ownership: a `\z` glyph delayed
+    /// from preceding source stays pending until that real word settles
+    /// it, and must then keep its own owner and style instead of being
+    /// captured by the wrapper's Link, Code, or `PortableDisplay`
+    /// annotation. The zero-advance owner ledger carries that receipt
+    /// across the whole handler execution.
+    pub(in crate::mandoc) fn begin_semantic_owner_checkpoint(&mut self) -> SemanticOwnerCheckpoint {
+        let pending = self.execution.zero_advance.pending_visible_characters();
+        self.execution.zero_advance.begin_output_owner();
+        SemanticOwnerCheckpoint {
+            nodes_start: self.nodes.len(),
+            pending,
+        }
+    }
+
+    /// Close a semantic wrapper checkpoint after its handler ran: glyphs
+    /// that were already pending at entry and were emitted while the
+    /// wrapper owned the output stream are split back out of the wrapper's
+    /// annotation, keeping their own source, style, and link identity.
+    pub(in crate::mandoc) fn finish_semantic_owner_checkpoint(
+        &mut self,
+        checkpoint: SemanticOwnerCheckpoint,
+    ) {
+        let mut owned = if self.execution.zero_advance.end_output_owner() {
+            checkpoint.pending
+        } else {
+            0
+        };
+        let start = checkpoint.nodes_start.min(self.nodes.len());
+        if owned > 0 && start < self.nodes.len() {
+            let projected = self.nodes.split_off(start);
+            let (owned, rest) = super::split::split_owned_glyph_prefix(projected, &mut owned);
+            self.nodes.extend(owned);
+            self.nodes.extend(rest);
+        }
+    }
+
+    /// Split delayed glyphs out of one wrapper's collected output just
+    /// before that wrapper compacts the rest into a single annotation
+    /// node (`.In`'s code span, which flattens nested identity).
+    /// `entry_pending` is the glyph count the zero-advance ledger held
+    /// when the wrapper's output began; `emitted` is the ledger's receipt
+    /// of whether those glyphs settled while it ran.
+    pub(in crate::mandoc) fn split_delayed_glyph_prefix(
+        nodes: Vec<Inline>,
+        entry_pending: usize,
+        emitted: bool,
+    ) -> (Vec<Inline>, Vec<Inline>) {
+        let mut remaining = usize::from(emitted) * entry_pending;
+        if remaining == 0 {
+            return (Vec::new(), nodes);
+        }
+        super::split::split_owned_glyph_prefix(nodes, &mut remaining)
     }
 
     /// Start an ordinary formatter word after a source text node. If a prior

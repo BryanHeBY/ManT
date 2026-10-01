@@ -40,8 +40,7 @@ pub(super) use source::roff_macro_arguments;
 use super::{
     first_part_children,
     roff_escape::{
-        RoffFont as Font, RoffInlineEvent, decode, is_formatter_word_blank,
-        source_has_visible_glyph, visible_text,
+        RoffFont as Font, RoffInlineEvent, decode, is_formatter_word_blank, visible_text,
     },
 };
 
@@ -178,16 +177,20 @@ pub(super) fn append_inline_node_with_next(
     // before any later operand changes word registers. TEXT and generated
     // words already enter through their own formatter-word methods below.
     if prepares_semantic_output_owner(node) {
-        // Retain the existing ownership preparation for compact semantic
-        // wrappers: a pending preceding glyph must remain outside the new
-        // Link/Code/replacement owner. This preparation is not evidence that
-        // native macro pre executed a word. Separating that owner checkpoint
-        // from the actual first operand is a distinct wrapper change.
-        builder.begin_word_projection_with_break(
-            node_emits_visible_output(node, default_name),
-            !builder.in_definition_field(),
-            node_starts_with_break_marker_blank(node),
-        );
+        // Compact semantic wrappers capture their whole operand stream in
+        // one Link, Code, or PortableDisplay node. Their entry is still no
+        // word event, so the only preparation is an ownership checkpoint:
+        // a `\z` glyph delayed from preceding source settles at the real
+        // first operand's own word entry, and the checkpoint then returns
+        // it to its original owner instead of letting the wrapper's
+        // annotation capture it.
+        let checkpoint = builder.begin_semantic_owner_checkpoint();
+        execute_inline_macro_handler(builder, node, next, default_name);
+        builder.finish_semantic_owner_checkpoint(checkpoint);
+        finish_inline_node_execution(builder, node, next, final_word_join_before);
+        execute_inline_macro_post(builder, node);
+        builder.restore_definition_geometry(geometry);
+        return;
     }
     if node.flags.delimiter_close {
         builder.tighten_next_boundary();
@@ -348,45 +351,6 @@ fn finish_inline_node_execution(
     }
 }
 
-/// Whether an executable inline node contains formatter glyph payload.
-///
-/// This preflight classifies payload; it does not prove that native macro
-/// pre calls `term_word()`. Control-only requests and targets remain
-/// transparent; generated prefixes such as `.Fl` and `.Nd` are visible even
-/// with no text child.
-pub(super) fn node_emits_visible_output(node: &Node, default_name: Option<&str>) -> bool {
-    if node.flags.no_print || node.kind == NodeKind::Comment {
-        return false;
-    }
-    if node.kind == NodeKind::Text {
-        return node.decoder_text().is_some_and(source_has_visible_glyph);
-    }
-    if node
-        .macro_name
-        .as_deref()
-        .is_some_and(|name| super::controls::operand_control(Some(name)).is_some())
-    {
-        return false;
-    }
-    match node.macro_name.as_deref() {
-        // ce/rj's first child is the line count, not term_word() payload.
-        // roff_term_pre_ce() executes pre_br() before any later child word.
-        Some("Tg" | "Ns" | "br" | "Pp" | "sp" | "ft" | "Sm" | "ce" | "rj") => false,
-        // An empty enclosure still emits its paired delimiters through the
-        // shared container stream.  Those glyphs are the next formatter word
-        // and must resolve a preceding `\\z` state before they are written.
-        name if is_enclosure_macro(name) => true,
-        Some("Fl" | "Nd") => true,
-        Some("Nm") if node.kind == NodeKind::Block && node.children.is_empty() => {
-            default_name.is_some()
-        }
-        _ => node
-            .children
-            .iter()
-            .any(|child| node_emits_visible_output(child, default_name)),
-    }
-}
-
 /// Semantic transforms capture an output suffix before their first operand.
 /// Plain font scopes and containers merely execute their child stream and
 /// have no such replacement owner to prepare at macro entry.
@@ -540,19 +504,6 @@ fn starts_with_break_marker_blank(events: &[RoffInlineEvent]) -> bool {
     false
 }
 
-/// Macro wrapper form of [`starts_with_break_marker_blank`]: a wrapper node
-/// whose first text child begins with a `\p` marker followed by a blank
-/// before its first graph. The wrapper's own word boundary must defer to
-/// the child's marker-blank retreat decision.
-fn node_starts_with_break_marker_blank(node: &Node) -> bool {
-    node.children.iter().any(|child| {
-        child.kind == NodeKind::Text
-            && child
-                .decoder_text()
-                .is_some_and(|text| starts_with_break_marker_blank(&decode(text)))
-    })
-}
-
 /// Append sibling events without throwing away pending formatter effects.
 pub(super) fn append_inline_nodes(
     builder: &mut InlineBuilder,
@@ -604,30 +555,37 @@ pub(super) fn append_include(builder: &mut InlineBuilder, node: &Node, default_n
         } else {
             Font::Emphasis
         });
-    builder.append_scope(
-        |builder| {
-            if node.flags.synopsis_pretty && node.flags.line_start {
-                builder.append_text("#include ");
-            }
-            builder.append_text("<");
-            builder.tighten_next_boundary();
-            append_inline_nodes(builder, children, default_name);
-            if node.flags.synopsis_pretty {
-                builder.font.select(Font::Strong);
-            }
-            builder.font.pop_scope(saved);
-            builder.tighten_next_boundary();
-            builder.append_text(">");
-        },
-        |nodes| {
-            let value = plain_text(&nodes);
-            if value.is_empty() {
-                Vec::new()
-            } else {
-                vec![Inline::Code { value }]
-            }
-        },
-    );
+    // The code-span compaction flattens nested nodes, so delayed glyphs
+    // from preceding source must leave this wrapper's output before it
+    // runs: their own owner, style, and link identity cannot survive the
+    // compaction, and the outer semantic checkpoint could only recover
+    // plain text from the flattened value.
+    let scope = builder.begin_output_checkpoint();
+    let entry_pending = builder.zero_advance.pending_visible_characters();
+    builder.zero_advance.begin_output_owner();
+    if node.flags.synopsis_pretty && node.flags.line_start {
+        builder.append_text("#include ");
+    }
+    builder.append_text("<");
+    builder.tighten_next_boundary();
+    append_inline_nodes(builder, children, default_name);
+    if node.flags.synopsis_pretty {
+        builder.font.select(Font::Strong);
+    }
+    builder.font.pop_scope(saved);
+    builder.tighten_next_boundary();
+    builder.append_text(">");
+    let emitted = builder.zero_advance.end_output_owner();
+    builder.wrap_output_since(scope, |nodes| {
+        let (owned, rest) =
+            InlineBuilder::split_delayed_glyph_prefix(nodes, entry_pending, emitted);
+        let value = plain_text(&rest);
+        let mut output = owned;
+        if !value.is_empty() {
+            output.push(Inline::Code { value });
+        }
+        output
+    });
 }
 
 /// Whether a semantic macro owns an inline enclosure body.
