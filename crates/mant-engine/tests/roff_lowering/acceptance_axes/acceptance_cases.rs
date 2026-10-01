@@ -159,7 +159,7 @@ fn column_tail_hard_row() -> AcceptanceCase {
         gold: GoldCard {
             accepted_units: Some(Axis::must(vec!["D", "RightWord"])),
             forbidden_units: Some(Axis::must(vec!["AFTER"])),
-            hard_rows: Some(Axis::after_repair(vec![HardRowExpect {
+            hard_rows: Some(Axis::must(vec![HardRowExpect {
                 left: "D",
                 right: "RightWord",
                 relation: HardRowRelation::DifferentRows,
@@ -169,7 +169,7 @@ fn column_tail_hard_row() -> AcceptanceCase {
                 before: "RightWord",
                 count: 0,
             }])),
-            row_count: Some(Axis::after_repair(3)),
+            row_count: Some(Axis::must(3)),
             identities: Some(Axis::must(vec![])),
             ..GoldCard::none()
         },

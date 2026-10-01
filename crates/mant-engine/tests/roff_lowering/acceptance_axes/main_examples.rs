@@ -255,15 +255,14 @@ fn six_examples_assert_registered_axes_across_projections() {
     }
 }
 
-/// The acceptance base has to catch the review regressions it was built
-/// for that are still open. This is the detection proof for the registered
-/// criteria; when a repair closes one of them, its expectation flips from
-/// `after_repair` to `must` in the same commit and its entry here moves to
-/// the green assertions above (the tag explicit vertical spacing and the
-/// hang final-word gap landed with the shared spacing/gap repair).
+/// The acceptance base caught the review regressions it was built for
+/// while they were open. Every registration has now flipped from
+/// `after_repair` to `must` with its repair (the column tail hard row,
+/// the tag explicit vertical spacing and the hang final-word gap); a new
+/// registered divergence must re-add its detection proof here.
 #[test]
 fn comparator_detects_the_registered_hard_row_blank_and_separator_regressions() {
-    let proofs: [(&str, AxisKind); 1] = [("column_tail_hard_row", AxisKind::HardRows)];
+    let proofs: [(&str, AxisKind); 0] = [];
     for (name, kind) in proofs {
         let case = case_by_name(name);
         let files = load_case(name);
