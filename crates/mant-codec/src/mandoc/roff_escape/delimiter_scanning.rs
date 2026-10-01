@@ -103,12 +103,12 @@ fn every_quoted_family_supports_escaped_delimiters() {
 fn rejected_delimiters_end_the_argument_and_keep_the_tail() {
     // Literal rejections: `\v(`, `\h `, `\D(` cannot open an argument.
     assert_eq!(visible_text(r"A\v(5)v B"), "A5)v B");
-    assert_eq!(visible_text(r"A\h 5n B"), "A5n B");
-    // `\D` only warns upstream and keeps scanning, so the rest is consumed
-    // by its (unclosed) argument.
-    assert_eq!(visible_text(r"A\D(l 1i)B"), "A");
-    // Escaped rejections: `\h\v` and `\N\v` are non-printing delimiter
-    // names for families that reject them.
+    // An UNDEF delimiter spelling takes the literal rejection too: the
+    // trigger character plays the delimiter, so `\v\1` is rejected exactly
+    // like `\v1` would be.
+    assert_eq!(visible_text(r"A\v\11n1B"), "A1n1B");
+    assert_eq!(visible_text(r"A\h\11n1B"), "A1n1B");
+    assert_eq!(visible_text(r"A\v\.X.B"), "AX.B");
     assert_eq!(visible_text(r"A\h\v5n\vB"), "AnB");
     // `\o` never rejects: `(` delimits an overstrike whose payload keeps
     // scanning to the end of input.
@@ -131,7 +131,16 @@ fn unclosed_arguments_release_their_unconsumed_delimiter() {
     // scanned unit stays consumed (CVS `iend`), so nothing leaks back.
     assert_eq!(visible_text(r"A\C'aqB"), "A");
     assert_eq!(visible_text(r"A\h'5nB"), "A");
-    assert_eq!(visible_text(r"A\Z'XB"), "A");
+    // A lone trailing backslash is consumed with the argument
+    // (`iend = send`), never re-decoded as literal text.
+    assert_eq!(visible_text(r"A\o\(aqXY\"), "AY");
+    assert_eq!(visible_text(r"A\o'XY\"), "AY");
+    // A truncated `(`/`[` opening renders nothing (its residual is an
+    // invisible incomplete name upstream), and a truncated closer leaves
+    // its trigger as text.
+    assert_eq!(visible_text(r"A\h\("), "A");
+    assert_eq!(visible_text(r"A\h\[x"), "A");
+    assert_eq!(visible_text(r"A\o\(aqXY\("), "AY(");
 }
 
 /// Empty closed arguments and missing arguments render nothing.

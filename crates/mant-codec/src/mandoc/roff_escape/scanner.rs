@@ -56,6 +56,23 @@ const REJECTED_DELIMITER_LITERALS: &[char] = &[
 /// argument only for these families; everyone else drops it.
 const KEEP_UNCLOSED_PAYLOAD_OUTERS: &[char] = &['A', 'o', 'w'];
 
+/// Whether a `(`/`[`-triggered escape ran past its trigger without ever
+/// completing its name: upstream's `iend` then stops at the trigger
+/// (roff_escape.c:182-184 leave the name unconsumed at end of input).
+fn truncated_bracket_escape(
+    characters: &[char],
+    trigger_index: usize,
+    trigger: char,
+    end: usize,
+) -> bool {
+    match trigger {
+        // `\(XY` needs two name characters past the trigger.
+        '(' => end < trigger_index + 3,
+        // `\[name]` is complete only when its bracket closed.
+        '[' => end == characters.len(),
+        _ => false,
+    }
+}
 /// Position and trigger of the escape whose backslash sits at `start`,
 /// skipping `\E` copies.  `None` when the backslash is the final character.
 fn escape_trigger_at(characters: &[char], start: usize) -> Option<(usize, char)> {
@@ -471,9 +488,18 @@ impl EscapeScan<'_> {
         let named = NAMED_TRIGGERS.contains(&trigger) || EXPAND_TRIGGERS.contains(&trigger);
         if !named {
             // ESCAPE_UNDEF: the backslash is dropped and the trigger
-            // character itself becomes the literal delimiter.  As with a
-            // literal delimiter, nothing is proven consumed past the
-            // backslash until payload follows.
+            // character itself becomes the literal delimiter — and, like a
+            // literal delimiter, is still subject to the ESCAPE_DELIM
+            // rejection of roff_escape.c:303-311 (upstream's `iarg++`
+            // lands on buf[snam] before that check).  `index` already
+            // sits just past the two-byte UNDEF spelling.
+            if REJECT_LITERAL_DELIMITER_OUTERS.contains(&outer)
+                && REJECTED_DELIMITER_LITERALS.contains(&trigger)
+            {
+                return Self::reported(report, QuotedOutcome::Rejected);
+            }
+            // As with a literal delimiter, nothing is proven consumed past
+            // the backslash until payload follows.
             return self.begin_scan(
                 outer,
                 Term::Literal(trigger),
@@ -491,12 +517,21 @@ impl EscapeScan<'_> {
         // The payload begins past the complete opening escape; only a nested
         // escape with the same trigger can close it.  The opening escape is
         // proven consumed only once payload follows: CVS keeps `iend` at the
-        // delimiter's backslash until the scan loop advances it.
+        // delimiter's backslash until the scan loop advances it.  A
+        // truncated `(`/`[` opening never proved its name — its residual
+        // renders nothing upstream — so conservatively consume the remainder
+        // instead of re-decoding a partial escape.
+        let consumed_end =
+            if truncated_bracket_escape(self.characters, trigger_index, trigger, self.index) {
+                self.characters.len()
+            } else {
+                delim_index
+            };
         self.begin_scan(
             outer,
             Term::Escaped(trigger),
             self.index,
-            delim_index,
+            consumed_end,
             report,
         )
     }
@@ -532,8 +567,9 @@ impl EscapeScan<'_> {
             if character == '\\' {
                 if escape_trigger_at(self.characters, self.index).is_none() {
                     // A trailing backslash is ESCAPE_UNDEF and consumes to
-                    // the end of input; roff_escape.c:363 still lets `\N`
-                    // close on it, at the end of input.
+                    // the end of input (`iend = send`); roff_escape.c:363
+                    // still lets `\N` close on it, at the end of input.
+                    consumed_end = self.characters.len();
                     let backslash = self.index;
                     self.index = self.characters.len();
                     if matches!(term, Term::Escaped(_)) && outer == 'N' {
@@ -575,14 +611,19 @@ impl EscapeScan<'_> {
         report: bool,
         nested_start: usize,
     ) -> ScanStep {
-        if let (Term::Escaped(delimiter), Some((_, trigger))) =
+        if let (Term::Escaped(delimiter), Some((trigger_index, trigger))) =
             (term, escape_trigger_at(self.characters, nested_start))
         {
             // `buf[snam] == term || buf[inam] == 'N'`: an escaped-delimiter
             // argument ends at a nested escape with the same trigger, and a
-            // numbered argument at any complete nested escape.
+            // numbered argument at any complete nested escape.  A truncated
+            // `(`/`[` escape only proves consumption through its trigger
+            // (CVS `iend = send` stops there), which then stays as text.
             if trigger == delimiter || outer == 'N' {
                 let payload = payload_start..nested_start;
+                if truncated_bracket_escape(self.characters, trigger_index, trigger, self.index) {
+                    self.index = trigger_index;
+                }
                 return Self::reported(report, QuotedOutcome::Closed { payload });
             }
         }

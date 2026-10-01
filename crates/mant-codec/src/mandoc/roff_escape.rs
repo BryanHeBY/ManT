@@ -857,8 +857,14 @@ impl Decoder {
 
     fn take_counted(&mut self, count: usize) -> String {
         // CVS maxl counting consumes nested escapes whole without counting
-        // them against the expected length.
-        let end = scan_counted_end(&self.characters, self.index, count);
+        // them against the expected length.  Backslash-free operands are
+        // the common case and stay on the pure index path.
+        let plain_end = (self.index + count).min(self.characters.len());
+        let end = if self.characters[self.index..plain_end].contains(&'\\') {
+            scan_counted_end(&self.characters, self.index, count)
+        } else {
+            plain_end
+        };
         let value = self.characters[self.index..end].iter().collect();
         self.index = end;
         value
