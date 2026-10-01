@@ -338,9 +338,12 @@ impl LiteralFlow {
         // The typed receipts retain their original order across this owner.
         // Empty TEXT content must not enter the bounded spacing-request plan.
         retire_completed_tail(&mut previous.nodes, origins.len());
+        // An already closed formatter row is joined to the next block once.
+        // This decision belongs to the producer's actual row receipt:
+        // public literal LineBreak remains content for every consumer.
+        // Empty TEXT is an occupied-row witness and prevents consuming a
+        // distinct completed literal row (term.c:475-497).
         if !previous.row_occupied
-            && (!origins.is_empty()
-                || !crate::mandoc::inline::trailing_device_row_end_receipt(&previous.nodes))
             && crate::mandoc::inline::consume_one_row_ending(&mut previous.nodes)
             && origins.is_empty()
             && previous.trailing_vertical_row == TrailingRow::AssertedVertical

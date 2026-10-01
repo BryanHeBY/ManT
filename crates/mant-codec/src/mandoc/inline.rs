@@ -19,7 +19,7 @@ pub(in crate::mandoc) use flow::{
     InlineExecutionState, NoFillInlineState, PreservedInlineState, consume_one_row_ending,
     ends_with_executed_line_break, lower_no_fill_fragment_with_formatter, native_row_origin,
     prepare_inline_output, retain_inline_identities, strip_native_projection_markers,
-    trailing_completed_row_origins, trailing_device_row_end_receipt,
+    trailing_completed_row_origins,
 };
 pub(super) use flow::{FilledBoundary, FontScope, FontState, InlineBuilder};
 mod source;

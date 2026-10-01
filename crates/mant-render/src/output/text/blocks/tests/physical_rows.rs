@@ -159,6 +159,44 @@ fn literal_whitespace_is_content_even_at_indented_and_document_edges() {
 }
 
 #[test]
+fn literal_typed_row_ends_match_embedded_newlines_across_block_joins() {
+    // The exact pristine Bd -literal control X / empty TEXT / Ed / Y
+    // preserves X\n\nY: term_vspace() asserts the empty row, while
+    // termp_bd_post() only closes it (term.c:475-497, mdoc_term.c:1474).
+    // In source-neutral IR the producer has already removed native closes;
+    // a typed literal LineBreak is content, including inside style wrappers.
+    let renderer = super::super::super::plain_renderer();
+    for nested in [false, true] {
+        for ending in [
+            Inline::Text { value: "\n".into() },
+            Inline::line_break(),
+            Inline::Strong {
+                children: vec![Inline::Emphasis {
+                    children: vec![Inline::line_break()],
+                }],
+            },
+        ] {
+            let literal = Block::Preformatted {
+                children: vec![Inline::Text { value: "X".into() }, ending],
+                language: None,
+                layout: LayoutHint::default(),
+                source: None,
+            };
+            let first = if nested {
+                plain_list(vec![literal], 0)
+            } else {
+                literal
+            };
+            assert_eq!(
+                renderer.render_blocks(&[first, paragraph("Y", 0)], 0),
+                "X\n\nY",
+                "nested={nested}"
+            );
+        }
+    }
+}
+
+#[test]
 fn paragraph_preserves_a_formatter_generated_leading_line_break() {
     let renderer = super::super::super::plain_renderer();
     let block = Block::Paragraph {

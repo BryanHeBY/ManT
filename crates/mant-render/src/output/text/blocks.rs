@@ -187,7 +187,7 @@ impl BlockRenderer<'_> {
             } => return self.paragraph_flow(children, layout, base_indent, tail),
             Block::Preformatted {
                 children, layout, ..
-            } => return self.preformatted_flow(children, layout, base_indent, tail),
+            } => return self.preformatted_flow(children, layout, base_indent),
             Block::List {
                 kind,
                 items,
@@ -251,7 +251,6 @@ impl BlockRenderer<'_> {
         children: &[mant_ir::Inline],
         layout: &mant_ir::LayoutHint,
         base_indent: i32,
-        tail: ParagraphTail,
     ) -> Flow {
         // Literal newlines and whitespace are content, not layout requests.
         // They survive even when the entire block contains only blanks.
@@ -259,25 +258,12 @@ impl BlockRenderer<'_> {
             return Flow::default();
         }
         let origin = compose_origin(base_indent, layout.indent_columns);
-        let mut rows = self.inline_rows(children, TextRole::Body);
-        if tail == ParagraphTail::BlockBoundary
-            && terminal_structural_break(children) == Some(true)
-            && rows.len() > 1
-            && rows.last().is_some_and(|(row, _)| row.is_empty())
-        {
-            // One typed row close belongs to this block's join, not a new
-            // literal empty row. A following empty TEXT is a distinct row
-            // witness, and authored newlines inside TEXT remain content.
-            let (closed, _) = rows.pop().expect("structural row delimiter");
-            rows.last_mut()
-                .expect("closed physical row")
-                .0
-                .append(&closed);
-        }
         Flow::literal(LayoutText::join(
-            rows.into_iter().map(|(row, indent)| {
-                row.indented(padding(compose_origin(origin, i32::from(indent))))
-            }),
+            self.inline_rows(children, TextRole::Body)
+                .into_iter()
+                .map(|(row, indent)| {
+                    row.indented(padding(compose_origin(origin, i32::from(indent))))
+                }),
             "\n",
         ))
     }
@@ -326,18 +312,4 @@ impl BlockRenderer<'_> {
             Flow::text(value.indented(padding(origin)))
         }
     }
-}
-
-/// Empty TEXT is a literal row witness; an empty wrapper or navigation
-/// identity is not. Semantic wrapping cannot hide the last typed row close.
-fn terminal_structural_break(children: &[Inline]) -> Option<bool> {
-    children.iter().rev().find_map(|child| match child {
-        Inline::LineBreak { .. } => Some(true),
-        Inline::Strong { children }
-        | Inline::Emphasis { children }
-        | Inline::PortableDisplay { children, .. }
-        | Inline::Link { children, .. } => terminal_structural_break(children),
-        Inline::Anchor { .. } => None,
-        _ => Some(false),
-    })
 }

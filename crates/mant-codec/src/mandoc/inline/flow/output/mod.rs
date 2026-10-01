@@ -40,7 +40,6 @@ pub(in crate::mandoc) use projection::ends_with_executed_line_break;
 pub(in crate::mandoc) use projection::retain_inline_identities;
 pub(in crate::mandoc::inline) use projection::trailing_ascii_spaces;
 pub(in crate::mandoc) use projection::trailing_completed_row_origins;
-pub(in crate::mandoc) use projection::trailing_device_row_end_receipt;
 pub(in crate::mandoc) use projection::trim_trailing_breakable_spaces;
 use projection::{has_non_whitespace_glyph, line_break_count};
 pub(in crate::mandoc) use projection::{

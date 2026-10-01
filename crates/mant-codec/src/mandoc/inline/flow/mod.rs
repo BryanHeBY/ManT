@@ -25,7 +25,7 @@ pub(in crate::mandoc) use output::trim_trailing_breakable_spaces;
 pub(in crate::mandoc) use output::{
     CompletedRowOrigin, consume_one_row_ending, ends_with_executed_line_break, native_row_origin,
     prepare_inline_output, retain_inline_identities, strip_native_projection_markers,
-    trailing_completed_row_origins, trailing_device_row_end_receipt,
+    trailing_completed_row_origins,
 };
 
 /// A stable source-word range plus the device cells its IR owner already
