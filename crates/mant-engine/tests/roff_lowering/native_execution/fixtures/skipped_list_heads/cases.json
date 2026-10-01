@@ -1,0 +1,3858 @@
+[
+  {
+    "name": "item-filled-break-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -item -width 4n\n.It Xo\n.No \"\\p HEAD\"\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -item -width 4n\n.It Xo\n.No \"\"\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "item",
+    "payload": "break",
+    "control": "none",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "BodyWord TailWord"
+    ],
+    "native_rows": [
+      "     BodyWord TailWord"
+    ],
+    "baseline_rows": [
+      "BodyWord TailWord"
+    ],
+    "baseline_native_rows": [
+      "     BodyWord TailWord"
+    ]
+  },
+  {
+    "name": "item-filled-break-break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -item -width 4n\n.It Xo\n.No \"\\p HEAD\"\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -item -width 4n\n.It Xo\n.No \"\"\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "item",
+    "payload": "break",
+    "control": "break",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "BodyWord TailWord"
+    ],
+    "native_rows": [
+      "     BodyWord TailWord"
+    ],
+    "baseline_rows": [
+      "BodyWord TailWord"
+    ],
+    "baseline_native_rows": [
+      "     BodyWord TailWord"
+    ]
+  },
+  {
+    "name": "item-filled-break-space",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -item -width 4n\n.It Xo\n.No \"\\p HEAD\"\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -item -width 4n\n.It Xo\n.No \"\"\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "item",
+    "payload": "break",
+    "control": "space",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "BodyWord TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     BodyWord TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "BodyWord TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     BodyWord TailWord"
+    ]
+  },
+  {
+    "name": "item-filled-break-literal",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -item -width 4n\n.It Xo\n.No \"\\p HEAD\"\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -item -width 4n\n.It Xo\n.No \"\"\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "item",
+    "payload": "break",
+    "control": "literal",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "BodyWord",
+      "TailWord"
+    ],
+    "native_rows": [
+      "     BodyWord",
+      "     TailWord"
+    ],
+    "baseline_rows": [
+      "BodyWord",
+      "TailWord"
+    ],
+    "baseline_native_rows": [
+      "     BodyWord",
+      "     TailWord"
+    ]
+  },
+  {
+    "name": "item-filled-zero-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -item -width 4n\n.It Xo\n.No HEAD\\zX\\c\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -item -width 4n\n.It Xo\n.No \"\"\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "item",
+    "payload": "zero",
+    "control": "none",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "BodyWord TailWord"
+    ],
+    "native_rows": [
+      "     BodyWord TailWord"
+    ],
+    "baseline_rows": [
+      "BodyWord TailWord"
+    ],
+    "baseline_native_rows": [
+      "     BodyWord TailWord"
+    ]
+  },
+  {
+    "name": "item-filled-zero-break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -item -width 4n\n.It Xo\n.No HEAD\\zX\\c\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -item -width 4n\n.It Xo\n.No \"\"\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "item",
+    "payload": "zero",
+    "control": "break",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "BodyWord TailWord"
+    ],
+    "native_rows": [
+      "     BodyWord TailWord"
+    ],
+    "baseline_rows": [
+      "BodyWord TailWord"
+    ],
+    "baseline_native_rows": [
+      "     BodyWord TailWord"
+    ]
+  },
+  {
+    "name": "item-filled-zero-space",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -item -width 4n\n.It Xo\n.No HEAD\\zX\\c\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -item -width 4n\n.It Xo\n.No \"\"\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "item",
+    "payload": "zero",
+    "control": "space",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "BodyWord TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     BodyWord TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "BodyWord TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     BodyWord TailWord"
+    ]
+  },
+  {
+    "name": "item-filled-zero-literal",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -item -width 4n\n.It Xo\n.No HEAD\\zX\\c\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -item -width 4n\n.It Xo\n.No \"\"\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "item",
+    "payload": "zero",
+    "control": "literal",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "BodyWord",
+      "TailWord"
+    ],
+    "native_rows": [
+      "     BodyWord",
+      "     TailWord"
+    ],
+    "baseline_rows": [
+      "BodyWord",
+      "TailWord"
+    ],
+    "baseline_native_rows": [
+      "     BodyWord",
+      "     TailWord"
+    ]
+  },
+  {
+    "name": "item-filled-font-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -item -width 4n\n.It Xo\n.ft I\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -item -width 4n\n.It Xo\n.No \"\"\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "item",
+    "payload": "font",
+    "control": "none",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "BodyWord TailWord"
+    ],
+    "native_rows": [
+      "     BodyWord TailWord"
+    ],
+    "baseline_rows": [
+      "BodyWord TailWord"
+    ],
+    "baseline_native_rows": [
+      "     BodyWord TailWord"
+    ]
+  },
+  {
+    "name": "item-filled-font-break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -item -width 4n\n.It Xo\n.ft I\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -item -width 4n\n.It Xo\n.No \"\"\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "item",
+    "payload": "font",
+    "control": "break",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "BodyWord TailWord"
+    ],
+    "native_rows": [
+      "     BodyWord TailWord"
+    ],
+    "baseline_rows": [
+      "BodyWord TailWord"
+    ],
+    "baseline_native_rows": [
+      "     BodyWord TailWord"
+    ]
+  },
+  {
+    "name": "item-filled-font-space",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -item -width 4n\n.It Xo\n.ft I\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -item -width 4n\n.It Xo\n.No \"\"\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "item",
+    "payload": "font",
+    "control": "space",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "BodyWord TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     BodyWord TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "BodyWord TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     BodyWord TailWord"
+    ]
+  },
+  {
+    "name": "item-filled-font-literal",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -item -width 4n\n.It Xo\n.ft I\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -item -width 4n\n.It Xo\n.No \"\"\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "item",
+    "payload": "font",
+    "control": "literal",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "BodyWord",
+      "TailWord"
+    ],
+    "native_rows": [
+      "     BodyWord",
+      "     TailWord"
+    ],
+    "baseline_rows": [
+      "BodyWord",
+      "TailWord"
+    ],
+    "baseline_native_rows": [
+      "     BodyWord",
+      "     TailWord"
+    ]
+  },
+  {
+    "name": "item-filled-link-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -item -width 4n\n.It Xo\n.Lk https://head.invalid HEAD\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -item -width 4n\n.It Xo\n.No \"\"\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "item",
+    "payload": "link",
+    "control": "none",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "BodyWord TailWord"
+    ],
+    "native_rows": [
+      "     BodyWord TailWord"
+    ],
+    "baseline_rows": [
+      "BodyWord TailWord"
+    ],
+    "baseline_native_rows": [
+      "     BodyWord TailWord"
+    ]
+  },
+  {
+    "name": "item-filled-link-break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -item -width 4n\n.It Xo\n.Lk https://head.invalid HEAD\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -item -width 4n\n.It Xo\n.No \"\"\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "item",
+    "payload": "link",
+    "control": "break",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "BodyWord TailWord"
+    ],
+    "native_rows": [
+      "     BodyWord TailWord"
+    ],
+    "baseline_rows": [
+      "BodyWord TailWord"
+    ],
+    "baseline_native_rows": [
+      "     BodyWord TailWord"
+    ]
+  },
+  {
+    "name": "item-filled-link-space",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -item -width 4n\n.It Xo\n.Lk https://head.invalid HEAD\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -item -width 4n\n.It Xo\n.No \"\"\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "item",
+    "payload": "link",
+    "control": "space",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "BodyWord TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     BodyWord TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "BodyWord TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     BodyWord TailWord"
+    ]
+  },
+  {
+    "name": "item-filled-link-literal",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -item -width 4n\n.It Xo\n.Lk https://head.invalid HEAD\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -item -width 4n\n.It Xo\n.No \"\"\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "item",
+    "payload": "link",
+    "control": "literal",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "BodyWord",
+      "TailWord"
+    ],
+    "native_rows": [
+      "     BodyWord",
+      "     TailWord"
+    ],
+    "baseline_rows": [
+      "BodyWord",
+      "TailWord"
+    ],
+    "baseline_native_rows": [
+      "     BodyWord",
+      "     TailWord"
+    ]
+  },
+  {
+    "name": "item-literal-break-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -item -width 4n\n.It Xo\n.No \"\\p HEAD\"\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -item -width 4n\n.It Xo\n.No \"\"\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "item",
+    "payload": "break",
+    "control": "none",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "BodyWord",
+      "TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     BodyWord",
+      "     TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "BodyWord",
+      "TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     BodyWord",
+      "     TailWord"
+    ]
+  },
+  {
+    "name": "item-literal-break-break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -item -width 4n\n.It Xo\n.No \"\\p HEAD\"\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -item -width 4n\n.It Xo\n.No \"\"\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "item",
+    "payload": "break",
+    "control": "break",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "BodyWord",
+      "TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     BodyWord",
+      "     TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "BodyWord",
+      "TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     BodyWord",
+      "     TailWord"
+    ]
+  },
+  {
+    "name": "item-literal-break-space",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -item -width 4n\n.It Xo\n.No \"\\p HEAD\"\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -item -width 4n\n.It Xo\n.No \"\"\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "item",
+    "payload": "break",
+    "control": "space",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "",
+      "BodyWord",
+      "TailWord"
+    ],
+    "native_rows": [
+      "",
+      "",
+      "     BodyWord",
+      "     TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "",
+      "BodyWord",
+      "TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "",
+      "     BodyWord",
+      "     TailWord"
+    ]
+  },
+  {
+    "name": "item-literal-break-literal",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -item -width 4n\n.It Xo\n.No \"\\p HEAD\"\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -item -width 4n\n.It Xo\n.No \"\"\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "item",
+    "payload": "break",
+    "control": "literal",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "BodyWord",
+      "TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     BodyWord",
+      "     TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "BodyWord",
+      "TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     BodyWord",
+      "     TailWord"
+    ]
+  },
+  {
+    "name": "item-literal-zero-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -item -width 4n\n.It Xo\n.No HEAD\\zX\\c\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -item -width 4n\n.It Xo\n.No \"\"\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "item",
+    "payload": "zero",
+    "control": "none",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "BodyWord",
+      "TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     BodyWord",
+      "     TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "BodyWord",
+      "TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     BodyWord",
+      "     TailWord"
+    ]
+  },
+  {
+    "name": "item-literal-zero-break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -item -width 4n\n.It Xo\n.No HEAD\\zX\\c\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -item -width 4n\n.It Xo\n.No \"\"\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "item",
+    "payload": "zero",
+    "control": "break",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "BodyWord",
+      "TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     BodyWord",
+      "     TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "BodyWord",
+      "TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     BodyWord",
+      "     TailWord"
+    ]
+  },
+  {
+    "name": "item-literal-zero-space",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -item -width 4n\n.It Xo\n.No HEAD\\zX\\c\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -item -width 4n\n.It Xo\n.No \"\"\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "item",
+    "payload": "zero",
+    "control": "space",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "",
+      "BodyWord",
+      "TailWord"
+    ],
+    "native_rows": [
+      "",
+      "",
+      "     BodyWord",
+      "     TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "",
+      "BodyWord",
+      "TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "",
+      "     BodyWord",
+      "     TailWord"
+    ]
+  },
+  {
+    "name": "item-literal-zero-literal",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -item -width 4n\n.It Xo\n.No HEAD\\zX\\c\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -item -width 4n\n.It Xo\n.No \"\"\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "item",
+    "payload": "zero",
+    "control": "literal",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "BodyWord",
+      "TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     BodyWord",
+      "     TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "BodyWord",
+      "TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     BodyWord",
+      "     TailWord"
+    ]
+  },
+  {
+    "name": "item-literal-font-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -item -width 4n\n.It Xo\n.ft I\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -item -width 4n\n.It Xo\n.No \"\"\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "item",
+    "payload": "font",
+    "control": "none",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "BodyWord",
+      "TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     BodyWord",
+      "     TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "BodyWord",
+      "TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     BodyWord",
+      "     TailWord"
+    ]
+  },
+  {
+    "name": "item-literal-font-break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -item -width 4n\n.It Xo\n.ft I\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -item -width 4n\n.It Xo\n.No \"\"\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "item",
+    "payload": "font",
+    "control": "break",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "BodyWord",
+      "TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     BodyWord",
+      "     TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "BodyWord",
+      "TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     BodyWord",
+      "     TailWord"
+    ]
+  },
+  {
+    "name": "item-literal-font-space",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -item -width 4n\n.It Xo\n.ft I\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -item -width 4n\n.It Xo\n.No \"\"\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "item",
+    "payload": "font",
+    "control": "space",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "",
+      "BodyWord",
+      "TailWord"
+    ],
+    "native_rows": [
+      "",
+      "",
+      "     BodyWord",
+      "     TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "",
+      "BodyWord",
+      "TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "",
+      "     BodyWord",
+      "     TailWord"
+    ]
+  },
+  {
+    "name": "item-literal-font-literal",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -item -width 4n\n.It Xo\n.ft I\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -item -width 4n\n.It Xo\n.No \"\"\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "item",
+    "payload": "font",
+    "control": "literal",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "BodyWord",
+      "TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     BodyWord",
+      "     TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "BodyWord",
+      "TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     BodyWord",
+      "     TailWord"
+    ]
+  },
+  {
+    "name": "item-literal-link-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -item -width 4n\n.It Xo\n.Lk https://head.invalid HEAD\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -item -width 4n\n.It Xo\n.No \"\"\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "item",
+    "payload": "link",
+    "control": "none",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "BodyWord",
+      "TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     BodyWord",
+      "     TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "BodyWord",
+      "TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     BodyWord",
+      "     TailWord"
+    ]
+  },
+  {
+    "name": "item-literal-link-break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -item -width 4n\n.It Xo\n.Lk https://head.invalid HEAD\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -item -width 4n\n.It Xo\n.No \"\"\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "item",
+    "payload": "link",
+    "control": "break",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "BodyWord",
+      "TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     BodyWord",
+      "     TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "BodyWord",
+      "TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     BodyWord",
+      "     TailWord"
+    ]
+  },
+  {
+    "name": "item-literal-link-space",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -item -width 4n\n.It Xo\n.Lk https://head.invalid HEAD\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -item -width 4n\n.It Xo\n.No \"\"\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "item",
+    "payload": "link",
+    "control": "space",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "",
+      "BodyWord",
+      "TailWord"
+    ],
+    "native_rows": [
+      "",
+      "",
+      "     BodyWord",
+      "     TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "",
+      "BodyWord",
+      "TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "",
+      "     BodyWord",
+      "     TailWord"
+    ]
+  },
+  {
+    "name": "item-literal-link-literal",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -item -width 4n\n.It Xo\n.Lk https://head.invalid HEAD\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -item -width 4n\n.It Xo\n.No \"\"\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "item",
+    "payload": "link",
+    "control": "literal",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "BodyWord",
+      "TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     BodyWord",
+      "     TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "BodyWord",
+      "TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     BodyWord",
+      "     TailWord"
+    ]
+  },
+  {
+    "name": "bullet-filled-break-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -bullet -width 4n\n.It Xo\n.No \"\\p HEAD\"\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -bullet -width 4n\n.It Xo\n.No \"\"\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "bullet",
+    "payload": "break",
+    "control": "none",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "•     BodyWord TailWord"
+    ],
+    "native_rows": [
+      "     •     BodyWord TailWord"
+    ],
+    "baseline_rows": [
+      "•     BodyWord TailWord"
+    ],
+    "baseline_native_rows": [
+      "     •     BodyWord TailWord"
+    ]
+  },
+  {
+    "name": "bullet-filled-break-break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -bullet -width 4n\n.It Xo\n.No \"\\p HEAD\"\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -bullet -width 4n\n.It Xo\n.No \"\"\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "bullet",
+    "payload": "break",
+    "control": "break",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "•",
+      "      BodyWord TailWord"
+    ],
+    "native_rows": [
+      "     •",
+      "           BodyWord TailWord"
+    ],
+    "baseline_rows": [
+      "•",
+      "      BodyWord TailWord"
+    ],
+    "baseline_native_rows": [
+      "     •",
+      "           BodyWord TailWord"
+    ]
+  },
+  {
+    "name": "bullet-filled-break-space",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -bullet -width 4n\n.It Xo\n.No \"\\p HEAD\"\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -bullet -width 4n\n.It Xo\n.No \"\"\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "bullet",
+    "payload": "break",
+    "control": "space",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "•",
+      "",
+      "      BodyWord TailWord"
+    ],
+    "native_rows": [
+      "     •",
+      "",
+      "           BodyWord TailWord"
+    ],
+    "baseline_rows": [
+      "•",
+      "",
+      "      BodyWord TailWord"
+    ],
+    "baseline_native_rows": [
+      "     •",
+      "",
+      "           BodyWord TailWord"
+    ]
+  },
+  {
+    "name": "bullet-filled-break-literal",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -bullet -width 4n\n.It Xo\n.No \"\\p HEAD\"\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -bullet -width 4n\n.It Xo\n.No \"\"\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "bullet",
+    "payload": "break",
+    "control": "literal",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "•",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "     •",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "•",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "     •",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "bullet-filled-zero-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -bullet -width 4n\n.It Xo\n.No HEAD\\zX\\c\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -bullet -width 4n\n.It Xo\n.No \"\"\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "bullet",
+    "payload": "zero",
+    "control": "none",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "•     BodyWord TailWord"
+    ],
+    "native_rows": [
+      "     •     BodyWord TailWord"
+    ],
+    "baseline_rows": [
+      "•     BodyWord TailWord"
+    ],
+    "baseline_native_rows": [
+      "     •     BodyWord TailWord"
+    ]
+  },
+  {
+    "name": "bullet-filled-zero-break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -bullet -width 4n\n.It Xo\n.No HEAD\\zX\\c\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -bullet -width 4n\n.It Xo\n.No \"\"\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "bullet",
+    "payload": "zero",
+    "control": "break",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "•",
+      "      BodyWord TailWord"
+    ],
+    "native_rows": [
+      "     •",
+      "           BodyWord TailWord"
+    ],
+    "baseline_rows": [
+      "•",
+      "      BodyWord TailWord"
+    ],
+    "baseline_native_rows": [
+      "     •",
+      "           BodyWord TailWord"
+    ]
+  },
+  {
+    "name": "bullet-filled-zero-space",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -bullet -width 4n\n.It Xo\n.No HEAD\\zX\\c\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -bullet -width 4n\n.It Xo\n.No \"\"\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "bullet",
+    "payload": "zero",
+    "control": "space",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "•",
+      "",
+      "      BodyWord TailWord"
+    ],
+    "native_rows": [
+      "     •",
+      "",
+      "           BodyWord TailWord"
+    ],
+    "baseline_rows": [
+      "•",
+      "",
+      "      BodyWord TailWord"
+    ],
+    "baseline_native_rows": [
+      "     •",
+      "",
+      "           BodyWord TailWord"
+    ]
+  },
+  {
+    "name": "bullet-filled-zero-literal",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -bullet -width 4n\n.It Xo\n.No HEAD\\zX\\c\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -bullet -width 4n\n.It Xo\n.No \"\"\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "bullet",
+    "payload": "zero",
+    "control": "literal",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "•",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "     •",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "•",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "     •",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "bullet-filled-font-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -bullet -width 4n\n.It Xo\n.ft I\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -bullet -width 4n\n.It Xo\n.No \"\"\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "bullet",
+    "payload": "font",
+    "control": "none",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "•     BodyWord TailWord"
+    ],
+    "native_rows": [
+      "     •     BodyWord TailWord"
+    ],
+    "baseline_rows": [
+      "•     BodyWord TailWord"
+    ],
+    "baseline_native_rows": [
+      "     •     BodyWord TailWord"
+    ]
+  },
+  {
+    "name": "bullet-filled-font-break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -bullet -width 4n\n.It Xo\n.ft I\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -bullet -width 4n\n.It Xo\n.No \"\"\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "bullet",
+    "payload": "font",
+    "control": "break",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "•",
+      "      BodyWord TailWord"
+    ],
+    "native_rows": [
+      "     •",
+      "           BodyWord TailWord"
+    ],
+    "baseline_rows": [
+      "•",
+      "      BodyWord TailWord"
+    ],
+    "baseline_native_rows": [
+      "     •",
+      "           BodyWord TailWord"
+    ]
+  },
+  {
+    "name": "bullet-filled-font-space",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -bullet -width 4n\n.It Xo\n.ft I\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -bullet -width 4n\n.It Xo\n.No \"\"\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "bullet",
+    "payload": "font",
+    "control": "space",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "•",
+      "",
+      "      BodyWord TailWord"
+    ],
+    "native_rows": [
+      "     •",
+      "",
+      "           BodyWord TailWord"
+    ],
+    "baseline_rows": [
+      "•",
+      "",
+      "      BodyWord TailWord"
+    ],
+    "baseline_native_rows": [
+      "     •",
+      "",
+      "           BodyWord TailWord"
+    ]
+  },
+  {
+    "name": "bullet-filled-font-literal",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -bullet -width 4n\n.It Xo\n.ft I\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -bullet -width 4n\n.It Xo\n.No \"\"\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "bullet",
+    "payload": "font",
+    "control": "literal",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "•",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "     •",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "•",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "     •",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "bullet-filled-link-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -bullet -width 4n\n.It Xo\n.Lk https://head.invalid HEAD\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -bullet -width 4n\n.It Xo\n.No \"\"\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "bullet",
+    "payload": "link",
+    "control": "none",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "•     BodyWord TailWord"
+    ],
+    "native_rows": [
+      "     •     BodyWord TailWord"
+    ],
+    "baseline_rows": [
+      "•     BodyWord TailWord"
+    ],
+    "baseline_native_rows": [
+      "     •     BodyWord TailWord"
+    ]
+  },
+  {
+    "name": "bullet-filled-link-break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -bullet -width 4n\n.It Xo\n.Lk https://head.invalid HEAD\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -bullet -width 4n\n.It Xo\n.No \"\"\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "bullet",
+    "payload": "link",
+    "control": "break",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "•",
+      "      BodyWord TailWord"
+    ],
+    "native_rows": [
+      "     •",
+      "           BodyWord TailWord"
+    ],
+    "baseline_rows": [
+      "•",
+      "      BodyWord TailWord"
+    ],
+    "baseline_native_rows": [
+      "     •",
+      "           BodyWord TailWord"
+    ]
+  },
+  {
+    "name": "bullet-filled-link-space",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -bullet -width 4n\n.It Xo\n.Lk https://head.invalid HEAD\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -bullet -width 4n\n.It Xo\n.No \"\"\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "bullet",
+    "payload": "link",
+    "control": "space",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "•",
+      "",
+      "      BodyWord TailWord"
+    ],
+    "native_rows": [
+      "     •",
+      "",
+      "           BodyWord TailWord"
+    ],
+    "baseline_rows": [
+      "•",
+      "",
+      "      BodyWord TailWord"
+    ],
+    "baseline_native_rows": [
+      "     •",
+      "",
+      "           BodyWord TailWord"
+    ]
+  },
+  {
+    "name": "bullet-filled-link-literal",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -bullet -width 4n\n.It Xo\n.Lk https://head.invalid HEAD\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -bullet -width 4n\n.It Xo\n.No \"\"\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "bullet",
+    "payload": "link",
+    "control": "literal",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "•",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "     •",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "•",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "     •",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "bullet-literal-break-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -bullet -width 4n\n.It Xo\n.No \"\\p HEAD\"\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -bullet -width 4n\n.It Xo\n.No \"\"\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "bullet",
+    "payload": "break",
+    "control": "none",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "•",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     •",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "•",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     •",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "bullet-literal-break-break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -bullet -width 4n\n.It Xo\n.No \"\\p HEAD\"\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -bullet -width 4n\n.It Xo\n.No \"\"\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "bullet",
+    "payload": "break",
+    "control": "break",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "•",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     •",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "•",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     •",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "bullet-literal-break-space",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -bullet -width 4n\n.It Xo\n.No \"\\p HEAD\"\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -bullet -width 4n\n.It Xo\n.No \"\"\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "bullet",
+    "payload": "break",
+    "control": "space",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "•",
+      "",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     •",
+      "",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "•",
+      "",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     •",
+      "",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "bullet-literal-break-literal",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -bullet -width 4n\n.It Xo\n.No \"\\p HEAD\"\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -bullet -width 4n\n.It Xo\n.No \"\"\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "bullet",
+    "payload": "break",
+    "control": "literal",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "•",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     •",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "•",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     •",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "bullet-literal-zero-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -bullet -width 4n\n.It Xo\n.No HEAD\\zX\\c\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -bullet -width 4n\n.It Xo\n.No \"\"\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "bullet",
+    "payload": "zero",
+    "control": "none",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "•",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     •",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "•",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     •",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "bullet-literal-zero-break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -bullet -width 4n\n.It Xo\n.No HEAD\\zX\\c\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -bullet -width 4n\n.It Xo\n.No \"\"\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "bullet",
+    "payload": "zero",
+    "control": "break",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "•",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     •",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "•",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     •",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "bullet-literal-zero-space",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -bullet -width 4n\n.It Xo\n.No HEAD\\zX\\c\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -bullet -width 4n\n.It Xo\n.No \"\"\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "bullet",
+    "payload": "zero",
+    "control": "space",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "•",
+      "",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     •",
+      "",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "•",
+      "",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     •",
+      "",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "bullet-literal-zero-literal",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -bullet -width 4n\n.It Xo\n.No HEAD\\zX\\c\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -bullet -width 4n\n.It Xo\n.No \"\"\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "bullet",
+    "payload": "zero",
+    "control": "literal",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "•",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     •",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "•",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     •",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "bullet-literal-font-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -bullet -width 4n\n.It Xo\n.ft I\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -bullet -width 4n\n.It Xo\n.No \"\"\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "bullet",
+    "payload": "font",
+    "control": "none",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "•",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     •",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "•",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     •",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "bullet-literal-font-break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -bullet -width 4n\n.It Xo\n.ft I\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -bullet -width 4n\n.It Xo\n.No \"\"\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "bullet",
+    "payload": "font",
+    "control": "break",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "•",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     •",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "•",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     •",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "bullet-literal-font-space",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -bullet -width 4n\n.It Xo\n.ft I\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -bullet -width 4n\n.It Xo\n.No \"\"\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "bullet",
+    "payload": "font",
+    "control": "space",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "•",
+      "",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     •",
+      "",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "•",
+      "",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     •",
+      "",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "bullet-literal-font-literal",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -bullet -width 4n\n.It Xo\n.ft I\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -bullet -width 4n\n.It Xo\n.No \"\"\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "bullet",
+    "payload": "font",
+    "control": "literal",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "•",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     •",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "•",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     •",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "bullet-literal-link-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -bullet -width 4n\n.It Xo\n.Lk https://head.invalid HEAD\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -bullet -width 4n\n.It Xo\n.No \"\"\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "bullet",
+    "payload": "link",
+    "control": "none",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "•",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     •",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "•",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     •",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "bullet-literal-link-break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -bullet -width 4n\n.It Xo\n.Lk https://head.invalid HEAD\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -bullet -width 4n\n.It Xo\n.No \"\"\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "bullet",
+    "payload": "link",
+    "control": "break",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "•",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     •",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "•",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     •",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "bullet-literal-link-space",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -bullet -width 4n\n.It Xo\n.Lk https://head.invalid HEAD\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -bullet -width 4n\n.It Xo\n.No \"\"\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "bullet",
+    "payload": "link",
+    "control": "space",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "•",
+      "",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     •",
+      "",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "•",
+      "",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     •",
+      "",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "bullet-literal-link-literal",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -bullet -width 4n\n.It Xo\n.Lk https://head.invalid HEAD\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -bullet -width 4n\n.It Xo\n.No \"\"\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "bullet",
+    "payload": "link",
+    "control": "literal",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "•",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     •",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "•",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     •",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "dash-filled-break-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -dash -width 4n\n.It Xo\n.No \"\\p HEAD\"\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -dash -width 4n\n.It Xo\n.No \"\"\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "dash",
+    "payload": "break",
+    "control": "none",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "-     BodyWord TailWord"
+    ],
+    "native_rows": [
+      "     -     BodyWord TailWord"
+    ],
+    "baseline_rows": [
+      "-     BodyWord TailWord"
+    ],
+    "baseline_native_rows": [
+      "     -     BodyWord TailWord"
+    ]
+  },
+  {
+    "name": "dash-filled-break-break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -dash -width 4n\n.It Xo\n.No \"\\p HEAD\"\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -dash -width 4n\n.It Xo\n.No \"\"\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "dash",
+    "payload": "break",
+    "control": "break",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "-",
+      "      BodyWord TailWord"
+    ],
+    "native_rows": [
+      "     -",
+      "           BodyWord TailWord"
+    ],
+    "baseline_rows": [
+      "-",
+      "      BodyWord TailWord"
+    ],
+    "baseline_native_rows": [
+      "     -",
+      "           BodyWord TailWord"
+    ]
+  },
+  {
+    "name": "dash-filled-break-space",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -dash -width 4n\n.It Xo\n.No \"\\p HEAD\"\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -dash -width 4n\n.It Xo\n.No \"\"\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "dash",
+    "payload": "break",
+    "control": "space",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "-",
+      "",
+      "      BodyWord TailWord"
+    ],
+    "native_rows": [
+      "     -",
+      "",
+      "           BodyWord TailWord"
+    ],
+    "baseline_rows": [
+      "-",
+      "",
+      "      BodyWord TailWord"
+    ],
+    "baseline_native_rows": [
+      "     -",
+      "",
+      "           BodyWord TailWord"
+    ]
+  },
+  {
+    "name": "dash-filled-break-literal",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -dash -width 4n\n.It Xo\n.No \"\\p HEAD\"\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -dash -width 4n\n.It Xo\n.No \"\"\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "dash",
+    "payload": "break",
+    "control": "literal",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "-",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "     -",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "-",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "     -",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "dash-filled-zero-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -dash -width 4n\n.It Xo\n.No HEAD\\zX\\c\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -dash -width 4n\n.It Xo\n.No \"\"\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "dash",
+    "payload": "zero",
+    "control": "none",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "-     BodyWord TailWord"
+    ],
+    "native_rows": [
+      "     -     BodyWord TailWord"
+    ],
+    "baseline_rows": [
+      "-     BodyWord TailWord"
+    ],
+    "baseline_native_rows": [
+      "     -     BodyWord TailWord"
+    ]
+  },
+  {
+    "name": "dash-filled-zero-break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -dash -width 4n\n.It Xo\n.No HEAD\\zX\\c\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -dash -width 4n\n.It Xo\n.No \"\"\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "dash",
+    "payload": "zero",
+    "control": "break",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "-",
+      "      BodyWord TailWord"
+    ],
+    "native_rows": [
+      "     -",
+      "           BodyWord TailWord"
+    ],
+    "baseline_rows": [
+      "-",
+      "      BodyWord TailWord"
+    ],
+    "baseline_native_rows": [
+      "     -",
+      "           BodyWord TailWord"
+    ]
+  },
+  {
+    "name": "dash-filled-zero-space",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -dash -width 4n\n.It Xo\n.No HEAD\\zX\\c\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -dash -width 4n\n.It Xo\n.No \"\"\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "dash",
+    "payload": "zero",
+    "control": "space",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "-",
+      "",
+      "      BodyWord TailWord"
+    ],
+    "native_rows": [
+      "     -",
+      "",
+      "           BodyWord TailWord"
+    ],
+    "baseline_rows": [
+      "-",
+      "",
+      "      BodyWord TailWord"
+    ],
+    "baseline_native_rows": [
+      "     -",
+      "",
+      "           BodyWord TailWord"
+    ]
+  },
+  {
+    "name": "dash-filled-zero-literal",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -dash -width 4n\n.It Xo\n.No HEAD\\zX\\c\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -dash -width 4n\n.It Xo\n.No \"\"\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "dash",
+    "payload": "zero",
+    "control": "literal",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "-",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "     -",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "-",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "     -",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "dash-filled-font-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -dash -width 4n\n.It Xo\n.ft I\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -dash -width 4n\n.It Xo\n.No \"\"\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "dash",
+    "payload": "font",
+    "control": "none",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "-     BodyWord TailWord"
+    ],
+    "native_rows": [
+      "     -     BodyWord TailWord"
+    ],
+    "baseline_rows": [
+      "-     BodyWord TailWord"
+    ],
+    "baseline_native_rows": [
+      "     -     BodyWord TailWord"
+    ]
+  },
+  {
+    "name": "dash-filled-font-break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -dash -width 4n\n.It Xo\n.ft I\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -dash -width 4n\n.It Xo\n.No \"\"\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "dash",
+    "payload": "font",
+    "control": "break",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "-",
+      "      BodyWord TailWord"
+    ],
+    "native_rows": [
+      "     -",
+      "           BodyWord TailWord"
+    ],
+    "baseline_rows": [
+      "-",
+      "      BodyWord TailWord"
+    ],
+    "baseline_native_rows": [
+      "     -",
+      "           BodyWord TailWord"
+    ]
+  },
+  {
+    "name": "dash-filled-font-space",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -dash -width 4n\n.It Xo\n.ft I\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -dash -width 4n\n.It Xo\n.No \"\"\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "dash",
+    "payload": "font",
+    "control": "space",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "-",
+      "",
+      "      BodyWord TailWord"
+    ],
+    "native_rows": [
+      "     -",
+      "",
+      "           BodyWord TailWord"
+    ],
+    "baseline_rows": [
+      "-",
+      "",
+      "      BodyWord TailWord"
+    ],
+    "baseline_native_rows": [
+      "     -",
+      "",
+      "           BodyWord TailWord"
+    ]
+  },
+  {
+    "name": "dash-filled-font-literal",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -dash -width 4n\n.It Xo\n.ft I\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -dash -width 4n\n.It Xo\n.No \"\"\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "dash",
+    "payload": "font",
+    "control": "literal",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "-",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "     -",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "-",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "     -",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "dash-filled-link-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -dash -width 4n\n.It Xo\n.Lk https://head.invalid HEAD\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -dash -width 4n\n.It Xo\n.No \"\"\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "dash",
+    "payload": "link",
+    "control": "none",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "-     BodyWord TailWord"
+    ],
+    "native_rows": [
+      "     -     BodyWord TailWord"
+    ],
+    "baseline_rows": [
+      "-     BodyWord TailWord"
+    ],
+    "baseline_native_rows": [
+      "     -     BodyWord TailWord"
+    ]
+  },
+  {
+    "name": "dash-filled-link-break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -dash -width 4n\n.It Xo\n.Lk https://head.invalid HEAD\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -dash -width 4n\n.It Xo\n.No \"\"\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "dash",
+    "payload": "link",
+    "control": "break",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "-",
+      "      BodyWord TailWord"
+    ],
+    "native_rows": [
+      "     -",
+      "           BodyWord TailWord"
+    ],
+    "baseline_rows": [
+      "-",
+      "      BodyWord TailWord"
+    ],
+    "baseline_native_rows": [
+      "     -",
+      "           BodyWord TailWord"
+    ]
+  },
+  {
+    "name": "dash-filled-link-space",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -dash -width 4n\n.It Xo\n.Lk https://head.invalid HEAD\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -dash -width 4n\n.It Xo\n.No \"\"\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "dash",
+    "payload": "link",
+    "control": "space",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "-",
+      "",
+      "      BodyWord TailWord"
+    ],
+    "native_rows": [
+      "     -",
+      "",
+      "           BodyWord TailWord"
+    ],
+    "baseline_rows": [
+      "-",
+      "",
+      "      BodyWord TailWord"
+    ],
+    "baseline_native_rows": [
+      "     -",
+      "",
+      "           BodyWord TailWord"
+    ]
+  },
+  {
+    "name": "dash-filled-link-literal",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -dash -width 4n\n.It Xo\n.Lk https://head.invalid HEAD\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -dash -width 4n\n.It Xo\n.No \"\"\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "dash",
+    "payload": "link",
+    "control": "literal",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "-",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "     -",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "-",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "     -",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "dash-literal-break-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -dash -width 4n\n.It Xo\n.No \"\\p HEAD\"\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -dash -width 4n\n.It Xo\n.No \"\"\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "dash",
+    "payload": "break",
+    "control": "none",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "-",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     -",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "-",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     -",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "dash-literal-break-break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -dash -width 4n\n.It Xo\n.No \"\\p HEAD\"\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -dash -width 4n\n.It Xo\n.No \"\"\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "dash",
+    "payload": "break",
+    "control": "break",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "-",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     -",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "-",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     -",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "dash-literal-break-space",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -dash -width 4n\n.It Xo\n.No \"\\p HEAD\"\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -dash -width 4n\n.It Xo\n.No \"\"\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "dash",
+    "payload": "break",
+    "control": "space",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "-",
+      "",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     -",
+      "",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "-",
+      "",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     -",
+      "",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "dash-literal-break-literal",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -dash -width 4n\n.It Xo\n.No \"\\p HEAD\"\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -dash -width 4n\n.It Xo\n.No \"\"\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "dash",
+    "payload": "break",
+    "control": "literal",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "-",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     -",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "-",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     -",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "dash-literal-zero-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -dash -width 4n\n.It Xo\n.No HEAD\\zX\\c\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -dash -width 4n\n.It Xo\n.No \"\"\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "dash",
+    "payload": "zero",
+    "control": "none",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "-",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     -",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "-",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     -",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "dash-literal-zero-break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -dash -width 4n\n.It Xo\n.No HEAD\\zX\\c\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -dash -width 4n\n.It Xo\n.No \"\"\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "dash",
+    "payload": "zero",
+    "control": "break",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "-",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     -",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "-",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     -",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "dash-literal-zero-space",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -dash -width 4n\n.It Xo\n.No HEAD\\zX\\c\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -dash -width 4n\n.It Xo\n.No \"\"\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "dash",
+    "payload": "zero",
+    "control": "space",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "-",
+      "",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     -",
+      "",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "-",
+      "",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     -",
+      "",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "dash-literal-zero-literal",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -dash -width 4n\n.It Xo\n.No HEAD\\zX\\c\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -dash -width 4n\n.It Xo\n.No \"\"\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "dash",
+    "payload": "zero",
+    "control": "literal",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "-",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     -",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "-",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     -",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "dash-literal-font-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -dash -width 4n\n.It Xo\n.ft I\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -dash -width 4n\n.It Xo\n.No \"\"\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "dash",
+    "payload": "font",
+    "control": "none",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "-",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     -",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "-",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     -",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "dash-literal-font-break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -dash -width 4n\n.It Xo\n.ft I\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -dash -width 4n\n.It Xo\n.No \"\"\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "dash",
+    "payload": "font",
+    "control": "break",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "-",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     -",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "-",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     -",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "dash-literal-font-space",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -dash -width 4n\n.It Xo\n.ft I\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -dash -width 4n\n.It Xo\n.No \"\"\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "dash",
+    "payload": "font",
+    "control": "space",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "-",
+      "",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     -",
+      "",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "-",
+      "",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     -",
+      "",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "dash-literal-font-literal",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -dash -width 4n\n.It Xo\n.ft I\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -dash -width 4n\n.It Xo\n.No \"\"\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "dash",
+    "payload": "font",
+    "control": "literal",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "-",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     -",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "-",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     -",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "dash-literal-link-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -dash -width 4n\n.It Xo\n.Lk https://head.invalid HEAD\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -dash -width 4n\n.It Xo\n.No \"\"\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "dash",
+    "payload": "link",
+    "control": "none",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "-",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     -",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "-",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     -",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "dash-literal-link-break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -dash -width 4n\n.It Xo\n.Lk https://head.invalid HEAD\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -dash -width 4n\n.It Xo\n.No \"\"\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "dash",
+    "payload": "link",
+    "control": "break",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "-",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     -",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "-",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     -",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "dash-literal-link-space",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -dash -width 4n\n.It Xo\n.Lk https://head.invalid HEAD\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -dash -width 4n\n.It Xo\n.No \"\"\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "dash",
+    "payload": "link",
+    "control": "space",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "-",
+      "",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     -",
+      "",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "-",
+      "",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     -",
+      "",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "dash-literal-link-literal",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -dash -width 4n\n.It Xo\n.Lk https://head.invalid HEAD\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -dash -width 4n\n.It Xo\n.No \"\"\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "dash",
+    "payload": "link",
+    "control": "literal",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "-",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     -",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "-",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     -",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "enum-filled-break-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -enum -width 4n\n.It Xo\n.No \"\\p HEAD\"\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -enum -width 4n\n.It Xo\n.No \"\"\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "enum",
+    "payload": "break",
+    "control": "none",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "1.    BodyWord TailWord"
+    ],
+    "native_rows": [
+      "     1.    BodyWord TailWord"
+    ],
+    "baseline_rows": [
+      "1.    BodyWord TailWord"
+    ],
+    "baseline_native_rows": [
+      "     1.    BodyWord TailWord"
+    ]
+  },
+  {
+    "name": "enum-filled-break-break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -enum -width 4n\n.It Xo\n.No \"\\p HEAD\"\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -enum -width 4n\n.It Xo\n.No \"\"\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "enum",
+    "payload": "break",
+    "control": "break",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "1.",
+      "      BodyWord TailWord"
+    ],
+    "native_rows": [
+      "     1.",
+      "           BodyWord TailWord"
+    ],
+    "baseline_rows": [
+      "1.",
+      "      BodyWord TailWord"
+    ],
+    "baseline_native_rows": [
+      "     1.",
+      "           BodyWord TailWord"
+    ]
+  },
+  {
+    "name": "enum-filled-break-space",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -enum -width 4n\n.It Xo\n.No \"\\p HEAD\"\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -enum -width 4n\n.It Xo\n.No \"\"\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "enum",
+    "payload": "break",
+    "control": "space",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "1.",
+      "",
+      "      BodyWord TailWord"
+    ],
+    "native_rows": [
+      "     1.",
+      "",
+      "           BodyWord TailWord"
+    ],
+    "baseline_rows": [
+      "1.",
+      "",
+      "      BodyWord TailWord"
+    ],
+    "baseline_native_rows": [
+      "     1.",
+      "",
+      "           BodyWord TailWord"
+    ]
+  },
+  {
+    "name": "enum-filled-break-literal",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -enum -width 4n\n.It Xo\n.No \"\\p HEAD\"\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -enum -width 4n\n.It Xo\n.No \"\"\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "enum",
+    "payload": "break",
+    "control": "literal",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "1.",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "     1.",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "1.",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "     1.",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "enum-filled-zero-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -enum -width 4n\n.It Xo\n.No HEAD\\zX\\c\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -enum -width 4n\n.It Xo\n.No \"\"\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "enum",
+    "payload": "zero",
+    "control": "none",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "1.    BodyWord TailWord"
+    ],
+    "native_rows": [
+      "     1.    BodyWord TailWord"
+    ],
+    "baseline_rows": [
+      "1.    BodyWord TailWord"
+    ],
+    "baseline_native_rows": [
+      "     1.    BodyWord TailWord"
+    ]
+  },
+  {
+    "name": "enum-filled-zero-break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -enum -width 4n\n.It Xo\n.No HEAD\\zX\\c\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -enum -width 4n\n.It Xo\n.No \"\"\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "enum",
+    "payload": "zero",
+    "control": "break",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "1.",
+      "      BodyWord TailWord"
+    ],
+    "native_rows": [
+      "     1.",
+      "           BodyWord TailWord"
+    ],
+    "baseline_rows": [
+      "1.",
+      "      BodyWord TailWord"
+    ],
+    "baseline_native_rows": [
+      "     1.",
+      "           BodyWord TailWord"
+    ]
+  },
+  {
+    "name": "enum-filled-zero-space",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -enum -width 4n\n.It Xo\n.No HEAD\\zX\\c\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -enum -width 4n\n.It Xo\n.No \"\"\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "enum",
+    "payload": "zero",
+    "control": "space",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "1.",
+      "",
+      "      BodyWord TailWord"
+    ],
+    "native_rows": [
+      "     1.",
+      "",
+      "           BodyWord TailWord"
+    ],
+    "baseline_rows": [
+      "1.",
+      "",
+      "      BodyWord TailWord"
+    ],
+    "baseline_native_rows": [
+      "     1.",
+      "",
+      "           BodyWord TailWord"
+    ]
+  },
+  {
+    "name": "enum-filled-zero-literal",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -enum -width 4n\n.It Xo\n.No HEAD\\zX\\c\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -enum -width 4n\n.It Xo\n.No \"\"\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "enum",
+    "payload": "zero",
+    "control": "literal",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "1.",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "     1.",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "1.",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "     1.",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "enum-filled-font-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -enum -width 4n\n.It Xo\n.ft I\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -enum -width 4n\n.It Xo\n.No \"\"\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "enum",
+    "payload": "font",
+    "control": "none",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "1.    BodyWord TailWord"
+    ],
+    "native_rows": [
+      "     1.    BodyWord TailWord"
+    ],
+    "baseline_rows": [
+      "1.    BodyWord TailWord"
+    ],
+    "baseline_native_rows": [
+      "     1.    BodyWord TailWord"
+    ]
+  },
+  {
+    "name": "enum-filled-font-break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -enum -width 4n\n.It Xo\n.ft I\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -enum -width 4n\n.It Xo\n.No \"\"\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "enum",
+    "payload": "font",
+    "control": "break",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "1.",
+      "      BodyWord TailWord"
+    ],
+    "native_rows": [
+      "     1.",
+      "           BodyWord TailWord"
+    ],
+    "baseline_rows": [
+      "1.",
+      "      BodyWord TailWord"
+    ],
+    "baseline_native_rows": [
+      "     1.",
+      "           BodyWord TailWord"
+    ]
+  },
+  {
+    "name": "enum-filled-font-space",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -enum -width 4n\n.It Xo\n.ft I\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -enum -width 4n\n.It Xo\n.No \"\"\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "enum",
+    "payload": "font",
+    "control": "space",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "1.",
+      "",
+      "      BodyWord TailWord"
+    ],
+    "native_rows": [
+      "     1.",
+      "",
+      "           BodyWord TailWord"
+    ],
+    "baseline_rows": [
+      "1.",
+      "",
+      "      BodyWord TailWord"
+    ],
+    "baseline_native_rows": [
+      "     1.",
+      "",
+      "           BodyWord TailWord"
+    ]
+  },
+  {
+    "name": "enum-filled-font-literal",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -enum -width 4n\n.It Xo\n.ft I\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -enum -width 4n\n.It Xo\n.No \"\"\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "enum",
+    "payload": "font",
+    "control": "literal",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "1.",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "     1.",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "1.",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "     1.",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "enum-filled-link-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -enum -width 4n\n.It Xo\n.Lk https://head.invalid HEAD\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -enum -width 4n\n.It Xo\n.No \"\"\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "enum",
+    "payload": "link",
+    "control": "none",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "1.    BodyWord TailWord"
+    ],
+    "native_rows": [
+      "     1.    BodyWord TailWord"
+    ],
+    "baseline_rows": [
+      "1.    BodyWord TailWord"
+    ],
+    "baseline_native_rows": [
+      "     1.    BodyWord TailWord"
+    ]
+  },
+  {
+    "name": "enum-filled-link-break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -enum -width 4n\n.It Xo\n.Lk https://head.invalid HEAD\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -enum -width 4n\n.It Xo\n.No \"\"\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "enum",
+    "payload": "link",
+    "control": "break",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "1.",
+      "      BodyWord TailWord"
+    ],
+    "native_rows": [
+      "     1.",
+      "           BodyWord TailWord"
+    ],
+    "baseline_rows": [
+      "1.",
+      "      BodyWord TailWord"
+    ],
+    "baseline_native_rows": [
+      "     1.",
+      "           BodyWord TailWord"
+    ]
+  },
+  {
+    "name": "enum-filled-link-space",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -enum -width 4n\n.It Xo\n.Lk https://head.invalid HEAD\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -enum -width 4n\n.It Xo\n.No \"\"\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "enum",
+    "payload": "link",
+    "control": "space",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "1.",
+      "",
+      "      BodyWord TailWord"
+    ],
+    "native_rows": [
+      "     1.",
+      "",
+      "           BodyWord TailWord"
+    ],
+    "baseline_rows": [
+      "1.",
+      "",
+      "      BodyWord TailWord"
+    ],
+    "baseline_native_rows": [
+      "     1.",
+      "",
+      "           BodyWord TailWord"
+    ]
+  },
+  {
+    "name": "enum-filled-link-literal",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -enum -width 4n\n.It Xo\n.Lk https://head.invalid HEAD\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -enum -width 4n\n.It Xo\n.No \"\"\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "enum",
+    "payload": "link",
+    "control": "literal",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "1.",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "     1.",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "1.",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "     1.",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "enum-literal-break-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -enum -width 4n\n.It Xo\n.No \"\\p HEAD\"\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -enum -width 4n\n.It Xo\n.No \"\"\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "enum",
+    "payload": "break",
+    "control": "none",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "1.",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     1.",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "1.",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     1.",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "enum-literal-break-break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -enum -width 4n\n.It Xo\n.No \"\\p HEAD\"\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -enum -width 4n\n.It Xo\n.No \"\"\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "enum",
+    "payload": "break",
+    "control": "break",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "1.",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     1.",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "1.",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     1.",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "enum-literal-break-space",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -enum -width 4n\n.It Xo\n.No \"\\p HEAD\"\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -enum -width 4n\n.It Xo\n.No \"\"\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "enum",
+    "payload": "break",
+    "control": "space",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "1.",
+      "",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     1.",
+      "",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "1.",
+      "",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     1.",
+      "",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "enum-literal-break-literal",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -enum -width 4n\n.It Xo\n.No \"\\p HEAD\"\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -enum -width 4n\n.It Xo\n.No \"\"\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "enum",
+    "payload": "break",
+    "control": "literal",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "1.",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     1.",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "1.",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     1.",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "enum-literal-zero-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -enum -width 4n\n.It Xo\n.No HEAD\\zX\\c\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -enum -width 4n\n.It Xo\n.No \"\"\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "enum",
+    "payload": "zero",
+    "control": "none",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "1.",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     1.",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "1.",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     1.",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "enum-literal-zero-break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -enum -width 4n\n.It Xo\n.No HEAD\\zX\\c\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -enum -width 4n\n.It Xo\n.No \"\"\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "enum",
+    "payload": "zero",
+    "control": "break",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "1.",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     1.",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "1.",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     1.",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "enum-literal-zero-space",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -enum -width 4n\n.It Xo\n.No HEAD\\zX\\c\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -enum -width 4n\n.It Xo\n.No \"\"\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "enum",
+    "payload": "zero",
+    "control": "space",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "1.",
+      "",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     1.",
+      "",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "1.",
+      "",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     1.",
+      "",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "enum-literal-zero-literal",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -enum -width 4n\n.It Xo\n.No HEAD\\zX\\c\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -enum -width 4n\n.It Xo\n.No \"\"\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "enum",
+    "payload": "zero",
+    "control": "literal",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "1.",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     1.",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "1.",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     1.",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "enum-literal-font-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -enum -width 4n\n.It Xo\n.ft I\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -enum -width 4n\n.It Xo\n.No \"\"\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "enum",
+    "payload": "font",
+    "control": "none",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "1.",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     1.",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "1.",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     1.",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "enum-literal-font-break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -enum -width 4n\n.It Xo\n.ft I\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -enum -width 4n\n.It Xo\n.No \"\"\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "enum",
+    "payload": "font",
+    "control": "break",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "1.",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     1.",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "1.",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     1.",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "enum-literal-font-space",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -enum -width 4n\n.It Xo\n.ft I\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -enum -width 4n\n.It Xo\n.No \"\"\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "enum",
+    "payload": "font",
+    "control": "space",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "1.",
+      "",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     1.",
+      "",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "1.",
+      "",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     1.",
+      "",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "enum-literal-font-literal",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -enum -width 4n\n.It Xo\n.ft I\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -enum -width 4n\n.It Xo\n.No \"\"\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "enum",
+    "payload": "font",
+    "control": "literal",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "1.",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     1.",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "1.",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     1.",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "enum-literal-link-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -enum -width 4n\n.It Xo\n.Lk https://head.invalid HEAD\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -enum -width 4n\n.It Xo\n.No \"\"\n.Xc\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "enum",
+    "payload": "link",
+    "control": "none",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "1.",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     1.",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "1.",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     1.",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "enum-literal-link-break",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -enum -width 4n\n.It Xo\n.Lk https://head.invalid HEAD\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -enum -width 4n\n.It Xo\n.No \"\"\n.Xc\n.br\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "enum",
+    "payload": "link",
+    "control": "break",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "1.",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     1.",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "1.",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     1.",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "enum-literal-link-space",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -enum -width 4n\n.It Xo\n.Lk https://head.invalid HEAD\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -enum -width 4n\n.It Xo\n.No \"\"\n.Xc\n.sp 1\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "enum",
+    "payload": "link",
+    "control": "space",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "1.",
+      "",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     1.",
+      "",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "1.",
+      "",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     1.",
+      "",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  },
+  {
+    "name": "enum-literal-link-literal",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -enum -width 4n\n.It Xo\n.Lk https://head.invalid HEAD\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "baseline_source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -enum -width 4n\n.It Xo\n.No \"\"\n.Xc\n.nf\n.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "kind": "enum",
+    "payload": "link",
+    "control": "literal",
+    "reading_rule": "skipped-head-execution-invariance",
+    "rows": [
+      "",
+      "1.",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "native_rows": [
+      "",
+      "     1.",
+      "           BodyWord",
+      "           TailWord"
+    ],
+    "baseline_rows": [
+      "",
+      "1.",
+      "      BodyWord",
+      "      TailWord"
+    ],
+    "baseline_native_rows": [
+      "",
+      "     1.",
+      "           BodyWord",
+      "           TailWord"
+    ]
+  }
+]

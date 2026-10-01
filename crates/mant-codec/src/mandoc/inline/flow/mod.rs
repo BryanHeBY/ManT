@@ -28,6 +28,19 @@ pub(in crate::mandoc) use output::{
     trailing_completed_row_origins, trailing_device_row_end_receipt,
 };
 
+/// A stable source-word range plus the device cells its IR owner already
+/// represents. Padding never enters the native input buffer.
+#[derive(Clone, Debug)]
+pub(in crate::mandoc::inline) struct NativeWordAnchor {
+    start: usize,
+    owner: String,
+    content: usize,
+    projected_device_padding: usize,
+    /// The word's generated field prefix was written before its content
+    /// marker. This receipt owns positioning, not a native buffer scalar.
+    projected_field_prefix: bool,
+}
+
 pub(in crate::mandoc) struct InlineBuilder {
     nodes: Vec<Inline>,
     // Macro handlers such as pre_alternate() call term_word() directly on
@@ -52,7 +65,7 @@ pub(in crate::mandoc) struct InlineBuilder {
 #[derive(Clone, Copy, Eq, PartialEq)]
 enum LeadingLineBoundary {
     None,
-    BeforeVisibleWord,
+    AtVisibleCheckpoint(u64),
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -78,7 +91,7 @@ pub(in crate::mandoc) struct InlineExecutionState {
     spacing: SpacingMode,
     last_visible_character: Option<char>,
     has_printable_content: bool,
-    // Native visible-glyph execution advances independently of generated
+    // Accepted native visible-glyph execution advances independently of generated
     // padding, formatter cells, and IR owner drains. Definition BODY checks
     // the increment made by its current source node.
     visible_glyph_epoch: u64,
@@ -96,8 +109,9 @@ pub(in crate::mandoc) struct InlineExecutionState {
     /// separator (term.c:143-146) even after the accepted prefix closed its
     /// own row.
     word_end_break_separated: bool,
-    /// An executed line request before the first visible word of this IR
-    /// segment. Definition BODY checkpoints consume this source-order fact.
+    /// The first observed line request and its accepted glyph checkpoint.
+    /// A BODY handler may execute both a glyph and a subsequent boundary;
+    /// this receipt keeps their order when its output owner returns.
     leading_line_boundary: LeadingLineBoundary,
     pub(in crate::mandoc) vertical_space_debt: u16,
     // A cached execution hint for completed empty rows. The active output
@@ -125,6 +139,10 @@ pub(in crate::mandoc) struct InlineExecutionState {
     /// Native tag/hang field geometry exists only in a definition head.
     /// Ordinary paragraphs keep word and row events without field widths.
     definition: Option<DefinitionFieldState>,
+    /// Device columns survive a detached HEAD's output owner, while its
+    /// scoped field flags and margin do not (mdoc_term.c:437-439,961-963).
+    /// A real plain-row flush consumes this handoff before another owner.
+    detached_device_row: Option<DetachedDeviceRow>,
     /// Active terminal tab settings persist across output owners and fields.
     tab_stops: Arc<TabStops>,
     last_tab_source_node: Option<u32>,
@@ -159,7 +177,7 @@ pub(in crate::mandoc) struct InlineExecutionState {
     pub(in crate::mandoc::inline) flush_unit: field_buffer::FieldBuffer,
     /// Word anchors of the plain flush unit (cell start, IR marker, content
     /// start), mirroring `DefinitionFieldState::field_word_anchors`.
-    pub(in crate::mandoc::inline) flush_unit_anchors: Vec<(usize, String, usize)>,
+    pub(in crate::mandoc::inline) flush_unit_anchors: Vec<NativeWordAnchor>,
     /// IR index where the plain flush unit's unprinted suffix starts; the
     /// rejection interval trim operates from here (the plain analogue of
     /// `AuthorExecution::field_output_start`).
@@ -204,6 +222,12 @@ struct AuthorExecution {
     authors_section: bool,
     break_effect: AuthorBreakEffect,
     field_output_start: usize,
+}
+
+#[derive(Clone, Copy)]
+struct DetachedDeviceRow {
+    viscol: usize,
+    minbl: usize,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -718,6 +742,7 @@ impl InlineExecutionState {
             execution_epoch: 0,
             author_execution: None,
             definition: None,
+            detached_device_row: None,
             tab_stops: Arc::new(TabStops::default()),
             last_tab_source_node: None,
             last_executed_source_line: None,
@@ -820,8 +845,11 @@ impl InlineExecutionState {
                 field.field_buffer.detach_projection_owner();
                 field.row.retire_row_origin();
             }
-        } else {
-            self.definition = None;
+        } else if let Some(field) = self.definition.take() {
+            self.detached_device_row = (field.hang_row.viscol > 0).then_some(DetachedDeviceRow {
+                viscol: field.hang_row.viscol,
+                minbl: field.hang_row.minbl,
+            });
         }
     }
 
@@ -839,6 +867,12 @@ impl InlineExecutionState {
             || self.word_end_break == WordEndBreak::Pending
     }
 
+    pub(in crate::mandoc) fn enter_man_definition_body(&mut self) {
+        self.boundary = PendingBoundary::Tight;
+        self.final_source_continuation = Some(true);
+        self.final_word_join = Some(false);
+    }
+
     pub(in crate::mandoc) fn visible_content_checkpoint(&self) -> (u64, bool) {
         (
             self.visible_glyph_epoch,
@@ -847,23 +881,23 @@ impl InlineExecutionState {
     }
 
     pub(in crate::mandoc) fn has_visible_content_since(&self, before: (u64, bool)) -> bool {
+        self.visible_glyph_epoch != before.0
+            || (!before.1
+                && self.zero_advance.has_printable_pending_glyph()
+                && !self.current_native_word_is_rejected())
+    }
+
+    fn current_native_word_is_rejected(&self) -> bool {
         let (buffer, anchors) = self
             .definition
             .as_ref()
             .map_or((&self.flush_unit, &self.flush_unit_anchors), |field| {
                 (&field.field_buffer, &field.field_word_anchors)
             });
-        let rejected_word = buffer.pending_pass_is_definitively_rejected()
+        buffer.pending_pass_is_definitively_rejected()
             && anchors
                 .last()
-                .is_some_and(|(_, _, first_content)| *first_content >= buffer.resume_offset());
-        // term_fill's rejected suffix is still buffered until term_flushln,
-        // but cannot claim a visible BODY row merely because its projection
-        // has not yet been trimmed. An accepted prefix in this same word
-        // remains visible and still advances the observation.
-        !rejected_word
-            && (self.visible_glyph_epoch != before.0
-                || (!before.1 && self.zero_advance.has_printable_pending_glyph()))
+                .is_some_and(|anchor| anchor.content >= buffer.resume_offset())
     }
 
     pub(in crate::mandoc) fn has_printable_pending_zero_advance_glyph(&self) -> bool {
@@ -874,9 +908,11 @@ impl InlineExecutionState {
         self.zero_advance.discard_at_row_end();
     }
 
-    pub(in crate::mandoc) fn take_leading_line_boundary(&mut self) -> bool {
-        std::mem::replace(&mut self.leading_line_boundary, LeadingLineBoundary::None)
-            == LeadingLineBoundary::BeforeVisibleWord
+    pub(in crate::mandoc) fn take_leading_line_boundary(&mut self) -> Option<u64> {
+        match std::mem::replace(&mut self.leading_line_boundary, LeadingLineBoundary::None) {
+            LeadingLineBoundary::None => None,
+            LeadingLineBoundary::AtVisibleCheckpoint(checkpoint) => Some(checkpoint),
+        }
     }
 
     pub(in crate::mandoc) fn take_zero_advance_armed(&mut self) -> bool {

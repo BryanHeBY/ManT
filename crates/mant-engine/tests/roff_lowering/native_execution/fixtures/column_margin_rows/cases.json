@@ -1,0 +1,374 @@
+[
+  {
+    "name": "no-0-accepted",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxx\" \"xxxx\"\n.It Xo\n.Bd -literal -compact -offset 0n\n.No \"X\\p Y\\c\"\n.mc\n.Ed\n.No AFTER\n.Xc Ta RightWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "No",
+    "offset": 0,
+    "rows": [
+      "X",
+      "Y",
+      "AFTER",
+      "            RightWord"
+    ],
+    "native_rows": [
+      "     X",
+      "     Y",
+      "     AFTER",
+      "                 RightWord"
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "no-0-rejected",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxx\" \"xxxx\"\n.It Xo\n.Bd -literal -compact -offset 0n\n.No \"X\\p \\p DROP\\c\"\n.mc\n.Ed\n.No AFTER\n.Xc Ta RightWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "No",
+    "offset": 0,
+    "rows": [
+      "X",
+      "AFTER",
+      "            RightWord"
+    ],
+    "native_rows": [
+      "     X",
+      "     AFTER",
+      "                 RightWord"
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "no-6-accepted",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxx\" \"xxxx\"\n.It Xo\n.Bd -literal -compact -offset 6n\n.No \"X\\p Y\\c\"\n.mc\n.Ed\n.No AFTER\n.Xc Ta RightWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "No",
+    "offset": 6,
+    "rows": [
+      "      X",
+      "      Y",
+      "AFTER",
+      "            RightWord"
+    ],
+    "native_rows": [
+      "           X",
+      "           Y",
+      "     AFTER",
+      "                 RightWord"
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "no-6-rejected",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxx\" \"xxxx\"\n.It Xo\n.Bd -literal -compact -offset 6n\n.No \"X\\p \\p DROP\\c\"\n.mc\n.Ed\n.No AFTER\n.Xc Ta RightWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "No",
+    "offset": 6,
+    "rows": [
+      "      X",
+      "AFTER",
+      "            RightWord"
+    ],
+    "native_rows": [
+      "           X",
+      "     AFTER",
+      "                 RightWord"
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "em-0-accepted",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxx\" \"xxxx\"\n.It Xo\n.Bd -literal -compact -offset 0n\n.Em \"X\\p Y\\c\"\n.mc\n.Ed\n.No AFTER\n.Xc Ta RightWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "Em",
+    "offset": 0,
+    "rows": [
+      "X",
+      "Y",
+      "AFTER",
+      "            RightWord"
+    ],
+    "native_rows": [
+      "     X",
+      "     Y",
+      "     AFTER",
+      "                 RightWord"
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "em-0-rejected",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxx\" \"xxxx\"\n.It Xo\n.Bd -literal -compact -offset 0n\n.Em \"X\\p \\p DROP\\c\"\n.mc\n.Ed\n.No AFTER\n.Xc Ta RightWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "Em",
+    "offset": 0,
+    "rows": [
+      "X",
+      "AFTER",
+      "            RightWord"
+    ],
+    "native_rows": [
+      "     X",
+      "     AFTER",
+      "                 RightWord"
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "em-6-accepted",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxx\" \"xxxx\"\n.It Xo\n.Bd -literal -compact -offset 6n\n.Em \"X\\p Y\\c\"\n.mc\n.Ed\n.No AFTER\n.Xc Ta RightWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "Em",
+    "offset": 6,
+    "rows": [
+      "      X",
+      "      Y",
+      "AFTER",
+      "            RightWord"
+    ],
+    "native_rows": [
+      "           X",
+      "           Y",
+      "     AFTER",
+      "                 RightWord"
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "em-6-rejected",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxx\" \"xxxx\"\n.It Xo\n.Bd -literal -compact -offset 6n\n.Em \"X\\p \\p DROP\\c\"\n.mc\n.Ed\n.No AFTER\n.Xc Ta RightWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "Em",
+    "offset": 6,
+    "rows": [
+      "      X",
+      "AFTER",
+      "            RightWord"
+    ],
+    "native_rows": [
+      "           X",
+      "     AFTER",
+      "                 RightWord"
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "sy-0-accepted",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxx\" \"xxxx\"\n.It Xo\n.Bd -literal -compact -offset 0n\n.Sy \"X\\p Y\\c\"\n.mc\n.Ed\n.No AFTER\n.Xc Ta RightWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "Sy",
+    "offset": 0,
+    "rows": [
+      "X",
+      "Y",
+      "AFTER",
+      "            RightWord"
+    ],
+    "native_rows": [
+      "     X",
+      "     Y",
+      "     AFTER",
+      "                 RightWord"
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "sy-0-rejected",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxx\" \"xxxx\"\n.It Xo\n.Bd -literal -compact -offset 0n\n.Sy \"X\\p \\p DROP\\c\"\n.mc\n.Ed\n.No AFTER\n.Xc Ta RightWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "Sy",
+    "offset": 0,
+    "rows": [
+      "X",
+      "AFTER",
+      "            RightWord"
+    ],
+    "native_rows": [
+      "     X",
+      "     AFTER",
+      "                 RightWord"
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "sy-6-accepted",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxx\" \"xxxx\"\n.It Xo\n.Bd -literal -compact -offset 6n\n.Sy \"X\\p Y\\c\"\n.mc\n.Ed\n.No AFTER\n.Xc Ta RightWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "Sy",
+    "offset": 6,
+    "rows": [
+      "      X",
+      "      Y",
+      "AFTER",
+      "            RightWord"
+    ],
+    "native_rows": [
+      "           X",
+      "           Y",
+      "     AFTER",
+      "                 RightWord"
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "sy-6-rejected",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxx\" \"xxxx\"\n.It Xo\n.Bd -literal -compact -offset 6n\n.Sy \"X\\p \\p DROP\\c\"\n.mc\n.Ed\n.No AFTER\n.Xc Ta RightWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "Sy",
+    "offset": 6,
+    "rows": [
+      "      X",
+      "AFTER",
+      "            RightWord"
+    ],
+    "native_rows": [
+      "           X",
+      "     AFTER",
+      "                 RightWord"
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "li-0-accepted",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxx\" \"xxxx\"\n.It Xo\n.Bd -literal -compact -offset 0n\n.Li \"X\\p Y\\c\"\n.mc\n.Ed\n.No AFTER\n.Xc Ta RightWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "Li",
+    "offset": 0,
+    "rows": [
+      "X",
+      "Y",
+      "AFTER",
+      "            RightWord"
+    ],
+    "native_rows": [
+      "     X",
+      "     Y",
+      "     AFTER",
+      "                 RightWord"
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "li-0-rejected",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxx\" \"xxxx\"\n.It Xo\n.Bd -literal -compact -offset 0n\n.Li \"X\\p \\p DROP\\c\"\n.mc\n.Ed\n.No AFTER\n.Xc Ta RightWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "Li",
+    "offset": 0,
+    "rows": [
+      "X",
+      "AFTER",
+      "            RightWord"
+    ],
+    "native_rows": [
+      "     X",
+      "     AFTER",
+      "                 RightWord"
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "li-6-accepted",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxx\" \"xxxx\"\n.It Xo\n.Bd -literal -compact -offset 6n\n.Li \"X\\p Y\\c\"\n.mc\n.Ed\n.No AFTER\n.Xc Ta RightWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "Li",
+    "offset": 6,
+    "rows": [
+      "      X",
+      "      Y",
+      "AFTER",
+      "            RightWord"
+    ],
+    "native_rows": [
+      "           X",
+      "           Y",
+      "     AFTER",
+      "                 RightWord"
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "li-6-rejected",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxx\" \"xxxx\"\n.It Xo\n.Bd -literal -compact -offset 6n\n.Li \"X\\p \\p DROP\\c\"\n.mc\n.Ed\n.No AFTER\n.Xc Ta RightWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "Li",
+    "offset": 6,
+    "rows": [
+      "      X",
+      "AFTER",
+      "            RightWord"
+    ],
+    "native_rows": [
+      "           X",
+      "     AFTER",
+      "                 RightWord"
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "lk-0-accepted",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxx\" \"xxxx\"\n.It Xo\n.Bd -literal -compact -offset 0n\n.Lk https://ex.org \"X\\p Y\\c\"\n.mc\n.Ed\n.No AFTER\n.Xc Ta RightWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "Lk",
+    "offset": 0,
+    "rows": [
+      "X",
+      "Y: https://ex.org",
+      "AFTER       RightWord"
+    ],
+    "native_rows": [
+      "     X",
+      "     Y: https://ex.org",
+      "     AFTER       RightWord"
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "lk-0-rejected",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxx\" \"xxxx\"\n.It Xo\n.Bd -literal -compact -offset 0n\n.Lk https://ex.org \"X\\p \\p DROP\\c\"\n.mc\n.Ed\n.No AFTER\n.Xc Ta RightWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "Lk",
+    "offset": 0,
+    "rows": [
+      "X",
+      "AFTER       RightWord"
+    ],
+    "native_rows": [
+      "     X",
+      "     AFTER       RightWord"
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "lk-6-accepted",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxx\" \"xxxx\"\n.It Xo\n.Bd -literal -compact -offset 6n\n.Lk https://ex.org \"X\\p Y\\c\"\n.mc\n.Ed\n.No AFTER\n.Xc Ta RightWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "Lk",
+    "offset": 6,
+    "rows": [
+      "      X",
+      "      Y: https://ex.org",
+      "AFTER       RightWord"
+    ],
+    "native_rows": [
+      "           X",
+      "           Y: https://ex.org",
+      "     AFTER       RightWord"
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "lk-6-rejected",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxx\" \"xxxx\"\n.It Xo\n.Bd -literal -compact -offset 6n\n.Lk https://ex.org \"X\\p \\p DROP\\c\"\n.mc\n.Ed\n.No AFTER\n.Xc Ta RightWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "Lk",
+    "offset": 6,
+    "rows": [
+      "      X",
+      "AFTER       RightWord"
+    ],
+    "native_rows": [
+      "           X",
+      "     AFTER       RightWord"
+    ],
+    "reading_rule": "common-manual-margin-only"
+  }
+]

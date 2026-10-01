@@ -15,7 +15,7 @@
 
 //! Native field targets and the numeric device receipt of a real flush.
 
-use super::super::field_buffer::FlushReceipt;
+use super::super::field_buffer::{FillBoundary, FlushReceipt};
 use super::super::native_field::{FieldFlag, FieldFlags};
 use super::super::{AuthorBreakEffect, InlineBuilder};
 use super::state::{DefinitionFieldState, NoBreakField};
@@ -36,9 +36,20 @@ struct NativeFieldSweep {
     emission: NativeFieldEmission,
     separator_retention: Option<usize>,
     row_origins: Vec<(String, usize, usize)>,
+    field_padding: Vec<(String, usize, usize)>,
     unprojected_origin_units: usize,
     /// Outcome of the last pass-loop endline (term.c:217) of this flush.
     loop_row_end: LoopRowEnd,
+    loop_rows: Vec<NativeLoopRow>,
+}
+
+/// One real pass-loop endline, tied to the accepted native cell interval.
+/// Acceptance is independent of printing: an NBRZW interval reaches
+/// `term_field()` and then `endline()` even when it emits no glyph.
+pub(super) struct NativeLoopRow {
+    pub(super) end_cell: usize,
+    pub(super) printed: bool,
+    pub(super) boundary: FillBoundary,
 }
 
 /// The last pass-loop `endline()` (term.c:217) of one flush, once its
@@ -48,12 +59,13 @@ pub(super) enum LoopRowEnd {
     /// No endline stayed final: none ran, or a later pass of this flush
     /// printed a graph on the fresh row an earlier endline opened.
     Open,
-    /// The final endline ran on a device-width boundary, or behind no
-    /// represented row: the following field keeps responsive placement.
+    /// The final endline ran on a device-width boundary: the following
+    /// field keeps responsive placement.
     Responsive,
-    /// The final endline closed a represented row on an authored `\p`
+    /// The final endline closed an accepted row on an authored `\p`
     /// pass boundary (term.c:294-305 armed breakline, 217 endline) and
-    /// no later pass printed on the fresh row it opened.
+    /// no later pass printed on the fresh row it opened. Acceptance can
+    /// include NBRZW without any printed glyph (term.c:340-349, 397).
     Authored,
 }
 
@@ -107,12 +119,14 @@ impl NativeFieldSweep {
             },
             tab_offset,
             loop_row_end: self.loop_row_end,
+            loop_rows: self.loop_rows,
             unprojected_origin_units: self.unprojected_origin_units,
             printed_row: self.printed_row,
             emission: self.emission,
             separator_retention: self.separator_retention,
             separator_field,
             row_origins: self.row_origins,
+            field_padding: self.field_padding,
             output_start,
         }
     }
@@ -124,7 +138,7 @@ impl NativeFieldSweep {
 /// `width` is the last printed pass's fill width; `overruns` and `ends_row`
 /// already carry the term.c:250-253 decision over the sweep-widened `vbr`
 /// (computed inside `native_field_device_with_resume`).
-pub(super) struct NativeFieldDevice {
+pub(in crate::mandoc::inline::flow) struct NativeFieldDevice {
     pub(super) width: usize,
     pub(super) viscol: usize,
     pub(super) ends_row: bool,
@@ -155,16 +169,23 @@ pub(super) struct NativeFieldDevice {
     /// projector consumes these only after native acceptance, never at a
     /// tentative word append or from its visible IR width.
     pub(super) row_origins: Vec<(String, usize, usize)>,
+    /// Same-row device padding at stable source-word scalar positions.
+    /// Only a real accepted print determines these cells, after node geometry
+    /// restoration; already materialized field padding is subtracted.
+    pub(super) field_padding: Vec<(String, usize, usize)>,
     /// Outcome of the pass loop's last `endline()` (term.c:217). With
     /// [`LoopRowEnd::Authored`], an authored hard row end exists even
     /// though the final tail comparison (250-253) left the fresh row open;
     /// responsive width placement stays with `overruns`/`ends_row`.
     pub(super) loop_row_end: LoopRowEnd,
+    /// Completed pass-loop rows in native buffer order (term.c:217),
+    /// including accepted zero-width intervals which printed no glyph.
+    pub(super) loop_rows: Vec<NativeLoopRow>,
     pub(super) output_start: usize,
 }
 
 impl NativeFieldDevice {
-    /// The pass loop ended a represented row on an authored `\p` boundary
+    /// The pass loop ended an accepted row on an authored `\p` boundary
     /// and printed nothing after it: the next field starts a new row.
     pub(super) fn row_closed_by_author(&self) -> bool {
         self.loop_row_end == LoopRowEnd::Authored
@@ -175,7 +196,10 @@ impl InlineBuilder {
     /// Execute the numeric pass/print/tail rules from term.c:113-253 and
     /// term_field():374-444. Semantic recovery and hidden URI projection
     /// cannot establish native width or device occupancy.
-    pub(super) fn native_field_device(&self, force_no_break: bool) -> Option<NativeFieldDevice> {
+    pub(in crate::mandoc::inline::flow) fn native_field_device(
+        &self,
+        force_no_break: bool,
+    ) -> Option<NativeFieldDevice> {
         self.native_field_device_with_resume(force_no_break, None)
     }
 
@@ -314,7 +338,10 @@ impl InlineBuilder {
     ) -> Option<(String, usize, usize)> {
         use super::super::field_buffer::FieldCell;
         let state = self.execution.definition.as_ref()?;
-        let declared_origin = state.column_origin_units?;
+        let declared_origin = state
+            .column_origin_units
+            .or(state.declared_body_origin_units)
+            .unwrap_or(0);
         let graph = (start..end).find(|cell| {
             matches!(
                 state.field_buffer.cells().get(*cell),
@@ -323,15 +350,29 @@ impl InlineBuilder {
         })?;
         let owner = state
             .field_word_anchors
-            .partition_point(|(_, _, content)| *content <= graph);
-        let (_, owner, content) = owner
+            .partition_point(|anchor| anchor.content <= graph);
+        let anchor = owner
             .checked_sub(1)
             .and_then(|index| state.field_word_anchors.get(index))?;
+        let scalar = state
+            .field_buffer
+            .projection_length(anchor.content, start.max(anchor.content));
+        let owner = if anchor.projected_field_prefix && scalar == 0 && start <= anchor.content {
+            // Only the word's first accepted pass owns its generated prefix.
+            // A later marker pass may still have scalar zero after NBRZW;
+            // its origin belongs after that real loop endline, not before
+            // the word's earlier positioning (term.c:217,389-427).
+            let serial = anchor
+                .owner
+                .strip_prefix(super::super::output::INTERNAL_FIELD_WORD)
+                .expect("native word owner");
+            format!("{}{serial}", super::super::output::INTERNAL_FIELD_PREFIX)
+        } else {
+            anchor.owner.clone()
+        };
         Some((
-            owner.clone(),
-            state
-                .field_buffer
-                .projection_length(*content, start.max(*content)),
+            owner,
+            scalar,
             // term_flushln() chooses offset (or BRIND's restart margin)
             // before applying minbl (term.c:113-116,225-228). SourceIndent
             // represents that origin; minbl is already a field separator.
@@ -343,12 +384,58 @@ impl InlineBuilder {
         ))
     }
 
+    fn printed_field_padding(
+        &self,
+        start: usize,
+        end: usize,
+        padding_units: usize,
+    ) -> Option<(String, usize, usize)> {
+        use super::super::field_buffer::FieldCell;
+        let state = self.execution.definition.as_ref()?;
+        // DeclaredColumns already carries table cell positioning. Its live
+        // offset advances stay in the column's numeric origin receipt, not
+        // as authored-looking blanks inside the following cell's text.
+        if state.column_origin_units.is_some() {
+            return None;
+        }
+        let graph = (start..end).find(|cell| {
+            matches!(
+                state.field_buffer.cells().get(*cell),
+                Some(FieldCell::Graph { .. })
+            )
+        })?;
+        let owner = state
+            .field_word_anchors
+            .partition_point(|anchor| anchor.content <= graph);
+        let anchor = owner
+            .checked_sub(1)
+            .and_then(|index| state.field_word_anchors.get(index))?;
+        let declared_padding = state.declared_body_origin_units.map_or(0, |origin| {
+            origin
+                .saturating_sub(state.hang_row.viscol.saturating_mul(24))
+                .max(state.hang_row.minbl.saturating_mul(24))
+        });
+        let cells = padding_units
+            .saturating_sub(declared_padding)
+            .saturating_add(11)
+            / 24;
+        let cells = cells.saturating_sub(anchor.projected_device_padding);
+        (cells > 0).then(|| {
+            (
+                anchor.owner.clone(),
+                state
+                    .field_buffer
+                    .projection_length(anchor.content, start.max(anchor.content)),
+                cells,
+            )
+        })
+    }
+
     fn printed_separator_retention(
         &self,
         resumed: Option<NoBreakField>,
         start: usize,
         end: usize,
-        padding_units: usize,
         origin_units: usize,
     ) -> Option<usize> {
         use super::super::field_buffer::FieldCell;
@@ -366,19 +453,25 @@ impl InlineBuilder {
         })?;
         let owner = state
             .field_word_anchors
-            .partition_point(|(_, _, content)| *content <= graph);
-        let (word_start, _, content) = owner
+            .partition_point(|anchor| anchor.content <= graph);
+        let anchor = owner
             .checked_sub(1)
             .and_then(|i| state.field_word_anchors.get(i))?;
         // The owner starts after term_word()'s automatic separator when the
         // field projection prepaid it. Authored leading blanks start inside
         // content and cannot be charged to this generated range.
-        let automatic = state.field_buffer.projection_length(*word_start, *content);
-        let positioning = padding_units
-            .saturating_sub(origin_units)
-            .saturating_add(11)
-            / 24;
-        Some(positioning.saturating_add(automatic))
+        let automatic = state
+            .field_buffer
+            .projection_length(anchor.start, anchor.content);
+        // This receipt is only taken on a fresh device row. DeclaredColumns
+        // and its accepted row-origin receipt already position that row;
+        // minbl is not another authored prefix there. The native page's
+        // common offset can cover minbl even when the responsive column
+        // origin is zero (term.c:113-116,389-427). Only a blank actually
+        // written by term_word() remains in this prepaid range; Ed's
+        // term_newln() can select NOSPACE and suppress precisely that cell
+        // (mdoc_term.c:1474-1483; term.c:475-481,573-589).
+        Some(automatic)
     }
 
     pub(in crate::mandoc::inline::flow) fn native_field_targets(
@@ -458,7 +551,6 @@ impl InlineBuilder {
                     resumed,
                     print.start,
                     print.end,
-                    print.padding_units,
                     print.origin_units,
                 )
             } else {
@@ -471,6 +563,11 @@ impl InlineBuilder {
                 self.printed_row_origin(print.start, print.end, print.origin_units)
         {
             sweep.row_origins.push(origin);
+        } else if sweep.viscol > 0
+            && let Some(padding) =
+                self.printed_field_padding(print.start, print.end, print.padding_units)
+        {
+            sweep.field_padding.push(padding);
         }
         // NBRZW, rejected cells and an empty field print no graph,
         // so they cannot establish a device-origin advance.
@@ -562,8 +659,10 @@ impl InlineBuilder {
             emission: NativeFieldEmission::Unprinted,
             separator_retention: None,
             row_origins: Vec::new(),
+            field_padding: Vec::new(),
             unprojected_origin_units: row.unprojected_origin_units,
             loop_row_end: LoopRowEnd::Open,
+            loop_rows: Vec::new(),
         };
         let mut vbl = state
             .field_offset_units
@@ -586,7 +685,6 @@ impl InlineBuilder {
             };
             width = pass.width;
             width_units = pass.units;
-            let pass_start = start;
             self.print_native_field_pass(
                 &mut sweep,
                 &NativeFieldPrint {
@@ -618,11 +716,12 @@ impl InlineBuilder {
                 // boundary came from an authored `\p` marker (term.c:294-
                 // 305 armed breakline; 217 endline); a device-width guess
                 // (vn > vtarget) stays responsive placement instead.
-                sweep.loop_row_end = if sweep.printed_row.is_some()
-                    && state.field_buffer.cells()[pass_start..pass.end]
-                        .iter()
-                        .any(|cell| matches!(cell, FieldCell::BreakMarker))
-                {
+                sweep.loop_rows.push(NativeLoopRow {
+                    end_cell: pass.end,
+                    printed: sweep.printed_row.is_some(),
+                    boundary: pass.boundary,
+                });
+                sweep.loop_row_end = if pass.boundary == FillBoundary::WordEndBreak {
                     LoopRowEnd::Authored
                 } else {
                     LoopRowEnd::Responsive

@@ -15,13 +15,15 @@ pub(in crate::mandoc::inline::flow) struct OwnerAcceptance {
 /// rejected suffix. Native cell intervals, not append order, decide limits.
 pub(in crate::mandoc::inline::flow) fn accepted_owner_lengths(
     buffer: &super::super::field_buffer::FieldBuffer,
-    anchors: &[(usize, String, usize)],
+    anchors: &[super::super::NativeWordAnchor],
     passes: &[super::super::field_buffer::FillPass],
 ) -> BTreeMap<String, OwnerAcceptance> {
     let mut lengths = BTreeMap::new();
     let mut pass_index = 0;
     let mut pass_start = 0;
-    for (index, (_, owner, content)) in anchors.iter().enumerate() {
+    for (index, anchor) in anchors.iter().enumerate() {
+        let owner = &anchor.owner;
+        let content = &anchor.content;
         #[cfg(test)]
         OWNER_PASS_INTERSECTIONS.with(|work| work.set(work.get().saturating_add(1)));
         // BACKBEFORE may replace the previous trailing blank before this
@@ -29,7 +31,7 @@ pub(in crate::mandoc::inline::flow) fn accepted_owner_lengths(
         // the replacement graph (term.c:901-908).
         let end = anchors
             .get(index + 1)
-            .map_or(buffer.cells().len(), |next| next.0.min(next.2));
+            .map_or(buffer.cells().len(), |next| next.start.min(next.content));
         if end <= *content {
             // An empty word can be followed by BACKBEFORE replacing its
             // trailing native blank. Its zero-length projection interval
@@ -87,7 +89,7 @@ fn next_native_pass_start(
 pub(in crate::mandoc::inline::flow) fn project_accepted_native_passes(
     nodes: &mut Vec<Inline>,
     buffer: &super::super::field_buffer::FieldBuffer,
-    anchors: &[(usize, String, usize)],
+    anchors: &[super::super::NativeWordAnchor],
     passes: &[super::super::field_buffer::FillPass],
     projected_passes: usize,
     output_start: usize,
@@ -110,14 +112,12 @@ pub(in crate::mandoc::inline::flow) fn project_accepted_native_passes(
         if index < first || represented {
             continue;
         }
-        let owner = anchors.partition_point(|(_, _, content)| *content <= cell);
-        if let Some((_, marker, content)) =
-            owner.checked_sub(1).and_then(|index| anchors.get(index))
-        {
+        let owner = anchors.partition_point(|anchor| anchor.content <= cell);
+        if let Some(anchor) = owner.checked_sub(1).and_then(|index| anchors.get(index)) {
             boundaries
-                .entry(marker.clone())
+                .entry(anchor.owner.clone())
                 .or_default()
-                .push(buffer.projection_length(*content, cell));
+                .push(buffer.projection_length(anchor.content, cell));
         }
     }
     if !boundaries.is_empty() {

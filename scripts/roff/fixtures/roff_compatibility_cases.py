@@ -5,6 +5,7 @@ is recorded separately from the registered pristine mandoc; this module never
 runs ManT or computes product expectations.
 """
 
+from itertools import product
 from pathlib import Path
 
 
@@ -287,6 +288,243 @@ def container_word_rows():
             cases.append(dict(name=f'man_{macro}_{state}', source=man + content + '.SH NEXT\nEND\n'))
     return cases
 
+def node_body_rows():
+    """Real HEAD fitting and first BODY events, including section/EOF edges."""
+    man = '.TH TEST 1 "September 28, 2026"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n'
+    mdoc = '.Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n'
+    states = [('empty-text', '.B ""'), ('zero-width', '\\&'), ('armed-zero', '\\z')]
+    cases = []
+    for macro, width, head, (state, text), control in product(
+            ['TP', 'TQ', 'IP'], [4, 8, 16], ['Short', 'HeadWord'],
+            states, ['.br', '.sp 1', '.PP']):
+        request = (f'.IP {head} {width}\n' if macro == 'IP'
+                   else f'.{macro} {width}\n{head}\n')
+        cases.append(dict(
+            name=f'{macro.lower()}-{width}-{head.lower()}-{state}-{control[1:].replace(" ", "-")}',
+            source=man + request + text + '\n' + control + '\nAFTER\n.SH NEXT\nEND\n',
+            heading='NEXT', macro=macro, head=head))
+    for state, text in states[:2]:
+        for boundary, suffix in [('eof-paragraph', '.PP\n'),
+                                 ('section', '.SH EXITMARK\nEXITBODY\n')]:
+            cases.append(dict(
+                name=f'tp-headword-{state}-{boundary}',
+                source=man + '.TP 8\nHeadWord\n' + text + '\n' + suffix,
+                heading=None if boundary == 'eof-paragraph' else 'EXITMARK',
+                macro='TP', head='HeadWord'))
+    for kind, carrier, control in product(['tag', 'hang'], ['No', 'Em', 'Lk'], ['br', 'Pp']):
+        operand = ('https://ex.org ' if carrier == 'Lk' else '') + '"D \\p E"'
+        cases.append(dict(
+            name=f'{kind}-{carrier.lower()}-{control.lower()}',
+            source=mdoc + f'.Bl -{kind} -width 8n\n.It HeadWord\n.{carrier} {operand}\n'
+                   + f'.{control}\n.No AFTER\n.El\n.Sh NEXT\n.No END\n',
+            heading='NEXT', macro='It', head='HeadWord'))
+    # A zero-width accepted prefix and a rejected visible suffix are
+    # different from a visible accepted description. Both must report
+    # boundary order from actual word events, never the final wrapper.
+    labels = [
+        ('zero-rejected', '\\p\\& \\p Z'),
+        ('zero-visible', '\\p\\& Z'),
+        ('zero-marker', '\\p\\& \\p'),
+        ('zero-only', '\\p\\&'),
+        ('rejected', '\\p  Z'),
+        ('prefix-rejected', 'D\\p \\p Z'),
+        ('delayed-rejected', '\\p\\zY Z'),
+    ]
+    for kind, carrier, (label_name, label), control in product(
+            ['tag', 'hang'], ['No', 'Em', 'Lk'], labels, ['br', 'Pp']):
+        operand = ('https://ex.org ' if carrier == 'Lk' else '') + f'"{label}"'
+        cases.append(dict(
+            name=f'{kind}-{carrier.lower()}-{label_name}-{control.lower()}',
+            source=mdoc + f'.Bl -{kind} -width 8n\n.It HeadWord\n.{carrier} {operand}\n'
+                   + f'.{control}\n.No AFTER\n.El\n.Sh NEXT\n.No END\n',
+            heading='NEXT', macro='It', head='HeadWord'))
+    for width, head, carrier, (label_name, label), control in product(
+            [4, 16], ['Short', 'HeadWord'], ['No', 'Em', 'Lk'],
+            [('accepted-zero-leading', '\\&\\p \\p Y'),
+             ('accepted-zero-marker', '\\p\\& \\p Y')], ['none', 'Pp']):
+        operand = ('https://ex.org ' if carrier == 'Lk' else '') + f'"{label}"'
+        request = '' if control == 'none' else '.Pp\n'
+        cases.append(dict(
+            name=f'tag-{width}-{head.lower()}-{carrier.lower()}-{label_name}-{control.lower()}',
+            source=mdoc + f'.Bl -tag -width {width}n\n.It {head}\n.{carrier} {operand}\n'
+                   + request + '.No AFTER\n.El\n.Sh NEXT\n.No END\n',
+            heading='NEXT', macro='It', head=head))
+    return cases
+
+
+def section_edge_rows():
+    """Executed blank HEAD rows and retained paragraphs at section/EOF edges."""
+    header = '.Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n'
+    cases = []
+    prefixes = [('none', ''), ('blank', '\n'), ('zero-width', '.No \\&\n'),
+                ('empty-word', '.No ""\n')]
+    suffixes = [('eof', ''), ('section', '.Sh NEXT\n.No END\n'),
+                ('body', '.No BodyWord\n.Sh NEXT\n.No END\n')]
+    for kind, no_fill, (prefix_name, prefix), request, (tail, suffix) in product(
+            ['tag', 'hang', 'ohang', 'inset'], [False, True], prefixes,
+            ['.sp 1', '.sp 2', '.Pp'], suffixes):
+        # The BODY source stays outside Xo. Its AST ownership is asserted
+        # by the regression test, including diagnostic recovery inputs.
+        before = '.nf\n' if no_fill else ''
+        body = '.No BodyWord\n' if tail == 'body' else ''
+        after = '.Sh NEXT\n.No END\n' if tail != 'eof' else ''
+        source = (header + before + f'.Bl -{kind} -width 8n\n.It Xo\n'
+                  + prefix + request + '\n.Xc\n' + body + '.El\n' + after)
+        cases.append(dict(
+            name=f'{kind}-{("literal" if no_fill else "filled")}-{prefix_name}-{request[1:].replace(" ", "-")}-{tail}',
+            source=source, heading=None if tail == 'eof' else 'NEXT',
+            owner='It', body_word=tail == 'body'))
+    for prefix_name, prefix in [('blank-paragraph', '\n.Pp\n'),
+                                ('paragraph', '.Pp\n'), ('blank', '\n')]:
+        for tail, suffix in [('eof', ''), ('section', '.Sh NEXT\n.No END\n'),
+                             ('word', '.No AFTER\n.Sh NEXT\n.No END\n')]:
+            cases.append(dict(name=f'section-{prefix_name}-{tail}',
+                              source=header + prefix + suffix,
+                              heading=None if tail == 'eof' else 'NEXT',
+                              owner='Sh', body_word=False))
+    return cases
+
+
+def field_spacing_rows():
+    """Skip-vspace debt cannot commit tentative field padding before printing."""
+    from scripts.roff.fixtures.roff_acceptance_cases import spacing_interval_cases
+    return [dict(name=f'hang-{case["width"]}-{index}', source=case['source'],
+                 heading='NEXT', macro='It', owner='Xo',
+                 wide_width=1000 if case['body_carrier'] == 'lk' else None)
+            for index, case in enumerate(spacing_interval_cases())
+            if case['kind'] == 'hang' and case['control'] == 'spneg1-sp1']
+
+
+def empty_text_continuation_rows():
+    """Empty source TEXT calls the same conditional native newline as scopes."""
+    header = '.Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n'
+    cases = []
+    for no_fill, (kind, width) in product([False, True],
+                                        [('hang', 4), ('hang', 8), ('tag', 4), ('tag', 8)]):
+        source = (header + ('.nf\n' if no_fill else '')
+                  + f'.Bl -{kind} -width {width}n\n.It Xo\n.No X\\c\n\n.No Y\n'
+                  + '.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n')
+        cases.append(dict(name=f'{kind}-{width}-{("literal" if no_fill else "filled")}',
+                          source=source, heading='NEXT', macro='It', owner='Xo'))
+    return cases
+
+
+def plain_field_rows():
+    """Ordinary flush units retain accepted invisible passes and reject tails."""
+    header = '.Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n'
+    payloads = [r'\& \p Y', r'\&\p \p Y', r'\p\& \p Y', r'\p',
+                r'\&', r'\[u0301]\p Y', r'\z', r'\zX']
+    cases = []
+    for no_fill, prefix, (index, payload) in product(
+            [False, True], [False, True], enumerate(payloads)):
+        source = (header + ('.nf\n' if no_fill else '')
+                  + ('.No BEFORE\n' if prefix else '')
+                  + f'.No "{payload}"\n.No AFTER\n'
+                  + ('.fi\n' if no_fill else '') + '.Sh NEXT\n.No END\n')
+        cases.append(dict(
+            name=f'{("literal" if no_fill else "filled")}-{("prefix" if prefix else "origin")}-{index}',
+            source=source, no_fill=no_fill, prefix=prefix, payload=payload,
+            heading='NEXT'))
+    return cases
+
+
+def literal_eof_rows():
+    """Physical literal rows survive at EOF without a following printed word."""
+    headers = {
+        'man': '.TH TEST 1 "September 28, 2026" "Historical Oracle Footer"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n',
+        'mdoc': '.Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n',
+    }
+    cases = []
+    for dialect, prefix, payload, repetitions, ending in product(
+            headers, [False, True], ['blank', 'zero-width', 'empty-text'],
+            [1, 2], ['eof', 'fill', 'break-fill']):
+        word = '.B' if dialect == 'man' else '.No'
+        line = {'blank': '\n', 'zero-width': '\\&\n',
+                'empty-text': f'{word} ""\n'}[payload]
+        suffix = {'eof': '', 'fill': '.fi\n', 'break-fill': '.br\n.fi\n'}[ending]
+        cases.append(dict(
+            name=f'{dialect}-{("prefix" if prefix else "origin")}-{payload}-{repetitions}-{ending}',
+            source=headers[dialect] + '.nf\n' + ('BEFORE\n' if prefix else '')
+                   + line * repetitions + suffix,
+            heading=None, dialect=dialect, payload=payload))
+    return cases
+
+
+def table_control_rows():
+    """Real list controls cannot introduce a post into the live column row."""
+    header = '.Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n'
+    cases = []
+    for width, carrier, (before, after) in product(
+            [4, 8, 10, 16], ['No', 'Em', 'Lk https://ex.org'],
+            [(False, False), (True, False), (False, True), (True, True)]):
+        source = (header + f'.Bl -column "{"x" * width}" "b"\n.It A\n'
+                  + '.Bl -tag -compact -width 2n\n'
+                  + ('.ft B\n' if before else '') + f'.It {carrier} x\n.No B\n'
+                  + ('.ft R\n' if after else '')
+                  + '.El\n.Ta C\n.El\n\n.Sh NEXT\n.No END\n')
+        cases.append(dict(
+            name=f'{width}-{carrier.split()[0]}-{int(before)}-{int(after)}',
+            source=source, heading='NEXT', carrier=carrier, width=width,
+            before=before, after=after))
+    return cases
+
+
+def skipped_list_heads():
+    """Plain list It pre declines authored HEAD children in every output mode."""
+    header = '.Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n'
+    payloads = [('break', '.No "\\p HEAD"\n'),
+                ('zero', '.No HEAD\\zX\\c\n'),
+                ('font', '.ft I\n'),
+                ('link', '.Lk https://head.invalid HEAD\n')]
+    controls = [('none', ''), ('break', '.br\n'), ('space', '.sp 1\n'),
+                ('literal', '.nf\n')]
+    cases = []
+    for kind, no_fill, (payload, head), (control, request) in product(
+            ['item', 'bullet', 'dash', 'enum'], [False, True], payloads, controls):
+        prefix = header + ('.nf\n' if no_fill else '') + f'.Bl -{kind} -width 4n\n.It Xo\n'
+        suffix = '.Xc\n' + request + '.No BodyWord\n.No TailWord\n.El\n.fi\n.Sh NEXT\n.No END\n'
+        cases.append(dict(
+            name=f'{kind}-{("literal" if no_fill else "filled")}-{payload}-{control}',
+            source=prefix + head + suffix, baseline_source=prefix + '.No ""\n' + suffix,
+            heading='NEXT', kind=kind, payload=payload, control=control,
+            reading_rule='skipped-head-execution-invariance'))
+    return cases
+
+
+def structural_row_handoffs():
+    """Bl BLOCK pre consumes the previous HEAD device row before a nested It."""
+    header = '.Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n'
+    cases = []
+    for style, width, no_fill, continuation in product(
+            ['tag', 'hang'], [4, 16], [False, True], [False, True]):
+        source = (header + ('.nf\n' if no_fill else '')
+                  + f'.Bl -{style} -width {width}n\n.It Xo\n.No X'
+                  + ('\\c' if continuation else '') + '\n.Xc\n'
+                  + '.Bl -tag -width inner\n.It INNER\n.No BodyWord\n.El\n'
+                  + '.No AFTER\n.El\n.fi\n.Sh NEXT\n.No END\n')
+        cases.append(dict(
+            name=f'{style}-{width}-{("literal" if no_fill else "filled")}-{int(continuation)}',
+            source=source, heading='NEXT', style=style, width=width,
+            no_fill=no_fill, continuation=continuation))
+    return cases
+
+
+def column_margin_rows():
+    """Deferred column padding stays with its resumed source word."""
+    header = '.Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n'
+    cases = []
+    for carrier, offset, (name, operand) in product(
+            ['No', 'Em', 'Sy', 'Li', 'Lk'], [0, 6],
+            [('accepted', r'X\p Y\c'), ('rejected', r'X\p \p DROP\c')]):
+        target = 'https://ex.org ' if carrier == 'Lk' else ''
+        source = (header + '.Bl -column "xxxxxxxx" "xxxx"\n.It Xo\n'
+                  + f'.Bd -literal -compact -offset {offset}n\n.{carrier} {target}"{operand}"\n'
+                  + '.mc\n.Ed\n.No AFTER\n.Xc Ta RightWord\n.El\n.Sh NEXT\n.No END\n')
+        cases.append(dict(name=f'{carrier.lower()}-{offset}-{name}', source=source,
+                          heading='NEXT', carrier=carrier, offset=offset))
+    return cases
+
+
 def matrices():
     """Return independent source families in stable recording order."""
     return [
@@ -299,7 +537,24 @@ def matrices():
         ("output_owner_rows", output_owner_rows()),
         ("portable_word_rows", portable_word_rows()),
         ("container_word_rows", container_word_rows()),
+        ("node_body_rows", node_body_rows()),
+        ("section_edge_rows", section_edge_rows()),
+        ("field_spacing_rows", field_spacing_rows()),
+        ("empty_text_continuation_rows", empty_text_continuation_rows()),
+        ("plain_field_rows", plain_field_rows()),
+        ("literal_eof_rows", literal_eof_rows()),
+        ("column_margin_rows", column_margin_rows()),
+        ("table_control_rows", table_control_rows()),
+        ("skipped_list_heads", skipped_list_heads()),
+        ("structural_row_handoffs", structural_row_handoffs()),
     ]
 
 
-COUNTS = {'native_acceptance_rows': 112, 'native_control_rows': 234, 'generated_word_rows': 2340, 'generated_body_rows': 134, 'kept_word_rows': 96, 'generated_word_styles': 48, 'output_owner_rows': 69, 'portable_word_rows': 108, 'container_word_rows': 21}
+COUNTS = {'native_acceptance_rows': 112, 'native_control_rows': 234, 'generated_word_rows': 2340, 'generated_body_rows': 134, 'kept_word_rows': 96, 'generated_word_styles': 48, 'output_owner_rows': 69, 'portable_word_rows': 108, 'container_word_rows': 21, 'node_body_rows': 262, 'section_edge_rows': 297}
+COUNTS.update(node_body_rows=310, field_spacing_rows=72, empty_text_continuation_rows=8)
+COUNTS.update(plain_field_rows=32)
+COUNTS.update(literal_eof_rows=72)
+COUNTS.update(column_margin_rows=20)
+COUNTS.update(table_control_rows=48)
+COUNTS.update(skipped_list_heads=128)
+COUNTS.update(structural_row_handoffs=16)

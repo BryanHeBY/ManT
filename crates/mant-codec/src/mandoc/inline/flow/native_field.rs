@@ -45,6 +45,16 @@ pub(in crate::mandoc) struct FieldFlags {
 }
 
 impl FieldFlags {
+    /// `man_term.c::pre_IP/pre_TP`: the HEAD post flush keeps a fitting
+    /// tag on the device row; TP/TQ additionally count trailing spaces.
+    pub(in crate::mandoc) const fn man_head(tagged: bool) -> Self {
+        if tagged {
+            Self::new(&[FieldFlag::NoBreak, FieldFlag::BrTrsp], 1)
+        } else {
+            Self::new(&[FieldFlag::NoBreak], 1)
+        }
+    }
+
     /// `mdoc_term.c::termp_it_pre()`: `LIST_hang` (mdoc_term.c:800-804) —
     /// NoBreak|Brind|Hang, trailspace 1.
     pub(in crate::mandoc) const fn hang() -> Self {

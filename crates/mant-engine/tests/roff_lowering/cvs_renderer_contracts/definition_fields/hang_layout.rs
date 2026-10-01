@@ -132,7 +132,7 @@ fn a_wrapping_hang_field_keeps_only_the_proven_body_word_boundary() {
     // `X YYYYYZBODY`. The two-row wrap is the ascii-device column
     // (ASCII_BREAK, term.c:287-300), preserved for a -Tascii switch in
     // FieldCell::Breakpoint.
-    assert!(lowered.contains("X     YYYYYZBODY"), "{lowered:?}");
+    assert!(lowered.contains("X YYYYYZBODY"), "{lowered:?}");
     // Exact fixed CVS -Tascii/-Tutf8/-Tlint: roff.c::post_hyph() marks
     // this source hyphen ASCII_HYPH, and term.c::term_fill() wraps after it.
     // It is ordinary text in the AST, so the gap proof must see that marker

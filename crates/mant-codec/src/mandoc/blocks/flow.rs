@@ -244,9 +244,21 @@ impl BlockState {
                 append,
             );
         }
+        let visible = self.formatter.definition_before_visible()
+            && self
+                .formatter
+                .execution
+                .has_visible_content_since(visible_before);
         if self.formatter.definition_before_visible()
-            && self.formatter.execution.take_leading_line_boundary()
+            && let Some(boundary_checkpoint) = self.formatter.execution.take_leading_line_boundary()
         {
+            // mdoc_term.c::termp_lk_pre() executes the description word
+            // before its generated colon/target settle a pending break.
+            // One handler can report both observations; the actual glyph
+            // checkpoint preserves their order across the output wrapper.
+            if visible && boundary_checkpoint != visible_before.0 {
+                self.formatter.note_definition_visible();
+            }
             self.formatter.note_definition_boundary();
             if self.formatter.definition_head_row_pending()
                 && self.paragraph.consume_invisible_head_row()
@@ -257,12 +269,7 @@ impl BlockState {
             // term_newln() in the same source stream as block requests.
             self.formatter.settle_definition_head_rows();
         }
-        if self.formatter.definition_before_visible()
-            && self
-                .formatter
-                .execution
-                .has_visible_content_since(visible_before)
-        {
+        if self.formatter.definition_before_visible() && visible {
             self.formatter.note_definition_visible();
         }
     }
@@ -484,24 +491,24 @@ impl BlockState {
 
     pub(super) fn finish_column_nested_row(&mut self) {
         if self.formatter.execution.has_column_output_scope() {
-            // The native post runs in the active output owner. In particular,
-            // closing literal graph must not produce a second empty paragraph.
-            if self.column_uses_literal_output() {
-                self.literal
-                    .with_inline_builder(&mut self.formatter, |builder| {
-                        builder.execute_native_newline();
-                    });
-            } else {
-                self.paragraph
-                    .with_inline_builder(&mut self.formatter, |builder| {
-                        builder.execute_native_newline();
-                    });
-            }
-            // The real pre/post above already consumed its native buffer.
-            // Retire no-fill's receipt tracker without executing another
-            // row finish or clearing the committed field gap/continuation.
-            self.formatter.no_fill_inline.retire_consumed_cell();
+            self.finish_native_structural_row();
         }
+    }
+
+    /// A real macro pre/post calls `term_newln` independently of its IR owner.
+    /// Borrow the active destination so a detached HEAD row is consumed even
+    /// when the BODY has no local glyph (`mdoc_term.c::termp_bl_pre`).
+    pub(super) fn finish_native_structural_row(&mut self) {
+        if self.column_uses_literal_output()
+            || (!self.formatter.execution.has_column_output_scope() && self.formatter.no_fill)
+        {
+            self.literal
+                .with_inline_builder(&mut self.formatter, InlineBuilder::execute_native_newline);
+        } else {
+            self.paragraph
+                .with_inline_builder(&mut self.formatter, InlineBuilder::execute_native_newline);
+        }
+        self.formatter.no_fill_inline.retire_consumed_cell();
     }
 
     pub(super) fn finish_column_display_body(&mut self, kind: Option<libmandoc_rs::DisplayKind>) {
@@ -525,6 +532,15 @@ impl BlockState {
             self.paragraph
                 .with_inline_builder(&mut self.formatter, enter);
         }
+    }
+
+    pub(super) fn enter_column_body_node(&mut self, node: &libmandoc_rs::Node) {
+        self.formatter.no_fill = node.flags.no_fill;
+        self.paragraph
+            .with_inline_builder(&mut self.formatter, |builder| {
+                builder.observe_no_fill_source_lines(true);
+                builder.begin_executed_node(node);
+            });
     }
 
     pub(super) fn column_vertical_space(&mut self, rows: i32) {
@@ -744,7 +760,7 @@ impl BlockState {
 
     #[cfg(test)]
     pub(super) fn finish(mut self) -> Vec<Block> {
-        self.settle(super::FormatterRowBoundary::Settle);
+        self.settle(super::FormatterRowBoundary::Settle, None);
         self.output
     }
 
@@ -754,17 +770,34 @@ impl BlockState {
         mut self,
         formatter: &mut crate::mandoc::formatter::FormatterState,
         row_boundary: super::FormatterRowBoundary,
+        next_column_entry: Option<&libmandoc_rs::Node>,
     ) -> Vec<Block> {
-        self.settle(row_boundary);
+        self.settle(row_boundary, next_column_entry);
         *formatter = self.formatter;
         self.output
     }
 
-    fn settle(&mut self, row_boundary: super::FormatterRowBoundary) {
+    fn settle(
+        &mut self,
+        row_boundary: super::FormatterRowBoundary,
+        next_column_entry: Option<&libmandoc_rs::Node>,
+    ) {
         let mut column_closed_row = false;
         if matches!(row_boundary, super::FormatterRowBoundary::Column { .. }) {
             let finish_column = |builder: &mut InlineBuilder| {
-                let closed = builder.finish_nested_column_part();
+                let mut closed = builder.finish_nested_column_part();
+                if let Some(node) = next_column_entry {
+                    // print_mdoc_node() enters the next actual BODY after
+                    // the prior It post cleared NOBREAK, and before the
+                    // next It pre establishes its field (mdoc_term.c:314-
+                    // 321, 930-964). Consume that event in the prior row's
+                    // owner; moving it into an empty next cell would lose
+                    // its graph-row end or invent an empty row.
+                    let row_was_open = builder.execution.has_open_native_device_row();
+                    builder.observe_no_fill_source_lines(true);
+                    builder.begin_executed_node(node);
+                    closed |= row_was_open && !builder.execution.has_open_native_device_row();
+                }
                 builder.observe_no_fill_source_lines(false);
                 closed
             };
@@ -780,6 +813,9 @@ impl BlockState {
                     .with_inline_builder(&mut self.formatter, finish_column)
             };
             self.formatter.no_fill_inline.retire_consumed_cell();
+            if let Some(node) = next_column_entry {
+                self.formatter.no_fill = node.flags.no_fill;
+            }
         } else if row_boundary == super::FormatterRowBoundary::Settle {
             // The caller identified a native BODY post, not an IR owner
             // return. mdoc_term.c::termp_it_post() executes term_newln()

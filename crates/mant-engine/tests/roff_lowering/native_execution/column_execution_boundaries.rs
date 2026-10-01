@@ -782,8 +782,14 @@ fn literal_content_and_spacing_rows_keep_their_execution_order() {
         ("\n.sp 2\n\n".to_owned(), 4, 2),
         (".sp -1\n\n.sp 1\n".to_owned(), 1, 1),
         ("\n.sp -1\n\n".to_owned(), 1, 0),
+        (format!(".sp 1\n{}", "\n".repeat(2)), 3, 1),
+        (format!(".sp 1\n{}", "\n".repeat(4095)), 4096, 1),
         (format!(".sp 1\n{}", "\n".repeat(4096)), 4097, 1),
+        (format!(".sp 1\n{}", "\n".repeat(4097)), 4098, 1),
+        (format!("{}.sp 1\n", "\n".repeat(2)), 3, 1),
+        (format!("{}.sp 1\n", "\n".repeat(4095)), 4096, 1),
         (format!("{}.sp 1\n", "\n".repeat(4096)), 4097, 1),
+        (format!("{}.sp 1\n", "\n".repeat(4097)), 4098, 1),
     ] {
         let source = format!(
             ".TH TEST 1 \"2026-09-28\"\n.SH DESCRIPTION\n.nf\nBEFORE\n{body}.fi\n.SH NEXT\nAFTER\n"

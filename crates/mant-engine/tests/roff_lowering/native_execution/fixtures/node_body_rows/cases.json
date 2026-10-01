@@ -1,0 +1,3729 @@
+[
+  {
+    "name": "tp-4-short-empty-text-br",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 4\nShort\n.B \"\"\n.br\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TP",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tp-4-short-empty-text-sp-1",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 4\nShort\n.B \"\"\n.sp 1\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TP",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tp-4-short-empty-text-PP",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 4\nShort\n.B \"\"\n.PP\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TP",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tp-4-short-zero-width-br",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 4\nShort\n\\&\n.br\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TP",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tp-4-short-zero-width-sp-1",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 4\nShort\n\\&\n.sp 1\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TP",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tp-4-short-zero-width-PP",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 4\nShort\n\\&\n.PP\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TP",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tp-4-short-armed-zero-br",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 4\nShort\n\\z\n.br\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TP",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "FTER"
+    ]
+  },
+  {
+    "name": "tp-4-short-armed-zero-sp-1",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 4\nShort\n\\z\n.sp 1\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TP",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "FTER"
+    ]
+  },
+  {
+    "name": "tp-4-short-armed-zero-PP",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 4\nShort\n\\z\n.PP\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TP",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "FTER"
+    ]
+  },
+  {
+    "name": "tp-4-headword-empty-text-br",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 4\nHeadWord\n.B \"\"\n.br\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tp-4-headword-empty-text-sp-1",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 4\nHeadWord\n.B \"\"\n.sp 1\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tp-4-headword-empty-text-PP",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 4\nHeadWord\n.B \"\"\n.PP\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tp-4-headword-zero-width-br",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 4\nHeadWord\n\\&\n.br\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tp-4-headword-zero-width-sp-1",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 4\nHeadWord\n\\&\n.sp 1\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tp-4-headword-zero-width-PP",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 4\nHeadWord\n\\&\n.PP\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tp-4-headword-armed-zero-br",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 4\nHeadWord\n\\z\n.br\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "FTER"
+    ]
+  },
+  {
+    "name": "tp-4-headword-armed-zero-sp-1",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 4\nHeadWord\n\\z\n.sp 1\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "FTER"
+    ]
+  },
+  {
+    "name": "tp-4-headword-armed-zero-PP",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 4\nHeadWord\n\\z\n.PP\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "FTER"
+    ]
+  },
+  {
+    "name": "tp-8-short-empty-text-br",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 8\nShort\n.B \"\"\n.br\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TP",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tp-8-short-empty-text-sp-1",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 8\nShort\n.B \"\"\n.sp 1\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TP",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tp-8-short-empty-text-PP",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 8\nShort\n.B \"\"\n.PP\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TP",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tp-8-short-zero-width-br",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 8\nShort\n\\&\n.br\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TP",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tp-8-short-zero-width-sp-1",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 8\nShort\n\\&\n.sp 1\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TP",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tp-8-short-zero-width-PP",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 8\nShort\n\\&\n.PP\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TP",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tp-8-short-armed-zero-br",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 8\nShort\n\\z\n.br\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TP",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tp-8-short-armed-zero-sp-1",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 8\nShort\n\\z\n.sp 1\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TP",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tp-8-short-armed-zero-PP",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 8\nShort\n\\z\n.PP\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TP",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tp-8-headword-empty-text-br",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 8\nHeadWord\n.B \"\"\n.br\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tp-8-headword-empty-text-sp-1",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 8\nHeadWord\n.B \"\"\n.sp 1\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tp-8-headword-empty-text-PP",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 8\nHeadWord\n.B \"\"\n.PP\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tp-8-headword-zero-width-br",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 8\nHeadWord\n\\&\n.br\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tp-8-headword-zero-width-sp-1",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 8\nHeadWord\n\\&\n.sp 1\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tp-8-headword-zero-width-PP",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 8\nHeadWord\n\\&\n.PP\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tp-8-headword-armed-zero-br",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 8\nHeadWord\n\\z\n.br\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "FTER"
+    ]
+  },
+  {
+    "name": "tp-8-headword-armed-zero-sp-1",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 8\nHeadWord\n\\z\n.sp 1\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "FTER"
+    ]
+  },
+  {
+    "name": "tp-8-headword-armed-zero-PP",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 8\nHeadWord\n\\z\n.PP\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "FTER"
+    ]
+  },
+  {
+    "name": "tp-16-short-empty-text-br",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 16\nShort\n.B \"\"\n.br\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TP",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tp-16-short-empty-text-sp-1",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 16\nShort\n.B \"\"\n.sp 1\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TP",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tp-16-short-empty-text-PP",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 16\nShort\n.B \"\"\n.PP\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TP",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tp-16-short-zero-width-br",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 16\nShort\n\\&\n.br\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TP",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tp-16-short-zero-width-sp-1",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 16\nShort\n\\&\n.sp 1\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TP",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tp-16-short-zero-width-PP",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 16\nShort\n\\&\n.PP\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TP",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tp-16-short-armed-zero-br",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 16\nShort\n\\z\n.br\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TP",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tp-16-short-armed-zero-sp-1",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 16\nShort\n\\z\n.sp 1\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TP",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tp-16-short-armed-zero-PP",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 16\nShort\n\\z\n.PP\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TP",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tp-16-headword-empty-text-br",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 16\nHeadWord\n.B \"\"\n.br\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tp-16-headword-empty-text-sp-1",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 16\nHeadWord\n.B \"\"\n.sp 1\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tp-16-headword-empty-text-PP",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 16\nHeadWord\n.B \"\"\n.PP\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tp-16-headword-zero-width-br",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 16\nHeadWord\n\\&\n.br\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tp-16-headword-zero-width-sp-1",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 16\nHeadWord\n\\&\n.sp 1\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tp-16-headword-zero-width-PP",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 16\nHeadWord\n\\&\n.PP\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tp-16-headword-armed-zero-br",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 16\nHeadWord\n\\z\n.br\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tp-16-headword-armed-zero-sp-1",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 16\nHeadWord\n\\z\n.sp 1\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tp-16-headword-armed-zero-PP",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 16\nHeadWord\n\\z\n.PP\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tq-4-short-empty-text-br",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TQ 4\nShort\n.B \"\"\n.br\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TQ",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tq-4-short-empty-text-sp-1",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TQ 4\nShort\n.B \"\"\n.sp 1\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TQ",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tq-4-short-empty-text-PP",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TQ 4\nShort\n.B \"\"\n.PP\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TQ",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tq-4-short-zero-width-br",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TQ 4\nShort\n\\&\n.br\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TQ",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tq-4-short-zero-width-sp-1",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TQ 4\nShort\n\\&\n.sp 1\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TQ",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tq-4-short-zero-width-PP",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TQ 4\nShort\n\\&\n.PP\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TQ",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tq-4-short-armed-zero-br",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TQ 4\nShort\n\\z\n.br\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TQ",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "FTER"
+    ]
+  },
+  {
+    "name": "tq-4-short-armed-zero-sp-1",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TQ 4\nShort\n\\z\n.sp 1\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TQ",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "FTER"
+    ]
+  },
+  {
+    "name": "tq-4-short-armed-zero-PP",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TQ 4\nShort\n\\z\n.PP\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TQ",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "FTER"
+    ]
+  },
+  {
+    "name": "tq-4-headword-empty-text-br",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TQ 4\nHeadWord\n.B \"\"\n.br\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TQ",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tq-4-headword-empty-text-sp-1",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TQ 4\nHeadWord\n.B \"\"\n.sp 1\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TQ",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tq-4-headword-empty-text-PP",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TQ 4\nHeadWord\n.B \"\"\n.PP\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TQ",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tq-4-headword-zero-width-br",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TQ 4\nHeadWord\n\\&\n.br\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TQ",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tq-4-headword-zero-width-sp-1",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TQ 4\nHeadWord\n\\&\n.sp 1\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TQ",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tq-4-headword-zero-width-PP",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TQ 4\nHeadWord\n\\&\n.PP\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TQ",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tq-4-headword-armed-zero-br",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TQ 4\nHeadWord\n\\z\n.br\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TQ",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "FTER"
+    ]
+  },
+  {
+    "name": "tq-4-headword-armed-zero-sp-1",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TQ 4\nHeadWord\n\\z\n.sp 1\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TQ",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "FTER"
+    ]
+  },
+  {
+    "name": "tq-4-headword-armed-zero-PP",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TQ 4\nHeadWord\n\\z\n.PP\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TQ",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "FTER"
+    ]
+  },
+  {
+    "name": "tq-8-short-empty-text-br",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TQ 8\nShort\n.B \"\"\n.br\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TQ",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tq-8-short-empty-text-sp-1",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TQ 8\nShort\n.B \"\"\n.sp 1\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TQ",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tq-8-short-empty-text-PP",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TQ 8\nShort\n.B \"\"\n.PP\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TQ",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tq-8-short-zero-width-br",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TQ 8\nShort\n\\&\n.br\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TQ",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tq-8-short-zero-width-sp-1",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TQ 8\nShort\n\\&\n.sp 1\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TQ",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tq-8-short-zero-width-PP",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TQ 8\nShort\n\\&\n.PP\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TQ",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tq-8-short-armed-zero-br",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TQ 8\nShort\n\\z\n.br\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TQ",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tq-8-short-armed-zero-sp-1",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TQ 8\nShort\n\\z\n.sp 1\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TQ",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tq-8-short-armed-zero-PP",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TQ 8\nShort\n\\z\n.PP\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TQ",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tq-8-headword-empty-text-br",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TQ 8\nHeadWord\n.B \"\"\n.br\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TQ",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tq-8-headword-empty-text-sp-1",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TQ 8\nHeadWord\n.B \"\"\n.sp 1\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TQ",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tq-8-headword-empty-text-PP",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TQ 8\nHeadWord\n.B \"\"\n.PP\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TQ",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tq-8-headword-zero-width-br",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TQ 8\nHeadWord\n\\&\n.br\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TQ",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tq-8-headword-zero-width-sp-1",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TQ 8\nHeadWord\n\\&\n.sp 1\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TQ",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tq-8-headword-zero-width-PP",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TQ 8\nHeadWord\n\\&\n.PP\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TQ",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tq-8-headword-armed-zero-br",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TQ 8\nHeadWord\n\\z\n.br\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TQ",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "FTER"
+    ]
+  },
+  {
+    "name": "tq-8-headword-armed-zero-sp-1",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TQ 8\nHeadWord\n\\z\n.sp 1\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TQ",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "FTER"
+    ]
+  },
+  {
+    "name": "tq-8-headword-armed-zero-PP",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TQ 8\nHeadWord\n\\z\n.PP\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TQ",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "FTER"
+    ]
+  },
+  {
+    "name": "tq-16-short-empty-text-br",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TQ 16\nShort\n.B \"\"\n.br\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TQ",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tq-16-short-empty-text-sp-1",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TQ 16\nShort\n.B \"\"\n.sp 1\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TQ",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tq-16-short-empty-text-PP",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TQ 16\nShort\n.B \"\"\n.PP\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TQ",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tq-16-short-zero-width-br",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TQ 16\nShort\n\\&\n.br\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TQ",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tq-16-short-zero-width-sp-1",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TQ 16\nShort\n\\&\n.sp 1\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TQ",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tq-16-short-zero-width-PP",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TQ 16\nShort\n\\&\n.PP\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TQ",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tq-16-short-armed-zero-br",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TQ 16\nShort\n\\z\n.br\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TQ",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tq-16-short-armed-zero-sp-1",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TQ 16\nShort\n\\z\n.sp 1\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TQ",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tq-16-short-armed-zero-PP",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TQ 16\nShort\n\\z\n.PP\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TQ",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tq-16-headword-empty-text-br",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TQ 16\nHeadWord\n.B \"\"\n.br\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TQ",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tq-16-headword-empty-text-sp-1",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TQ 16\nHeadWord\n.B \"\"\n.sp 1\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TQ",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tq-16-headword-empty-text-PP",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TQ 16\nHeadWord\n.B \"\"\n.PP\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TQ",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tq-16-headword-zero-width-br",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TQ 16\nHeadWord\n\\&\n.br\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TQ",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tq-16-headword-zero-width-sp-1",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TQ 16\nHeadWord\n\\&\n.sp 1\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TQ",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tq-16-headword-zero-width-PP",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TQ 16\nHeadWord\n\\&\n.PP\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TQ",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tq-16-headword-armed-zero-br",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TQ 16\nHeadWord\n\\z\n.br\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TQ",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tq-16-headword-armed-zero-sp-1",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TQ 16\nHeadWord\n\\z\n.sp 1\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TQ",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tq-16-headword-armed-zero-PP",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TQ 16\nHeadWord\n\\z\n.PP\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "TQ",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "ip-4-short-empty-text-br",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.IP Short 4\n.B \"\"\n.br\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "IP",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "ip-4-short-empty-text-sp-1",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.IP Short 4\n.B \"\"\n.sp 1\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "IP",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "ip-4-short-empty-text-PP",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.IP Short 4\n.B \"\"\n.PP\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "IP",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "ip-4-short-zero-width-br",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.IP Short 4\n\\&\n.br\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "IP",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "ip-4-short-zero-width-sp-1",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.IP Short 4\n\\&\n.sp 1\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "IP",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "ip-4-short-zero-width-PP",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.IP Short 4\n\\&\n.PP\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "IP",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "ip-4-short-armed-zero-br",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.IP Short 4\n\\z\n.br\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "IP",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "FTER"
+    ]
+  },
+  {
+    "name": "ip-4-short-armed-zero-sp-1",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.IP Short 4\n\\z\n.sp 1\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "IP",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "FTER"
+    ]
+  },
+  {
+    "name": "ip-4-short-armed-zero-PP",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.IP Short 4\n\\z\n.PP\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "IP",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "FTER"
+    ]
+  },
+  {
+    "name": "ip-4-headword-empty-text-br",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.IP HeadWord 4\n.B \"\"\n.br\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "IP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "ip-4-headword-empty-text-sp-1",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.IP HeadWord 4\n.B \"\"\n.sp 1\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "IP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "ip-4-headword-empty-text-PP",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.IP HeadWord 4\n.B \"\"\n.PP\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "IP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "ip-4-headword-zero-width-br",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.IP HeadWord 4\n\\&\n.br\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "IP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "ip-4-headword-zero-width-sp-1",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.IP HeadWord 4\n\\&\n.sp 1\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "IP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "ip-4-headword-zero-width-PP",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.IP HeadWord 4\n\\&\n.PP\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "IP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "ip-4-headword-armed-zero-br",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.IP HeadWord 4\n\\z\n.br\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "IP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "FTER"
+    ]
+  },
+  {
+    "name": "ip-4-headword-armed-zero-sp-1",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.IP HeadWord 4\n\\z\n.sp 1\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "IP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "FTER"
+    ]
+  },
+  {
+    "name": "ip-4-headword-armed-zero-PP",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.IP HeadWord 4\n\\z\n.PP\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "IP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "FTER"
+    ]
+  },
+  {
+    "name": "ip-8-short-empty-text-br",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.IP Short 8\n.B \"\"\n.br\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "IP",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "ip-8-short-empty-text-sp-1",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.IP Short 8\n.B \"\"\n.sp 1\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "IP",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "ip-8-short-empty-text-PP",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.IP Short 8\n.B \"\"\n.PP\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "IP",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "ip-8-short-zero-width-br",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.IP Short 8\n\\&\n.br\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "IP",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "ip-8-short-zero-width-sp-1",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.IP Short 8\n\\&\n.sp 1\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "IP",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "ip-8-short-zero-width-PP",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.IP Short 8\n\\&\n.PP\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "IP",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "ip-8-short-armed-zero-br",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.IP Short 8\n\\z\n.br\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "IP",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "ip-8-short-armed-zero-sp-1",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.IP Short 8\n\\z\n.sp 1\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "IP",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "ip-8-short-armed-zero-PP",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.IP Short 8\n\\z\n.PP\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "IP",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "ip-8-headword-empty-text-br",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.IP HeadWord 8\n.B \"\"\n.br\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "IP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "ip-8-headword-empty-text-sp-1",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.IP HeadWord 8\n.B \"\"\n.sp 1\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "IP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "ip-8-headword-empty-text-PP",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.IP HeadWord 8\n.B \"\"\n.PP\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "IP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "ip-8-headword-zero-width-br",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.IP HeadWord 8\n\\&\n.br\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "IP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "ip-8-headword-zero-width-sp-1",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.IP HeadWord 8\n\\&\n.sp 1\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "IP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "ip-8-headword-zero-width-PP",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.IP HeadWord 8\n\\&\n.PP\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "IP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "ip-8-headword-armed-zero-br",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.IP HeadWord 8\n\\z\n.br\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "IP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "FTER"
+    ]
+  },
+  {
+    "name": "ip-8-headword-armed-zero-sp-1",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.IP HeadWord 8\n\\z\n.sp 1\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "IP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "FTER"
+    ]
+  },
+  {
+    "name": "ip-8-headword-armed-zero-PP",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.IP HeadWord 8\n\\z\n.PP\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "IP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "FTER"
+    ]
+  },
+  {
+    "name": "ip-16-short-empty-text-br",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.IP Short 16\n.B \"\"\n.br\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "IP",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "ip-16-short-empty-text-sp-1",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.IP Short 16\n.B \"\"\n.sp 1\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "IP",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "ip-16-short-empty-text-PP",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.IP Short 16\n.B \"\"\n.PP\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "IP",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "ip-16-short-zero-width-br",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.IP Short 16\n\\&\n.br\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "IP",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "ip-16-short-zero-width-sp-1",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.IP Short 16\n\\&\n.sp 1\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "IP",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "ip-16-short-zero-width-PP",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.IP Short 16\n\\&\n.PP\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "IP",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "ip-16-short-armed-zero-br",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.IP Short 16\n\\z\n.br\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "IP",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "ip-16-short-armed-zero-sp-1",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.IP Short 16\n\\z\n.sp 1\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "IP",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "ip-16-short-armed-zero-PP",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.IP Short 16\n\\z\n.PP\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "IP",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "ip-16-headword-empty-text-br",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.IP HeadWord 16\n.B \"\"\n.br\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "IP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "ip-16-headword-empty-text-sp-1",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.IP HeadWord 16\n.B \"\"\n.sp 1\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "IP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "ip-16-headword-empty-text-PP",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.IP HeadWord 16\n.B \"\"\n.PP\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "IP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "ip-16-headword-zero-width-br",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.IP HeadWord 16\n\\&\n.br\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "IP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "ip-16-headword-zero-width-sp-1",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.IP HeadWord 16\n\\&\n.sp 1\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "IP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "ip-16-headword-zero-width-PP",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.IP HeadWord 16\n\\&\n.PP\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "IP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "ip-16-headword-armed-zero-br",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.IP HeadWord 16\n\\z\n.br\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "IP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "ip-16-headword-armed-zero-sp-1",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.IP HeadWord 16\n\\z\n.sp 1\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "IP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "ip-16-headword-armed-zero-PP",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.IP HeadWord 16\n\\z\n.PP\nAFTER\n.SH NEXT\nEND\n",
+    "heading": "NEXT",
+    "macro": "IP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tp-headword-empty-text-eof-paragraph",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 8\nHeadWord\n.B \"\"\n.PP\n",
+    "heading": null,
+    "macro": "TP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord"
+    ]
+  },
+  {
+    "name": "tp-headword-empty-text-section",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 8\nHeadWord\n.B \"\"\n.SH EXITMARK\nEXITBODY\n",
+    "heading": "EXITMARK",
+    "macro": "TP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord"
+    ]
+  },
+  {
+    "name": "tp-headword-zero-width-eof-paragraph",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 8\nHeadWord\n\\&\n.PP\n",
+    "heading": null,
+    "macro": "TP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      ""
+    ]
+  },
+  {
+    "name": "tp-headword-zero-width-section",
+    "source": ".TH TEST 1 \"September 28, 2026\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.TP 8\nHeadWord\n\\&\n.SH EXITMARK\nEXITBODY\n",
+    "heading": "EXITMARK",
+    "macro": "TP",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      ""
+    ]
+  },
+  {
+    "name": "tag-no-br",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It HeadWord\n.No \"D \\p E\"\n.br\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord D",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-no-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It HeadWord\n.No \"D \\p E\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord D",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-em-br",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It HeadWord\n.Em \"D \\p E\"\n.br\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord D",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-em-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It HeadWord\n.Em \"D \\p E\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord D",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-lk-br",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It HeadWord\n.Lk https://ex.org \"D \\p E\"\n.br\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord D",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-lk-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It HeadWord\n.Lk https://ex.org \"D \\p E\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord D",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-no-br",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It HeadWord\n.No \"D \\p E\"\n.br\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord D",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-no-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It HeadWord\n.No \"D \\p E\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord D",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-em-br",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It HeadWord\n.Em \"D \\p E\"\n.br\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord D",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-em-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It HeadWord\n.Em \"D \\p E\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord D",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-lk-br",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It HeadWord\n.Lk https://ex.org \"D \\p E\"\n.br\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord D",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-lk-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It HeadWord\n.Lk https://ex.org \"D \\p E\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord D",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-no-zero-rejected-br",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It HeadWord\n.No \"\\p\\& \\p Z\"\n.br\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-no-zero-rejected-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It HeadWord\n.No \"\\p\\& \\p Z\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-no-zero-visible-br",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It HeadWord\n.No \"\\p\\& Z\"\n.br\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "Z",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-no-zero-visible-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It HeadWord\n.No \"\\p\\& Z\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "Z",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-no-zero-marker-br",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It HeadWord\n.No \"\\p\\& \\p\"\n.br\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-no-zero-marker-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It HeadWord\n.No \"\\p\\& \\p\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-no-zero-only-br",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It HeadWord\n.No \"\\p\\&\"\n.br\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-no-zero-only-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It HeadWord\n.No \"\\p\\&\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-no-rejected-br",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It HeadWord\n.No \"\\p  Z\"\n.br\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-no-rejected-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It HeadWord\n.No \"\\p  Z\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-no-prefix-rejected-br",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It HeadWord\n.No \"D\\p \\p Z\"\n.br\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord D",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-no-prefix-rejected-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It HeadWord\n.No \"D\\p \\p Z\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord D",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-no-delayed-rejected-br",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It HeadWord\n.No \"\\p\\zY Z\"\n.br\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord YZ",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-no-delayed-rejected-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It HeadWord\n.No \"\\p\\zY Z\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord YZ",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-em-zero-rejected-br",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It HeadWord\n.Em \"\\p\\& \\p Z\"\n.br\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-em-zero-rejected-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It HeadWord\n.Em \"\\p\\& \\p Z\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-em-zero-visible-br",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It HeadWord\n.Em \"\\p\\& Z\"\n.br\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "Z",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-em-zero-visible-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It HeadWord\n.Em \"\\p\\& Z\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "Z",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-em-zero-marker-br",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It HeadWord\n.Em \"\\p\\& \\p\"\n.br\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-em-zero-marker-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It HeadWord\n.Em \"\\p\\& \\p\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-em-zero-only-br",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It HeadWord\n.Em \"\\p\\&\"\n.br\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-em-zero-only-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It HeadWord\n.Em \"\\p\\&\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-em-rejected-br",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It HeadWord\n.Em \"\\p  Z\"\n.br\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-em-rejected-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It HeadWord\n.Em \"\\p  Z\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-em-prefix-rejected-br",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It HeadWord\n.Em \"D\\p \\p Z\"\n.br\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord D",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-em-prefix-rejected-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It HeadWord\n.Em \"D\\p \\p Z\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord D",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-em-delayed-rejected-br",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It HeadWord\n.Em \"\\p\\zY Z\"\n.br\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord YZ",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-em-delayed-rejected-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It HeadWord\n.Em \"\\p\\zY Z\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord YZ",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-lk-zero-rejected-br",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It HeadWord\n.Lk https://ex.org \"\\p\\& \\p Z\"\n.br\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-lk-zero-rejected-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It HeadWord\n.Lk https://ex.org \"\\p\\& \\p Z\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-lk-zero-visible-br",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It HeadWord\n.Lk https://ex.org \"\\p\\& Z\"\n.br\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "Z: https://ex.org",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-lk-zero-visible-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It HeadWord\n.Lk https://ex.org \"\\p\\& Z\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "Z: https://ex.org",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-lk-zero-marker-br",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It HeadWord\n.Lk https://ex.org \"\\p\\& \\p\"\n.br\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      ":",
+      "https://ex.org",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-lk-zero-marker-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It HeadWord\n.Lk https://ex.org \"\\p\\& \\p\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      ":",
+      "https://ex.org",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-lk-zero-only-br",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It HeadWord\n.Lk https://ex.org \"\\p\\&\"\n.br\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord :",
+      "https://ex.org",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-lk-zero-only-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It HeadWord\n.Lk https://ex.org \"\\p\\&\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord :",
+      "https://ex.org",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-lk-rejected-br",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It HeadWord\n.Lk https://ex.org \"\\p  Z\"\n.br\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-lk-rejected-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It HeadWord\n.Lk https://ex.org \"\\p  Z\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-lk-prefix-rejected-br",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It HeadWord\n.Lk https://ex.org \"D\\p \\p Z\"\n.br\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord D",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-lk-prefix-rejected-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It HeadWord\n.Lk https://ex.org \"D\\p \\p Z\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord D",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-lk-delayed-rejected-br",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It HeadWord\n.Lk https://ex.org \"\\p\\zY Z\"\n.br\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord YZ:",
+      "https://ex.org",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-lk-delayed-rejected-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It HeadWord\n.Lk https://ex.org \"\\p\\zY Z\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord YZ:",
+      "https://ex.org",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-no-zero-rejected-br",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It HeadWord\n.No \"\\p\\& \\p Z\"\n.br\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-no-zero-rejected-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It HeadWord\n.No \"\\p\\& \\p Z\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-no-zero-visible-br",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It HeadWord\n.No \"\\p\\& Z\"\n.br\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "Z",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-no-zero-visible-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It HeadWord\n.No \"\\p\\& Z\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "Z",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-no-zero-marker-br",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It HeadWord\n.No \"\\p\\& \\p\"\n.br\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-no-zero-marker-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It HeadWord\n.No \"\\p\\& \\p\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-no-zero-only-br",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It HeadWord\n.No \"\\p\\&\"\n.br\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-no-zero-only-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It HeadWord\n.No \"\\p\\&\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-no-rejected-br",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It HeadWord\n.No \"\\p  Z\"\n.br\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-no-rejected-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It HeadWord\n.No \"\\p  Z\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-no-prefix-rejected-br",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It HeadWord\n.No \"D\\p \\p Z\"\n.br\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord D",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-no-prefix-rejected-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It HeadWord\n.No \"D\\p \\p Z\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord D",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-no-delayed-rejected-br",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It HeadWord\n.No \"\\p\\zY Z\"\n.br\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord YZ",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-no-delayed-rejected-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It HeadWord\n.No \"\\p\\zY Z\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord YZ",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-em-zero-rejected-br",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It HeadWord\n.Em \"\\p\\& \\p Z\"\n.br\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-em-zero-rejected-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It HeadWord\n.Em \"\\p\\& \\p Z\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-em-zero-visible-br",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It HeadWord\n.Em \"\\p\\& Z\"\n.br\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "Z",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-em-zero-visible-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It HeadWord\n.Em \"\\p\\& Z\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "Z",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-em-zero-marker-br",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It HeadWord\n.Em \"\\p\\& \\p\"\n.br\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-em-zero-marker-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It HeadWord\n.Em \"\\p\\& \\p\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-em-zero-only-br",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It HeadWord\n.Em \"\\p\\&\"\n.br\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-em-zero-only-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It HeadWord\n.Em \"\\p\\&\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-em-rejected-br",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It HeadWord\n.Em \"\\p  Z\"\n.br\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-em-rejected-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It HeadWord\n.Em \"\\p  Z\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-em-prefix-rejected-br",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It HeadWord\n.Em \"D\\p \\p Z\"\n.br\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord D",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-em-prefix-rejected-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It HeadWord\n.Em \"D\\p \\p Z\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord D",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-em-delayed-rejected-br",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It HeadWord\n.Em \"\\p\\zY Z\"\n.br\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord YZ",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-em-delayed-rejected-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It HeadWord\n.Em \"\\p\\zY Z\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord YZ",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-lk-zero-rejected-br",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It HeadWord\n.Lk https://ex.org \"\\p\\& \\p Z\"\n.br\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-lk-zero-rejected-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It HeadWord\n.Lk https://ex.org \"\\p\\& \\p Z\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-lk-zero-visible-br",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It HeadWord\n.Lk https://ex.org \"\\p\\& Z\"\n.br\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "Z: https://ex.org",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-lk-zero-visible-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It HeadWord\n.Lk https://ex.org \"\\p\\& Z\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "Z: https://ex.org",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-lk-zero-marker-br",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It HeadWord\n.Lk https://ex.org \"\\p\\& \\p\"\n.br\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      ":",
+      "https://ex.org",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-lk-zero-marker-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It HeadWord\n.Lk https://ex.org \"\\p\\& \\p\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      ":",
+      "https://ex.org",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-lk-zero-only-br",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It HeadWord\n.Lk https://ex.org \"\\p\\&\"\n.br\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord :",
+      "https://ex.org",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-lk-zero-only-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It HeadWord\n.Lk https://ex.org \"\\p\\&\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord :",
+      "https://ex.org",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-lk-rejected-br",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It HeadWord\n.Lk https://ex.org \"\\p  Z\"\n.br\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-lk-rejected-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It HeadWord\n.Lk https://ex.org \"\\p  Z\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-lk-prefix-rejected-br",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It HeadWord\n.Lk https://ex.org \"D\\p \\p Z\"\n.br\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord D",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-lk-prefix-rejected-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It HeadWord\n.Lk https://ex.org \"D\\p \\p Z\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord D",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-lk-delayed-rejected-br",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It HeadWord\n.Lk https://ex.org \"\\p\\zY Z\"\n.br\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord YZ:",
+      "https://ex.org",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-lk-delayed-rejected-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It HeadWord\n.Lk https://ex.org \"\\p\\zY Z\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord YZ:",
+      "https://ex.org",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-4-short-no-accepted-zero-leading-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It Short\n.No \"\\&\\p \\p Y\"\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      ""
+    ]
+  },
+  {
+    "name": "tag-4-short-no-accepted-zero-leading-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It Short\n.No \"\\&\\p \\p Y\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-4-short-no-accepted-zero-marker-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It Short\n.No \"\\p\\& \\p Y\"\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      ""
+    ]
+  },
+  {
+    "name": "tag-4-short-no-accepted-zero-marker-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It Short\n.No \"\\p\\& \\p Y\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-4-short-em-accepted-zero-leading-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It Short\n.Em \"\\&\\p \\p Y\"\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      ""
+    ]
+  },
+  {
+    "name": "tag-4-short-em-accepted-zero-leading-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It Short\n.Em \"\\&\\p \\p Y\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-4-short-em-accepted-zero-marker-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It Short\n.Em \"\\p\\& \\p Y\"\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      ""
+    ]
+  },
+  {
+    "name": "tag-4-short-em-accepted-zero-marker-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It Short\n.Em \"\\p\\& \\p Y\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-4-short-lk-accepted-zero-leading-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It Short\n.Lk https://ex.org \"\\&\\p \\p Y\"\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      ""
+    ]
+  },
+  {
+    "name": "tag-4-short-lk-accepted-zero-leading-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It Short\n.Lk https://ex.org \"\\&\\p \\p Y\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-4-short-lk-accepted-zero-marker-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It Short\n.Lk https://ex.org \"\\p\\& \\p Y\"\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      ""
+    ]
+  },
+  {
+    "name": "tag-4-short-lk-accepted-zero-marker-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It Short\n.Lk https://ex.org \"\\p\\& \\p Y\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-4-headword-no-accepted-zero-leading-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It HeadWord\n.No \"\\&\\p \\p Y\"\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      ""
+    ]
+  },
+  {
+    "name": "tag-4-headword-no-accepted-zero-leading-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It HeadWord\n.No \"\\&\\p \\p Y\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-4-headword-no-accepted-zero-marker-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It HeadWord\n.No \"\\p\\& \\p Y\"\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      ""
+    ]
+  },
+  {
+    "name": "tag-4-headword-no-accepted-zero-marker-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It HeadWord\n.No \"\\p\\& \\p Y\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-4-headword-em-accepted-zero-leading-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It HeadWord\n.Em \"\\&\\p \\p Y\"\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      ""
+    ]
+  },
+  {
+    "name": "tag-4-headword-em-accepted-zero-leading-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It HeadWord\n.Em \"\\&\\p \\p Y\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-4-headword-em-accepted-zero-marker-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It HeadWord\n.Em \"\\p\\& \\p Y\"\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      ""
+    ]
+  },
+  {
+    "name": "tag-4-headword-em-accepted-zero-marker-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It HeadWord\n.Em \"\\p\\& \\p Y\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-4-headword-lk-accepted-zero-leading-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It HeadWord\n.Lk https://ex.org \"\\&\\p \\p Y\"\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      ""
+    ]
+  },
+  {
+    "name": "tag-4-headword-lk-accepted-zero-leading-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It HeadWord\n.Lk https://ex.org \"\\&\\p \\p Y\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-4-headword-lk-accepted-zero-marker-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It HeadWord\n.Lk https://ex.org \"\\p\\& \\p Y\"\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      ""
+    ]
+  },
+  {
+    "name": "tag-4-headword-lk-accepted-zero-marker-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It HeadWord\n.Lk https://ex.org \"\\p\\& \\p Y\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-16-short-no-accepted-zero-leading-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 16n\n.It Short\n.No \"\\&\\p \\p Y\"\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "Short",
+    "rows": [
+      "Short",
+      ""
+    ]
+  },
+  {
+    "name": "tag-16-short-no-accepted-zero-leading-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 16n\n.It Short\n.No \"\\&\\p \\p Y\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-16-short-no-accepted-zero-marker-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 16n\n.It Short\n.No \"\\p\\& \\p Y\"\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "Short",
+    "rows": [
+      "Short",
+      ""
+    ]
+  },
+  {
+    "name": "tag-16-short-no-accepted-zero-marker-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 16n\n.It Short\n.No \"\\p\\& \\p Y\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-16-short-em-accepted-zero-leading-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 16n\n.It Short\n.Em \"\\&\\p \\p Y\"\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "Short",
+    "rows": [
+      "Short",
+      ""
+    ]
+  },
+  {
+    "name": "tag-16-short-em-accepted-zero-leading-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 16n\n.It Short\n.Em \"\\&\\p \\p Y\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-16-short-em-accepted-zero-marker-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 16n\n.It Short\n.Em \"\\p\\& \\p Y\"\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "Short",
+    "rows": [
+      "Short",
+      ""
+    ]
+  },
+  {
+    "name": "tag-16-short-em-accepted-zero-marker-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 16n\n.It Short\n.Em \"\\p\\& \\p Y\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-16-short-lk-accepted-zero-leading-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 16n\n.It Short\n.Lk https://ex.org \"\\&\\p \\p Y\"\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "Short",
+    "rows": [
+      "Short",
+      ""
+    ]
+  },
+  {
+    "name": "tag-16-short-lk-accepted-zero-leading-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 16n\n.It Short\n.Lk https://ex.org \"\\&\\p \\p Y\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-16-short-lk-accepted-zero-marker-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 16n\n.It Short\n.Lk https://ex.org \"\\p\\& \\p Y\"\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "Short",
+    "rows": [
+      "Short",
+      ""
+    ]
+  },
+  {
+    "name": "tag-16-short-lk-accepted-zero-marker-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 16n\n.It Short\n.Lk https://ex.org \"\\p\\& \\p Y\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "Short",
+    "rows": [
+      "Short",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-16-headword-no-accepted-zero-leading-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 16n\n.It HeadWord\n.No \"\\&\\p \\p Y\"\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      ""
+    ]
+  },
+  {
+    "name": "tag-16-headword-no-accepted-zero-leading-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 16n\n.It HeadWord\n.No \"\\&\\p \\p Y\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-16-headword-no-accepted-zero-marker-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 16n\n.It HeadWord\n.No \"\\p\\& \\p Y\"\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      ""
+    ]
+  },
+  {
+    "name": "tag-16-headword-no-accepted-zero-marker-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 16n\n.It HeadWord\n.No \"\\p\\& \\p Y\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-16-headword-em-accepted-zero-leading-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 16n\n.It HeadWord\n.Em \"\\&\\p \\p Y\"\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      ""
+    ]
+  },
+  {
+    "name": "tag-16-headword-em-accepted-zero-leading-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 16n\n.It HeadWord\n.Em \"\\&\\p \\p Y\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-16-headword-em-accepted-zero-marker-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 16n\n.It HeadWord\n.Em \"\\p\\& \\p Y\"\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      ""
+    ]
+  },
+  {
+    "name": "tag-16-headword-em-accepted-zero-marker-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 16n\n.It HeadWord\n.Em \"\\p\\& \\p Y\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-16-headword-lk-accepted-zero-leading-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 16n\n.It HeadWord\n.Lk https://ex.org \"\\&\\p \\p Y\"\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      ""
+    ]
+  },
+  {
+    "name": "tag-16-headword-lk-accepted-zero-leading-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 16n\n.It HeadWord\n.Lk https://ex.org \"\\&\\p \\p Y\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-16-headword-lk-accepted-zero-marker-none",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 16n\n.It HeadWord\n.Lk https://ex.org \"\\p\\& \\p Y\"\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      ""
+    ]
+  },
+  {
+    "name": "tag-16-headword-lk-accepted-zero-marker-pp",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 16n\n.It HeadWord\n.Lk https://ex.org \"\\p\\& \\p Y\"\n.Pp\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "head": "HeadWord",
+    "rows": [
+      "HeadWord",
+      "",
+      "",
+      "AFTER"
+    ]
+  }
+]

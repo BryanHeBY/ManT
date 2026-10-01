@@ -10,7 +10,7 @@ use super::super::{
     LoweringContext, first_part_children,
     inline::{InlineBuilder, plain_text, terms_fit_inline},
     layout::{block_indent, layout, layout_with_spacing, paragraph_distance_lines},
-    part_child_groups, source_span, targets,
+    source_span, targets,
 };
 use super::{ScopeFlow, is_inline_equation, is_inline_equation_quote_artifact, lower_scope};
 

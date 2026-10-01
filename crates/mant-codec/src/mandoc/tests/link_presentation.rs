@@ -329,7 +329,10 @@ fn rejected_links_keep_authored_identity_without_a_visible_range() {
                 .iter()
                 .map(|term| inline_text(term))
                 .collect::<String>(),
-            "X     ",
+            // Rejected link fields print none of their deferred cells.
+            // X's actual BODY gap remains layout (term_field:389-427),
+            // rather than text owned by a rejected label's HEAD projection.
+            "X",
             "{source}\n{item:#?}"
         );
         let identities = item

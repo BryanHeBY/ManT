@@ -295,9 +295,10 @@ impl LiteralFlow {
             crate::mandoc::inline::InlineBuilder::no_break_flush,
         );
         formatter.no_fill_inline.retire_consumed_cell();
-        self.row_occupied = mant_ir::has_printable_character(&self.nodes);
+        // with_inline_builder already observed the consumed buffer's live
+        // native row. Earlier accepted rows remain in nodes, but cannot
+        // make the current row occupied after a marker pass ended it.
         self.ordinary_continuation = false;
-        self.formatter_column = FormatterColumn::Origin;
     }
 
     pub(super) const fn has_formatter_column(&self) -> bool {
@@ -388,6 +389,15 @@ fn append_completed_rows(
                         value: String::new(),
                     }];
                     children.extend(std::iter::repeat_n(Inline::line_break(), rows - 1));
+                    if rows > 1 {
+                        // Every completed empty TEXT row is literal content
+                        // (term_vspace, term.c:489-497). A typed delimiter
+                        // closes the preceding row; keep the last empty row
+                        // witness distinct from a block's ordinary close.
+                        children.push(Inline::Text {
+                            value: String::new(),
+                        });
+                    }
                     blocks.push(Block::Preformatted {
                         children,
                         language: None,

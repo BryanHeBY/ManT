@@ -161,32 +161,27 @@ impl<'a> LoweringContext<'a> {
         spacing: bool,
         formatter: &mut formatter::FormatterState,
     ) -> Vec<mant_ir::Inline> {
-        self.lower_inline_with_author_break(
-            nodes,
-            spacing,
-            formatter,
-            inline::AuthorBreakEffect::Line,
-        )
-        .0
-    }
-
-    pub(super) fn lower_inline_with_author_break(
-        &self,
-        nodes: &[Node],
-        spacing: bool,
-        formatter: &mut formatter::FormatterState,
-        author_break_effect: inline::AuthorBreakEffect,
-    ) -> (Vec<mant_ir::Inline>, bool, bool, Vec<usize>) {
-        let (output, field_exited, body_gap_consumed, _author_restarted, breaks) = self
-            .lower_inline_with_author_break_rows(
-                nodes,
-                spacing,
-                formatter,
-                author_break_effect,
-                false,
-                None,
-            );
-        (output, field_exited, body_gap_consumed, breaks)
+        // An absent source slice has no node pre/post or term_newln(). In
+        // particular, empty list control groups must not replace the active
+        // column flags and close its still-open device row before an It
+        // HEAD enters (mdoc_term.c::termp_bl_pre/termp_it_pre).
+        if nodes.is_empty() {
+            return Vec::new();
+        }
+        formatter.execution.set_spacing_enabled(spacing);
+        let mut output = Vec::new();
+        // A group of source controls is a traversal destination, not an It
+        // HEAD/BODY. print_mdoc_node() executes each control but there is no
+        // synthetic termp_it_post() when this helper returns. Borrowing the
+        // active execution keeps the surrounding column's viscol/minbl and
+        // pad flags until the next actual node pre/post consumes them.
+        formatter.with_output_builder(&mut output, |builder| {
+            builder.scope_posts = self.scope_posts.clone();
+            builder.observe_no_fill_source_lines(true);
+            inline::append_inline_nodes(builder, nodes, self.default_name);
+            builder.observe_no_fill_source_lines(false);
+        });
+        output
     }
 
     pub(super) fn lower_inline_with_author_break_preserving_rows(
@@ -235,6 +230,13 @@ impl<'a> LoweringContext<'a> {
         inline::append_inline_nodes(&mut builder, nodes, self.default_name);
         builder.observe_no_fill_source_lines(false);
         let finished = formatter.finish_inline_line_with_rows(builder, preserve_rows);
+        if preserve_rows && self.macro_set == MacroSet::Mdoc {
+            // This path is the actual detached It HEAD post, whose native
+            // flush above precedes clearing NOBREAK/BRTRSP/BRIND/HANG and
+            // trailspace (mdoc_term.c::termp_it_post(), 936-963). Keep that
+            // node lifecycle separate from generic output-helper returns.
+            formatter.execution.clear_native_list_part_flags();
+        }
         (
             finished.output,
             finished.definition_field_exited,

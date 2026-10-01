@@ -1,0 +1,958 @@
+[
+  {
+    "name": "hang-4-600",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo\n.No \"D \\p E\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "D",
+      "AFTER BodyWord"
+    ],
+    "wide_width": null
+  },
+  {
+    "name": "hang-4-601",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo\n.No \"D \\p E\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.Lk https://body.example BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "D",
+      "AFTER BodyWord: https://body.example"
+    ],
+    "wide_width": 1000,
+    "wide_rows": [
+      "D",
+      "AFTER BodyWord: https://body.example"
+    ]
+  },
+  {
+    "name": "hang-4-602",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo\n.Lk https://ex.org \"D \\p E\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "D",
+      "AFTER BodyWord"
+    ],
+    "wide_width": null
+  },
+  {
+    "name": "hang-4-603",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo\n.Lk https://ex.org \"D \\p E\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.Lk https://body.example BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "D",
+      "AFTER BodyWord: https://body.example"
+    ],
+    "wide_width": 1000,
+    "wide_rows": [
+      "D",
+      "AFTER BodyWord: https://body.example"
+    ]
+  },
+  {
+    "name": "hang-4-632",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo\n.No \"D\\p \\p\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "DAFTERBodyWord"
+    ],
+    "wide_width": null
+  },
+  {
+    "name": "hang-4-633",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo\n.No \"D\\p \\p\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.Lk https://body.example BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "DAFTERBodyWord: https://body.example"
+    ],
+    "wide_width": 1000,
+    "wide_rows": [
+      "DAFTERBodyWord: https://body.example"
+    ]
+  },
+  {
+    "name": "hang-4-634",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo\n.Lk https://ex.org \"D\\p \\p\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "D",
+      ":",
+      "https://ex.orgAFTERBodyWord"
+    ],
+    "wide_width": null
+  },
+  {
+    "name": "hang-4-635",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo\n.Lk https://ex.org \"D\\p \\p\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.Lk https://body.example BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "D",
+      ":",
+      "https://ex.orgAFTERBodyWord: https://body.example"
+    ],
+    "wide_width": 1000,
+    "wide_rows": [
+      "D",
+      ":",
+      "https://ex.orgAFTERBodyWord: https://body.example"
+    ]
+  },
+  {
+    "name": "hang-4-664",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo\n.No \"D\\p E\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "D",
+      "EAFTERBodyWord"
+    ],
+    "wide_width": null
+  },
+  {
+    "name": "hang-4-665",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo\n.No \"D\\p E\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.Lk https://body.example BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "D",
+      "EAFTERBodyWord: https://body.example"
+    ],
+    "wide_width": 1000,
+    "wide_rows": [
+      "D",
+      "EAFTERBodyWord: https://body.example"
+    ]
+  },
+  {
+    "name": "hang-4-666",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo\n.Lk https://ex.org \"D\\p E\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "D",
+      "E: https://ex.orgAFTERBodyWord"
+    ],
+    "wide_width": null
+  },
+  {
+    "name": "hang-4-667",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo\n.Lk https://ex.org \"D\\p E\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.Lk https://body.example BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "D",
+      "E: https://ex.orgAFTERBodyWord: https://body.example"
+    ],
+    "wide_width": 1000,
+    "wide_rows": [
+      "D",
+      "E: https://ex.orgAFTERBodyWord: https://body.example"
+    ]
+  },
+  {
+    "name": "hang-4-696",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo\n.No \"LABEL\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "LABELAFTERBodyWord"
+    ],
+    "wide_width": null
+  },
+  {
+    "name": "hang-4-697",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo\n.No \"LABEL\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.Lk https://body.example BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "LABELAFTERBodyWord: https://body.example"
+    ],
+    "wide_width": 1000,
+    "wide_rows": [
+      "LABELAFTERBodyWord: https://body.example"
+    ]
+  },
+  {
+    "name": "hang-4-698",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo\n.Lk https://ex.org \"LABEL\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "LABEL: https://ex.orgAFTERBodyWord"
+    ],
+    "wide_width": null
+  },
+  {
+    "name": "hang-4-699",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo\n.Lk https://ex.org \"LABEL\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.Lk https://body.example BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "LABEL: https://ex.orgAFTERBodyWord: https://body.example"
+    ],
+    "wide_width": 1000,
+    "wide_rows": [
+      "LABEL: https://ex.orgAFTERBodyWord: https://body.example"
+    ]
+  },
+  {
+    "name": "hang-4-728",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo\n.No \"\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "AFTER BodyWord"
+    ],
+    "wide_width": null
+  },
+  {
+    "name": "hang-4-729",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo\n.No \"\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.Lk https://body.example BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "AFTER BodyWord: https://body.example"
+    ],
+    "wide_width": 1000,
+    "wide_rows": [
+      "AFTER BodyWord: https://body.example"
+    ]
+  },
+  {
+    "name": "hang-4-730",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo\n.Lk https://ex.org \"\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      ": https://ex.orgAFTERBodyWord"
+    ],
+    "wide_width": null
+  },
+  {
+    "name": "hang-4-731",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo\n.Lk https://ex.org \"\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.Lk https://body.example BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      ": https://ex.orgAFTERBodyWord: https://body.example"
+    ],
+    "wide_width": 1000,
+    "wide_rows": [
+      ": https://ex.orgAFTERBodyWord: https://body.example"
+    ]
+  },
+  {
+    "name": "hang-4-760",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo\n.No \"\\&\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "AFTER BodyWord"
+    ],
+    "wide_width": null
+  },
+  {
+    "name": "hang-4-761",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo\n.No \"\\&\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.Lk https://body.example BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "AFTER BodyWord: https://body.example"
+    ],
+    "wide_width": 1000,
+    "wide_rows": [
+      "AFTER BodyWord: https://body.example"
+    ]
+  },
+  {
+    "name": "hang-4-762",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo\n.Lk https://ex.org \"\\&\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      ": https://ex.orgAFTERBodyWord"
+    ],
+    "wide_width": null
+  },
+  {
+    "name": "hang-4-763",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo\n.Lk https://ex.org \"\\&\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.Lk https://body.example BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      ": https://ex.orgAFTERBodyWord: https://body.example"
+    ],
+    "wide_width": 1000,
+    "wide_rows": [
+      ": https://ex.orgAFTERBodyWord: https://body.example"
+    ]
+  },
+  {
+    "name": "hang-8-792",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It Xo\n.No \"D \\p E\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "D",
+      "AFTER BodyWord"
+    ],
+    "wide_width": null
+  },
+  {
+    "name": "hang-8-793",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It Xo\n.No \"D \\p E\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.Lk https://body.example BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "D",
+      "AFTER BodyWord: https://body.example"
+    ],
+    "wide_width": 1000,
+    "wide_rows": [
+      "D",
+      "AFTER BodyWord: https://body.example"
+    ]
+  },
+  {
+    "name": "hang-8-794",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It Xo\n.Lk https://ex.org \"D \\p E\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "D",
+      "AFTER BodyWord"
+    ],
+    "wide_width": null
+  },
+  {
+    "name": "hang-8-795",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It Xo\n.Lk https://ex.org \"D \\p E\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.Lk https://body.example BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "D",
+      "AFTER BodyWord: https://body.example"
+    ],
+    "wide_width": 1000,
+    "wide_rows": [
+      "D",
+      "AFTER BodyWord: https://body.example"
+    ]
+  },
+  {
+    "name": "hang-8-824",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It Xo\n.No \"D\\p \\p\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "DAFTER BodyWord"
+    ],
+    "wide_width": null
+  },
+  {
+    "name": "hang-8-825",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It Xo\n.No \"D\\p \\p\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.Lk https://body.example BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "DAFTER BodyWord: https://body.example"
+    ],
+    "wide_width": 1000,
+    "wide_rows": [
+      "DAFTER BodyWord: https://body.example"
+    ]
+  },
+  {
+    "name": "hang-8-826",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It Xo\n.Lk https://ex.org \"D\\p \\p\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "D",
+      ":",
+      "https://ex.orgAFTERBodyWord"
+    ],
+    "wide_width": null
+  },
+  {
+    "name": "hang-8-827",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It Xo\n.Lk https://ex.org \"D\\p \\p\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.Lk https://body.example BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "D",
+      ":",
+      "https://ex.orgAFTERBodyWord: https://body.example"
+    ],
+    "wide_width": 1000,
+    "wide_rows": [
+      "D",
+      ":",
+      "https://ex.orgAFTERBodyWord: https://body.example"
+    ]
+  },
+  {
+    "name": "hang-8-856",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It Xo\n.No \"D\\p E\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "D",
+      "EAFTERBodyWord"
+    ],
+    "wide_width": null
+  },
+  {
+    "name": "hang-8-857",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It Xo\n.No \"D\\p E\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.Lk https://body.example BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "D",
+      "EAFTERBodyWord: https://body.example"
+    ],
+    "wide_width": 1000,
+    "wide_rows": [
+      "D",
+      "EAFTERBodyWord: https://body.example"
+    ]
+  },
+  {
+    "name": "hang-8-858",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It Xo\n.Lk https://ex.org \"D\\p E\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "D",
+      "E: https://ex.orgAFTERBodyWord"
+    ],
+    "wide_width": null
+  },
+  {
+    "name": "hang-8-859",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It Xo\n.Lk https://ex.org \"D\\p E\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.Lk https://body.example BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "D",
+      "E: https://ex.orgAFTERBodyWord: https://body.example"
+    ],
+    "wide_width": 1000,
+    "wide_rows": [
+      "D",
+      "E: https://ex.orgAFTERBodyWord: https://body.example"
+    ]
+  },
+  {
+    "name": "hang-8-888",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It Xo\n.No \"LABEL\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "LABELAFTERBodyWord"
+    ],
+    "wide_width": null
+  },
+  {
+    "name": "hang-8-889",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It Xo\n.No \"LABEL\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.Lk https://body.example BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "LABELAFTERBodyWord: https://body.example"
+    ],
+    "wide_width": 1000,
+    "wide_rows": [
+      "LABELAFTERBodyWord: https://body.example"
+    ]
+  },
+  {
+    "name": "hang-8-890",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It Xo\n.Lk https://ex.org \"LABEL\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "LABEL: https://ex.orgAFTERBodyWord"
+    ],
+    "wide_width": null
+  },
+  {
+    "name": "hang-8-891",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It Xo\n.Lk https://ex.org \"LABEL\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.Lk https://body.example BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "LABEL: https://ex.orgAFTERBodyWord: https://body.example"
+    ],
+    "wide_width": 1000,
+    "wide_rows": [
+      "LABEL: https://ex.orgAFTERBodyWord: https://body.example"
+    ]
+  },
+  {
+    "name": "hang-8-920",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It Xo\n.No \"\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "AFTER BodyWord"
+    ],
+    "wide_width": null
+  },
+  {
+    "name": "hang-8-921",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It Xo\n.No \"\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.Lk https://body.example BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "AFTER BodyWord: https://body.example"
+    ],
+    "wide_width": 1000,
+    "wide_rows": [
+      "AFTER BodyWord: https://body.example"
+    ]
+  },
+  {
+    "name": "hang-8-922",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It Xo\n.Lk https://ex.org \"\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      ": https://ex.orgAFTERBodyWord"
+    ],
+    "wide_width": null
+  },
+  {
+    "name": "hang-8-923",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It Xo\n.Lk https://ex.org \"\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.Lk https://body.example BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      ": https://ex.orgAFTERBodyWord: https://body.example"
+    ],
+    "wide_width": 1000,
+    "wide_rows": [
+      ": https://ex.orgAFTERBodyWord: https://body.example"
+    ]
+  },
+  {
+    "name": "hang-8-952",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It Xo\n.No \"\\&\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "AFTER BodyWord"
+    ],
+    "wide_width": null
+  },
+  {
+    "name": "hang-8-953",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It Xo\n.No \"\\&\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.Lk https://body.example BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "AFTER BodyWord: https://body.example"
+    ],
+    "wide_width": 1000,
+    "wide_rows": [
+      "AFTER BodyWord: https://body.example"
+    ]
+  },
+  {
+    "name": "hang-8-954",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It Xo\n.Lk https://ex.org \"\\&\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      ": https://ex.orgAFTERBodyWord"
+    ],
+    "wide_width": null
+  },
+  {
+    "name": "hang-8-955",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It Xo\n.Lk https://ex.org \"\\&\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.Lk https://body.example BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      ": https://ex.orgAFTERBodyWord: https://body.example"
+    ],
+    "wide_width": 1000,
+    "wide_rows": [
+      ": https://ex.orgAFTERBodyWord: https://body.example"
+    ]
+  },
+  {
+    "name": "hang-32-984",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 32n\n.It Xo\n.No \"D \\p E\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "D",
+      "AFTER BodyWord"
+    ],
+    "wide_width": null
+  },
+  {
+    "name": "hang-32-985",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 32n\n.It Xo\n.No \"D \\p E\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.Lk https://body.example BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "D",
+      "AFTER BodyWord: https://body.example"
+    ],
+    "wide_width": 1000,
+    "wide_rows": [
+      "D",
+      "AFTER BodyWord: https://body.example"
+    ]
+  },
+  {
+    "name": "hang-32-986",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 32n\n.It Xo\n.Lk https://ex.org \"D \\p E\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "D",
+      "AFTER BodyWord"
+    ],
+    "wide_width": null
+  },
+  {
+    "name": "hang-32-987",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 32n\n.It Xo\n.Lk https://ex.org \"D \\p E\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.Lk https://body.example BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "D",
+      "AFTER BodyWord: https://body.example"
+    ],
+    "wide_width": 1000,
+    "wide_rows": [
+      "D",
+      "AFTER BodyWord: https://body.example"
+    ]
+  },
+  {
+    "name": "hang-32-1016",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 32n\n.It Xo\n.No \"D\\p \\p\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "DAFTER BodyWord"
+    ],
+    "wide_width": null
+  },
+  {
+    "name": "hang-32-1017",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 32n\n.It Xo\n.No \"D\\p \\p\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.Lk https://body.example BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "DAFTER BodyWord: https://body.example"
+    ],
+    "wide_width": 1000,
+    "wide_rows": [
+      "DAFTER BodyWord: https://body.example"
+    ]
+  },
+  {
+    "name": "hang-32-1018",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 32n\n.It Xo\n.Lk https://ex.org \"D\\p \\p\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "D",
+      ":",
+      "https://ex.orgAFTERBodyWord"
+    ],
+    "wide_width": null
+  },
+  {
+    "name": "hang-32-1019",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 32n\n.It Xo\n.Lk https://ex.org \"D\\p \\p\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.Lk https://body.example BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "D",
+      ":",
+      "https://ex.orgAFTERBodyWord:",
+      "https://body.example"
+    ],
+    "wide_width": 1000,
+    "wide_rows": [
+      "D",
+      ":",
+      "https://ex.orgAFTERBodyWord: https://body.example"
+    ]
+  },
+  {
+    "name": "hang-32-1048",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 32n\n.It Xo\n.No \"D\\p E\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "D",
+      "EAFTERBodyWord"
+    ],
+    "wide_width": null
+  },
+  {
+    "name": "hang-32-1049",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 32n\n.It Xo\n.No \"D\\p E\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.Lk https://body.example BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "D",
+      "EAFTERBodyWord: https://body.example"
+    ],
+    "wide_width": 1000,
+    "wide_rows": [
+      "D",
+      "EAFTERBodyWord: https://body.example"
+    ]
+  },
+  {
+    "name": "hang-32-1050",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 32n\n.It Xo\n.Lk https://ex.org \"D\\p E\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "D",
+      "E: https://ex.orgAFTERBodyWord"
+    ],
+    "wide_width": null
+  },
+  {
+    "name": "hang-32-1051",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 32n\n.It Xo\n.Lk https://ex.org \"D\\p E\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.Lk https://body.example BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "D",
+      "E: https://ex.orgAFTERBodyWord:",
+      "https://body.example"
+    ],
+    "wide_width": 1000,
+    "wide_rows": [
+      "D",
+      "E: https://ex.orgAFTERBodyWord: https://body.example"
+    ]
+  },
+  {
+    "name": "hang-32-1080",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 32n\n.It Xo\n.No \"LABEL\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "LABELAFTER BodyWord"
+    ],
+    "wide_width": null
+  },
+  {
+    "name": "hang-32-1081",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 32n\n.It Xo\n.No \"LABEL\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.Lk https://body.example BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "LABELAFTER BodyWord: https://body.example"
+    ],
+    "wide_width": 1000,
+    "wide_rows": [
+      "LABELAFTER BodyWord: https://body.example"
+    ]
+  },
+  {
+    "name": "hang-32-1082",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 32n\n.It Xo\n.Lk https://ex.org \"LABEL\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "LABEL: https://ex.orgAFTER BodyWord"
+    ],
+    "wide_width": null
+  },
+  {
+    "name": "hang-32-1083",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 32n\n.It Xo\n.Lk https://ex.org \"LABEL\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.Lk https://body.example BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "LABEL: https://ex.orgAFTER BodyWord: https://body.example"
+    ],
+    "wide_width": 1000,
+    "wide_rows": [
+      "LABEL: https://ex.orgAFTER BodyWord: https://body.example"
+    ]
+  },
+  {
+    "name": "hang-32-1112",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 32n\n.It Xo\n.No \"\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "AFTER BodyWord"
+    ],
+    "wide_width": null
+  },
+  {
+    "name": "hang-32-1113",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 32n\n.It Xo\n.No \"\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.Lk https://body.example BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "AFTER BodyWord: https://body.example"
+    ],
+    "wide_width": 1000,
+    "wide_rows": [
+      "AFTER BodyWord: https://body.example"
+    ]
+  },
+  {
+    "name": "hang-32-1114",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 32n\n.It Xo\n.Lk https://ex.org \"\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      ": https://ex.orgAFTER BodyWord"
+    ],
+    "wide_width": null
+  },
+  {
+    "name": "hang-32-1115",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 32n\n.It Xo\n.Lk https://ex.org \"\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.Lk https://body.example BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      ": https://ex.orgAFTER BodyWord: https://body.example"
+    ],
+    "wide_width": 1000,
+    "wide_rows": [
+      ": https://ex.orgAFTER BodyWord: https://body.example"
+    ]
+  },
+  {
+    "name": "hang-32-1144",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 32n\n.It Xo\n.No \"\\&\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "AFTER BodyWord"
+    ],
+    "wide_width": null
+  },
+  {
+    "name": "hang-32-1145",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 32n\n.It Xo\n.No \"\\&\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.Lk https://body.example BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "AFTER BodyWord: https://body.example"
+    ],
+    "wide_width": 1000,
+    "wide_rows": [
+      "AFTER BodyWord: https://body.example"
+    ]
+  },
+  {
+    "name": "hang-32-1146",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 32n\n.It Xo\n.Lk https://ex.org \"\\&\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      ": https://ex.orgAFTER BodyWord"
+    ],
+    "wide_width": null
+  },
+  {
+    "name": "hang-32-1147",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 32n\n.It Xo\n.Lk https://ex.org \"\\&\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.Lk https://body.example BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      ": https://ex.orgAFTER BodyWord: https://body.example"
+    ],
+    "wide_width": 1000,
+    "wide_rows": [
+      ": https://ex.orgAFTER BodyWord: https://body.example"
+    ]
+  }
+]

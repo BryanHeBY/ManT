@@ -26,7 +26,11 @@ impl InlineBuilder {
     /// to the accepted prefix and the zero-advance register is discarded.
     /// Returns whether the retirement ended a native row.
     pub(in crate::mandoc) fn retire_plain_flush_unit(&mut self) -> bool {
-        Self::retire_plain_flush_unit_at(&mut self.execution, &mut self.nodes)
+        Self::retire_plain_flush_unit_at(
+            &mut self.execution,
+            &mut self.nodes,
+            super::super::output::CompletedRowOrigin::Layout,
+        )
     }
 
     /// Execution-state form shared with the no-fill row finisher, which
@@ -34,6 +38,7 @@ impl InlineBuilder {
     pub(in crate::mandoc) fn retire_plain_flush_unit_at(
         execution: &mut super::super::InlineExecutionState,
         nodes: &mut Vec<Inline>,
+        row_origin: super::super::output::CompletedRowOrigin,
     ) -> bool {
         use super::super::field_buffer::{FillTargets, FlushReceipt};
         // An author-less definition session has no field geometry: its
@@ -42,6 +47,13 @@ impl InlineBuilder {
         // the same receipt. Borrow whichever buffer is live.
         let authorless_definition =
             execution.definition.is_some() && execution.author_execution.is_none();
+        let inherited_printed_row = execution
+            .definition
+            .as_ref()
+            .is_some_and(|state| state.hang_row.viscol > 0)
+            || execution
+                .detached_device_row
+                .is_some_and(|row| row.viscol > 0);
         if execution.definition.is_some() && !authorless_definition {
             return false;
         }
@@ -76,6 +88,12 @@ impl InlineBuilder {
         let passes = match &receipt {
             FlushReceipt::Accepted { passes } | FlushReceipt::Rejected { passes, .. } => passes,
         };
+        let empty_rows = completed_empty_plain_passes(
+            &buffer,
+            passes,
+            matches!(&receipt, FlushReceipt::Rejected { .. }),
+            inherited_printed_row,
+        );
         // A deferred scanner can accept several authored-marker passes at
         // the actual term_flushln(). Acceptance still carries their row
         // events (term.c:165-220); retirement cannot silently omit them.
@@ -96,6 +114,7 @@ impl InlineBuilder {
         } = receipt
         else {
             retain_accepted_unit_output(nodes, &buffer, &anchors, passes, output_start);
+            project_retired_empty_rows(execution, nodes, empty_rows, row_origin);
             Self::restore_retired_buffer(execution, nodes, authorless_definition, buffer, anchors);
             return false;
         };
@@ -107,7 +126,7 @@ impl InlineBuilder {
         }
 
         let accepted_owned_prefix =
-            !passes.is_empty() && anchors.iter().any(|(cell, _, _)| *cell < rejected_from);
+            !passes.is_empty() && anchors.iter().any(|anchor| anchor.start < rejected_from);
         retain_unit_owner_ranges(nodes, &buffer, &anchors, &passes, output_start);
         if accepted_owned_prefix
             && !crate::mandoc::inline::flow::output::ends_with_executed_line_break(nodes)
@@ -116,9 +135,25 @@ impl InlineBuilder {
             // nbr=0; the retirement boundary must expose that native event.
             nodes.push(Inline::line_break());
         }
+        if empty_rows > 0
+            && row_origin == super::super::output::CompletedRowOrigin::LiteralText
+            && passes
+                .iter()
+                .all(|pass| buffer.printed_columns(0, pass.end, 0, 0).is_none())
+        {
+            // Word-time row hints are provisional until this flush accepts
+            // its actual intervals. An all-unprinted native unit has no
+            // committed glyph in this range: replace only its empty hints
+            // with the exact accepted loop events, retaining identities.
+            // Earlier native units lie before output_start and are immutable.
+            let mut pending = nodes.split_off(output_start.min(nodes.len()));
+            super::super::output::retain_inline_identities(&mut pending);
+            nodes.extend(pending);
+        }
         // term.c::term_flushln() clears both backtracking flags; a rejected
         // unit dies whole, including a still-buffered `\z` glyph.
         execution.zero_advance.discard_at_row_end();
+        project_retired_empty_rows(execution, nodes, empty_rows, row_origin);
         drop(buffer);
         drop(anchors);
         if authorless_definition {
@@ -141,6 +176,7 @@ impl InlineBuilder {
         execution: &mut super::super::InlineExecutionState,
         nodes: &[Inline],
     ) {
+        execution.detached_device_row = None;
         execution.flush_unit.clear();
         execution.flush_unit.set_tab_offset(0);
         execution.flush_unit_anchors.clear();
@@ -155,7 +191,7 @@ impl InlineBuilder {
         nodes: &mut [Inline],
         authorless_definition: bool,
         buffer: super::super::field_buffer::FieldBuffer,
-        anchors: Vec<(usize, String, usize)>,
+        anchors: Vec<super::super::NativeWordAnchor>,
     ) {
         drop(anchors);
         drop(buffer);
@@ -179,6 +215,63 @@ impl InlineBuilder {
         execution.flush_unit_anchors.clear();
         execution.flush_unit_output_start = nodes.len();
     }
+}
+
+/// The output destination chooses the representation of completed rows,
+/// never their execution. Literal rows can precede another source word in
+/// the same owner; a marker only read at its tail would lose those rows.
+fn project_retired_empty_rows(
+    execution: &mut super::super::InlineExecutionState,
+    nodes: &mut Vec<Inline>,
+    rows: u16,
+    origin: super::super::output::CompletedRowOrigin,
+) {
+    match origin {
+        super::super::output::CompletedRowOrigin::Layout => {
+            InlineBuilder::record_completed_rows_at(execution, nodes, rows, origin);
+        }
+        super::super::output::CompletedRowOrigin::LiteralText => {
+            for _ in 0..rows {
+                nodes.push(Inline::Text {
+                    value: String::new(),
+                });
+                nodes.push(Inline::line_break());
+            }
+        }
+    }
+}
+
+/// Each real loop endline closes its accepted native interval, including
+/// graphful NBRZW intervals with no printed scalar (term.c:340-349,397,217).
+/// Only trailing empty rows move to layout; earlier rows retain their ordered
+/// inline boundaries before a later accepted printed pass.
+fn completed_empty_plain_passes(
+    buffer: &super::super::field_buffer::FieldBuffer,
+    passes: &[super::super::field_buffer::FillPass],
+    rejected: bool,
+    mut printed_row: bool,
+) -> u16 {
+    let mut rows = 0u16;
+    let mut start = 0;
+    for (index, pass) in passes.iter().enumerate() {
+        printed_row |= buffer.printed_columns(start, pass.end, 0, 0).is_some();
+        if printed_row {
+            rows = 0;
+        } else if index + 1 < passes.len() || rejected {
+            rows = rows.saturating_add(1);
+        }
+        if index + 1 < passes.len() || rejected {
+            printed_row = false;
+        }
+        start = pass.end;
+        while matches!(
+            buffer.cells().get(start),
+            Some(super::super::field_buffer::FieldCell::BreakableBlank)
+        ) {
+            start += 1;
+        }
+    }
+    rows
 }
 
 /// Stop at the most recent physical-row witness or delimiter. The live
@@ -219,7 +312,7 @@ fn find_literal_tail_row(nodes: &[Inline], visit: &mut impl FnMut()) -> Option<b
 fn retain_accepted_unit_output(
     nodes: &mut Vec<Inline>,
     buffer: &super::super::field_buffer::FieldBuffer,
-    anchors: &[(usize, String, usize)],
+    anchors: &[super::super::NativeWordAnchor],
     passes: &[super::super::field_buffer::FillPass],
     output_start: usize,
 ) {
@@ -257,7 +350,7 @@ fn retain_accepted_unit_output(
 fn retain_unit_owner_ranges(
     nodes: &mut Vec<Inline>,
     buffer: &super::super::field_buffer::FieldBuffer,
-    anchors: &[(usize, String, usize)],
+    anchors: &[super::super::NativeWordAnchor],
     passes: &[super::super::field_buffer::FillPass],
     output_start: usize,
 ) {

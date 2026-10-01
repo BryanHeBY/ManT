@@ -1,0 +1,1106 @@
+[
+  {
+    "name": "man-origin-blank-1-eof",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\n\n",
+    "heading": null,
+    "dialect": "man",
+    "payload": "blank",
+    "rows": [
+      ""
+    ],
+    "native_rows": [
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "man-origin-blank-1-fill",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\n\n.fi\n",
+    "heading": null,
+    "dialect": "man",
+    "payload": "blank",
+    "rows": [
+      ""
+    ],
+    "native_rows": [
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "man-origin-blank-1-break-fill",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\n\n.br\n.fi\n",
+    "heading": null,
+    "dialect": "man",
+    "payload": "blank",
+    "rows": [
+      ""
+    ],
+    "native_rows": [
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "man-origin-blank-2-eof",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\n\n\n",
+    "heading": null,
+    "dialect": "man",
+    "payload": "blank",
+    "rows": [
+      "",
+      ""
+    ],
+    "native_rows": [
+      "",
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "man-origin-blank-2-fill",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\n\n\n.fi\n",
+    "heading": null,
+    "dialect": "man",
+    "payload": "blank",
+    "rows": [
+      "",
+      ""
+    ],
+    "native_rows": [
+      "",
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "man-origin-blank-2-break-fill",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\n\n\n.br\n.fi\n",
+    "heading": null,
+    "dialect": "man",
+    "payload": "blank",
+    "rows": [
+      "",
+      ""
+    ],
+    "native_rows": [
+      "",
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "man-origin-zero-width-1-eof",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\n\\&\n",
+    "heading": null,
+    "dialect": "man",
+    "payload": "zero-width",
+    "rows": [
+      ""
+    ],
+    "native_rows": [
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "man-origin-zero-width-1-fill",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\n\\&\n.fi\n",
+    "heading": null,
+    "dialect": "man",
+    "payload": "zero-width",
+    "rows": [
+      ""
+    ],
+    "native_rows": [
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "man-origin-zero-width-1-break-fill",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\n\\&\n.br\n.fi\n",
+    "heading": null,
+    "dialect": "man",
+    "payload": "zero-width",
+    "rows": [
+      ""
+    ],
+    "native_rows": [
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "man-origin-zero-width-2-eof",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\n\\&\n\\&\n",
+    "heading": null,
+    "dialect": "man",
+    "payload": "zero-width",
+    "rows": [
+      "",
+      ""
+    ],
+    "native_rows": [
+      "",
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "man-origin-zero-width-2-fill",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\n\\&\n\\&\n.fi\n",
+    "heading": null,
+    "dialect": "man",
+    "payload": "zero-width",
+    "rows": [
+      "",
+      ""
+    ],
+    "native_rows": [
+      "",
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "man-origin-zero-width-2-break-fill",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\n\\&\n\\&\n.br\n.fi\n",
+    "heading": null,
+    "dialect": "man",
+    "payload": "zero-width",
+    "rows": [
+      "",
+      ""
+    ],
+    "native_rows": [
+      "",
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "man-origin-empty-text-1-eof",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\n.B \"\"\n",
+    "heading": null,
+    "dialect": "man",
+    "payload": "empty-text",
+    "rows": [
+      ""
+    ],
+    "native_rows": [
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "man-origin-empty-text-1-fill",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\n.B \"\"\n.fi\n",
+    "heading": null,
+    "dialect": "man",
+    "payload": "empty-text",
+    "rows": [
+      ""
+    ],
+    "native_rows": [
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "man-origin-empty-text-1-break-fill",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\n.B \"\"\n.br\n.fi\n",
+    "heading": null,
+    "dialect": "man",
+    "payload": "empty-text",
+    "rows": [
+      ""
+    ],
+    "native_rows": [
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "man-origin-empty-text-2-eof",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\n.B \"\"\n.B \"\"\n",
+    "heading": null,
+    "dialect": "man",
+    "payload": "empty-text",
+    "rows": [
+      "",
+      ""
+    ],
+    "native_rows": [
+      "",
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "man-origin-empty-text-2-fill",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\n.B \"\"\n.B \"\"\n.fi\n",
+    "heading": null,
+    "dialect": "man",
+    "payload": "empty-text",
+    "rows": [
+      "",
+      ""
+    ],
+    "native_rows": [
+      "",
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "man-origin-empty-text-2-break-fill",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\n.B \"\"\n.B \"\"\n.br\n.fi\n",
+    "heading": null,
+    "dialect": "man",
+    "payload": "empty-text",
+    "rows": [
+      "",
+      ""
+    ],
+    "native_rows": [
+      "",
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "man-prefix-blank-1-eof",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\nBEFORE\n\n",
+    "heading": null,
+    "dialect": "man",
+    "payload": "blank",
+    "rows": [
+      "BEFORE",
+      ""
+    ],
+    "native_rows": [
+      "     BEFORE",
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "man-prefix-blank-1-fill",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\nBEFORE\n\n.fi\n",
+    "heading": null,
+    "dialect": "man",
+    "payload": "blank",
+    "rows": [
+      "BEFORE",
+      ""
+    ],
+    "native_rows": [
+      "     BEFORE",
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "man-prefix-blank-1-break-fill",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\nBEFORE\n\n.br\n.fi\n",
+    "heading": null,
+    "dialect": "man",
+    "payload": "blank",
+    "rows": [
+      "BEFORE",
+      ""
+    ],
+    "native_rows": [
+      "     BEFORE",
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "man-prefix-blank-2-eof",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\nBEFORE\n\n\n",
+    "heading": null,
+    "dialect": "man",
+    "payload": "blank",
+    "rows": [
+      "BEFORE",
+      "",
+      ""
+    ],
+    "native_rows": [
+      "     BEFORE",
+      "",
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "man-prefix-blank-2-fill",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\nBEFORE\n\n\n.fi\n",
+    "heading": null,
+    "dialect": "man",
+    "payload": "blank",
+    "rows": [
+      "BEFORE",
+      "",
+      ""
+    ],
+    "native_rows": [
+      "     BEFORE",
+      "",
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "man-prefix-blank-2-break-fill",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\nBEFORE\n\n\n.br\n.fi\n",
+    "heading": null,
+    "dialect": "man",
+    "payload": "blank",
+    "rows": [
+      "BEFORE",
+      "",
+      ""
+    ],
+    "native_rows": [
+      "     BEFORE",
+      "",
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "man-prefix-zero-width-1-eof",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\nBEFORE\n\\&\n",
+    "heading": null,
+    "dialect": "man",
+    "payload": "zero-width",
+    "rows": [
+      "BEFORE",
+      ""
+    ],
+    "native_rows": [
+      "     BEFORE",
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "man-prefix-zero-width-1-fill",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\nBEFORE\n\\&\n.fi\n",
+    "heading": null,
+    "dialect": "man",
+    "payload": "zero-width",
+    "rows": [
+      "BEFORE",
+      ""
+    ],
+    "native_rows": [
+      "     BEFORE",
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "man-prefix-zero-width-1-break-fill",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\nBEFORE\n\\&\n.br\n.fi\n",
+    "heading": null,
+    "dialect": "man",
+    "payload": "zero-width",
+    "rows": [
+      "BEFORE",
+      ""
+    ],
+    "native_rows": [
+      "     BEFORE",
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "man-prefix-zero-width-2-eof",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\nBEFORE\n\\&\n\\&\n",
+    "heading": null,
+    "dialect": "man",
+    "payload": "zero-width",
+    "rows": [
+      "BEFORE",
+      "",
+      ""
+    ],
+    "native_rows": [
+      "     BEFORE",
+      "",
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "man-prefix-zero-width-2-fill",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\nBEFORE\n\\&\n\\&\n.fi\n",
+    "heading": null,
+    "dialect": "man",
+    "payload": "zero-width",
+    "rows": [
+      "BEFORE",
+      "",
+      ""
+    ],
+    "native_rows": [
+      "     BEFORE",
+      "",
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "man-prefix-zero-width-2-break-fill",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\nBEFORE\n\\&\n\\&\n.br\n.fi\n",
+    "heading": null,
+    "dialect": "man",
+    "payload": "zero-width",
+    "rows": [
+      "BEFORE",
+      "",
+      ""
+    ],
+    "native_rows": [
+      "     BEFORE",
+      "",
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "man-prefix-empty-text-1-eof",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\nBEFORE\n.B \"\"\n",
+    "heading": null,
+    "dialect": "man",
+    "payload": "empty-text",
+    "rows": [
+      "BEFORE",
+      ""
+    ],
+    "native_rows": [
+      "     BEFORE",
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "man-prefix-empty-text-1-fill",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\nBEFORE\n.B \"\"\n.fi\n",
+    "heading": null,
+    "dialect": "man",
+    "payload": "empty-text",
+    "rows": [
+      "BEFORE",
+      ""
+    ],
+    "native_rows": [
+      "     BEFORE",
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "man-prefix-empty-text-1-break-fill",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\nBEFORE\n.B \"\"\n.br\n.fi\n",
+    "heading": null,
+    "dialect": "man",
+    "payload": "empty-text",
+    "rows": [
+      "BEFORE",
+      ""
+    ],
+    "native_rows": [
+      "     BEFORE",
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "man-prefix-empty-text-2-eof",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\nBEFORE\n.B \"\"\n.B \"\"\n",
+    "heading": null,
+    "dialect": "man",
+    "payload": "empty-text",
+    "rows": [
+      "BEFORE",
+      "",
+      ""
+    ],
+    "native_rows": [
+      "     BEFORE",
+      "",
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "man-prefix-empty-text-2-fill",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\nBEFORE\n.B \"\"\n.B \"\"\n.fi\n",
+    "heading": null,
+    "dialect": "man",
+    "payload": "empty-text",
+    "rows": [
+      "BEFORE",
+      "",
+      ""
+    ],
+    "native_rows": [
+      "     BEFORE",
+      "",
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "man-prefix-empty-text-2-break-fill",
+    "source": ".TH TEST 1 \"September 28, 2026\" \"Historical Oracle Footer\"\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n.nf\nBEFORE\n.B \"\"\n.B \"\"\n.br\n.fi\n",
+    "heading": null,
+    "dialect": "man",
+    "payload": "empty-text",
+    "rows": [
+      "BEFORE",
+      "",
+      ""
+    ],
+    "native_rows": [
+      "     BEFORE",
+      "",
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "mdoc-origin-blank-1-eof",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n\n",
+    "heading": null,
+    "dialect": "mdoc",
+    "payload": "blank",
+    "rows": [
+      ""
+    ],
+    "native_rows": [
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "mdoc-origin-blank-1-fill",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n\n.fi\n",
+    "heading": null,
+    "dialect": "mdoc",
+    "payload": "blank",
+    "rows": [
+      ""
+    ],
+    "native_rows": [
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "mdoc-origin-blank-1-break-fill",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n\n.br\n.fi\n",
+    "heading": null,
+    "dialect": "mdoc",
+    "payload": "blank",
+    "rows": [
+      ""
+    ],
+    "native_rows": [
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "mdoc-origin-blank-2-eof",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n\n\n",
+    "heading": null,
+    "dialect": "mdoc",
+    "payload": "blank",
+    "rows": [
+      "",
+      ""
+    ],
+    "native_rows": [
+      "",
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "mdoc-origin-blank-2-fill",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n\n\n.fi\n",
+    "heading": null,
+    "dialect": "mdoc",
+    "payload": "blank",
+    "rows": [
+      "",
+      ""
+    ],
+    "native_rows": [
+      "",
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "mdoc-origin-blank-2-break-fill",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n\n\n.br\n.fi\n",
+    "heading": null,
+    "dialect": "mdoc",
+    "payload": "blank",
+    "rows": [
+      "",
+      ""
+    ],
+    "native_rows": [
+      "",
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "mdoc-origin-zero-width-1-eof",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n\\&\n",
+    "heading": null,
+    "dialect": "mdoc",
+    "payload": "zero-width",
+    "rows": [
+      ""
+    ],
+    "native_rows": [
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "mdoc-origin-zero-width-1-fill",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n\\&\n.fi\n",
+    "heading": null,
+    "dialect": "mdoc",
+    "payload": "zero-width",
+    "rows": [
+      ""
+    ],
+    "native_rows": [
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "mdoc-origin-zero-width-1-break-fill",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n\\&\n.br\n.fi\n",
+    "heading": null,
+    "dialect": "mdoc",
+    "payload": "zero-width",
+    "rows": [
+      ""
+    ],
+    "native_rows": [
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "mdoc-origin-zero-width-2-eof",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n\\&\n\\&\n",
+    "heading": null,
+    "dialect": "mdoc",
+    "payload": "zero-width",
+    "rows": [
+      "",
+      ""
+    ],
+    "native_rows": [
+      "",
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "mdoc-origin-zero-width-2-fill",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n\\&\n\\&\n.fi\n",
+    "heading": null,
+    "dialect": "mdoc",
+    "payload": "zero-width",
+    "rows": [
+      "",
+      ""
+    ],
+    "native_rows": [
+      "",
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "mdoc-origin-zero-width-2-break-fill",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n\\&\n\\&\n.br\n.fi\n",
+    "heading": null,
+    "dialect": "mdoc",
+    "payload": "zero-width",
+    "rows": [
+      "",
+      ""
+    ],
+    "native_rows": [
+      "",
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "mdoc-origin-empty-text-1-eof",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.No \"\"\n",
+    "heading": null,
+    "dialect": "mdoc",
+    "payload": "empty-text",
+    "rows": [],
+    "native_rows": [],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "mdoc-origin-empty-text-1-fill",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.No \"\"\n.fi\n",
+    "heading": null,
+    "dialect": "mdoc",
+    "payload": "empty-text",
+    "rows": [],
+    "native_rows": [],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "mdoc-origin-empty-text-1-break-fill",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.No \"\"\n.br\n.fi\n",
+    "heading": null,
+    "dialect": "mdoc",
+    "payload": "empty-text",
+    "rows": [],
+    "native_rows": [],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "mdoc-origin-empty-text-2-eof",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.No \"\"\n.No \"\"\n",
+    "heading": null,
+    "dialect": "mdoc",
+    "payload": "empty-text",
+    "rows": [],
+    "native_rows": [],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "mdoc-origin-empty-text-2-fill",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.No \"\"\n.No \"\"\n.fi\n",
+    "heading": null,
+    "dialect": "mdoc",
+    "payload": "empty-text",
+    "rows": [],
+    "native_rows": [],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "mdoc-origin-empty-text-2-break-fill",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.No \"\"\n.No \"\"\n.br\n.fi\n",
+    "heading": null,
+    "dialect": "mdoc",
+    "payload": "empty-text",
+    "rows": [],
+    "native_rows": [],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "mdoc-prefix-blank-1-eof",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\nBEFORE\n\n",
+    "heading": null,
+    "dialect": "mdoc",
+    "payload": "blank",
+    "rows": [
+      "BEFORE",
+      ""
+    ],
+    "native_rows": [
+      "     BEFORE",
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "mdoc-prefix-blank-1-fill",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\nBEFORE\n\n.fi\n",
+    "heading": null,
+    "dialect": "mdoc",
+    "payload": "blank",
+    "rows": [
+      "BEFORE",
+      ""
+    ],
+    "native_rows": [
+      "     BEFORE",
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "mdoc-prefix-blank-1-break-fill",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\nBEFORE\n\n.br\n.fi\n",
+    "heading": null,
+    "dialect": "mdoc",
+    "payload": "blank",
+    "rows": [
+      "BEFORE",
+      ""
+    ],
+    "native_rows": [
+      "     BEFORE",
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "mdoc-prefix-blank-2-eof",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\nBEFORE\n\n\n",
+    "heading": null,
+    "dialect": "mdoc",
+    "payload": "blank",
+    "rows": [
+      "BEFORE",
+      "",
+      ""
+    ],
+    "native_rows": [
+      "     BEFORE",
+      "",
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "mdoc-prefix-blank-2-fill",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\nBEFORE\n\n\n.fi\n",
+    "heading": null,
+    "dialect": "mdoc",
+    "payload": "blank",
+    "rows": [
+      "BEFORE",
+      "",
+      ""
+    ],
+    "native_rows": [
+      "     BEFORE",
+      "",
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "mdoc-prefix-blank-2-break-fill",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\nBEFORE\n\n\n.br\n.fi\n",
+    "heading": null,
+    "dialect": "mdoc",
+    "payload": "blank",
+    "rows": [
+      "BEFORE",
+      "",
+      ""
+    ],
+    "native_rows": [
+      "     BEFORE",
+      "",
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "mdoc-prefix-zero-width-1-eof",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\nBEFORE\n\\&\n",
+    "heading": null,
+    "dialect": "mdoc",
+    "payload": "zero-width",
+    "rows": [
+      "BEFORE",
+      ""
+    ],
+    "native_rows": [
+      "     BEFORE",
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "mdoc-prefix-zero-width-1-fill",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\nBEFORE\n\\&\n.fi\n",
+    "heading": null,
+    "dialect": "mdoc",
+    "payload": "zero-width",
+    "rows": [
+      "BEFORE",
+      ""
+    ],
+    "native_rows": [
+      "     BEFORE",
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "mdoc-prefix-zero-width-1-break-fill",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\nBEFORE\n\\&\n.br\n.fi\n",
+    "heading": null,
+    "dialect": "mdoc",
+    "payload": "zero-width",
+    "rows": [
+      "BEFORE",
+      ""
+    ],
+    "native_rows": [
+      "     BEFORE",
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "mdoc-prefix-zero-width-2-eof",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\nBEFORE\n\\&\n\\&\n",
+    "heading": null,
+    "dialect": "mdoc",
+    "payload": "zero-width",
+    "rows": [
+      "BEFORE",
+      "",
+      ""
+    ],
+    "native_rows": [
+      "     BEFORE",
+      "",
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "mdoc-prefix-zero-width-2-fill",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\nBEFORE\n\\&\n\\&\n.fi\n",
+    "heading": null,
+    "dialect": "mdoc",
+    "payload": "zero-width",
+    "rows": [
+      "BEFORE",
+      "",
+      ""
+    ],
+    "native_rows": [
+      "     BEFORE",
+      "",
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "mdoc-prefix-zero-width-2-break-fill",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\nBEFORE\n\\&\n\\&\n.br\n.fi\n",
+    "heading": null,
+    "dialect": "mdoc",
+    "payload": "zero-width",
+    "rows": [
+      "BEFORE",
+      "",
+      ""
+    ],
+    "native_rows": [
+      "     BEFORE",
+      "",
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "mdoc-prefix-empty-text-1-eof",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\nBEFORE\n.No \"\"\n",
+    "heading": null,
+    "dialect": "mdoc",
+    "payload": "empty-text",
+    "rows": [
+      "BEFORE"
+    ],
+    "native_rows": [
+      "     BEFORE"
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "mdoc-prefix-empty-text-1-fill",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\nBEFORE\n.No \"\"\n.fi\n",
+    "heading": null,
+    "dialect": "mdoc",
+    "payload": "empty-text",
+    "rows": [
+      "BEFORE"
+    ],
+    "native_rows": [
+      "     BEFORE"
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "mdoc-prefix-empty-text-1-break-fill",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\nBEFORE\n.No \"\"\n.br\n.fi\n",
+    "heading": null,
+    "dialect": "mdoc",
+    "payload": "empty-text",
+    "rows": [
+      "BEFORE"
+    ],
+    "native_rows": [
+      "     BEFORE"
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "mdoc-prefix-empty-text-2-eof",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\nBEFORE\n.No \"\"\n.No \"\"\n",
+    "heading": null,
+    "dialect": "mdoc",
+    "payload": "empty-text",
+    "rows": [
+      "BEFORE"
+    ],
+    "native_rows": [
+      "     BEFORE"
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "mdoc-prefix-empty-text-2-fill",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\nBEFORE\n.No \"\"\n.No \"\"\n.fi\n",
+    "heading": null,
+    "dialect": "mdoc",
+    "payload": "empty-text",
+    "rows": [
+      "BEFORE"
+    ],
+    "native_rows": [
+      "     BEFORE"
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "mdoc-prefix-empty-text-2-break-fill",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\nBEFORE\n.No \"\"\n.No \"\"\n.br\n.fi\n",
+    "heading": null,
+    "dialect": "mdoc",
+    "payload": "empty-text",
+    "rows": [
+      "BEFORE"
+    ],
+    "native_rows": [
+      "     BEFORE"
+    ],
+    "reading_rule": "common-manual-margin-only"
+  }
+]

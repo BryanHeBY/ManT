@@ -14,6 +14,11 @@ pub(in crate::mandoc) fn execute_man_paragraph_spacing(
     paragraph_distance: u16,
     has_predecessor: bool,
 ) -> u16 {
+    // print_bvspace() executes term_newln() before testing the source
+    // predecessor. A fitting detached HEAD can still own viscol even when
+    // this IR destination has no cells; closing it clears bare BACKAFTER
+    // exactly once before PP/SY/IP/TP enters the following body.
+    formatter.settle_definition_head_rows();
     if !has_predecessor {
         return 0;
     }

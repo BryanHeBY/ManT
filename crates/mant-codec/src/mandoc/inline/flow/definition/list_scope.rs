@@ -35,6 +35,7 @@ pub(in crate::mandoc) struct NestedListScope {
     offset_units: usize,
     offset_columns: usize,
     column_origin_units: Option<usize>,
+    declared_body_origin_units: Option<usize>,
     indent_columns: u16,
     outcome: DefinitionOutcome,
     head_flags_cleared: bool,
@@ -60,6 +61,7 @@ impl InlineBuilder {
             offset_units: definition.field_offset_units,
             offset_columns: definition.hang_row.field_offset,
             column_origin_units: definition.column_origin_units,
+            declared_body_origin_units: definition.declared_body_origin_units,
             indent_columns: definition.row.indent_columns,
             outcome: definition.outcome,
             head_flags_cleared: definition.head_flags_cleared,
@@ -191,6 +193,7 @@ impl InlineBuilder {
             .saturating_add_signed(isize::try_from(offset_units).unwrap_or_default())
             .saturating_add(width_units);
         definition.hang_row.field_offset = definition.field_offset_units.saturating_add(11) / 24;
+        definition.declared_body_origin_units = Some(definition.field_offset_units);
         // HEAD post cleared trailspace, not the minbl from its actual flush.
         // Responsive BODY text does not acquire another field interpreter.
         if let Some(author) = &mut self.execution.author_execution {
@@ -360,6 +363,7 @@ impl InlineBuilder {
         definition.field_offset_units = saved.offset_units;
         definition.hang_row.field_offset = saved.offset_columns;
         definition.column_origin_units = saved.column_origin_units;
+        definition.declared_body_origin_units = saved.declared_body_origin_units;
         definition.row.indent_columns = saved.indent_columns;
     }
 
@@ -386,6 +390,15 @@ impl InlineBuilder {
 }
 
 impl super::super::InlineExecutionState {
+    /// The list wrapper carries normal BODY positioning. Keep the actual
+    /// native columns, but do not also materialize that declared placement
+    /// into its text (`termp_it_pre()` BODY offset, term.c:113-116).
+    pub(in crate::mandoc) fn declare_list_body_origin(&mut self) {
+        if let Some(state) = &mut self.definition {
+            state.declared_body_origin_units = Some(state.field_offset_units);
+        }
+    }
+
     /// Every non-BLOCK `It` post clears the list pad/break flags and trailspace,
     /// including a plain HEAD that emits nothing and calls no `term_newln`.
     /// This is shared with structural list output; an enclosing column's

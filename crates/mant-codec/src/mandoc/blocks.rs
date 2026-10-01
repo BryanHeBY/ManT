@@ -73,6 +73,14 @@ pub(super) struct ScopeFlow<'node> {
     pub(super) run_in: Option<RunInBody<'node>>,
     /// Whether returning from this scope settles the active formatter row.
     pub(super) row_boundary: FormatterRowBoundary,
+    /// Actual column BODY entries surround pre/post, independently of
+    /// their detached child slices and output-owner returns.
+    pub(super) column_nodes: Option<ColumnBodyNodes<'node>>,
+}
+
+pub(super) struct ColumnBodyNodes<'node> {
+    entry: Option<&'node Node>,
+    next: Option<&'node Node>,
 }
 
 pub(super) struct RunInBody<'node> {
@@ -84,7 +92,7 @@ pub(super) struct RunInBody<'node> {
     pub(super) entry: Option<&'node Node>,
 }
 
-impl ScopeFlow<'_> {
+impl<'node> ScopeFlow<'node> {
     /// Ordinary filled scope; the caller keeps its active formatter row.
     pub(super) const fn filled(
         indent_columns: crate::mandoc::layout::SourceIndent,
@@ -96,6 +104,7 @@ impl ScopeFlow<'_> {
             paragraph_predecessor: false,
             run_in: None,
             row_boundary: FormatterRowBoundary::Preserve,
+            column_nodes: None,
         }
     }
 
@@ -112,6 +121,7 @@ impl ScopeFlow<'_> {
             paragraph_predecessor: false,
             run_in: None,
             row_boundary: FormatterRowBoundary::Settle,
+            column_nodes: None,
         }
     }
 
@@ -137,7 +147,17 @@ impl ScopeFlow<'_> {
                 origin,
                 last,
             },
+            column_nodes: None,
         }
+    }
+
+    pub(super) const fn with_column_nodes(
+        mut self,
+        entry: Option<&'node Node>,
+        next: Option<&'node Node>,
+    ) -> Self {
+        self.column_nodes = Some(ColumnBodyNodes { entry, next });
+        self
     }
 
     /// The owning macro's BODY post calls `term_newln()` (or
@@ -156,6 +176,7 @@ impl ScopeFlow<'_> {
             paragraph_predecessor,
             run_in: None,
             row_boundary: FormatterRowBoundary::Settle,
+            column_nodes: None,
         }
     }
 }
@@ -186,6 +207,9 @@ pub(super) fn lower_scope(
         );
     }
     lowerer.paragraph_predecessor = flow.paragraph_predecessor;
+    if let Some(entry) = flow.column_nodes.as_ref().and_then(|nodes| nodes.entry) {
+        lowerer.state.enter_column_body_node(entry);
+    }
     if let FormatterRowBoundary::Column {
         width,
         origin,
@@ -196,7 +220,11 @@ pub(super) fn lower_scope(
         lowerer.state.begin_column_body(width, origin, last);
     }
     lowerer.push_nodes(nodes);
-    lowerer.finish_into(formatter, flow.row_boundary)
+    lowerer.finish_into_before_column_entry(
+        formatter,
+        flow.row_boundary,
+        flow.column_nodes.and_then(|nodes| nodes.next),
+    )
 }
 
 const DEFAULT_MAN_TAG_WIDTH: i32 = 7;
@@ -297,9 +325,18 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
     }
 
     fn finish_into(
+        self,
+        formatter: &mut crate::mandoc::formatter::FormatterState,
+        row_boundary: FormatterRowBoundary,
+    ) -> Vec<Block> {
+        self.finish_into_before_column_entry(formatter, row_boundary, None)
+    }
+
+    fn finish_into_before_column_entry(
         mut self,
         formatter: &mut crate::mandoc::formatter::FormatterState,
         row_boundary: FormatterRowBoundary,
+        next_column_entry: Option<&Node>,
     ) -> Vec<Block> {
         if row_boundary == FormatterRowBoundary::Settle {
             // Native BODY posts settle the field before its IR owner drains.
@@ -307,7 +344,9 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             self.state.finish_column_nested_row();
             self.settle_no_fill_inline();
         }
-        let blocks = self.state.finish_with_formatter(formatter, row_boundary);
+        let blocks = self
+            .state
+            .finish_with_formatter(formatter, row_boundary, next_column_entry);
         self.context.check_gap_bounds(&blocks);
         blocks
     }

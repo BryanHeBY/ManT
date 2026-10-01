@@ -132,6 +132,67 @@ fn nested_definition_cells_keep_content_order_and_entry_identity() {
 }
 
 #[test]
+fn list_control_groups_execute_only_their_source_nodes_on_the_live_column() {
+    // All 48 exact sources ran pristine ASCII/UTF-8/HTML/tree/lint first.
+    // Bl pre calls term_newln once, leaving a fitting column's viscol/minbl
+    // live. Absent control slices execute no node; ft nodes change a font,
+    // not the physical row (mdoc_term.c::print_mdoc_node(), roff_term_pre()).
+    // The inner tag HEAD then overruns because its own field begins after
+    // that prior device position (term.c:113-127,250-253). Responsive table
+    // placement gives A its own output row while retaining x/B separation.
+    #[derive(serde::Deserialize)]
+    struct Case {
+        name: String,
+        source: String,
+        carrier: String,
+        rows: Vec<String>,
+        native_rows: Vec<String>,
+        reading_rule: String,
+    }
+    let cases: Vec<Case> = serde_json::from_str(include_str!(
+        "../native_execution/fixtures/table_control_rows/cases.json"
+    ))
+    .unwrap();
+    assert_eq!(cases.len(), 48);
+    let mut failures = Vec::new();
+    for case in cases {
+        assert_eq!(case.reading_rule, "responsive-nested-definition-owner");
+        let label = if case.carrier.starts_with("Lk") {
+            "x: https://ex.org"
+        } else {
+            "x"
+        };
+        assert_eq!(case.native_rows[0].trim_start(), format!("A {label}"));
+        assert_eq!(
+            case.native_rows[1..]
+                .iter()
+                .map(|row| row.trim_start())
+                .collect::<Vec<_>>(),
+            ["B", "", "C", ""]
+        );
+        let query = mant_loader::load_roff_bytes(case.source.as_bytes()).unwrap();
+        let wire = mant_render::render_query_json(&query, false).unwrap();
+        assert!(!wire.contains("\\u0000mant:"), "{}", case.name);
+        let decoded: mant_protocol::QueryBundle = serde_json::from_str(&wire).unwrap();
+        let restored: ResolvedContent = decoded.into();
+        assert_eq!(restored.document, query.document, "{}", case.name);
+        let mut expected = ["NAME", "test – probe", "", "DESCRIPTION"]
+            .map(str::to_owned)
+            .to_vec();
+        expected.extend(case.rows);
+        expected.extend(["", "NEXT", "END"].map(str::to_owned));
+        let actual = actual_rows(&mant_render::render_query_man(&restored));
+        if actual != expected {
+            failures.push(format!(
+                "{}\n{}\nactual {actual:?}\nreference {expected:?}",
+                case.name, case.source
+            ));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n\n"));
+}
+
+#[test]
 fn boxed_tbl_keeps_its_single_cell_without_copying_device_frame_glyphs() {
     // tbl_term.c::term_tbl draws the optional frame around the data span.
     // The frozen IR contract retains table data and topology, while ASCII

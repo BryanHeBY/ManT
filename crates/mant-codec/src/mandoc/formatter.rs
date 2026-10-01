@@ -13,6 +13,13 @@ pub(super) struct FinishedInlineLine {
     pub(super) definition_author_restarted: bool,
 }
 
+/// A HEAD post's observed physical row, independent of the output container.
+#[derive(Clone, Copy, Default)]
+struct DefinitionHeadRows {
+    occupied: bool,
+    completed_empty_rows: u16,
+}
+
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 enum RowHandoff {
     #[default]
@@ -49,6 +56,8 @@ pub(super) struct FormatterState {
     /// Definition BODY checkpoints observe the one real source walk. Nested
     /// items push their own checkpoint without replaying their parent body.
     definition_bodies: Vec<DefinitionBodyObservation>,
+    /// Last HEAD post's physical row, independent of its rendered term.
+    definition_head_rows: DefinitionHeadRows,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -102,6 +111,7 @@ impl Clone for FormatterState {
             no_fill_inline: self.no_fill_inline.clone(),
             row_handoff: self.row_handoff,
             definition_bodies: self.definition_bodies.clone(),
+            definition_head_rows: self.definition_head_rows,
         }
     }
 }
@@ -115,6 +125,7 @@ impl Default for FormatterState {
             no_fill_inline: NoFillInlineState::new(),
             row_handoff: RowHandoff::None,
             definition_bodies: Vec::new(),
+            definition_head_rows: DefinitionHeadRows::default(),
         }
     }
 }
@@ -134,6 +145,21 @@ impl std::ops::DerefMut for FormatterState {
 }
 
 impl FormatterState {
+    pub(super) const fn definition_head_row_occupied(&self) -> bool {
+        self.definition_head_rows.occupied
+    }
+
+    pub(super) const fn definition_head_completed_empty_rows(&self) -> u16 {
+        self.definition_head_rows.completed_empty_rows
+    }
+
+    pub(super) fn enter_man_definition_body(&mut self) {
+        // man_term.c::pre_IP/pre_TP(BODY), independent of HEAD fitting:
+        // an empty visited TEXT calls term_newln, not term_vspace, until
+        // the first actual term_word clears NONEWLINE (term.c::term_word).
+        self.execution.enter_man_definition_body();
+    }
+
     pub(super) fn begin_definition_body(&mut self, shares_pending_head_row: bool) {
         self.execution.concat_consumed_for_body = false;
         self.definition_bodies.push(DefinitionBodyObservation {
@@ -317,10 +343,6 @@ impl FormatterState {
         // an explicit .br. Do not export IR from a HANG field for which
         // term_fill() never produced a printable device slice.
         builder.discard_unprinted_definition_field_output();
-        // The item post's flush prints a still-buffered jump word only
-        // after the element restore zeroed the offset (mdoc_term.c:437-
-        // 439): its fill collapses.
-        builder.retract_head_close_jump();
         builder.settle_provisional_definition_break();
         let definition_field_exited = builder.definition_field_exited();
         let definition_author_restarted = builder.definition_author_restarted();
@@ -337,6 +359,10 @@ impl FormatterState {
             builder.note_flushed_at_body_column();
         }
         let definition_body_gap_consumed = builder.definition_body_gap_consumed();
+        self.definition_head_rows = DefinitionHeadRows {
+            occupied: builder.definition_head_row_occupied(),
+            completed_empty_rows: builder.completed_empty_rows(),
+        };
         let definition_term_breaks = builder.take_definition_term_breaks();
         let (output, mut execution) = builder.finish_formatter_line(preserve_rows);
         std::mem::swap(&mut execution, &mut self.execution);
@@ -356,6 +382,10 @@ impl FormatterState {
         &mut self,
         builder: InlineBuilder,
     ) -> (Vec<mant_ir::Inline>, PreservedInlineState) {
+        self.definition_head_rows = DefinitionHeadRows {
+            occupied: builder.definition_head_row_occupied(),
+            completed_empty_rows: builder.completed_empty_rows(),
+        };
         let (output, preserved, mut execution) = builder.finish_preserving_execution();
         std::mem::swap(&mut execution, &mut self.execution);
         self.spare_execution = Some(execution);

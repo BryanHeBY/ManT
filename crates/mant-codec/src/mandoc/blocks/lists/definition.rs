@@ -130,14 +130,19 @@ pub(super) fn definition_item(
         geometry.native_head_field_units,
         formatter,
     );
+    let completed_head_rows = formatter.definition_head_completed_empty_rows();
     // TERMP_NONEWLINE survives the HEAD output drain. It is the execution
     // evidence that the first no-fill BODY row still belongs on that line.
     let head_source_continues = formatter.execution.source_row_continues();
     if man_node {
         formatter.font.man_text_boundary(); // HEAD post
         formatter.font.man_text_boundary(); // BODY pre
+        formatter.enter_man_definition_body();
     }
-    if definition_field_exited {
+    if definition_field_exited && !man_node {
+        // man tag width fitting remains responsive IR geometry. The actual
+        // HEAD post's device close controls formatter registers below, but
+        // a width-only overrun does not author a hard layout boundary.
         geometry.placement = crate::mandoc::layout::TermPlacement::Stacked;
     }
     if definition_body_gap_consumed {
@@ -145,6 +150,7 @@ pub(super) fn definition_item(
     }
     let (mut terms, closed_head_row) =
         normalize_executed_definition_head(term, &term_breaks, node, flow, &mut geometry);
+    let empty_head_rows = transfer_completed_empty_head_rows(&mut terms, completed_head_rows);
     let body_origin = geometry.body_origin(context, node, indent_columns);
     // The BODY is executed once. Its active formatter records whether a real
     // boundary preceded the first visible word and whether the detached head
@@ -157,7 +163,11 @@ pub(super) fn definition_item(
         .any(|term| mant_ir::has_printable_character(term));
     formatter.begin_definition_body(
         flow.shares_pending_term_row
-            && rendered_head_row
+            && if man_node {
+                formatter.definition_head_row_occupied()
+            } else {
+                rendered_head_row
+            }
             && !closed_head_row
             && !definition_field_exited,
     );
@@ -169,13 +179,26 @@ pub(super) fn definition_item(
         formatter,
         definition_body_flow(node, body_origin, spacing_enabled, flow, run_in_execution),
     );
-    carry_invisible_head_row(node, &terms, closed_head_row, &mut description);
+    carry_completed_head_rows(
+        node,
+        &terms,
+        closed_head_row,
+        empty_head_rows,
+        &mut description,
+    );
     if node.macro_name.as_deref() == Some("IP") {
         // man_term.c::post_IP() can complete an empty HEAD word even though
         // it supplies no tag. Its row now belongs to the description; an
         // empty term shell must not turn a headless .IP continuation into a
         // new semantic definition.
         terms.retain(|term| !term.is_empty());
+    }
+    if man_node {
+        // post_IP/post_TP executes term_newln() even when the BODY emitted
+        // only a bare BACKAFTER and has no local cell. A fitting HEAD's
+        // device row remains occupied until this actual BODY post; it must
+        // close before a following PP or sibling starts another scope.
+        formatter.settle_definition_head_rows();
     }
     let observed = formatter.finish_definition_body();
     if man_node {
@@ -250,6 +273,7 @@ fn definition_body_flow(
                     .find(|part| part.kind == NodeKind::Body && part.scope_end.is_none()),
             }),
             row_boundary: FormatterRowBoundary::Settle,
+            column_nodes: None,
         }
     } else {
         ScopeFlow::body_post_row_end(body_origin, spacing_enabled, flow.paragraph_predecessor)
@@ -425,19 +449,44 @@ fn invisible_closed_head_row(terms: &[Vec<Inline>]) -> bool {
     })
 }
 
-fn carry_invisible_head_row(
+fn transfer_completed_empty_head_rows(terms: &mut [Vec<Inline>], rows: u16) -> u16 {
+    if rows == 0
+        || terms
+            .iter()
+            .any(|term| mant_ir::has_printable_character(term))
+    {
+        return 0;
+    }
+    // term_vspace() already executed each endline (term.c:489-497). An
+    // otherwise empty term has no glyph row to render their last boundary.
+    // Deliver the receipt once to BODY layout; neither an implicit term row
+    // nor its retained LineBreak projection may account for the same rows.
+    // Keep every authored identity even when its HEAD has no readable label.
+    for term in terms {
+        crate::mandoc::inline::retain_inline_identities(term);
+    }
+    rows
+}
+
+fn carry_completed_head_rows(
     node: &Node,
     terms: &[Vec<Inline>],
     closed_head_row: bool,
+    completed_empty_rows: u16,
     description: &mut Vec<Block>,
 ) {
-    if closed_head_row && invisible_closed_head_row(terms) {
+    let rows = if completed_empty_rows > 0 {
+        completed_empty_rows
+    } else {
+        u16::from(closed_head_row && invisible_closed_head_row(terms))
+    };
+    if rows > 0 {
         // term_newln() flushed a HEAD cell, but an invisible term has no IR
         // renderer. Transfer its completed physical row to the BODY owner.
         description.insert(
             0,
             Block::VerticalSpace {
-                lines: 1,
+                lines: rows,
                 source: source_span(node),
             },
         );

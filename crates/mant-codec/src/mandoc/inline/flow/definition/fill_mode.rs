@@ -131,17 +131,12 @@ impl InlineBuilder {
                 *indent_columns = row_indent;
             }
             self.definition_state_mut().row.indent_columns = row_indent;
-            self.definition_state_mut().pending_indent = Some(usize::from(body));
+            self.definition_state_mut().pending_indent = None;
+            self.retire_native_field_with_device(native.as_ref());
+            self.move_definition_field_origin_to_body(body);
         } else {
             let width = mant_ir::geometry::text_width(&super::super::super::plain_text(field));
-            self.finish_fill_mode_open_row(
-                body,
-                field_width_columns,
-                gap,
-                flags,
-                width,
-                native.as_ref(),
-            );
+            self.finish_fill_mode_open_row(body, gap, flags, width, native.as_ref());
         }
         if flags.wraps() || native.as_ref().is_some_and(|field| field.ends_row) {
             self.execution
@@ -191,7 +186,6 @@ impl InlineBuilder {
     fn finish_fill_mode_open_row(
         &mut self,
         body: u16,
-        field_width_columns: u16,
         gap: u8,
         flags: FieldFlags,
         width: usize,
@@ -204,20 +198,18 @@ impl InlineBuilder {
             // Upstream has no `body - width` fixed padding on this
             // row — a deferred print past the element restore zeroes
             // the offset (mdoc_term.c:437-439) and the fill collapses,
-            // which the armed-offset state machine carries.
-            self.definition_state_mut()
-                .row
-                .arm_jump(field_width_columns);
+            // which the actual print receipt records after restoration.
+
             // term_newln() already printed this accepted field under
             // the old HANG flags. Keep that captured position while
             // retiring its cells, even though the physical row stays
             // open; changing fill mode does not print them a second time.
-            if let Some(native) = native {
+            if native.is_some() {
                 let row = &mut self.definition_state_mut().hang_row;
                 row.flush(usize::from(gap));
-                row.viscol = native.viscol;
             }
             self.retire_native_field_with_device(native);
+            self.move_definition_field_origin_to_body(body);
             self.reset_native_tab_origin();
         } else {
             self.append_fixed_cells(usize::from(body).saturating_sub(width));

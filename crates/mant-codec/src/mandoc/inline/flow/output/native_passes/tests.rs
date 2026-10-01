@@ -38,7 +38,13 @@ fn accepted_owner_receipt_intersects_each_ordered_range_once() {
                 writes.push(FieldWrite::Cell(FieldCell::BreakMarker));
             }
             buffer.apply_writes(&writes);
-            anchors.push((start, marker(&index.to_string()), start));
+            anchors.push(super::super::super::NativeWordAnchor {
+                start,
+                owner: marker(&index.to_string()),
+                content: start,
+                projected_device_padding: 0,
+                projected_field_prefix: false,
+            });
         }
         let targets = FillTargets {
             first: usize::MAX / 2,

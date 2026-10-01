@@ -1,6 +1,36 @@
 use super::*;
 
 #[test]
+fn rejected_link_fields_keep_the_accepted_head_and_its_body_position() {
+    // All five exact inputs ran pristine ASCII/UTF-8/HTML/tree/lint before
+    // this assertion. term_field() advances X and term_flushln() preserves
+    // its device position through rejected label fields; BODY prints at
+    // the six-column origin (term.c:113-116,233-253,397-427). The public
+    // layout may express this with body origin or a minimum gap; assert
+    // the final consumer's actual cells instead of either private choice.
+    let prefix =
+        ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n";
+    for link in [
+        ".Lk https://example.com visible",
+        ".Lk https://example.com",
+        ".Lk https://example.com first\n.Lk https://example.com second",
+        r#".Lk "" visible"#,
+        r".Lk \zX visible",
+    ] {
+        let source = format!(
+            "{prefix}.Bl -hang -width 4n\n.It Xo X\n.br\n.No \\p\n{link}\n.br\n.Xc\n.No BODY\n.El\n"
+        );
+        let loaded = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+        let json = mant_render::render_query_json(&loaded, false).unwrap();
+        let restored: mant_protocol::QueryBundle = serde_json::from_str(&json).unwrap();
+        let query: mant_ir::ResolvedContent = restored.into();
+        let output = mant_render::render_query_man(&query);
+        let body = output.split_once("DESCRIPTION\n").unwrap().1;
+        assert_eq!(body, "X     BODY", "{source}");
+    }
+}
+
+#[test]
 fn leading_word_end_break_rejects_a_link_label_field_without_graph() {
     // Both exact TAG/HANG inputs passed fixed CVS -Tascii/-Tutf8/-Tlint.
     // term.c::term_word() writes the separator after the empty \p word;
@@ -172,10 +202,9 @@ fn a_hang_field_discarded_by_word_end_break_does_not_export_its_projection() {
     let native = without_line_indentation(&native_terminal(source));
     let lowered = lowered_terminal(source);
     assert!(native.contains("X\nBODY"), "native: {native:?}");
-    assert!(
-        lowered.contains("X     \n      BODY"),
-        "lowered: {lowered:?}"
-    );
+    // term_field() printed X before the later field was rejected. Its
+    // unprinted positioning cells are not trailing X text (term.c:389-427).
+    assert!(lowered.contains("X\n      BODY"), "lowered: {lowered:?}");
 }
 
 #[test]

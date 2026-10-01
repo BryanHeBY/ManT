@@ -1,0 +1,560 @@
+[
+  {
+    "name": "filled-origin-0",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\& \\p Y\"\n.No AFTER\n.Sh NEXT\n.No END\n",
+    "no_fill": false,
+    "prefix": false,
+    "payload": "\\& \\p Y",
+    "heading": "NEXT",
+    "rows": [
+      "",
+      ""
+    ],
+    "native_rows": [
+      "",
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "filled-origin-1",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\&\\p \\p Y\"\n.No AFTER\n.Sh NEXT\n.No END\n",
+    "no_fill": false,
+    "prefix": false,
+    "payload": "\\&\\p \\p Y",
+    "heading": "NEXT",
+    "rows": [
+      "",
+      ""
+    ],
+    "native_rows": [
+      "",
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "filled-origin-2",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\p\\& \\p Y\"\n.No AFTER\n.Sh NEXT\n.No END\n",
+    "no_fill": false,
+    "prefix": false,
+    "payload": "\\p\\& \\p Y",
+    "heading": "NEXT",
+    "rows": [
+      "",
+      ""
+    ],
+    "native_rows": [
+      "",
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "filled-origin-3",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\p\"\n.No AFTER\n.Sh NEXT\n.No END\n",
+    "no_fill": false,
+    "prefix": false,
+    "payload": "\\p",
+    "heading": "NEXT",
+    "rows": [
+      ""
+    ],
+    "native_rows": [
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "filled-origin-4",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\&\"\n.No AFTER\n.Sh NEXT\n.No END\n",
+    "no_fill": false,
+    "prefix": false,
+    "payload": "\\&",
+    "heading": "NEXT",
+    "rows": [
+      "AFTER"
+    ],
+    "native_rows": [
+      "      AFTER"
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "filled-origin-5",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\[u0301]\\p Y\"\n.No AFTER\n.Sh NEXT\n.No END\n",
+    "no_fill": false,
+    "prefix": false,
+    "payload": "\\[u0301]\\p Y",
+    "heading": "NEXT",
+    "rows": [
+      "́",
+      "Y AFTER"
+    ],
+    "native_rows": [
+      "     ́",
+      "     Y AFTER"
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "filled-origin-6",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\z\"\n.No AFTER\n.Sh NEXT\n.No END\n",
+    "no_fill": false,
+    "prefix": false,
+    "payload": "\\z",
+    "heading": "NEXT",
+    "rows": [
+      "FTER"
+    ],
+    "native_rows": [
+      "      FTER"
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "filled-origin-7",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\zX\"\n.No AFTER\n.Sh NEXT\n.No END\n",
+    "no_fill": false,
+    "prefix": false,
+    "payload": "\\zX",
+    "heading": "NEXT",
+    "rows": [
+      "XAFTER"
+    ],
+    "native_rows": [
+      "     XAFTER"
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "filled-prefix-0",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No BEFORE\n.No \"\\& \\p Y\"\n.No AFTER\n.Sh NEXT\n.No END\n",
+    "no_fill": false,
+    "prefix": true,
+    "payload": "\\& \\p Y",
+    "heading": "NEXT",
+    "rows": [
+      "BEFORE",
+      ""
+    ],
+    "native_rows": [
+      "     BEFORE",
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "filled-prefix-1",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No BEFORE\n.No \"\\&\\p \\p Y\"\n.No AFTER\n.Sh NEXT\n.No END\n",
+    "no_fill": false,
+    "prefix": true,
+    "payload": "\\&\\p \\p Y",
+    "heading": "NEXT",
+    "rows": [
+      "BEFORE",
+      ""
+    ],
+    "native_rows": [
+      "     BEFORE",
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "filled-prefix-2",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No BEFORE\n.No \"\\p\\& \\p Y\"\n.No AFTER\n.Sh NEXT\n.No END\n",
+    "no_fill": false,
+    "prefix": true,
+    "payload": "\\p\\& \\p Y",
+    "heading": "NEXT",
+    "rows": [
+      "BEFORE",
+      ""
+    ],
+    "native_rows": [
+      "     BEFORE",
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "filled-prefix-3",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No BEFORE\n.No \"\\p\"\n.No AFTER\n.Sh NEXT\n.No END\n",
+    "no_fill": false,
+    "prefix": true,
+    "payload": "\\p",
+    "heading": "NEXT",
+    "rows": [
+      "BEFORE",
+      ""
+    ],
+    "native_rows": [
+      "     BEFORE",
+      ""
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "filled-prefix-4",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No BEFORE\n.No \"\\&\"\n.No AFTER\n.Sh NEXT\n.No END\n",
+    "no_fill": false,
+    "prefix": true,
+    "payload": "\\&",
+    "heading": "NEXT",
+    "rows": [
+      "BEFORE  AFTER"
+    ],
+    "native_rows": [
+      "     BEFORE  AFTER"
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "filled-prefix-5",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No BEFORE\n.No \"\\[u0301]\\p Y\"\n.No AFTER\n.Sh NEXT\n.No END\n",
+    "no_fill": false,
+    "prefix": true,
+    "payload": "\\[u0301]\\p Y",
+    "heading": "NEXT",
+    "rows": [
+      "BEFORE ́",
+      "Y AFTER"
+    ],
+    "native_rows": [
+      "     BEFORE ́",
+      "     Y AFTER"
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "filled-prefix-6",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No BEFORE\n.No \"\\z\"\n.No AFTER\n.Sh NEXT\n.No END\n",
+    "no_fill": false,
+    "prefix": true,
+    "payload": "\\z",
+    "heading": "NEXT",
+    "rows": [
+      "BEFORE  FTER"
+    ],
+    "native_rows": [
+      "     BEFORE  FTER"
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "filled-prefix-7",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No BEFORE\n.No \"\\zX\"\n.No AFTER\n.Sh NEXT\n.No END\n",
+    "no_fill": false,
+    "prefix": true,
+    "payload": "\\zX",
+    "heading": "NEXT",
+    "rows": [
+      "BEFORE XAFTER"
+    ],
+    "native_rows": [
+      "     BEFORE XAFTER"
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "literal-origin-0",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.No \"\\& \\p Y\"\n.No AFTER\n.fi\n.Sh NEXT\n.No END\n",
+    "no_fill": true,
+    "prefix": false,
+    "payload": "\\& \\p Y",
+    "heading": "NEXT",
+    "rows": [
+      "",
+      "",
+      "AFTER"
+    ],
+    "native_rows": [
+      "",
+      "",
+      "     AFTER"
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "literal-origin-1",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.No \"\\&\\p \\p Y\"\n.No AFTER\n.fi\n.Sh NEXT\n.No END\n",
+    "no_fill": true,
+    "prefix": false,
+    "payload": "\\&\\p \\p Y",
+    "heading": "NEXT",
+    "rows": [
+      "",
+      "",
+      "AFTER"
+    ],
+    "native_rows": [
+      "",
+      "",
+      "     AFTER"
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "literal-origin-2",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.No \"\\p\\& \\p Y\"\n.No AFTER\n.fi\n.Sh NEXT\n.No END\n",
+    "no_fill": true,
+    "prefix": false,
+    "payload": "\\p\\& \\p Y",
+    "heading": "NEXT",
+    "rows": [
+      "",
+      "",
+      "AFTER"
+    ],
+    "native_rows": [
+      "",
+      "",
+      "     AFTER"
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "literal-origin-3",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.No \"\\p\"\n.No AFTER\n.fi\n.Sh NEXT\n.No END\n",
+    "no_fill": true,
+    "prefix": false,
+    "payload": "\\p",
+    "heading": "NEXT",
+    "rows": [
+      "",
+      "AFTER"
+    ],
+    "native_rows": [
+      "",
+      "     AFTER"
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "literal-origin-4",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.No \"\\&\"\n.No AFTER\n.fi\n.Sh NEXT\n.No END\n",
+    "no_fill": true,
+    "prefix": false,
+    "payload": "\\&",
+    "heading": "NEXT",
+    "rows": [
+      "",
+      "AFTER"
+    ],
+    "native_rows": [
+      "",
+      "     AFTER"
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "literal-origin-5",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.No \"\\[u0301]\\p Y\"\n.No AFTER\n.fi\n.Sh NEXT\n.No END\n",
+    "no_fill": true,
+    "prefix": false,
+    "payload": "\\[u0301]\\p Y",
+    "heading": "NEXT",
+    "rows": [
+      "́",
+      "Y",
+      "AFTER"
+    ],
+    "native_rows": [
+      "     ́",
+      "     Y",
+      "     AFTER"
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "literal-origin-6",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.No \"\\z\"\n.No AFTER\n.fi\n.Sh NEXT\n.No END\n",
+    "no_fill": true,
+    "prefix": false,
+    "payload": "\\z",
+    "heading": "NEXT",
+    "rows": [
+      "FTER"
+    ],
+    "native_rows": [
+      "     FTER"
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "literal-origin-7",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.No \"\\zX\"\n.No AFTER\n.fi\n.Sh NEXT\n.No END\n",
+    "no_fill": true,
+    "prefix": false,
+    "payload": "\\zX",
+    "heading": "NEXT",
+    "rows": [
+      "X",
+      "AFTER"
+    ],
+    "native_rows": [
+      "     X",
+      "     AFTER"
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "literal-prefix-0",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.No BEFORE\n.No \"\\& \\p Y\"\n.No AFTER\n.fi\n.Sh NEXT\n.No END\n",
+    "no_fill": true,
+    "prefix": true,
+    "payload": "\\& \\p Y",
+    "heading": "NEXT",
+    "rows": [
+      "BEFORE",
+      "",
+      "",
+      "AFTER"
+    ],
+    "native_rows": [
+      "     BEFORE",
+      "",
+      "",
+      "     AFTER"
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "literal-prefix-1",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.No BEFORE\n.No \"\\&\\p \\p Y\"\n.No AFTER\n.fi\n.Sh NEXT\n.No END\n",
+    "no_fill": true,
+    "prefix": true,
+    "payload": "\\&\\p \\p Y",
+    "heading": "NEXT",
+    "rows": [
+      "BEFORE",
+      "",
+      "",
+      "AFTER"
+    ],
+    "native_rows": [
+      "     BEFORE",
+      "",
+      "",
+      "     AFTER"
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "literal-prefix-2",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.No BEFORE\n.No \"\\p\\& \\p Y\"\n.No AFTER\n.fi\n.Sh NEXT\n.No END\n",
+    "no_fill": true,
+    "prefix": true,
+    "payload": "\\p\\& \\p Y",
+    "heading": "NEXT",
+    "rows": [
+      "BEFORE",
+      "",
+      "",
+      "AFTER"
+    ],
+    "native_rows": [
+      "     BEFORE",
+      "",
+      "",
+      "     AFTER"
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "literal-prefix-3",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.No BEFORE\n.No \"\\p\"\n.No AFTER\n.fi\n.Sh NEXT\n.No END\n",
+    "no_fill": true,
+    "prefix": true,
+    "payload": "\\p",
+    "heading": "NEXT",
+    "rows": [
+      "BEFORE",
+      "",
+      "AFTER"
+    ],
+    "native_rows": [
+      "     BEFORE",
+      "",
+      "     AFTER"
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "literal-prefix-4",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.No BEFORE\n.No \"\\&\"\n.No AFTER\n.fi\n.Sh NEXT\n.No END\n",
+    "no_fill": true,
+    "prefix": true,
+    "payload": "\\&",
+    "heading": "NEXT",
+    "rows": [
+      "BEFORE",
+      "",
+      "AFTER"
+    ],
+    "native_rows": [
+      "     BEFORE",
+      "",
+      "     AFTER"
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "literal-prefix-5",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.No BEFORE\n.No \"\\[u0301]\\p Y\"\n.No AFTER\n.fi\n.Sh NEXT\n.No END\n",
+    "no_fill": true,
+    "prefix": true,
+    "payload": "\\[u0301]\\p Y",
+    "heading": "NEXT",
+    "rows": [
+      "BEFORE",
+      "́",
+      "Y",
+      "AFTER"
+    ],
+    "native_rows": [
+      "     BEFORE",
+      "     ́",
+      "     Y",
+      "     AFTER"
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "literal-prefix-6",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.No BEFORE\n.No \"\\z\"\n.No AFTER\n.fi\n.Sh NEXT\n.No END\n",
+    "no_fill": true,
+    "prefix": true,
+    "payload": "\\z",
+    "heading": "NEXT",
+    "rows": [
+      "BEFORE",
+      "FTER"
+    ],
+    "native_rows": [
+      "     BEFORE",
+      "     FTER"
+    ],
+    "reading_rule": "common-manual-margin-only"
+  },
+  {
+    "name": "literal-prefix-7",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.No BEFORE\n.No \"\\zX\"\n.No AFTER\n.fi\n.Sh NEXT\n.No END\n",
+    "no_fill": true,
+    "prefix": true,
+    "payload": "\\zX",
+    "heading": "NEXT",
+    "rows": [
+      "BEFORE",
+      "X",
+      "AFTER"
+    ],
+    "native_rows": [
+      "     BEFORE",
+      "     X",
+      "     AFTER"
+    ],
+    "reading_rule": "common-manual-margin-only"
+  }
+]

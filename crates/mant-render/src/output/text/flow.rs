@@ -12,6 +12,7 @@ pub(super) struct Flow {
 
 enum Part {
     Text(LayoutText),
+    Literal(LayoutText),
     Gap(u16),
 }
 
@@ -22,7 +23,7 @@ impl Flow {
 
     pub(super) fn has_physical_rows(&self) -> bool {
         self.parts.iter().any(|part| match part {
-            Part::Text(_) => true,
+            Part::Text(_) | Part::Literal(_) => true,
             Part::Gap(rows) => *rows > 0,
         })
     }
@@ -34,7 +35,7 @@ impl Flow {
 
     pub(super) fn literal(value: LayoutText) -> Self {
         Self {
-            parts: vec![Part::Text(value)],
+            parts: vec![Part::Literal(value)],
         }
     }
 
@@ -57,7 +58,7 @@ impl Flow {
     }
 
     pub(super) fn finish_layout(self, preceding_content: bool) -> LayoutText {
-        self.finish_rows(preceding_content).0
+        self.finish_rows(preceding_content, true).0
     }
 
     /// A rendered cell is split into physical rows before the following
@@ -65,23 +66,33 @@ impl Flow {
     /// delimiter; otherwise `split_terminator` would consume one as a mere
     /// close of the preceding printed row.
     pub(super) fn finish_cell(self) -> (LayoutText, bool) {
-        self.finish_rows(false)
+        self.finish_rows(false, false)
     }
 
-    fn finish_rows(self, preceding_content: bool) -> (LayoutText, bool) {
+    fn finish_rows(
+        self,
+        preceding_content: bool,
+        complete_literal_tail: bool,
+    ) -> (LayoutText, bool) {
         let mut output = LayoutText::default();
         let mut gap = GapPlan::default();
         let mut has_content = preceding_content;
+        let mut final_empty_literal_row = false;
         for part in self.parts {
+            let empty_literal_tail = matches!(
+                &part,
+                Part::Literal(text) if text.is_empty() || text.visible.ends_with('\n')
+            );
             match part {
                 Part::Gap(rows) => gap.append_resolved(rows),
-                Part::Text(text) => {
+                Part::Text(text) | Part::Literal(text) => {
                     if has_content {
                         output.push_plain("\n");
                     }
                     output.push_plain(&"\n".repeat(usize::from(gap.rows(0))));
                     output.append(&text);
                     has_content = true;
+                    final_empty_literal_row = empty_literal_tail;
                     gap = GapPlan::default();
                 }
             }
@@ -91,10 +102,16 @@ impl Flow {
         // The final printed row also needs its closing delimiter outside a
         // table cell. Otherwise EOF consumes one completed empty row as the
         // preceding row's terminator (term_vspace's endline, term.c:489).
-        if has_content && rows > 0 {
+        // An empty literal tail is a physical row, even without a later
+        // printed part to close it. Its delimiter must survive EOF just as
+        // term_newln/term_vspace survive leaving NODE_NOFILL (man_term.c).
+        // A cell's open final row may receive the next column; collecting
+        // that fragment does not complete the surrounding physical row.
+        let completed = rows > 0 || (complete_literal_tail && final_empty_literal_row);
+        if has_content && completed {
             output.push_plain("\n");
         }
-        (output, rows > 0)
+        (output, completed)
     }
 }
 

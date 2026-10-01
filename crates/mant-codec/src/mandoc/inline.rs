@@ -278,8 +278,7 @@ fn execute_inline_macro_handler(
             builder.fill_mode_boundary();
         }
         Some("sp") => {
-            let lines = builder.resolve_vertical_space(super::layout::vertical_space_delta(node));
-            builder.vertical_space(lines.into());
+            builder.execute_spacing_request(super::layout::vertical_space_delta(node));
         }
         name if super::controls::formatter_control(name)
             .is_some_and(|control| !control.specialized) =>

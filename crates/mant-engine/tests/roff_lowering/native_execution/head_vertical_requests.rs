@@ -50,7 +50,9 @@ fn paragraph_target_belongs_after_the_executed_gap_and_term_separator() {
     // mdoc_validate.c::post_tg() moves gap's ID onto Pp, and
     // mdoc_term.c::termp_pp_pre() writes that tag after term_vspace().
     for (label, expected_first) in [
-        ("LABEL", "LABEL  "),
+        // term_field() does not print the short HEAD's unused positioning
+        // cells before Pp's term_vspace() ends it (term.c:389-427,489-497).
+        ("LABEL", "LABEL"),
         ("VERYVERYLONGLABEL", "VERYVERYLONGLABEL\n"),
     ] {
         let source = format!(

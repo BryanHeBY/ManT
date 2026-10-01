@@ -188,20 +188,19 @@ fn lower_man_item(
         *paragraph_distance = distance;
     }
     update_man_definition_width(node, context, definition_hanging_width);
+    let head_field_columns =
+        u16::try_from(definition_hanging_width.position_columns().max(0)).unwrap_or(u16::MAX);
     let item = definition_item(
         node,
         context,
         indent_columns,
         paragraph_distance,
         crate::mandoc::layout::DefinitionGeometry {
-            native_head_field_units: None,
+            native_head_field_units: Some(definition_hanging_width.nonnegative_basic_units()),
             body: *definition_hanging_width,
             placement: crate::mandoc::layout::TermPlacement::Fit,
             gap: 1,
-            // man's TP/HP head is not an mdoc NOBREAK field: the head
-            // width governs body placement only (man_term.c), never a
-            // term_fill pass target.
-            head_field_columns: 0,
+            head_field_columns,
             relation_override: None,
         },
         super::super::DefinitionFlow {
@@ -211,7 +210,17 @@ fn lower_man_item(
             paragraph_predecessor: true,
             shares_pending_term_row: true,
             head: super::super::DefinitionHeadFlow::Detached {
-                author_break_effect: crate::mandoc::inline::AuthorBreakEffect::Line,
+                // man_term.c::pre_IP/pre_TP configures NOBREAK before
+                // the real HEAD post term_flushln. Its receipt determines
+                // whether a BODY request can still close the tag row.
+                author_break_effect: crate::mandoc::inline::AuthorBreakEffect::Field {
+                    gap_cells: 1,
+                    body_width_columns: head_field_columns,
+                    field_width_columns: head_field_columns,
+                    flags: crate::mandoc::inline::FieldFlags::man_head(
+                        node.macro_name.as_deref() != Some("IP"),
+                    ),
+                },
             },
         },
         formatter,

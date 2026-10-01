@@ -54,11 +54,22 @@ def cells(line):
     return output
 
 
-def projected_rows(text, family, eof):
+def projected_rows(text, family, eof, heading='NEXT'):
     rows = [cells(line) for line in text.splitlines()]
     strings = ["".join(character for character, _ in row) for row in rows]
     headings = [row.strip() for row in strings]
     start = headings.index("DESCRIPTION") + 1
+    if family in {'node_body_rows', 'field_spacing_rows', 'empty_text_continuation_rows',
+                  'structural_row_handoffs'}:
+        # This matrix covers physical and word boundaries, not responsive
+        # field padding widths. Keep every edge empty row. Native section
+        # pre and the man footer each own exactly one separate empty row.
+        boundary = (headings.index(heading) if heading is not None else
+                    max(index for index in range(start, len(headings))
+                        if 'September 28, 2026' in headings[index]))
+        if headings[boundary - 1] != '':
+            raise ValueError('native structural separator is missing')
+        return [' '.join(row.split()) for row in strings[start:boundary - 1]], []
     if eof:
         end = next(index for index in range(start, len(headings))
                    if headings[index].startswith("Historical Oracle Footer"))
@@ -82,6 +93,27 @@ def projected_rows(text, family, eof):
     styles = [font for row in rows[start:end] for character, font in row
               if character == "A"]
     return projected, styles
+
+
+def section_edge_rows(profiles):
+    # Metadata authenticates the entire pristine footer; neither host OS
+    # strings nor fixed suffix row counts decide where executed rows end.
+    from scripts.roff.fixtures.acceptance_regions import select_native_region
+    region = select_native_region(profiles['utf8']['stdout'], profiles['tree']['stdout'])
+    if region['status'] != 'asserted':
+        raise ValueError(f'unqualified section edge: {region}')
+    return [row.lstrip(' ') for row in region['rows']]
+
+
+def plain_field_rows(profiles):
+    """Remove the common manual margin while keeping each executed empty row."""
+    from scripts.roff.fixtures.acceptance_regions import select_native_region
+    region = select_native_region(profiles['utf8']['stdout'], profiles['tree']['stdout'])
+    if region['status'] != 'asserted':
+        raise ValueError(f'unqualified plain field: {region}')
+    native = region['rows']
+    margin = min((len(row) - len(row.lstrip(' ')) for row in native if row), default=0)
+    return [row[margin:] if row else '' for row in native], native
 
 
 def record_profiles(family, name, source, selected=("ascii", "utf8", "html", "tree", "lint"), width=78):
@@ -114,12 +146,62 @@ def record_profiles(family, name, source, selected=("ascii", "utf8", "html", "tr
 def record(item):
     family, case = item
     profiles = record_profiles(family, case["name"], case["source"])
-    rows, styles = projected_rows(profiles["utf8"]["stdout"], family, case.get("eof", False))
+    if family == 'section_edge_rows':
+        rows, styles = section_edge_rows(profiles), []
+    elif family in {'plain_field_rows', 'literal_eof_rows', 'column_margin_rows'}:
+        rows, native_rows = plain_field_rows(profiles)
+        styles = []
+    elif family == 'table_control_rows':
+        from scripts.roff.fixtures.acceptance_regions import select_native_region
+        region = select_native_region(profiles['utf8']['stdout'], profiles['tree']['stdout'])
+        if region['status'] != 'asserted':
+            raise ValueError(f'unqualified table controls: {region}')
+        native_rows = region['rows']
+        rows = [row.lstrip(' ') for row in native_rows]
+        if not rows or not rows[0].startswith('A '):
+            raise ValueError(f'outer column and nested HEAD changed: {rows}')
+        # The selected responsive table contract preserves nested definition
+        # ownership, giving A a separate row. Every native post's empty row
+        # stays in place; this rule never folds whitespace or line endings.
+        rows = ['A', rows[0][2:], *rows[1:]]
+        styles = []
+    elif family == 'skipped_list_heads':
+        rows, native_rows = plain_field_rows(profiles)
+        baseline_profiles = record_profiles(family, case['name'] + '-baseline',
+                                            case['baseline_source'])
+        baseline_rows, baseline_native_rows = plain_field_rows(baseline_profiles)
+        if rows != baseline_rows:
+            raise ValueError(f'pristine plain-list HEAD had execution effects: {case["name"]}')
+        styles = []
+    else:
+        rows, styles = projected_rows(profiles["utf8"]["stdout"], family,
+                                      case.get("eof", False), case.get('heading', 'NEXT'))
     # Keep the original native record in place; assertion-scope/fragment
     # metadata is appended without replacing its source or pristine rows.
     fixture = {key: value for key, value in case.items()
                if key not in {"scope", "reference_fragment", "wide_width"}}
     fixture["rows"] = rows
+    if family in {'plain_field_rows', 'literal_eof_rows', 'column_margin_rows'}:
+        fixture['native_rows'] = native_rows
+        fixture['reading_rule'] = 'common-manual-margin-only'
+    if family == 'table_control_rows':
+        fixture['native_rows'] = native_rows
+        fixture['reading_rule'] = 'responsive-nested-definition-owner'
+    if family == 'skipped_list_heads':
+        fixture['native_rows'] = native_rows
+        fixture['baseline_rows'] = baseline_rows
+        fixture['baseline_native_rows'] = baseline_native_rows
+    if family == 'section_edge_rows':
+        fixture['native_rows'] = list(rows)
+        # These canonical inset sources contain no authored NBSP. The
+        # sole native NBSP is the generated It BODY pre-word (mdoc_term.c
+        # :764). Its otherwise empty row remains a row in responsive IR;
+        # it does not acquire a literal body glyph or a second term owner.
+        if case['name'].startswith('inset-'):
+            fixture['rows'] = [row.removeprefix('\u00a0') for row in rows]
+            fixture['reading_rule'] = 'generated-inset-body-blank-row'
+        else:
+            fixture['reading_rule'] = 'common-left-margin-only'
     if family == "generated_word_styles":
         fixture["accepted_a_styles"] = styles
     fixture.update({key: case[key] for key in ("scope", "reference_fragment", "wide_width") if key in case})
@@ -127,6 +209,9 @@ def record(item):
         **fixture, "source_sha256": digest(case["source"].encode()),
         "profiles": profiles,
     }
+    if family == 'skipped_list_heads':
+        full['baseline_profiles'] = baseline_profiles
+        full['baseline_source_sha256'] = digest(case['baseline_source'].encode())
     if fragment := case.get("reference_fragment"):
         fragment_profiles = record_profiles("table_macro_fragments", case["name"], fragment)
         if fragment_profiles["lint"]["status"] != 0:
@@ -207,6 +292,7 @@ def main():
         "counts": roff_compatibility_cases.COUNTS,
         "additional_reference_fragments": sum("reference_fragment" in case for _, case in tasks),
         "additional_wide_profiles": sum("wide_width" in case for _, case in tasks),
+        "additional_head_baselines": sum("baseline_source" in case for _, case in tasks),
         "lint_status_counts": diagnostics,
         "reference_profile_failures": profile_failures,
         "expectations_from_product": False,

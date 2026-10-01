@@ -1,0 +1,1202 @@
+[
+  {
+    "name": "4-No-0-0",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxx\" \"b\"\n.It A\n.Bl -tag -compact -width 2n\n.It No x\n.No B\n.El\n.Ta C\n.El\n\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "No",
+    "width": 4,
+    "before": false,
+    "after": false,
+    "rows": [
+      "A",
+      "x",
+      "B",
+      "",
+      "C",
+      ""
+    ],
+    "native_rows": [
+      "     A x",
+      "         B",
+      "",
+      "             C",
+      ""
+    ],
+    "reading_rule": "responsive-nested-definition-owner"
+  },
+  {
+    "name": "4-No-1-0",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxx\" \"b\"\n.It A\n.Bl -tag -compact -width 2n\n.ft B\n.It No x\n.No B\n.El\n.Ta C\n.El\n\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "No",
+    "width": 4,
+    "before": true,
+    "after": false,
+    "rows": [
+      "A",
+      "x",
+      "B",
+      "",
+      "C",
+      ""
+    ],
+    "native_rows": [
+      "     A x",
+      "         B",
+      "",
+      "             C",
+      ""
+    ],
+    "reading_rule": "responsive-nested-definition-owner"
+  },
+  {
+    "name": "4-No-0-1",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxx\" \"b\"\n.It A\n.Bl -tag -compact -width 2n\n.It No x\n.No B\n.ft R\n.El\n.Ta C\n.El\n\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "No",
+    "width": 4,
+    "before": false,
+    "after": true,
+    "rows": [
+      "A",
+      "x",
+      "B",
+      "",
+      "C",
+      ""
+    ],
+    "native_rows": [
+      "     A x",
+      "         B",
+      "",
+      "             C",
+      ""
+    ],
+    "reading_rule": "responsive-nested-definition-owner"
+  },
+  {
+    "name": "4-No-1-1",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxx\" \"b\"\n.It A\n.Bl -tag -compact -width 2n\n.ft B\n.It No x\n.No B\n.ft R\n.El\n.Ta C\n.El\n\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "No",
+    "width": 4,
+    "before": true,
+    "after": true,
+    "rows": [
+      "A",
+      "x",
+      "B",
+      "",
+      "C",
+      ""
+    ],
+    "native_rows": [
+      "     A x",
+      "         B",
+      "",
+      "             C",
+      ""
+    ],
+    "reading_rule": "responsive-nested-definition-owner"
+  },
+  {
+    "name": "4-Em-0-0",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxx\" \"b\"\n.It A\n.Bl -tag -compact -width 2n\n.It Em x\n.No B\n.El\n.Ta C\n.El\n\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "Em",
+    "width": 4,
+    "before": false,
+    "after": false,
+    "rows": [
+      "A",
+      "x",
+      "B",
+      "",
+      "C",
+      ""
+    ],
+    "native_rows": [
+      "     A x",
+      "         B",
+      "",
+      "             C",
+      ""
+    ],
+    "reading_rule": "responsive-nested-definition-owner"
+  },
+  {
+    "name": "4-Em-1-0",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxx\" \"b\"\n.It A\n.Bl -tag -compact -width 2n\n.ft B\n.It Em x\n.No B\n.El\n.Ta C\n.El\n\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "Em",
+    "width": 4,
+    "before": true,
+    "after": false,
+    "rows": [
+      "A",
+      "x",
+      "B",
+      "",
+      "C",
+      ""
+    ],
+    "native_rows": [
+      "     A x",
+      "         B",
+      "",
+      "             C",
+      ""
+    ],
+    "reading_rule": "responsive-nested-definition-owner"
+  },
+  {
+    "name": "4-Em-0-1",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxx\" \"b\"\n.It A\n.Bl -tag -compact -width 2n\n.It Em x\n.No B\n.ft R\n.El\n.Ta C\n.El\n\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "Em",
+    "width": 4,
+    "before": false,
+    "after": true,
+    "rows": [
+      "A",
+      "x",
+      "B",
+      "",
+      "C",
+      ""
+    ],
+    "native_rows": [
+      "     A x",
+      "         B",
+      "",
+      "             C",
+      ""
+    ],
+    "reading_rule": "responsive-nested-definition-owner"
+  },
+  {
+    "name": "4-Em-1-1",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxx\" \"b\"\n.It A\n.Bl -tag -compact -width 2n\n.ft B\n.It Em x\n.No B\n.ft R\n.El\n.Ta C\n.El\n\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "Em",
+    "width": 4,
+    "before": true,
+    "after": true,
+    "rows": [
+      "A",
+      "x",
+      "B",
+      "",
+      "C",
+      ""
+    ],
+    "native_rows": [
+      "     A x",
+      "         B",
+      "",
+      "             C",
+      ""
+    ],
+    "reading_rule": "responsive-nested-definition-owner"
+  },
+  {
+    "name": "4-Lk-0-0",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxx\" \"b\"\n.It A\n.Bl -tag -compact -width 2n\n.It Lk https://ex.org x\n.No B\n.El\n.Ta C\n.El\n\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "Lk https://ex.org",
+    "width": 4,
+    "before": false,
+    "after": false,
+    "rows": [
+      "A",
+      "x: https://ex.org",
+      "B",
+      "",
+      "C",
+      ""
+    ],
+    "native_rows": [
+      "     A x: https://ex.org",
+      "         B",
+      "",
+      "             C",
+      ""
+    ],
+    "reading_rule": "responsive-nested-definition-owner"
+  },
+  {
+    "name": "4-Lk-1-0",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxx\" \"b\"\n.It A\n.Bl -tag -compact -width 2n\n.ft B\n.It Lk https://ex.org x\n.No B\n.El\n.Ta C\n.El\n\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "Lk https://ex.org",
+    "width": 4,
+    "before": true,
+    "after": false,
+    "rows": [
+      "A",
+      "x: https://ex.org",
+      "B",
+      "",
+      "C",
+      ""
+    ],
+    "native_rows": [
+      "     A x: https://ex.org",
+      "         B",
+      "",
+      "             C",
+      ""
+    ],
+    "reading_rule": "responsive-nested-definition-owner"
+  },
+  {
+    "name": "4-Lk-0-1",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxx\" \"b\"\n.It A\n.Bl -tag -compact -width 2n\n.It Lk https://ex.org x\n.No B\n.ft R\n.El\n.Ta C\n.El\n\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "Lk https://ex.org",
+    "width": 4,
+    "before": false,
+    "after": true,
+    "rows": [
+      "A",
+      "x: https://ex.org",
+      "B",
+      "",
+      "C",
+      ""
+    ],
+    "native_rows": [
+      "     A x: https://ex.org",
+      "         B",
+      "",
+      "             C",
+      ""
+    ],
+    "reading_rule": "responsive-nested-definition-owner"
+  },
+  {
+    "name": "4-Lk-1-1",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxx\" \"b\"\n.It A\n.Bl -tag -compact -width 2n\n.ft B\n.It Lk https://ex.org x\n.No B\n.ft R\n.El\n.Ta C\n.El\n\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "Lk https://ex.org",
+    "width": 4,
+    "before": true,
+    "after": true,
+    "rows": [
+      "A",
+      "x: https://ex.org",
+      "B",
+      "",
+      "C",
+      ""
+    ],
+    "native_rows": [
+      "     A x: https://ex.org",
+      "         B",
+      "",
+      "             C",
+      ""
+    ],
+    "reading_rule": "responsive-nested-definition-owner"
+  },
+  {
+    "name": "8-No-0-0",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxx\" \"b\"\n.It A\n.Bl -tag -compact -width 2n\n.It No x\n.No B\n.El\n.Ta C\n.El\n\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "No",
+    "width": 8,
+    "before": false,
+    "after": false,
+    "rows": [
+      "A",
+      "x",
+      "B",
+      "",
+      "C",
+      ""
+    ],
+    "native_rows": [
+      "     A x",
+      "         B",
+      "",
+      "                 C",
+      ""
+    ],
+    "reading_rule": "responsive-nested-definition-owner"
+  },
+  {
+    "name": "8-No-1-0",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxx\" \"b\"\n.It A\n.Bl -tag -compact -width 2n\n.ft B\n.It No x\n.No B\n.El\n.Ta C\n.El\n\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "No",
+    "width": 8,
+    "before": true,
+    "after": false,
+    "rows": [
+      "A",
+      "x",
+      "B",
+      "",
+      "C",
+      ""
+    ],
+    "native_rows": [
+      "     A x",
+      "         B",
+      "",
+      "                 C",
+      ""
+    ],
+    "reading_rule": "responsive-nested-definition-owner"
+  },
+  {
+    "name": "8-No-0-1",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxx\" \"b\"\n.It A\n.Bl -tag -compact -width 2n\n.It No x\n.No B\n.ft R\n.El\n.Ta C\n.El\n\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "No",
+    "width": 8,
+    "before": false,
+    "after": true,
+    "rows": [
+      "A",
+      "x",
+      "B",
+      "",
+      "C",
+      ""
+    ],
+    "native_rows": [
+      "     A x",
+      "         B",
+      "",
+      "                 C",
+      ""
+    ],
+    "reading_rule": "responsive-nested-definition-owner"
+  },
+  {
+    "name": "8-No-1-1",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxx\" \"b\"\n.It A\n.Bl -tag -compact -width 2n\n.ft B\n.It No x\n.No B\n.ft R\n.El\n.Ta C\n.El\n\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "No",
+    "width": 8,
+    "before": true,
+    "after": true,
+    "rows": [
+      "A",
+      "x",
+      "B",
+      "",
+      "C",
+      ""
+    ],
+    "native_rows": [
+      "     A x",
+      "         B",
+      "",
+      "                 C",
+      ""
+    ],
+    "reading_rule": "responsive-nested-definition-owner"
+  },
+  {
+    "name": "8-Em-0-0",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxx\" \"b\"\n.It A\n.Bl -tag -compact -width 2n\n.It Em x\n.No B\n.El\n.Ta C\n.El\n\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "Em",
+    "width": 8,
+    "before": false,
+    "after": false,
+    "rows": [
+      "A",
+      "x",
+      "B",
+      "",
+      "C",
+      ""
+    ],
+    "native_rows": [
+      "     A x",
+      "         B",
+      "",
+      "                 C",
+      ""
+    ],
+    "reading_rule": "responsive-nested-definition-owner"
+  },
+  {
+    "name": "8-Em-1-0",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxx\" \"b\"\n.It A\n.Bl -tag -compact -width 2n\n.ft B\n.It Em x\n.No B\n.El\n.Ta C\n.El\n\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "Em",
+    "width": 8,
+    "before": true,
+    "after": false,
+    "rows": [
+      "A",
+      "x",
+      "B",
+      "",
+      "C",
+      ""
+    ],
+    "native_rows": [
+      "     A x",
+      "         B",
+      "",
+      "                 C",
+      ""
+    ],
+    "reading_rule": "responsive-nested-definition-owner"
+  },
+  {
+    "name": "8-Em-0-1",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxx\" \"b\"\n.It A\n.Bl -tag -compact -width 2n\n.It Em x\n.No B\n.ft R\n.El\n.Ta C\n.El\n\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "Em",
+    "width": 8,
+    "before": false,
+    "after": true,
+    "rows": [
+      "A",
+      "x",
+      "B",
+      "",
+      "C",
+      ""
+    ],
+    "native_rows": [
+      "     A x",
+      "         B",
+      "",
+      "                 C",
+      ""
+    ],
+    "reading_rule": "responsive-nested-definition-owner"
+  },
+  {
+    "name": "8-Em-1-1",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxx\" \"b\"\n.It A\n.Bl -tag -compact -width 2n\n.ft B\n.It Em x\n.No B\n.ft R\n.El\n.Ta C\n.El\n\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "Em",
+    "width": 8,
+    "before": true,
+    "after": true,
+    "rows": [
+      "A",
+      "x",
+      "B",
+      "",
+      "C",
+      ""
+    ],
+    "native_rows": [
+      "     A x",
+      "         B",
+      "",
+      "                 C",
+      ""
+    ],
+    "reading_rule": "responsive-nested-definition-owner"
+  },
+  {
+    "name": "8-Lk-0-0",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxx\" \"b\"\n.It A\n.Bl -tag -compact -width 2n\n.It Lk https://ex.org x\n.No B\n.El\n.Ta C\n.El\n\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "Lk https://ex.org",
+    "width": 8,
+    "before": false,
+    "after": false,
+    "rows": [
+      "A",
+      "x: https://ex.org",
+      "B",
+      "",
+      "C",
+      ""
+    ],
+    "native_rows": [
+      "     A x: https://ex.org",
+      "         B",
+      "",
+      "                 C",
+      ""
+    ],
+    "reading_rule": "responsive-nested-definition-owner"
+  },
+  {
+    "name": "8-Lk-1-0",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxx\" \"b\"\n.It A\n.Bl -tag -compact -width 2n\n.ft B\n.It Lk https://ex.org x\n.No B\n.El\n.Ta C\n.El\n\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "Lk https://ex.org",
+    "width": 8,
+    "before": true,
+    "after": false,
+    "rows": [
+      "A",
+      "x: https://ex.org",
+      "B",
+      "",
+      "C",
+      ""
+    ],
+    "native_rows": [
+      "     A x: https://ex.org",
+      "         B",
+      "",
+      "                 C",
+      ""
+    ],
+    "reading_rule": "responsive-nested-definition-owner"
+  },
+  {
+    "name": "8-Lk-0-1",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxx\" \"b\"\n.It A\n.Bl -tag -compact -width 2n\n.It Lk https://ex.org x\n.No B\n.ft R\n.El\n.Ta C\n.El\n\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "Lk https://ex.org",
+    "width": 8,
+    "before": false,
+    "after": true,
+    "rows": [
+      "A",
+      "x: https://ex.org",
+      "B",
+      "",
+      "C",
+      ""
+    ],
+    "native_rows": [
+      "     A x: https://ex.org",
+      "         B",
+      "",
+      "                 C",
+      ""
+    ],
+    "reading_rule": "responsive-nested-definition-owner"
+  },
+  {
+    "name": "8-Lk-1-1",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxx\" \"b\"\n.It A\n.Bl -tag -compact -width 2n\n.ft B\n.It Lk https://ex.org x\n.No B\n.ft R\n.El\n.Ta C\n.El\n\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "Lk https://ex.org",
+    "width": 8,
+    "before": true,
+    "after": true,
+    "rows": [
+      "A",
+      "x: https://ex.org",
+      "B",
+      "",
+      "C",
+      ""
+    ],
+    "native_rows": [
+      "     A x: https://ex.org",
+      "         B",
+      "",
+      "                 C",
+      ""
+    ],
+    "reading_rule": "responsive-nested-definition-owner"
+  },
+  {
+    "name": "10-No-0-0",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxx\" \"b\"\n.It A\n.Bl -tag -compact -width 2n\n.It No x\n.No B\n.El\n.Ta C\n.El\n\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "No",
+    "width": 10,
+    "before": false,
+    "after": false,
+    "rows": [
+      "A",
+      "x",
+      "B",
+      "",
+      "C",
+      ""
+    ],
+    "native_rows": [
+      "     A x",
+      "         B",
+      "",
+      "                   C",
+      ""
+    ],
+    "reading_rule": "responsive-nested-definition-owner"
+  },
+  {
+    "name": "10-No-1-0",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxx\" \"b\"\n.It A\n.Bl -tag -compact -width 2n\n.ft B\n.It No x\n.No B\n.El\n.Ta C\n.El\n\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "No",
+    "width": 10,
+    "before": true,
+    "after": false,
+    "rows": [
+      "A",
+      "x",
+      "B",
+      "",
+      "C",
+      ""
+    ],
+    "native_rows": [
+      "     A x",
+      "         B",
+      "",
+      "                   C",
+      ""
+    ],
+    "reading_rule": "responsive-nested-definition-owner"
+  },
+  {
+    "name": "10-No-0-1",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxx\" \"b\"\n.It A\n.Bl -tag -compact -width 2n\n.It No x\n.No B\n.ft R\n.El\n.Ta C\n.El\n\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "No",
+    "width": 10,
+    "before": false,
+    "after": true,
+    "rows": [
+      "A",
+      "x",
+      "B",
+      "",
+      "C",
+      ""
+    ],
+    "native_rows": [
+      "     A x",
+      "         B",
+      "",
+      "                   C",
+      ""
+    ],
+    "reading_rule": "responsive-nested-definition-owner"
+  },
+  {
+    "name": "10-No-1-1",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxx\" \"b\"\n.It A\n.Bl -tag -compact -width 2n\n.ft B\n.It No x\n.No B\n.ft R\n.El\n.Ta C\n.El\n\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "No",
+    "width": 10,
+    "before": true,
+    "after": true,
+    "rows": [
+      "A",
+      "x",
+      "B",
+      "",
+      "C",
+      ""
+    ],
+    "native_rows": [
+      "     A x",
+      "         B",
+      "",
+      "                   C",
+      ""
+    ],
+    "reading_rule": "responsive-nested-definition-owner"
+  },
+  {
+    "name": "10-Em-0-0",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxx\" \"b\"\n.It A\n.Bl -tag -compact -width 2n\n.It Em x\n.No B\n.El\n.Ta C\n.El\n\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "Em",
+    "width": 10,
+    "before": false,
+    "after": false,
+    "rows": [
+      "A",
+      "x",
+      "B",
+      "",
+      "C",
+      ""
+    ],
+    "native_rows": [
+      "     A x",
+      "         B",
+      "",
+      "                   C",
+      ""
+    ],
+    "reading_rule": "responsive-nested-definition-owner"
+  },
+  {
+    "name": "10-Em-1-0",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxx\" \"b\"\n.It A\n.Bl -tag -compact -width 2n\n.ft B\n.It Em x\n.No B\n.El\n.Ta C\n.El\n\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "Em",
+    "width": 10,
+    "before": true,
+    "after": false,
+    "rows": [
+      "A",
+      "x",
+      "B",
+      "",
+      "C",
+      ""
+    ],
+    "native_rows": [
+      "     A x",
+      "         B",
+      "",
+      "                   C",
+      ""
+    ],
+    "reading_rule": "responsive-nested-definition-owner"
+  },
+  {
+    "name": "10-Em-0-1",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxx\" \"b\"\n.It A\n.Bl -tag -compact -width 2n\n.It Em x\n.No B\n.ft R\n.El\n.Ta C\n.El\n\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "Em",
+    "width": 10,
+    "before": false,
+    "after": true,
+    "rows": [
+      "A",
+      "x",
+      "B",
+      "",
+      "C",
+      ""
+    ],
+    "native_rows": [
+      "     A x",
+      "         B",
+      "",
+      "                   C",
+      ""
+    ],
+    "reading_rule": "responsive-nested-definition-owner"
+  },
+  {
+    "name": "10-Em-1-1",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxx\" \"b\"\n.It A\n.Bl -tag -compact -width 2n\n.ft B\n.It Em x\n.No B\n.ft R\n.El\n.Ta C\n.El\n\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "Em",
+    "width": 10,
+    "before": true,
+    "after": true,
+    "rows": [
+      "A",
+      "x",
+      "B",
+      "",
+      "C",
+      ""
+    ],
+    "native_rows": [
+      "     A x",
+      "         B",
+      "",
+      "                   C",
+      ""
+    ],
+    "reading_rule": "responsive-nested-definition-owner"
+  },
+  {
+    "name": "10-Lk-0-0",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxx\" \"b\"\n.It A\n.Bl -tag -compact -width 2n\n.It Lk https://ex.org x\n.No B\n.El\n.Ta C\n.El\n\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "Lk https://ex.org",
+    "width": 10,
+    "before": false,
+    "after": false,
+    "rows": [
+      "A",
+      "x: https://ex.org",
+      "B",
+      "",
+      "C",
+      ""
+    ],
+    "native_rows": [
+      "     A x: https://ex.org",
+      "         B",
+      "",
+      "                   C",
+      ""
+    ],
+    "reading_rule": "responsive-nested-definition-owner"
+  },
+  {
+    "name": "10-Lk-1-0",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxx\" \"b\"\n.It A\n.Bl -tag -compact -width 2n\n.ft B\n.It Lk https://ex.org x\n.No B\n.El\n.Ta C\n.El\n\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "Lk https://ex.org",
+    "width": 10,
+    "before": true,
+    "after": false,
+    "rows": [
+      "A",
+      "x: https://ex.org",
+      "B",
+      "",
+      "C",
+      ""
+    ],
+    "native_rows": [
+      "     A x: https://ex.org",
+      "         B",
+      "",
+      "                   C",
+      ""
+    ],
+    "reading_rule": "responsive-nested-definition-owner"
+  },
+  {
+    "name": "10-Lk-0-1",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxx\" \"b\"\n.It A\n.Bl -tag -compact -width 2n\n.It Lk https://ex.org x\n.No B\n.ft R\n.El\n.Ta C\n.El\n\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "Lk https://ex.org",
+    "width": 10,
+    "before": false,
+    "after": true,
+    "rows": [
+      "A",
+      "x: https://ex.org",
+      "B",
+      "",
+      "C",
+      ""
+    ],
+    "native_rows": [
+      "     A x: https://ex.org",
+      "         B",
+      "",
+      "                   C",
+      ""
+    ],
+    "reading_rule": "responsive-nested-definition-owner"
+  },
+  {
+    "name": "10-Lk-1-1",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxx\" \"b\"\n.It A\n.Bl -tag -compact -width 2n\n.ft B\n.It Lk https://ex.org x\n.No B\n.ft R\n.El\n.Ta C\n.El\n\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "Lk https://ex.org",
+    "width": 10,
+    "before": true,
+    "after": true,
+    "rows": [
+      "A",
+      "x: https://ex.org",
+      "B",
+      "",
+      "C",
+      ""
+    ],
+    "native_rows": [
+      "     A x: https://ex.org",
+      "         B",
+      "",
+      "                   C",
+      ""
+    ],
+    "reading_rule": "responsive-nested-definition-owner"
+  },
+  {
+    "name": "16-No-0-0",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxx\" \"b\"\n.It A\n.Bl -tag -compact -width 2n\n.It No x\n.No B\n.El\n.Ta C\n.El\n\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "No",
+    "width": 16,
+    "before": false,
+    "after": false,
+    "rows": [
+      "A",
+      "x",
+      "B",
+      "",
+      "C",
+      ""
+    ],
+    "native_rows": [
+      "     A x",
+      "         B",
+      "",
+      "                         C",
+      ""
+    ],
+    "reading_rule": "responsive-nested-definition-owner"
+  },
+  {
+    "name": "16-No-1-0",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxx\" \"b\"\n.It A\n.Bl -tag -compact -width 2n\n.ft B\n.It No x\n.No B\n.El\n.Ta C\n.El\n\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "No",
+    "width": 16,
+    "before": true,
+    "after": false,
+    "rows": [
+      "A",
+      "x",
+      "B",
+      "",
+      "C",
+      ""
+    ],
+    "native_rows": [
+      "     A x",
+      "         B",
+      "",
+      "                         C",
+      ""
+    ],
+    "reading_rule": "responsive-nested-definition-owner"
+  },
+  {
+    "name": "16-No-0-1",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxx\" \"b\"\n.It A\n.Bl -tag -compact -width 2n\n.It No x\n.No B\n.ft R\n.El\n.Ta C\n.El\n\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "No",
+    "width": 16,
+    "before": false,
+    "after": true,
+    "rows": [
+      "A",
+      "x",
+      "B",
+      "",
+      "C",
+      ""
+    ],
+    "native_rows": [
+      "     A x",
+      "         B",
+      "",
+      "                         C",
+      ""
+    ],
+    "reading_rule": "responsive-nested-definition-owner"
+  },
+  {
+    "name": "16-No-1-1",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxx\" \"b\"\n.It A\n.Bl -tag -compact -width 2n\n.ft B\n.It No x\n.No B\n.ft R\n.El\n.Ta C\n.El\n\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "No",
+    "width": 16,
+    "before": true,
+    "after": true,
+    "rows": [
+      "A",
+      "x",
+      "B",
+      "",
+      "C",
+      ""
+    ],
+    "native_rows": [
+      "     A x",
+      "         B",
+      "",
+      "                         C",
+      ""
+    ],
+    "reading_rule": "responsive-nested-definition-owner"
+  },
+  {
+    "name": "16-Em-0-0",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxx\" \"b\"\n.It A\n.Bl -tag -compact -width 2n\n.It Em x\n.No B\n.El\n.Ta C\n.El\n\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "Em",
+    "width": 16,
+    "before": false,
+    "after": false,
+    "rows": [
+      "A",
+      "x",
+      "B",
+      "",
+      "C",
+      ""
+    ],
+    "native_rows": [
+      "     A x",
+      "         B",
+      "",
+      "                         C",
+      ""
+    ],
+    "reading_rule": "responsive-nested-definition-owner"
+  },
+  {
+    "name": "16-Em-1-0",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxx\" \"b\"\n.It A\n.Bl -tag -compact -width 2n\n.ft B\n.It Em x\n.No B\n.El\n.Ta C\n.El\n\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "Em",
+    "width": 16,
+    "before": true,
+    "after": false,
+    "rows": [
+      "A",
+      "x",
+      "B",
+      "",
+      "C",
+      ""
+    ],
+    "native_rows": [
+      "     A x",
+      "         B",
+      "",
+      "                         C",
+      ""
+    ],
+    "reading_rule": "responsive-nested-definition-owner"
+  },
+  {
+    "name": "16-Em-0-1",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxx\" \"b\"\n.It A\n.Bl -tag -compact -width 2n\n.It Em x\n.No B\n.ft R\n.El\n.Ta C\n.El\n\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "Em",
+    "width": 16,
+    "before": false,
+    "after": true,
+    "rows": [
+      "A",
+      "x",
+      "B",
+      "",
+      "C",
+      ""
+    ],
+    "native_rows": [
+      "     A x",
+      "         B",
+      "",
+      "                         C",
+      ""
+    ],
+    "reading_rule": "responsive-nested-definition-owner"
+  },
+  {
+    "name": "16-Em-1-1",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxx\" \"b\"\n.It A\n.Bl -tag -compact -width 2n\n.ft B\n.It Em x\n.No B\n.ft R\n.El\n.Ta C\n.El\n\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "Em",
+    "width": 16,
+    "before": true,
+    "after": true,
+    "rows": [
+      "A",
+      "x",
+      "B",
+      "",
+      "C",
+      ""
+    ],
+    "native_rows": [
+      "     A x",
+      "         B",
+      "",
+      "                         C",
+      ""
+    ],
+    "reading_rule": "responsive-nested-definition-owner"
+  },
+  {
+    "name": "16-Lk-0-0",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxx\" \"b\"\n.It A\n.Bl -tag -compact -width 2n\n.It Lk https://ex.org x\n.No B\n.El\n.Ta C\n.El\n\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "Lk https://ex.org",
+    "width": 16,
+    "before": false,
+    "after": false,
+    "rows": [
+      "A",
+      "x: https://ex.org",
+      "B",
+      "",
+      "C",
+      ""
+    ],
+    "native_rows": [
+      "     A x: https://ex.org",
+      "         B",
+      "",
+      "                         C",
+      ""
+    ],
+    "reading_rule": "responsive-nested-definition-owner"
+  },
+  {
+    "name": "16-Lk-1-0",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxx\" \"b\"\n.It A\n.Bl -tag -compact -width 2n\n.ft B\n.It Lk https://ex.org x\n.No B\n.El\n.Ta C\n.El\n\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "Lk https://ex.org",
+    "width": 16,
+    "before": true,
+    "after": false,
+    "rows": [
+      "A",
+      "x: https://ex.org",
+      "B",
+      "",
+      "C",
+      ""
+    ],
+    "native_rows": [
+      "     A x: https://ex.org",
+      "         B",
+      "",
+      "                         C",
+      ""
+    ],
+    "reading_rule": "responsive-nested-definition-owner"
+  },
+  {
+    "name": "16-Lk-0-1",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxx\" \"b\"\n.It A\n.Bl -tag -compact -width 2n\n.It Lk https://ex.org x\n.No B\n.ft R\n.El\n.Ta C\n.El\n\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "Lk https://ex.org",
+    "width": 16,
+    "before": false,
+    "after": true,
+    "rows": [
+      "A",
+      "x: https://ex.org",
+      "B",
+      "",
+      "C",
+      ""
+    ],
+    "native_rows": [
+      "     A x: https://ex.org",
+      "         B",
+      "",
+      "                         C",
+      ""
+    ],
+    "reading_rule": "responsive-nested-definition-owner"
+  },
+  {
+    "name": "16-Lk-1-1",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxx\" \"b\"\n.It A\n.Bl -tag -compact -width 2n\n.ft B\n.It Lk https://ex.org x\n.No B\n.ft R\n.El\n.Ta C\n.El\n\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "carrier": "Lk https://ex.org",
+    "width": 16,
+    "before": true,
+    "after": true,
+    "rows": [
+      "A",
+      "x: https://ex.org",
+      "B",
+      "",
+      "C",
+      ""
+    ],
+    "native_rows": [
+      "     A x: https://ex.org",
+      "         B",
+      "",
+      "                         C",
+      ""
+    ],
+    "reading_rule": "responsive-nested-definition-owner"
+  }
+]

@@ -23,6 +23,13 @@ use super::super::{
 use super::state::{DefinitionFieldStyle, HangRowTransition};
 
 impl InlineBuilder {
+    /// Read the actual HEAD post flush receipt before retiring its IR owner.
+    /// `man_term.c::post_IP/post_TP` call `term_flushln` directly; only viscol
+    /// left on an open row can make a later `term_newln` flush the HEAD again.
+    pub(in crate::mandoc) fn definition_head_row_occupied(&self) -> bool {
+        self.native_field_device(false)
+            .is_some_and(|device| !device.ends_row && device.viscol > 0)
+    }
     /// `term.c::encode1()` buffers the character following `\\z` in the
     /// current field. It has not reached an IR node yet, but `term_fill()` and
     /// `term_field()` still count its printed width at a field boundary.
@@ -205,6 +212,12 @@ impl InlineBuilder {
     /// then discard the temporary device position as documented.
     pub(in crate::mandoc) fn temporary_indent(&mut self) {
         if let Some(field) = self.take_no_break_field() {
+            let prior_offset = self.execution.definition.as_ref().map(|definition| {
+                (
+                    definition.hang_row.field_offset,
+                    definition.field_offset_units,
+                )
+            });
             self.restore_no_break_field_projection(field, false);
             match field.style {
                 DefinitionFieldStyle::Tag => {
@@ -226,6 +239,15 @@ impl InlineBuilder {
                 }
             }
             self.finish_definition_field_control(field, 0, false);
+            if let Some((columns, units)) = prior_offset {
+                // pre_ti executes pre_br then replaces that temporary body
+                // offset with its operand (roff_term.c:225-275). The chosen
+                // responsive contract omits this numeric device position;
+                // its provisional pre_br offset must not become text either.
+                let definition = self.definition_state_mut();
+                definition.hang_row.field_offset = columns;
+                definition.field_offset_units = units;
+            }
             return;
         }
         let Some((start, gap, body, field_width_columns, flags)) = self
@@ -295,18 +317,6 @@ impl InlineBuilder {
             }
         }
         self.execution.boundary = PendingBoundary::Tight;
-    }
-
-    /// Collapse a jump still uncommitted at the item post: the element
-    /// restore already zeroed the offset (mdoc_term.c:437-439), so the
-    /// buffered word prints with `vbl = 0`.
-    pub(in crate::mandoc) fn retract_head_close_jump(&mut self) {
-        if let Some(definition) = &mut self.execution.definition
-            && let Some(jump_node) = definition.row.retract_on_head_close()
-            && let Some(Inline::Text { value }) = self.nodes.get_mut(jump_node)
-        {
-            value.clear();
-        }
     }
 
     /// The row origin survives each flush until a document scope restores it.

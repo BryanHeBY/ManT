@@ -1,0 +1,96 @@
+[
+  {
+    "name": "hang-4-filled",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo\n.No X\\c\n\n.No Y\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "X",
+      "Y BODY"
+    ]
+  },
+  {
+    "name": "hang-8-filled",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It Xo\n.No X\\c\n\n.No Y\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "X",
+      "Y BODY"
+    ]
+  },
+  {
+    "name": "tag-4-filled",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It Xo\n.No X\\c\n\n.No Y\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "X",
+      "Y",
+      "BODY"
+    ]
+  },
+  {
+    "name": "tag-8-filled",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It Xo\n.No X\\c\n\n.No Y\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "X",
+      "Y",
+      "BODY"
+    ]
+  },
+  {
+    "name": "hang-4-literal",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -hang -width 4n\n.It Xo\n.No X\\c\n\n.No Y\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "",
+      "X Y",
+      "BODY"
+    ]
+  },
+  {
+    "name": "hang-8-literal",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -hang -width 8n\n.It Xo\n.No X\\c\n\n.No Y\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "",
+      "X Y",
+      "BODY"
+    ]
+  },
+  {
+    "name": "tag-4-literal",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -tag -width 4n\n.It Xo\n.No X\\c\n\n.No Y\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "",
+      "X Y",
+      "BODY"
+    ]
+  },
+  {
+    "name": "tag-8-literal",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -tag -width 8n\n.It Xo\n.No X\\c\n\n.No Y\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "macro": "It",
+    "owner": "Xo",
+    "rows": [
+      "",
+      "X Y",
+      "BODY"
+    ]
+  }
+]

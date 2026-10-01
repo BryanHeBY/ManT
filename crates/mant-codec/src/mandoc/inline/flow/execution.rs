@@ -93,7 +93,9 @@ impl InlineBuilder {
             return;
         };
         match break_effect {
-            AuthorBreakEffect::Line => self.hard_break(),
+            // termp_an_pre() calls term_newln(), including the current
+            // field's accepted device positions before node geometry returns.
+            AuthorBreakEffect::Line => self.execute_native_newline(),
             AuthorBreakEffect::Field {
                 gap_cells,
                 body_width_columns,

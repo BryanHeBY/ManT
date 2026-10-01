@@ -25,6 +25,14 @@ use super::flush::retain_unprinted_field_targets;
 use super::state::{DefinitionFieldStyle, NoBreakField};
 
 impl InlineBuilder {
+    pub(in crate::mandoc::inline::flow) fn native_field_closes_unprinted_row(&self) -> bool {
+        self.native_field_device(false).is_some_and(|device| {
+            device.ends_row
+                && device.emission == super::device::NativeFieldEmission::Unprinted
+                && device.printed_row.is_none()
+        })
+    }
+
     pub(in crate::mandoc) fn discard_unprinted_definition_field_output(&mut self) -> bool {
         self.project_definition_field_receipt(false, false)
     }
@@ -61,12 +69,40 @@ impl InlineBuilder {
             return false;
         };
 
+        let empty_pass_ends = if owner_boundary {
+            Vec::new()
+        } else {
+            self.native_field_device(no_break_flush)
+                .filter(|device| device.printed_row.is_none())
+                .map_or_else(Vec::new, |device| {
+                    device
+                        .loop_rows
+                        .iter()
+                        .rev()
+                        .take_while(|row| {
+                            !row.printed
+                                && row.boundary
+                                    == super::super::field_buffer::FillBoundary::WordEndBreak
+                        })
+                        .map(|row| row.end_cell)
+                        .collect::<Vec<_>>()
+                })
+        };
+
         if let FlushReceipt::Accepted { passes } = &receipt {
             if !owner_boundary {
                 self.project_accepted_field_passes(passes);
             }
             self.definition_state_mut().hang_row.field_discarded = false;
+            self.project_completed_empty_passes(&empty_pass_ends);
             return false;
+        }
+        if !owner_boundary && let FlushReceipt::Rejected { passes, .. } = &receipt {
+            // term_flushln() executes every accepted pass before nbr == 0
+            // rejects its suffix. NBRZW can end a pass without a visible
+            // scalar (term.c:340-349), so projecting only the final boundary
+            // would merge two different endline events at the same scalar.
+            self.project_accepted_field_passes(passes);
         }
         let definition = self.execution.definition.as_mut().expect("native field");
         let (passes, rejected_from) = match receipt {
@@ -96,7 +132,7 @@ impl InlineBuilder {
             && definition
                 .field_word_anchors
                 .iter()
-                .any(|(cell, _, _)| *cell < rejected_from);
+                .any(|anchor| anchor.start < rejected_from);
         definition.hang_row.accepted_prefix_before_rejection = accepted_owned_prefix;
         let current_field_start = self
             .execution
@@ -128,7 +164,26 @@ impl InlineBuilder {
         if let Some(author) = &mut self.execution.author_execution {
             author.field_output_start = self.nodes.len();
         }
+        self.project_completed_empty_passes(&empty_pass_ends);
         self.finish_rejected_field_state(owner_boundary, no_break_flush)
+    }
+
+    fn project_completed_empty_passes(&mut self, ends: &[usize]) {
+        let mut rows = 0u16;
+        for end in ends.iter().rev() {
+            if self
+                .definition_state_mut()
+                .field_buffer
+                .claim_completed_empty_pass(*end)
+            {
+                rows = rows.saturating_add(1);
+            }
+        }
+        // term_fill accepts NBRZW as graph, term_field prints no scalar,
+        // and the pass loop nevertheless calls endline (term.c:217).
+        // This completed empty row is separate from the later rejected
+        // pass's unconditional tail endline (250-253).
+        self.record_completed_vertical_rows(rows);
     }
 
     fn project_accepted_field_passes(&mut self, passes: &[super::super::field_buffer::FillPass]) {
@@ -284,7 +339,10 @@ impl InlineBuilder {
         self.retire_native_field_with_device(device.as_ref());
     }
 
-    pub(super) fn retire_native_field_with_device(&mut self, device: Option<&NativeFieldDevice>) {
+    pub(in crate::mandoc::inline::flow) fn retire_native_field_with_device(
+        &mut self,
+        device: Option<&NativeFieldDevice>,
+    ) {
         self.retire_native_field_with_device_at(device, super::flush::FieldFlushBoundary::Continue);
     }
 
@@ -301,10 +359,15 @@ impl InlineBuilder {
                 device.separator_field,
                 &mut output_start,
             );
-            super::super::output::row_origins::project_row_origins(
+            super::super::output::row_origins::project_native_positions(
                 &mut self.nodes,
                 &device.row_origins,
+                &device.field_padding,
                 output_start,
+                self.execution
+                    .definition
+                    .as_ref()
+                    .is_some_and(|state| state.column_origin_units.is_none()),
             );
             if let Some(author) = &mut self.execution.author_execution {
                 author.field_output_start = self.nodes.len();
@@ -319,6 +382,10 @@ impl InlineBuilder {
         if let Some(state) = &mut self.execution.definition {
             if let Some(device) = device {
                 state.field_buffer.set_tab_offset(device.tab_offset);
+                // Every real flush owns the final device position, including
+                // a detached HEAD post. NOBREAK may leave that printed row
+                // occupied after the input cells have retired (term.c:250-253).
+                state.hang_row.viscol = device.viscol;
                 state.hang_row.minbl = device.next_field_gap_cells;
                 // Geometry return retires no printed device content. Real
                 // flushes atomically transfer their row receipt, while a
@@ -347,11 +414,13 @@ impl InlineBuilder {
             if had_cell || definition.hang_row.viscol > 0 {
                 definition.hang_row.flush(usize::from(hang_gap_cells));
             }
-            definition.hang_row.field_offset = field.body_width;
-            definition.field_offset_units = definition
-                .native_margin_units
-                .unwrap_or_else(|| field.body_width.saturating_mul(24));
         }
+        // pre_br moves offset under BRIND for TAG and HANG alike; this
+        // numeric origin remains scoped until a node restores it. Only a
+        // later accepted native print turns it into projected positioning.
+        self.move_definition_field_origin_to_body(
+            u16::try_from(field.body_width).unwrap_or(u16::MAX),
+        );
         if consume_body_gap {
             self.execution
                 .definition

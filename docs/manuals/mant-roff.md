@@ -367,6 +367,32 @@ For an inline definition, only the initial paragraph is attached to the label's 
 
 For multi-tag `TP`/`TQ` heads, only the final open label line participates in run-in width fitting. Earlier completed labels cannot force a short final label onto a separate body line. Explicit hard breaks close a label line; zero-width targets do not reopen it or create another line.
 
+Man `TP`, `TQ`, and `IP` execute their HEAD's no-break field flush before
+entering BODY. Its actual device row receipt determines whether a later
+request can still close that HEAD row; rendered label presence alone cannot
+decide this. BODY pre selects both no-space and no-newline, so an initially
+empty visited TEXT executes `term_newln()` without asserting vertical space.
+A bare `\z` writes no cell: it survives a close with neither buffered cells
+nor an occupied device row, but is cleared when the real HEAD row is flushed.
+BODY post and paragraph pre retain these execution rules even after the
+HEAD's IR owner has been drained. Device-width fitting still permits the
+existing responsive label layout; it does not create an authored hard break.
+
+A definition BODY records its first accepted glyph and subsequent boundaries
+in execution order. A link handler can print its description, then settle a
+break while executing its generated colon and target. Rejection of those
+later words cannot hide an already accepted description or move its first
+glyph below the HEAD. Link and style packaging do not change these events.
+
+Completed empty rows have one output owner. The formatter records each real
+field-pass or vertical-space endline independently of visible characters;
+zero-width NBRZW cells can complete an empty row. Draining a HEAD hands those
+completed rows to the description layout without replaying the native cell.
+An output owner change neither closes a still-open physical row nor retracts
+a previously accepted prefix. Ordinary paragraph and literal destinations
+consume the same accepted cell intervals; their different IR representations
+preserve the same authored row events.
+
 Paragraph distance is resolved at its source boundary. A first paragraph inside `RS` checks predecessors through enclosing relative scopes, including an ordered-item continuation; `RS` without a paragraph request adds no default gap. Independent positive requests add: `.sp 1` followed by `.sp 2` produces three blank rows, while `.sp 0` still breaks flow without adding a row. A negative `.sp` accumulates bounded skip-space debt that cancels later vertical rows until a formatter word resets it, matching mandoc's terminal request state. Renderers do not erase a following `PP` distance just because explicit spacing precedes it. A boundary exceeding 4096 rows is bounded with `manual.vertical-spacing-limit`; literal blank lines remain separate content. Text, node and explain output preserve hard lines and these gaps without imposing a soft-wrap width; the TUI reflows its immutable logical lines for the current viewport.
 
 Document and section text facades consume the same source gaps, including spacing before subsections and explicit spacing at the end of a node. The page title has a separate one-line presentation separator. Preformatted content retains leading, trailing and entirely blank rows; an explicit empty text row is content, unlike an anchor-only block. Executed spacing requests remain bounded layout events rather than being converted into unbounded literal rows.

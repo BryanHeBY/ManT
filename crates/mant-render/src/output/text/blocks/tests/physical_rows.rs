@@ -133,7 +133,7 @@ fn literal_whitespace_is_content_even_at_indented_and_document_edges() {
                 layout: LayoutHint::default(),
                 source: None,
             };
-            let expected = value
+            let mut expected = value
                 .split('\n')
                 .map(|line| {
                     if line.is_empty() {
@@ -144,6 +144,12 @@ fn literal_whitespace_is_content_even_at_indented_and_document_edges() {
                 })
                 .collect::<Vec<_>>()
                 .join("\n");
+            // The exact man/mdoc literal EOF matrix ran the pristine oracle
+            // before this assertion. An empty last row needs its own closing
+            // delimiter, rather than borrowing the previous row's close.
+            if value.is_empty() || value.ends_with('\n') {
+                expected.push('\n');
+            }
             assert_eq!(
                 renderer.render_blocks(&[block], i32::try_from(origin).unwrap()),
                 expected

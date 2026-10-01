@@ -117,13 +117,10 @@ impl BlockLowerer<'_, '_> {
             self.state.flush_paragraph_for_line_request();
             self.state
                 .queue_targets(structural_targets, source_span(node));
-            // CVS termp_pp_pre() executes term_vspace() even for the first
-            // child of a compact Bd BODY. A detached display starts with an
-            // empty IR sink, but that does not cancel the authored request.
-            if self.paragraph_predecessor
-                || !self.state.output.is_empty()
-                || self.display_fill.is_some()
-            {
+            // A Pp retained by the validator executes term_vspace even in
+            // an empty destination (mdoc_term.c::termp_pp_pre). Output owner
+            // emptiness cannot cancel the executed vertical-space receipt.
+            if lines > 0 {
                 self.state.output.push(Block::VerticalSpace {
                     lines,
                     source: source_span(node),
@@ -256,6 +253,15 @@ impl BlockLowerer<'_, '_> {
     fn prepare_node_execution(&mut self, node: &Node) {
         self.state.formatter.enter_tab_source_node(node);
         self.state.formatter.execute_tab_configuration(node);
+        if !self.column_field
+            && node.kind == libmandoc_rs::NodeKind::Block
+            && node.macro_name.as_deref() == Some("Bl")
+        {
+            // Bl BLOCK pre is term_newln(), including an occupied detached
+            // HEAD with no BODY buffer (mdoc_term.c:1128-1134). An IR drain
+            // cannot substitute for this source execution boundary.
+            self.state.finish_native_structural_row();
+        }
         if self.column_field {
             // NODE_LINE was already observed at node entry. A filled word
             // or transparent Xo has no independent native line effect:

@@ -165,6 +165,11 @@ impl InlineBuilder {
             && self.native_field_row_ends()
             && !has_printable_character(&self.nodes)
             && !self.execution.zero_advance.has_buffered_glyph();
+        // This is the HEAD post's real term_newln()/term_flushln(), not an
+        // owner drain. Capture before acceptance advances projection ranges;
+        // geometry is restored already, and pending glyphs enter their owner
+        // before that receipt projects actual same-row padding and origins.
+        let native = self.native_field_device(false);
         let native_tail_end = self.discard_unprinted_definition_field_output();
         let surviving_armed = if self.has_formatter_cell() {
             false
@@ -172,6 +177,7 @@ impl InlineBuilder {
             self.execution.zero_advance.take_armed()
         };
         self.flush_zero_advance();
+        self.retire_native_field_with_device(native.as_ref());
         if native_tail_end || invisible_native_row_end {
             self.nodes.push(Inline::line_break());
             self.note_definition_output_row();
@@ -194,6 +200,13 @@ impl InlineBuilder {
     /// Execute the native BODY post selected by `FormatterRowBoundary::Settle`.
     /// An IR paragraph drain or a Preserve return must not invoke this.
     pub(in crate::mandoc) fn finish_run_in_field_row(&mut self) {
+        if self.execution.definition.is_none() && self.execution.detached_device_row.is_some() {
+            // A fitting detached HEAD already consumed its input buffer,
+            // leaving only viscol/minbl live. The BODY post still executes
+            // term_newln() over that occupied device row (term.c:475-481).
+            self.hard_break();
+            return;
+        }
         if !self
             .execution
             .definition
@@ -221,9 +234,11 @@ impl InlineBuilder {
                     .definition
                     .as_ref()
                     .is_some_and(|state| state.hang_row.viscol > 0);
+            let native = self.native_field_device(false);
             self.commit_definition_row_origin();
             self.flush_zero_advance();
             let extra_row_end = self.discard_unprinted_definition_field_output();
+            self.retire_native_field_with_device(native.as_ref());
             self.record_completed_vertical_rows(u16::from(
                 extra_row_end && !closes_represented_head,
             ));

@@ -17,6 +17,9 @@ pub(in crate::mandoc::inline::flow) struct DefinitionFieldState {
     /// already represented by table placement; temporary node origins are
     /// not. This geometry is set at BODY pre, independently of IR owners.
     pub(in crate::mandoc::inline::flow) column_origin_units: Option<usize>,
+    /// The normal BODY origin is already expressed by list/definition IR
+    /// placement. Only later temporary geometry can add inline positioning.
+    pub(in crate::mandoc::inline::flow) declared_body_origin_units: Option<usize>,
     pub(in crate::mandoc::inline::flow) projected_passes: usize,
     pub(in crate::mandoc::inline::flow) pending_indent: Option<usize>,
     /// True only for a NOBREAK field carried across the HEAD/BODY ownership
@@ -54,7 +57,7 @@ pub(in crate::mandoc::inline::flow) struct DefinitionFieldState {
     pub(in crate::mandoc::inline::flow) field_buffer: super::super::field_buffer::FieldBuffer,
     /// Native word start, stable private owner marker, and content start.
     /// Markers retain ownership through style/link wrapping and compaction.
-    pub(in crate::mandoc::inline::flow) field_word_anchors: Vec<(usize, String, usize)>,
+    pub(in crate::mandoc::inline::flow) field_word_anchors: Vec<super::super::NativeWordAnchor>,
     pub(in crate::mandoc::inline::flow) outcome: DefinitionOutcome,
     pub(in crate::mandoc::inline::flow) no_break: Option<NoBreakField>,
     // A positive term_vspace() ends the HANG device row. The next author
@@ -226,14 +229,26 @@ impl HangNativeRow {
     }
 }
 impl InlineBuilder {
+    pub(in crate::mandoc::inline::flow) fn projected_native_field_padding(&self) -> usize {
+        self.execution
+            .definition
+            .as_ref()
+            .and_then(|state| state.no_break)
+            .map_or(0, |field| field.separator_cells.saturating_sub(1))
+    }
     pub(in crate::mandoc::inline::flow) fn definition_state_mut(
         &mut self,
     ) -> &mut DefinitionFieldState {
         let tabs = self.execution.tab_stops.clone();
+        let detached_row = self.execution.detached_device_row.take();
         let state = self
             .execution
             .definition
             .get_or_insert_with(DefinitionFieldState::default);
+        if let Some(row) = detached_row {
+            state.hang_row.viscol = row.viscol;
+            state.hang_row.minbl = row.minbl;
+        }
         if state.field_buffer.configure_tabs(&tabs) {
             state.projected_passes = 0;
         }

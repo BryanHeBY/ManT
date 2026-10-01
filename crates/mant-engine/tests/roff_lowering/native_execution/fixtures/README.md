@@ -32,7 +32,7 @@ Updating expectations from product output is forbidden.
 
 ## Historical families and HEAD requests
 
-The nine smaller compatibility families retain complete source records in
+The nineteen smaller compatibility families retain complete source records in
 `<family>/cases.json` beneath this directory. Their canonical definitions are
 in `scripts/roff/fixtures/roff_compatibility_cases.py`; the acceptance family also reads the
 immutable source files in `shared_execution_matrix/cases`.
@@ -48,6 +48,16 @@ immutable source files in `shared_execution_matrix/cases`.
 | `output_owner_rows` | 69 | Output transfers retain execution facts |
 | `portable_word_rows` | 108 | Native and portable reading contracts |
 | `container_word_rows` | 21 | Container pre/post and word order |
+| `node_body_rows` | 310 | Actual HEAD post fitting, BODY events and edge rows |
+| `section_edge_rows` | 297 | Completed empty HEAD rows and section/EOF handoffs |
+| `field_spacing_rows` | 72 | Negative vertical-space debt and field padding |
+| `empty_text_continuation_rows` | 8 | Empty TEXT after continued fields |
+| `plain_field_rows` | 32 | Ordinary buffers, accepted invisible passes and rejected tails |
+| `literal_eof_rows` | 72 | Empty literal rows at EOF and fill transitions |
+| `table_control_rows` | 48 | Live column fields and real list control/post lifecycles |
+| `skipped_list_heads` | 128 | Declined HEAD children have no execution side effects |
+| `structural_row_handoffs` | 16 | Real nested Bl pre consumes the occupied outer row |
+| `column_margin_rows` | 20 | Device padding and word origins share their live owner |
 
 ```sh
 python3 -m scripts.roff.fixtures.generate_roff_compatibility_fixtures --check-sources
@@ -55,7 +65,7 @@ python3 -m scripts.roff.fixtures.generate_roff_compatibility_fixtures --check \
   --evidence target/audits/native-compatibility-fixtures-check
 ```
 
-These 3,162 inputs keep each family's selected device/reading assertions.
+These 4,165 inputs keep each family's selected device/reading assertions.
 Recovery cases, isolated table-macro fragments and the display-equation reading
 contract remain explicitly identified. Wider UTF-8 recordings supplement the
 original 78-column evidence; they do not overwrite it. The generator preserves
@@ -68,6 +78,36 @@ inputs used by `head_vertical_requests.rs`. These exercise TAG/HANG field tails,
 vertical requests and target placement. They are producer/consumer records,
 separate from the two large JSONL matrices and the historical family generator.
 Do not reconstruct their complete sources from shortened scenario labels.
+
+`node_body_rows` crosses TP/TQ/IP, 4/8/16-column fields, short/full-width
+HEADs, empty TEXT/NBRZW/armed BACKAFTER, and br/sp/paragraph requests. It
+also records section/EOF handoffs and No/Em/Lk BODY ordering in TAG/HANG.
+Every fixture explicitly names its final structural boundary. Assertions
+keep all leading/internal/trailing empty rows and word separators; generated
+field padding widths are normalized under the existing responsive contract.
+Tests separately verify the expected native HEAD/BODY AST ownership.
+
+`plain_field_rows` keeps the ordinary paragraph and no-fill execution path
+independent of definition geometry. Its 32 sources cross visible/absent
+prefixes with NBRZW, combining graphs, word-end breaks, and bare/completed
+zero-advance requests. Fixtures remove only the common manual margin and
+retain every empty row, including leading and trailing rows; the raw native
+region remains in `native_rows`. Tests cross the real query JSON string and
+assert the complete physical row sequence in the native reading consumer.
+
+`literal_eof_rows` retains every final physical row without relying on a
+following heading or printable word. Its exact man/mdoc sources cross raw
+blank lines, NBRZW and empty TEXT, repeated rows, visible/absent prefixes,
+and EOF/fi/br-fi exits. An open table-cell fragment can receive another
+column; closing the document instead must preserve an empty literal row.
+
+`skipped_list_heads` records 128 exact sources and 128 independently recorded
+empty-HEAD baselines. Pristine physical rows prove that `termp_it_pre()`
+declines authored HEAD children for item/bullet/dash/enum lists; parser recovery
+does not execute them. Tests assert real HEAD AST ownership and unchanged
+reading rows, font styles and typed link export through JSON. Item lists also
+assert exact native physical rows. Generated marker geometry keeps the existing
+portable-list contract; paired invariance is not a native column-position claim.
 
 ## Assertion scopes
 

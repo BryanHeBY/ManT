@@ -152,6 +152,17 @@ pub(super) struct FillPass {
     pub(super) width: usize,
     /// Preserve the device's basic units until field-fit decisions finish.
     pub(super) units: usize,
+    /// Why `term_fill` stopped scanning, independent of the accepted prefix.
+    /// A marker can arm breakline after the last accepted graph; the next
+    /// blank then stops the pass without that marker being inside `end`.
+    pub(super) boundary: FillBoundary,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum FillBoundary {
+    BufferEnd,
+    WordEndBreak,
+    Width,
 }
 
 impl FillPass {
@@ -160,7 +171,13 @@ impl FillPass {
             end: accepted_end,
             width: columns(accepted_units),
             units: accepted_units,
+            boundary: FillBoundary::BufferEnd,
         }
+    }
+
+    fn stopped_at(mut self, boundary: FillBoundary) -> Self {
+        self.boundary = boundary;
+        self
     }
 }
 
@@ -250,6 +267,10 @@ pub(in crate::mandoc::inline) struct FieldBuffer {
     /// Landing of the first cell pushed by the word currently executing
     /// its writes; tracked only while `apply_writes` runs.
     word_first_content: Option<usize>,
+    /// Projection acknowledgement within this live buffer, not a native
+    /// cell/width fact. Repeated views of one flush cannot emit its empty
+    /// accepted-pass endline twice; retirement clears the cursor.
+    completed_empty_pass_end: Option<usize>,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -442,6 +463,7 @@ impl FieldBuffer {
         self.projected_pass_ends.clear();
         self.word_space_ready = false;
         self.word_first_content = None;
+        self.completed_empty_pass_end = None;
         self.significant_positions.clear();
         self.blank_positions.clear();
         self.scan = None;
@@ -455,6 +477,17 @@ impl FieldBuffer {
         let word_space_ready = self.word_space_ready;
         self.clear();
         self.word_space_ready = word_space_ready;
+    }
+
+    pub(super) fn claim_completed_empty_pass(&mut self, end: usize) -> bool {
+        if self
+            .completed_empty_pass_end
+            .is_some_and(|previous| end <= previous)
+        {
+            return false;
+        }
+        self.completed_empty_pass_end = Some(end);
+        true
     }
 
     /// Execute decoded native writes without consulting projected IR.
@@ -658,7 +691,13 @@ impl FieldBuffer {
                     let vn = registers.vis
                         + EN * usize::from(matches!(self.cells[ic], FieldCell::BreakableBlank));
                     if registers.breakline || vn > vtarget {
-                        let result = finish_pass(*registers, vtarget);
+                        let boundary = if registers.breakline {
+                            FillBoundary::WordEndBreak
+                        } else {
+                            FillBoundary::Width
+                        };
+                        let result =
+                            finish_pass(*registers, vtarget).map(|pass| pass.stopped_at(boundary));
                         scan.stopped = Some(PassStop::from(result));
                         return result;
                     }
@@ -679,7 +718,10 @@ impl FieldBuffer {
                     registers.vis += width.saturating_mul(EN);
                     registers.graph = true;
                     if registers.vis > vtarget && registers.nbr > 0 {
-                        let result = Some(FillPass::new(registers.nbr, registers.vbr));
+                        let result = Some(
+                            FillPass::new(registers.nbr, registers.vbr)
+                                .stopped_at(FillBoundary::Width),
+                        );
                         scan.stopped = Some(PassStop::from(result));
                         return result;
                     }
@@ -690,7 +732,10 @@ impl FieldBuffer {
                     registers.vis = advance_tab(&self.tabs, registers.vis, registers.tab_offset);
                     registers.graph = true;
                     if registers.vis > vtarget && registers.nbr > 0 {
-                        let result = Some(FillPass::new(registers.nbr, registers.vbr));
+                        let result = Some(
+                            FillPass::new(registers.nbr, registers.vbr)
+                                .stopped_at(FillBoundary::Width),
+                        );
                         scan.stopped = Some(PassStop::from(result));
                         return result;
                     }

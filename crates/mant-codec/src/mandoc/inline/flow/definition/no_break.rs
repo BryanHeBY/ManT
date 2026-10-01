@@ -125,45 +125,6 @@ impl InlineBuilder {
         self.execution.boundary = PendingBoundary::Tight;
     }
 
-    pub(super) fn vertical_space_in_definition_field(&mut self, field: NoBreakField, rows: usize) {
-        let capacity = field.field_capacity_columns;
-        self.note_field_control_cleared_no_break(true, capacity);
-        if rows == 0 {
-            // roff_term_pre_sp() skips term_vspace() for zero rows, then runs
-            // roff_term_pre_br(). HANG's term_flushln() retains the same
-            // physical row; only a positive vertical request ends it.
-            self.settle_no_break_field_line(field, 0);
-            self.execution.final_word_join = Some(false);
-            return;
-        }
-        self.restore_no_break_field_projection(field, false);
-        self.force_output_line_break();
-        if field.style == DefinitionFieldStyle::Tag {
-            self.retain_line_breaks(rows);
-        } else {
-            self.retain_line_breaks(rows.saturating_sub(1));
-        }
-        // For tag fields the request closes the device row before
-        // `roff_term_pre_br()` consumes BRIND; the node-local offset is
-        // restored by mdoc traversal, so later head content resumes at
-        // the list origin. HANG deliberately keeps its run-in body origin.
-        self.definition_state_mut().pending_indent = match field.style {
-            DefinitionFieldStyle::Tag => None,
-            DefinitionFieldStyle::Hang => Some(field.body_width),
-        };
-        if field.style == DefinitionFieldStyle::Tag {
-            self.execution
-                .definition
-                .as_mut()
-                .expect("definition field session")
-                .outcome
-                .mark_field_exited();
-        }
-        self.finish_definition_field_control(field, 0, true);
-        self.execution.final_word_join = Some(false);
-        self.execution.final_source_continuation = Some(false);
-    }
-
     /// Commit the current formatter cell without ending its visual row.
     ///
     /// The pinned CVS renderer uses this for `.mc`: pending `\z` content is
@@ -214,8 +175,7 @@ impl InlineBuilder {
         // `roff_term_pre_mc()` resets `tcol->buf` under NOBREAK, but the
         // reset consumes the unit's receipt first - a definitively
         // rejected suffix stays dead and its row event stays real.
-        let _plain_flush_rejection =
-            Self::retire_plain_flush_unit_at(&mut self.execution, &mut self.nodes);
+        let _plain_flush_rejection = self.retire_plain_flush_unit();
         self.discard_unprinted_definition_field_output_no_break();
         if self.no_break_definition_field(consumed_output_start) {
             return;
@@ -452,17 +412,10 @@ impl InlineBuilder {
         // retirement, so private annotation insertion cannot move them.
         self.retire_native_field_with_device(native.as_ref());
         let output_end_before_separator = self.nodes.len();
+        let mut materialized_separator_cells = 0;
         if flags.wraps() {
-            if overrun {
-                self.hard_break();
-                // Clearing NOSPACE leaves a pending boundary for the next
-                // term_word(), not an occupied row before HEAD post.
-                self.execution.pending_field_spaces = 1;
-                self.execution.boundary = PendingBoundary::CommittedField;
-            } else {
-                self.append_field_separator(usize::from(gap).saturating_add(1));
-                self.execution.boundary = PendingBoundary::CommittedField;
-            }
+            materialized_separator_cells =
+                self.position_no_break_separator(gap, overrun, native.as_ref());
             self.execution
                 .definition
                 .as_mut()
@@ -496,7 +449,9 @@ impl InlineBuilder {
             field_capacity_columns: field_width_columns,
             body_width: usize::from(body),
             trailspace_cells: usize::from(gap),
-            separator_cells: if overrun {
+            separator_cells: if flags.wraps() {
+                materialized_separator_cells
+            } else if overrun {
                 1
             } else {
                 usize::from(gap).saturating_add(1)
@@ -515,6 +470,36 @@ impl InlineBuilder {
         self.execution.formatter_column = FormatterColumn::Origin;
         self.execution.final_word_join = Some(false);
         true
+    }
+
+    /// minbl positions the next accepted graph, not an otherwise empty row.
+    fn position_no_break_separator(
+        &mut self,
+        gap: u8,
+        overrun: bool,
+        native: Option<&NativeFieldDevice>,
+    ) -> usize {
+        let cells = if overrun {
+            1
+        } else {
+            usize::from(gap).saturating_add(1)
+        };
+        if overrun || native.is_some_and(|field| field.viscol == 0) {
+            if overrun {
+                self.hard_break();
+            }
+            // Clearing NOSPACE leaves a pending boundary for term_word(),
+            // not an occupied row before HEAD post. A marker can leave
+            // viscol zero after accepting a prefix; term_field prints its
+            // future minbl only when graph follows (term.c:397-427).
+            self.execution.pending_field_spaces = cells;
+            self.execution.boundary = PendingBoundary::CommittedField;
+            0
+        } else {
+            self.append_field_separator(cells);
+            self.execution.boundary = PendingBoundary::CommittedField;
+            cells
+        }
     }
 
     pub(super) fn take_no_break_field(&mut self) -> Option<NoBreakField> {
@@ -588,10 +573,9 @@ impl InlineBuilder {
         }
         self.execution.pending_breakable_spaces = 0;
         self.execution.pending_field_spaces = 0;
-        if let Some(native) = &native {
+        if native.is_some() {
             let row = &mut self.definition_state_mut().hang_row;
             row.flush(field.trailspace_cells);
-            row.viscol = native.viscol;
         }
         self.retire_native_field_with_device(native.as_ref());
         resumed_has_cell
@@ -600,8 +584,7 @@ impl InlineBuilder {
     pub(super) fn settle_no_break_field_line(&mut self, field: NoBreakField, row_indent: u16) {
         // Sample before the restore: its flush settles a pending
         // zero-advance glyph and thereby closes the row (mdoc_term.c:1085).
-        let zero_pending = self.execution.zero_advance.has_pending_glyph();
-        let resumed_visible = self.restore_no_break_field_projection(field, false);
+        self.restore_no_break_field_projection(field, false);
         match field.style {
             DefinitionFieldStyle::Tag => {
                 // roff_term.c:73-75: a fill-mode boundary (`.nf`/`.fi`, the
@@ -612,9 +595,7 @@ impl InlineBuilder {
                     self.definition_state_mut().row.indent_columns = row_indent;
                 }
                 self.force_output_line_break();
-                if !resumed_visible {
-                    self.definition_state_mut().pending_indent = Some(field.body_width);
-                }
+                self.definition_state_mut().pending_indent = None;
                 self.execution
                     .definition
                     .as_mut()
@@ -623,30 +604,9 @@ impl InlineBuilder {
                     .mark_field_exited();
             }
             DefinitionFieldStyle::Hang => {
-                // A pending zero-advance glyph settles through the
-                // boundary's term_newln() and closes the row
-                // (mdoc_term.c:1085), so no jump remains.
-                let row_open = self.execution.definition.as_ref().is_some_and(|state| {
-                    state.hang_row.viscol > 0
-                        || state.field_buffer.cells().iter().any(|cell| {
-                            matches!(
-                                cell,
-                                super::super::field_buffer::FieldCell::Graph { .. }
-                                    | super::super::field_buffer::FieldCell::NonBreakingBlank
-                            )
-                        })
-                }) && !zero_pending;
-                if row_open && row_indent > 0 {
-                    // HANG kept the row open (roff_term.c:76 clears NOBREAK
-                    // and BRIND only), so the next word does not break: it
-                    // jumps to the field's right margin through the same
-                    // `vbl = offset - viscol` fill (term.c:113-114).
-                    let state = self.definition_state_mut();
-                    state.row.arm_jump(row_indent);
-                } else if !resumed_visible {
-                    self.definition_state_mut().pending_indent =
-                        Some(field.body_width.saturating_sub(field.field_width).max(1));
-                }
+                // HANG keeps this physical row open. pre_br changes its
+                // offset; the next accepted print's receipt determines the
+                // actual pad after all enclosing node geometry restores.
                 self.execution.boundary = PendingBoundary::Tight;
             }
         }

@@ -1,0 +1,258 @@
+[
+  {
+    "name": "tag-4-filled-0",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It Xo\n.No X\n.Xc\n.Bl -tag -width inner\n.It INNER\n.No BodyWord\n.El\n.No AFTER\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "style": "tag",
+    "width": 4,
+    "no_fill": false,
+    "continuation": false,
+    "rows": [
+      "X",
+      "",
+      "INNER BodyWord",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-4-filled-1",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It Xo\n.No X\\c\n.Xc\n.Bl -tag -width inner\n.It INNER\n.No BodyWord\n.El\n.No AFTER\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "style": "tag",
+    "width": 4,
+    "no_fill": false,
+    "continuation": true,
+    "rows": [
+      "X",
+      "",
+      "INNER BodyWord",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-4-literal-0",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -tag -width 4n\n.It Xo\n.No X\n.Xc\n.Bl -tag -width inner\n.It INNER\n.No BodyWord\n.El\n.No AFTER\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "style": "tag",
+    "width": 4,
+    "no_fill": true,
+    "continuation": false,
+    "rows": [
+      "",
+      "X",
+      "",
+      "INNER",
+      "BodyWord",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-4-literal-1",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -tag -width 4n\n.It Xo\n.No X\\c\n.Xc\n.Bl -tag -width inner\n.It INNER\n.No BodyWord\n.El\n.No AFTER\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "style": "tag",
+    "width": 4,
+    "no_fill": true,
+    "continuation": true,
+    "rows": [
+      "",
+      "X",
+      "",
+      "INNER",
+      "BodyWord",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-16-filled-0",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 16n\n.It Xo\n.No X\n.Xc\n.Bl -tag -width inner\n.It INNER\n.No BodyWord\n.El\n.No AFTER\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "style": "tag",
+    "width": 16,
+    "no_fill": false,
+    "continuation": false,
+    "rows": [
+      "X",
+      "",
+      "INNER BodyWord",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-16-filled-1",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 16n\n.It Xo\n.No X\\c\n.Xc\n.Bl -tag -width inner\n.It INNER\n.No BodyWord\n.El\n.No AFTER\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "style": "tag",
+    "width": 16,
+    "no_fill": false,
+    "continuation": true,
+    "rows": [
+      "X",
+      "",
+      "INNER BodyWord",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-16-literal-0",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -tag -width 16n\n.It Xo\n.No X\n.Xc\n.Bl -tag -width inner\n.It INNER\n.No BodyWord\n.El\n.No AFTER\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "style": "tag",
+    "width": 16,
+    "no_fill": true,
+    "continuation": false,
+    "rows": [
+      "",
+      "X",
+      "",
+      "INNER",
+      "BodyWord",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "tag-16-literal-1",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -tag -width 16n\n.It Xo\n.No X\\c\n.Xc\n.Bl -tag -width inner\n.It INNER\n.No BodyWord\n.El\n.No AFTER\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "style": "tag",
+    "width": 16,
+    "no_fill": true,
+    "continuation": true,
+    "rows": [
+      "",
+      "X",
+      "",
+      "INNER",
+      "BodyWord",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-4-filled-0",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo\n.No X\n.Xc\n.Bl -tag -width inner\n.It INNER\n.No BodyWord\n.El\n.No AFTER\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "style": "hang",
+    "width": 4,
+    "no_fill": false,
+    "continuation": false,
+    "rows": [
+      "X",
+      "",
+      "INNER BodyWord",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-4-filled-1",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo\n.No X\\c\n.Xc\n.Bl -tag -width inner\n.It INNER\n.No BodyWord\n.El\n.No AFTER\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "style": "hang",
+    "width": 4,
+    "no_fill": false,
+    "continuation": true,
+    "rows": [
+      "X",
+      "",
+      "INNER BodyWord",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-4-literal-0",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -hang -width 4n\n.It Xo\n.No X\n.Xc\n.Bl -tag -width inner\n.It INNER\n.No BodyWord\n.El\n.No AFTER\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "style": "hang",
+    "width": 4,
+    "no_fill": true,
+    "continuation": false,
+    "rows": [
+      "",
+      "X",
+      "",
+      "INNER",
+      "BodyWord",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-4-literal-1",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -hang -width 4n\n.It Xo\n.No X\\c\n.Xc\n.Bl -tag -width inner\n.It INNER\n.No BodyWord\n.El\n.No AFTER\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "style": "hang",
+    "width": 4,
+    "no_fill": true,
+    "continuation": true,
+    "rows": [
+      "",
+      "X",
+      "",
+      "INNER",
+      "BodyWord",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-16-filled-0",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 16n\n.It Xo\n.No X\n.Xc\n.Bl -tag -width inner\n.It INNER\n.No BodyWord\n.El\n.No AFTER\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "style": "hang",
+    "width": 16,
+    "no_fill": false,
+    "continuation": false,
+    "rows": [
+      "X",
+      "",
+      "INNER BodyWord",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-16-filled-1",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 16n\n.It Xo\n.No X\\c\n.Xc\n.Bl -tag -width inner\n.It INNER\n.No BodyWord\n.El\n.No AFTER\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "style": "hang",
+    "width": 16,
+    "no_fill": false,
+    "continuation": true,
+    "rows": [
+      "X",
+      "",
+      "INNER BodyWord",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-16-literal-0",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -hang -width 16n\n.It Xo\n.No X\n.Xc\n.Bl -tag -width inner\n.It INNER\n.No BodyWord\n.El\n.No AFTER\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "style": "hang",
+    "width": 16,
+    "no_fill": true,
+    "continuation": false,
+    "rows": [
+      "",
+      "X",
+      "",
+      "INNER",
+      "BodyWord",
+      "AFTER"
+    ]
+  },
+  {
+    "name": "hang-16-literal-1",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -hang -width 16n\n.It Xo\n.No X\\c\n.Xc\n.Bl -tag -width inner\n.It INNER\n.No BodyWord\n.El\n.No AFTER\n.El\n.fi\n.Sh NEXT\n.No END\n",
+    "heading": "NEXT",
+    "style": "hang",
+    "width": 16,
+    "no_fill": true,
+    "continuation": true,
+    "rows": [
+      "",
+      "X",
+      "",
+      "INNER",
+      "BodyWord",
+      "AFTER"
+    ]
+  }
+]

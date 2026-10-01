@@ -20,7 +20,15 @@ fn column_cell_text(body: &str) -> Vec<String> {
         source.as_bytes(),
     )
     .expect("lower column source");
-    let Block::Table { rows, .. } = &document.sections[1].blocks[0] else {
+    column_cells(&document)
+}
+
+fn column_cells(document: &mant_ir::Document) -> Vec<String> {
+    let Some(Block::Table { rows, .. }) = document.sections[1]
+        .blocks
+        .iter()
+        .find(|block| matches!(block, Block::Table { .. }))
+    else {
         panic!("expected one lowered column table: {document:#?}");
     };
     assert_eq!(rows.len(), 1, "one .It row: {rows:#?}");
@@ -34,11 +42,128 @@ fn column_cell_text(body: &str) -> Vec<String> {
                     Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
                         inline_text(children)
                     }
+                    Block::VerticalSpace { lines, .. } => "\n".repeat(usize::from(*lines)),
                     _ => String::new(),
                 })
                 .collect::<String>()
         })
         .collect()
+}
+
+#[test]
+fn actual_column_body_entry_runs_after_previous_post_and_before_its_own_pre() {
+    // All 24 exact sources ran pristine in ASCII/UTF-8/HTML/tree/lint before
+    // these assertions. The stand-alone Ta has a warning, but retains its
+    // BODY topology: NODE_LINE|NOFILL belongs to that BODY, not its child.
+    // print_mdoc_node() enters it after termp_it_post cleared NOBREAK and
+    // before termp_it_pre reestablishes the next column (mdoc_term.c:314-
+    // 321, 817-830, 930-964). A live NONEWLINE suppresses that source event.
+    fn column_item(node: &libmandoc_rs::Node) -> Option<&libmandoc_rs::Node> {
+        if node.kind == libmandoc_rs::NodeKind::Block && node.macro_name.as_deref() == Some("It") {
+            return Some(node);
+        }
+        node.children.iter().find_map(column_item)
+    }
+    for no_fill in [false, true] {
+        for separate_body_line in [false, true] {
+            for continuation in [false, true] {
+                for prefix in [r"BEFORE\c", r"BEFORE \c", r"\&\c"] {
+                    let source = format!(
+                        ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n{}{prefix}\n.Bl -column \"xxxx\" \"xxxx\"\n.It Xo\nD\\p E{}\n.Xc{}\n.El\nAFTER\n{}.Sh NEXT\n.No END\n",
+                        if no_fill { ".nf\n" } else { "" },
+                        if continuation { r"\c" } else { "" },
+                        if separate_body_line {
+                            "\n.Ta RightWord"
+                        } else {
+                            " Ta RightWord"
+                        },
+                        if no_fill { ".fi\n" } else { "" },
+                    );
+                    let parsed = Parser::default()
+                        .parse_bytes("column-body-entry.1", source.as_bytes())
+                        .unwrap();
+                    let bodies: Vec<_> = column_item(&parsed.document.root)
+                        .expect("column It")
+                        .children
+                        .iter()
+                        .filter(|node| node.kind == libmandoc_rs::NodeKind::Body)
+                        .collect();
+                    assert_eq!(bodies.len(), 2, "actual BODY nodes: {source}");
+                    assert_eq!(bodies[1].flags.no_fill, no_fill, "{source}");
+                    assert_eq!(bodies[1].flags.line_start, separate_body_line, "{source}");
+                    let document = parse_manual_bytes(
+                        std::path::Path::new("column-body-entry.1"),
+                        source.as_bytes(),
+                    )
+                    .unwrap();
+                    let ends_row = no_fill && separate_body_line && !continuation;
+                    assert_eq!(
+                        column_cells(&document),
+                        [if ends_row { "D\nE\n" } else { "D\nE" }, "RightWord"],
+                        "{source}\n{document:#?}",
+                    );
+                    let json = serde_json::to_string(&document).unwrap();
+                    let restored: mant_ir::Document = serde_json::from_str(&json).unwrap();
+                    assert_eq!(restored, document, "real JSON roundtrip: {source}");
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn accepted_invisible_column_passes_preserve_each_completed_row() {
+    // Every exact width/carrier/payload source below ran pristine in five
+    // profiles before this assertion. NBRZW sets graph and accepts nbr>0
+    // without printing (term.c:340-349, 397). A non-ignorable remainder
+    // executes endline (217), even if its next pass rejects. Conversely,
+    // bare \p has no accepted pass and executes no loop endline. Combining
+    // and fixed-space graphs, and a later accepted Y, retain their own row.
+    // A URI can overrun its declared column in CVS. The selected responsive
+    // table contract represents that width decision through column placement,
+    // rather than adding an authored hard break (termp_it_post() with the
+    // NOBREAK tail comparison in term.c:250-253).
+    for width in [4usize, 8, 20] {
+        for carrier in ["No", "Em", "Lk https://ex.org"] {
+            for (payload, first_row, remainder) in [
+                (r"\& \p Y", "", None),
+                (r"\& \p \p", "", None),
+                (r"\&\p Y", "", Some("Y")),
+                (r"\[u0301]\p Y", "\u{0301}", Some("Y")),
+                (r"\~\p Y", "\u{a0}", Some("Y")),
+                (r"\p", "", Some("")),
+            ] {
+                let source = format!(
+                    ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"{}\" \"xxxx\"\n.It {carrier} \"{payload}\" No AFTER Ta RightWord\n.El\n.Sh NEXT\n.No END\n",
+                    "x".repeat(width),
+                );
+                let document = parse_manual_bytes(
+                    std::path::Path::new("column-invisible-passes.1"),
+                    source.as_bytes(),
+                )
+                .unwrap();
+                let expected = match remainder {
+                    None => "\n".to_owned(),
+                    Some("") if carrier == "Lk https://ex.org" => {
+                        ":\nhttps://ex.org AFTER".to_owned()
+                    }
+                    Some("") => String::new(),
+                    Some(word) if carrier == "Lk https://ex.org" => {
+                        format!("{first_row}\n{word}: https://ex.org AFTER")
+                    }
+                    Some(word) => format!("{first_row}\n{word} AFTER"),
+                };
+                assert_eq!(
+                    column_cells(&document),
+                    [expected, "RightWord".to_owned()],
+                    "{source}\n{document:#?}",
+                );
+                let json = serde_json::to_string(&document).unwrap();
+                let restored: mant_ir::Document = serde_json::from_str(&json).unwrap();
+                assert_eq!(restored, document, "real JSON roundtrip: {source}");
+            }
+        }
+    }
 }
 
 #[test]
@@ -82,9 +207,10 @@ fn the_authored_column_row_end_follows_its_breaking_cell() {
     // "MidWord LastWord"; a middle-column break yields "Alpha   E" then
     // "LastWord" (the break belongs to the breaking cell's own owner, not
     // to the preceding cell); a last-column break yields
-    // "Alpha   Beta    C" with no following body row, because the last
-    // column's own post closes the row and an appended break would only
-    // manufacture an empty row.
+    // "Alpha   Beta    C" then one empty row: loop endline closed C,
+    // rejection reset vbr=0, and the last BODY without NOBREAK executes
+    // another tail endline (term.c:217, 143-146, 250-253). The completed
+    // row is independent of a delimiter inserted between column cells.
     let first = column_cell_text(
         ".Bl -column \"xxxx\" \"xxxx\" \"xxxx\"\n.It No \"D\\p \\p\" No AFTER Ta MidWord Ta LastWord\n.El\n",
     );
@@ -96,7 +222,7 @@ fn the_authored_column_row_end_follows_its_breaking_cell() {
     let last = column_cell_text(
         ".Bl -column \"xxxx\" \"xxxx\" \"xxxx\"\n.It Alpha Ta Beta Ta No \"C\\p \\p\" No AFTER\n.El\n",
     );
-    assert_eq!(last, ["Alpha", "Beta", "C"]);
+    assert_eq!(last, ["Alpha", "Beta", "C\n"]);
 }
 
 #[test]

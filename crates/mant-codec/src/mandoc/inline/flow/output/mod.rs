@@ -9,6 +9,8 @@ pub(in crate::mandoc::inline) const INTERNAL_LINK_SPLIT: &str = "\0mant:field-li
 const INTERNAL_COMPLETED_ROW: &str = "\0mant:output-scope:completed-row";
 const INTERNAL_LITERAL_ROW: &str = "\0mant:output-scope:literal-row";
 const INTERNAL_ROW_ORIGIN: &str = "\0mant:output-scope:row-origin:";
+pub(in crate::mandoc::inline::flow) const INTERNAL_FIELD_PREFIX: &str =
+    "\0mant:output-scope:field-prefix:";
 
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub(in crate::mandoc) enum CompletedRowOrigin {
@@ -50,6 +52,11 @@ pub(in crate::mandoc::inline::flow) mod row_origins;
 pub(in crate::mandoc::inline::flow) mod split;
 
 impl InlineBuilder {
+    /// Already executed empty endlines in the accepted output tail.
+    pub(in crate::mandoc) fn completed_empty_rows(&self) -> u16 {
+        u16::try_from(projection::trailing_completed_row_origins(&self.nodes).len())
+            .unwrap_or(u16::MAX)
+    }
     /// Retain one actual native graph-row end in its current output owner.
     /// This is a boundary receipt, not an additional completed empty row.
     pub(in crate::mandoc) fn record_device_row_end(&mut self) {
@@ -68,13 +75,21 @@ impl InlineBuilder {
         rows: u16,
         origin: CompletedRowOrigin,
     ) {
-        self.execution.completed_vertical_rows =
-            self.execution.completed_vertical_rows.saturating_add(rows);
+        Self::record_completed_rows_at(&mut self.execution, &mut self.nodes, rows, origin);
+    }
+
+    pub(in crate::mandoc::inline::flow) fn record_completed_rows_at(
+        execution: &mut super::InlineExecutionState,
+        nodes: &mut Vec<Inline>,
+        rows: u16,
+        origin: CompletedRowOrigin,
+    ) {
+        execution.completed_vertical_rows = execution.completed_vertical_rows.saturating_add(rows);
         let marker = match origin {
             CompletedRowOrigin::Layout => INTERNAL_COMPLETED_ROW,
             CompletedRowOrigin::LiteralText => INTERNAL_LITERAL_ROW,
         };
-        self.nodes.extend(std::iter::repeat_n(
+        nodes.extend(std::iter::repeat_n(
             Inline::anchor(marker),
             usize::from(rows),
         ));
@@ -157,21 +172,26 @@ impl InlineBuilder {
             state.field_buffer.resume_offset() < state.field_buffer.cells().len()
         }) || (self.execution.definition.is_none()
             && self.execution.flush_unit.resume_offset() < self.execution.flush_unit.cells().len());
+        let unprinted_field_tail = had_native_buffer && self.native_field_closes_unprinted_row();
         let exited_discarded_buffer = self.discarded_exited_definition_buffer();
         let exited_definition_row = self
             .execution
-            .definition
-            .as_ref()
-            .is_some_and(|definition| {
-                definition.hang_row.viscol > 0
-                    && self
-                        .execution
-                        .author_execution
-                        .as_ref()
-                        .is_some_and(|execution| {
-                            matches!(execution.break_effect, super::AuthorBreakEffect::Line)
-                        })
-            });
+            .detached_device_row
+            .is_some_and(|row| row.viscol > 0)
+            || self
+                .execution
+                .definition
+                .as_ref()
+                .is_some_and(|definition| {
+                    definition.hang_row.viscol > 0
+                        && self
+                            .execution
+                            .author_execution
+                            .as_ref()
+                            .is_some_and(|execution| {
+                                matches!(execution.break_effect, super::AuthorBreakEffect::Line)
+                            })
+                });
         // term_newln() flushes the plain flush unit through the same
         // term_flushln(): a definitive rejection ends its own row here.
         let plain_flush_rejection = if self.in_definition_field() {
@@ -182,8 +202,11 @@ impl InlineBuilder {
         } else {
             self.retire_plain_flush_unit()
         };
-        if !self.execution.has_printable_content {
-            self.execution.leading_line_boundary = super::LeadingLineBoundary::BeforeVisibleWord;
+        if !self.execution.has_printable_content
+            && self.execution.leading_line_boundary == super::LeadingLineBoundary::None
+        {
+            self.execution.leading_line_boundary =
+                super::LeadingLineBoundary::AtVisibleCheckpoint(self.execution.visible_glyph_epoch);
         }
         // term_newln() flushes only an occupied terminal cell. A completed
         // `\zX` glyph and a buffered `\p` both advanced the native buffer;
@@ -220,14 +243,16 @@ impl InlineBuilder {
             // row is complete now, even if another native unit starts before
             // the paragraph owner drains (term.c:143-146,250-253).
             self.record_completed_vertical_rows(1);
-        } else if self.execution.completed_vertical_rows > 0
-            && self.execution.formatter_column == FormatterColumn::Advanced
-            && !self
-                .nodes
-                .iter()
-                .rev()
-                .take_while(|node| !matches!(node, Inline::LineBreak { .. }))
-                .any(|node| has_non_whitespace_glyph(std::slice::from_ref(node)))
+        } else if unprinted_field_tail
+            || !self.in_definition_field()
+                && self.execution.completed_vertical_rows > 0
+                && self.execution.formatter_column == FormatterColumn::Advanced
+                && !self
+                    .nodes
+                    .iter()
+                    .rev()
+                    .take_while(|node| !matches!(node, Inline::LineBreak { .. }))
+                    .any(|node| has_non_whitespace_glyph(std::slice::from_ref(node)))
         {
             // term_newln() commits a whitespace-only formatter row even
             // though term_fill() prints no glyphs. When a later empty TEXT
@@ -297,6 +322,7 @@ impl InlineBuilder {
             definition.field_word_anchors.clear();
         }
         if self.execution.definition.is_none() {
+            self.execution.detached_device_row = None;
             // term_flushln() resets the plain unit with the same row
             // (term.c:233-237): the next word starts a fresh buffer whose
             // output interval begins after this committed row.

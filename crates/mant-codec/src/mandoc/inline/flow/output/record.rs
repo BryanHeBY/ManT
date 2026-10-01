@@ -32,6 +32,7 @@ impl InlineBuilder {
             // its words take the same marker/pass/rejection arithmetic.
             return self.record_plain_unit_word(incoming, native_boundary, native_writes);
         }
+        let materialized_field_padding = self.projected_native_field_padding();
         let Some(definition) = &mut self.execution.definition else {
             return WordPassProjection::default();
         };
@@ -62,20 +63,27 @@ impl InlineBuilder {
         let receipt = definition
             .field_buffer
             .apply_writes(&native_writes.expect("formatter word native writes"));
-        definition.field_word_anchors.push((
-            native_word_start,
-            anchor_ir_start,
-            if definition
-                .field_buffer
-                .word_separator_survives(native_word_start, separator)
-                && self.execution.pending_field_spaces == 0
-                && (!boundary.is_tight() || self.execution.zero_advance_joined)
-            {
-                native_word_start
-            } else {
-                receipt.first_content_cell
-            },
-        ));
+        definition
+            .field_word_anchors
+            .push(super::super::NativeWordAnchor {
+                start: native_word_start,
+                owner: anchor_ir_start,
+                content: if definition
+                    .field_buffer
+                    .word_separator_survives(native_word_start, separator)
+                    && self.execution.pending_field_spaces == 0
+                    && (!boundary.is_tight() || self.execution.zero_advance_joined)
+                {
+                    native_word_start
+                } else {
+                    receipt.first_content_cell
+                },
+                projected_device_padding: self
+                    .execution
+                    .pending_field_spaces
+                    .max(materialized_field_padding),
+                projected_field_prefix: false,
+            });
         let projected = super::super::super::plain_text(incoming);
         let trimmed = projected.trim_end_matches(' ');
         let trailing_spaces = projected.len().saturating_sub(trimmed.len());
@@ -136,21 +144,25 @@ impl InlineBuilder {
             .execution
             .flush_unit
             .apply_writes(&native_writes.unwrap_or_default());
-        self.execution.flush_unit_anchors.push((
-            native_word_start,
-            anchor_ir_start,
-            if self
-                .execution
-                .flush_unit
-                .word_separator_survives(native_word_start, separator)
-                && !native_boundary.is_tight()
-                && (!self.execution.boundary.is_tight() || self.execution.zero_advance_joined)
-            {
-                native_word_start
-            } else {
-                receipt.first_content_cell
-            },
-        ));
+        self.execution
+            .flush_unit_anchors
+            .push(super::super::NativeWordAnchor {
+                start: native_word_start,
+                owner: anchor_ir_start,
+                content: if self
+                    .execution
+                    .flush_unit
+                    .word_separator_survives(native_word_start, separator)
+                    && !native_boundary.is_tight()
+                    && (!self.execution.boundary.is_tight() || self.execution.zero_advance_joined)
+                {
+                    native_word_start
+                } else {
+                    receipt.first_content_cell
+                },
+                projected_device_padding: 0,
+                projected_field_prefix: false,
+            });
         let native_separator = self
             .execution
             .flush_unit
@@ -215,7 +227,7 @@ impl InlineBuilder {
     fn native_unit_passes(
         incoming: &[Inline],
         buffer: &mut super::super::field_buffer::FieldBuffer,
-        anchors: &mut [(usize, String, usize)],
+        anchors: &mut [super::super::NativeWordAnchor],
         targets: super::super::field_buffer::FillTargets,
         word_first_cell: usize,
     ) -> WordPassProjection {
@@ -227,7 +239,7 @@ impl InlineBuilder {
             && incoming.first().is_some_and(|node| {
                 matches!(node, Inline::Anchor { id, .. }
                     if id.as_str().starts_with(super::INTERNAL_FIELD_WORD)
-                        && id.as_str() != anchors[anchor_count - 1].1)
+                        && id.as_str() != anchors[anchor_count - 1].owner)
             });
         if anchor_count > 0 && !buffer.word_scan_deferred() && buffer.has_pending_break_markers() {
             let word_end = buffer.cells().len();
@@ -260,6 +272,15 @@ impl InlineBuilder {
                 let represented_in_ir = buffer.has_projected_pass(pass.end);
                 buffer.commit_pass(pass, targets.actual(first_pass));
                 let scalar_offset = buffer.projection_length(word_first_cell, boundary);
+                if scalar_offset == 0 {
+                    // term_flushln() consumes the current word's automatic
+                    // blank before its first projected scalar (term.c:205-207).
+                    // NBRZW/markers can put that boundary inside the word,
+                    // rather than in closes_before. The consumed separator
+                    // cannot later grant acceptance to a rejected glyph.
+                    let anchor = &mut anchors[anchor_count - 1];
+                    anchor.content = anchor.content.max(word_first_cell);
+                }
                 if boundary <= word_first_cell || (scalar_offset == 0 && !starts_earlier_owner) {
                     if !represented_in_ir {
                         // The incoming projection may first settle an earlier
@@ -278,7 +299,7 @@ impl InlineBuilder {
                     // stops that sweep, leaving this word's real separator
                     // at the new row origin even after an empty operand.
                     leading_cells = buffer.projection_length(
-                        boundary.max(anchors[anchor_count - 1].0),
+                        boundary.max(anchors[anchor_count - 1].start),
                         word_first_cell,
                     );
                 } else if boundary < word_end && !represented_in_ir {
@@ -291,7 +312,7 @@ impl InlineBuilder {
             }
         }
         let split_word = (!inside_splits.is_empty()).then(|| {
-            let owner = &anchors[anchor_count - 1].1;
+            let owner = &anchors[anchor_count - 1].owner;
             let mut projection_nodes = incoming.to_vec();
             let starts_owned = projection_nodes.first().is_some_and(|node| matches!(node, Inline::Anchor { id, .. } if id.as_str().starts_with(super::INTERNAL_FIELD_WORD)));
             if !starts_owned { projection_nodes.insert(0, Inline::anchor(owner.clone())); }

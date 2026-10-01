@@ -2,22 +2,33 @@
 
 use std::collections::BTreeMap;
 
-use super::{INTERNAL_FIELD_WORD, INTERNAL_ROW_ORIGIN, Inline};
+use super::{INTERNAL_FIELD_PREFIX, INTERNAL_FIELD_WORD, INTERNAL_ROW_ORIGIN, Inline};
 
-pub(in crate::mandoc::inline::flow) fn project_row_origins(
+pub(in crate::mandoc::inline::flow) fn project_native_positions(
     nodes: &mut Vec<Inline>,
     origins: &[(String, usize, usize)],
+    padding: &[(String, usize, usize)],
     output_start: usize,
+    materialize_line_origins: bool,
 ) {
-    if origins.is_empty() {
+    if origins.is_empty() && padding.is_empty() {
         return;
     }
-    let mut positions = BTreeMap::<String, Vec<(usize, usize)>>::new();
+    let mut positions = BTreeMap::<String, Vec<(usize, NativePosition)>>::new();
     for (owner, scalar, origin) in origins {
         positions
             .entry(owner.clone())
             .or_default()
-            .push((*scalar, *origin));
+            .push((*scalar, NativePosition::RowOrigin(*origin)));
+    }
+    for (owner, scalar, cells) in padding {
+        positions
+            .entry(owner.clone())
+            .or_default()
+            .push((*scalar, NativePosition::FieldPadding(*cells)));
+    }
+    for values in positions.values_mut() {
+        values.sort_by_key(|(scalar, _)| *scalar);
     }
     let mut cursor = OriginCursor {
         positions: &positions,
@@ -30,11 +41,85 @@ pub(in crate::mandoc::inline::flow) fn project_row_origins(
     // start predates its retirement; only that suffix is projected, using
     // stable words/scalars rather than indices for the receipt positions.
     let pending = nodes.split_off(output_start.min(nodes.len()));
-    nodes.extend(cursor.project(pending));
+    let mut projected = cursor.project(pending);
+    if materialize_line_origins {
+        let mut origin = None;
+        materialize_origins(&mut projected, &mut origin);
+        if let Some(origin) = origin
+            && apply_tail_origin(nodes, origin).is_none()
+            && origin > 0
+        {
+            // The first represented HEAD row can start at a nonzero
+            // restored native offset without a prior row delimiter.
+            // Its accepted print owns this positioning; an empty
+            // earlier owner cannot represent it through LineBreak.
+            projected.insert(
+                0,
+                Inline::Text {
+                    value: " ".repeat(usize::from(origin)),
+                },
+            );
+        }
+    }
+    nodes.extend(projected);
+}
+
+fn apply_tail_origin(nodes: &mut [Inline], origin: u16) -> Option<bool> {
+    for node in nodes.iter_mut().rev() {
+        match node {
+            Inline::LineBreak { indent_columns } => {
+                *indent_columns = origin;
+                return Some(true);
+            }
+            Inline::Strong { children }
+            | Inline::Emphasis { children }
+            | Inline::PortableDisplay { children, .. }
+            | Inline::Link { children, .. } => {
+                if let Some(applied) = apply_tail_origin(children, origin) {
+                    return Some(applied);
+                }
+            }
+            Inline::Anchor { .. } => {}
+            _ => return Some(false),
+        }
+    }
+    None
+}
+
+/// Origins sit immediately before their accepted graph. Walking backwards
+/// reaches that graph's actual hard row boundary, even through annotations.
+/// A first-row origin has no preceding hard boundary; its pending receipt is
+/// handled by the owner projection after this boundary search completes.
+fn materialize_origins(nodes: &mut Vec<Inline>, origin: &mut Option<u16>) {
+    for node in nodes.iter_mut().rev() {
+        if let Some(columns) = super::native_row_origin(node) {
+            *origin = Some(u16::try_from(columns).unwrap_or(u16::MAX));
+            continue;
+        }
+        match node {
+            Inline::LineBreak { indent_columns } => {
+                if let Some(columns) = origin.take() {
+                    *indent_columns = columns;
+                }
+            }
+            Inline::Strong { children }
+            | Inline::Emphasis { children }
+            | Inline::PortableDisplay { children, .. }
+            | Inline::Link { children, .. } => materialize_origins(children, origin),
+            Inline::Text { value } | Inline::Code { value } if !value.is_empty() => *origin = None,
+            _ => {}
+        }
+    }
+    nodes.retain(|node| super::native_row_origin(node).is_none());
+}
+
+enum NativePosition {
+    RowOrigin(usize),
+    FieldPadding(usize),
 }
 
 struct OriginCursor<'a> {
-    positions: &'a BTreeMap<String, Vec<(usize, usize)>>,
+    positions: &'a BTreeMap<String, Vec<(usize, NativePosition)>>,
     owner: Option<String>,
     scalar: usize,
     next: usize,
@@ -46,6 +131,24 @@ impl OriginCursor<'_> {
         let mut output = Vec::with_capacity(nodes.len());
         for mut node in nodes {
             if let Inline::Anchor { id, .. } = &node
+                && id.as_str().starts_with(INTERNAL_FIELD_PREFIX)
+            {
+                // Position the actually written field prefix at its accepted
+                // word's origin. Do not advance the content owner's scalar
+                // cursor: these cells are device padding, not input glyphs.
+                if let Some(positions) = self.positions.get(id.as_str()) {
+                    for (scalar, position) in positions {
+                        if *scalar == 0
+                            && let NativePosition::RowOrigin(origin) = position
+                        {
+                            output.push(Inline::anchor(format!("{INTERNAL_ROW_ORIGIN}{origin}")));
+                        }
+                    }
+                }
+                output.push(node);
+                continue;
+            }
+            if let Inline::Anchor { id, .. } = &node
                 && id.as_str().starts_with(INTERNAL_FIELD_WORD)
             {
                 if let Some(owner) = self.owner.replace(id.as_str().to_owned()) {
@@ -54,7 +157,6 @@ impl OriginCursor<'_> {
                 (self.scalar, self.next) =
                     self.previous.get(id.as_str()).copied().unwrap_or_default();
                 output.push(node);
-                self.emit_here(&mut output);
                 continue;
             }
             match &mut node {
@@ -83,11 +185,18 @@ impl OriginCursor<'_> {
         else {
             return;
         };
-        while let Some((scalar, origin)) = positions.get(self.next) {
+        while let Some((scalar, position)) = positions.get(self.next) {
             if *scalar != self.scalar {
                 break;
             }
-            output.push(Inline::anchor(format!("{INTERNAL_ROW_ORIGIN}{origin}")));
+            output.push(match position {
+                NativePosition::RowOrigin(origin) => {
+                    Inline::anchor(format!("{INTERNAL_ROW_ORIGIN}{origin}"))
+                }
+                NativePosition::FieldPadding(cells) => Inline::Text {
+                    value: " ".repeat(*cells),
+                },
+            });
             self.next += 1;
         }
     }
@@ -112,7 +221,6 @@ impl OriginCursor<'_> {
             self.scalar += 1;
         }
         append_piece(node, &mut piece, output);
-        self.emit_here(output);
     }
 }
 

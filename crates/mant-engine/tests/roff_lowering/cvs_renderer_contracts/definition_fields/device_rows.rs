@@ -25,7 +25,9 @@ fn no_break_field_retains_brind_and_hang_for_following_controls() {
             "tag",
             ".sp 1",
             "LONGTEXT\n\nA\nBob\nBODY",
-            "LONGTEXT\n\nA\nBob\n              BODY",
+            // pre_sp's trailing pre_br leaves the native body origin live
+            // until A is flushed by An (roff_term.c:195-214,69-78).
+            "LONGTEXT\n\n              A\nBob\n              BODY",
         ),
         (
             "tag/nf",

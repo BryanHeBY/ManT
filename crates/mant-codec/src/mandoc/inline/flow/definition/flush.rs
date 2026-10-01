@@ -1,6 +1,6 @@
 use super::super::native_field::{FieldFlags, row_continues};
 use super::super::{
-    AuthorBreakEffect, FormatterColumn, Inline, InlineBuilder, PendingBoundary, TrailingOutput,
+    AuthorBreakEffect, FormatterColumn, InlineBuilder, PendingBoundary, TrailingOutput,
     WordEndBreak, has_printable_character, trim_trailing_breakable_spaces,
 };
 use super::device::NativeFieldDevice;
@@ -82,7 +82,6 @@ impl InlineBuilder {
             .definition
             .as_ref()
             .is_some_and(|state| state.hang_row.transition != HangRowTransition::Initial);
-        let pending_native_gap = self.execution.pending_field_spaces > 0;
         let native_field_discarded = self
             .execution
             .definition
@@ -110,12 +109,7 @@ impl InlineBuilder {
             // survives, so a hang head and its body remain on that same row;
             // a tag head instead finishes as an ordinary line field.
             if exit_field {
-                self.exit_empty_definition_field(
-                    pending_native_gap,
-                    body_width_columns,
-                    field_width_columns,
-                    flags,
-                );
+                self.exit_empty_definition_field(body_width_columns, field_width_columns, flags);
             }
             return false;
         }
@@ -141,31 +135,16 @@ impl InlineBuilder {
         let ends_row = native.as_ref().map_or(overruns, |field| field.ends_row);
         if ends_row {
             self.hard_break();
-            if exit_field {
-                self.definition_state_mut().pending_indent = Some(body_width);
-            }
         } else if field_is_printable {
-            let final_column = native.as_ref().map_or(field_width, |field| field.viscol);
-            let cells = if exit_field && flags.wraps() {
-                body_width.saturating_sub(final_column)
-            } else if exit_field {
-                body_width
-                    .saturating_sub(final_column)
-                    .max(usize::from(gap_cells))
-            } else {
-                usize::from(gap_cells)
-            };
-            if !exit_field && (!flags.wraps() || self.execution.has_column_output_scope()) {
+            if !exit_field {
                 // term_flushln() retains trailspace as minbl. A following
                 // formatter word materializes it, while roff_term_pre_br()
                 // or an overrun empty column post can retire it first. An
                 // output-owner drain cannot eagerly print these cells.
-                deferred_field_cells = cells;
-            } else {
-                self.append_fixed_cells(cells);
+                deferred_field_cells = usize::from(gap_cells);
             }
         } else if exit_field {
-            self.exit_unprinted_definition_field(body_width, had_marker_passes, flags);
+            self.exit_unprinted_definition_field(had_marker_passes, flags);
         } else {
             // term_flushln() restores minbl from trailspace even when
             // term_fill() accepted no graph. Only a later formatter word or
@@ -185,12 +164,7 @@ impl InlineBuilder {
         overruns
     }
 
-    fn exit_unprinted_definition_field(
-        &mut self,
-        body_width: usize,
-        had_marker_passes: bool,
-        flags: FieldFlags,
-    ) {
+    fn exit_unprinted_definition_field(&mut self, had_marker_passes: bool, flags: FieldFlags) {
         // An explicit empty word and `\&` still execute the NOBREAK
         // field.  There is no row to close, but `roff_term_pre_br()`
         // applies BRIND before the following word.
@@ -205,7 +179,6 @@ impl InlineBuilder {
         // pre-flush transition: only accepted or rejected in-word
         // `term_fill()` passes leave it non-initial.
         if had_marker_passes && !row_continues(flags, 0, 0) {
-            self.definition_state_mut().pending_indent = Some(body_width);
             self.execution
                 .definition
                 .as_mut()
@@ -216,7 +189,10 @@ impl InlineBuilder {
                 execution.break_effect = AuthorBreakEffect::Line;
             }
         } else {
-            self.definition_state_mut().pending_indent = Some(body_width);
+            // pre_br updates offset without printing padding.
+            // A later real flush may run after Xo restored that offset;
+            // only its accepted print receipt can establish the row origin.
+            self.definition_state_mut().pending_indent = None;
             self.execution
                 .definition
                 .as_mut()
@@ -231,26 +207,9 @@ impl InlineBuilder {
         native: Option<&NativeFieldDevice>,
         boundary: FieldFlushBoundary,
     ) {
-        let exit_field = boundary == FieldFlushBoundary::ExitField;
         // term.c:233-237: the committed flush ends the field; the input
         // buffer restarts empty for whatever follows this row.
         self.retire_native_field_with_device_at(native, boundary);
-        if let Some(definition) = &mut self.execution.definition {
-            // A mid-field flush is a row event (upstream's `term_newln`
-            // printing the buffered word before the restore,
-            // mdoc_term.c:1084-1085): the jump stands. Only the field's
-            // final flush - past the restore (mdoc_term.c:437-439) -
-            // collapses it.
-            if exit_field {
-                if let Some(jump_node) = definition.row.retract_on_head_close()
-                    && let Some(Inline::Text { value }) = self.nodes.get_mut(jump_node)
-                {
-                    value.clear();
-                }
-            } else {
-                definition.row.commit_at_flush();
-            }
-        }
     }
 
     fn observe_flushed_definition_field(
@@ -319,8 +278,9 @@ impl InlineBuilder {
                     .mark_field_exited();
                 execution.break_effect = AuthorBreakEffect::Line;
             } else if exit_field {
-                // TERMP_HANG survives `term_newln()`, but the generated field
-                // gap has already been emitted for this request.
+                // TERMP_HANG survives term_newln; pre_br changes its future
+                // offset and clears trailspace. Only a later accepted print
+                // receipt can turn that positioning into output cells.
                 self.execution
                     .definition
                     .as_mut()
@@ -339,7 +299,6 @@ impl InlineBuilder {
 
     fn exit_empty_definition_field(
         &mut self,
-        pending_native_gap: bool,
         body_width_columns: u16,
         field_width_columns: u16,
         flags: FieldFlags,
@@ -348,8 +307,7 @@ impl InlineBuilder {
         // field and left its trailspace for the next word. An
         // explicit .br consumes that pending gap while BRIND moves
         // the offset; it does not print another field's padding.
-        self.definition_state_mut().pending_indent =
-            (!pending_native_gap).then_some(usize::from(body_width_columns));
+        self.definition_state_mut().pending_indent = None;
         self.execution.pending_field_spaces = 0;
         // `roff_term_pre_br()` changes the device offset even for
         // an empty field. It does not advance `p->viscol`; the

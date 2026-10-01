@@ -4,7 +4,7 @@ use super::{
     AstTableAlignment, AstTableCell, Block, DefinitionFlow, DefinitionHeadFlow, DefinitionItem,
     DefinitionListStyle, Inline, ListItem, ListKind, LoweringContext, Node, NodeKind,
     NormalizedListKind, RunInHeadStyle, ScopeFlow, TableRow, definition_item, first_part_children,
-    layout, lower_scope, ordinal_sequence, part_child_groups, source_span, targets,
+    layout, lower_scope, ordinal_sequence, source_span, targets,
 };
 
 /// Only normalized `It` blocks execute `termp_it_pre`'s paragraph distance.
@@ -162,16 +162,16 @@ fn lower_mdoc_plain_list(
                 if kind != ListKind::Plain {
                     formatter.execute_visible_generated_word();
                 }
-                context.lower_inline_with_spacing(
-                    first_part_children(item.node, NodeKind::Head),
-                    formatter.spacing_enabled(),
-                    formatter,
-                );
+                // termp_it_pre() returns 0 for the HEAD of item/bullet/
+                // dash/enum lists (mdoc_term.c:916-927). Their generated
+                // marker above executes, but even a parser-recovered HEAD
+                // subtree has no child execution or text side effects.
                 // termp_it_post() clears the shared pad/break flags on every
                 // HEAD, including LIST_item whose HEAD has no row flush.
                 // Nested structural output must not resurrect its enclosing
                 // column's NOBREAK merely because the HEAD emitted no IR.
                 formatter.execution.clear_native_list_part_flags();
+                formatter.execution.declare_list_body_origin();
                 let spacing_enabled = formatter.spacing_enabled();
                 let mut blocks = lower_scope(
                     first_part_children(item.node, NodeKind::Body),
@@ -557,7 +557,12 @@ fn lower_mdoc_column_list(
                 formatter.spacing_enabled(),
                 formatter,
             );
-            let bodies = part_child_groups(item.node, NodeKind::Body).collect::<Vec<_>>();
+            let bodies = item
+                .node
+                .children
+                .iter()
+                .filter(|part| part.kind == NodeKind::Body && part.scope_end.is_none())
+                .collect::<Vec<_>>();
             let gap = match column_widths.len() {
                 n if n < 5 => 4,
                 5 => 3,
@@ -574,7 +579,7 @@ fn lower_mdoc_column_list(
                         .saturating_add(gap);
                     let origin = origins.as_ref().map_or(0, |columns| columns.start(index));
                     let blocks = lower_scope(
-                        body,
+                        &body.children,
                         context,
                         paragraph_distance,
                         formatter,
@@ -588,6 +593,10 @@ fn lower_mdoc_column_list(
                             },
                             origin,
                             index + 1 == bodies.len(),
+                        )
+                        .with_column_nodes(
+                            (index == 0).then_some(*body),
+                            bodies.get(index + 1).copied(),
                         ),
                     );
                     AstTableCell {
@@ -599,25 +608,7 @@ fn lower_mdoc_column_list(
                     }
                 })
                 .collect::<Vec<_>>();
-            if let Some(cell) = cells.first_mut() {
-                attach_item_targets(
-                    &mut cell.blocks,
-                    &item,
-                    layout(cell_indent.content_origin()),
-                );
-            } else {
-                let mut blocks = Vec::new();
-                attach_item_targets(&mut blocks, &item, layout(cell_indent.content_origin()));
-                if !blocks.is_empty() {
-                    cells.push(AstTableCell {
-                        kind: mant_ir::TableCellKind::Text,
-                        blocks,
-                        column_span: 1,
-                        row_span: 1,
-                        alignment: Some(AstTableAlignment::Left),
-                    });
-                }
-            }
+            attach_column_item_targets(&mut cells, &item, cell_indent);
             TableRow {
                 kind: mant_ir::TableRowKind::Data,
                 cells,
@@ -631,6 +622,28 @@ fn lower_mdoc_column_list(
         rows,
         layout: layout(indent_columns),
         source: source_span(node),
+    }
+}
+
+fn attach_column_item_targets(
+    cells: &mut Vec<AstTableCell>,
+    item: &MdocListItem<'_>,
+    indent: crate::mandoc::layout::SourceIndent,
+) {
+    if let Some(cell) = cells.first_mut() {
+        attach_item_targets(&mut cell.blocks, item, layout(indent.content_origin()));
+        return;
+    }
+    let mut blocks = Vec::new();
+    attach_item_targets(&mut blocks, item, layout(indent.content_origin()));
+    if !blocks.is_empty() {
+        cells.push(AstTableCell {
+            kind: mant_ir::TableCellKind::Text,
+            blocks,
+            column_span: 1,
+            row_span: 1,
+            alignment: Some(AstTableAlignment::Left),
+        });
     }
 }
 

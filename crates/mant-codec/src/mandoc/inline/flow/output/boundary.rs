@@ -163,9 +163,6 @@ impl InlineBuilder {
         if starts_output_row {
             self.note_definition_output_row();
         }
-        if let Some(definition) = &mut self.execution.definition {
-            definition.row.close_word();
-        }
         self.observe_appended_word(
             AppendedWordContent {
                 last: incoming_last,
@@ -217,19 +214,6 @@ impl InlineBuilder {
             trim_trailing_breakable_spaces(&mut self.nodes, usize::MAX);
             self.execution.last_visible_character = last_visible_character(&self.nodes);
         }
-        if let Some(definition) = &mut self.execution.definition {
-            // Emit after the NOSPACE arm's trims: the jump fill is the
-            // upstream `vbl` pad (term.c:113-114), not a breakable blank.
-            // The amount is `offset - viscol` at print time, exactly as
-            // upstream computes it when the carrying word flushes.
-            let viscol = u16::try_from(definition.hang_row.viscol).unwrap_or(u16::MAX);
-            let fill = definition.row.emit_armed(self.nodes.len(), viscol);
-            if fill > 0 {
-                self.nodes.push(Inline::Text {
-                    value: " ".repeat(usize::from(fill)),
-                });
-            }
-        }
         (empty_word, boundary, fixed_blank_boundary, concat_next_word)
     }
 
@@ -257,7 +241,12 @@ impl InlineBuilder {
             };
         }
         self.execution.has_printable_content |= incoming_has_printable;
-        if incoming_has_glyph {
+        if incoming_has_glyph && !self.execution.current_native_word_is_rejected() {
+            // The observation belongs to this actual word. A later generated
+            // colon/URI can be rejected while the preceding description
+            // prefix survives (mdoc_term.c::termp_lk_pre, term.c::term_fill).
+            // Inspecting only that final word after the handler returns
+            // would retroactively hide the already accepted first glyph.
             self.execution.visible_glyph_epoch = self.execution.visible_glyph_epoch.wrapping_add(1);
             self.execution.completed_vertical_rows = 0;
         }
@@ -297,7 +286,7 @@ impl InlineBuilder {
         } else {
             self.execution.flush_unit_anchors.last()
         }
-        .map(|(_, marker, _)| marker.clone());
+        .map(|anchor| anchor.owner.clone());
         if word
             && self.execution.pending_field_spaces == 0
             && let Some(marker) = native_anchor_marker.as_ref()
@@ -353,6 +342,12 @@ impl InlineBuilder {
                 (boundary, add_space)
             };
             let field_padding = self.execution.pending_field_spaces > 0;
+            if word
+                && field_padding
+                && let Some(marker) = native_anchor_marker.as_ref()
+            {
+                self.mark_native_field_prefix(marker);
+            }
             self.append_boundary_spacing(spacing_boundary, add_space, word, empty_word);
             if word
                 && field_padding
@@ -362,6 +357,27 @@ impl InlineBuilder {
                 // The word's accepted scalar interval begins after that pad.
                 self.nodes.push(Inline::anchor(marker));
             }
+        }
+    }
+
+    fn mark_native_field_prefix(&mut self, owner: &str) {
+        let serial = owner
+            .strip_prefix(super::INTERNAL_FIELD_WORD)
+            .expect("native word owner");
+        self.nodes.push(Inline::anchor(format!(
+            "{}{serial}",
+            super::INTERNAL_FIELD_PREFIX
+        )));
+        let anchor = if self.in_definition_field() {
+            self.execution
+                .definition
+                .as_mut()
+                .and_then(|field| field.field_word_anchors.last_mut())
+        } else {
+            self.execution.flush_unit_anchors.last_mut()
+        };
+        if let Some(anchor) = anchor {
+            anchor.projected_field_prefix = true;
         }
     }
 

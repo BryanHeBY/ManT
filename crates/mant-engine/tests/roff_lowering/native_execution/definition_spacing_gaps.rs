@@ -105,9 +105,8 @@ fn proved_hang_joins_do_not_gain_a_forced_gap() {
     // gap (minTermGapColumns == 0, also pinned by the auxiliary
     // join_proven_hang acceptance case); a blanket "always space out
     // run-in heads" fix would fail here. E and AFTER stay ordinary head
-    // words separated on the shared row; whether the renderer already
-    // reproduces the native AFTER/BodyWord glue is a separate, responsive
-    // reading-geometry question this test does not pin.
+    // words separated on the shared row; the proven AFTER/BodyWord join
+    // must also reach the final consumer, rather than adding another word.
     let src = ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n\
 .Sh DESCRIPTION\n.Bl -hang -width 8n\n.It Xo\n.No \"D\\p E\"\n.br\n.No AFTER\n.Xc\n\
 .No BodyWord\n.El\n.Sh NEXT\n.No END\n";
@@ -123,7 +122,7 @@ fn proved_hang_joins_do_not_gain_a_forced_gap() {
         .find(|row| row.split_whitespace().any(|word| word == "E"))
         .unwrap();
     let words = head.split_whitespace().collect::<Vec<_>>();
-    assert_eq!(words[..2], ["E", "AFTER"]);
+    assert_eq!(words, ["E", "AFTERBodyWord"]);
 }
 
 #[test]
