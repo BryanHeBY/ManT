@@ -1,0 +1,202 @@
+[
+  {
+    "id": "spacing-intervals-1019",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 32n\n.It Xo\n.Lk https://ex.org \"D\\p \\p\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.Lk https://body.example BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "source_sha256": "d0b85d014e2e9260f21293a6c0be9275793a9bd53fa90dc8e9276d0562352a8f",
+    "tree": "title = \"TEST\"\nname  = \"test\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.40.1-microsoft-standard-WSL2\"\ndate  = \"September 28, 2026\"\n\nDd (elem) *1:2 NOPRT\n    September 28, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    TEST (text) 2:5\n    1 (text) 2:10\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          test (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            probe (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      Bl (block) -hang -width [ [32n] ] *8:2\n        Bl (head) 8:2\n        Bl (body) 8:2\n            It (block) *9:2\n              It (head) 9:2\n                  Xo (block) 9:5 BROKEN\n                    Xo (head) 9:5\n                    Xo (body) 9:5 BROKEN\n                        Lk (elem) *10:2\n                            https://ex.org (text) 10:5\n                            D\\p \\p (text) 10:20\n                        sp (elem) *11:2\n                            -1 (text) 11:5\n                        sp (elem) *12:2\n                            1 (text) 12:5\n                        No (elem) *13:2\n                            AFTER (text) 13:5\n              It (body) *9:2\n                  Lk (elem) *15:2\n                      https://body.example (text) 15:5\n                      BodyWord (text) 15:26\nSh (block) *17:2\n  Sh (head) 17:2 ID=HREF\n      NEXT (text) 17:5\n  Sh (body) 17:2\n      No (elem) *18:2\n          END (text) 18:5\n",
+    "native_tree_sha256": "33f14f7d93cea696f1b94785c5c3729a926707ec0b23a8f3e4581cad7ea0154b",
+    "widths": {
+      "78": {
+        "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     _\bD\n                                       :\n                                       https://ex.orgAFTER_\bB_\bo_\bd_\by_\bW_\bo_\br_\bd:\n                                       https://body.example\n\nN\bNE\bEX\bXT\bT\n     END\n\nLinux 6.18.40.1-microsoft-standard-WSL2\n                              September 28, 2026                       TEST(1)\n",
+        "stdout_sha256": "b265b93878fed128b1bd528bd9d94452ff5d7e682036c1c3b5ea8e2c2757d040",
+        "region": {
+          "status": "asserted",
+          "rows": [
+            "     D",
+            "                                       :",
+            "                                       https://ex.orgAFTERBodyWord:",
+            "                                       https://body.example"
+          ],
+          "owner": {
+            "heading": "DESCRIPTION",
+            "occurrence": 0
+          },
+          "following": "NEXT",
+          "furniture_rows": 1,
+          "margin": {
+            "status": "not-applicable",
+            "reason": "no native mc node"
+          }
+        },
+        "status": 0
+      },
+      "158": {
+        "stdout": "TEST(1)                                                             General Commands Manual                                                            TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     _\bD\n                                       :\n                                       https://ex.orgAFTER_\bB_\bo_\bd_\by_\bW_\bo_\br_\bd: https://body.example\n\nN\bNE\bEX\bXT\bT\n     END\n\nLinux 6.18.40.1-microsoft-standard-WSL2                               September 28, 2026                                                               TEST(1)\n",
+        "stdout_sha256": "bd87ef7cb60b809bf9fefae1c07f59529dffb20e33a8f9e03daca2a521233ea2",
+        "region": {
+          "status": "asserted",
+          "rows": [
+            "     D",
+            "                                       :",
+            "                                       https://ex.orgAFTERBodyWord: https://body.example"
+          ],
+          "owner": {
+            "heading": "DESCRIPTION",
+            "occurrence": 0
+          },
+          "following": "NEXT",
+          "furniture_rows": 1,
+          "margin": {
+            "status": "not-applicable",
+            "reason": "no native mc node"
+          }
+        },
+        "status": 0
+      },
+      "238": {
+        "stdout": "TEST(1)                                                                                                     General Commands Manual                                                                                                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     _\bD\n                                       :\n                                       https://ex.orgAFTER_\bB_\bo_\bd_\by_\bW_\bo_\br_\bd: https://body.example\n\nN\bNE\bEX\bXT\bT\n     END\n\nLinux 6.18.40.1-microsoft-standard-WSL2                                                                       September 28, 2026                                                                                                       TEST(1)\n",
+        "stdout_sha256": "75f7d8118ae5594d640359d74f33b3e8f914d45b8cbf5b1bdfd45da11beb6f95",
+        "region": {
+          "status": "asserted",
+          "rows": [
+            "     D",
+            "                                       :",
+            "                                       https://ex.orgAFTERBodyWord: https://body.example"
+          ],
+          "owner": {
+            "heading": "DESCRIPTION",
+            "occurrence": 0
+          },
+          "following": "NEXT",
+          "furniture_rows": 1,
+          "margin": {
+            "status": "not-applicable",
+            "reason": "no native mc node"
+          }
+        },
+        "status": 0
+      },
+      "1000": {
+        "stdout": "TEST(1)                                                                                                                                                                                                                                                                General Commands Manual                                                                                                                                                                                                                                                                TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     _\bD\n                                       :\n                                       https://ex.orgAFTER_\bB_\bo_\bd_\by_\bW_\bo_\br_\bd: https://body.example\n\nN\bNE\bEX\bXT\bT\n     END\n\nLinux 6.18.40.1-microsoft-standard-WSL2                                                                                                                                                                                                                                                                September 28, 2026                                                                                                                                                                                                                                                                TEST(1)\n",
+        "stdout_sha256": "6d1e802806873375bf87fd149c3b99beccbf054fee862278db6e9a0368bd8bc1",
+        "region": {
+          "status": "asserted",
+          "rows": [
+            "     D",
+            "                                       :",
+            "                                       https://ex.orgAFTERBodyWord: https://body.example"
+          ],
+          "owner": {
+            "heading": "DESCRIPTION",
+            "occurrence": 0
+          },
+          "following": "NEXT",
+          "furniture_rows": 1,
+          "margin": {
+            "status": "not-applicable",
+            "reason": "no native mc node"
+          }
+        },
+        "status": 0
+      }
+    }
+  },
+  {
+    "id": "spacing-intervals-1051",
+    "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 32n\n.It Xo\n.Lk https://ex.org \"D\\p E\"\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.Lk https://body.example BodyWord\n.El\n.Sh NEXT\n.No END\n",
+    "source_sha256": "7b32b1c4e046c5e804c0b66cdf8f2d83ab44f94fd64d3ad30c98977b11ac366e",
+    "tree": "title = \"TEST\"\nname  = \"test\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.40.1-microsoft-standard-WSL2\"\ndate  = \"September 28, 2026\"\n\nDd (elem) *1:2 NOPRT\n    September 28, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    TEST (text) 2:5\n    1 (text) 2:10\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          test (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            probe (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      Bl (block) -hang -width [ [32n] ] *8:2\n        Bl (head) 8:2\n        Bl (body) 8:2\n            It (block) *9:2\n              It (head) 9:2\n                  Xo (block) 9:5 BROKEN\n                    Xo (head) 9:5\n                    Xo (body) 9:5 BROKEN\n                        Lk (elem) *10:2\n                            https://ex.org (text) 10:5\n                            D\\p E (text) 10:20\n                        sp (elem) *11:2\n                            -1 (text) 11:5\n                        sp (elem) *12:2\n                            1 (text) 12:5\n                        No (elem) *13:2\n                            AFTER (text) 13:5\n              It (body) *9:2\n                  Lk (elem) *15:2\n                      https://body.example (text) 15:5\n                      BodyWord (text) 15:26\nSh (block) *17:2\n  Sh (head) 17:2 ID=HREF\n      NEXT (text) 17:5\n  Sh (body) 17:2\n      No (elem) *18:2\n          END (text) 18:5\n",
+    "native_tree_sha256": "5a43a3970cbb46b928edff462ebc76d6958c72712fc33f9d671b2878aec2bf88",
+    "widths": {
+      "78": {
+        "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     _\bD\n                                       _\bE: https://ex.orgAFTER_\bB_\bo_\bd_\by_\bW_\bo_\br_\bd:\n                                       https://body.example\n\nN\bNE\bEX\bXT\bT\n     END\n\nLinux 6.18.40.1-microsoft-standard-WSL2\n                              September 28, 2026                       TEST(1)\n",
+        "stdout_sha256": "d7aebdfeb3273332f16108e27379479d8c983e88c86f2617dc4b76d215457e2e",
+        "region": {
+          "status": "asserted",
+          "rows": [
+            "     D",
+            "                                       E: https://ex.orgAFTERBodyWord:",
+            "                                       https://body.example"
+          ],
+          "owner": {
+            "heading": "DESCRIPTION",
+            "occurrence": 0
+          },
+          "following": "NEXT",
+          "furniture_rows": 1,
+          "margin": {
+            "status": "not-applicable",
+            "reason": "no native mc node"
+          }
+        },
+        "status": 0
+      },
+      "158": {
+        "stdout": "TEST(1)                                                             General Commands Manual                                                            TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     _\bD\n                                       _\bE: https://ex.orgAFTER_\bB_\bo_\bd_\by_\bW_\bo_\br_\bd: https://body.example\n\nN\bNE\bEX\bXT\bT\n     END\n\nLinux 6.18.40.1-microsoft-standard-WSL2                               September 28, 2026                                                               TEST(1)\n",
+        "stdout_sha256": "91800a960d23a3030ddeeee93e76ea8d2fc77eb49fe4c9940e429aaedf19d5df",
+        "region": {
+          "status": "asserted",
+          "rows": [
+            "     D",
+            "                                       E: https://ex.orgAFTERBodyWord: https://body.example"
+          ],
+          "owner": {
+            "heading": "DESCRIPTION",
+            "occurrence": 0
+          },
+          "following": "NEXT",
+          "furniture_rows": 1,
+          "margin": {
+            "status": "not-applicable",
+            "reason": "no native mc node"
+          }
+        },
+        "status": 0
+      },
+      "238": {
+        "stdout": "TEST(1)                                                                                                     General Commands Manual                                                                                                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     _\bD\n                                       _\bE: https://ex.orgAFTER_\bB_\bo_\bd_\by_\bW_\bo_\br_\bd: https://body.example\n\nN\bNE\bEX\bXT\bT\n     END\n\nLinux 6.18.40.1-microsoft-standard-WSL2                                                                       September 28, 2026                                                                                                       TEST(1)\n",
+        "stdout_sha256": "971d7bd99f70e9150360b0b821adf0dc9f0c57d5e69e851dfe01389779b98d20",
+        "region": {
+          "status": "asserted",
+          "rows": [
+            "     D",
+            "                                       E: https://ex.orgAFTERBodyWord: https://body.example"
+          ],
+          "owner": {
+            "heading": "DESCRIPTION",
+            "occurrence": 0
+          },
+          "following": "NEXT",
+          "furniture_rows": 1,
+          "margin": {
+            "status": "not-applicable",
+            "reason": "no native mc node"
+          }
+        },
+        "status": 0
+      },
+      "1000": {
+        "stdout": "TEST(1)                                                                                                                                                                                                                                                                General Commands Manual                                                                                                                                                                                                                                                                TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     _\bD\n                                       _\bE: https://ex.orgAFTER_\bB_\bo_\bd_\by_\bW_\bo_\br_\bd: https://body.example\n\nN\bNE\bEX\bXT\bT\n     END\n\nLinux 6.18.40.1-microsoft-standard-WSL2                                                                                                                                                                                                                                                                September 28, 2026                                                                                                                                                                                                                                                                TEST(1)\n",
+        "stdout_sha256": "bbc0cf4eb13afe9b6ec4f5d59207061b0a7082fa570eefe35ce3b551d0688bdc",
+        "region": {
+          "status": "asserted",
+          "rows": [
+            "     D",
+            "                                       E: https://ex.orgAFTERBodyWord: https://body.example"
+          ],
+          "owner": {
+            "heading": "DESCRIPTION",
+            "occurrence": 0
+          },
+          "following": "NEXT",
+          "furniture_rows": 1,
+          "margin": {
+            "status": "not-applicable",
+            "reason": "no native mc node"
+          }
+        },
+        "status": 0
+      }
+    }
+  }
+]

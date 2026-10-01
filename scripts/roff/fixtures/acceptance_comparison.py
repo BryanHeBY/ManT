@@ -154,6 +154,12 @@ def product_external_targets(bundle):
                 target = value.get("target", {})
                 if target.get("kind") == "external":
                     targets.append(target.get("uri", ""))
+                elif target.get("kind") == "email":
+                    # mdoc_html.c::mdoc_mt_pre and man_html.c::man_UR_pre
+                    # encode email navigation as mailto hrefs. The typed IR
+                    # keeps the address separately; compare that same href,
+                    # retaining order and every authored occurrence.
+                    targets.append("mailto:" + target.get("address", ""))
             # A portableDisplay value is the native display, while children
             # preserve rich identities. Only children carry typed links.
             for key, item in value.items():

@@ -224,6 +224,65 @@ class AcceptanceAxisTests(unittest.TestCase):
             '<a class="k" href="https://ex.org">A</a><a href="https://ex.org"></a>'),
             ["https://ex.org", "https://ex.org"])
 
+    def test_email_identities_compare_the_same_href_without_losing_typed_occurrences(self):
+        # All 16 wrapper-entries Mt complete sources ran the fixed pristine
+        # five profiles first. mdoc_html.c::mdoc_mt_pre formats mailto:<raw>
+        # before print_otag/print_encode. IR Email keeps just the address.
+        record = json.loads(FIXTURES.with_name("email_identity.json").read_text())
+        self.assertEqual(sha(record["source"]), record["source_sha256"])
+        self.assertEqual(record["html"]["status"], 0)
+        self.assertEqual(sha(record["html"]["stdout"]), record["html"]["stdout_sha256"])
+        native = comparison.native_external_targets(record["html"]["stdout"])
+        self.assertEqual(native, record["expected_targets"])
+
+        def bundle(targets):
+            return {"document": {"sections": [{"blocks": [{"type": "paragraph",
+                "children": [{"type": "link", "target": target, "children": []}
+                             for target in targets]}]}]}}
+
+        email = {"kind": "email", "address": "x@example.org"}
+        actual = comparison.product_external_targets(bundle([email]))
+        self.assertEqual(actual, native)
+        self.assertNotEqual(comparison.product_external_targets(bundle([])), native)
+        self.assertNotEqual(comparison.product_external_targets(bundle([email, email])), native)
+        wrong = {"kind": "email", "address": "wrong@example.org"}
+        self.assertNotEqual(comparison.product_external_targets(bundle([wrong])), native)
+        external = {"kind": "external", "uri": "https://ex.org"}
+        self.assertEqual(comparison.product_external_targets(bundle([email, external, email])),
+                         ["mailto:x@example.org", "https://ex.org", "mailto:x@example.org"])
+
+    def test_exact_uri_width_cards_preserve_every_authored_head_and_word_boundary(self):
+        # term.c::term_fill(vtarget) wraps only the target word at width78.
+        # Exact source runs at 158/238/1000 agree before this assertion; the
+        # preceding buffered \p HEAD rows remain distinct at every width.
+        records = json.loads(FIXTURES.with_name("uri_widths.json").read_text())
+        cards = comparison.load_policies()
+        for record in records:
+            with self.subTest(case=record["id"]):
+                card = cards[record["id"]]
+                self.assertEqual(sha(record["source"]), card["source_sha256"])
+                self.assertEqual(sha(record["tree"]), card["native_tree_sha256"])
+                self.assertEqual(record["widths"]["78"]["stdout_sha256"],
+                                 card["native_utf8_sha256"])
+                expected = card["expected_region"]
+                for width, profile in record["widths"].items():
+                    self.assertEqual(profile["status"], 0, width)
+                    self.assertEqual(sha(profile["stdout"]), profile["stdout_sha256"], width)
+                for width in ("158", "238", "1000"):
+                    self.assertEqual(record["widths"][width]["region"], expected)
+                actual = asserted([row[5:] if row.strip(" ") else row
+                                   for row in expected["rows"]])
+                report = comparison.compare_axes(expected, actual, card)
+                self.assertTrue(report["content"])
+                self.assertTrue(report["rows"])
+                self.assertTrue(report["separators"])
+                self.assertTrue(report["indent"])
+                collapsed = asserted([" ".join(actual["rows"])])
+                self.assertFalse(comparison.compare_axes(expected, collapsed, card)["rows"])
+                wrong = asserted([row.replace("https://ex.orgAFTER", "https://ex.org AFTER")
+                                  for row in actual["rows"]])
+                self.assertFalse(comparison.compare_axes(expected, wrong, card)["separators"])
+
 
 if __name__ == "__main__":
     unittest.main()
