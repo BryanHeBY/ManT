@@ -102,7 +102,11 @@ fn nested_definition_cells_keep_content_order_and_entry_identity() {
     assert_eq!(entry.names, ["x"]);
     assert_eq!(entry.id, "term-x");
     assert_eq!(items[0].description.len(), 1);
-    assert_eq!(paragraph(&items[0].description[0]), "B");
+    // The exact cw10_list source was replayed with pristine CVS first.
+    // Inner tag BODY post calls term_newln() (mdoc_term.c::termp_it_post),
+    // closing B before the outer column post flush. The paragraph owns that
+    // executed close; the consumer must not count it as another blank row.
+    assert_eq!(paragraph(&items[0].description[0]), "B\n");
     assert_eq!(rows[0].cells[1].blocks.len(), 1);
     assert_eq!(paragraph(&rows[0].cells[1].blocks[0]), "C");
     let explanation = mant_query::explain_query(

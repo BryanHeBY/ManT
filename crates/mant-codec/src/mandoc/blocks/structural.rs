@@ -120,7 +120,15 @@ impl StructuralLowerer<'_, '_, '_> {
                     has_predecessor,
                     self.formatter,
                 );
-                if node.macro_name.as_deref() == Some("Bd") && has_predecessor && !node.compact {
+                if node.macro_name.as_deref() == Some("Bd")
+                    && has_predecessor
+                    && !node.compact
+                    // The shared column driver already executed native
+                    // print_bvspace against the live field, including its
+                    // completed-row receipt. IR spacing is not a second
+                    // execution of that request.
+                    && !self.formatter.execution.has_column_output_scope()
+                {
                     if nested.is_empty() {
                         // Even an empty display executes its own vertical
                         // request. Do not lose it merely because no literal

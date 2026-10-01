@@ -40,12 +40,9 @@ impl InlineBuilder {
             let capacity = field.field_capacity_columns;
             self.settle_no_break_field_line(field, capacity);
             self.note_field_control_cleared_no_break(true, capacity);
-            self.execution
-                .definition
-                .as_mut()
-                .expect("definition field session")
-                .outcome
-                .mark_field_exited();
+            // settle_no_break_field_line already records any row it ended.
+            // Leaving BRIND/NOBREAK is not an additional device row close:
+            // HANG keeps the shared row through pre_br (roff_term.c:76).
             return true;
         }
         false
@@ -99,7 +96,7 @@ impl InlineBuilder {
             self.reset_native_tab_origin();
             return;
         }
-        let native = self.native_field_device(false);
+        let native = self.native_field_device_at(false, None, start);
         self.note_field_control_cleared_no_break(
             flags.contains(FieldFlag::Brind),
             field_width_columns,
@@ -146,12 +143,14 @@ impl InlineBuilder {
                 native.as_ref(),
             );
         }
-        self.execution
-            .definition
-            .as_mut()
-            .expect("definition field session")
-            .outcome
-            .mark_field_exited();
+        if flags.wraps() || native.as_ref().is_some_and(|field| field.ends_row) {
+            self.execution
+                .definition
+                .as_mut()
+                .expect("definition field session")
+                .outcome
+                .mark_field_exited();
+        }
         if let Some(execution) = &mut self.execution.author_execution {
             execution.field_output_start = self.nodes.len();
             execution.break_effect = if flags.wraps() {

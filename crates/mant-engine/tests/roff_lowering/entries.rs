@@ -992,8 +992,19 @@ fn separates_alternative_terms_in_an_extended_mdoc_definition_head() {
     };
     assert_eq!(items.len(), 1);
     assert_eq!(items[0].terms.len(), 2);
-    assert_eq!(inline_text(&items[0].terms[0]), "ipaddr[/masklen]");
+    // This exact source was rerun against pristine CVS in all five profiles.
+    // termp_pp_pre() calls term_vspace() even inside HEAD: the first term
+    // carries that completed empty row, independently of the term split.
+    assert_eq!(inline_text(&items[0].terms[0]), "ipaddr[/masklen]\n");
     assert_eq!(inline_text(&items[0].terms[1]), "ipaddr[/prefixlen]");
+    let content = ResolvedContent {
+        address: None,
+        label: "extended-term-alternatives.8".to_owned(),
+        document: Some(document),
+        tldr: None,
+    };
+    let text = mant_render::render_query_text(&content);
+    assert!(text.contains("ipaddr[/masklen]\n\n"), "{text:?}");
 }
 
 #[test]

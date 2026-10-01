@@ -338,7 +338,16 @@ impl<'a> LoweringContext<'a> {
                 builder.font.pop_heading_scope(heading_font);
             }
         }
-        remove_structural_heading_bold(formatter.finish_inline_line(builder).output)
+        // mdoc_term.c::termp_sh_post()/termp_ss_post() execute term_newln
+        // at the HEAD post. Consume the live native receipt before draining
+        // this semantic owner; a rejected later pass still ended its row.
+        builder.hard_break();
+        let mut output = formatter.finish_inline_line_with_rows(builder, true).output;
+        // The heading consumer supplies the post's final line ending. Only
+        // that one terminator is redundant; earlier executed empty rows are
+        // part of the heading and must not be trimmed with it.
+        inline::consume_one_row_ending(&mut output);
+        remove_structural_heading_bold(output)
     }
 
     pub(super) fn lower_text(

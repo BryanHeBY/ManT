@@ -187,11 +187,22 @@ fn lower_body(
             append_inline_node_with_next(&mut builder, node, nodes.get(index + 1), default_name);
         }
     }
+    // This admitted fragment owns one independent tbl cell. Its closing
+    // term_newln consumes the same receipt as a paragraph drain, retaining
+    // completed empty rows separately from the ordinary closing delimiter.
+    let (mut inlines, _, completed_rows) = builder.take_paragraph_segment(true);
+    if completed_rows > 0 {
+        // A cell's split_terminator consumes the printed row's closing
+        // delimiter. Completed empty rows therefore need their own ones.
+        let delimiters = usize::from(completed_rows)
+            + usize::from(!mant_ir::inline_plain_text(&inlines).is_empty());
+        inlines.extend((0..delimiters).map(|_| Inline::line_break()));
+    }
     formatter.font = builder.font.clone();
     formatter.set_spacing_enabled(builder.spacing_enabled());
     formatter.vertical_space_debt = builder.vertical_space_debt();
     formatter.inherit_zero_advance_armed(builder.take_zero_advance_armed());
-    builder.finish()
+    inlines
 }
 
 fn clear_synthetic_targets(node: &mut libmandoc_rs::Node) {

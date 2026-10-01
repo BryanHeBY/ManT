@@ -4,31 +4,80 @@ use super::super::Inline;
 use super::split::{advance_boundary, split_text_at_boundaries};
 use std::collections::BTreeMap;
 
-/// Scalar ownership retained by the accepted passes of a rejected word.
-/// Blanks consumed between passes never extend that owner's accepted range.
-pub(in crate::mandoc::inline::flow) fn accepted_owner_prefix_length(
-    buffer: &super::super::field_buffer::FieldBuffer,
-    passes: &[super::super::field_buffer::FillPass],
-    content: usize,
-) -> usize {
-    use super::super::field_buffer::FieldCell;
+#[derive(Clone, Copy, Debug, Default)]
+pub(in crate::mandoc::inline::flow) struct OwnerAcceptance {
+    pub(in crate::mandoc::inline::flow) scalars: usize,
+    pub(in crate::mandoc::inline::flow) native_cells: bool,
+}
 
+/// Accepted projection range of each stable source word. A delayed glyph
+/// can re-enter that owner after a later word marker without becoming its
+/// rejected suffix. Native cell intervals, not append order, decide limits.
+pub(in crate::mandoc::inline::flow) fn accepted_owner_lengths(
+    buffer: &super::super::field_buffer::FieldBuffer,
+    anchors: &[(usize, String, usize)],
+    passes: &[super::super::field_buffer::FillPass],
+) -> BTreeMap<String, OwnerAcceptance> {
+    let mut lengths = BTreeMap::new();
+    let mut pass_index = 0;
     let mut pass_start = 0;
-    let mut length = 0;
-    for pass in passes {
-        let start = content.max(pass_start);
-        if start < pass.end {
-            length += buffer.projection_length(start, pass.end);
+    for (index, (_, owner, content)) in anchors.iter().enumerate() {
+        #[cfg(test)]
+        OWNER_PASS_INTERSECTIONS.with(|work| work.set(work.get().saturating_add(1)));
+        // BACKBEFORE may replace the previous trailing blank before this
+        // word's original buffer end. Its landing, not that old end, owns
+        // the replacement graph (term.c:901-908).
+        let end = anchors
+            .get(index + 1)
+            .map_or(buffer.cells().len(), |next| next.0.min(next.2));
+        if end <= *content {
+            // An empty word can be followed by BACKBEFORE replacing its
+            // trailing native blank. Its zero-length projection interval
+            // cannot consume a pass needed by that replacement's owner.
+            lengths.insert(owner.clone(), OwnerAcceptance::default());
+            continue;
         }
-        pass_start = pass.end;
-        while matches!(
-            buffer.cells().get(pass_start),
-            Some(FieldCell::BreakableBlank)
-        ) {
-            pass_start += 1;
+        while passes
+            .get(pass_index)
+            .is_some_and(|pass| pass.end <= *content)
+        {
+            #[cfg(test)]
+            OWNER_PASS_INTERSECTIONS.with(|work| work.set(work.get().saturating_add(1)));
+            pass_start = next_native_pass_start(buffer, passes[pass_index].end);
+            pass_index += 1;
         }
+        let mut acceptance = OwnerAcceptance::default();
+        while let Some(pass) = passes.get(pass_index) {
+            #[cfg(test)]
+            OWNER_PASS_INTERSECTIONS.with(|work| work.set(work.get().saturating_add(1)));
+            let start = (*content).max(pass_start);
+            let accepted_end = end.min(pass.end);
+            if start < accepted_end {
+                acceptance.scalars += buffer.projection_length(start, accepted_end);
+                acceptance.native_cells = true;
+            }
+            if pass.end >= end {
+                break;
+            }
+            pass_start = next_native_pass_start(buffer, pass.end);
+            pass_index += 1;
+        }
+        lengths.insert(owner.clone(), acceptance);
     }
-    length
+    lengths
+}
+
+fn next_native_pass_start(
+    buffer: &super::super::field_buffer::FieldBuffer,
+    mut cell: usize,
+) -> usize {
+    while matches!(
+        buffer.cells().get(cell),
+        Some(super::super::field_buffer::FieldCell::BreakableBlank)
+    ) {
+        cell += 1;
+    }
+    cell
 }
 
 /// Consume accepted `term_flushln()` passes at their real retirement point.
@@ -51,34 +100,13 @@ pub(in crate::mandoc::inline::flow) fn project_accepted_native_passes(
         return count;
     }
     let start = output_start.min(nodes.len());
-    let mut authored_breaks = authored_owner_breaks(&nodes[start..]);
     let mut boundaries: BTreeMap<String, Vec<usize>> = BTreeMap::new();
-    let mut pass_start = 0;
     for (index, pass) in passes.iter().take(count).enumerate() {
         let mut cell = pass.end;
         while matches!(buffer.cells().get(cell), Some(FieldCell::BreakableBlank)) {
             cell += 1;
         }
-        let marker_owner = buffer.cells()[pass_start..cell]
-            .iter()
-            .rposition(|cell| matches!(cell, FieldCell::BreakMarker))
-            .map(|relative| pass_start + relative)
-            .and_then(|marker_cell| {
-                let owner = anchors.partition_point(|(_, _, content)| *content <= marker_cell);
-                owner.checked_sub(1).and_then(|index| anchors.get(index))
-            });
-        pass_start = cell;
-        // A real authored row already represented inside a styled owner
-        // is the same event, not another width break at a later scalar.
-        let represented = marker_owner.is_some_and(|(_, marker, _)| {
-            authored_breaks.get_mut(marker).is_some_and(|count| {
-                if *count == 0 {
-                    return false;
-                }
-                *count -= 1;
-                true
-            })
-        });
+        let represented = buffer.has_projected_pass(pass.end);
         if index < first || represented {
             continue;
         }
@@ -104,6 +132,7 @@ pub(in crate::mandoc::inline::flow) fn project_accepted_native_passes(
 #[cfg(test)]
 std::thread_local! {
     static OWNER_NODES_VISITED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static OWNER_PASS_INTERSECTIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// Project the final native pass receipt once, in output-owner order. The
@@ -117,12 +146,16 @@ pub(in crate::mandoc::inline::flow) fn split_native_field_passes(
     let mut ordered = boundaries.clone();
     for positions in ordered.values_mut() {
         positions.sort_unstable();
-        positions.dedup();
+        // Different native passes can end at the same semantic scalar:
+        // NBRZW sets graph but contributes no glyph (term.c:340-349).
+        // Keep one event per pass; scalar equality is not event identity.
     }
     let mut cursor = NativePassCursor {
         boundaries: &[],
         scalar: 0,
         next_boundary: 0,
+        owner: None,
+        positions: BTreeMap::new(),
     };
     let mut output = project_native_pass_nodes(nodes, &ordered, &mut cursor);
     trim_native_pass_rows(&mut output);
@@ -133,39 +166,8 @@ struct NativePassCursor<'a> {
     boundaries: &'a [usize],
     scalar: usize,
     next_boundary: usize,
-}
-
-/// Existing authored hard breaks belong to stable word owners even when a
-/// semantic style or link wrapper encloses them. Width-pass projection must
-/// not reinterpret such a break as an automatic split at another scalar.
-pub(in crate::mandoc::inline::flow) fn authored_owner_breaks(
-    nodes: &[Inline],
-) -> BTreeMap<String, usize> {
-    fn visit(nodes: &[Inline], owner: &mut Option<String>, breaks: &mut BTreeMap<String, usize>) {
-        for node in nodes {
-            #[cfg(test)]
-            OWNER_NODES_VISITED.with(|work| work.set(work.get().saturating_add(1)));
-            if let Some(marker) = native_word_marker(node) {
-                *owner = Some(marker.to_owned());
-            } else {
-                match node {
-                    Inline::LineBreak { .. } => {
-                        if let Some(owner) = owner.as_ref() {
-                            *breaks.entry(owner.clone()).or_default() += 1;
-                        }
-                    }
-                    Inline::Strong { children }
-                    | Inline::Emphasis { children }
-                    | Inline::PortableDisplay { children, .. }
-                    | Inline::Link { children, .. } => visit(children, owner, breaks),
-                    _ => {}
-                }
-            }
-        }
-    }
-    let mut breaks = BTreeMap::new();
-    visit(nodes, &mut None, &mut breaks);
-    breaks
+    owner: Option<String>,
+    positions: BTreeMap<String, (usize, usize)>,
 }
 
 fn native_word_marker(node: &Inline) -> Option<&str> {
@@ -186,14 +188,22 @@ fn project_native_pass_nodes<'a>(
 ) -> Vec<Inline> {
     let mut output = Vec::with_capacity(nodes.len());
     for node in nodes {
+        #[cfg(test)]
+        OWNER_NODES_VISITED.with(|work| work.set(work.get().saturating_add(1)));
         if let Some(marker) = native_word_marker(node) {
+            if let Some(owner) = cursor.owner.take() {
+                cursor
+                    .positions
+                    .insert(owner, (cursor.scalar, cursor.next_boundary));
+            }
+            cursor.owner = Some(marker.to_owned());
             cursor.boundaries = boundaries.get(marker).map_or(&[], Vec::as_slice);
-            cursor.scalar = 0;
-            cursor.next_boundary = 0;
+            (cursor.scalar, cursor.next_boundary) =
+                cursor.positions.get(marker).copied().unwrap_or_default();
             output.push(node.clone());
-            if cursor.boundaries.first() == Some(&0) {
+            while cursor.boundaries.get(cursor.next_boundary) == Some(&cursor.scalar) {
                 output.push(Inline::line_break());
-                cursor.next_boundary = 1;
+                cursor.next_boundary += 1;
             }
             continue;
         }
@@ -209,21 +219,16 @@ fn project_native_pass_nodes<'a>(
                 );
             }
             Inline::LineBreak { .. } => {
-                // An already projected hard boundary satisfies the same
-                // pass boundary. It remains an existing scalar, so later
-                // positions in this owner still count it exactly once.
+                // A device endline is a receipt event, never a native cell
+                // or a scalar from the authored word (term.c:220). If a
+                // receipt boundary reaches this same native position, this
+                // already executed event satisfies it exactly once.
                 advance_boundary(
                     &mut cursor.scalar,
                     &mut cursor.next_boundary,
                     cursor.boundaries,
                 );
                 output.push(node.clone());
-                cursor.scalar += 1;
-                advance_boundary(
-                    &mut cursor.scalar,
-                    &mut cursor.next_boundary,
-                    cursor.boundaries,
-                );
             }
             Inline::Strong { children } => output.push(Inline::Strong {
                 children: project_native_pass_nodes(children, boundaries, cursor),
@@ -358,6 +363,93 @@ mod native_pass_tests {
     }
 
     #[test]
+    fn accepted_owner_receipt_intersects_each_ordered_range_once() {
+        use super::super::super::field_buffer::{
+            FieldBuffer, FieldCell, FieldWrite, FillTargets, FlushReceipt,
+        };
+
+        // The exact 1024/2048/4096/8192-word HANG sources ran pristine CVS
+        // ASCII/UTF-8/lint before this test. term_flushln() consumes accepted
+        // passes forward (term.c:123-231); ownership may not rescan all old
+        // passes for each word. Count the actual production intersections.
+        for words in [1_024, 2_048, 4_096, 8_192] {
+            let mut buffer = FieldBuffer::default();
+            let mut anchors = Vec::new();
+            for index in 0..=words {
+                let start = buffer.cells().len();
+                buffer.begin_word(false, true, false);
+                let mut writes = if index == words {
+                    vec![
+                        FieldWrite::Cell(FieldCell::BreakMarker),
+                        FieldWrite::UnprojectedBlank,
+                        FieldWrite::Cell(FieldCell::Graph {
+                            text: 'D',
+                            width: 1,
+                        }),
+                    ]
+                } else {
+                    FieldWrite::literal("aa")
+                };
+                if index < words {
+                    writes.push(FieldWrite::Cell(FieldCell::BreakMarker));
+                }
+                buffer.apply_writes(&writes);
+                anchors.push((start, marker(&index.to_string()), start));
+            }
+            let targets = FillTargets {
+                first: usize::MAX / 2,
+                rest: usize::MAX / 2,
+                unbounded: true,
+            };
+            let FlushReceipt::Rejected { passes, .. } = buffer.flush_receipt(targets, false) else {
+                panic!("the graphless final marker must reject");
+            };
+            assert_eq!(passes.len(), words);
+            super::OWNER_PASS_INTERSECTIONS.with(|work| work.set(0));
+            let accepted = super::accepted_owner_lengths(&buffer, &anchors, &passes);
+            assert_eq!(accepted.len(), words + 1);
+            assert_eq!(accepted[&marker("0")].scalars, 2);
+            assert!(!accepted[&marker(&words.to_string())].native_cells);
+            let intersections = super::OWNER_PASS_INTERSECTIONS.with(std::cell::Cell::get);
+            assert!(
+                intersections <= 4 * (words + 1),
+                "{words} owners revisited {intersections} pass intervals"
+            );
+        }
+    }
+
+    #[test]
+    fn native_word_receipt_preserves_ordinary_kept_and_tight_boundaries() {
+        use super::super::super::field_buffer::{FieldBuffer, FieldCell, FieldWrite};
+
+        // Exact No A No B / Bk -words / No A Ns No B sources ran pristine
+        // CVS ASCII/UTF-8/tree/lint first. term_word() writes its incoming
+        // NOSPACE/KEEP separator before promoting PREKEEP (term.c:573-586).
+        for (tight, kept, cell) in [
+            (false, false, Some(FieldCell::BreakableBlank)),
+            (false, true, Some(FieldCell::NonBreakingBlank)),
+            (true, false, None),
+        ] {
+            let mut buffer = FieldBuffer::default();
+            assert_eq!(buffer.begin_word(true, true, false), 0);
+            buffer.apply_writes(&FieldWrite::literal("A"));
+            assert_eq!(
+                buffer.begin_word(tight, true, kept),
+                usize::from(cell.is_some())
+            );
+            let receipt = buffer.apply_writes(&FieldWrite::literal("B"));
+            assert_eq!(receipt.first_content_cell, if tight { 1 } else { 2 });
+            assert_eq!(
+                buffer.cells().get(1),
+                cell.as_ref().or(Some(&FieldCell::Graph {
+                    text: 'B',
+                    width: 1
+                }))
+            );
+        }
+    }
+
+    #[test]
     fn repeated_physical_flushes_never_revisit_the_committed_head_prefix() {
         // Both exact sources ran on pristine CVS -Tascii/-Tutf8/-Tlint
         // before this test. NODE_LINE executes term_newln() for each native
@@ -435,6 +527,56 @@ mod native_pass_tests {
         )));
     }
 
+    #[test]
+    fn empty_native_flush_closes_only_an_already_occupied_overrun_row() {
+        use crate::mandoc::inline::InlineBuilder;
+
+        // Twelve complete short/near-full column Bd sources ran pristine
+        // CVS first, lint=0. term_newln(lastcol || viscol) still reaches
+        // term_flushln's vbr=0 tail with an empty buffer (term.c:475-480,
+        // 143-146,250-253). No cell and no device row remains a no-op.
+        for (word, expected_open) in [("LEFT", true), ("LEFT1234567", false)] {
+            let mut builder = InlineBuilder::new();
+            builder.begin_column_body(12, 0, false);
+            builder.append_text(word);
+            builder.execute_native_newline();
+            assert!(builder.execution.has_open_native_device_row());
+            assert!(builder.definition.as_ref().unwrap().field_buffer.is_empty());
+            builder.execute_native_newline();
+            assert_eq!(
+                builder.execution.has_open_native_device_row(),
+                expected_open
+            );
+            let committed = builder.nodes.clone();
+            if !expected_open {
+                builder.execute_native_newline();
+                assert_eq!(builder.nodes, committed, "the closed row cannot end twice");
+            }
+        }
+        let mut empty = InlineBuilder::new();
+        empty.begin_column_body(12, 0, false);
+        empty.execute_native_newline();
+        assert!(empty.nodes.is_empty());
+    }
+
+    #[test]
+    fn display_post_clears_native_no_fill_without_ending_the_retained_device_row() {
+        use crate::mandoc::inline::InlineBuilder;
+
+        // The exact compact literal-column Marker/AFTER sources ran CVS
+        // first. termp_bd_post temporarily sets BRNEVER, calls term_newln,
+        // then clears BRNEVER irrespective of a NOBREAK open device row
+        // (mdoc_term.c:1474-1483).
+        let mut builder = InlineBuilder::new();
+        builder.begin_column_body(20, 0, false);
+        builder.execution.no_fill_word_active = true;
+        builder.append_text("Marker");
+        builder.finish_display_body(Some(libmandoc_rs::DisplayKind::Literal));
+        assert!(!builder.execution.no_fill_word_active);
+        assert!(builder.execution.has_open_native_device_row());
+        assert!(builder.definition.as_ref().unwrap().field_buffer.is_empty());
+    }
+
     fn text(value: &str) -> Inline {
         Inline::Text {
             value: value.to_owned(),
@@ -495,16 +637,16 @@ mod native_pass_tests {
         ];
         let output =
             split_native_field_passes(&input, &BTreeMap::from([(marker("unicode"), vec![4, 4])]));
-        assert_eq!(plain_text(&output), "𝔸β\nγD E");
+        assert_eq!(plain_text(&output), "𝔸β\n\nγD E");
         let Inline::Strong { children } = &output[2] else {
             panic!("code's style wrapper must survive: {output:?}");
         };
         assert!(matches!(children[1], Inline::Code { .. }));
-        assert!(matches!(children[3], Inline::Code { .. }));
+        assert!(matches!(children[4], Inline::Code { .. }));
     }
 
     #[test]
-    fn existing_hard_boundaries_keep_their_scalars_and_empty_rows() {
+    fn existing_hard_boundaries_represent_events_without_native_scalars() {
         let input = [
             Inline::anchor(marker("word")),
             text("A"),
@@ -515,7 +657,7 @@ mod native_pass_tests {
             text("D"),
         ];
         let output =
-            split_native_field_passes(&input, &BTreeMap::from([(marker("word"), vec![4, 1])]));
+            split_native_field_passes(&input, &BTreeMap::from([(marker("word"), vec![3, 1])]));
         assert_eq!(plain_text(&output), "A\nB\nC\n\nD");
         assert!(matches!(output[2], Inline::LineBreak { indent_columns: 3 }));
     }

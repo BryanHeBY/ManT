@@ -167,6 +167,11 @@ fn lower_mdoc_plain_list(
                     formatter.spacing_enabled(),
                     formatter,
                 );
+                // termp_it_post() clears the shared pad/break flags on every
+                // HEAD, including LIST_item whose HEAD has no row flush.
+                // Nested structural output must not resurrect its enclosing
+                // column's NOBREAK merely because the HEAD emitted no IR.
+                formatter.execution.clear_native_list_part_flags();
                 let spacing_enabled = formatter.spacing_enabled();
                 let mut blocks = lower_scope(
                     first_part_children(item.node, NodeKind::Body),
@@ -183,6 +188,10 @@ fn lower_mdoc_plain_list(
                         ),
                     ),
                 );
+                // BODY post already executed its term_newln() in the scope
+                // driver. Its following generic It flag clear precedes Bl
+                // post and the next source word, independently of IR drain.
+                formatter.execution.clear_native_list_part_flags();
                 attach_item_targets(&mut blocks, &item, layout(body_origin));
                 mant_ir::geometry::rebase_roots(&mut blocks, body_columns, marker_width);
                 ListItem {

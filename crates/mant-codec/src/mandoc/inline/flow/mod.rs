@@ -22,6 +22,11 @@ pub(in crate::mandoc) use no_fill::{NoFillInlineState, lower_no_fill_fragment_wi
 
 pub(super) use output::trailing_ascii_spaces;
 pub(in crate::mandoc) use output::trim_trailing_breakable_spaces;
+pub(in crate::mandoc) use output::{
+    CompletedRowOrigin, consume_one_row_ending, ends_with_executed_line_break, native_row_origin,
+    prepare_inline_output, retain_inline_identities, strip_native_projection_markers,
+    trailing_completed_row_origins, trailing_device_row_end_receipt,
+};
 
 pub(in crate::mandoc) struct InlineBuilder {
     nodes: Vec<Inline>,
@@ -35,6 +40,9 @@ pub(in crate::mandoc) struct InlineBuilder {
     // row inherited from a detached HEAD or a prior output owner.
     produced_formatter_cell: CellProduction,
     definition_term_breaks: Vec<usize>,
+    // Semantic annotations begin after the first operand's executed auto
+    // separator, independently of any authored leading blank glyphs.
+    pending_output_scope_prefixes: Vec<String>,
     pub(in crate::mandoc) execution: InlineExecutionState,
     /// A detached definition HEAD occupies the native formatter row even
     /// though its term lives in a different IR output container.
@@ -92,9 +100,9 @@ pub(in crate::mandoc) struct InlineExecutionState {
     /// segment. Definition BODY checkpoints consume this source-order fact.
     leading_line_boundary: LeadingLineBoundary,
     pub(in crate::mandoc) vertical_space_debt: u16,
-    // Rows already emitted by an empty TEXT's term_vspace(), still at the
-    // tail of the current IR segment. A structural drain must project these
-    // rows even though ordinary terminal line endings are trim-eligible.
+    // A cached execution hint for completed empty rows. The active output
+    // owner carries their actual private receipts: this shared hint cannot
+    // assign a LiteralFlow row to an otherwise empty ParagraphFlow drain.
     completed_vertical_rows: u16,
     pub(in crate::mandoc) keep: KeepState,
     pub(in crate::mandoc) font: FontState,
@@ -135,6 +143,8 @@ pub(in crate::mandoc) struct InlineExecutionState {
     /// (`roff_term.c:78`).
     pub(in crate::mandoc) native_word_writes: Option<Vec<field_buffer::FieldWrite>>,
     pub(in crate::mandoc) native_word_boundary: Option<PendingBoundary>,
+    pub(in crate::mandoc) native_word_owner: Option<String>,
+    native_owner_serial: u64,
     pub(in crate::mandoc) concat_next_word: bool,
     /// A `\p` marker met a surviving breakable blank before this flush
     /// unit recorded any graph (term.c:143-146 with 233-237): the whole
@@ -573,6 +583,7 @@ impl InlineBuilder {
             asserted_vertical_row: false,
             produced_formatter_cell: CellProduction::None,
             definition_term_breaks: Vec::new(),
+            pending_output_scope_prefixes: Vec::new(),
             execution: InlineExecutionState::with_spacing(spacing_enabled),
             external_head_row_pending: false,
         }
@@ -588,6 +599,7 @@ impl InlineBuilder {
             asserted_vertical_row: false,
             produced_formatter_cell: CellProduction::None,
             definition_term_breaks: Vec::new(),
+            pending_output_scope_prefixes: Vec::new(),
             execution,
             external_head_row_pending: false,
         }
@@ -633,10 +645,14 @@ impl InlineBuilder {
     }
 
     pub(in crate::mandoc) fn mark_definition_term_break(&mut self) {
-        if matches!(self.nodes.last(), Some(Inline::LineBreak { .. }))
-            && self.definition_term_breaks.last() != Some(&(self.nodes.len() - 1))
+        if let Some(index) = self
+            .nodes
+            .iter()
+            .rposition(|node| !output::is_private_output_marker(node))
+            && matches!(self.nodes[index], Inline::LineBreak { .. })
+            && self.definition_term_breaks.last() != Some(&index)
         {
-            self.definition_term_breaks.push(self.nodes.len() - 1);
+            self.definition_term_breaks.push(index);
         }
     }
 
@@ -647,11 +663,7 @@ impl InlineBuilder {
             .nodes
             .iter()
             .enumerate()
-            .filter_map(|(index, node)| {
-                matches!(node,
-                Inline::Anchor { id, .. } if id.as_str().starts_with("\0mant:field-"))
-                .then_some(index)
-            })
+            .filter_map(|(index, node)| output::is_private_output_marker(node).then_some(index))
             .collect();
         let mut private_cursor = 0;
         std::mem::take(&mut self.definition_term_breaks)
@@ -715,6 +727,8 @@ impl InlineExecutionState {
             row_zero_graph: false,
             native_word_writes: None,
             native_word_boundary: None,
+            native_word_owner: None,
+            native_owner_serial: 0,
             flush_unit: field_buffer::FieldBuffer::default(),
             flush_unit_anchors: Vec::new(),
             flush_unit_output_start: 0,

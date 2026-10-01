@@ -216,6 +216,9 @@ impl BlockLowerer<'_, '_> {
         if self.push_container(node) {
             return true;
         }
+        if self.push_column_display(node) {
+            return true;
+        }
         if self.column_field && self.push_column_payload(node, next) {
             return true;
         }
@@ -254,13 +257,30 @@ impl BlockLowerer<'_, '_> {
         self.state.formatter.enter_tab_source_node(node);
         self.state.formatter.execute_tab_configuration(node);
         if self.column_field {
-            // The ordinary structural pre boundary consumes the same field
-            // before switching IR owner (Bl/Bd/D1 pre all call term_newln).
-            // Requests keep their specialized ordered inline dispatch.
-            if formatter_control(node.macro_name.as_deref()).is_none()
-                && no_fill_boundary(node, false) == FormatterBoundary::Line
+            // NODE_LINE was already observed at node entry. A filled word
+            // or transparent Xo has no independent native line effect:
+            // mdoc_term.c maps Xo/Xc to NULL pre/post, and ordinary styled
+            // words only call term_word(). Structural BLOCK pre handlers
+            // really do consume the column's live field before changing IR
+            // owner: Bl/D1/Dl call term_newln(), and Bd's print_bvspace()
+            // starts with the same call. Requests retain their own dispatch.
+            if node.kind == libmandoc_rs::NodeKind::Block
+                && matches!(node.macro_name.as_deref(), Some("Bl" | "Bd" | "D1" | "Dl"))
             {
                 self.state.finish_column_nested_row();
+                if node.macro_name.as_deref() == Some("Bd")
+                    && !node.compact
+                    && self.paragraph_predecessor
+                {
+                    // print_bvspace first calls term_newln above, then
+                    // term_vspace calls it again before backend endline
+                    // (mdoc_term.c:589,619; term.c:491). The latter can
+                    // close a row that
+                    // NOBREAK left open rather than assert an empty row.
+                    // Execute that native effect once in its live owner;
+                    // structural output must not request a second gap.
+                    self.state.column_vertical_space(1);
+                }
             }
             return;
         }
@@ -306,12 +326,7 @@ impl BlockLowerer<'_, '_> {
                         .no_fill_inline
                         .has_pending_formatter_cell(&self.state.formatter.execution)
                 {
-                    let nodes = self
-                        .state
-                        .formatter
-                        .no_fill_inline
-                        .take_no_break_cell(&mut self.state.formatter.execution);
-                    self.state.no_break_formatter_flush(nodes);
+                    self.state.no_break_formatter_flush();
                 }
             }
         }

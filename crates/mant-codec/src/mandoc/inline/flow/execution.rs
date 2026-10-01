@@ -105,12 +105,11 @@ impl InlineBuilder {
                     && let Some(definition) = &mut self.execution.definition
                     && definition.vertical_started_row
                 {
-                    // termp_an_pre() enters the body margin after a positive
-                    // term_vspace() ended the former HANG device row.
-                    definition.hang_row.viscol = definition
-                        .hang_row
-                        .viscol
-                        .max(usize::from(body_width_columns));
+                    // term_vspace() ended the device row. The body margin
+                    // is offset geometry, not printed viscol: termp_an_pre()
+                    // only calls conditional term_newln() (mdoc_term.c:1085;
+                    // term.c:475-480). Fabricating occupancy here would flush
+                    // and clear a bare BACKAFTER that wrote no native cell.
                     definition.vertical_started_row = false;
                 }
                 self.flush_definition_field(
@@ -239,11 +238,6 @@ impl InlineBuilder {
 
     pub(in crate::mandoc) fn begin_executed_node(&mut self, node: &libmandoc_rs::Node) {
         self.execution.enter_tab_source_node(node);
-        // mdoc_term.c:314-318: a NODE_NOFILL node prints its whole subtree
-        // under TERMP_BRNEVER, whose term_fill() target is infinite
-        // (term.c:143-144) — no pass can end a device row. roff.c:957-958
-        // flags every node created under ROFF_NOFILL.
-        self.execution.no_fill_word_active = node.flags.no_fill;
         if self.execution.observe_no_fill_source_lines == SourceLineObservation::NoFill
             && node.flags.no_fill
             && node.flags.line_start
@@ -255,6 +249,11 @@ impl InlineBuilder {
             // A repeated event on an empty formatter cell is a no-op.
             self.no_fill_source_line();
         }
+        // mdoc_term.c:314-321 applies the incoming BRNEVER only after
+        // NODE_LINE consumes the preceding buffer under its old flags.
+        // BRNEVER widens term_fill's target, not term_flushln's final
+        // NOBREAK tail comparison (term.c:143-144,250-253).
+        self.execution.no_fill_word_active = node.flags.no_fill;
         // NODE_LINE settles the previous field under its old settings;
         // roff_term_pre_ta() then changes stops for the subsequent field.
         self.execution.execute_tab_configuration(node);

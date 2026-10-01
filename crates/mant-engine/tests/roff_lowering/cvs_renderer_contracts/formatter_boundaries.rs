@@ -31,22 +31,34 @@ fn formatter_boundaries_precede_pending_zero_advance_glyphs() {
     }
 }
 
-/// Rows after the DESCRIPTION section head with page furniture removed and
-/// overstrikes collapsed; interior blank rows stay part of the contract.
-fn body_rows(output: &str) -> Vec<String> {
-    let mut in_body = false;
-    let mut rows = Vec::new();
-    for line in apply_terminal_backspaces(output).lines() {
-        if !in_body {
-            in_body = line.trim() == "DESCRIPTION";
-            continue;
-        }
-        let row = line.trim_start().trim_end();
-        if row.ends_with("(1)") || row.starts_with("Linux ") || row.starts_with("September ") {
-            continue;
-        }
-        rows.push(row.to_owned());
+/// Author a separate section boundary; page furniture can contain arbitrary
+/// `.Os` text (`mdoc_validate.c::post_os`, `mdoc_term.c::print_mdoc_foot`).
+fn framed_source(source: &str) -> String {
+    if source.starts_with(".TH ") {
+        format!("{source}.SH NEXT\nEND\n")
+    } else {
+        format!("{source}.Sh NEXT\n.No END\n")
     }
+}
+
+/// Rows between the two authored headings, with overstrikes collapsed.
+/// Only section-end spacing is trimmed; interior blank rows remain exact.
+fn body_rows(output: &str) -> Vec<String> {
+    let visible = apply_terminal_backspaces(output);
+    let lines = visible.lines().collect::<Vec<_>>();
+    let start = lines
+        .iter()
+        .position(|line| line.trim() == "DESCRIPTION")
+        .expect("authored DESCRIPTION heading");
+    let end = lines[start + 1..]
+        .iter()
+        .position(|line| line.trim() == "NEXT")
+        .map(|index| index + start + 1)
+        .expect("authored NEXT heading before page furniture");
+    let mut rows = lines[start + 1..end]
+        .iter()
+        .map(|line| line.trim().to_owned())
+        .collect::<Vec<_>>();
     while rows.last().is_some_and(String::is_empty) {
         rows.pop();
     }
@@ -54,12 +66,34 @@ fn body_rows(output: &str) -> Vec<String> {
 }
 
 fn assert_rows_match_reference(source: &str) {
-    let native = body_rows(&native_terminal(source));
-    let lowered = body_rows(&lowered_terminal(source));
+    let source = framed_source(source);
+    let native = body_rows(&native_terminal(&source));
+    let lowered = body_rows(&lowered_terminal(&source));
     assert_eq!(
         lowered, native,
         "lowered rows must keep the pinned reference structure"
     );
+}
+
+#[test]
+fn authored_section_bounds_do_not_filter_footer_shaped_body_text() {
+    // All four complete inputs ran pristine CVS in all five profiles first.
+    // post_os() accepts custom text; print_mdoc_foot() can wrap it across
+    // rows. Neither OS words nor footer-like BODY words identify a boundary.
+    let long_footer = format!("FixtureOS {}", "long footer ".repeat(12).trim_end());
+    for operating_system in [
+        "Linux 6.18.33.2-microsoft-standard-WSL2",
+        "Darwin 23.6.0",
+        "FixtureOS",
+        long_footer.as_str(),
+    ] {
+        let source = framed_source(&format!(
+            ".Dd September 30, 2026\n.Dt TEST 1\n.Os {operating_system}\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\nLinux authored\n\nSeptember authored\nBODY(1)\n.fi\n"
+        ));
+        let expected = ["Linux authored", "", "September authored", "BODY(1)"];
+        assert_eq!(body_rows(&native_terminal(&source)), expected);
+        assert_eq!(body_rows(&lowered_terminal(&source)), expected);
+    }
 }
 
 #[test]
@@ -105,6 +139,7 @@ fn rejected_units_retire_glyphs_and_word_state_at_real_flushes() {
                         if no_fill { ".nf\n" } else { "" },
                         if no_fill { ".fi\n" } else { "" },
                     );
+                    let source = framed_source(&source);
                     let expected = if no_fill {
                         match pending {
                             "\\zX\n" | "\\zX\\z\n" | "\\zX\\z\\fB\n" => {
@@ -149,6 +184,7 @@ fn non_rejected_zero_advance_state_survives_only_empty_flushes() {
         ("\\zX\\z", ".mc", vec!["X AFTER"]),
     ] {
         let source = format!(".TH TEST 1\n.SH DESCRIPTION\n{pending}\n{request}\nAFTER\n");
+        let source = framed_source(&source);
         assert_eq!(
             body_rows(&native_terminal(&source)),
             expected,
@@ -179,6 +215,7 @@ fn margin_flush_retires_accepted_run_in_cells_before_the_next_word() {
                 ".Dd September 30, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset\n.It Xo\n.No \"{head}\"\n.Xc\n.mc\n.No BodyWord\n.El\n"
             )
         };
+        let source = framed_source(&source);
         let row_words = |output: &str| {
             body_rows(output)
                 .into_iter()

@@ -38,7 +38,7 @@ pub(super) enum Event<'a> {
     /// Restore the font depth saved on the original BODY before its post.
     RestoreBody(u32),
     /// `.Ed` restores the parser's saved fill mode at its source marker.
-    RestoreFill(u32),
+    RestoreFill(u32, &'a Node),
     /// A direct Fa child of a structural Fo body; the sibling relation is
     /// needed for mandoc's generated comma after an argument.
     FunctionArgument(&'a Node, bool),
@@ -222,7 +222,7 @@ pub(super) trait ContainerSink<'a> {
     fn font(&mut self) -> &mut super::inline::FontState;
     fn source_node(&mut self, node: &'a Node, starts_line: bool);
     fn event(&mut self, event: Event<'a>);
-    fn restore_fill(&mut self, _fill: bool) {}
+    fn restore_fill(&mut self, _fill: bool, _marker: &Node) {}
     fn geometry_checkpoint(
         &self,
         _node: &Node,
@@ -270,9 +270,9 @@ pub(super) fn drive<'a>(
                 sink.font().pop_scope(saved);
             }
         }
-        Event::RestoreFill(body_id) => {
+        Event::RestoreFill(body_id, marker) => {
             if let Some(fill) = posts.exit_display_fill(body_id) {
-                sink.restore_fill(fill);
+                sink.restore_fill(fill, marker);
             }
         }
         Event::EnterFont(font, body_id) => {
@@ -303,7 +303,7 @@ pub(super) fn is_container(node: &Node) -> bool {
     node.scope_end.is_some()
         || matches!(
             node.macro_name.as_deref(),
-            Some("Bf" | "Bk" | "Fo" | "ce" | "rj")
+            Some("Bf" | "Bk" | "Fo" | "Xo" | "ce" | "rj")
         )
         || super::inline::is_enclosure_macro(node.macro_name.as_deref())
         || (node.macro_name.is_none()
@@ -338,6 +338,7 @@ pub(super) fn walk<'a>(
         }
         Some("ce" | "rj") => aligned_line_payload(node, &mut emit),
         Some("Eo") => authored_enclosure(node, posts, &mut emit),
+        Some("Xo") => transparent_scope(node, posts, &mut emit),
         name if super::inline::is_enclosure_macro(name) => {
             if !emit_enclosure(node, posts, &mut emit) {
                 return false;
@@ -357,6 +358,24 @@ pub(super) fn walk<'a>(
     }
     emit(Event::EndNode(node));
     true
+}
+
+/// `Xo`/`Xc` have no macro pre/post in `mdoc_term.c`. Visit their actual
+/// structural parts, preserving the shared node-entry/font lifecycle, but
+/// never turn an output-owner return into `term_newln()`/`term_flushln()`.
+fn transparent_scope<'a>(node: &'a Node, posts: &ScopePostState, emit: &mut impl FnMut(Event<'a>)) {
+    for child in &node.children {
+        if matches!(child.kind, NodeKind::Head | NodeKind::Body | NodeKind::Tail) {
+            emit(Event::At(child, true));
+            emit(Event::Children(&child.children));
+            if child.kind == NodeKind::Body && !posts.ended(child.id) {
+                emit(Event::RestoreBody(child.id));
+            }
+            emit(Event::EndNode(child));
+        } else {
+            emit(Event::Children(std::slice::from_ref(child)));
+        }
+    }
 }
 
 fn emit_font_or_keep<'a>(node: &'a Node, emit: &mut impl FnMut(Event<'a>)) {
@@ -480,7 +499,7 @@ fn walk_scope_end<'a>(
     emit(Event::Children(&node.children));
     emit(Event::RestoreBody(end.body_id));
     if node.macro_name.as_deref() == Some("Bd") {
-        emit(Event::RestoreFill(end.body_id));
+        emit(Event::RestoreFill(end.body_id, node));
     }
     posts.finish(end.body_id);
     true

@@ -87,20 +87,11 @@ impl InlineBuilder {
             }
         };
         definition.hang_row.field_discarded = true;
-        let anchor = definition
-            .field_word_anchors
-            .iter()
-            .rev()
-            .find(|(cell, _, _)| *cell <= rejected_from)
-            .cloned();
-        let (marker, prefix_cells) = anchor.map_or((None, 0), |(_, marker, content)| {
-            let length = super::super::output::native_passes::accepted_owner_prefix_length(
-                &definition.field_buffer,
-                &passes,
-                content,
-            );
-            (Some(marker), length)
-        });
+        let accepted_owners = super::super::output::native_passes::accepted_owner_lengths(
+            &definition.field_buffer,
+            &definition.field_word_anchors,
+            &passes,
+        );
         let accepted_owned_prefix = !passes.is_empty()
             && definition
                 .field_word_anchors
@@ -114,13 +105,10 @@ impl InlineBuilder {
             .map_or(0, |author| author.field_output_start)
             .min(self.nodes.len());
         let mut pending_output = self.nodes.split_off(current_field_start);
-        let owned = marker.as_deref().is_some_and(|marker| {
-            super::super::output::split::retain_native_field_prefix(
-                &mut pending_output,
-                marker,
-                prefix_cells,
-            )
-        });
+        let owned = super::super::output::split::retain_native_field_owners(
+            &mut pending_output,
+            &accepted_owners,
+        );
         if !owned {
             // A detached or hidden owner can have an explicitly empty
             // projection. It never grants acceptance to the new owner's
@@ -297,9 +285,49 @@ impl InlineBuilder {
     }
 
     pub(super) fn retire_native_field_with_device(&mut self, device: Option<&NativeFieldDevice>) {
+        self.retire_native_field_with_device_at(device, super::flush::FieldFlushBoundary::Continue);
+    }
+
+    pub(super) fn retire_native_field_with_device_at(
+        &mut self,
+        device: Option<&NativeFieldDevice>,
+        boundary: super::flush::FieldFlushBoundary,
+    ) {
+        if let Some(device) = device {
+            let mut output_start = device.output_start;
+            self.retire_unprinted_no_break_separator(
+                device.emission,
+                device.separator_retention,
+                device.separator_field,
+                &mut output_start,
+            );
+            super::super::output::row_origins::project_row_origins(
+                &mut self.nodes,
+                &device.row_origins,
+                output_start,
+            );
+            if let Some(author) = &mut self.execution.author_execution {
+                author.field_output_start = self.nodes.len();
+            }
+        }
+        if self.execution.has_column_output_scope()
+            && boundary != super::flush::FieldFlushBoundary::ColumnPost
+            && device.is_some_and(|device| device.ends_row && device.printed_row.is_some())
+        {
+            self.record_device_row_end();
+        }
         if let Some(state) = &mut self.execution.definition {
             if let Some(device) = device {
                 state.field_buffer.set_tab_offset(device.tab_offset);
+                state.hang_row.minbl = device.next_field_gap_cells;
+                // Geometry return retires no printed device content. Real
+                // flushes atomically transfer their row receipt, while a
+                // real endline consumes the current row's origin advances.
+                state.hang_row.unprojected_origin_units = if device.ends_row {
+                    0
+                } else {
+                    device.unprojected_origin_units
+                };
             }
             state.field_buffer.clear_consumed_field();
             state.field_word_anchors.clear();

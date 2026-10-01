@@ -15,8 +15,11 @@ pub(super) use links::{append_man_link, man_link_identity_text};
 mod scopes;
 mod source_fragment;
 pub(in crate::mandoc) use flow::{
-    AuthorBreakEffect, DefinitionGeometryCheckpoint, FieldFlag, FieldFlags, InlineExecutionState,
-    NoFillInlineState, PreservedInlineState, lower_no_fill_fragment_with_formatter,
+    AuthorBreakEffect, CompletedRowOrigin, DefinitionGeometryCheckpoint, FieldFlag, FieldFlags,
+    InlineExecutionState, NoFillInlineState, PreservedInlineState, consume_one_row_ending,
+    ends_with_executed_line_break, lower_no_fill_fragment_with_formatter, native_row_origin,
+    prepare_inline_output, retain_inline_identities, strip_native_projection_markers,
+    trailing_completed_row_origins, trailing_device_row_end_receipt,
 };
 pub(super) use flow::{FilledBoundary, FontScope, FontState, InlineBuilder};
 mod source;
@@ -217,15 +220,14 @@ pub(super) fn append_inline_node_with_next(
             builder.control_line_break();
         }
         Some("Pp") => {
-            // Extended definition heads can retain a Pp target as well as
-            // a label break. Block/display flow handles paragraph spacing
-            // and its post-gap target separately; do not impose that policy
-            // on this inline-only owner.
+            // mdoc_term.c::termp_pp_pre() executes term_vspace(), including
+            // the current field's term_newln() and skipvsp, before recording
+            // the target. Collecting a HEAD does not change that execution.
+            builder.native_vertical_space(1);
+            builder.mark_definition_term_break();
             if let Some(target) = super::targets::raw_target(node) {
                 builder.append(vec![Inline::anchor_at(target, super::source_span(node))]);
             }
-            builder.hard_break();
-            builder.mark_definition_term_break();
         }
         // Formatting requests carry control arguments such as `CW` and `R`.
         // `Es` likewise only changes the delimiters later `En` nodes use;
@@ -406,7 +408,7 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
         // man_term.c visits every empty TEXT through term_vspace(); mdoc_term.c
         // does so only for NODE_LINE. Neither path calls term_word(), so a
         // negative .sp debt remains available to cancel the requested row.
-        builder.execute_visited_empty_text();
+        builder.execute_visited_empty_text(node.flags.no_fill);
         return;
     }
     // `term_word()` consumes its inter-word boundary even for an explicit
@@ -436,11 +438,11 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
     // The plain flush unit owns the same pass arithmetic as a definition
     // field (term.c runs one term_fill() over tcol->buf regardless of
     // authorship), so its marker blank defers to the shared cell consumer
-    // instead of the ordinary-flow wipe decision here. No-fill fragments
-    // retire their rows outside the builder (the IR drains through the
-    // block owner), so the text executor keeps its own wipe arm there;
-    // isolated tbl words keep it through their hardcoded flags.
-    let field_authoritative = !builder.execution.no_fill_word_active;
+    // instead of a local wipe decision. No-fill borrows the live output sink
+    // until its native row retires; isolated table words retain their
+    // independent cell scope.
+    let field_authoritative = true;
+    builder.begin_native_word_owner();
     let execution = font::parse_roff_text_with_zero_advance(
         source,
         font::TextExecutionContext {
@@ -519,10 +521,11 @@ fn starts_with_break_marker_blank(events: &[RoffInlineEvent]) -> bool {
                 }
             }
             RoffInlineEvent::Glyph(_)
-            | RoffInlineEvent::FallbackGlyph(_)
             | RoffInlineEvent::DeviceName
-            | RoffInlineEvent::Overstrike { .. }
-            | RoffInlineEvent::ZeroWidthGlyph => return false,
+            | RoffInlineEvent::Overstrike { .. } => return false,
+            // These use bufferc(ASCII_NBRZW), not encode1(), so they do
+            // not consume BACKBEFORE before the later source blank
+            // (term.c:610-638). Their graph role in term_fill is separate.
             _ => {}
         }
     }

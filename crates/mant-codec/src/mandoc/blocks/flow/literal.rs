@@ -5,6 +5,7 @@ use mant_ir::{Block, Inline, SourceSpan};
 pub(super) struct LiteralFlow {
     nodes: Vec<Inline>,
     source: Option<SourceSpan>,
+    last_filled_line: Option<u32>,
     tight_boundary: bool,
     ordinary_continuation: bool,
     row_occupied: bool,
@@ -30,17 +31,138 @@ impl LiteralFlow {
         !self.nodes.is_empty()
     }
 
+    /// Rehome the active paragraph vector without consuming its native unit.
+    /// Field anchors retain their exact indices; no completed row is replayed.
+    pub(super) fn adopt_active_output(
+        &mut self,
+        nodes: Vec<Inline>,
+        source: Option<SourceSpan>,
+        occupied: bool,
+    ) {
+        debug_assert!(self.nodes.is_empty());
+        self.nodes = nodes;
+        self.source = source;
+        self.row_occupied = occupied;
+        self.formatter_column = if occupied {
+            FormatterColumn::Advanced
+        } else {
+            FormatterColumn::Origin
+        };
+    }
+
+    /// Continue a filled source word in the output owner of an already
+    /// printed, still-open device row. Bd BODY post calls `term_newln()`, but
+    /// NOBREAK can keep that row alive (`mdoc_term.c:1474`; term.c:250-253).
+    pub(super) fn append_filled_fragment(
+        &mut self,
+        formatter: &mut crate::mandoc::formatter::FormatterState,
+        source: Option<SourceSpan>,
+        starts_indented_line: bool,
+        continues_line: bool,
+        ordinary_text: bool,
+        append: impl FnOnce(&mut crate::mandoc::inline::InlineBuilder),
+    ) {
+        let source_line = source.map(|span| span.line);
+        let crossed_source_line = self
+            .last_filled_line
+            .zip(source_line)
+            .is_some_and(|(previous, current)| current > previous);
+        let has_executed_predecessor =
+            self.row_occupied || formatter.execution.has_formatter_cell();
+        formatter.note_definition_source_line();
+        self.with_inline_builder(formatter, |builder| {
+            let boundary = super::paragraph::filled_fragment_boundary(
+                builder,
+                starts_indented_line && has_executed_predecessor,
+                crossed_source_line,
+            );
+            super::paragraph::append_filled_fragment(
+                builder,
+                boundary,
+                continues_line,
+                ordinary_text,
+                append,
+            );
+        });
+        self.row_occupied = formatter.execution.has_formatter_cell()
+            || formatter.execution.has_open_native_device_row();
+        self.formatter_column = if self.row_occupied {
+            FormatterColumn::Advanced
+        } else {
+            FormatterColumn::Origin
+        };
+        if source_line.is_some() {
+            self.last_filled_line = source_line;
+        }
+    }
+
     pub(super) fn with_inline_builder<R>(
         &mut self,
         formatter: &mut crate::mandoc::formatter::FormatterState,
         operation: impl FnOnce(&mut crate::mandoc::inline::InlineBuilder) -> R,
     ) -> R {
         let result = formatter.with_output_builder(&mut self.nodes, operation);
-        if matches!(self.nodes.last(), Some(Inline::LineBreak { .. })) {
+        // Metadata can follow a projected delimiter, and NOBREAK can keep
+        // device graph alive after the input buffer has been consumed. The
+        // operation's actual row receipt determines occupancy in both cases.
+        self.row_occupied = formatter.execution.has_formatter_cell()
+            || formatter.execution.has_open_native_device_row();
+        self.formatter_column = if self.row_occupied {
+            FormatterColumn::Advanced
+        } else {
+            FormatterColumn::Origin
+        };
+        result
+    }
+
+    /// Execute against the live literal destination. All private word owners
+    /// remain provisional until the native row consumer retires the buffer.
+    pub(super) fn execute_fragment(
+        &mut self,
+        formatter: &mut crate::mandoc::formatter::FormatterState,
+        source: Option<SourceSpan>,
+        fallback: bool,
+        finishes_row: bool,
+        append: impl FnOnce(&mut crate::mandoc::inline::InlineBuilder),
+    ) -> bool {
+        let (continued, asserted) = crate::mandoc::inline::lower_no_fill_fragment_with_formatter(
+            formatter,
+            &mut self.nodes,
+            fallback,
+            finishes_row,
+            append,
+        );
+        let occupied = formatter.execution.has_formatter_cell()
+            || formatter.execution.has_open_native_device_row();
+        self.row_occupied = occupied;
+        self.formatter_column = if occupied {
+            FormatterColumn::Advanced
+        } else {
+            FormatterColumn::Origin
+        };
+        self.tight_boundary = continued;
+        if self.source.is_none() {
+            self.source = source;
+        }
+        self.trailing_vertical_row = if asserted {
+            TrailingRow::AssertedVertical
+        } else {
+            TrailingRow::Ordinary
+        };
+        occupied
+    }
+
+    pub(super) fn settle_native_row(
+        &mut self,
+        formatter: &mut crate::mandoc::formatter::FormatterState,
+    ) {
+        formatter
+            .no_fill_inline
+            .finish_row(&mut formatter.execution, &mut self.nodes);
+        if crate::mandoc::inline::ends_with_executed_line_break(&self.nodes) {
             self.row_occupied = false;
             self.formatter_column = FormatterColumn::Origin;
         }
-        result
     }
 
     pub(super) fn insert_link_cursor(&mut self, marker: String) {
@@ -71,6 +193,7 @@ impl LiteralFlow {
         Self {
             nodes: Vec::new(),
             source: None,
+            last_filled_line: None,
             tight_boundary: false,
             ordinary_continuation: false,
             row_occupied: false,
@@ -92,10 +215,6 @@ impl LiteralFlow {
         }
         self.tight_boundary = false;
         self.ordinary_continuation = false;
-    }
-
-    pub(super) fn mark_vertical_row(&mut self) {
-        self.trailing_vertical_row = TrailingRow::AssertedVertical;
     }
 
     pub(super) fn append(
@@ -164,15 +283,20 @@ impl LiteralFlow {
     /// Model `TERMP_NOBREAK + term_flushln()` without exposing device margin
     /// geometry in the IR. Pending cells are committed, while the following
     /// formatter word remains on this visual row at an ordinary boundary.
-    pub(super) fn no_break_flush(&mut self, nodes: Vec<Inline>) {
-        let committed_a_cell = mant_ir::has_printable_character(&nodes);
-        self.nodes.extend(nodes);
-        self.row_occupied |= committed_a_cell;
-        // The caller invokes this only for an active formatter cell. `.mc`
-        // releases NOSPACE but preserves an independently active NONEWLINE.
-        // LiteralFlow represents that as an ordinary continuation across a
-        // still-tight physical row boundary.
-        self.ordinary_continuation = self.tight_boundary;
+    pub(super) fn no_break_flush(
+        &mut self,
+        formatter: &mut crate::mandoc::formatter::FormatterState,
+    ) {
+        // roff_term_pre_mc() invokes the same term_flushln() consumer in
+        // filled and no-fill modes (roff_term.c:147-151). Its accepted
+        // prefix/rejected suffix must consume this live literal owner.
+        self.with_inline_builder(
+            formatter,
+            crate::mandoc::inline::InlineBuilder::no_break_flush,
+        );
+        formatter.no_fill_inline.retire_consumed_cell();
+        self.row_occupied = mant_ir::has_printable_character(&self.nodes);
+        self.ordinary_continuation = false;
         self.formatter_column = FormatterColumn::Origin;
     }
 
@@ -203,29 +327,131 @@ impl LiteralFlow {
         };
         self.nodes = nodes;
         self.source = source;
+        self.last_filled_line = source.map(|span| span.line);
         self.adopted_layout = Some(layout);
     }
 
-    pub(super) fn take(&mut self, indent: crate::mandoc::layout::SourceIndent) -> Option<Block> {
+    pub(super) fn take(&mut self, indent: crate::mandoc::layout::SourceIndent) -> Vec<Block> {
         let mut previous = std::mem::replace(self, Self::new());
-        // A formatter-only word closes a row without occupying the next one.
-        // A visited empty TEXT asserts one empty row at this edge. Encode that
-        // row as an empty cell, since an IR-only terminal LineBreak would add
-        // another blank line when this block is followed by a new owner.
-        if !previous.row_occupied && matches!(previous.nodes.last(), Some(Inline::LineBreak { .. }))
+        let origins = crate::mandoc::inline::trailing_completed_row_origins(&previous.nodes);
+        // The typed receipts retain their original order across this owner.
+        // Empty TEXT content must not enter the bounded spacing-request plan.
+        retire_completed_tail(&mut previous.nodes, origins.len());
+        if !previous.row_occupied
+            && (!origins.is_empty()
+                || !crate::mandoc::inline::trailing_device_row_end_receipt(&previous.nodes))
+            && crate::mandoc::inline::consume_one_row_ending(&mut previous.nodes)
+            && origins.is_empty()
+            && previous.trailing_vertical_row == TrailingRow::AssertedVertical
         {
-            previous.nodes.pop();
-            if previous.trailing_vertical_row == TrailingRow::AssertedVertical {
-                previous.nodes.push(Inline::Text {
-                    value: String::new(),
-                });
-            }
+            previous.nodes.push(Inline::Text {
+                value: String::new(),
+            });
         }
-        (!previous.nodes.is_empty()).then(|| Block::Preformatted {
-            children: previous.nodes,
-            language: None,
-            layout: previous.adopted_layout.unwrap_or_else(|| layout(indent)),
-            source: previous.source,
-        })
+        crate::mandoc::inline::prepare_inline_output(&mut previous.nodes);
+        let layout = previous.adopted_layout.unwrap_or_else(|| layout(indent));
+        let mut blocks = origins::literal_blocks(previous.nodes, layout, previous.source);
+        append_completed_rows(&mut blocks, &origins, layout);
+        blocks
     }
 }
+
+/// Consecutive literal rows remain content in the preceding literal owner;
+/// a layout request instead creates a separate bounded gap. A literal group
+/// after that gap starts its own empty-row block, preserving execution order.
+fn append_completed_rows(
+    blocks: &mut Vec<Block>,
+    origins: &[crate::mandoc::inline::CompletedRowOrigin],
+    layout: mant_ir::LayoutHint,
+) {
+    use crate::mandoc::inline::CompletedRowOrigin;
+    let mut index = 0;
+    while index < origins.len() {
+        let origin = origins[index];
+        let rows = origins[index..]
+            .iter()
+            .take_while(|next| **next == origin)
+            .count();
+        match origin {
+            CompletedRowOrigin::Layout => blocks.push(Block::VerticalSpace {
+                lines: u16::try_from(rows).unwrap_or(u16::MAX),
+                source: None,
+            }),
+            CompletedRowOrigin::LiteralText => {
+                if let Some(Block::Preformatted { children, .. }) = blocks.last_mut() {
+                    children.extend(std::iter::repeat_n(Inline::line_break(), rows));
+                    children.push(Inline::Text {
+                        value: String::new(),
+                    });
+                } else {
+                    let mut children = vec![Inline::Text {
+                        value: String::new(),
+                    }];
+                    children.extend(std::iter::repeat_n(Inline::line_break(), rows - 1));
+                    blocks.push(Block::Preformatted {
+                        children,
+                        language: None,
+                        layout,
+                        source: None,
+                    });
+                }
+            }
+        }
+        index += rows;
+    }
+}
+
+/// Each actual `term_vspace()` row transfers exactly once. Scan the tail in
+/// one reverse pass rather than searching past retained identities once for
+/// every row. Authored spaces remain cells; only empty occupancy witnesses
+/// associated with this completed tail can be retired.
+fn retire_completed_tail(nodes: &mut Vec<Inline>, completed_rows: usize) {
+    let mut tail = CompletedTail {
+        remaining: completed_rows,
+        active: completed_rows > 0,
+        #[cfg(test)]
+        visits: 0,
+    };
+    tail.retire(nodes);
+}
+
+struct CompletedTail {
+    remaining: usize,
+    active: bool,
+    #[cfg(test)]
+    visits: usize,
+}
+
+impl CompletedTail {
+    fn retire(&mut self, nodes: &mut Vec<Inline>) {
+        let mut retained = Vec::with_capacity(nodes.len());
+        for mut node in nodes.drain(..).rev() {
+            #[cfg(test)]
+            {
+                self.visits += 1;
+            }
+            if self.active {
+                match &mut node {
+                    Inline::Anchor { .. } => {}
+                    Inline::Text { value } if value.is_empty() => continue,
+                    Inline::LineBreak { .. } if self.remaining > 0 => {
+                        self.remaining -= 1;
+                        continue;
+                    }
+                    Inline::Strong { children }
+                    | Inline::Emphasis { children }
+                    | Inline::PortableDisplay { children, .. }
+                    | Inline::Link { children, .. } => self.retire(children),
+                    _ => self.active = false,
+                }
+            }
+            retained.push(node);
+        }
+        retained.reverse();
+        *nodes = retained;
+    }
+}
+
+mod origins;
+#[cfg(test)]
+mod tests;

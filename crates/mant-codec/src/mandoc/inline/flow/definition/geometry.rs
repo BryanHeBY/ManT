@@ -288,40 +288,14 @@ impl InlineBuilder {
         &self,
         node: &libmandoc_rs::Node,
     ) -> Option<super::DefinitionGeometryCheckpoint> {
-        // Roff requests return before the geometry restore. Text restores
-        // rmargin only; this ledger records the offset relevant to reading.
-        if self.execution.macro_set != libmandoc_rs::MacroSet::Mdoc
-            || node.kind == libmandoc_rs::NodeKind::Text
-            || node
-                .macro_name
-                .as_deref()
-                .is_some_and(|name| name.as_bytes().first().is_some_and(u8::is_ascii_lowercase))
-        {
-            return None;
-        }
-        self.execution
-            .definition
-            .as_ref()
-            .map(|definition| super::DefinitionGeometryCheckpoint {
-                indent_columns: definition.row.indent_columns,
-                field_offset: definition.hang_row.field_offset,
-                field_offset_units: definition.field_offset_units,
-                margin_override: definition.margin_override,
-            })
+        self.execution.definition_geometry_checkpoint(node)
     }
 
     pub(in crate::mandoc) fn restore_definition_geometry(
         &mut self,
         checkpoint: Option<super::DefinitionGeometryCheckpoint>,
     ) {
-        if let Some(checkpoint) = checkpoint
-            && let Some(definition) = &mut self.execution.definition
-        {
-            definition.row.indent_columns = checkpoint.indent_columns;
-            definition.hang_row.field_offset = checkpoint.field_offset;
-            definition.field_offset_units = checkpoint.field_offset_units;
-            definition.margin_override = checkpoint.margin_override;
-        }
+        self.execution.restore_definition_geometry(checkpoint);
     }
 
     /// Assign origin when the buffered row actually prints. The last word
@@ -381,5 +355,76 @@ impl InlineBuilder {
         self.execution.pending_breakable_spaces = 0;
         self.execution.pending_field_spaces = 0;
         self.execution.formatter_column = FormatterColumn::Origin;
+    }
+}
+
+impl super::super::InlineExecutionState {
+    /// Apply the native origin selected by a display pre-handler. The IR
+    /// display indentation is independent: only field consumption uses this
+    /// offset, and the node checkpoint restores it after the real post.
+    pub(in crate::mandoc) fn add_native_display_offset(&mut self, columns: usize) {
+        self.add_native_display_offset_units(
+            i32::try_from(columns.saturating_mul(24)).unwrap_or(i32::MAX),
+        );
+    }
+
+    /// Bd BODY uses a signed basic-unit offset; negative values stop at the
+    /// native page floor (mdoc_term.c:1449-1455). No projected width is read.
+    pub(in crate::mandoc) fn add_native_display_offset_units(&mut self, units: i32) {
+        if let Some(definition) = &mut self.definition {
+            definition.field_offset_units = definition
+                .field_offset_units
+                .saturating_add_signed(isize::try_from(units).unwrap_or_default());
+            definition.hang_row.field_offset =
+                definition.field_offset_units.saturating_add(11) / 24;
+        }
+    }
+
+    /// A consumed field may leave its physical device row open under
+    /// NOBREAK/HANG (term.c:233-253). This is independent of IR ownership
+    /// and of whether the next source node is filled or no-fill.
+    pub(in crate::mandoc) fn has_open_native_device_row(&self) -> bool {
+        self.definition
+            .as_ref()
+            .is_some_and(|definition| definition.hang_row.viscol > 0)
+    }
+
+    pub(in crate::mandoc) fn definition_geometry_checkpoint(
+        &self,
+        node: &libmandoc_rs::Node,
+    ) -> Option<super::DefinitionGeometryCheckpoint> {
+        // Roff requests return before the geometry restore. Text restores
+        // rmargin only; this ledger records the offset relevant to reading.
+        if self.macro_set != libmandoc_rs::MacroSet::Mdoc
+            || node.kind == libmandoc_rs::NodeKind::Text
+            || node
+                .macro_name
+                .as_deref()
+                .is_some_and(|name| name.as_bytes().first().is_some_and(u8::is_ascii_lowercase))
+        {
+            return None;
+        }
+        self.definition
+            .as_ref()
+            .map(|definition| super::DefinitionGeometryCheckpoint {
+                indent_columns: definition.row.indent_columns,
+                field_offset: definition.hang_row.field_offset,
+                field_offset_units: definition.field_offset_units,
+                margin_override: definition.margin_override,
+            })
+    }
+
+    pub(in crate::mandoc) fn restore_definition_geometry(
+        &mut self,
+        checkpoint: Option<super::DefinitionGeometryCheckpoint>,
+    ) {
+        if let Some(checkpoint) = checkpoint
+            && let Some(definition) = &mut self.definition
+        {
+            definition.row.indent_columns = checkpoint.indent_columns;
+            definition.hang_row.field_offset = checkpoint.field_offset;
+            definition.field_offset_units = checkpoint.field_offset_units;
+            definition.margin_override = checkpoint.margin_override;
+        }
     }
 }

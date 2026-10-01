@@ -95,7 +95,17 @@ impl InlineBuilder {
             definitive,
         } = receipt
         else {
-            // The flushed row prints the whole unit; nothing is unprinted.
+            // An accepted unit can still leave ordinary trailing blanks
+            // outside its final nbr. term_field() defers blank output until
+            // another graph (term.c:389-427), so those source cells were not
+            // printed. Use the same native owner intervals as rejection,
+            // without inspecting visible IR to guess the accepted tail.
+            if passes
+                .last()
+                .is_some_and(|pass| buffer.projection_length(pass.end, buffer.cells().len()) > 0)
+            {
+                retain_unit_owner_ranges(nodes, &buffer, &anchors, passes, output_start);
+            }
             Self::restore_retired_buffer(execution, nodes, authorless_definition, buffer, anchors);
             return false;
         };
@@ -106,31 +116,9 @@ impl InlineBuilder {
             return false;
         }
 
-        let anchor = anchors
-            .iter()
-            .rev()
-            .find(|(cell, _, _)| *cell <= rejected_from)
-            .cloned();
-        let (marker, prefix_cells) = anchor.map_or((None, 0), |(_, marker, content)| {
-            let length = super::super::output::native_passes::accepted_owner_prefix_length(
-                &buffer, &passes, content,
-            );
-            (Some(marker), length)
-        });
         let accepted_owned_prefix =
             !passes.is_empty() && anchors.iter().any(|(cell, _, _)| *cell < rejected_from);
-        let mut pending_output = nodes.split_off(output_start);
-        let owned = marker.as_deref().is_some_and(|marker| {
-            crate::mandoc::inline::flow::output::split::retain_native_field_prefix(
-                &mut pending_output,
-                marker,
-                prefix_cells,
-            )
-        });
-        if !owned {
-            retain_unprinted_field_targets(&mut pending_output);
-        }
-        nodes.extend(pending_output);
+        retain_unit_owner_ranges(nodes, &buffer, &anchors, &passes, output_start);
         if accepted_owned_prefix
             && !crate::mandoc::inline::flow::output::ends_with_executed_line_break(nodes)
         {
@@ -151,20 +139,7 @@ impl InlineBuilder {
         true
     }
 
-    /// `term_flushln()` clears the consumed buffer at every retirement
-    /// (`term.c`:235-237); the next word starts a fresh flush unit whose
-    /// output interval begins at the current IR end.
-    /// Row-boundary reset for flows whose marker semantics live in the text
-    /// executor: only the native buffer dies with the row (term.c:235-237).
-    pub(in crate::mandoc) fn clear_plain_flush_unit_for_row(
-        execution: &mut super::super::InlineExecutionState,
-    ) {
-        execution.flush_unit.clear();
-        execution.flush_unit.set_tab_offset(0);
-        execution.flush_unit_anchors.clear();
-        execution.flush_unit_output_start = 0;
-    }
-
+    /// Retire the actual consumed native buffer, not an output fragment.
     pub(in crate::mandoc::inline::flow) fn clear_plain_flush_unit_at(
         execution: &mut super::super::InlineExecutionState,
         nodes: &[Inline],
@@ -207,4 +182,27 @@ impl InlineBuilder {
         execution.flush_unit_anchors.clear();
         execution.flush_unit_output_start = nodes.len();
     }
+}
+
+/// Apply one native receipt to its active output interval. Acceptance and
+/// rejection share this ownership operation; earlier committed output is
+/// outside the supplied interval and cannot be revoked by a later unit.
+fn retain_unit_owner_ranges(
+    nodes: &mut Vec<Inline>,
+    buffer: &super::super::field_buffer::FieldBuffer,
+    anchors: &[(usize, String, usize)],
+    passes: &[super::super::field_buffer::FillPass],
+    output_start: usize,
+) {
+    let accepted_owners =
+        super::super::output::native_passes::accepted_owner_lengths(buffer, anchors, passes);
+    let mut pending_output = nodes.split_off(output_start);
+    let owned = crate::mandoc::inline::flow::output::split::retain_native_field_owners(
+        &mut pending_output,
+        &accepted_owners,
+    );
+    if !owned {
+        retain_unprinted_field_targets(&mut pending_output);
+    }
+    nodes.extend(pending_output);
 }

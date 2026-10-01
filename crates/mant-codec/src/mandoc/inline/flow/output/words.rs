@@ -9,6 +9,21 @@ use super::projection::has_non_whitespace_glyph;
 use crate::mandoc::inline::is_formatter_word_blank;
 
 impl InlineBuilder {
+    /// Mint projection identity before decoding, so a cached BACKBEFORE
+    /// glyph remains attached to its source word after a later word emits it.
+    pub(in crate::mandoc) fn begin_native_word_owner(&mut self) {
+        self.execution.native_owner_serial = self.execution.native_owner_serial.wrapping_add(1);
+        let marker = format!(
+            "{}{}",
+            super::INTERNAL_FIELD_WORD,
+            self.execution.native_owner_serial
+        );
+        self.execution
+            .zero_advance
+            .set_native_word_owner(self.execution.native_owner_serial);
+        self.execution.native_word_owner = Some(marker);
+    }
+
     /// Keep the formatter's write order when this word armed BACKBEFORE.
     ///
     /// `term_word()` buffers the word boundary before decoding `\zX`.  The
@@ -38,6 +53,7 @@ impl InlineBuilder {
 
     pub(in crate::mandoc) fn execute_empty_word(&mut self) {
         self.begin_word_projection(true);
+        self.begin_native_word_owner();
         self.execution.native_word_writes = Some(Vec::new());
         self.append_word(Vec::new());
     }
@@ -59,6 +75,7 @@ impl InlineBuilder {
     /// Complete a generated word whose native pre-boundary was entered by
     /// `prepare_generated_word()` before an IR wrapper was attached.
     pub(in crate::mandoc) fn append_prepared_text(&mut self, value: &str) {
+        self.begin_native_word_owner();
         self.execution
             .native_word_boundary
             .get_or_insert(self.execution.boundary);
@@ -86,6 +103,7 @@ impl InlineBuilder {
         // must consume PrefixJoin/Tight and establish the boundary seen by
         // the following source operand.
         self.append_word(projected);
+        self.materialize_boundary_before_pending_glyph();
         // Generated formatter words (for example Lk's colon or enclosure
         // delimiters) cannot themselves carry source `\\c`; they consume a
         // preceding continuation before the next source operand runs.
@@ -104,6 +122,7 @@ impl InlineBuilder {
         self.execution.native_word_writes = Some(FieldWrite::literal(value));
         self.note_produced_formatter_cell(!value.is_empty());
         self.begin_word_projection(!value.is_empty());
+        self.begin_native_word_owner();
         let mut projected = Vec::new();
         self.execution.zero_advance.append_generated_text(
             value,
@@ -111,6 +130,7 @@ impl InlineBuilder {
             self.execution.font.display_current(),
         );
         self.append_word(projected);
+        self.materialize_boundary_before_pending_glyph();
         if !value.is_empty() {
             self.execution.final_word_join = Some(false);
             self.execution.final_source_continuation = Some(false);
@@ -164,6 +184,11 @@ impl InlineBuilder {
             self.execution.native_word_boundary = Some(
                 if self.execution.keep.phase == KeepPhase::Keep
                     && !self.execution.boundary.is_tight()
+                    && (self.execution.spacing.enabled()
+                        || matches!(
+                            self.execution.boundary,
+                            PendingBoundary::Preserved | PendingBoundary::Continued
+                        ))
                 {
                     PendingBoundary::Kept
                 } else {
@@ -171,7 +196,15 @@ impl InlineBuilder {
                 },
             );
         }
-        if next_is_visible && self.execution.keep.keeping() && !self.execution.boundary.is_tight() {
+        if next_is_visible
+            && self.execution.keep.keeping()
+            && !self.execution.boundary.is_tight()
+            && (self.execution.spacing.enabled()
+                || matches!(
+                    self.execution.boundary,
+                    PendingBoundary::Preserved | PendingBoundary::Continued
+                ))
+        {
             self.execution.boundary = PendingBoundary::Kept;
             if let Some(glyph) = self.resolve_zero_advance_at_word_boundary() {
                 // CVS writes TERMP_KEEP's implicit NBRSP before the next
@@ -255,7 +288,7 @@ impl InlineBuilder {
             // while BACKBEFORE consumes it and retains its buffered glyph.
             if !self.execution.boundary.is_nonbreaking()
                 && (self.execution.formatter_column == FormatterColumn::Advanced
-                    || self.execution.zero_advance.has_pending_glyph())
+                    || self.execution.zero_advance.has_buffered_glyph())
                 && (self.execution.spacing.enabled()
                     || matches!(self.execution.boundary, PendingBoundary::Preserved))
             {
@@ -297,7 +330,7 @@ impl InlineBuilder {
         if !next_is_visible
             || self.execution.boundary.is_nonbreaking()
             || !(self.execution.has_printable_content
-                || self.execution.zero_advance.has_pending_glyph())
+                || self.execution.zero_advance.has_buffered_glyph())
             || !(self.execution.spacing.enabled()
                 || matches!(self.execution.boundary, PendingBoundary::Preserved))
         {

@@ -119,6 +119,13 @@ visible label and typed navigation target. Markdown export retains explicit
 omitting the native-manual link wrapper. Consequently body Markdown reimport
 does not recover these targets; use IR JSON when full link fidelity is needed.
 
+Preformatted runs and native tables export as fenced code. Their accepted
+text remains literal, so links inside those blocks do not become active
+Markdown links on reimport. This also applies to identity-only links whose
+native label was rejected: JSON and reference inventories retain each
+occurrence, while a code fence neither recreates the rejected address text
+nor supplies an activation range.
+
 ## Semantic Entry Lists
 
 ### Content and annotation boundary

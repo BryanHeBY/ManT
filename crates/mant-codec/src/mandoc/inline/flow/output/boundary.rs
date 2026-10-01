@@ -167,6 +167,24 @@ impl InlineBuilder {
         } else {
             super::record::WordPassProjection::default()
         };
+        // Plain words anchor into the same native flush unit the field
+        // path uses; the marker routes by session exactly like the cell
+        // recording in `record_native_word`.
+        let native_anchor_marker = if self.in_definition_field() {
+            self.execution
+                .definition
+                .as_ref()
+                .and_then(|state| state.field_word_anchors.last())
+        } else {
+            self.execution.flush_unit_anchors.last()
+        }
+        .map(|(_, marker, _)| marker.clone());
+        if word
+            && self.execution.pending_field_spaces == 0
+            && let Some(marker) = native_anchor_marker.as_ref()
+        {
+            self.nodes.push(Inline::anchor(marker.clone()));
+        }
         if accepted_row_break > 0 {
             // A consumed \p separator closes the already accepted prefix.
             // Its blank is part of the break, not a new formatter word cell.
@@ -181,12 +199,22 @@ impl InlineBuilder {
             }
         } else {
             // Literal rows preserve the actual buffered separator even
-            // after a zero-width or empty word. An IR-visible-character
-            // predicate cannot establish NOSPACE (term.c:573-589). Use the
-            // post-encode receipt: BACKBEFORE may already have consumed the
-            // blank. Filled responsive projection keeps its frozen padding
-            // policy; only authored no-fill rows expose these native cells.
-            let (spacing_boundary, add_space) = if word && self.execution.no_fill_word_active {
+            // after a zero-width or empty word. An IR character predicate
+            // cannot establish NOSPACE (term.c:573-589); BACKBEFORE may
+            // already have consumed the blank. Filled responsive words keep
+            // their projected zero-advance joins, but authored leading blanks
+            // do not replace term_word()'s separate automatic separator.
+            let (spacing_boundary, add_space) = if word
+                && self.execution.no_fill_word_active
+                && boundary == PendingBoundary::CommittedField
+            {
+                // The committed field already represents its positioning
+                // and the following ordinary word blank. term_word() must
+                // still buffer that blank after MC cleared NOSPACE, but
+                // no-fill cannot project the same cell a second time
+                // (roff_term.c:147-150; term.c:573-589,389-427).
+                (boundary, false)
+            } else if word && self.execution.no_fill_word_active {
                 (
                     if native_separator {
                         PendingBoundary::Preserved
@@ -195,25 +223,34 @@ impl InlineBuilder {
                     },
                     native_separator,
                 )
+            } else if word
+                && !self.in_definition_field()
+                && incoming_first.is_some_and(super::super::super::is_formatter_word_blank)
+                && native_separator
+                && !boundary.is_tight()
+            {
+                (boundary, true)
             } else {
                 (boundary, add_space)
             };
+            let field_padding = self.execution.pending_field_spaces > 0;
             self.append_boundary_spacing(spacing_boundary, add_space, word, empty_word);
+            if word
+                && field_padding
+                && let Some(marker) = native_anchor_marker
+            {
+                // Device minbl is field geometry, not a native buffer cell.
+                // The word's accepted scalar interval begins after that pad.
+                self.nodes.push(Inline::anchor(marker));
+            }
         }
-        // Plain words anchor into the same native flush unit the field
-        // path uses; the marker routes by session exactly like the cell
-        // recording in `record_native_word`.
-        let native_anchor_marker = if self.in_definition_field() {
-            self.execution
-                .definition
-                .as_ref()
-                .and_then(|state| state.field_word_anchors.last())
-        } else {
-            self.execution.flush_unit_anchors.last()
-        }
-        .map(|(_, marker, _)| marker.clone());
-        if word && let Some(marker) = native_anchor_marker {
-            self.nodes.push(Inline::anchor(marker));
+        // The native word boundary belongs to its surrounding flow. Only
+        // the operand itself belongs to an optional semantic annotation;
+        // authored leading blanks therefore stay inside that owner.
+        if word {
+            for marker in self.pending_output_scope_prefixes.drain(..) {
+                self.nodes.push(Inline::anchor(marker));
+            }
         }
         let starts_output_row =
             incoming_has_line_break || split_word.is_some() || accepted_row_break > 0;
@@ -279,7 +316,15 @@ impl InlineBuilder {
         }
         if materialized_field_separator {
             let count = self.execution.pending_field_spaces;
-            push_text(&mut self.nodes, " ".repeat(count));
+            let separator_start = self.nodes.len();
+            // This generated range remains provisional until term_field()
+            // prints a graph (term.c:389-427). Keep it separate from the
+            // committed prefix so a graphless control flush can retire only
+            // these cells, using NoBreakField's saved owner boundaries.
+            self.nodes.push(Inline::Text {
+                value: " ".repeat(count),
+            });
+            self.bind_materialized_field_separator(separator_start, count);
             self.execution.pending_field_spaces = 0;
             self.execution.trailing_output = TrailingOutput::FieldBlank(count);
             self.execution.last_visible_character = Some(' ');

@@ -15,6 +15,11 @@ pub(super) struct BlockState {
     // Filled and literal buffers are independent, not mutually exclusive modes.
     paragraph: ParagraphFlow,
     literal: LiteralFlow,
+    // A column display transfers the active projection vector to LiteralFlow.
+    // Its source and native posts keep borrowing that destination, including
+    // an empty vector or a device row which has just ended. Neither fact is
+    // permission to run the same native buffer against a different Vec.
+    column_display_owner: bool,
     pending_targets: targets::PendingTargets,
     // A paragraph pre request can finish its BODY with a live text row. Its
     // leading distance belongs to the next emitted block, not a Rust return.
@@ -32,7 +37,7 @@ pub(super) struct LinkOutputCursor {
 impl BlockState {
     pub(super) fn link_output_cursor(&mut self, node_id: u32) -> LinkOutputCursor {
         let marker = super::man_links::link_cursor_marker(node_id);
-        if self.formatter.no_fill {
+        if self.formatter.no_fill || self.column_uses_literal_output() {
             self.literal.insert_link_cursor(marker);
         } else {
             self.paragraph.insert_link_cursor(marker);
@@ -157,6 +162,7 @@ impl BlockState {
             formatter,
             paragraph: ParagraphFlow::new(),
             literal: LiteralFlow::new(),
+            column_display_owner: false,
             pending_targets: targets::PendingTargets::new(),
             pending_spacing: None,
             indent_columns,
@@ -219,14 +225,25 @@ impl BlockState {
         append: impl FnOnce(&mut InlineBuilder),
     ) {
         let visible_before = self.formatter.execution.visible_content_checkpoint();
-        self.paragraph.append(
-            &mut self.formatter,
-            source,
-            starts_indented_line,
-            continues_line,
-            ordinary_text,
-            append,
-        );
+        if self.column_uses_literal_output() {
+            self.literal.append_filled_fragment(
+                &mut self.formatter,
+                source,
+                starts_indented_line,
+                continues_line,
+                ordinary_text,
+                append,
+            );
+        } else {
+            self.paragraph.append(
+                &mut self.formatter,
+                source,
+                starts_indented_line,
+                continues_line,
+                ordinary_text,
+                append,
+            );
+        }
         if self.formatter.definition_before_visible()
             && self.formatter.execution.take_leading_line_boundary()
         {
@@ -252,6 +269,23 @@ impl BlockState {
 
     pub(super) fn paragraph_is_empty(&self) -> bool {
         self.paragraph.is_empty()
+    }
+
+    /// A display changes the active IR destination, not its native field.
+    /// Keep the exact vector/anchor coordinate system until its real post.
+    pub(super) fn enter_column_display_output(&mut self) {
+        self.column_display_owner = true;
+        if self.literal.is_empty() && !self.paragraph.is_empty() {
+            let (nodes, source) = self.paragraph.take_active_output();
+            let occupied = self.formatter.execution.has_formatter_cell()
+                || self.formatter.execution.has_open_native_device_row();
+            self.literal.adopt_active_output(nodes, source, occupied);
+        }
+    }
+
+    fn column_uses_literal_output(&self) -> bool {
+        self.formatter.execution.has_column_output_scope()
+            && (self.column_display_owner || self.literal.has_output())
     }
 
     pub(super) fn hard_break(&mut self) {
@@ -354,6 +388,28 @@ impl BlockState {
         }
     }
 
+    pub(super) fn execute_no_fill_fragment(
+        &mut self,
+        source: Option<mant_ir::SourceSpan>,
+        fallback: bool,
+        finishes_row: bool,
+        append: impl FnOnce(&mut InlineBuilder),
+    ) {
+        if self.literal.execute_fragment(
+            &mut self.formatter,
+            source,
+            fallback,
+            finishes_row,
+            append,
+        ) {
+            self.formatter.note_definition_visible();
+        }
+    }
+
+    pub(super) fn settle_no_fill_row(&mut self) {
+        self.literal.settle_native_row(&mut self.formatter);
+    }
+
     pub(super) fn push_preformatted(
         &mut self,
         nodes: Vec<Inline>,
@@ -379,10 +435,6 @@ impl BlockState {
             .append(nodes, source, continues_line, starts_line, occupies_row);
     }
 
-    pub(super) fn mark_literal_vertical_row(&mut self) {
-        self.literal.mark_vertical_row();
-    }
-
     pub(super) fn adopt_trailing_preformatted(&mut self) -> bool {
         if !self.literal.is_empty() {
             return false;
@@ -403,11 +455,12 @@ impl BlockState {
         true
     }
 
-    pub(super) fn no_break_formatter_flush(&mut self, nodes: Vec<Inline>) {
-        if !self.formatter.no_fill {
+    pub(super) fn no_break_formatter_flush(&mut self) {
+        if self.formatter.no_fill || self.column_uses_literal_output() {
+            self.literal.no_break_flush(&mut self.formatter);
+        } else {
             self.paragraph.no_break_flush(&mut self.formatter);
         }
-        self.literal.no_break_flush(nodes);
     }
 
     pub(super) fn has_formatter_cell(&self) -> bool {
@@ -422,10 +475,6 @@ impl BlockState {
 
     /// A no-fill word clears CVS skipvsp; its zero-width registers are
     /// already updated by the shared text executor.
-    pub(super) fn clear_formatter_word_debt(&mut self) {
-        self.formatter.vertical_space_debt = 0;
-    }
-
     pub(super) fn begin_column_body(&mut self, width: u16, origin: usize, last: bool) {
         self.paragraph
             .with_inline_builder(&mut self.formatter, |builder| {
@@ -437,7 +486,7 @@ impl BlockState {
         if self.formatter.execution.has_column_output_scope() {
             // The native post runs in the active output owner. In particular,
             // closing literal graph must not produce a second empty paragraph.
-            if self.literal.has_output() {
+            if self.column_uses_literal_output() {
                 self.literal
                     .with_inline_builder(&mut self.formatter, |builder| {
                         builder.execute_native_newline();
@@ -448,21 +497,48 @@ impl BlockState {
                         builder.execute_native_newline();
                     });
             }
+            // The real pre/post above already consumed its native buffer.
+            // Retire no-fill's receipt tracker without executing another
+            // row finish or clearing the committed field gap/continuation.
+            self.formatter.no_fill_inline.retire_consumed_cell();
         }
     }
 
+    pub(super) fn finish_column_display_body(&mut self, kind: Option<libmandoc_rs::DisplayKind>) {
+        let post = |builder: &mut InlineBuilder| builder.finish_display_body(kind);
+        if self.column_uses_literal_output() {
+            self.literal.with_inline_builder(&mut self.formatter, post);
+        } else {
+            self.paragraph
+                .with_inline_builder(&mut self.formatter, post);
+        }
+        self.formatter.no_fill_inline.retire_consumed_cell();
+    }
+
     pub(super) fn enter_column_node(&mut self, node: &libmandoc_rs::Node) {
-        self.paragraph
-            .with_inline_builder(&mut self.formatter, |builder| {
-                builder.begin_executed_node(node);
-            });
+        let enter = |builder: &mut InlineBuilder| {
+            builder.begin_executed_node(node);
+        };
+        if self.column_uses_literal_output() {
+            self.literal.with_inline_builder(&mut self.formatter, enter);
+        } else {
+            self.paragraph
+                .with_inline_builder(&mut self.formatter, enter);
+        }
     }
 
     pub(super) fn column_vertical_space(&mut self, rows: i32) {
-        self.paragraph
-            .with_inline_builder(&mut self.formatter, |builder| {
-                builder.native_vertical_space(u16::try_from(rows.max(0)).unwrap_or(u16::MAX));
-            });
+        let execute = |builder: &mut InlineBuilder| {
+            builder.native_vertical_space(u16::try_from(rows.max(0)).unwrap_or(u16::MAX));
+        };
+        if self.column_uses_literal_output() {
+            self.literal
+                .with_inline_builder(&mut self.formatter, execute);
+        } else {
+            self.paragraph
+                .with_inline_builder(&mut self.formatter, execute);
+        }
+        self.formatter.no_fill_inline.retire_consumed_cell();
     }
 
     pub(super) fn inherit_author_execution(
@@ -528,6 +604,12 @@ impl BlockState {
     }
 
     fn flush_paragraph_with(&mut self, line_request: bool) {
+        if self.column_uses_literal_output() && self.paragraph.is_empty() {
+            // The live column buffer belongs to LiteralFlow. Draining an
+            // empty paragraph must not retire its native cells or claim its
+            // completed-row receipts at a different IR destination.
+            return;
+        }
         if self.formatter.no_fill && self.paragraph.is_empty() && !line_request {
             // A block output boundary has no filled content to drain. The
             // current no-fill formatter row remains live until term_newln().
@@ -567,13 +649,11 @@ impl BlockState {
                     let rows = u16::try_from(completed_rows + usize::from(active_row))
                         .unwrap_or(u16::MAX)
                         .max(1);
-                    let anchors = children
-                        .into_iter()
-                        .filter(|inline| matches!(inline, Inline::Anchor { .. }))
-                        .collect::<Vec<_>>();
-                    if !anchors.is_empty() {
+                    let mut identities = children;
+                    crate::mandoc::inline::retain_inline_identities(&mut identities);
+                    if !identities.is_empty() {
                         self.output.push(Block::Paragraph {
-                            children: anchors,
+                            children: identities,
                             layout,
                             source,
                         });
@@ -634,9 +714,7 @@ impl BlockState {
 
     pub(super) fn flush_preformatted(&mut self) {
         let output_start = self.output.len();
-        if let Some(block) = self.literal.take(self.indent_columns) {
-            self.output.push(block);
-        }
+        self.output.extend(self.literal.take(self.indent_columns));
         if self.output.len() > output_start {
             self.consume_hanging_first_line();
         }
@@ -685,13 +763,23 @@ impl BlockState {
     fn settle(&mut self, row_boundary: super::FormatterRowBoundary) {
         let mut column_closed_row = false;
         if matches!(row_boundary, super::FormatterRowBoundary::Column { .. }) {
-            column_closed_row =
+            let finish_column = |builder: &mut InlineBuilder| {
+                let closed = builder.finish_nested_column_part();
+                builder.observe_no_fill_source_lines(false);
+                closed
+            };
+            // Bd can leave the column's device row open in its literal
+            // destination. Its subsequent words and the actual It post
+            // consume that same owner (mdoc_term.c:1482 with 953), so a
+            // rejected receipt must not target an empty paragraph Vec.
+            column_closed_row = if self.column_uses_literal_output() {
+                self.literal
+                    .with_inline_builder(&mut self.formatter, finish_column)
+            } else {
                 self.paragraph
-                    .with_inline_builder(&mut self.formatter, |builder| {
-                        let closed = builder.finish_nested_column_part();
-                        builder.observe_no_fill_source_lines(false);
-                        closed
-                    });
+                    .with_inline_builder(&mut self.formatter, finish_column)
+            };
+            self.formatter.no_fill_inline.retire_consumed_cell();
         } else if row_boundary == super::FormatterRowBoundary::Settle {
             // The caller identified a native BODY post, not an IR owner
             // return. mdoc_term.c::termp_it_post() executes term_newln()
@@ -702,12 +790,18 @@ impl BlockState {
         self.flush_preformatted();
         self.flush_paragraph();
         if column_closed_row
+            && matches!(
+                row_boundary,
+                super::FormatterRowBoundary::Column { last: false, .. }
+            )
             && let Some(Block::Paragraph { children, .. } | Block::Preformatted { children, .. }) =
                 self.output.last_mut()
             && !matches!(children.last(), Some(Inline::LineBreak { .. }))
         {
-            // It post closed an already represented graph row. The trailing
-            // hard break opens the next row; it is not another blank row.
+            // It post closed an already represented graph row before the
+            // following cell. A final cell is closed by the table owner;
+            // adding a second delimiter there would create an empty row.
+            // Here the break opens the next cell's row, not a blank row.
             children.push(Inline::line_break());
         }
         if let Some((lines, source)) = self.pending_spacing.take() {

@@ -4,7 +4,7 @@ use super::{BlockRenderer, Flow, LayoutText, TableCell, indent_lines, padding};
 
 impl BlockRenderer<'_> {
     fn cell_layout(&self, cell: &TableCell) -> LayoutText {
-        self.block_flow(&cell.blocks, 0).finish_cell().0
+        self.cell_block_flow(&cell.blocks, 0).finish_cell().0
     }
 
     pub(super) fn table_flow(
@@ -73,7 +73,7 @@ impl BlockRenderer<'_> {
             let mut cells = Vec::with_capacity(row.cells.len());
             let mut widths = Vec::with_capacity(row.cells.len());
             for cell in &row.cells {
-                let (text, completed) = self.block_flow(&cell.blocks, 0).finish_cell();
+                let (text, completed) = self.cell_block_flow(&cell.blocks, 0).finish_cell();
                 let lines = text.split(completed);
                 let mut measured = lines
                     .iter()

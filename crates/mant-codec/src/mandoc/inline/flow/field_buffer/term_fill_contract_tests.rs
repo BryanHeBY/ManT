@@ -319,3 +319,26 @@ fn recovery_cell_preserves_native_flags_and_separate_projection_width() {
     assert_eq!(pass.width, 0);
     assert_eq!(buffer.projection_length(0, pass.end), 14);
 }
+
+#[test]
+fn configuration_restart_keeps_projected_pass_identity_at_earlier_offsets() {
+    // A configuration change invalidates scan position, not row events
+    // already delivered to the output owner. Exercise the private lifecycle
+    // directly: the next legal pass can precede the earlier accepted end.
+    let mut buffer = FieldBuffer::default();
+    buffer.apply_writes(&super::FieldWrite::literal("AAA BBB CCC"));
+    let later = buffer.fill_pass(8).unwrap();
+    buffer.commit_pass(later, 8 * 24);
+    assert!(
+        buffer.configure_tabs(&std::sync::Arc::new(super::TabStops::from_arguments(
+            ["2n"].into_iter()
+        )))
+    );
+    let earlier = buffer.fill_pass(4).unwrap();
+    assert!(earlier.end < later.end);
+    buffer.commit_pass(earlier, 4 * 24);
+    assert!(buffer.has_projected_pass(later.end));
+    assert!(buffer.has_projected_pass(earlier.end));
+    buffer.clear_consumed_field();
+    assert!(!buffer.has_projected_rows());
+}

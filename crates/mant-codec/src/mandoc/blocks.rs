@@ -293,15 +293,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
     }
 
     fn settle_no_fill_inline(&mut self) {
-        let nodes = self
-            .state
-            .formatter
-            .no_fill_inline
-            .take_settled_row(&mut self.state.formatter.execution);
-        if !nodes.is_empty() {
-            self.state
-                .push_preformatted(nodes, None, false, false, true);
-        }
+        self.state.settle_no_fill_row();
     }
 
     fn finish_into(

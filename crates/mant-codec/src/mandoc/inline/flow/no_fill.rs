@@ -39,15 +39,13 @@ impl NoFillInlineState {
         if !self.active {
             return;
         }
-        // term_newln() resets the plain unit's shared native buffer with the
-        // row (term.c:233-237). No-fill marker decisions stay with the text
-        // executor's own wipe arm (`field_authoritative` is false there), so
-        // this boundary only clears the buffer - a stale marker must not
-        // poison the next literal row's pass arithmetic.
-        crate::mandoc::inline::InlineBuilder::clear_plain_flush_unit_for_row(execution);
+        // Resolve the complete active native unit against the actual literal
+        // owner before its cells retire. A fragment return is not a flush:
+        // earlier TEXT and delayed glyph owners remain reachable here.
         // CVS term_newln() flushes only an occupied cell. A bare BACKAFTER
         // request survives an empty row and can affect the first word after
         // .fi; a buffered glyph is committed before this row ends.
+        let mut accepted_invisible_row = false;
         if self.formatter_cell != NoFillFormatterCell::Origin {
             let output_start = output.len();
             execution.zero_advance.finish_into(output);
@@ -55,12 +53,27 @@ impl NoFillInlineState {
                 && output.len() == output_start
                 && execution.word_end_break != WordEndBreak::Pending
             {
-                output.push(Inline::Text {
-                    value: String::new(),
-                });
+                accepted_invisible_row = true;
             }
         }
-        if execution.word_end_break == WordEndBreak::Pending {
+        let represented_marker_row = execution.flush_unit.has_projected_rows();
+        let rejected_row = InlineBuilder::retire_plain_flush_unit_at(execution, output);
+        if rejected_row {
+            execution.word_end_break = WordEndBreak::Clear;
+        }
+        if rejected_row || accepted_invisible_row {
+            // nbr=0 ends the rejected pass's own physical row, independently
+            // of any earlier accepted marker pass (term.c:143-146,250-253).
+            // An accepted invisible row likewise belongs to the whole
+            // consumed buffer, not its last empty word's accepted scalar
+            // interval. Append its witness after receipt filtering.
+            output.push(Inline::Text {
+                value: String::new(),
+            });
+        }
+        if execution.word_end_break == WordEndBreak::Pending
+            && !(represented_marker_row && super::output::ends_with_executed_line_break(output))
+        {
             if mant_ir::has_printable_character(output) {
                 output.push(Inline::line_break());
             } else {
@@ -78,49 +91,11 @@ impl NoFillInlineState {
         self.active = false;
     }
 
-    pub(in crate::mandoc) fn take_settled_row(
-        &mut self,
-        execution: &mut InlineExecutionState,
-    ) -> Vec<Inline> {
-        if !self.active {
-            return Vec::new();
-        }
-        let mut output = Vec::new();
-        self.finish_row(execution, &mut output);
-        output
-    }
-
-    /// Flush an occupied cell under `TERMP_NOBREAK` without ending a `\c`
-    /// continuation. A deferred \p can make an otherwise empty cell visible.
-    pub(in crate::mandoc) fn take_no_break_cell(
-        &mut self,
-        execution: &mut InlineExecutionState,
-    ) -> Vec<Inline> {
-        if !self.active {
-            return Vec::new();
-        }
-        let mut output = Vec::new();
-        let realizes_word_end_break =
-            execution.word_end_break == WordEndBreak::Pending && !self.continued;
-        execution.zero_advance.finish_into(&mut output);
-        if realizes_word_end_break {
-            if output.is_empty() {
-                output.push(Inline::Text {
-                    value: String::new(),
-                });
-            }
-            output.push(Inline::line_break());
-        }
-        // roff_term_pre_mc() holds NOBREAK while term_flushln() consumes the
-        // active buffer. Its reset (term.c:233-237) clears col/lastcol even
-        // when the device row continues: a previous NBRZW + \\p may not be
-        // re-fed when the next word arrives. The word executor already
-        // projected accepted passes; this is retirement, not another pass.
-        InlineBuilder::clear_plain_flush_unit_for_row(execution);
-        execution.reset_no_fill_row(false);
+    /// The actual native no-break consumer already settled the live output.
+    /// Its buffer retirement does not end the physically continued row.
+    pub(in crate::mandoc) fn retire_consumed_cell(&mut self) {
         self.formatter_cell = NoFillFormatterCell::Origin;
         self.active = false;
-        output
     }
 
     pub(in crate::mandoc) fn has_pending_formatter_cell(
@@ -142,7 +117,7 @@ impl InlineExecutionState {
     /// A physical row resets word geometry while preserving document registers.
     /// Output-segment drains and Rust function returns do not call this method.
     fn reset_no_fill_row(&mut self, bare_armed: bool) {
-        self.boundary = PendingBoundary::Ordinary;
+        self.boundary = PendingBoundary::Tight;
         self.last_visible_character = None;
         self.has_printable_content = false;
         self.formatter_column = FormatterColumn::Origin;
@@ -167,34 +142,40 @@ impl InlineExecutionState {
 /// state. The returned Vec is only an IR destination for this fragment.
 pub(in crate::mandoc) fn lower_no_fill_fragment_with_formatter(
     formatter: &mut FormatterState,
+    output: &mut Vec<Inline>,
     source_continuation_fallback: bool,
     finishes_row: bool,
     append: impl FnOnce(&mut InlineBuilder),
-) -> (Vec<Inline>, bool, bool) {
+) -> (bool, bool) {
     let continued = formatter.no_fill_inline.continued;
     // A no-fill BODY word's NODE_LINE gate reads TERMP_NONEWLINE as it
     // stands at this fragment's entry (mdoc_term.c:314-317), before the
     // word's own term_word() clears it (term.c:588).
     formatter.note_definition_source_line();
-    let mut output = Vec::new();
-    let (continues_line, formatter_cell_occupied, produced_formatter_cell, asserted_vertical_row) =
-        formatter.with_output_builder(&mut output, |builder| {
-            if continued {
-                builder.continue_source_line(true);
-            }
-            // mdoc_term.c:314-318: the NODE_NOFILL subtree prints under
-            // TERMP_BRNEVER.
-            let was_no_fill_word = builder.execution.no_fill_word_active;
-            builder.execution.no_fill_word_active = true;
-            append(builder);
-            builder.execution.no_fill_word_active = was_no_fill_word;
-            (
-                builder.final_source_continuation_or(source_continuation_fallback),
-                builder.has_formatter_cell(),
-                builder.produced_formatter_cell(),
-                builder.asserted_vertical_row(),
-            )
-        });
+    let (
+        continues_line,
+        formatter_cell_occupied,
+        current_row_visible,
+        produced_formatter_cell,
+        asserted_vertical_row,
+    ) = formatter.with_output_builder(output, |builder| {
+        if continued {
+            builder.continue_source_line(true);
+        }
+        // mdoc_term.c:314-318: the NODE_NOFILL subtree prints under
+        // TERMP_BRNEVER.
+        let was_no_fill_word = builder.execution.no_fill_word_active;
+        builder.execution.no_fill_word_active = true;
+        append(builder);
+        builder.execution.no_fill_word_active = was_no_fill_word;
+        (
+            builder.final_source_continuation_or(source_continuation_fallback),
+            builder.has_formatter_cell(),
+            builder.execution.has_printable_content,
+            builder.produced_formatter_cell(),
+            builder.asserted_vertical_row(),
+        )
+    });
     // LiteralFlow owns the asserted row for this fragment. Its execution
     // fact must not be replayed if the formatter later returns to filled IR.
     formatter.execution.completed_vertical_rows = 0;
@@ -204,7 +185,10 @@ pub(in crate::mandoc) fn lower_no_fill_fragment_with_formatter(
     let row = &mut formatter.no_fill_inline;
     row.active = true;
     row.continued = continues_line;
-    if mant_ir::has_printable_character(&output) {
+    // The output owner can retain earlier completed rows. They cannot make
+    // a new bare BACKAFTER word an occupied native row: term_newln() only
+    // flushes the current native buffer (term.c:475-481).
+    if formatter_cell_occupied && current_row_visible {
         row.formatter_cell = NoFillFormatterCell::Visible;
     } else if formatter_cell_occupied
         && produced_formatter_cell
@@ -213,11 +197,7 @@ pub(in crate::mandoc) fn lower_no_fill_fragment_with_formatter(
         row.formatter_cell = NoFillFormatterCell::Invisible;
     }
     if finishes_row && !continues_line {
-        row.finish_row(&mut formatter.execution, &mut output);
+        row.finish_row(&mut formatter.execution, output);
     }
-    // A word receipt may carry an internal projection anchor even when
-    // term_word() wrote no formatter cell. Remove it before LiteralFlow
-    // decides whether this fragment occupies a physical row.
-    super::output::finalize_inline_output(&mut output);
-    (output, continues_line, asserted_vertical_row)
+    (continues_line, asserted_vertical_row)
 }

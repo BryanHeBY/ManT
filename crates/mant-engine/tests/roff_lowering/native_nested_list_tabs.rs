@@ -302,6 +302,79 @@ fn nested_item_post_clears_flags_before_the_next_item() {
 }
 
 #[test]
+fn body_fixed_words_replace_only_the_interval_they_actually_represent() {
+    // These five complete inputs ran pristine: ASCII/UTF-8/HTML/tree pass;
+    // lint reports the existing filled-text TAB warning in the outer HEAD.
+    // It HEAD post retains minbl (term.c:235), then BODY pre selects NOSPACE
+    // (mdoc_term.c:752-777). HANG generates no fixed word: its retained minbl
+    // still separates one/two. Inset/diag instead emit one/two fixed cells,
+    // so those cells alone represent the interval without a second pad.
+    // The responsive HANG field retains its one-cell word separator; its
+    // pristine three-cell BRIND positioning remains recorded independently.
+    let cases = [
+        ("hang -width 4n", "", false, "one two"),
+        ("hang -width 4n", ".br\n", false, "one two"),
+        ("hang -width 4n -compact", "", true, "one two"),
+        ("inset", "", false, "one two"),
+        ("diag", "", false, "one  two"),
+    ];
+    for (option, before_item, repeated, expected) in cases {
+        let later = if repeated {
+            ".It three\n.No four\n"
+        } else {
+            ""
+        };
+        let inner = format!(".Bl -{option}\n{before_item}.It one\n.No two\n{later}.El\n");
+        let source = format!(
+            "{HEADER}.Bl -tag -width 4n\n.It Xo\n.ta 2n\n{inner}.No \"X\t\"\n.Xc\n.No BodyWord\n.El\n"
+        );
+        let style = if option == "inset" {
+            DefinitionListStyle::Inset
+        } else if option == "diag" {
+            DefinitionListStyle::Diagnostic
+        } else {
+            DefinitionListStyle::Hang
+        };
+        let expected_rows = if repeated {
+            vec!["one two", "three four", "X", "BodyWord"]
+        } else {
+            vec!["", "one two", "X", "BodyWord"]
+        };
+        // The shared helper proves the actual nested Bl is in It HEAD,
+        // rather than assuming its placement from the source template.
+        assert_head_list_rows(
+            "",
+            &inner,
+            NormalizedListKind::Definition,
+            Some(style),
+            &expected_rows,
+        );
+        let loaded = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+        let json = mant_render::render_query_json(&loaded, false).unwrap();
+        assert!(!json.contains("\\u0000mant:"), "{source}");
+        assert!(
+            !json.contains("onetwo") && !json.contains("threefour"),
+            "word identity merged: {source}"
+        );
+        let restored: mant_protocol::QueryBundle = serde_json::from_str(&json).unwrap();
+        let output = mant_render::render_query_man(&restored.into());
+        let (_, rows) = output.split_once("DESCRIPTION\n").unwrap();
+        let leading = if repeated { "" } else { "\n" };
+        let later = if repeated { "three four\n" } else { "" };
+        assert_eq!(
+            rows,
+            // render_query_man omits the final presentation delimiter;
+            // every internal row and its horizontal cells remain exact.
+            format!("{leading}{expected}\n{later}X\t\n      BodyWord"),
+            "{source}"
+        );
+        for word in ["one", "two", "BodyWord"] {
+            assert_eq!(output.matches(word).count(), 1, "{word}: {source}");
+        }
+    }
+}
+
+#[test]
 fn nested_empty_body_controls_inter_item_vertical_space() {
     // print_bvspace() suppresses only the gap after an empty diag BODY;
     // other kinds still execute term_vspace() (mdoc_term.c:623-628).

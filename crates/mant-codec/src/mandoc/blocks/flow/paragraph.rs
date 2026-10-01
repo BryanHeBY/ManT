@@ -57,6 +57,13 @@ impl ParagraphFlow {
         self.nodes.is_empty()
     }
 
+    /// Move the live projection destination without executing `term_newln`.
+    /// Native cell and owner offsets address this same ordered node vector.
+    pub(super) fn take_active_output(&mut self) -> (Vec<Inline>, Option<SourceSpan>) {
+        self.last_line = None;
+        (std::mem::take(&mut self.nodes), self.source.take())
+    }
+
     /// The detached definition HEAD already represents its pending native
     /// row. Drop that row at the moment a real BODY break closes it, while
     /// retaining target anchors that identify the following visible word.
@@ -74,12 +81,9 @@ impl ParagraphFlow {
         {
             return false;
         }
-        let anchors = self
-            .nodes
-            .drain(..=break_index)
-            .filter(|node| matches!(node, Inline::Anchor { .. }))
-            .collect::<Vec<_>>();
-        self.nodes.splice(0..0, anchors);
+        let mut identities = self.nodes.drain(..=break_index).collect::<Vec<_>>();
+        crate::mandoc::inline::retain_inline_identities(&mut identities);
+        self.nodes.splice(0..0, identities);
         true
     }
 
@@ -147,34 +151,12 @@ impl ParagraphFlow {
         // term_word() clears it (term.c:588 with mdoc_term.c:314-317).
         formatter.note_definition_source_line();
         let changed = self.with_inline_builder(formatter, |builder| {
-            let source_continues = builder.final_source_continuation_or(false);
-            let boundary = if source_continues {
-                FilledBoundary::SameLine
-            } else if starts_indented_line && has_executed_predecessor {
-                // CVS print_mdoc_node() executes NODE_LINE before a word,
-                // including generated punctuation and transparent wrappers.
-                FilledBoundary::LineBreak
-            } else if builder.has_tight_boundary() || !crossed_source_line {
-                FilledBoundary::SameLine
-            } else {
-                FilledBoundary::Word
-            };
-            if boundary == FilledBoundary::LineBreak {
-                builder.hard_break();
-            } else if boundary == FilledBoundary::Word && ordinary_text {
-                builder.preserve_source_word_boundary();
-            }
-            if source_continues && !builder.has_tight_boundary() {
-                builder.preserve_continued_boundary();
-            }
-            let previous_count = builder.node_count();
-            let fragment = builder.begin_source_fragment();
-            append(builder);
-            builder.finish_source_fragment(fragment);
-            if builder.final_word_join_or(continues_line) {
-                builder.tighten_next_boundary();
-            }
-            builder.node_count() != previous_count
+            let boundary = filled_fragment_boundary(
+                builder,
+                starts_indented_line && has_executed_predecessor,
+                crossed_source_line,
+            );
+            append_filled_fragment(builder, boundary, continues_line, ordinary_text, append)
         });
         if changed {
             if self.source.is_none() {
@@ -208,5 +190,50 @@ impl ParagraphFlow {
             empty_word_end_break,
             completed_vertical_rows,
         )
+    }
+}
+
+/// A filled word executes identically when its still-open physical row has
+/// literal presentation. The destination does not choose another executor.
+pub(super) fn append_filled_fragment(
+    builder: &mut InlineBuilder,
+    boundary: FilledBoundary,
+    continues_line: bool,
+    ordinary_text: bool,
+    append: impl FnOnce(&mut InlineBuilder),
+) -> bool {
+    if boundary == FilledBoundary::LineBreak {
+        builder.hard_break();
+    } else if boundary == FilledBoundary::Word && ordinary_text {
+        builder.preserve_source_word_boundary();
+    }
+    if builder.final_source_continuation_or(false) && !builder.has_tight_boundary() {
+        builder.preserve_continued_boundary();
+    }
+    let previous_count = builder.node_count();
+    let fragment = builder.begin_source_fragment();
+    append(builder);
+    builder.finish_source_fragment(fragment);
+    if builder.final_word_join_or(continues_line) {
+        builder.tighten_next_boundary();
+    }
+    builder.node_count() != previous_count
+}
+
+pub(super) fn filled_fragment_boundary(
+    builder: &InlineBuilder,
+    starts_indented_row: bool,
+    crossed_source_line: bool,
+) -> FilledBoundary {
+    if builder.final_source_continuation_or(false) {
+        FilledBoundary::SameLine
+    } else if starts_indented_row {
+        // CVS print_mdoc_node() executes NODE_LINE before a word,
+        // including generated punctuation and transparent wrappers.
+        FilledBoundary::LineBreak
+    } else if builder.has_tight_boundary() || !crossed_source_line {
+        FilledBoundary::SameLine
+    } else {
+        FilledBoundary::Word
     }
 }

@@ -28,28 +28,13 @@ impl super::BlockLowerer<'_, '_> {
         if !self.state.paragraph_is_empty() {
             self.state.flush_paragraph();
         }
-        let formatter = &mut self.state.formatter;
-        let (nodes, continues_line, asserted_vertical_row) =
-            crate::mandoc::inline::lower_no_fill_fragment_with_formatter(
-                formatter,
-                source_continuation_fallback,
-                finishes_row,
-                append,
-            );
-        let occupies_row = mant_ir::has_printable_character(&nodes);
-        if occupies_row {
-            self.state.clear_formatter_word_debt();
-        }
-        self.state.push_preformatted(
-            nodes,
+        self.state.execute_no_fill_fragment(
             source_span(source),
-            continues_line,
-            starts_line,
-            occupies_row,
+            source_continuation_fallback,
+            finishes_row,
+            append,
         );
-        if asserted_vertical_row {
-            self.state.mark_literal_vertical_row();
-        }
+        let _ = starts_line;
     }
 
     fn push_function_argument(&mut self, argument: &Node, comma_after: bool) {
@@ -69,7 +54,9 @@ impl super::BlockLowerer<'_, '_> {
                 },
             );
         } else {
-            self.state.flush_preformatted();
+            if !self.column_field {
+                self.state.flush_preformatted();
+            }
             self.state.push_source_inline_with(
                 source_span(argument),
                 false,
@@ -96,7 +83,9 @@ impl super::BlockLowerer<'_, '_> {
                 append_generated_event(builder, event);
             });
         } else {
-            self.state.flush_preformatted();
+            if !self.column_field {
+                self.state.flush_preformatted();
+            }
             self.state
                 .push_inline_with(source_span(source), false, false, |builder| {
                     append_generated_event(builder, event);
@@ -113,6 +102,7 @@ impl super::BlockLowerer<'_, '_> {
         if node.scope_end.is_none()
             && !matches!(node.macro_name.as_deref(), Some("Bf" | "Bk"))
             && !self.state.formatter.no_fill
+            && !self.column_field
             && !self.context.scope_posts.has_structural_payload(node)
         {
             return false;
@@ -140,6 +130,28 @@ impl<'node> ContainerSink<'node> for BlockContainerSink<'node, '_, '_> {
         &mut self.lowerer.state.formatter.font
     }
 
+    fn geometry_checkpoint(
+        &self,
+        node: &Node,
+    ) -> Option<crate::mandoc::inline::DefinitionGeometryCheckpoint> {
+        self.lowerer
+            .state
+            .formatter
+            .execution
+            .definition_geometry_checkpoint(node)
+    }
+
+    fn restore_geometry(
+        &mut self,
+        checkpoint: Option<crate::mandoc::inline::DefinitionGeometryCheckpoint>,
+    ) {
+        self.lowerer
+            .state
+            .formatter
+            .execution
+            .restore_definition_geometry(checkpoint);
+    }
+
     fn source_node(&mut self, source: &'node Node, starts_line: bool) {
         if !self.started {
             self.lowerer.state.queue_targets(
@@ -150,6 +162,15 @@ impl<'node> ContainerSink<'node> for BlockContainerSink<'node, '_, '_> {
         }
         self.emission_source = source;
         self.lowerer.observe_source_fill_mode(source);
+        if self.lowerer.column_field {
+            // The walker entered the root already. Transparent wrappers
+            // keep the same column field; their own source-line gate still
+            // runs once before children, without draining the IR owner.
+            if starts_line && source.id != self.root.id {
+                self.lowerer.state.enter_column_node(source);
+            }
+            return;
+        }
         if self.lowerer.state.formatter.no_fill {
             self.lowerer.resume_no_fill_row();
         }
@@ -204,7 +225,16 @@ impl<'node> ContainerSink<'node> for BlockContainerSink<'node, '_, '_> {
         }
     }
 
-    fn restore_fill(&mut self, fill: bool) {
+    fn restore_fill(&mut self, fill: bool, marker: &Node) {
+        if self.lowerer.column_field {
+            // Explicit Ed executes the original Bd BODY post here; its
+            // later AST return cannot replay the same native flush.
+            // mdoc_endbody_alloc() copies the original BODY's norm to this
+            // source marker (mdoc.c:95-107), including its display kind.
+            self.lowerer
+                .state
+                .finish_column_display_body(marker.display_kind);
+        }
         self.lowerer.state.formatter.no_fill = fill;
     }
 }

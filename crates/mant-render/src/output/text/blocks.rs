@@ -24,6 +24,12 @@ pub(super) struct BlockRenderer<'a> {
     pub(super) locations: Option<&'a super::super::styles::LocatedStyles<'a>>,
 }
 
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum ParagraphTail {
+    BlockBoundary,
+    OpenCellRow,
+}
+
 impl BlockRenderer<'_> {
     pub(super) fn paint(&self, role: TextRole, text: &str) -> String {
         (self.decorate)(role.into(), text)
@@ -139,21 +145,46 @@ impl BlockRenderer<'_> {
     }
 
     pub(super) fn block_flow(&self, blocks: &[Block], base_indent: i32) -> Flow {
+        self.block_flow_with_tail(blocks, base_indent, ParagraphTail::BlockBoundary)
+    }
+
+    /// A table cell's final hard break opens a row for the next field.
+    /// Ordinary block composition closes that same tail at its block join;
+    /// completed vertical rows continue to belong to the gap flow.
+    fn cell_block_flow(&self, blocks: &[Block], base_indent: i32) -> Flow {
+        self.block_flow_with_tail(blocks, base_indent, ParagraphTail::OpenCellRow)
+    }
+
+    fn block_flow_with_tail(
+        &self,
+        blocks: &[Block],
+        base_indent: i32,
+        tail: ParagraphTail,
+    ) -> Flow {
         let mut output = Flow::default();
-        for block in blocks {
+        for (index, block) in blocks.iter().enumerate() {
             output.gap(mant_ir::geometry::block_gap(block));
-            output.extend(self.render_block(block, base_indent));
+            let tail = if index + 1 == blocks.len() {
+                tail
+            } else {
+                ParagraphTail::BlockBoundary
+            };
+            output.extend(self.render_block_with_tail(block, base_indent, tail));
         }
         output
     }
 
     fn render_block(&self, block: &Block, base_indent: i32) -> Flow {
+        self.render_block_with_tail(block, base_indent, ParagraphTail::BlockBoundary)
+    }
+
+    fn render_block_with_tail(&self, block: &Block, base_indent: i32, tail: ParagraphTail) -> Flow {
         #[cfg(test)]
         visits::block();
         let (value, layout_indent) = match block {
             Block::Paragraph {
                 children, layout, ..
-            } => return self.paragraph_flow(children, layout, base_indent),
+            } => return self.paragraph_flow(children, layout, base_indent, tail),
             Block::Preformatted {
                 children, layout, ..
             } => return self.preformatted_flow(children, layout, base_indent),
@@ -242,12 +273,15 @@ impl BlockRenderer<'_> {
         children: &[mant_ir::Inline],
         layout: &mant_ir::LayoutHint,
         base_indent: i32,
+        tail: ParagraphTail,
     ) -> Flow {
         let mut rows = self.inline_rows(children, TextRole::Body);
         if rows.iter().all(|(row, _)| row.visible.trim().is_empty()) {
             return Flow::default();
         }
-        while rows.last().is_some_and(|(row, _)| row.is_empty()) {
+        while tail == ParagraphTail::BlockBoundary
+            && rows.last().is_some_and(|(row, _)| row.is_empty())
+        {
             let (tail, _) = rows.pop().expect("trailing row");
             if let Some((row, _)) = rows.last_mut() {
                 row.append(&tail);
@@ -261,7 +295,10 @@ impl BlockRenderer<'_> {
                 } else {
                     compose_origin(first_origin, layout.continuation_indent_columns)
                 };
-                line.prefixed(&" ".repeat(padding(compose_origin(origin, i32::from(indent)))))
+                // An empty physical row has no device advance. Preserve its
+                // opaque decoration without turning the row origin into
+                // authored blank cells (term_ascii.c::ascii_endline()).
+                line.indented(padding(compose_origin(origin, i32::from(indent))))
             }),
             "\n",
         ))

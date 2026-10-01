@@ -100,7 +100,16 @@ impl BlockRenderer<'_> {
                 origin,
                 i32::from(last_rows.last().map_or(0, |(_, indent)| *indent)),
             );
-            let term_row_count = last_rows.len();
+            // A leading executed empty row did not wrap the label's graph
+            // or consume its HANG origin. Keep the recorded BODY column
+            // for that case instead of deriving a wrap from row count.
+            let head_wrapped = matches!(
+                item.layout.head_body_relation,
+                mant_ir::HeadBodyRelation::RunIn
+            ) && last_rows
+                .iter()
+                .take(last_rows.len().saturating_sub(1))
+                .any(|(row, _)| !row.is_empty());
             let last = LayoutText::join(
                 last_rows.into_iter().map(|(row, row_indent)| {
                     row.indented(padding(compose_origin(origin, i32::from(row_indent))))
@@ -111,10 +120,6 @@ impl BlockRenderer<'_> {
             // A run-in head that already wrapped past its first row has
             // consumed the hang indent (term.c: the offset only locates a
             // single-row head); the body then continues after one blank.
-            let head_wrapped = matches!(
-                item.layout.head_body_relation,
-                mant_ir::HeadBodyRelation::RunIn
-            ) && term_row_count > 1;
             let mut lines = self.inline_rows(children, TextRole::Body).into_iter();
             let first_line = lines.next().unwrap_or_default();
             let first_origin = if head_wrapped {

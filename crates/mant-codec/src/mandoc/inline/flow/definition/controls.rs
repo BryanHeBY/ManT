@@ -54,11 +54,29 @@ impl InlineBuilder {
         self.execute_native_newline();
     }
 
+    /// The original Bd BODY post sets BRNEVER for literal/unfilled output,
+    /// consumes the live buffer, then clears it even when that device row
+    /// remains open under NOBREAK (mdoc_term.c:1474-1483).
+    pub(in crate::mandoc) fn finish_display_body(
+        &mut self,
+        display: Option<libmandoc_rs::DisplayKind>,
+    ) {
+        if matches!(
+            display,
+            Some(libmandoc_rs::DisplayKind::Literal | libmandoc_rs::DisplayKind::Unfilled)
+        ) {
+            self.execution.no_fill_word_active = true;
+        }
+        self.execute_native_newline();
+        self.execution.no_fill_word_active = false;
+    }
+
     /// Execute `term_newln()` before any enclosing node restores geometry.
     /// Source `NODE_LINE` and macro posts share this flush; `roff_pre_br()` is
     /// separate because it also changes the field flags and row origin.
     pub(in crate::mandoc) fn execute_native_newline(&mut self) {
         self.commit_definition_row_origin();
+        let resumed = self.begin_resumed_native_line();
         if let Some(definition) = &mut self.execution.definition {
             definition.row.commit_at_flush();
         }
@@ -98,6 +116,13 @@ impl InlineBuilder {
         } else {
             self.hard_break();
         }
+        if let Some(device) = resumed {
+            self.finish_resumed_native_line(&device);
+        }
+        // term_newln() selects NOSPACE before its conditional buffer flush
+        // (term.c:475-480). An empty Line owner can return from hard_break()
+        // without any output, but that cannot skip the register transition.
+        self.execution.boundary = PendingBoundary::Tight;
         self.reset_native_tab_origin();
     }
 
@@ -166,6 +191,18 @@ impl InlineBuilder {
         definition.no_break_cleared = true;
         definition.margin_override = Some(usize::MAX / 2);
         definition.cleared_field_capacity_columns = capacity;
+    }
+
+    /// Finish `pre_br`'s BRIND geometry after its conditional `term_newln`.
+    /// A positive .sp executes backend endlines first; they reset viscol,
+    /// then `pre_br` moves offset to rmargin without printing a cell
+    /// (roff_term.c:69-78,195-214). That origin stays scoped to this node.
+    pub(super) fn move_definition_field_origin_to_body(&mut self, body: u16) {
+        let definition = self.definition_state_mut();
+        definition.hang_row.field_offset = usize::from(body);
+        definition.field_offset_units = definition
+            .native_margin_units
+            .unwrap_or_else(|| usize::from(body).saturating_mul(24));
     }
 
     /// Whether the next word already has a request-armed concatenation

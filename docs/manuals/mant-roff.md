@@ -529,6 +529,18 @@ No-fill changes line layout, not content reachability: nested tables and lists r
 
 Nested displays likewise retain their own fill mode, offset, leading gap, targets, and source positions. Entering an inner `Bd`, `D1`, or `Dl` ends the current preformatted run; leaving it restores the outer origin. For example, nested offsets of `2n` and `3n` produce origins of 2, 5, then 2 cells, while an inner `D1` or `Dl` adds its own six-cell displacement. A first-child display retains predecessor context through outer displays: independent non-compact gaps accumulate when earlier content exists, but do not appear directly after a section heading. This follows ManT's selected mandoc behavior, not a claim that nested displays are portable: libmandoc's “nested displays are not portable” warning remains observable.
 
+Within an active mdoc column field, display text and later sibling words keep
+the same execution buffer. The temporary `D1`/`Dl` or `Bd -offset` origin
+affects native row consumption until the real display post restores it;
+restoring the offset does not undo an advance already printed on the device.
+An accepted physical row's display origin uses the existing layout hint;
+after a real row end, later rows return to their own origin. The responsive
+column projection can omit additional padding partway through a cell row,
+while retaining every resulting hard row and ordinary word boundary.
+An entirely rejected field or a zero-width `\&` cell does not print an origin
+advance. Ordinary declared-column overruns remain table placement and do not
+insert line breaks into semantic cell names.
+
 An empty `Bd` still retains an executed spacing request and its role as a predecessor for the following source block. A non-plain mdoc `It` itself establishes a paragraph boundary for a first-child display; plain `-item` lists instead inherit the preceding sibling or outer context. This applies to definition and column bodies as well as marked lists, without changing their semantic ownership.
 
 Display predecessors are native logical siblings, not emitted text: a font-only input word or retained empty `Bf` scope counts, while comments, suppressed nodes and transparent requests such as `ft`, `Sm` and `Tg` do not. A scope is not its own first child's predecessor. This follows the selected mandoc no-space behavior, which can differ from groff for invisible content immediately after a heading.
@@ -775,6 +787,12 @@ Some formatter-specific strings disappear before libmandoc exposes a cell. For o
 ## Equations
 
 Display [mandoc eqn(7)](https://mandoc.bsd.lv/man/eqn.7.html) input becomes an `equation` block with libmandoc's parsed box structure and a checked readable text projection. Delimiter-selected equations inside filled prose remain inline equation nodes between the surrounding words. The same active delimiters are applied to ordinary `tbl(7)` cells, whose opaque cell strings are normalized through a separate bounded invocation of the pinned eqn parser. This isolated recovery cannot inherit the page's complete `delim`/`define` history; a declined or failed recovery retains the raw cell payload. Configuration-only `EQ`/`EN` blocks emit no empty equation. The common complete, unquoted GNU `ldots` macro is projected as `...`; quoted `"ldots"` remains literal text.
+
+An authored display is an independent IR block. The terminal reference can
+write its equation words into the preceding text buffer; that device behavior
+does not determine the display's IR boundary. Regression checks retain the
+accepted preceding prose and the owned display separately. Inline equations
+continue to occupy their original place among prose words.
 
 ManT preserves the owned structure and its shared readable projection for text, Markdown, JSON, search, and TUI consumers; it does not typeset mathematical layout or execute an external `eqn` preprocessor. At most 256 distinct opaque table expressions are reparsed per document, with 8 KiB per fragment and 1 MiB cumulative attempted input. Failed attempts also spend the allowance. Later expressions remain visible in their source spelling and produce `manual.inline-equation-budget`, preventing adversarial tables from turning semantic recovery into unbounded parser work.
 

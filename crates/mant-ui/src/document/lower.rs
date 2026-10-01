@@ -243,15 +243,42 @@ impl DocumentBuilder<'_> {
     }
 
     pub(super) fn blocks(&mut self, blocks: &[Block], base_indent: i32) {
+        self.blocks_with_cell_context(blocks, base_indent, false);
+    }
+
+    pub(super) fn table_cell_blocks(&mut self, blocks: &[Block], base_indent: i32) {
+        self.blocks_with_cell_context(blocks, base_indent, true);
+    }
+
+    fn blocks_with_cell_context(&mut self, blocks: &[Block], base_indent: i32, cell: bool) {
         let mut gap = mant_ir::geometry::GapPlan::default();
-        for block in blocks {
+        for (index, block) in blocks.iter().enumerate() {
             gap.append_resolved(mant_ir::geometry::block_gap(block));
             if matches!(block, Block::VerticalSpace { .. }) {
                 continue;
             }
             self.spacing(gap.rows(0));
             gap = mant_ir::geometry::GapPlan::default();
-            self.block(block, base_indent);
+            if let Block::Paragraph {
+                children, layout, ..
+            } = block
+            {
+                // A following block closes the paragraph terminator before
+                // its own completed gap. Only the final direct Paragraph
+                // gives a cell an open tail, as in the shared CLI cell flow.
+                // Literal rows always retain their authored delimiters.
+                let origin = compose_origin(base_indent, layout.indent_columns);
+                self.inline_lines_with_geometry_tail(
+                    children,
+                    origin,
+                    compose_origin(origin, layout.continuation_indent_columns),
+                    Style::default().fg(theme::TEXT),
+                    LineSurface::Normal,
+                    !(cell && index + 1 == blocks.len()),
+                );
+            } else {
+                self.block(block, base_indent);
+            }
         }
         self.spacing(gap.rows(0));
     }
@@ -262,12 +289,13 @@ impl DocumentBuilder<'_> {
                 children, layout, ..
             } => {
                 let origin = compose_origin(base_indent, layout.indent_columns);
-                self.inline_lines_with_geometry(
+                self.inline_lines_with_geometry_tail(
                     children,
                     origin,
                     compose_origin(origin, layout.continuation_indent_columns),
                     Style::default().fg(theme::TEXT),
                     LineSurface::Normal,
+                    true,
                 );
             }
             Block::Preformatted {
@@ -391,8 +419,27 @@ impl DocumentBuilder<'_> {
         base_style: Style,
         surface: LineSurface,
     ) {
+        self.inline_lines_with_geometry_tail(
+            nodes,
+            indent,
+            continuation,
+            base_style,
+            surface,
+            false,
+        );
+    }
+
+    fn inline_lines_with_geometry_tail(
+        &mut self,
+        nodes: &[Inline],
+        indent: i32,
+        continuation: i32,
+        base_style: Style,
+        surface: LineSurface,
+        trim_paragraph_tail: bool,
+    ) {
         let targets = inline_anchor_rows(nodes);
-        let lines = styled_reference_inline_lines(
+        let mut lines = styled_reference_inline_lines(
             nodes,
             base_style,
             self.address.as_ref(),
@@ -400,6 +447,20 @@ impl DocumentBuilder<'_> {
             surface == LineSurface::Code,
             &self.reference_origins,
         );
+        if trim_paragraph_tail {
+            while lines.len() > 1
+                && lines
+                    .last()
+                    .is_some_and(|line| line.spans.iter().all(|span| span.content.is_empty()))
+            {
+                let tail = lines.pop().expect("ordinary paragraph terminator");
+                self.defer_anchors(
+                    tail.reference_marks
+                        .into_iter()
+                        .map(|mark| mark.id.to_string()),
+                );
+            }
+        }
         if lines.len() == 1
             && lines[0].spans.is_empty()
             && !(surface == LineSurface::Code && mant_ir::geometry::has_literal_rows(nodes))
@@ -414,7 +475,11 @@ impl DocumentBuilder<'_> {
             return;
         }
         for (id, row) in targets {
-            self.anchors.entry(id).or_insert(self.lines.len() + row);
+            if trim_paragraph_tail && row >= lines.len() {
+                self.defer_anchors(std::iter::once(id));
+            } else {
+                self.anchors.entry(id).or_insert(self.lines.len() + row);
+            }
         }
         self.push_styled_lines_with_geometry(
             lines,

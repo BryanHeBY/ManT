@@ -33,33 +33,7 @@ impl DocumentBuilder<'_> {
                             .collect()
                     })
                     .into_iter()
-                    .map(|cell| {
-                        let mut builder = Self::new(String::new(), self.address.clone());
-                        builder.entry_styles = Arc::clone(&self.entry_styles);
-                        builder.reference_origins = Arc::clone(&self.reference_origins);
-                        if let Some(cell) = cell {
-                            match cell.kind {
-                                mant_ir::TableCellKind::Text => builder.blocks(&cell.blocks, 0),
-                                mant_ir::TableCellKind::HorizontalRule
-                                | mant_ir::TableCellKind::IsolatedHorizontalRule => {
-                                    builder.push(LogicalLine::rule(0));
-                                }
-                                mant_ir::TableCellKind::DoubleHorizontalRule
-                                | mant_ir::TableCellKind::IsolatedDoubleHorizontalRule => {
-                                    builder.push(LogicalLine::double_rule(0));
-                                }
-                            }
-                        }
-                        let completed_tail = builder.pending_gap.rows(0) > 0;
-                        let content = builder.finish().content;
-                        let mut rendered = LogicalTableCell::new(
-                            content.lines,
-                            cell.and_then(|cell| cell.alignment),
-                        );
-                        rendered.anchors = content.anchors;
-                        rendered.completed_tail = completed_tail;
-                        rendered
-                    })
+                    .map(|cell| self.prepare_table_cell(cell))
                     .collect::<Vec<_>>()
                     .into()
             })
@@ -115,6 +89,34 @@ impl DocumentBuilder<'_> {
         }
     }
 
+    fn prepare_table_cell(&self, cell: Option<&mant_ir::TableCell>) -> LogicalTableCell {
+        let mut builder = Self::new(String::new(), self.address.clone());
+        builder.entry_styles = Arc::clone(&self.entry_styles);
+        builder.reference_origins = Arc::clone(&self.reference_origins);
+        if let Some(cell) = cell {
+            match cell.kind {
+                mant_ir::TableCellKind::Text => {
+                    builder.table_cell_blocks(&cell.blocks, 0);
+                }
+                mant_ir::TableCellKind::HorizontalRule
+                | mant_ir::TableCellKind::IsolatedHorizontalRule => {
+                    builder.push(LogicalLine::rule(0));
+                }
+                mant_ir::TableCellKind::DoubleHorizontalRule
+                | mant_ir::TableCellKind::IsolatedDoubleHorizontalRule => {
+                    builder.push(LogicalLine::double_rule(0));
+                }
+            }
+        }
+        let completed_tail = builder.pending_gap.rows(0) > 0;
+        let content = builder.finish().content;
+        let mut rendered =
+            LogicalTableCell::new(content.lines, cell.and_then(|cell| cell.alignment));
+        rendered.anchors = content.anchors;
+        rendered.completed_tail = completed_tail;
+        rendered
+    }
+
     fn stacked_table(&mut self, rows: &[TableRow], indent: i32) {
         for row in rows {
             if self.defer_navigation_row(row, indent) {
@@ -126,7 +128,9 @@ impl DocumentBuilder<'_> {
                     let start = self.lines.len();
                     for cell in &row.cells {
                         match cell.kind {
-                            mant_ir::TableCellKind::Text => self.blocks(&cell.blocks, indent),
+                            mant_ir::TableCellKind::Text => {
+                                self.table_cell_blocks(&cell.blocks, indent);
+                            }
                             mant_ir::TableCellKind::HorizontalRule
                             | mant_ir::TableCellKind::IsolatedHorizontalRule => {
                                 self.push(LogicalLine::rule(padding(indent)));

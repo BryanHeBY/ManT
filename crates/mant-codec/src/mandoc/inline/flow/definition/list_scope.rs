@@ -34,6 +34,7 @@ pub(in crate::mandoc) struct NestedListScope {
     margin_override: Option<usize>,
     offset_units: usize,
     offset_columns: usize,
+    column_origin_units: Option<usize>,
     indent_columns: u16,
     outcome: DefinitionOutcome,
     head_flags_cleared: bool,
@@ -58,6 +59,7 @@ impl InlineBuilder {
             margin_override: definition.margin_override,
             offset_units: definition.field_offset_units,
             offset_columns: definition.hang_row.field_offset,
+            column_origin_units: definition.column_origin_units,
             indent_columns: definition.row.indent_columns,
             outcome: definition.outcome,
             head_flags_cleared: definition.head_flags_cleared,
@@ -169,13 +171,7 @@ impl InlineBuilder {
         if flush {
             self.no_fill_source_line();
         }
-        let definition = self.definition_state_mut();
-        definition.no_break = None;
-        definition.no_break_cleared = false;
-        definition.head_flags_cleared = true;
-        if let Some(author) = &mut self.execution.author_execution {
-            author.break_effect = AuthorBreakEffect::Line;
-        }
+        self.execution.clear_native_list_part_flags();
     }
 
     /// Restore the HEAD node's geometry, then apply the BODY offset. The
@@ -199,6 +195,12 @@ impl InlineBuilder {
         // Responsive BODY text does not acquire another field interpreter.
         if let Some(author) = &mut self.execution.author_execution {
             author.break_effect = AuthorBreakEffect::Line;
+        }
+        // The BODY's fixed cells below already represent the actual
+        // offset/minbl positioning (termp_it_pre(), term.c:113-116). Keep
+        // native minbl, but do not also materialize the HEAD's prepaid pad.
+        if fixed_cells > 0 {
+            self.execution.pending_field_spaces = 0;
         }
         self.tighten_next_boundary();
         self.append_run_in_cells(fixed_cells, fixed_cells, fixed_cells > 0);
@@ -250,6 +252,7 @@ impl InlineBuilder {
         self.observe_no_fill_source_lines(true);
         let state = self.definition_state_mut();
         state.field_offset_units = origin.saturating_mul(24);
+        state.column_origin_units = Some(state.field_offset_units);
         state.hang_row.field_offset = origin;
         state.native_margin_units =
             Some(origin.saturating_add(usize::from(width)).saturating_mul(24));
@@ -276,7 +279,21 @@ impl InlineBuilder {
                 AuthorBreakEffect::Line => None,
             })
             .unwrap_or((0, FieldFlags::inset(), 0));
-        let mut closed_represented_row = false;
+        // A nonempty post can end a previously open column row too:
+        // nested It posts clear NOBREAK (mdoc_term.c:961-963), so this
+        // term_flushln() executes endline even when its field fits.
+        // Hand that native row close to the block owner before its
+        // paragraph drain trims the output terminator.
+        let explicit_row_end = self.native_field_tail_is_unconditional()
+            || self.native_field_device(false).is_some_and(|device| {
+                // A temporary native origin may close a row whose public
+                // cell glyphs still fit the declared field. Preserve the
+                // real tail in that case; ordinary column width overruns
+                // remain responsive placement, without inline pollution.
+                device.unprojected_origin_units > 0
+            });
+        let mut closed_represented_row =
+            self.has_formatter_cell() && explicit_row_end && self.native_field_row_ends();
         {
             let occupied = self.has_formatter_cell();
             let empty_ends_row = self.native_empty_field_row_ends();
@@ -285,15 +302,30 @@ impl InlineBuilder {
                 .definition
                 .as_ref()
                 .is_some_and(|state| state.hang_row.viscol > 0);
-            self.flush_definition_field(start, gap, u16::MAX, u16::MAX, flags, false);
+            self.flush_definition_field_at(
+                start,
+                gap,
+                u16::MAX,
+                u16::MAX,
+                flags,
+                super::flush::FieldFlushBoundary::ColumnPost,
+            );
             if !occupied {
                 // Unlike term_newln(), the column BODY post calls
                 // term_flushln() even with no buffered byte. Its tail still
                 // executes endline for the last column (term.c:233-253).
                 self.execution.zero_advance.discard_at_row_end();
-                self.retire_consumed_native_field();
+                let device = self.native_field_device(false);
+                self.retire_native_field_with_device_at(
+                    device.as_ref(),
+                    super::flush::FieldFlushBoundary::ColumnPost,
+                );
                 self.definition_state_mut().hang_row.minbl = usize::from(gap);
                 if empty_ends_row {
+                    // This is a second real flush of an already printed row:
+                    // minbl/trailspace can end it even when the earlier pass
+                    // fit. No nonempty field placement remains to represent
+                    // that end (term.c:113-137,233-253).
                     closed_represented_row = device_row_occupied;
                     if !device_row_occupied {
                         self.retain_line_breaks(1);
@@ -301,8 +333,7 @@ impl InlineBuilder {
                         // new empty row, rather than closing prior graph.
                         // The block drain owns this completed-row receipt;
                         // it must not trim it as an IR paragraph terminator.
-                        self.execution.completed_vertical_rows =
-                            self.execution.completed_vertical_rows.saturating_add(1);
+                        self.record_completed_vertical_rows(1);
                     }
                     self.definition_state_mut().hang_row.endline();
                 }
@@ -318,6 +349,7 @@ impl InlineBuilder {
         definition.margin_override = saved.margin_override;
         definition.field_offset_units = saved.offset_units;
         definition.hang_row.field_offset = saved.offset_columns;
+        definition.column_origin_units = saved.column_origin_units;
         definition.row.indent_columns = saved.indent_columns;
     }
 
@@ -339,6 +371,24 @@ impl InlineBuilder {
             // this scope's geometry/effect, never its old author mode.
             author.break_effect = saved_effect;
             author.field_output_start = self.nodes.len();
+        }
+    }
+}
+
+impl super::super::InlineExecutionState {
+    /// Every non-BLOCK `It` post clears the list pad/break flags and trailspace,
+    /// including a plain HEAD that emits nothing and calls no `term_newln`.
+    /// This is shared with structural list output; an enclosing column's
+    /// former `NOBREAK` is not restored on a nested list owner return.
+    /// See `mdoc_term.c::termp_it_post()`, 936–963.
+    pub(in crate::mandoc) fn clear_native_list_part_flags(&mut self) {
+        if let Some(definition) = &mut self.definition {
+            definition.no_break = None;
+            definition.no_break_cleared = false;
+            definition.head_flags_cleared = true;
+        }
+        if let Some(author) = &mut self.author_execution {
+            author.break_effect = AuthorBreakEffect::Line;
         }
     }
 }

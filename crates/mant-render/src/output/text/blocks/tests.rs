@@ -644,6 +644,70 @@ fn zero_width_terms_and_clipped_markers_do_not_move_body_text() {
     assert_eq!(renderer.render_blocks(&[block], 0), "TERM BODY");
 }
 
+#[test]
+fn empty_head_prefix_rows_preserve_the_recorded_run_in_body_origin() {
+    // Exact .Bl -hang -width 12n / .No \\z / .sp 1 or 2 / .An -split /
+    // .An Bob / .No BODY ran pristine before this assertion: the empty
+    // endline is real, but did not print or wrap the label (term.c:489-497).
+    // Its accepted "ob" therefore retains BODY column 14, not only gap 1.
+    for (prefix, prefix_rows, expected_gap) in
+        [("", 1, 12), ("", 2, 12), ("HEAD", 1, 1), (" ", 1, 1)]
+    {
+        let mut head = vec![Inline::anchor("empty-head-origin")];
+        head.push(Inline::Strong {
+            children: vec![Inline::Text {
+                value: prefix.into(),
+            }],
+        });
+        head.extend((0..prefix_rows).map(|_| Inline::line_break()));
+        head.push(Inline::Text { value: "ob".into() });
+        let block = Block::DefinitionList {
+            declaration_groups: vec![],
+            compact: true,
+            items: vec![DefinitionItem {
+                source: None,
+                entry: None,
+                terms: vec![head],
+                description: vec![paragraph("BODY", 0)],
+                layout: mant_ir::DefinitionLayout {
+                    head_body_relation: mant_ir::HeadBodyRelation::RunIn,
+                    body_indent_columns: 14,
+                    min_term_gap_columns: 1,
+                    spacing_before_lines: None,
+                },
+            }],
+            layout: LayoutHint::default(),
+            source: None,
+        };
+        for decorated in [false, true] {
+            let paint = |_: TextPresentation, value: &str| {
+                if decorated {
+                    format!("\x1b[1m{value}\x1b[0m")
+                } else {
+                    value.into()
+                }
+            };
+            let renderer = BlockRenderer {
+                names: None,
+                locations: None,
+                decorate: &paint,
+            };
+            let output = renderer
+                .render_blocks(std::slice::from_ref(&block), 0)
+                .replace("\x1b[1m", "")
+                .replace("\x1b[0m", "");
+            assert_eq!(
+                output,
+                format!(
+                    "{prefix}{}ob{}BODY",
+                    "\n".repeat(prefix_rows),
+                    " ".repeat(expected_gap)
+                )
+            );
+        }
+    }
+}
+
 fn declared_column_table(widths: &[u16], cells: &[&str]) -> Block {
     Block::Table {
         column_widths: widths.to_vec(),

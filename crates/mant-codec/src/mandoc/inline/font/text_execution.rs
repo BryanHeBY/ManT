@@ -174,6 +174,12 @@ fn append_text_event(
         if state.pending_word_end_break && is_formatter_word_blank(character) {
             zero_advance.append_text(&chunk, output, buffer, font, link);
             chunk.clear();
+            // This is the marker's first following blank in either
+            // projection arm. BACKBEFORE can consume that blank, but it
+            // cannot make a later blank in the same word another marker
+            // event (term.c:294-305,901-908). Native passes retain breakline
+            // independently until they accept their ordered cell interval.
+            state.pending_word_end_break = false;
             if zero_advance.has_pending_glyph() {
                 // CVS stores `\\p` in the same terminal buffer as a
                 // completed `\\z` glyph.  The intervening word blank settles
@@ -217,9 +223,7 @@ fn append_text_event(
             // `nbr == 0`, and term_flushln() wipes the whole unprinted
             // remainder of the flush unit (term.c:143-146 with 233-237); an
             // earlier graph keeps its committed row (term.c:220).
-            if field_authoritative {
-                output.push(Inline::line_break());
-            } else {
+            if !field_authoritative {
                 let tail_accepted = state.graph_since_blank;
                 if tail_accepted || state.graph_seen {
                     output.push(Inline::line_break());
@@ -228,7 +232,6 @@ fn append_text_event(
                     state.wiped = true;
                 }
             }
-            state.pending_word_end_break = false;
             state.suppress_break_whitespace = true;
             state.graph_seen = false;
             state.graph_since_blank = false;
@@ -498,6 +501,10 @@ fn execute_formatter_word_events(
                 event,
                 &mut word.native_writes,
                 context.zero_advance.fallback_is_projected(),
+                context
+                    .policy
+                    .field_authoritative
+                    .then_some(&word.text_state),
             );
         }
         word.append_event(event, &mut context, index + 1 == events.len());
@@ -514,9 +521,27 @@ fn record_native_event(
     event: &FormatterWordEvent,
     writes: &mut Vec<super::super::flow::field_buffer::FieldWrite>,
     fallback_projected: bool,
+    authoritative_state: Option<&TextEventState>,
 ) {
     use super::super::flow::field_buffer::{FieldCell, FieldWrite};
     match event {
+        FormatterWordEvent::Source(RoffInlineEvent::Text(value))
+            if authoritative_state.is_some() =>
+        {
+            let state = authoritative_state.expect("authoritative text state");
+            let mut pending = state.pending_word_end_break;
+            let mut suppress = state.suppress_break_whitespace;
+            for character in value.chars() {
+                if is_formatter_word_blank(character) && (pending || suppress) {
+                    writes.push(FieldWrite::UnprojectedBlank);
+                    pending = false;
+                    suppress = true;
+                } else {
+                    suppress = false;
+                    FieldWrite::append_literal(writes, character.encode_utf8(&mut [0; 4]));
+                }
+            }
+        }
         FormatterWordEvent::Code(value)
         | FormatterWordEvent::Source(
             RoffInlineEvent::Text(value)

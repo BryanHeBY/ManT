@@ -6,24 +6,80 @@ use super::{
 // A private boundary carried only while one authored Link spans two native
 // term_flushln() fields. It is removed before any IR owner is returned.
 const INTERNAL_LINK_SPLIT: &str = "\0mant:field-link-split";
+const INTERNAL_COMPLETED_ROW: &str = "\0mant:output-scope:completed-row";
+const INTERNAL_LITERAL_ROW: &str = "\0mant:output-scope:literal-row";
+const INTERNAL_ROW_ORIGIN: &str = "\0mant:output-scope:row-origin:";
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub(in crate::mandoc) enum CompletedRowOrigin {
+    Layout,
+    LiteralText,
+}
+const INTERNAL_DEVICE_ROW_END: &str = "\0mant:output-scope:device-row-end";
 pub(in crate::mandoc::inline) const INTERNAL_FIELD_WORD: &str = "\0mant:field-word:";
 pub(in crate::mandoc::inline) const INTERNAL_OUTPUT_SCOPE: &str = "\0mant:output-scope:";
+
+/// The public drain and local row-index consumers share this classification.
+/// Metadata can sit after a real row end without becoming that row's payload.
+pub(in crate::mandoc::inline::flow) fn is_private_output_marker(node: &Inline) -> bool {
+    matches!(node, Inline::Anchor { id, .. }
+        if id.as_str().starts_with(INTERNAL_FIELD_WORD)
+            || id.as_str().starts_with(INTERNAL_OUTPUT_SCOPE)
+            || id.as_str() == INTERNAL_LINK_SPLIT)
+}
 
 mod boundary;
 mod drain;
 mod projection;
 mod words;
 
-pub(in crate::mandoc::inline::flow) use projection::ends_with_executed_line_break;
-pub(in crate::mandoc) use projection::finalize_inline_output;
+pub(in crate::mandoc) use projection::consume_one_row_ending;
+pub(in crate::mandoc) use projection::ends_with_executed_line_break;
+pub(in crate::mandoc) use projection::retain_inline_identities;
 pub(in crate::mandoc::inline) use projection::trailing_ascii_spaces;
+pub(in crate::mandoc) use projection::trailing_completed_row_origins;
+pub(in crate::mandoc) use projection::trailing_device_row_end_receipt;
 pub(in crate::mandoc) use projection::trim_trailing_breakable_spaces;
 use projection::{has_non_whitespace_glyph, line_break_count};
+pub(in crate::mandoc) use projection::{
+    native_row_origin, prepare_inline_output, strip_native_projection_markers,
+};
 pub(in crate::mandoc::inline::flow) mod native_passes;
 mod record;
+pub(in crate::mandoc::inline::flow) mod row_origins;
 pub(in crate::mandoc::inline::flow) mod split;
 
 impl InlineBuilder {
+    /// Retain one actual native graph-row end in its current output owner.
+    /// This is a boundary receipt, not an additional completed empty row.
+    pub(in crate::mandoc) fn record_device_row_end(&mut self) {
+        self.nodes.push(Inline::anchor(INTERNAL_DEVICE_ROW_END));
+    }
+
+    /// Record an executed empty row in its active output owner. A later
+    /// provisional glyph cannot revoke it when native acceptance rejects
+    /// that glyph; actual accepted content determines its final placement.
+    pub(in crate::mandoc) fn record_completed_vertical_rows(&mut self, rows: u16) {
+        self.record_completed_rows(rows, CompletedRowOrigin::Layout);
+    }
+
+    pub(in crate::mandoc) fn record_completed_rows(
+        &mut self,
+        rows: u16,
+        origin: CompletedRowOrigin,
+    ) {
+        self.execution.completed_vertical_rows =
+            self.execution.completed_vertical_rows.saturating_add(rows);
+        let marker = match origin {
+            CompletedRowOrigin::Layout => INTERNAL_COMPLETED_ROW,
+            CompletedRowOrigin::LiteralText => INTERNAL_LITERAL_ROW,
+        };
+        self.nodes.extend(std::iter::repeat_n(
+            Inline::anchor(marker),
+            usize::from(rows),
+        ));
+    }
+
     pub(in crate::mandoc) fn node_count(&self) -> usize {
         self.nodes.len()
     }
@@ -160,7 +216,12 @@ impl InlineBuilder {
         // still settles through the ordinary flush.
         self.flush_zero_advance();
         self.external_head_row_pending = false;
-        if self.execution.completed_vertical_rows > 0
+        if plain_flush_rejection {
+            // This real term_newln() finished a rejected nbr=0 pass. Its
+            // row is complete now, even if another native unit starts before
+            // the paragraph owner drains (term.c:143-146,250-253).
+            self.record_completed_vertical_rows(1);
+        } else if self.execution.completed_vertical_rows > 0
             && self.execution.formatter_column == FormatterColumn::Advanced
             && !self
                 .nodes
@@ -173,8 +234,7 @@ impl InlineBuilder {
             // though term_fill() prints no glyphs. When a later empty TEXT
             // requests another term_vspace(), that committed row must remain
             // in the completed-row count after formatter_column resets.
-            self.execution.completed_vertical_rows =
-                self.execution.completed_vertical_rows.saturating_add(1);
+            self.record_completed_vertical_rows(1);
         }
         let current_row_has_printable = self
             .nodes
@@ -334,6 +394,38 @@ impl InlineBuilder {
         let start = self.nodes.len();
         append(self);
         self.wrap_output_from(start, style);
+    }
+
+    /// Annotate operands without capturing their executed automatic prefix.
+    /// `term_word()` writes that prefix before encoding the source spelling
+    /// (term.c:573-589); inspecting leading whitespace cannot distinguish it
+    /// from the author's own blank glyphs. These bounded local markers do.
+    pub(in crate::mandoc) fn append_semantic_scope(
+        &mut self,
+        owner: u32,
+        append: impl FnOnce(&mut Self),
+        mut wrap: impl FnMut(Vec<Inline>) -> Vec<Inline>,
+    ) {
+        let scope = format!("{INTERNAL_OUTPUT_SCOPE}semantic:{owner}");
+        let content = format!("{scope}:content");
+        self.begin_output_scope(&scope);
+        self.pending_output_scope_prefixes.push(content.clone());
+        append(self);
+        self.pending_output_scope_prefixes
+            .retain(|pending| pending != &content);
+        let mut started = false;
+        self.wrap_output_scope(&scope, |children| {
+            if started {
+                return wrap(children);
+            }
+            let (mut prefix, children, found) =
+                projection::split_output_scope_prefix(children, &content);
+            started = found;
+            if found {
+                prefix.extend(wrap(children));
+            }
+            prefix
+        });
     }
 
     /// Append content using the formatter-level boundary selected by the

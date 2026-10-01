@@ -74,3 +74,5 @@ mod native_rows;
 mod scope_fonts;
 mod scope_rows;
 mod vertical_rows;
+
+mod buffer_ownership;

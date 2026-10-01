@@ -11,7 +11,8 @@ use crate::mandoc::roff_escape::ZeroAdvanceMachine;
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[allow(clippy::struct_excessive_bools)]
 pub(in crate::mandoc) struct ZeroAdvanceState {
-    machine: ZeroAdvanceMachine<Inline>,
+    machine: ZeroAdvanceMachine<OwnedGlyph>,
+    native_word_owner: Option<u64>,
     fragment_started_pending: bool,
     resolved_preexisting: bool,
     output_owners: Vec<PendingOutputOwner>,
@@ -28,6 +29,12 @@ pub(in crate::mandoc) struct ZeroAdvanceState {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+struct OwnedGlyph {
+    value: Inline,
+    owner: Option<u64>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 struct PendingOutputOwner {
     pending_at_entry: bool,
     emitted_before_owner: bool,
@@ -39,6 +46,7 @@ impl ZeroAdvanceState {
             marker_blank_separator: false,
             held: Vec::new(),
             machine: ZeroAdvanceMachine::new(),
+            native_word_owner: None,
             fragment_started_pending: false,
             resolved_preexisting: false,
             output_owners: Vec::new(),
@@ -88,15 +96,53 @@ impl ZeroAdvanceState {
         }
     }
 
+    pub(in crate::mandoc) fn set_native_word_owner(&mut self, owner: u64) {
+        self.native_word_owner = Some(owner);
+    }
+
     fn project_glyph(&mut self, glyph: Inline) -> Option<(Inline, bool)> {
         if self.machine.has_pending() {
             self.note_pending_replaced();
         }
-        self.machine.project_glyph(glyph)
+        self.machine
+            .project_glyph(OwnedGlyph {
+                value: glyph,
+                owner: self.native_word_owner,
+            })
+            .map(|(glyph, replaced)| (glyph.value, replaced))
     }
 
     fn project_fallback(&mut self, glyph: Inline) -> Option<(Inline, bool)> {
-        self.machine.project_fallback(glyph)
+        self.machine
+            .project_fallback(OwnedGlyph {
+                value: glyph,
+                owner: self.native_word_owner,
+            })
+            .map(|(glyph, replaced)| (glyph.value, replaced))
+    }
+
+    fn project_owned(&self, glyphs: Vec<OwnedGlyph>) -> Vec<Inline> {
+        if glyphs.is_empty() {
+            return Vec::new();
+        }
+        let mut output = Vec::with_capacity(glyphs.len().saturating_mul(3));
+        for glyph in glyphs {
+            if let Some(owner) = glyph.owner {
+                output.push(Inline::anchor(format!(
+                    "{}{owner}",
+                    super::super::flow::INTERNAL_FIELD_WORD
+                )));
+            }
+            output.push(glyph.value);
+        }
+        // Resume the current owner for the new source word's following run.
+        if let Some(owner) = self.native_word_owner {
+            output.push(Inline::anchor(format!(
+                "{}{owner}",
+                super::super::flow::INTERNAL_FIELD_WORD
+            )));
+        }
+        output
     }
 
     fn take_pending(&mut self) -> Option<Vec<Inline>> {
@@ -104,7 +150,7 @@ impl ZeroAdvanceState {
         if glyph.is_some() {
             self.note_pending_emitted();
         }
-        glyph
+        glyph.map(|glyphs| self.project_owned(glyphs))
     }
 
     pub(super) fn begin_fragment(&mut self) {
@@ -158,9 +204,10 @@ impl ZeroAdvanceState {
     pub(in crate::mandoc) fn resolve_at_word_boundary(&mut self) -> Option<Vec<Inline>> {
         self.fragment_started_pending = false;
         self.resolved_preexisting = false;
-        if self.machine.is_armed() {
-            return None;
-        }
+        // term_word() buffers its separator independently of BACKAFTER.
+        // A later encode1() retreats over that blank, so the earlier
+        // BACKBEFORE glyph survives even when another \z armed the next
+        // graph (term.c:573-589,901-927). Keep the arm for that graph.
         let mut glyph = self.take_pending()?;
         if !self.held.is_empty() {
             // The held bytes behind the glyph survive the boundary: the
@@ -196,7 +243,7 @@ impl ZeroAdvanceState {
     /// it to print. Fallback spelling can contain more than one scalar.
     pub(in crate::mandoc) fn pending_visible_characters(&self) -> usize {
         self.machine.pending_ref().map_or(0, |glyph| {
-            mant_ir::inline_plain_text(std::slice::from_ref(glyph))
+            mant_ir::inline_plain_text(std::slice::from_ref(&glyph.value))
                 .chars()
                 .filter(|character| !character.is_whitespace())
                 .count()
@@ -232,16 +279,15 @@ impl ZeroAdvanceState {
             if self.machine.has_pending() && !self.held.is_empty() {
                 self.settle_pending_before_graph(output);
                 if self.machine.is_armed() {
-                    let _ = self
-                        .machine
-                        .project_glyph(styled_segment(" ".to_owned(), font));
+                    let _ = self.project_glyph(styled_segment(" ".to_owned(), font));
                     continue;
                 }
                 output.push(styled_segment(" ".to_owned(), font));
                 continue;
             }
             if let Some((cell, _)) = self.project_glyph(styled_segment(" ".to_owned(), font)) {
-                output.extend(self.machine.take_recoveries());
+                let recoveries = self.machine.take_recoveries();
+                output.extend(self.project_owned(recoveries));
                 output.push(cell);
             }
         }
@@ -437,6 +483,7 @@ impl ZeroAdvanceState {
         link: Option<&str>,
     ) {
         let recoveries = self.machine.take_recoveries();
+        let recoveries = self.project_owned(recoveries);
         if !recoveries.is_empty() {
             flush_segment(output, buffer, font, link);
             output.extend(recoveries);

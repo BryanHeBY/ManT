@@ -110,7 +110,8 @@ fn append_scope_children(builder: &mut InlineBuilder, node: &Node, name: Option<
         }),
         Some("Sx") => {
             let authored_target = authored_section_phrase(children, name);
-            builder.append_scope(
+            builder.append_semantic_scope(
+                node.id,
                 |builder| {
                     builder.with_font_scope(Font::Emphasis, |builder| {
                         append_inline_nodes(builder, children, name);
@@ -443,7 +444,11 @@ fn append_display(builder: &mut InlineBuilder, node: &Node, name: Option<&str>) 
     if !posts.ended(body.id) {
         // Bd BODY post and D1/Dl BLOCK post call term_newln(), exactly
         // once for the original scope (mdoc_term.c:1131,1482).
-        builder.no_fill_source_line();
+        if node.macro_name.as_deref() == Some("Bd") {
+            builder.finish_display_body(node.display_kind);
+        } else {
+            builder.no_fill_source_line();
+        }
         posts.finish(body.id);
     }
     if node.macro_name.as_deref() == Some("Bd") {
@@ -470,12 +475,14 @@ impl<'node> crate::mandoc::containers::ContainerSink<'node> for InlineContainerS
         self.builder.restore_definition_geometry(checkpoint);
     }
 
-    fn restore_fill(&mut self, _fill: bool) {
+    fn restore_fill(&mut self, _fill: bool, marker: &Node) {
         // An explicit .Ed restores the original display at its source
         // marker, before subsequent children execute. Inline execution
         // derives their fill flags from AST nodes; its post still owes the
         // same term_newln() as a normal return (mdoc_term.c:1474-1486).
-        self.builder.no_fill_source_line();
+        // mdoc_endbody_alloc shares the original BODY norm, including its
+        // display kind. The marker's post consumes that original scope.
+        self.builder.finish_display_body(marker.display_kind);
     }
 
     fn source_node(&mut self, node: &'node Node, starts_line: bool) {

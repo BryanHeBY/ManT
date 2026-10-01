@@ -13,6 +13,10 @@ pub(in crate::mandoc::inline::flow) struct DefinitionFieldState {
     pub(in crate::mandoc::inline::flow) margin_override: Option<usize>,
     pub(in crate::mandoc::inline::flow) native_margin_units: Option<usize>,
     pub(in crate::mandoc::inline::flow) field_offset_units: usize,
+    /// The current declared column origin. Its normal device padding is
+    /// already represented by table placement; temporary node origins are
+    /// not. This geometry is set at BODY pre, independently of IR owners.
+    pub(in crate::mandoc::inline::flow) column_origin_units: Option<usize>,
     pub(in crate::mandoc::inline::flow) projected_passes: usize,
     pub(in crate::mandoc::inline::flow) pending_indent: Option<usize>,
     /// True only for a NOBREAK field carried across the HEAD/BODY ownership
@@ -85,6 +89,10 @@ pub(in crate::mandoc::inline::flow) enum PendingFieldGapOrigin {
 #[derive(Clone, Default)]
 pub(in crate::mandoc::inline::flow) struct HangNativeRow {
     pub(in crate::mandoc::inline::flow) viscol: usize,
+    /// Actual origin advances printed on this device row beyond declared
+    /// column placement (`term.c::term_field()`). Node geometry restoration
+    /// cannot undo them; only a real endline retires the receipt.
+    pub(in crate::mandoc::inline::flow) unprojected_origin_units: usize,
     pub(in crate::mandoc::inline::flow) minbl: usize,
     // BRIND changes the offset while nested HEAD children execute. The
     // enclosing HEAD restores its old offset before its final post flush.
@@ -186,6 +194,7 @@ impl HangNativeRow {
 
     pub(in crate::mandoc::inline::flow) fn endline(&mut self) {
         self.viscol = 0;
+        self.unprojected_origin_units = 0;
         self.minbl = 0;
         self.field_width = 0;
         self.trailing_breakable = 0;
@@ -286,6 +295,10 @@ impl DefinitionOutcome {
 /// `BRIND`, `HANG`, and the list field geometry for a following request.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(in crate::mandoc::inline::flow) struct NoBreakField {
+    /// Actual native pad/break flags retained after `.mc` clears NOBREAK.
+    /// A layout style cannot reconstruct these: a Column is wrappable,
+    /// but never introduces a TAG's BRIND or BRTRSP.
+    pub(super) flags: super::super::native_field::FieldFlags,
     pub(super) output_end_before_separator: usize,
     pub(super) resumed_output_start: usize,
     pub(super) resumed_execution_epoch: u64,

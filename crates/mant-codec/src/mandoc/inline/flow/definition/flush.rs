@@ -3,11 +3,148 @@ use super::super::{
     AuthorBreakEffect, FormatterColumn, Inline, InlineBuilder, PendingBoundary, TrailingOutput,
     WordEndBreak, has_printable_character, last_visible_character, trim_trailing_breakable_spaces,
 };
+use super::device::{NativeFieldDevice, NativeFieldEmission};
 use super::state::{DefinitionFieldStyle, HangRowTransition, NoBreakField, PendingFieldGapOrigin};
 
+pub(super) use super::super::output::retain_inline_identities as retain_unprinted_field_targets;
+
+/// A real source/request/post flush delivers its row boundary to the active
+/// owner. The final column field tail instead has table-wide placement.
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub(super) enum FieldFlushBoundary {
+    Continue,
+    ExitField,
+    ColumnPost,
+}
+
+/// `minbl` survives a graphless flush (term.c:235), but `term_field()` only
+/// prints it with a later graph (397-434). Within an already printed row it
+/// is a real word separator; at an unprinted origin the responsive layout
+/// already represents positioning and must not add authored-looking cells.
+fn projected_next_field_gap(device: &NativeFieldDevice) -> usize {
+    if device.viscol > 0 {
+        device.next_field_gap_cells
+    } else {
+        0
+    }
+}
+
 impl InlineBuilder {
-    // The NOBREAK flush commits field, row, and BRIND state in native order.
-    #[allow(clippy::too_many_lines)]
+    /// A pending device separator has entered the active IR owner. Capture
+    /// that precise range before the next word, without writing native cells
+    /// or reviving a previously consumed `NoBreakField`.
+    pub(in crate::mandoc::inline::flow) fn bind_materialized_field_separator(
+        &mut self,
+        start: usize,
+        count: usize,
+    ) {
+        if let Some(field) = self
+            .execution
+            .definition
+            .as_mut()
+            .and_then(|state| state.no_break.as_mut())
+        {
+            field.output_end_before_separator = start;
+            field.resumed_output_start = self.nodes.len();
+            field.separator_cells = count;
+        }
+    }
+
+    /// A prior NOBREAK flush left actual flags and future positioning behind.
+    /// `term_newln()` consumes the next buffer under those same native flags;
+    /// an output owner's Line effect does not bypass that execution.
+    pub(super) fn begin_resumed_native_line(&mut self) -> Option<NativeFieldDevice> {
+        if !self
+            .execution
+            .author_execution
+            .as_ref()
+            .is_some_and(|author| matches!(author.break_effect, AuthorBreakEffect::Line))
+        {
+            return None;
+        }
+        let field = self.execution.definition.as_ref()?.no_break?;
+        let mut device =
+            self.native_field_device_at(false, Some(field), field.resumed_output_start)?;
+        self.retire_unprinted_no_break_separator(
+            device.emission,
+            device.separator_retention,
+            device.separator_field,
+            &mut device.output_start,
+        );
+        Some(device)
+    }
+
+    pub(super) fn retire_unprinted_no_break_separator(
+        &mut self,
+        emission: NativeFieldEmission,
+        separator_retention: Option<usize>,
+        consumed_field: Option<NoBreakField>,
+        output_start: &mut usize,
+    ) {
+        let active_field = self
+            .execution
+            .definition
+            .as_ref()
+            .and_then(|state| state.no_break);
+        let Some(mut field) = active_field.or(consumed_field) else {
+            return;
+        };
+        if field.separator_cells == 0 {
+            return;
+        }
+        let retained = if emission == NativeFieldEmission::Unprinted {
+            0
+        } else {
+            separator_retention.unwrap_or(field.separator_cells)
+        };
+        let unprinted = field.separator_cells.saturating_sub(retained);
+        if unprinted == 0 {
+            return;
+        }
+        // term_field() keeps positioning blank until an accepted graph
+        // actually prints (term.c:389-427). Only this generated separator's
+        // saved prefix is provisional; authored suffix and identities stay.
+        let old_start = field.resumed_output_start.min(self.nodes.len());
+        let mut suffix = self.nodes.split_off(old_start);
+        let separator_start = field.output_end_before_separator.min(self.nodes.len());
+        let mut separator = self.nodes.split_off(separator_start);
+        trim_trailing_breakable_spaces(&mut separator, unprinted);
+        self.nodes.append(&mut separator);
+        let new_start = self.nodes.len();
+        let removed = old_start.saturating_sub(new_start);
+        self.nodes.append(&mut suffix);
+        field.output_end_before_separator = field.output_end_before_separator.min(new_start);
+        field.resumed_output_start = new_start;
+        field.separator_cells = retained;
+        if active_field.is_some() {
+            self.definition_state_mut().no_break = Some(field);
+        }
+        if let Some(author) = &mut self.execution.author_execution
+            && author.field_output_start >= old_start
+        {
+            author.field_output_start = author.field_output_start.saturating_sub(removed);
+        }
+        if *output_start >= old_start {
+            *output_start = output_start.saturating_sub(removed);
+        }
+    }
+
+    pub(super) fn finish_resumed_native_line(&mut self, device: &NativeFieldDevice) {
+        self.retire_native_field_with_device(Some(device));
+        let start = self.nodes.len();
+        let epoch = self.execution.execution_epoch;
+        if let Some(field) = self.definition_state_mut().no_break.as_mut() {
+            field.output_end_before_separator = start;
+            field.resumed_output_start = start;
+            field.resumed_execution_epoch = epoch;
+            field.field_width = 0;
+            field.separator_cells = 0;
+        }
+        // term_newln() sets NOSPACE even when both lastcol and viscol were
+        // zero, so an empty flush cannot re-arm the next word's auto blank.
+        self.execution.boundary = PendingBoundary::Tight;
+    }
+
     pub(in crate::mandoc::inline::flow) fn flush_definition_field(
         &mut self,
         field_output_start: usize,
@@ -17,12 +154,45 @@ impl InlineBuilder {
         flags: FieldFlags,
         exit_field: bool,
     ) -> bool {
+        self.flush_definition_field_at(
+            field_output_start,
+            gap_cells,
+            body_width_columns,
+            field_width_columns,
+            flags,
+            if exit_field {
+                FieldFlushBoundary::ExitField
+            } else {
+                FieldFlushBoundary::Continue
+            },
+        )
+    }
+
+    // The NOBREAK flush commits field, row, and BRIND state in native order.
+    #[allow(clippy::too_many_lines)]
+    pub(super) fn flush_definition_field_at(
+        &mut self,
+        field_output_start: usize,
+        gap_cells: u8,
+        body_width_columns: u16,
+        field_width_columns: u16,
+        flags: FieldFlags,
+        boundary: FieldFlushBoundary,
+    ) -> bool {
+        let exit_field = boundary == FieldFlushBoundary::ExitField;
         self.commit_definition_row_origin();
         self.discard_unprinted_definition_field_output();
         // Source-line and request flushes consume the same native cells as
         // .mc. A projected tab has no IR glyph width, and BRTRSP considers
         // its tail even when term_field() prints no trailing padding.
-        let native = self.native_field_device(false);
+        let had_open_device_row = self.execution.has_open_native_device_row();
+        let mut native = self.native_field_device(false);
+        if let Some(device) = &mut native {
+            // Rejection projection may have advanced the author cursor to
+            // its accepted tail. This real flush still owns its original
+            // stable-word interval, captured by the entry's argument.
+            device.output_start = field_output_start;
+        }
         let had_marker_passes = self
             .execution
             .definition
@@ -47,6 +217,24 @@ impl InlineBuilder {
             self.definition_state_mut().hang_row.viscol = native.viscol;
         }
         if !self.has_formatter_cell() {
+            if had_open_device_row {
+                // term_newln(lastcol || viscol) flushes an empty buffer
+                // against the occupied device row. Its tail can close that
+                // row even under NOBREAK; the following term_vspace then
+                // owns a genuinely empty endline (term.c:475-497).
+                if native.as_ref().is_some_and(|device| device.ends_row) {
+                    self.force_output_line_break();
+                    self.execution.pending_field_spaces = 0;
+                }
+                self.execution.zero_advance.discard_at_row_end();
+                self.retire_native_field_with_device_at(native.as_ref(), boundary);
+                if !exit_field {
+                    // term_flushln() still restored minbl from trailspace,
+                    // even though lastcol was empty (term.c:233-253).
+                    self.execution.pending_field_spaces =
+                        native.as_ref().map_or(0, projected_next_field_gap);
+                }
+            }
             // `roff_term_pre_br()` applies BRIND even when `term_newln()` had
             // no tcol bytes or device row to flush.  It moves the next word
             // to the body margin and clears NOBREAK/BRIND.  HANG itself
@@ -194,16 +382,7 @@ impl InlineBuilder {
             // term_flushln() restores minbl from trailspace even when
             // term_fill() accepted no graph. Only a later formatter word or
             // roff_term_pre_br() decides whether those device cells print.
-            if !flags.wraps()
-                && self.execution.word_end_break == WordEndBreak::Pending
-                && self
-                    .execution
-                    .definition
-                    .as_ref()
-                    .is_some_and(|state| state.hang_row.viscol > 0)
-            {
-                deferred_field_cells = usize::from(gap_cells);
-            }
+            deferred_field_cells = native.as_ref().map_or(0, projected_next_field_gap);
             self.execution.trailing_output = TrailingOutput::None;
         }
 
@@ -245,7 +424,7 @@ impl InlineBuilder {
         }
         // term.c:233-237: the committed flush ends the field; the input
         // buffer restarts empty for whatever follows this row.
-        self.retire_native_field_with_device(native.as_ref());
+        self.retire_native_field_with_device_at(native.as_ref(), boundary);
         if let Some(definition) = &mut self.execution.definition {
             // A mid-field flush is a row event (upstream's `term_newln`
             // printing the buffered word before the restore,
@@ -359,6 +538,10 @@ impl InlineBuilder {
             }
             return;
         }
+        // term_fill() may accept a prefix and retire the rejected suffix's
+        // cursor. Keep the input owner boundary of this actual flush before
+        // either projection; accepted graph/origin receipts still belong to it.
+        let consumed_output_start = self.native_field_output_start();
         if let Some(field) = self.take_no_break_field() {
             self.continue_no_break_definition_field(field);
             return;
@@ -371,11 +554,11 @@ impl InlineBuilder {
         // rejected suffix stays dead and its row event stays real.
         let _plain_flush_rejection =
             Self::retire_plain_flush_unit_at(&mut self.execution, &mut self.nodes);
-        let row_ends = self.discard_unprinted_definition_field_output_no_break();
-        if self.no_break_definition_field() {
+        self.discard_unprinted_definition_field_output_no_break();
+        if self.no_break_definition_field(consumed_output_start) {
             return;
         }
-        let native = self.native_field_device(true);
+        let native = self.native_field_device_at(true, None, consumed_output_start);
         let device_row_continues = native.as_ref().is_none_or(|field| !field.ends_row);
         self.flush_zero_advance();
         // term.c:233-237 retires accepted and rejected buffers alike. Keep
@@ -391,12 +574,17 @@ impl InlineBuilder {
             row.margin_flush_seen = true;
         }
         self.retire_native_field_with_device(native.as_ref());
-        if row_ends && !device_row_continues {
+        if !device_row_continues {
             // term.c:220 with 250-253 under NOBREAK: the overrun field ends
             // its device row inside this flush; the next word starts a new
             // one at the list offset.
             let row_indent = self.take_definition_row_indent();
-            self.nodes.push(Inline::line_break_indented(row_indent));
+            if !super::super::output::ends_with_executed_line_break(&self.nodes) {
+                self.force_output_line_break();
+            }
+            if let Some(Inline::LineBreak { indent_columns }) = self.nodes.last_mut() {
+                *indent_columns = row_indent;
+            }
             self.note_definition_output_row();
             if let Some(definition) = &mut self.execution.definition {
                 definition.hang_row.endline();
@@ -442,7 +630,7 @@ impl InlineBuilder {
     /// `.mc` must not fall back to the ordinary one-cell path merely because
     /// `AuthorBreakEffect` changed after the first flush.
     pub(super) fn continue_no_break_definition_field(&mut self, mut field: NoBreakField) {
-        let native = self.native_field_device_with_resume(true, Some(field));
+        let native = self.native_field_device_at(true, Some(field), field.resumed_output_start);
         let resumed_has_cell = self.restore_no_break_field_projection(field, true);
         if let Some(native) = &native {
             let row = &mut self.definition_state_mut().hang_row;
@@ -464,6 +652,7 @@ impl InlineBuilder {
             }
             // Restore the one separator that was waiting for the next real
             // field instead of consuming it or manufacturing a second one.
+            field.output_end_before_separator = self.nodes.len();
             self.append_field_separator(field.separator_cells);
             self.execution.boundary = PendingBoundary::CommittedField;
             field.resumed_output_start = self.nodes.len();
@@ -556,7 +745,7 @@ impl InlineBuilder {
         }
     }
 
-    pub(super) fn no_break_definition_field(&mut self) -> bool {
+    pub(super) fn no_break_definition_field(&mut self, consumed_output_start: usize) -> bool {
         let Some((start, gap, body, field_width_columns, flags)) = self
             .execution
             .author_execution
@@ -579,7 +768,7 @@ impl InlineBuilder {
         else {
             return false;
         };
-        let native = self.native_field_device(true);
+        let native = self.native_field_device_at(true, None, consumed_output_start);
         self.flush_zero_advance();
         let field = self.nodes.get(start..).unwrap_or_default();
         let width = native.as_ref().map_or_else(
@@ -596,6 +785,10 @@ impl InlineBuilder {
             width.saturating_add(usize::from(gap)) > usize::from(body),
             |field| field.overruns,
         );
+        // The consumed buffer and its row-origin annotations precede the
+        // next field. Establish future owner cursors only after that exact
+        // retirement, so private annotation insertion cannot move them.
+        self.retire_native_field_with_device(native.as_ref());
         let output_end_before_separator = self.nodes.len();
         if flags.wraps() {
             if overrun {
@@ -633,6 +826,7 @@ impl InlineBuilder {
             }
         }
         self.definition_state_mut().no_break = Some(NoBreakField {
+            flags,
             output_end_before_separator,
             resumed_output_start: self.nodes.len(),
             resumed_execution_epoch: self.execution.execution_epoch,
@@ -658,7 +852,6 @@ impl InlineBuilder {
         self.execution.row_zero_graph = false;
         self.execution.formatter_column = FormatterColumn::Origin;
         self.execution.final_word_join = Some(false);
-        self.retire_native_field_with_device(native.as_ref());
         true
     }
 
@@ -695,7 +888,8 @@ impl InlineBuilder {
         // this path therefore executes a real `term_flushln()`: settle a
         // completed zero-advance glyph and, critically, clear a bare
         // BACKAFTER request before the next word runs.
-        let native = self.native_field_device_with_resume(force_no_break, Some(field));
+        let native =
+            self.native_field_device_at(force_no_break, Some(field), field.resumed_output_start);
         self.flush_zero_advance();
         let resumed = self
             .nodes
@@ -709,7 +903,12 @@ impl InlineBuilder {
             || (has_printable_character(resumed)
                 && self.execution.trailing_output == TrailingOutput::FixedBlank);
         if !resumed_has_cell {
-            trim_trailing_breakable_spaces(&mut self.nodes, field.separator_cells);
+            // A pending-only next-word cell has not entered this Vec. Never
+            // let its count trim a blank authored in the accepted prefix.
+            let separator_start = field.output_end_before_separator.min(self.nodes.len());
+            let mut provisional = self.nodes.split_off(separator_start);
+            trim_trailing_breakable_spaces(&mut provisional, field.separator_cells);
+            self.nodes.append(&mut provisional);
             let mut index = self.nodes.len();
             while index > field.output_end_before_separator {
                 index -= 1;
@@ -791,29 +990,4 @@ impl InlineBuilder {
         }
         self.finish_definition_field_control(field, 0, true);
     }
-}
-pub(super) fn retain_unprinted_field_targets(inlines: &mut Vec<Inline>) {
-    inlines.retain_mut(|inline| {
-        let identity =
-            crate::mandoc::inline::links::presentation::retains_authored_identity(inline);
-        match inline {
-            Inline::Anchor { .. } => true,
-            // term_fill() returned nbr=0: a buffered \p line request in this
-            // field never reached the device, even inside a semantic Link.
-            Inline::LineBreak { .. }
-            | Inline::Text { .. }
-            | Inline::Code { .. }
-            | Inline::Equation { .. } => false,
-            Inline::Link { children, .. } => {
-                retain_unprinted_field_targets(children);
-                true
-            }
-            Inline::Strong { children }
-            | Inline::Emphasis { children }
-            | Inline::PortableDisplay { children, .. } => {
-                retain_unprinted_field_targets(children);
-                identity || !children.is_empty()
-            }
-        }
-    });
 }

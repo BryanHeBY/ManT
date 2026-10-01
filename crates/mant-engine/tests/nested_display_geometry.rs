@@ -45,6 +45,19 @@ fn visible(children: &[Inline]) -> String {
     text.0
 }
 
+fn represented_display_gap(children: &[Inline], spacing: u16) -> Option<u16> {
+    // Exact original source profiles were rerun before this assertion:
+    // print_bvspace's completed rows can live in a shared column owner as
+    // leading hard rows, rather than a detached display's layout hint.
+    // Keep every row and the exact INNER suffix (including no trailing LF).
+    let text = visible(children);
+    let leading = text.strip_suffix("INNER")?;
+    leading
+        .chars()
+        .all(|character| character == '\n')
+        .then(|| spacing.saturating_add(u16::try_from(leading.chars().count()).unwrap()))
+}
+
 #[test]
 fn nested_display_offsets_compose_and_restore_for_each_mode() {
     for outer in ["filled", "literal", "unfilled"] {
@@ -355,9 +368,10 @@ fn first_item_display_boundaries_follow_the_native_list_kind() {
             if let Block::Preformatted {
                 children, layout, ..
             } = block
-                && visible(children) == "INNER"
+                && let Some(spacing) =
+                    represented_display_gap(children, layout.spacing_before_lines)
             {
-                self.0 = Some(layout.spacing_before_lines);
+                self.0 = Some(spacing);
             }
             visit::walk_block(self, block);
         }
@@ -435,9 +449,10 @@ fn compact_column_display_suppresses_only_its_own_vertical_request() {
             if let Block::Preformatted {
                 children, layout, ..
             } = block
-                && visible(children) == "INNER"
+                && let Some(spacing) =
+                    represented_display_gap(children, layout.spacing_before_lines)
             {
-                self.0 = Some(layout.spacing_before_lines);
+                self.0 = Some(spacing);
             }
             visit::walk_block(self, block);
         }

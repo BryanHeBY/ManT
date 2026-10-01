@@ -880,13 +880,17 @@ fn definition_head_anchor_does_not_shift_explicit_term_separator() {
         })
         .expect("definition item");
     assert_eq!(item.terms.len(), 2, "{item:#?}");
-    assert_eq!(inline_text(&item.terms[0]), "first");
+    // This exact input was rerun before updating the assertion. The TAG
+    // overruns its field: term_newln() ends the row and term_vspace() adds
+    // a separate empty row. The semantic alternative removes one boundary,
+    // leaving that executed vertical row attached to the preceding term.
+    assert_eq!(inline_text(&item.terms[0]), "first\n");
     assert_eq!(inline_text(&item.terms[1]), "second");
 
-    // Consecutive Pp requests may reuse one projected LineBreak when an
-    // intervening bare \z has not occupied a formatter cell. The later Pp
-    // must still split the following term. Exact source checked with fixed
-    // CVS -Tascii/-Thtml/-Tlint; mdoc_term.c executes each Pp in order.
+    // Each Pp asserts a separate vertical row even when an intervening bare
+    // \z has not occupied a formatter cell. The later Pp must still split
+    // the following term. Exact source rerun with fixed CVS before these
+    // assertions; mdoc_term.c::termp_pp_pre executes each Pp in order.
     let source = b".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width xxx\n.It Xo\nfirst\n.Pp\n\\z\n.Pp\nsecond\n.Pp\nthird\n.Xc\nbody\n.El\n";
     let document =
         parse_manual_bytes(std::path::Path::new("definition-repeated-pp.1"), source).unwrap();
@@ -899,9 +903,18 @@ fn definition_head_anchor_does_not_shift_explicit_term_separator() {
         })
         .expect("definition item");
     assert_eq!(item.terms.len(), 3, "{item:#?}");
-    assert_eq!(inline_text(&item.terms[0]), "first");
+    assert_eq!(inline_text(&item.terms[0]), "first\n");
     assert!(inline_text(&item.terms[1]).contains("cond"), "{item:#?}");
     assert_eq!(inline_text(&item.terms[2]), "third");
+    assert_eq!(
+        item.terms
+            .iter()
+            .map(|term| inline_text(term))
+            .collect::<Vec<_>>()
+            .join("\n"),
+        "first\n\n\necond\n\nthird",
+        "each actual vertical row survives its semantic alternative: {item:#?}"
+    );
 }
 
 #[test]

@@ -22,7 +22,7 @@ impl InlineBuilder {
     /// Execute a visited empty TEXT at its actual node position. Native
     /// `print_man_node()`/`print_mdoc_node()` call `term_newln()` for an active \c;
     /// otherwise `term_vspace()` consumes skipvsp before emitting a blank row.
-    pub(in crate::mandoc) fn execute_visited_empty_text(&mut self) {
+    pub(in crate::mandoc) fn execute_visited_empty_text(&mut self, no_fill: bool) {
         if self.final_source_continuation_or(false) {
             self.hard_break();
             // term_newln() does not clear TERMP_NONEWLINE. Another empty
@@ -33,7 +33,14 @@ impl InlineBuilder {
             // Empty TEXT calls term_vspace(), not roff_term_pre_sp().
             // Its resolved rows are recorded by that single execution
             // entry; it must not add a second receipt or execute pre_br.
-            self.native_vertical_space(1);
+            self.native_vertical_space_with_origin(
+                1,
+                if no_fill {
+                    super::super::CompletedRowOrigin::LiteralText
+                } else {
+                    super::super::CompletedRowOrigin::Layout
+                },
+            );
         }
     }
 
@@ -130,6 +137,19 @@ impl InlineBuilder {
                 self.execution.final_word_join = Some(false);
                 self.execution.final_source_continuation = Some(false);
                 self.finish_native_vertical_row(rows);
+                self.move_definition_field_origin_to_body(body_width_columns);
+                if !flags.wraps()
+                    && let Some(execution) = &mut self.execution.author_execution
+                {
+                    // pre_br clears trailspace even when term_newln had
+                    // no cell to flush. HANG survives; offset is not viscol.
+                    execution.break_effect = AuthorBreakEffect::Field {
+                        gap_cells: 0,
+                        body_width_columns,
+                        field_width_columns,
+                        flags,
+                    };
+                }
                 return;
             }
             // `roff_term_pre_sp()` executes term_vspace() before the final
@@ -201,6 +221,11 @@ impl InlineBuilder {
             self.retain_line_breaks(rows);
         }
         self.finish_native_vertical_row(rows);
+        if let Some((body, _, flags)) = field
+            && flags.contains(FieldFlag::Brind)
+        {
+            self.move_definition_field_origin_to_body(body);
+        }
         if self.execution.definition.is_some()
             && self
                 .execution
@@ -233,15 +258,28 @@ impl InlineBuilder {
     /// Plain `term_vspace()`, as used by `print_bvspace()`; unlike roff `.sp`,
     /// this does not execute `pre_br` or clear BRIND/NOBREAK afterwards.
     pub(in crate::mandoc) fn native_vertical_space(&mut self, rows: u16) {
-        self.no_fill_source_line();
+        self.native_vertical_space_with_origin(rows, super::super::CompletedRowOrigin::Layout);
+    }
+
+    fn native_vertical_space_with_origin(
+        &mut self,
+        rows: u16,
+        origin: super::super::CompletedRowOrigin,
+    ) {
+        self.execute_native_newline();
         let rows = self.execution.resolve_vertical_space(i32::from(rows));
+        // NOBREAK/HANG can leave an already printed device row alive after
+        // term_newln(). The first backend endline then closes that graph;
+        // only later endlines complete empty rows (term.c:489-497). Observe
+        // the device after the flush, not the pre-flush buffer or IR tail.
+        let closes_printed_row = rows > 0 && self.execution.has_open_native_device_row();
+        let completed_rows = rows.saturating_sub(u16::from(closes_printed_row));
         self.retain_line_breaks(usize::from(rows));
         self.finish_native_vertical_row(usize::from(rows));
-        self.asserted_vertical_row |= rows > 0;
+        self.asserted_vertical_row |= completed_rows > 0;
         // term_vspace() already emitted these empty rows after resolving
         // skipvsp. They survive an output-owner return independently of
         // the ordinary row end from its leading term_newln().
-        self.execution.completed_vertical_rows =
-            self.execution.completed_vertical_rows.saturating_add(rows);
+        self.record_completed_rows(completed_rows, origin);
     }
 }

@@ -1,37 +1,67 @@
 use super::*;
 
+/// A separate authored section bounds the body independently of OS metadata.
+/// `mdoc_validate.c::post_os` accepts arbitrary text, and `print_mdoc_foot()`
+/// may lay out that text across several rows.
+fn framed_definition_rows(output: &str) -> Vec<String> {
+    let lines = output.lines().collect::<Vec<_>>();
+    let start = lines
+        .iter()
+        .position(|line| line.trim() == "DESCRIPTION")
+        .expect("authored DESCRIPTION heading");
+    let end = lines[start + 1..]
+        .iter()
+        .position(|line| line.trim() == "NEXT")
+        .map(|index| index + start + 1)
+        .expect("authored NEXT heading before page furniture");
+    let mut rows = lines[start + 1..end]
+        .iter()
+        .map(|line| line.trim().to_owned())
+        .collect::<Vec<_>>();
+    while rows.last().is_some_and(String::is_empty) {
+        rows.pop();
+    }
+    rows
+}
+
 #[test]
 fn continued_literal_definition_body_reaches_the_text_consumer_on_the_head_row() {
-    // Both exact sources passed the pinned reference -Tascii/-Tutf8/-Tlint.
+    // All eight complete inputs ran pristine in all five profiles first.
     // mdoc_term.c::print_mdoc_node() observes NODE_LINE before BODY dispatch;
     // TERMP_NONEWLINE from \c alone keeps that physical row open.
     fn content_lines(output: &str) -> Vec<String> {
-        output
-            .lines()
-            .skip_while(|line| line.trim() != "DESCRIPTION")
-            .skip(1)
-            .take_while(|line| !line.contains("Linux 6."))
-            .map(str::trim)
-            .filter(|line| !line.is_empty())
-            .map(str::to_owned)
+        // The list's leading spacing is outside this row-connection check;
+        // every later empty row remains visible to the assertion.
+        framed_definition_rows(output)
+            .into_iter()
+            .skip_while(String::is_empty)
             .collect()
     }
-    let prefix = ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -hang -width 4n\n.It Xo\n";
-    for (head, same_row) in [(".No X\\c", true), (".No X", false)] {
-        let source = format!("{prefix}{head}\n.Xc\n.No BODY\n.El\n");
-        let native = content_lines(&native_terminal(&source));
-        let lowered = content_lines(&lowered_terminal(&source));
-        assert_eq!(
-            native.len(),
-            if same_row { 1 } else { 2 },
-            "{head}: {native:?}"
-        );
-        assert_eq!(lowered.len(), native.len(), "{head}: {lowered:?}");
-        if same_row {
-            assert!(lowered[0].contains('X') && lowered[0].contains("BODY"));
-        } else {
-            assert_eq!(lowered[0], "X");
-            assert_eq!(lowered[1], "BODY");
+    let long_footer = format!("FixtureOS {}", "long footer ".repeat(12).trim_end());
+    for operating_system in [
+        "Linux 6.18.33.2-microsoft-standard-WSL2",
+        "Darwin 23.6.0",
+        "FixtureOS",
+        long_footer.as_str(),
+    ] {
+        for (head, same_row) in [(".No X\\c", true), (".No X", false)] {
+            let source = format!(
+                ".Dd September 28, 2026\n.Dt TEST 1\n.Os {operating_system}\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -hang -width 4n\n.It Xo\n{head}\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n"
+            );
+            let native = content_lines(&native_terminal(&source));
+            let lowered = content_lines(&lowered_terminal(&source));
+            assert_eq!(
+                native.len(),
+                if same_row { 1 } else { 2 },
+                "{head}: {native:?}"
+            );
+            assert_eq!(lowered.len(), native.len(), "{head}: {lowered:?}");
+            if same_row {
+                assert!(lowered[0].contains('X') && lowered[0].contains("BODY"));
+            } else {
+                assert_eq!(lowered[0], "X");
+                assert_eq!(lowered[1], "BODY");
+            }
         }
     }
 }
@@ -1444,6 +1474,49 @@ fn control_only_author_handoffs_settle_buffer_and_device_rows_separately() {
 }
 
 #[test]
+fn graphless_native_posts_retire_padding_and_retain_the_next_field_gap() {
+    // Each exact source ran the pristine CVS ASCII/UTF-8/HTML/tree/lint
+    // profiles before these assertions. term_field() writes positioning
+    // blanks only with a graph (term.c:389-427), but term_flushln() restores
+    // minbl from trailspace even for NBRZW/empty fields (233-253). Fd's post,
+    // Bd's BODY post and no-fill NODE_LINE consume the same live field.
+    for (label, control, expected) in [
+        ("declaration post", ".Fd \\&\n", "LONGTEXT Bob  BODY"),
+        (
+            "display post",
+            ".Bd -literal -compact\n.No \\&\n.Ed\n",
+            "LONGTEXT Bob  BODY",
+        ),
+        (
+            "source and fill-mode events",
+            ".nf\n.No \\&\n.fi\n",
+            "LONGTEXTBob   BODY",
+        ),
+        (
+            "repeated invisible input",
+            ".No \\&\n.Fd \\&\n",
+            "LONGTEXT Bob  BODY",
+        ),
+    ] {
+        let source = format!(
+            ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.Bl -hang -width 12n\n.It Xo\n.No LONGTEXT\n.mc\n.No \"\"\n{control}.An -split\n.An Bob\n.Xc\n.No BODY\n.El\n"
+        );
+        let native = without_line_indentation(&native_terminal(&source));
+        assert!(native.contains(expected), "{label}: {native:?}");
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+        let json = mant_render::render_query_json(&query, false).unwrap();
+        assert!(!json.contains("\\u0000mant:"), "private owner leaked");
+        let decoded: mant_protocol::QueryBundle = serde_json::from_str(&json).unwrap();
+        let restored = decoded.into();
+        let lowered = mant_render::render_query_text(&restored);
+        assert!(lowered.contains(expected), "{label}: {lowered:?}");
+        for word in ["LONGTEXT", "Bob", "BODY"] {
+            assert_eq!(lowered.matches(word).count(), 1, "{label}: {lowered:?}");
+        }
+    }
+}
+
+#[test]
 fn invisible_run_in_head_row_has_one_output_owner() {
     // Each exact input was run with the pinned CVS -Tascii/-Tlint. In
     // term.c::term_word(), the second empty word writes a separator cell;
@@ -1772,7 +1845,8 @@ fn tag_and_hang_fields_share_the_native_word_end_and_graph_rules() {
 
 #[test]
 fn discarded_tag_head_buffer_preserves_prior_rows_and_waits_for_real_flush() {
-    // All three exact inputs passed fixed CVS -Tutf8/-Tlint. term_fill()
+    // All four complete framed inputs ran pristine in all five profiles.
+    // term_fill()
     // discards the entire pending buffer after a leading \p and separator;
     // a later term_newln() releases subsequent words but never erases rows
     // already completed by roff_term_pre_br()/pre_sp().
@@ -1782,44 +1856,33 @@ fn discarded_tag_head_buffer_preserves_prior_rows_and_waits_for_real_flush() {
         (".br\n.No \\p\n.No Y\n.br\n.No Z\n", vec!["X", "Z", "BODY"]),
         (".sp 1\n.No \\p\n.No Y\n.br\n", vec!["X", "", "BODY"]),
     ] {
-        let source = format!("{prefix}{tail}.Xc\n.No BODY\n.El\n");
+        let source = format!("{prefix}{tail}.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n");
         let native = native_terminal(&source);
         let lowered = lowered_terminal(&source);
-        let rows = |value: &str| {
-            value
-                .split("DESCRIPTION\n")
-                .nth(1)
-                .unwrap()
-                .lines()
-                .map(str::trim)
-                .take_while(|row| *row != "Linux 6.18.33.2-microsoft-standard-WSL2")
-                .filter(|row| !row.is_empty() || expected_rows.contains(&""))
-                .take(expected_rows.len())
-                .map(str::to_owned)
-                .collect::<Vec<_>>()
-        };
-        assert_eq!(rows(&native), expected_rows, "native {tail}: {native:?}");
-        assert_eq!(rows(&lowered), expected_rows, "lowered {tail}: {lowered:?}");
+        assert_eq!(
+            framed_definition_rows(&native),
+            expected_rows,
+            "native {tail}: {native:?}"
+        );
+        assert_eq!(
+            framed_definition_rows(&lowered),
+            expected_rows,
+            "lowered {tail}: {lowered:?}"
+        );
     }
-    let long_tag = ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It Xo XXXXXX\n.br\n.No \\p\n.No Y\n.br\n.Xc\n.No BODY\n.El\n";
+    let long_tag = ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It Xo XXXXXX\n.br\n.No \\p\n.No Y\n.br\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n";
     let native = native_terminal(long_tag);
     let lowered = lowered_terminal(long_tag);
     // Exact pristine source run retains one physical blank row. The IR
     // may attach a line-origin hint to it; padding does not make it another
     // row or printable word (term.c::term_flushln(), roff_term_pre_br()).
-    let rows = |value: &str| {
-        value
-            .split_once("DESCRIPTION\n")
-            .unwrap()
-            .1
-            .lines()
-            .take(3)
-            .map(|row| row.trim().to_owned())
-            .collect::<Vec<_>>()
-    };
-    assert_eq!(rows(&native), ["XXXXXX", "", "BODY"], "native: {native:?}");
     assert_eq!(
-        rows(&lowered),
+        framed_definition_rows(&native),
+        ["XXXXXX", "", "BODY"],
+        "native: {native:?}"
+    );
+    assert_eq!(
+        framed_definition_rows(&lowered),
         ["XXXXXX", "", "BODY"],
         "lowered: {lowered:?}"
     );

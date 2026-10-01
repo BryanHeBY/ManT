@@ -4,6 +4,7 @@ use super::super::Inline;
 /// (term.c:220 with 205-207): each boundary is a cell offset inside the
 /// word's content; the breakable blanks immediately before it were
 /// consumed by the break, and the continuation starts at the boundary.
+#[cfg(test)]
 pub(super) fn split_word_at_row_boundaries(
     incoming: &[Inline],
     boundaries: &mut Vec<usize>,
@@ -24,6 +25,7 @@ pub(super) fn split_word_at_row_boundaries(
 
 /// Returns true when the whole remainder was emitted (a boundary fell in a
 /// non-cell node, so no further split can apply).
+#[cfg(test)]
 fn split_nodes_at_boundaries(
     nodes: &[Inline],
     cell: &mut usize,
@@ -93,6 +95,7 @@ fn split_nodes_at_boundaries(
     }
 }
 
+#[cfg(test)]
 fn split_nodes_at_boundaries_owned(
     nodes: &[Inline],
     cell: &mut usize,
@@ -168,7 +171,7 @@ fn split_text_with_blank_run(
         // word-tail candidate an overrun cut at (353-354): the row ends
         // here and the graph starts the next one. The breakpoint itself
         // never prints (term.c:396-398).
-        if boundaries.get(*next_boundary) == Some(cell) {
+        while boundaries.get(*next_boundary) == Some(cell) {
             push_split_text(&mut run, node, output);
             output.push(Inline::line_break());
             advance_boundary(cell, next_boundary, boundaries);
@@ -231,18 +234,25 @@ fn push_split_text(run: &mut String, node: &Inline, output: &mut Vec<Inline>) {
     }
 }
 
-/// Locate a stable native-word marker through semantic wrappers. All output
-/// preceding it is committed; the receipt owns only the following interval.
-/// Link targets and authored anchors are identities and survive rejection.
-pub(in crate::mandoc::inline::flow) fn retain_native_field_prefix(
+/// Keep exactly each native owner's accepted scalar interval. A cached
+/// glyph can resume an earlier owner after a later owner's marker: acceptance
+/// follows that identity, never the append location. Typed links and authored
+/// anchors survive even when all their visible cells were rejected.
+pub(in crate::mandoc::inline::flow) fn retain_native_field_owners(
     nodes: &mut Vec<Inline>,
-    marker: &str,
-    limit: usize,
+    limits: &std::collections::BTreeMap<String, super::native_passes::OwnerAcceptance>,
 ) -> bool {
-    fn retain(nodes: &mut Vec<Inline>, marker: &str, found: &mut bool, remaining: &mut usize) {
+    fn retain(
+        nodes: &mut Vec<Inline>,
+        limits: &std::collections::BTreeMap<String, super::native_passes::OwnerAcceptance>,
+        owner: &mut Option<String>,
+        positions: &mut std::collections::BTreeMap<String, usize>,
+        found: &mut bool,
+    ) {
         nodes.retain_mut(|node| {
             if let Inline::Anchor { id, .. } = node {
-                if id.as_str() == marker {
+                if limits.contains_key(id.as_str()) {
+                    *owner = Some(id.as_str().to_owned());
                     *found = true;
                 }
                 return true;
@@ -252,43 +262,53 @@ pub(in crate::mandoc::inline::flow) fn retain_native_field_prefix(
                 | Inline::Emphasis { children }
                 | Inline::PortableDisplay { children, .. }
                 | Inline::Link { children, .. } => {
-                    retain(children, marker, found, remaining);
+                    retain(children, limits, owner, positions, found);
                     !children.is_empty()
                         || matches!(node, Inline::Link { .. } | Inline::PortableDisplay { .. })
                 }
-                _ if !*found => true,
-                Inline::Text { value } | Inline::Code { value } => {
+                _ if owner.is_none() => true,
+                Inline::Text { value }
+                | Inline::Code { value }
+                | Inline::Equation { value, .. } => {
+                    let owner = owner.as_ref().expect("native owner");
+                    if value.is_empty() {
+                        // An invisible native graph can own an empty physical
+                        // row witness. A glyphless Rust fragment alone cannot
+                        // establish it (term.c:340-349,475-481).
+                        return limits.get(owner).is_some_and(|range| range.native_cells);
+                    }
+                    let position = positions.entry(owner.clone()).or_default();
                     let count = value.chars().count();
-                    if count > *remaining {
+                    let accepted = limits
+                        .get(owner)
+                        .map_or(0, |range| range.scalars)
+                        .saturating_sub(*position);
+                    if count > accepted {
                         let end = value
                             .char_indices()
-                            .nth(*remaining)
+                            .nth(accepted)
                             .map_or(value.len(), |(byte, _)| byte);
                         value.truncate(end);
                     }
-                    *remaining = remaining.saturating_sub(count);
+                    *position = position.saturating_add(count);
                     !value.is_empty()
                 }
                 Inline::LineBreak { .. } => {
-                    if *remaining == 0 {
-                        false
-                    } else {
-                        *remaining -= 1;
-                        true
-                    }
-                }
-                Inline::Equation { value, .. } => {
-                    let keep = *remaining > 0;
-                    *remaining = remaining.saturating_sub(value.chars().count());
-                    keep
+                    let owner = owner.as_ref().expect("native owner");
+                    limits.get(owner).is_some_and(|range| range.native_cells)
                 }
                 Inline::Anchor { .. } => unreachable!(),
             }
         });
     }
-    let mut remaining = limit;
     let mut found = false;
-    retain(nodes, marker, &mut found, &mut remaining);
+    retain(
+        nodes,
+        limits,
+        &mut None,
+        &mut std::collections::BTreeMap::new(),
+        &mut found,
+    );
     found
 }
 

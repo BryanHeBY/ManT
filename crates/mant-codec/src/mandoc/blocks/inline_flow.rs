@@ -6,6 +6,10 @@ use super::{
 
 impl super::BlockLowerer<'_, '_> {
     pub(super) fn push_inline_node(&mut self, node: &Node, next: Option<&Node>) {
+        // A native post may have consumed a display's field while leaving
+        // its physical row open. Reuse that actual owner before another
+        // filled word executes, independently of the presentation fill mode.
+        self.resume_no_fill_row();
         let source = source_span(node);
         self.state.push_source_inline_with(
             source,

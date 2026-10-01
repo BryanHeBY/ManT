@@ -92,6 +92,9 @@ pub(in crate::mandoc) enum FieldWrite {
     RecoveryGlyph {
         projected_scalars: usize,
     },
+    /// A breakable source blank consumed by a marker's pass boundary. Its
+    /// cell participates in acceptance, but has no authored output scalar.
+    UnprojectedBlank,
     ArmBackafter,
     CancelBackafter,
 }
@@ -128,7 +131,7 @@ impl FieldWrite {
 /// facts the recorder must register its anchor from, never a prediction
 /// made before execution (a BACKBEFORE retreat can pop the separator
 /// blank or a previous word's trailing blank, term.c:901-908).
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(super) struct WordWriteReceipt {
     /// Index of the first cell this word's writes produced that survives
     /// execution with projection ownership. A leading `Backline` is a
@@ -233,6 +236,9 @@ pub(in crate::mandoc::inline) struct FieldBuffer {
     /// Repeated .ta/word pairs must not replay their growing field history.
     word_scan: WordScanPolicy,
     last_break_marker: Option<usize>,
+    /// Accepted native row events already projected. A .ta change restarts
+    /// width scanning, but cannot execute the same marker pass twice.
+    projected_pass_ends: std::collections::BTreeSet<usize>,
     word_space_ready: bool,
     significant_positions: Vec<usize>,
     blank_positions: Vec<usize>,
@@ -303,7 +309,6 @@ impl FieldBuffer {
             FieldCell::Graph { .. }
                 | FieldCell::BreakableBlank
                 | FieldCell::NonBreakingBlank
-                | FieldCell::BreakMarker
                 | FieldCell::Tab
         ));
         if self.projection_prefix.is_empty() {
@@ -434,6 +439,7 @@ impl FieldBuffer {
         self.committed_passes.clear();
         self.word_scan = WordScanPolicy::Incremental;
         self.last_break_marker = None;
+        self.projected_pass_ends.clear();
         self.word_space_ready = false;
         self.word_first_content = None;
         self.significant_positions.clear();
@@ -470,6 +476,10 @@ impl FieldBuffer {
                     self.push_cell(FieldCell::ZeroWidthGraph);
                     *self.projection_prefix.last_mut().expect("recovery cell") += projected_scalars;
                 }
+                FieldWrite::UnprojectedBlank => {
+                    self.push_cell(FieldCell::BreakableBlank);
+                    *self.projection_prefix.last_mut().expect("buffered blank") -= 1;
+                }
                 FieldWrite::ArmBackafter => self.backafter_armed = true,
                 FieldWrite::CancelBackafter => self.backafter_armed = false,
             }
@@ -487,6 +497,14 @@ impl FieldBuffer {
             end_cell,
         }
     }
+    pub(super) fn has_projected_pass(&self, end: usize) -> bool {
+        self.projected_pass_ends.contains(&end)
+    }
+
+    pub(super) fn has_projected_rows(&self) -> bool {
+        !self.projected_pass_ends.is_empty()
+    }
+
     fn encode_graph(&mut self, text: char, width: usize, projected: bool) {
         self.push_graph(text, width);
         if !projected {
@@ -805,6 +823,7 @@ impl FieldBuffer {
     pub(super) fn commit_pass(&mut self, pass: FillPass, tab_target: usize) {
         self.advance_tab_offset(pass.units, tab_target);
         self.committed_passes.push(pass);
+        self.projected_pass_ends.insert(pass.end);
         self.scan = None;
         self.advance_past(pass.end);
         self.consume_break_blanks();

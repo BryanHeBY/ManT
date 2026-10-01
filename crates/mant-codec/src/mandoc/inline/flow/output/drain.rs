@@ -6,7 +6,8 @@ use super::super::{
     PreservedInlineState, WordEndBreak, has_printable_character,
 };
 use super::projection::{
-    finalize_inline_output, has_non_whitespace_glyph, trim_output_terminators,
+    finalize_inline_output, has_non_whitespace_glyph, retain_inline_identities,
+    trim_output_terminators,
 };
 
 impl InlineBuilder {
@@ -35,8 +36,7 @@ impl InlineBuilder {
         // in finish_nodes() is too late: the block row count is already
         // detached, and trimming would erase the rejected pass's endline.
         if self.retire_plain_flush_unit() {
-            self.execution.completed_vertical_rows =
-                self.execution.completed_vertical_rows.saturating_add(1);
+            self.record_completed_vertical_rows(1);
             self.execution.word_end_break = WordEndBreak::Clear;
             self.execution.formatter_column = FormatterColumn::Origin;
         }
@@ -81,13 +81,10 @@ impl InlineBuilder {
         // Trailing LineBreak nodes own already closed rows; the current
         // invisible cell is a later row. A bare \p was excluded above and
         // is transferred separately through empty_word_end_break.
-        let mut completed_vertical_rows = self
-            .execution
-            .completed_vertical_rows
+        let executed_tail_rows = super::projection::trailing_completed_row_receipts(&self.nodes);
+        let mut completed_vertical_rows = executed_tail_rows
             .saturating_add(u16::from(requested_invisible_row))
-            .saturating_add(
-                trailing_invisible_rows.saturating_sub(self.execution.completed_vertical_rows),
-            );
+            .saturating_add(trailing_invisible_rows.saturating_sub(executed_tail_rows));
         if completed_vertical_rows > 0 {
             // term_vspace() has already emitted these rows. Remove only their
             // trailing inline projection, including a later invisible word
@@ -110,17 +107,18 @@ impl InlineBuilder {
             // The completed-row owner now accounts for this cell. The old
             // invisible-word fallback must not manufacture it a second time.
             invisible_formatter_cell &= !active_invisible_cell;
-            let mut anchors = Vec::new();
+            let mut identities = Vec::new();
             while self.nodes.last().is_some_and(|node| {
                 matches!(node, Inline::LineBreak { .. })
                     || !has_non_whitespace_glyph(std::slice::from_ref(node))
             }) {
-                if let Some(anchor @ Inline::Anchor { .. }) = self.nodes.pop() {
-                    anchors.push(anchor);
+                if let Some(node) = self.nodes.pop() {
+                    identities.push(node);
                 }
             }
-            anchors.reverse();
-            self.nodes.extend(anchors);
+            identities.reverse();
+            retain_inline_identities(&mut identities);
+            self.nodes.extend(identities);
         }
         let completed_invisible_row =
             invisible_formatter_cell && matches!(self.nodes.last(), Some(Inline::LineBreak { .. }));
@@ -226,10 +224,9 @@ impl InlineBuilder {
             self.commit_definition_row_origin();
             self.flush_zero_advance();
             let extra_row_end = self.discard_unprinted_definition_field_output();
-            self.execution.completed_vertical_rows = self
-                .execution
-                .completed_vertical_rows
-                .saturating_add(u16::from(extra_row_end && !closes_represented_head));
+            self.record_completed_vertical_rows(u16::from(
+                extra_row_end && !closes_represented_head,
+            ));
         }
         if let Some(state) = &mut self.execution.definition {
             state.field_buffer.clear();
@@ -323,7 +320,9 @@ impl InlineBuilder {
             self.execution.flush_unit_anchors.clear();
             self.execution.flush_unit_output_start = 0;
         }
-        trim_output_terminators(&mut self.nodes);
+        if !super::projection::trailing_device_row_end_receipt(&self.nodes) {
+            trim_output_terminators(&mut self.nodes);
+        }
         let _ = retired_rejected_row;
         self.drain_ir_nodes()
     }
