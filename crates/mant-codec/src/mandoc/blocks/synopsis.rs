@@ -246,7 +246,7 @@ pub(super) fn execute_synopsis_head(
         formatter.with_output_builder(&mut no_output, |builder| {
             builder.inherit_preserved_execution(preserved);
         });
-        debug_assert!(no_output.is_empty());
+        assert!(no_output.is_empty());
         head
     };
     if node.macro_name.as_deref() == Some("SY") {

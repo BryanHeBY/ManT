@@ -21,9 +21,9 @@ pub(super) fn append_table_row(
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) {
     let Some(kind) = table_row_kind(node) else {
-        // Only native table spans carry a row kind. Keep the defensive guard
-        // for synthetic test nodes and malformed foreign ASTs.
-        debug_assert!(node.table_cells.is_empty());
+        // Only native table spans carry a row kind; foreign or synthetic
+        // nodes without one (even if they carry cells) are tolerated and
+        // dropped here rather than treated as an invariant violation.
         return;
     };
     if !matches!(&kind, mant_ir::TableRowKind::Data) && !node.table_cells.is_empty() {

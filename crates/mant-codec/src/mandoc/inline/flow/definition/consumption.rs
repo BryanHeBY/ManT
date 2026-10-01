@@ -71,7 +71,7 @@ impl InlineBuilder {
         let definition = self.execution.definition.as_mut().expect("native field");
         let (passes, rejected_from) = match receipt {
             FlushReceipt::Accepted { passes } => {
-                debug_assert!(!passes.is_empty());
+                assert!(!passes.is_empty());
                 definition.hang_row.field_discarded = false;
                 return false;
             }

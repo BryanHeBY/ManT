@@ -39,7 +39,7 @@ impl LiteralFlow {
         source: Option<SourceSpan>,
         occupied: bool,
     ) {
-        debug_assert!(self.nodes.is_empty());
+        assert!(self.nodes.is_empty());
         self.nodes = nodes;
         self.source = source;
         self.row_occupied = occupied;
@@ -314,7 +314,7 @@ impl LiteralFlow {
         source: Option<SourceSpan>,
         layout: mant_ir::LayoutHint,
     ) {
-        debug_assert!(self.nodes.is_empty());
+        assert!(self.nodes.is_empty());
         let last_line = nodes
             .iter()
             .rposition(|node| matches!(node, Inline::LineBreak { .. }))
