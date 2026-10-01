@@ -66,12 +66,19 @@ def margin_projection(rows, tree, following_heading):
     lines = tree.splitlines()
     for index, line in enumerate(lines):
         if re.match(r"\s*mc \(elem\)", line):
-            if index + 1 < len(lines) and " (text) " in lines[index + 1]:
+            indent = len(line) - len(line.lstrip())
+            if (index + 1 < len(lines) and " (text) " in lines[index + 1]
+                    and len(lines[index + 1]) - len(lines[index + 1].lstrip()) > indent):
                 controls.append(lines[index + 1].strip().split(" (text) ", 1)[0])
             else:
                 controls.append(None)
     if not controls:
         return rows, {"status": "not-applicable", "reason": "no native mc node"}
+    if all(character is None for character in controls):
+        # roff_term.c::roff_term_pre_mc sets only TERMP_ENDMC without a
+        # child. term.c::endline cannot print a margin glyph when no earlier
+        # executed mc installed one. A following sibling TEXT is not its arg.
+        return rows, {"status": "not-applicable", "reason": "no installed native mc character"}
     if len(controls) != 1 or controls[0] is None or len(controls[0]) != 1:
         return rows, {"status": "uncovered", "reason": "changing or nonliteral mc"}
     character = controls[0]

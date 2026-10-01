@@ -78,6 +78,32 @@ class AcceptanceRegionTests(unittest.TestCase):
         wrong = asserted(["     AUTHORED", "", "     AFTER"])
         self.assertFalse(comparison.compare_axes(result, wrong)["content"])
 
+    def test_margin_end_without_an_installed_character_keeps_native_rows_unchanged(self):
+        # Exact complete sources ran all five pristine profiles first.
+        # roff_term.c::roff_term_pre_mc(None) sets ENDMC; term.c::endline
+        # prints no margin glyph unless an earlier mc child installed one.
+        records = json.loads(FIXTURES.with_name("margin_controls.json").read_text())
+        for record in records:
+            with self.subTest(case=record["id"]):
+                self.assertEqual(sha(record["source"]), record["source_sha256"])
+                for profile in record["oracle"].values():
+                    self.assertEqual(profile["code"], 0)
+                    self.assertEqual(sha(profile["stdout"]), profile["stdout_sha256"])
+                    self.assertEqual(sha(profile["stderr"]), profile["stderr_sha256"])
+                native = record["oracle"]["utf8"]["stdout"]
+                tree = record["oracle"]["tree"]["stdout"]
+                original = regions.visible_text(native).splitlines()
+                projected, margin = regions.margin_projection(original, tree, "NEXT")
+                self.assertEqual(projected, original)
+                selected = regions.select_native_region(native, tree)
+                if "expected_rows" in record:
+                    self.assertEqual(margin["status"], "not-applicable")
+                    self.assertEqual(selected["status"], "asserted")
+                    self.assertEqual(selected["rows"], record["expected_rows"])
+                else:
+                    self.assertEqual(margin["status"], "uncovered")
+                    self.assertEqual(selected["status"], "uncovered")
+
     def test_product_region_uses_ir_spacing_and_does_not_trim_edges(self):
         bundle = {"document": {"sections": [
             {"heading": {"content": [{"type": "text", "value": "DESCRIPTION"}]}},
