@@ -56,23 +56,6 @@ const REJECTED_DELIMITER_LITERALS: &[char] = &[
 /// argument only for these families; everyone else drops it.
 const KEEP_UNCLOSED_PAYLOAD_OUTERS: &[char] = &['A', 'o', 'w'];
 
-/// Whether a `(`/`[`-triggered escape ran past its trigger without ever
-/// completing its name: upstream's `iend` then stops at the trigger
-/// (roff_escape.c:182-184 leave the name unconsumed at end of input).
-fn truncated_bracket_escape(
-    characters: &[char],
-    trigger_index: usize,
-    trigger: char,
-    end: usize,
-) -> bool {
-    match trigger {
-        // `\(XY` needs two name characters past the trigger.
-        '(' => end < trigger_index + 3,
-        // `\[name]` is complete only when its bracket closed.
-        '[' => end == characters.len(),
-        _ => false,
-    }
-}
 /// Position and trigger of the escape whose backslash sits at `start`,
 /// skipping `\E` copies.  `None` when the backslash is the final character.
 fn escape_trigger_at(characters: &[char], start: usize) -> Option<(usize, char)> {
@@ -176,6 +159,10 @@ struct EscapeScan<'a> {
     /// `outer` and payload start of the reported frame once its opening
     /// delimiter has been decided, for the conservative overflow outcome.
     reported_scan: Option<(char, usize)>,
+    /// Whether the most recently completed counted/delimited name reached
+    /// its terminator.  Consumed extent and completeness are independent:
+    /// an incomplete name may still consume the whole remaining input.
+    argument_complete: bool,
 }
 
 /// Return the end of one complete nested escape without recursive descent.
@@ -185,6 +172,7 @@ pub(super) fn scan_nested_escape_end(characters: &[char], start: usize) -> usize
         index: start,
         tasks: vec![EscapeScanTask::Escape],
         reported_scan: None,
+        argument_complete: true,
     };
     scan.run_extent();
     scan.index
@@ -198,6 +186,7 @@ pub(super) fn scan_counted_end(characters: &[char], start: usize, count: usize) 
         index: start,
         tasks: vec![EscapeScanTask::Counted(count)],
         reported_scan: None,
+        argument_complete: true,
     };
     scan.run_extent();
     scan.index
@@ -218,6 +207,7 @@ pub(super) fn scan_quoted_argument(
             report: true,
         }],
         reported_scan: None,
+        argument_complete: true,
     };
     loop {
         if scan.tasks.len() > MAX_NESTED_ESCAPE_SCAN_DEPTH {
@@ -296,7 +286,28 @@ impl EscapeScan<'_> {
         let Some(trigger) = self.characters.get(self.index).copied() else {
             return ScanStep::Going;
         };
+        let trigger_index = self.index;
         self.index += 1;
+        self.argument_complete = true;
+        // CVS roff_escape_impl() initializes `iend` to the name trigger
+        // for `(`/`[` and advances it only as name units are consumed.
+        // An entirely absent name therefore leaves the trigger available;
+        // a partial name still consumes every scanned unit.  In particular,
+        // an unclosed `\[name` consumes the remainder, rather than rewinding
+        // to `[` merely because it lacks the closing bracket.
+        if matches!(trigger, '(' | '[') && self.index == self.characters.len() {
+            self.index = trigger_index;
+            self.argument_complete = false;
+            return ScanStep::Going;
+        }
+        if trigger == '[' && self.characters.get(self.index) == Some(&' ') {
+            // The standard-argument shape switch rejects a bracketed name
+            // beginning with blank immediately (CVS ESC_ARG). Its `send`
+            // includes that blank, but none of the later name-like text.
+            self.index += 1;
+            self.argument_complete = false;
+            return ScanStep::Going;
+        }
         self.schedule_escape_argument(trigger);
         ScanStep::Going
     }
@@ -304,9 +315,13 @@ impl EscapeScan<'_> {
     fn step_until(&mut self, delimiter: char) -> ScanStep {
         loop {
             match self.characters.get(self.index).copied() {
-                None => break,
+                None => {
+                    self.argument_complete = false;
+                    break;
+                }
                 Some(character) if character == delimiter => {
                     self.index += 1;
+                    self.argument_complete = true;
                     break;
                 }
                 // A nested escape belongs to the payload; only the matching
@@ -332,12 +347,18 @@ impl EscapeScan<'_> {
                     self.tasks.push(EscapeScanTask::Escape);
                     break;
                 }
-                None => break,
+                None => {
+                    self.argument_complete = false;
+                    break;
+                }
                 Some(_) => {
                     self.index += 1;
                     remaining -= 1;
                 }
             }
+        }
+        if remaining == 0 {
+            self.argument_complete = true;
         }
         ScanStep::Going
     }
@@ -517,16 +538,24 @@ impl EscapeScan<'_> {
         // The payload begins past the complete opening escape; only a nested
         // escape with the same trigger can close it.  The opening escape is
         // proven consumed only once payload follows: CVS keeps `iend` at the
-        // delimiter's backslash until the scan loop advances it.  A
-        // truncated `(`/`[` opening never proved its name — its residual
-        // renders nothing upstream — so conservatively consume the remainder
-        // instead of re-decoding a partial escape.
-        let consumed_end =
-            if truncated_bracket_escape(self.characters, trigger_index, trigger, self.index) {
-                self.characters.len()
-            } else {
-                delim_index
-            };
+        // delimiter's backslash until the scan loop advances it.  The nested
+        // scanner's end is the actual CVS `send`, including partial names;
+        // it is independent of whether the nested escape is valid.  When
+        // that incomplete name consumes the remainder, its residual is an
+        // invisible ESCAPE_ERROR upstream; do not re-decode it as a fallback
+        // symbol. A complete nonempty delimiter at EOF remains available
+        // as text; an empty bracketed name is CVS's invisible ESC_BADCHAR.
+        let empty_bracketed_name = trigger == '['
+            && self.characters.get(trigger_index + 1) == Some(&']')
+            && self.index == trigger_index + 2;
+        let consumed_end = if matches!(trigger, '(' | '[')
+            && (!self.argument_complete || empty_bracketed_name)
+            && self.index == self.characters.len()
+        {
+            self.index
+        } else {
+            delim_index
+        };
         self.begin_scan(
             outer,
             Term::Escaped(trigger),
@@ -611,19 +640,15 @@ impl EscapeScan<'_> {
         report: bool,
         nested_start: usize,
     ) -> ScanStep {
-        if let (Term::Escaped(delimiter), Some((trigger_index, trigger))) =
+        if let (Term::Escaped(delimiter), Some((_, trigger))) =
             (term, escape_trigger_at(self.characters, nested_start))
         {
             // `buf[snam] == term || buf[inam] == 'N'`: an escaped-delimiter
             // argument ends at a nested escape with the same trigger, and a
-            // numbered argument at any complete nested escape.  A truncated
-            // `(`/`[` escape only proves consumption through its trigger
-            // (CVS `iend = send` stops there), which then stays as text.
+            // numbered argument at any nested escape.  `iend = send` uses
+            // its actual consumed extent even when the name is incomplete.
             if trigger == delimiter || outer == 'N' {
                 let payload = payload_start..nested_start;
-                if truncated_bracket_escape(self.characters, trigger_index, trigger, self.index) {
-                    self.index = trigger_index;
-                }
                 return Self::reported(report, QuotedOutcome::Closed { payload });
             }
         }

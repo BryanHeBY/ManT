@@ -135,12 +135,226 @@ fn unclosed_arguments_release_their_unconsumed_delimiter() {
     // (`iend = send`), never re-decoded as literal text.
     assert_eq!(visible_text(r"A\o\(aqXY\"), "AY");
     assert_eq!(visible_text(r"A\o'XY\"), "AY");
-    // A truncated `(`/`[` opening renders nothing (its residual is an
-    // invisible incomplete name upstream), and a truncated closer leaves
-    // its trigger as text.
+    // These incomplete openings contain no accepted motion payload, while
+    // a closer with no name leaves its unconsumed trigger as text.
     assert_eq!(visible_text(r"A\h\("), "A");
     assert_eq!(visible_text(r"A\h\[x"), "A");
     assert_eq!(visible_text(r"A\o\(aqXY\("), "AY(");
+}
+
+#[test]
+fn partial_named_closers_consume_only_their_actual_extent() {
+    // CVS roff_escape_impl() initializes `iend` at `(`/`[` and advances it
+    // as name units arrive; its outer scan assigns `iend = send` even when
+    // that nested escape is incomplete.  Only an entirely absent name leaves
+    // its trigger behind.  Exact pristine -Tutf8 probes precede these golds.
+    for (source, expected) in [
+        (r"A\o\[aq]XY\[", "AY["),
+        (r"A\o\[aq]XY\[a", "AY"),
+        (r"A\o\[aq]XY\[a Z", "AY"),
+        (r"A\o\[aq]XY\[aq]", "AY"),
+        (r"A\o\(aqXY\(", "AY("),
+        (r"A\o\(aqXY\(a", "AY"),
+        (r"A\o\(aqXY\(aq", "AY"),
+        (r"A\o\[aq]XY\E[a Z", "AY"),
+        (r"A\o\[aq]XY\[a\]", "AY"),
+        (r"A\o\[aq]X\[]B", "AXB"),
+        // A different name trigger does not close the outer overstrike;
+        // term.c's overstrike loop then projects its source spelling.
+        (r"A\o\[aq]XY\(a", "Aa"),
+        (r"A\o\(aqXY\[a", "Aa"),
+    ] {
+        assert_eq!(visible_text(source), expected, "{source}");
+    }
+}
+
+#[test]
+fn opening_name_completion_is_independent_of_end_of_input() {
+    // A complete `\[aq]` at EOF is an unconsumed opening delimiter and is
+    // reinterpreted as the apostrophe.  A partial name is an invisible error;
+    // a bare trigger is instead part of \o's retained unclosed payload.
+    for (source, expected) in [
+        (r"A\o\[aq]", "A'"),
+        (r"A\o\(aq", "A'"),
+        (r"A\o\[", "A["),
+        (r"A\o\(", "A("),
+        (r"A\o\[a", "A"),
+        (r"A\o\(a", "A"),
+        (r"A\o\[]", "A"),
+    ] {
+        assert_eq!(visible_text(source), expected, "{source}");
+    }
+}
+
+#[test]
+fn malformed_named_delimiters_preserve_the_unconsumed_suffix() {
+    // CVS's standard-argument shape switch rejects `[ ` at that space,
+    // without scanning to `]` or EOF. An escaped closer uses that `send`;
+    // an invalid opener still permits \o to retain its subsequent payload.
+    for (source, expected) in [
+        (r"A\o\[aq]X\[ a Z", "AXa Z"),
+        (r"A\o\[aq]X\[ a] Z", "AXa] Z"),
+        (r"A\o\[ a Z", "AZ"),
+        (r"A\o\[ a]XY\[aq]Z", "AYZ"),
+        (r"A\o\[ ]", "A]"),
+    ] {
+        assert_eq!(visible_text(source), expected, "{source}");
+    }
+}
+
+#[test]
+fn every_quoted_family_uses_the_partial_closer_extent() {
+    for outer in ['h', 'D', 'H', 'L', 'R', 'S', 'X', 'Z', 'b', 'v', 'x'] {
+        for source in [
+            format!(r"A\{outer}\[aq]XY\[a Z"),
+            format!(r"A\{outer}\(aqXY\(a"),
+        ] {
+            assert_eq!(visible_text(&source), "A", "{source}");
+        }
+    }
+    // Use a known \C descriptor: unknown-name fallback is a separate
+    // established recovery policy, not part of delimiter consumption.
+    for source in [r"A\C\[aq]aq\[a Z", r"A\C\(aqaq\(a"] {
+        assert_eq!(visible_text(source), "A'", "{source}");
+    }
+    for source in [r"A\N\[aq]65\[a Z", r"A\N\(aq65\(a"] {
+        assert_eq!(visible_text(source), "AA", "{source}");
+    }
+}
+
+#[test]
+fn partial_bracket_closers_preserve_rows_and_link_ownership_across_carriers() {
+    const HEADER: &str =
+        ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n";
+    // All 36 exact sources are the bracket-aq/truncated-close portion of
+    // XE: pristine ASCII/UTF-8/HTML/tree/lint were run before these golds.
+    // A matching incomplete `[` consumes through `send`, even on ERROR.
+    // mdoc_term.c::termp_lk_pre() still executes the colon and target words;
+    // neither the parse diagnostic nor an empty label suppresses their rows.
+    for payload in ["", "XY", r"X\zY"] {
+        for prefix in ["", r"\p"] {
+            for carrier in ["No", "Em", "Lk"] {
+                for no_fill in [false, true] {
+                    let expression = format!(r"{prefix}\o\[aq]{payload}\[a Z");
+                    let operand = if carrier == "Lk" {
+                        format!(".Lk https://ex.org \"{expression}\"\n")
+                    } else {
+                        format!(".{carrier} \"{expression}\"\n")
+                    };
+                    let source = format!(
+                        "{HEADER}{}{operand}.No AFTER\n{}.Sh NEXT\n.No END\n",
+                        if no_fill { ".nf\n" } else { "" },
+                        if no_fill { ".fi\n" } else { "" },
+                    );
+                    let document = crate::mandoc::parse_plain_manual(
+                        std::path::Path::new("partial-bracket-closer.1"),
+                        source.as_bytes(),
+                    )
+                    .expect("lower exact recovery source");
+                    let json = serde_json::to_string(&document).expect("serialize IR");
+                    let decoded: mant_ir::Document =
+                        serde_json::from_str(&json).expect("read actual JSON text");
+                    assert_eq!(decoded, document, "{source}");
+                    let section = decoded
+                        .sections
+                        .iter()
+                        .find(|section| section.heading.plain_text() == "DESCRIPTION")
+                        .expect("DESCRIPTION owner survives recovery");
+                    let glyph = if payload.is_empty() { "" } else { "Y" };
+                    let expected: Vec<String> = if carrier == "Lk" {
+                        let label = format!("{glyph}:");
+                        match (prefix.is_empty(), no_fill) {
+                            (true, false) => vec![format!("{label} https://ex.org AFTER")],
+                            (true, true) => vec![format!("{label} https://ex.org"), "AFTER".into()],
+                            (false, false) => vec![label, "https://ex.org AFTER".into()],
+                            (false, true) => {
+                                vec![label, "https://ex.org".into(), "AFTER".into()]
+                            }
+                        }
+                    } else {
+                        match (glyph.is_empty(), prefix.is_empty(), no_fill) {
+                            (true, false, false) => vec![String::new()],
+                            (true, false, true) => vec![String::new(), "AFTER".into()],
+                            (true, true, _) => vec!["AFTER".into()],
+                            (false, true, false) => vec!["Y AFTER".into()],
+                            (false, _, _) => vec!["Y".into(), "AFTER".into()],
+                        }
+                    };
+                    assert_eq!(escape_owner_rows(&section.blocks), expected, "{source}");
+                    let mut links = EscapeLinkCollector::default();
+                    for block in &section.blocks {
+                        mant_ir::visit::Visit::visit_block(&mut links, block);
+                    }
+                    if carrier == "Lk" {
+                        // Native terminal text remains oracle-exact above.
+                        // The existing mant-roff reading contract keeps an
+                        // accepted URI clickable when no readable label
+                        // survives; its colon stays outside that label.
+                        let label = if glyph.is_empty() {
+                            "https://ex.org"
+                        } else {
+                            glyph
+                        };
+                        assert_eq!(
+                            links.0,
+                            [("https://ex.org".into(), label.into())],
+                            "{source}"
+                        );
+                    } else {
+                        assert!(links.0.is_empty(), "{source}");
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn escape_owner_rows(blocks: &[mant_ir::Block]) -> Vec<String> {
+    let mut rows = Vec::new();
+    for block in blocks {
+        match block {
+            mant_ir::Block::Paragraph {
+                children, layout, ..
+            }
+            | mant_ir::Block::Preformatted {
+                children, layout, ..
+            } => {
+                rows.extend(std::iter::repeat_n(
+                    String::new(),
+                    usize::from(layout.spacing_before_lines),
+                ));
+                // In this source family all leading cells are generated
+                // page/word padding, not authored indentation. Preserve
+                // every actual empty row; a final line terminator closes its
+                // existing row and does not itself create another blank row.
+                let text = mant_ir::inline_plain_text(children);
+                rows.extend(text.lines().map(|line| line.trim_start_matches(' ').into()));
+            }
+            mant_ir::Block::VerticalSpace { lines, .. } => {
+                rows.extend(std::iter::repeat_n(String::new(), usize::from(*lines)));
+            }
+            _ => panic!("unexpected escape output owner: {block:#?}"),
+        }
+    }
+    rows
+}
+
+#[derive(Default)]
+struct EscapeLinkCollector(Vec<(String, String)>);
+
+impl<'ir> mant_ir::visit::Visit<'ir> for EscapeLinkCollector {
+    fn visit_inline(&mut self, inline: &'ir mant_ir::Inline) {
+        if let mant_ir::Inline::Link {
+            target: mant_ir::LinkTarget::External { uri },
+            children,
+            ..
+        } = inline
+        {
+            self.0
+                .push((uri.clone(), mant_ir::inline_plain_text(children)));
+        }
+        mant_ir::visit::walk_inline(self, inline);
+    }
 }
 
 /// Empty closed arguments and missing arguments render nothing.
