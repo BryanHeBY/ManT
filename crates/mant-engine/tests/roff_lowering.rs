@@ -18,6 +18,8 @@ fn parse_manual_source(
     Ok(parse_manual_bytes(path, &fs::read(path)?)?)
 }
 
+#[path = "roff_lowering/acceptance_axes/mod.rs"]
+mod acceptance_axes;
 #[path = "roff_lowering/consumer_boundaries.rs"]
 mod consumer_boundaries;
 #[path = "roff_lowering/cvs_renderer_contracts.rs"]
