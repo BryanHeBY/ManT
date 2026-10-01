@@ -8,7 +8,7 @@
 //! `term_ascii.c::ascii_advance()` truncates each single padding advance at
 //! 256 columns with the comment that "the input document can trigger [that]
 //! by merely providing large input".
-use libmandoc_rs::{RenderFormat, Renderer};
+use libmandoc_rs::{Parser, RenderFormat, Renderer};
 
 const PRE: &str = ".Dd September 8, 2026\n.Dt T 1\n.Os\n.Sh DESCRIPTION\n";
 
@@ -175,10 +175,18 @@ fn undeclared_columns_start_after_all_declared_fields() {
 #[test]
 fn native_and_lowered_column_geometry_agree() {
     // Cross-check the same table through the vendored UTF-8 terminal render
-    // at width 78; the overstrike projection removes page furniture biases.
-    let native = |source: &str| -> Vec<String> {
+    // at width 78; frame the body with a source heading, never a host name.
+    // CVS mdoc_validate.c::post_os uses uname for bare Os, and
+    // mdoc_term.c::print_mdoc_foot prints that name as page furniture.
+    // Exact pristine -Ios inputs for all cases below preceded the assertions.
+    let native = |source: &str, operating_system: &str| -> Vec<String> {
         let raw = Renderer::new(RenderFormat::Utf8)
             .with_width(78)
+            .with_parser(
+                Parser::default()
+                    .with_mdoc_operating_system(operating_system)
+                    .unwrap(),
+            )
             .render_bytes("column-safety.1", source.as_bytes())
             .expect("native render")
             .output;
@@ -196,6 +204,17 @@ fn native_and_lowered_column_geometry_agree() {
             .map(str::to_owned)
             .collect()
     };
+    let table_body = |lines: &[String]| -> Vec<String> {
+        let start = lines
+            .iter()
+            .position(|line| line.trim() == "DESCRIPTION")
+            .expect("description heading");
+        let end = lines
+            .iter()
+            .position(|line| line.trim() == "COLUMN-END-MARKER")
+            .expect("table end heading");
+        lines[start + 1..end].to_vec()
+    };
     for (columns, cells) in [
         ("one two", "A Ta B"),
         ("one two three", "AAAA BB Ta C Ta D"),
@@ -204,30 +223,10 @@ fn native_and_lowered_column_geometry_agree() {
         ("one two", "AAAA B Ta C"),
         ("o o", "AAAA Ta B"),
     ] {
-        let source = format!("{PRE}.Bl -column {columns}\n.It {cells}\n.El\n");
-        let native_lines = native(&source);
-        let start = native_lines
-            .iter()
-            .position(|line| line.contains("DESCRIPTION"))
-            .expect("description heading");
-        let native_table = &native_lines[start + 1..];
-        // The footer follows the table; stop at the system attribution line.
-        let native_table: &[String] = native_table
-            .split_at(
-                native_table
-                    .iter()
-                    .position(|line| line.contains("Linux"))
-                    .unwrap_or(native_table.len()),
-            )
-            .0;
+        let source =
+            format!("{PRE}.Bl -column {columns}\n.It {cells}\n.El\n.Sh COLUMN-END-MARKER\n");
         let lowered = lowered_body(&source);
-        let lowered_table = {
-            let body_start = lowered
-                .iter()
-                .position(|line| line.contains("DESCRIPTION"))
-                .map_or(0, |index| index + 1);
-            &lowered[body_start..]
-        };
+        let lowered_table = table_body(&lowered);
         let starts = |lines: &[String]| -> Vec<Vec<usize>> {
             lines
                 .iter()
@@ -246,19 +245,28 @@ fn native_and_lowered_column_geometry_agree() {
                 .filter(|columns| !columns.is_empty())
                 .collect()
         };
-        let native_starts = starts(native_table);
-        let lowered_starts = starts(lowered_table);
-        // The native render indents the table by the `.Bl` margin; compare
-        // the table-relative starts.
-        let origin = native_starts.iter().flatten().copied().min().unwrap_or(0);
-        let relative: Vec<Vec<usize>> = native_starts
-            .into_iter()
-            .map(|line| line.into_iter().map(|c| c - origin).collect())
-            .collect();
-        assert_eq!(
-            relative, lowered_starts,
-            "{columns} / {cells}:\nnative:  {native_table:?}\nlowered: {lowered_table:?}"
-        );
+        let lowered_starts = starts(&lowered_table);
+        for operating_system in [
+            "Linux 6.12.0",
+            "Darwin 23.6.0",
+            "Windows 11",
+            "Column Safety Oracle",
+        ] {
+            let native_lines = native(&source, operating_system);
+            let native_table = table_body(&native_lines);
+            let native_starts = starts(&native_table);
+            // The native render indents the table by the `.Bl` margin; compare
+            // the table-relative starts.
+            let origin = native_starts.iter().flatten().copied().min().unwrap_or(0);
+            let relative: Vec<Vec<usize>> = native_starts
+                .into_iter()
+                .map(|line| line.into_iter().map(|c| c - origin).collect())
+                .collect();
+            assert_eq!(
+                relative, lowered_starts,
+                "{operating_system}: {columns} / {cells}:\nnative:  {native_table:?}\nlowered: {lowered_table:?}"
+            );
+        }
     }
 }
 
