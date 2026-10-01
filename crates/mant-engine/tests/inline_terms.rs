@@ -273,13 +273,23 @@ fn markdown_renders_inline_terms_on_the_same_line() {
         "markdown inline term should be on one line, got: {output:?}"
     );
 
-    // inline_term=false: term on its own line, description on the next.
+    // The full fixture was rerun in pristine five profiles before this
+    // assertion. man_term.c::post_TP() closes the overlong HEAD before
+    // BODY. CommonMark needs two trailing spaces to retain that hard row.
     assert!(
-        output.contains("**--verbose**\n"),
+        output.contains("**--verbose**  \n"),
         "markdown block term should be on its own line, got: {output:?}"
     );
     assert!(
         output.contains("**-a**  \n  **--all** Show all entries."),
         "separate authored heads retain a hard break without invented commas, got: {output:?}"
     );
+    let reparsed = mant_loader::load_markdown_text(&output, None).unwrap();
+    let read_back = render_query_man(&reparsed);
+    let rows = read_back.lines().collect::<Vec<_>>();
+    let label = rows
+        .iter()
+        .position(|row| row.ends_with("--verbose"))
+        .unwrap();
+    assert_eq!(rows[label + 1].trim(), "Enable verbose diagnostic output.");
 }
