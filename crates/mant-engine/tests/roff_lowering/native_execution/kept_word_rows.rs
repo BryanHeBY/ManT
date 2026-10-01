@@ -41,7 +41,7 @@ fn keep_words_cross_all_word_kinds_lines_and_controlled_separators() {
     // KEEP/PREKEEP. The common page margin alone is removed: A\p -> empty
     // word -> B can retain a real extra leading blank on the next row.
     let cases: serde_json::Value =
-        serde_json::from_str(include_str!("kept_word_rows/cases.json")).unwrap();
+        serde_json::from_str(include_str!("fixtures/kept_word_rows/cases.json")).unwrap();
     let cases = cases.as_array().unwrap();
     assert_eq!(cases.len(), 2 * 4 * 2 * 6);
     let mut failures = Vec::new();

@@ -112,7 +112,7 @@ fn body_and_generated_post_share_word_row_and_owner_execution() {
     // termp_d1_pre, termp_quote_post, termp_fo_post and termp_an_pre consume
     // the same active termp; source-line coordinates cannot deduplicate them.
     let cases: serde_json::Value =
-        serde_json::from_str(include_str!("generated_body_rows/cases.json")).unwrap();
+        serde_json::from_str(include_str!("fixtures/generated_body_rows/cases.json")).unwrap();
     let cases = cases.as_array().unwrap();
     assert_eq!(cases.len(), 48 + 30 + 8 + 48);
     let mut failures = Vec::new();

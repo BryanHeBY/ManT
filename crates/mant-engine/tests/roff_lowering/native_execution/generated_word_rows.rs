@@ -67,7 +67,7 @@ fn generated_words_consume_every_pending_and_held_cell_state() {
     // this projection does not assert device row origins or trailing cells.
     // No-argument Bx is native BSD, without a portable enhancement contract.
     let cases: serde_json::Value =
-        serde_json::from_str(include_str!("generated_word_rows/cases.json")).unwrap();
+        serde_json::from_str(include_str!("fixtures/generated_word_rows/cases.json")).unwrap();
     let cases = cases.as_array().unwrap();
     assert_eq!(cases.len(), 6 * 10 * 13 * 3);
     let mut failures = Vec::new();

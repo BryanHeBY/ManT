@@ -1,8 +1,8 @@
-//! Native buffer state is consumed at each actual formatter control boundary.
+//! Native word acceptance retains the exact initial, interior and final rows.
 
 use mant_ir::ResolvedContent;
 
-fn body_rows(rendered: &str, eof: bool) -> Vec<String> {
+fn body_rows(rendered: &str) -> Vec<String> {
     let mut projected = String::with_capacity(rendered.len());
     for character in rendered.chars() {
         match character {
@@ -15,11 +15,7 @@ fn body_rows(rendered: &str, eof: bool) -> Vec<String> {
     }
     let rows = projected.lines().map(str::trim).collect::<Vec<_>>();
     let start = rows.iter().position(|row| *row == "DESCRIPTION").unwrap() + 1;
-    let end = if eof {
-        rows.len()
-    } else {
-        rows.iter().position(|row| *row == "NEXT").unwrap()
-    };
+    let end = rows.iter().position(|row| *row == "NEXT").unwrap();
     rows[start..end]
         .iter()
         .map(|row| (*row).to_owned())
@@ -27,19 +23,17 @@ fn body_rows(rendered: &str, eof: bool) -> Vec<String> {
 }
 
 #[test]
-fn every_control_consumes_the_current_buffer_once_through_json() {
-    // All exact sources ran the registered pristine reference before these
-    // snapshots were recorded. term.c::term_word()/term_fill() distinguish
-    // empty operands, NBRZW, BACKBEFORE and ESCAPE_BREAK. roff_term_pre_mc
-    // flushes with NOBREAK; br/sp/nf/ti retire different native boundaries.
-    // man_term.c::print_man_node() also applies its generic font lifecycle.
-    // The 8 buffer states cross all 12 controls in both dialects (192),
-    // plus 7 repeated/end boundaries crossed with 3 states (42). The target
-    // control uses real Tg in mdoc and a zero-output ft request in man.
+fn all_original_acceptance_sources_keep_their_complete_body_row_window() {
+    // These are the unchanged A110 plus man1/man2 inputs from the original
+    // shared execution matrix. All 112 exact files ran pristine ASCII,
+    // UTF-8, HTML, tree and lint before these gold rows were recorded.
+    // term.c::term_fill distinguishes accepted prefixes, NBRZW graph cells,
+    // BACKBEFORE and rejected suffixes. DESCRIPTION/NEXT delimit only page
+    // furniture; source-produced initial/final empty rows remain assertions.
     let cases: serde_json::Value =
-        serde_json::from_str(include_str!("native_control_rows/cases.json")).unwrap();
+        serde_json::from_str(include_str!("fixtures/native_acceptance_rows/cases.json")).unwrap();
     let cases = cases.as_array().unwrap();
-    assert_eq!(cases.len(), 234);
+    assert_eq!(cases.len(), 110 + 2);
     let mut failures = Vec::new();
     for case in cases {
         let name = case["name"].as_str().unwrap();
@@ -59,10 +53,7 @@ fn every_control_consumes_the_current_buffer_once_through_json() {
         );
         let decoded: mant_protocol::QueryBundle = serde_json::from_str(&json).unwrap();
         let query: ResolvedContent = decoded.into();
-        let actual = body_rows(
-            &mant_render::render_query_man(&query),
-            case["eof"].as_bool().unwrap(),
-        );
+        let actual = body_rows(&mant_render::render_query_man(&query));
         if actual != expected {
             failures.push(format!(
                 "{name}\nsource:\n{source}\nactual: {actual:?}\nreference: {expected:?}"

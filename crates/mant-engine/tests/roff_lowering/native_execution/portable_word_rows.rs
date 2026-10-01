@@ -107,7 +107,7 @@ fn portable_transactions_keep_all_native_operand_and_owner_boundaries() {
     // substitutes spelling, including shorter/longer/space-containing text,
     // while the original receipt children continue to own native execution.
     let cases: serde_json::Value =
-        serde_json::from_str(include_str!("portable_word_rows/cases.json")).unwrap();
+        serde_json::from_str(include_str!("fixtures/portable_word_rows/cases.json")).unwrap();
     let cases = cases.as_array().unwrap();
     assert_eq!(cases.len(), 9 * 4 * 3);
     let mut failures = Vec::new();

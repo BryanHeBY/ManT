@@ -13,10 +13,7 @@ import concurrent.futures
 import hashlib
 import json
 from pathlib import Path
-import subprocess
-
-import mandoc_oracle
-import rebuild_reference_mandoc
+import roff_fixture_reference
 import roff_compatibility_cases
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -91,10 +88,10 @@ def projected_rows(text, family, eof):
 def record_profiles(family, name, source, selected=("ascii", "utf8", "html", "tree", "lint"), width=78):
     profiles = {}
     for profile in selected:
-        completed = subprocess.run(
-            [str(REFERENCE), "-T" + profile, f"-Owidth={width}",
+        completed = roff_fixture_reference.run_reference(
+            REFERENCE, ["-T" + profile, f"-Owidth={width}",
              "-Ios=Historical Oracle Footer"],
-            input=source.encode(), capture_output=True, timeout=15,
+            input_bytes=source.encode(), timeout=15,
             env={"PATH": "/usr/bin:/bin", "LC_ALL": "C.UTF-8", "TZ": "UTC"},
             check=False,
         )
@@ -160,7 +157,7 @@ def check_sources(fixtures):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--evidence", type=Path)
-    parser.add_argument("--fixtures", type=Path, default=ROOT / "crates/mant-engine/tests")
+    parser.add_argument("--fixtures", type=Path, default=ROOT / "crates/mant-engine/tests/roff_lowering/native_execution/fixtures")
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--check-sources", action="store_true")
@@ -173,9 +170,7 @@ def main():
     evidence = args.evidence.resolve()
     if not evidence.is_relative_to(ROOT / "target"):
         parser.error("stage evidence must stay below target")
-    attestation, registration = rebuild_reference_mandoc.active_attestation(ROOT)
-    archive = mandoc_oracle.repository_path(ROOT, registration["source"]["archive"]["path"], "archive")
-    rebuild_reference_mandoc.verify_all(ROOT, REFERENCE, archive, attestation, registration["identity"])
+    registration = roff_fixture_reference.verified_reference(ROOT, REFERENCE)
     evidence.mkdir(parents=True, exist_ok=True)
     tasks = [(family, case) for family, cases in roff_compatibility_cases.matrices() for case in cases]
     if collections.Counter(family for family, _ in tasks) != roff_compatibility_cases.COUNTS:

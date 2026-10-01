@@ -96,7 +96,7 @@ fn every_output_sink_preserves_accepted_rows_and_public_semantic_owners() {
     // tbl uses a bare Lk whose recovered text agrees with native operands,
     // and a real outer Tg adjacent to tbl, rather than invented cell AST.
     let cases: serde_json::Value =
-        serde_json::from_str(include_str!("output_owner_rows/cases.json")).unwrap();
+        serde_json::from_str(include_str!("fixtures/output_owner_rows/cases.json")).unwrap();
     let cases = cases.as_array().unwrap();
     assert_eq!(cases.len(), 9 * 5 + 2 * 3 * 4);
     let mut failures = Vec::new();

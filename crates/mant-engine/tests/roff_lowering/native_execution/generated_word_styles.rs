@@ -66,7 +66,7 @@ fn mail_and_link_words_keep_the_accepted_pending_glyphs_font_and_owner() {
     // overstrikes record A's real bold/underline bits independently of the
     // later link's font. Accepted prior glyphs never enter that Link owner.
     let cases: serde_json::Value =
-        serde_json::from_str(include_str!("generated_word_styles/cases.json")).unwrap();
+        serde_json::from_str(include_str!("fixtures/generated_word_styles/cases.json")).unwrap();
     let cases = cases.as_array().unwrap();
     assert_eq!(cases.len(), 2 * 4 * 2 * 3);
     let mut failures = Vec::new();

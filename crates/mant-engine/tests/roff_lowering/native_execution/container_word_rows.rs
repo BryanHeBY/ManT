@@ -71,7 +71,7 @@ fn nested_containers_and_alternate_operands_preserve_native_word_consumption() {
     // man_term.c::pre_alternate calls term_word for each BI/BR operand and
     // sets NOSPACE between them; these operands are not ordinary B children.
     let cases: serde_json::Value =
-        serde_json::from_str(include_str!("container_word_rows/cases.json")).unwrap();
+        serde_json::from_str(include_str!("fixtures/container_word_rows/cases.json")).unwrap();
     let cases = cases.as_array().unwrap();
     assert_eq!(cases.len(), 4 * 3 + 3 * 3);
     let mut failures = Vec::new();

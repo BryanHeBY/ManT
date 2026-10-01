@@ -30,6 +30,45 @@ run atomically replaces either fixture. `--check` never changes gold, while
 `--check-sources` needs no oracle and checks the canonical definitions and hashes.
 Updating expectations from product output is forbidden.
 
+## Historical families and HEAD requests
+
+The nine smaller compatibility families retain complete source records in
+`<family>/cases.json` beneath this directory. Their canonical definitions are
+in `scripts/roff_compatibility_cases.py`; the acceptance family also reads the
+immutable source files in `shared_execution_matrix/cases`.
+
+| Family | Inputs | Main contract |
+| --- | ---: | --- |
+| `native_acceptance_rows` | 112 | Accepted prefixes and rejected suffixes |
+| `native_control_rows` | 234 | Real control and source-row boundaries |
+| `generated_word_rows` | 2,340 | Generated words share formatter execution |
+| `generated_body_rows` | 134 | Generated and structural BODY handoffs |
+| `kept_word_rows` | 96 | Keep, spacing and word boundaries |
+| `generated_word_styles` | 48 | Styles retain generated-word ownership |
+| `output_owner_rows` | 69 | Output transfers retain execution facts |
+| `portable_word_rows` | 108 | Native and portable reading contracts |
+| `container_word_rows` | 21 | Container pre/post and word order |
+
+```sh
+python3 scripts/generate_roff_compatibility_fixtures.py --check-sources
+python3 scripts/generate_roff_compatibility_fixtures.py --check \
+  --evidence target/audits/native-compatibility-fixtures-check
+```
+
+These 3,162 inputs keep each family's selected device/reading assertions.
+Recovery cases, isolated table-macro fragments and the display-equation reading
+contract remain explicitly identified. Wider UTF-8 recordings supplement the
+original 78-column evidence; they do not overwrite it. The generator preserves
+failed native HTML profiles as failures, not inferred successful output.
+The Rust suites still cross real serialized JSON and their selected consumers;
+a coarse accepted-content assertion does not prove column or hard-row geometry.
+
+`native_head_vertical_requests.json` separately records 60 exact HEAD request
+inputs used by `head_vertical_requests.rs`. These exercise TAG/HANG field tails,
+vertical requests and target placement. They are producer/consumer records,
+separate from the two large JSONL matrices and the historical family generator.
+Do not reconstruct their complete sources from shortened scenario labels.
+
 ## Assertion scopes
 
 | Matrix | Hard rows | Accepted content | Recovery safety | Total |

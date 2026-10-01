@@ -37,6 +37,9 @@ mod glyphs;
 #[path = "roff_lowering/inline_boundaries.rs"]
 mod inline_boundaries;
 
+#[path = "roff_lowering/native_execution/mod.rs"]
+mod native_execution;
+
 #[path = "roff_lowering/native_field_lifecycle.rs"]
 mod native_field_lifecycle;
 #[path = "roff_lowering/native_fractional_margin.rs"]

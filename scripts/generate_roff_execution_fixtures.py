@@ -13,10 +13,7 @@ from html.parser import HTMLParser
 import json
 from pathlib import Path
 import re
-import subprocess
-
-import mandoc_oracle
-import rebuild_reference_mandoc
+import roff_fixture_reference
 import roff_execution_cases
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -101,8 +98,8 @@ def authored_destinations(source):
 def record_identity(operand):
     source = (roff_execution_cases.HEAD["mdoc"] +
               '.Lk "' + operand + '" label\n.Sh NEXT\n.No END\n')
-    completed = subprocess.run([str(REFERENCE), "-Thtml"], input=source.encode(),
-                               capture_output=True, timeout=15, check=False)
+    completed = roff_fixture_reference.run_reference(
+        REFERENCE, ["-Thtml"], input_bytes=source.encode(), timeout=15, check=False)
     if completed.returncode > 2:
         raise ValueError(f"oracle identity probe failed for {operand!r}")
     html = Links()
@@ -135,9 +132,9 @@ def reading_rows(case, utf8_rows, end_heading):
         # An oracle pair changes only that offset, never source word/line
         # events; preserve both original and paired evidence independently.
         source = case["source"].replace(".ti 2n\n", ".ti 0n\n")
-        completed = subprocess.run([str(REFERENCE), "-Tutf8", "-Owidth=78"],
-                                   input=source.encode(), capture_output=True,
-                                   timeout=15, check=False)
+        completed = roff_fixture_reference.run_reference(
+            REFERENCE, ["-Tutf8", "-Owidth=78"], input_bytes=source.encode(),
+            timeout=15, check=False)
         if completed.returncode > 2:
             raise ValueError("temporary-origin paired oracle failed")
         paired = section_rows(completed.stdout.decode("utf-8"), end_heading)
@@ -163,11 +160,11 @@ def record(item):
     source = case["source"]
     profiles = {}
     for profile in ("ascii", "utf8", "html", "tree", "lint"):
-        command = [str(REFERENCE), "-T" + profile]
+        command = ["-T" + profile]
         if profile in ("ascii", "utf8"):
             command.append("-Owidth=78")
-        completed = subprocess.run(
-            command, input=source.encode(), capture_output=True, timeout=15,
+        completed = roff_fixture_reference.run_reference(
+            REFERENCE, command, input_bytes=source.encode(), timeout=15,
             env={"PATH": "/usr/bin:/bin", "LC_ALL": "C.UTF-8", "TZ": "UTC"},
             check=False,
         )
@@ -231,7 +228,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--evidence", type=Path)
     parser.add_argument("--fixtures", type=Path,
-                        default=ROOT / "crates/mant-engine/tests/fixtures")
+                        default=ROOT / "crates/mant-engine/tests/roff_lowering/native_execution/fixtures")
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--check", action="store_true",
                         help="validate all oracle records against fixtures without changing them")
@@ -246,9 +243,7 @@ def main():
     evidence = args.evidence.resolve()
     if not evidence.is_relative_to(ROOT / "target"):
         parser.error("complete stage evidence must stay below target")
-    attestation, registration = rebuild_reference_mandoc.active_attestation(ROOT)
-    archive = mandoc_oracle.repository_path(ROOT, registration["source"]["archive"]["path"], "archive")
-    rebuild_reference_mandoc.verify_all(ROOT, REFERENCE, archive, attestation, registration["identity"])
+    registration = roff_fixture_reference.verified_reference(ROOT, REFERENCE)
     evidence.mkdir(parents=True, exist_ok=True)
     args.fixtures.mkdir(parents=True, exist_ok=True)
     tasks = [(matrix, index, case) for matrix, cases in roff_execution_cases.matrices()
