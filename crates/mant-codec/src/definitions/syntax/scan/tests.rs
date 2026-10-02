@@ -544,6 +544,116 @@ fn connected_parameter_fragments_keep_their_source_punctuation() {
 }
 
 #[test]
+fn literal_delimiters_complete_a_single_styled_parameter_token() {
+    // The exact font-escaped TP and TEXT/RS sources ran pristine first.
+    // term_word changes fonts inside the same TEXT; the external comma is
+    // authored declaration syntax, rather than proof of another roff operand.
+    for separator in [", ", " | "] {
+        let nodes = [
+            strong(vec![text("-o ")]),
+            emphasis(vec![text("file")]),
+            text(separator),
+            strong(vec![text("--output=")]),
+            emphasis(vec![text("file")]),
+        ];
+        let value = mant_ir::inline_plain_text(&nodes);
+        for operands in [
+            Vec::new(),
+            vec![NativeOperand {
+                bytes: 0..value.len(),
+                role: NativeOperandRole::Literal,
+            }],
+        ] {
+            assert_names(&nodes, &operands, &["-o", "--output"]);
+            assert!(option_head(&nodes, &operands).inferred_complete);
+        }
+    }
+    for parameter in ["file,", "file names", "file/name"] {
+        let nodes = [
+            strong(vec![text("-o ")]),
+            emphasis(vec![text(parameter)]),
+            text(", "),
+            strong(vec![text("--fake")]),
+        ];
+        assert!(!option_head(&nodes, &[]).inferred_complete, "{parameter}");
+    }
+    let nodes = [
+        strong(vec![text("-o ")]),
+        emphasis(vec![text("file,")]),
+        text(" --fake"),
+    ];
+    let operand = NativeOperand {
+        bytes: 3..8,
+        role: NativeOperandRole::Argument,
+    };
+    assert_names(&nodes, &[operand], &["-o"]);
+}
+
+#[test]
+fn a_temporary_parameter_font_requires_both_token_boundaries() {
+    // pre_B supplies one child term_word, and font escapes inside that child
+    // never split the native operand. All four exact sources plus the original
+    // inword-font-argument control ran pristine before these assertions.
+    for boundary in [" ", "="] {
+        let nodes = [
+            strong(vec![text(&format!("-L{boundary}"))]),
+            emphasis(vec![text("first")]),
+            strong(vec![text(", --other")]),
+        ];
+        let value = mant_ir::inline_plain_text(&nodes);
+        let operand = NativeOperand {
+            bytes: 0..value.len(),
+            role: NativeOperandRole::Literal,
+        };
+        assert_names(&nodes, &[operand], &["-L", "--other"]);
+        assert!(option_head(&nodes, &[]).inferred_complete);
+    }
+    for (before, parameter, after) in [
+        ("-L", "first", ", --fake,last"),
+        ("-L fi", "rst", ", --fake"),
+        ("-L ", "fir", "st, --fake"),
+    ] {
+        let nodes = [
+            strong(vec![text(before)]),
+            emphasis(vec![text(parameter)]),
+            strong(vec![text(after)]),
+        ];
+        let value = mant_ir::inline_plain_text(&nodes);
+        let operand = NativeOperand {
+            bytes: 0..value.len(),
+            role: NativeOperandRole::Literal,
+        };
+        assert_names(&nodes, &[operand], &["-L"]);
+        assert!(!option_head(&nodes, &[]).inferred_complete);
+    }
+}
+
+#[test]
+fn repetition_suffixes_complete_parameters_without_accepting_literal_prose() {
+    // The exact TEXT/RS option... source ran pristine first. The italic
+    // parameter and its literal repetition suffix remain separate IR leaves;
+    // validation must not invent whitespace or include dots in a name.
+    for suffix in ["...", "", ",..."] {
+        let nodes = [
+            strong(vec![text("-O, --test-opts ")]),
+            emphasis(vec![text("option")]),
+            text(suffix),
+        ];
+        assert_names(&nodes, &[], &["-O", "--test-opts"]);
+        assert!(option_head(&nodes, &[]).inferred_complete, "{suffix}");
+    }
+    for suffix in ["..", "....", "...more", ".ordinary"] {
+        let nodes = [
+            strong(vec![text("--test-opts ")]),
+            emphasis(vec![text("option")]),
+            text(suffix),
+        ];
+        assert!(!option_head(&nodes, &[]).inferred_complete, "{suffix}");
+    }
+    assert!(!option_head(&[text("--test-opts option...")], &[]).inferred_complete);
+}
+
+#[test]
 fn alias_or_cannot_skip_a_real_parameter_operand() {
     // Exact pinned mdoc Ar/No siblings ran first: Ar selects parameter
     // styling and owns its word independently of the following No text.

@@ -80,9 +80,13 @@ such as `-a --argument -literal-value` contains three written names when no
 argument boundary is present, just as `-c --stdout --to-stdout` does. The
 meaning of an option name cannot establish a parameter boundary. Numeric and
 metavariable syntax, an assignment, a quoted or bracketed value, or a proven
-argument operand can establish that boundary; punctuation or a temporary font
-change within the argument cannot restart name recognition. Original forms and
-name ranges remain attached to the same content owner, without inferring aliases.
+argument operand can establish that boundary. Within one literal native operand,
+a single complete styled parameter after authored whitespace or an assignment,
+followed by a literal comma or pipe outside that parameter, can separate another
+declaration. A styled fragment attached directly to a name has no such proof. Punctuation inside the parameter,
+multiword styled prose and a temporary font change do not establish this boundary.
+Original forms and name ranges remain attached to the same content owner,
+without inferring aliases.
 
 Accepted native operand roles take precedence over font hints. An opening
 quotation owned by an actual `Ar` operand remains a parameter boundary. An
@@ -380,7 +384,7 @@ they must not be hidden by dropping Terms or manufacturing value domains.
 Whole-head acceptance keeps styled arguments opaque without inserting new
 whitespace: adjacency and separators in `-L<start>,<end>:<file>` still belong
 to the invocation. A bounded template such as `-<number>` can occur beside a
-concrete flag, and a terminal `,...` is repetition rather than another name.
+concrete flag, and a terminal `...` or `,...` is repetition rather than another name.
 Environment groups may contain literal/placeholder templates such as
 `GIT_CONFIG_KEY_<n>` alongside concrete names. Templates preserve the declaration
 and form but produce no prefix name or invented expansion; rejected prose still

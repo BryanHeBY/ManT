@@ -1,11 +1,11 @@
 {
   "header": {
-    "count": 88,
+    "count": 102,
     "oracleSha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
     "semantics": "authored ManT grammar contract; mandoc proves actual text/font/HEAD structure, not entry kinds",
     "expectationsFromProduct": false,
     "nativeHeadPolicy": "HTML dt printer LF plus indentation is one HTML flow space; no authored hard-line case uses this field",
-    "ownerProofPolicy": "Source-authored native definition HEAD or actual B/MR adjacent RS; validated empty PP may be absent from AST. Never inferred from EntryKind."
+    "ownerProofPolicy": "Source-authored native definition HEAD or actual B/MR/TEXT adjacent RS; validated empty PP may be absent from AST. Never inferred from EntryKind."
   },
   "cases": [
     {
@@ -3915,6 +3915,624 @@
       "ownerProof": {
         "kind": "native-definition",
         "headMacro": "It"
+      }
+    },
+    {
+      "id": "query-old-file-tp",
+      "source": ".TH T 1 \"October 3, 2026\"\n.SH OPTIONS\n.TP\n\\fB\\-o\\fR \\fIfile\\fR, \\fB\\-\\-old\\-file\\fR=\\fIfile\\fR, \\fB\\-\\-assume\\-old\\fR=\\fIfile\\fR\nBodyWord.\n",
+      "names": [
+        "-o",
+        "--old-file",
+        "--assume-old"
+      ],
+      "excluded": [],
+      "kind": "option",
+      "sourceSha256": "7193069d93795ebd46609accf5d14560d3686d92de3099fb6d3b6e67eae6d28b",
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdoutSha256": "71850cc6086fd1636cef0385878d81fb8bc45980c84c8a8ac1f04bc0f5b3b499",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdoutSha256": "71850cc6086fd1636cef0385878d81fb8bc45980c84c8a8ac1f04bc0f5b3b499",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdoutSha256": "bee5a00805880bc333f66d5000823608b02f225ba94d45e714490845a1f7c4a1",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdoutSha256": "09535114cdd85c3ec19622bc936db1c9b4621c76ccdd3dc8c92a533a1a4fbc89",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "bodyWord": "BodyWord.",
+      "ownerProof": {
+        "kind": "native-definition",
+        "headMacro": "TP"
+      },
+      "nativeHead": "-o file, --old-file=file, --assume-old=file"
+    },
+    {
+      "id": "query-old-file-weak",
+      "source": ".TH T 1 \"October 3, 2026\"\n.SH OPTIONS\n\\fB\\-o\\fR \\fIfile\\fR, \\fB\\-\\-old\\-file\\fR=\\fIfile\\fR, \\fB\\-\\-assume\\-old\\fR=\\fIfile\\fR\n.RS 4\nBodyWord.\n.RE\n",
+      "names": [
+        "-o",
+        "--old-file",
+        "--assume-old"
+      ],
+      "excluded": [],
+      "kind": "option",
+      "sourceSha256": "92f47a6efdb201e416a3766e0a781146b319d3cd9df2568e5a5d738cc39110f9",
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdoutSha256": "dacc52d1924fa7dca23d7e0b0a89a4b4886501c7ad328a007590dc697956746c",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdoutSha256": "dacc52d1924fa7dca23d7e0b0a89a4b4886501c7ad328a007590dc697956746c",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdoutSha256": "830ee062c0e1c09d0c851d6f0d0119a97c91224f9738bf28a1052524331558a1",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdoutSha256": "f1d8ed7d3687c9670fd096542d62098f095c0fea62bb88875e97cdd8eb9bb969",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "bodyWord": "BodyWord.",
+      "ownerProof": {
+        "kind": "literal-relative-body",
+        "headMacro": "TEXT"
+      },
+      "nativeHead": "-o file, --old-file=file, --assume-old=file"
+    },
+    {
+      "id": "query-test-opts-weak",
+      "source": ".TH T 1 \"October 3, 2026\"\n.SH OPTIONS\n\\fB\\-O\\fP, \\fB\\-\\-test\\-opts\\fP \\fIoption\\fP...\n.RS 4\nBodyWord.\n.RE\n",
+      "names": [
+        "-O",
+        "--test-opts"
+      ],
+      "excluded": [],
+      "kind": "option",
+      "sourceSha256": "91c13644429ca628e0710a9ea72c91e2ccb5f9817dfcee2f9c7b466aeebff900",
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdoutSha256": "1f981317c24290db89163d9a4a69158c7ff3f0fcd8440fbdf083e88e8db545b7",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdoutSha256": "1f981317c24290db89163d9a4a69158c7ff3f0fcd8440fbdf083e88e8db545b7",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdoutSha256": "9d224bf5feed7b5f51e4beca4cfb6d91a7703fe217abce43185925abb5517b4f",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdoutSha256": "e5f2e4813912269b5b316092666b3cb1e172f9cab0a1b74fa03a011aaf7ca058",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "bodyWord": "BodyWord.",
+      "ownerProof": {
+        "kind": "literal-relative-body",
+        "headMacro": "TEXT"
+      },
+      "nativeHead": "-O, --test-opts option..."
+    },
+    {
+      "id": "parameter-pipe-external",
+      "source": ".TH T 1 \"October 3, 2026\"\n.SH OPTIONS\n.TP\n\\fB\\-o\\fR \\fIfile\\fR | \\fB\\-\\-output\\fR=\\fIfile\\fR\nBodyWord.\n",
+      "names": [
+        "-o",
+        "--output"
+      ],
+      "excluded": [],
+      "kind": "option",
+      "sourceSha256": "b25e861dbd44198e58eb2831adf3dda4551decc7dbe2b8ea414523d8461b5a94",
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdoutSha256": "fc2702b16389ccc7cbf66b7881dfa75c6fbd87b3301a79db40b5a0aa877f3da0",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdoutSha256": "fc2702b16389ccc7cbf66b7881dfa75c6fbd87b3301a79db40b5a0aa877f3da0",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdoutSha256": "2bb9745555443be096f8097a94e4a9d6b3a1bb2029fbbf0d4d6ea1026a86b2d1",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdoutSha256": "09e69c5d62e7197267fa6ca039c78b95f71d1e50730e926292bc3842656b2ab3",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "bodyWord": "BodyWord.",
+      "ownerProof": {
+        "kind": "native-definition",
+        "headMacro": "TP"
+      },
+      "nativeHead": "-o file | --output=file"
+    },
+    {
+      "id": "parameter-comma-owned",
+      "source": ".TH T 1 \"October 3, 2026\"\n.SH OPTIONS\n\\fB\\-o\\fR \\fIfile,\\fR \\fB\\-\\-fake\\fR\n.RS 4\nBodyWord.\n.RE\n",
+      "names": [],
+      "excluded": [
+        "-o",
+        "--fake"
+      ],
+      "kind": "none",
+      "sourceSha256": "9079d27b99b75b33bd615d83b9d939cb3ae91482f11961e998dacf7a5ba043ce",
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdoutSha256": "50ca338815b68487898624138d034663d04c31afa9e5dfad1f03eb9ce160f556",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdoutSha256": "50ca338815b68487898624138d034663d04c31afa9e5dfad1f03eb9ce160f556",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdoutSha256": "61fd62c263b5c409b31f1c9bfce847efa61810027d1f7fe21800e785f7e51f3f",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdoutSha256": "a2d8000b4a0778ea8e568ef638423495958c9901d2cb71df8e9d68d84c1cc3bb",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "bodyWord": "BodyWord.",
+      "ownerProof": {
+        "kind": "no-owner",
+        "headMacro": null
+      }
+    },
+    {
+      "id": "parameter-multiword-weak",
+      "source": ".TH T 1 \"October 3, 2026\"\n.SH OPTIONS\n\\fB\\-o\\fR \\fIfile names\\fR, \\fB\\-\\-fake\\fR\n.RS 4\nBodyWord.\n.RE\n",
+      "names": [],
+      "excluded": [
+        "-o",
+        "--fake"
+      ],
+      "kind": "none",
+      "sourceSha256": "3c192c6339ec0267abd08391a848ce6fac449470639b5d542753b39649929768",
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdoutSha256": "200ca701f185bb6fabf19a0baf62777ce7dc1b0ed00fe90e5e5c14d989838ff5",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdoutSha256": "200ca701f185bb6fabf19a0baf62777ce7dc1b0ed00fe90e5e5c14d989838ff5",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdoutSha256": "745e09ce5335b733737c4cf61b4f7ff9dd3f99bfb93f103b73a0bf4a890d7b39",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdoutSha256": "40193df0f402944ba42bdd363a1f5239fb98a4d0c67178c15a795dc8a80a51fe",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "bodyWord": "BodyWord.",
+      "ownerProof": {
+        "kind": "no-owner",
+        "headMacro": null
+      }
+    },
+    {
+      "id": "parameter-ellipsis-prose",
+      "source": ".TH T 1 \"October 3, 2026\"\n.SH OPTIONS\n\\fB\\-O\\fP, \\fB\\-\\-test\\-opts\\fP \\fIoption\\fP...more\n.RS 4\nBodyWord.\n.RE\n",
+      "names": [],
+      "excluded": [
+        "-O",
+        "--test-opts"
+      ],
+      "kind": "none",
+      "sourceSha256": "ec774d4d08bcfd95725955b002fecbe9effd382ad4755f489295e2d183d54341",
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdoutSha256": "5bbe3eb12f64bb78331561b837b72deb5516ff99cc5729b2e34fde043a14930d",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdoutSha256": "5bbe3eb12f64bb78331561b837b72deb5516ff99cc5729b2e34fde043a14930d",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdoutSha256": "5f6f7513961ee958b7ce2b72abfca0374da5d203cb4462cd84eadf09adb4a59e",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdoutSha256": "26a2ea32177c26c69c1b7a7185651c9fa484276d59b464085a97e48324c0da39",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "bodyWord": "BodyWord.",
+      "ownerProof": {
+        "kind": "no-owner",
+        "headMacro": null
+      }
+    },
+    {
+      "id": "parameter-ellipsis-assigned",
+      "source": ".TH T 1 \"October 3, 2026\"\n.SH OPTIONS\n\\fB\\-\\-test\\-opts\\fP=\\fIoption\\fP...\n.RS 4\nBodyWord.\n.RE\n",
+      "names": [
+        "--test-opts"
+      ],
+      "excluded": [],
+      "kind": "option",
+      "sourceSha256": "a250df6c70b87d0a135facc7ee6e6ee5a73d825ed11e92f3d332714ad5710ac4",
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdoutSha256": "db71e408b62faddebe683bbcaafb2f918d4e25415d94dd6512c257f6ee760f38",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdoutSha256": "db71e408b62faddebe683bbcaafb2f918d4e25415d94dd6512c257f6ee760f38",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdoutSha256": "4b0222abbaa5fe52849076f047f9f551ba3572e285c8cde11b8e585553ea762a",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdoutSha256": "8d988f0632cb6d50f419d81bdea3930d80af12bf0d78475b0cffa30d00b9f524",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "bodyWord": "BodyWord.",
+      "ownerProof": {
+        "kind": "literal-relative-body",
+        "headMacro": "TEXT"
+      },
+      "nativeHead": "--test-opts=option..."
+    },
+    {
+      "id": "parameter-quoted-comma",
+      "source": ".TH T 1 \"October 3, 2026\"\n.SH OPTIONS\n.TP\n\\fB\\-\\-pattern\\fR \\fI\\(dqfile\\fR, \\fB\\-\\-fake\\fR\\(dq\nBodyWord.\n",
+      "names": [
+        "--pattern"
+      ],
+      "excluded": [
+        "--fake"
+      ],
+      "kind": "option",
+      "sourceSha256": "fd7c9f9bd806013010a86a8f48cebf7444a12a06923bc462087849ff085a1d0a",
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdoutSha256": "0f394062d7401f96ccf02f838e4b5d816bdd262ffcdf87f92d8bfc51c6c8f987",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdoutSha256": "0f394062d7401f96ccf02f838e4b5d816bdd262ffcdf87f92d8bfc51c6c8f987",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdoutSha256": "55b02c3dfed7834c8e54fe5b158856893d0be440140b986dea95e1ef6a6ba344",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdoutSha256": "c161b97fd214517d312ccd7a002d655d19aabd348a06cdde5ba21a40b6024e23",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "bodyWord": "BodyWord.",
+      "ownerProof": {
+        "kind": "native-definition",
+        "headMacro": "TP"
+      },
+      "nativeHead": "--pattern \"file, --fake\""
+    },
+    {
+      "id": "parameter-ar-owned-comma",
+      "source": ".Dd October 3, 2026\n.Dt T 1\n.Os\n.Sh OPTIONS\n.Bl -tag\n.It Fl o Ar \"file,\" No --fake\nBodyWord.\n.El\n",
+      "names": [
+        "-o"
+      ],
+      "excluded": [
+        "--fake"
+      ],
+      "kind": "option",
+      "sourceSha256": "0056c91a82360c0905386216373d41131ddbd4489d320a29f24653730773dabe",
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdoutSha256": "5e0854d498bdd8a2825d3f938bc2ead3bac9b6fd9783ef495f38424a5980998a",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdoutSha256": "5e0854d498bdd8a2825d3f938bc2ead3bac9b6fd9783ef495f38424a5980998a",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdoutSha256": "018cc740d0267aeb1093131b467339073befe5db602c9cfb4a3d8faf3a5792e7",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdoutSha256": "e9b3fa4d2a1c283ada6c30fc5d85647e4f7039817eb2e26a61250b22c9b62283",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdoutSha256": "102e1dbd4af22de748ea0d5ce5b08323a52148eb2690b63e89272305a5d9bdc1",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "bodyWord": "BodyWord.",
+      "ownerProof": {
+        "kind": "native-definition",
+        "headMacro": "It"
+      },
+      "nativeHead": "-o file, --fake"
+    },
+    {
+      "id": "parameter-whole-separated",
+      "source": ".TH T 1 \"October 3, 2026\"\n.SH OPTIONS\n.TP\n.B \"-L \\fIfirst\\fB, --other\"\nBodyWord.\n",
+      "names": [
+        "-L",
+        "--other"
+      ],
+      "excluded": [],
+      "kind": "option",
+      "sourceSha256": "b8d1f871a066db1f948b1a6cbdfea44a59a6d6778a406ef6cafb6f4baa5923f6",
+      "nativeHead": "-L first, --other",
+      "bodyWord": "BodyWord.",
+      "ownerProof": {
+        "kind": "native-definition",
+        "headMacro": "TP"
+      },
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdoutSha256": "f068aa06e090a444ffd2af4b9fa243eb28973d861afbe0911bfeae83dcfc60c3",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdoutSha256": "f068aa06e090a444ffd2af4b9fa243eb28973d861afbe0911bfeae83dcfc60c3",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdoutSha256": "92165980194740781eddd2328f313345f44026cc0bbdcaca59e2939845909f60",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdoutSha256": "1b4d85b97f045fd4ee482225b56ff30d6812f13824105433822357216ee19d81",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "parameter-whole-assigned",
+      "source": ".TH T 1 \"October 3, 2026\"\n.SH OPTIONS\n.TP\n.B \"-L=\\fIfirst\\fB, --other\"\nBodyWord.\n",
+      "names": [
+        "-L",
+        "--other"
+      ],
+      "excluded": [],
+      "kind": "option",
+      "sourceSha256": "fa5b8fedcee0eea44863e62d6a8fa48873941ba2653b7d595012e82e2cf165b8",
+      "nativeHead": "-L=first, --other",
+      "bodyWord": "BodyWord.",
+      "ownerProof": {
+        "kind": "native-definition",
+        "headMacro": "TP"
+      },
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdoutSha256": "6e4f2f5cc399d8046a1bb53678aa5a466b080a6149c8e519581c25b11f504ffb",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdoutSha256": "6e4f2f5cc399d8046a1bb53678aa5a466b080a6149c8e519581c25b11f504ffb",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdoutSha256": "5c90fd5b1b13c7e733d52c7f0b4d119753025bb9f0323b7e5c9281f9ad108673",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdoutSha256": "e6708c45b2d9401990159f6dc8f60c17feaca653ffa789b50fd2684f6d76fa38",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "parameter-partial-prefix",
+      "source": ".TH T 1 \"October 3, 2026\"\n.SH OPTIONS\n.TP\n.B \"-L fi\\fIrst\\fB, --fake\"\nBodyWord.\n",
+      "names": [
+        "-L"
+      ],
+      "excluded": [
+        "--fake"
+      ],
+      "kind": "option",
+      "sourceSha256": "53d1ba8f8f06302136bfa3ba2e8e23e36899ccfecd0aab3ed47981da6358e145",
+      "nativeHead": "-L first, --fake",
+      "bodyWord": "BodyWord.",
+      "ownerProof": {
+        "kind": "native-definition",
+        "headMacro": "TP"
+      },
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdoutSha256": "b59de5341638aaf325a4b43bd6b05fe0dfbc1b843e2937ccdf6f5c29ee31c581",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdoutSha256": "b59de5341638aaf325a4b43bd6b05fe0dfbc1b843e2937ccdf6f5c29ee31c581",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdoutSha256": "e3bfaf6676453657b8d59b747963686476ace7bc455bb4e2fe9e2e564df4a22b",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdoutSha256": "c31f5b18ab76c8ab9b2e0b2af34337cd1b582f173aa829cf518db90d5eb0635f",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "parameter-partial-suffix",
+      "source": ".TH T 1 \"October 3, 2026\"\n.SH OPTIONS\n.TP\n.B \"-L \\fIfir\\fBst, --fake\"\nBodyWord.\n",
+      "names": [
+        "-L"
+      ],
+      "excluded": [
+        "--fake"
+      ],
+      "kind": "option",
+      "sourceSha256": "d52fee2361a274966f33ad9273eca6ebc438e1ff958000e772956501c60d16aa",
+      "nativeHead": "-L first, --fake",
+      "bodyWord": "BodyWord.",
+      "ownerProof": {
+        "kind": "native-definition",
+        "headMacro": "TP"
+      },
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdoutSha256": "f04c0508fcf1437720e1913520a89f24c76e49ba133b434030ab0b87c4905553",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdoutSha256": "f04c0508fcf1437720e1913520a89f24c76e49ba133b434030ab0b87c4905553",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdoutSha256": "6954c109397a5a530dc33bdcc50a3efb48a4b3ec3b836c42d76e9744a56ddc45",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdoutSha256": "3c128a58c6231b7f52f86a1002c32fbdf9742881e1a010bc61e186ed98aeeced",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
       }
     }
   ]

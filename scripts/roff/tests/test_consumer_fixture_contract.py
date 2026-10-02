@@ -51,18 +51,18 @@ class ConsumerFixtureContractTests(unittest.TestCase):
 
     def test_declaration_names_keep_exact_sources_and_native_profile_bindings(self):
         fixture = json.loads((FIXTURE_ROOT / "declaration_names/cases.json").read_text())
-        self.assertEqual(fixture["header"]["count"], 88)
+        self.assertEqual(fixture["header"]["count"], 102)
         self.assertFalse(fixture["header"]["expectationsFromProduct"])
         self.assertEqual(fixture["header"]["oracleSha256"],
                          "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6")
         cases = fixture["cases"]
-        self.assertEqual(len(cases), 88)
-        self.assertEqual(len({case["id"] for case in cases}), 88)
-        self.assertEqual(len({case["source"] for case in cases}), 88)
-        self.assertEqual(sum(case["profiles"]["lint"]["code"] == 0 for case in cases), 66)
-        self.assertEqual(sum(case["ownerProof"]["kind"] == "native-definition" for case in cases), 80)
-        self.assertEqual(sum(case["ownerProof"]["kind"] == "literal-relative-body" for case in cases), 2)
-        self.assertEqual(sum(case["ownerProof"]["kind"] == "no-owner" for case in cases), 6)
+        self.assertEqual(len(cases), 102)
+        self.assertEqual(len({case["id"] for case in cases}), 102)
+        self.assertEqual(len({case["source"] for case in cases}), 102)
+        self.assertEqual(sum(case["profiles"]["lint"]["code"] == 0 for case in cases), 79)
+        self.assertEqual(sum(case["ownerProof"]["kind"] == "native-definition" for case in cases), 88)
+        self.assertEqual(sum(case["ownerProof"]["kind"] == "literal-relative-body" for case in cases), 5)
+        self.assertEqual(sum(case["ownerProof"]["kind"] == "no-owner" for case in cases), 9)
         for case in cases:
             with self.subTest(case=case["id"]):
                 self.assertEqual(hashlib.sha256(case["source"].encode()).hexdigest(),
@@ -80,9 +80,12 @@ class ConsumerFixtureContractTests(unittest.TestCase):
                     self.assertIn(proof["headMacro"], {"TP", "IP", "It"})
                     self.assertRegex(case["source"], r"(?m)^\." + proof["headMacro"] + r"(?:$|\s)")
                 elif proof["kind"] == "literal-relative-body":
-                    self.assertIn(proof["headMacro"], {"B", "MR"})
-                    self.assertIn("." + proof["headMacro"] + " ", case["source"])
-                    self.assertIn("\n.RS\n", case["source"])
+                    self.assertIn(proof["headMacro"], {"B", "MR", "TEXT"})
+                    if proof["headMacro"] == "TEXT":
+                        self.assertIn("\\fB", case["source"])
+                    else:
+                        self.assertIn("." + proof["headMacro"] + " ", case["source"])
+                    self.assertRegex(case["source"], r"(?m)^\.RS(?:$|\s)")
                 else:
                     self.assertEqual(proof, {"kind": "no-owner", "headMacro": None})
                     self.assertEqual(case["kind"], "none")

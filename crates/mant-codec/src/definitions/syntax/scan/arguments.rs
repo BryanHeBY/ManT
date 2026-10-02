@@ -77,6 +77,7 @@ fn structured_token(token: &str, attached_to_name: bool) -> bool {
     // becoming artificial standalone words after a font-run projection.
     let token = token
         .strip_suffix(",...")
+        .or_else(|| token.strip_suffix("..."))
         .or_else(|| token.strip_suffix(','))
         .unwrap_or(token);
     // A field operator directly adjoining an actual name (for example

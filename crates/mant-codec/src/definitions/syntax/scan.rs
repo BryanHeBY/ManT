@@ -44,16 +44,24 @@ enum Placeholder {
     Start,
     Assigned,
     Uppercase,
+    Styled,
+    StyledGap,
     Invalid,
 }
 
 impl Placeholder {
-    fn observe(self, character: char) -> Self {
+    fn observe(self, character: char, parameter: bool) -> Self {
         match (self, character) {
             (Self::Start, '=') => Self::Assigned,
             (Self::Start | Self::Assigned, 'A'..='Z')
             | (Self::Uppercase, 'A'..='Z' | '0'..='9' | '_' | '-') => Self::Uppercase,
             (Self::Uppercase, c) if c.is_whitespace() => Self::Uppercase,
+            (Self::Start | Self::Assigned | Self::Styled, c)
+                if parameter && (c.is_alphanumeric() || matches!(c, '_' | '-')) =>
+            {
+                Self::Styled
+            }
+            (Self::Styled | Self::StyledGap, c) if c.is_whitespace() => Self::StyledGap,
             _ => Self::Invalid,
         }
     }
@@ -483,10 +491,27 @@ impl<'a> Scanner<'a> {
         self.placeholder = Placeholder::Start;
     }
 
+    fn complete_parameter_token(&self, delimiter_is_parameter: bool) -> bool {
+        match self.placeholder {
+            Placeholder::Uppercase => true,
+            Placeholder::Styled | Placeholder::StyledGap if !delimiter_is_parameter => {
+                self.argument_start.as_ref().is_some_and(|argument| {
+                    // A styled suffix adjoining the name is only part of a
+                    // native word. Author whitespace or an explicit assignment
+                    // supplies the left boundary of a complete parameter token.
+                    !argument.attached_to_name
+                        || self.view.text[argument.bytes.start..].starts_with('=')
+                })
+            }
+            _ => false,
+        }
+    }
+
     fn consume_argument(&mut self, character: char) {
         let mut next_offset = self.cursor + character.len_utf8();
         let role = self.view.operand(self.cursor);
-        self.styled_argument |= self.view.is_parameter(self.cursor);
+        let parameter = self.view.is_parameter(self.cursor);
+        self.styled_argument |= parameter;
         if self.lexical.is_top_level() {
             let mut following = next_offset;
             if matches!(character, ',' | '|') || character.is_whitespace() {
@@ -498,10 +523,14 @@ impl<'a> Scanner<'a> {
                         .len_utf8();
                 }
             }
+            // term_word() may change fonts within one native TEXT operand.
+            // A complete parameter token followed by literal punctuation is
+            // declaration syntax, without claiming that the font change was
+            // a new native word. Punctuation still inside a parameter cannot
+            // supply this proof, nor can a multiword styled prose suffix.
+            let complete_parameter = self.complete_parameter_token(parameter);
             let boundary = matches!(character, ',' | '|')
-                && (self.styled_argument
-                    || self.structured_argument
-                    || matches!(self.placeholder, Placeholder::Uppercase))
+                && (self.styled_argument || self.structured_argument || complete_parameter)
                 || (self.view.literal_operand_starts(self.cursor)
                     || self.view.literal_operand_starts(following))
                     && self.separator.is_some()
@@ -517,13 +546,13 @@ impl<'a> Scanner<'a> {
                 && !self.view.is_parameter(restart)
                 && (role.is_none()
                     || self.structured_argument
-                    || matches!(self.placeholder, Placeholder::Uppercase)
+                    || complete_parameter
                     || self.view.literal_operand_starts(restart))
             {
                 if role.is_none()
                     && self.styled_argument
                     && !self.structured_argument
-                    && !matches!(self.placeholder, Placeholder::Uppercase)
+                    && !complete_parameter
                 {
                     self.admission = OwnerAdmission::UnprovedStyleRestart;
                 }
@@ -549,7 +578,7 @@ impl<'a> Scanner<'a> {
         } else if top_level && !character.is_whitespace() {
             self.structured_argument = false;
         }
-        self.placeholder = self.placeholder.observe(character);
+        self.placeholder = self.placeholder.observe(character, parameter);
         self.cursor = next_offset;
     }
 }

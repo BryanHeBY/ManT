@@ -36,7 +36,7 @@ struct OwnerProof {
 fn cases() -> Vec<Case> {
     let fixture: serde_json::Value =
         serde_json::from_str(include_str!("declaration_names/cases.json")).unwrap();
-    assert_eq!(fixture["header"]["count"], 88);
+    assert_eq!(fixture["header"]["count"], 102);
     serde_json::from_value(fixture["cases"].clone()).unwrap()
 }
 
@@ -160,7 +160,7 @@ fn assert_owner(case: &Case, owner: EntryOwner<'_>) {
 
 #[test]
 fn ordered_native_heads_keep_complete_names_fonts_and_actual_content_bindings() {
-    // All 88 exact sources ran pristine ASCII/UTF-8/HTML/tree/lint first.
+    // All 102 exact sources ran pristine ASCII/UTF-8/HTML/tree/lint first.
     // man_term.c::pre_alternate calls term_word once per actual TEXT child;
     // term.c::term_word changes fonts inside that operand without a new word.
     // Mandoc proves the visible HEAD and fonts; semantic names/kinds below
@@ -249,14 +249,16 @@ fn has_literal_relative_pair(
     // man_term.c::pre_PP supplies paragraph spacing, pre_B/pre_MR text,
     // pre_RS/post_RS a distinct indented BODY. man validation removes the
     // initial empty PP after SH in these exact inputs: pristine tree proves
-    // B/MR and RS are actual adjacent siblings, not native TP/IP HEADs.
+    // B/MR or a font-escaped TEXT and RS are actual adjacent siblings,
+    // not native TP/IP HEADs.
     // Owner source must remain within that exact literal subtree; description
     // text must belong to its actual following RS BODY, independently of kind.
     node.children.windows(2).any(|siblings| {
         let head = &siblings[0];
         let tail = &siblings[1];
-        head.kind == libmandoc_rs::NodeKind::Element
+        (head.kind == libmandoc_rs::NodeKind::Element
             && head.macro_name.as_deref() == Some(macro_name)
+            || macro_name == "TEXT" && head.kind == libmandoc_rs::NodeKind::Text)
             && native_contains_source(head, source)
             && tail.kind == libmandoc_rs::NodeKind::Block
             && tail.macro_name.as_deref() == Some("RS")
