@@ -200,7 +200,7 @@ Text with ~~strike~~, ![alt](image.png), <kbd>raw</kbd>, and $math$.
 [^note]: footnote body
 ";
     let document = parse_document(markdown, None);
-    assert!(document.sections.is_empty());
+    assert_eq!(document.sections.len(), 0);
     let blocks = &document.blocks;
 
     assert!(matches!(

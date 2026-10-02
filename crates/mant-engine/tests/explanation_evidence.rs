@@ -69,7 +69,7 @@ fn explicit_relationships_add_independent_content_not_inherited_domains() {
 - `-S`, `--since`, `-U`, `--until`: Independent bounds. <!-- mant:entry {"id":"bounds","aliasGroups":[["-S","--since"],["-U","--until"]]} -->
 "#;
     let content = load_markdown_text(source, None).unwrap();
-    assert!(content.document.as_ref().unwrap().diagnostics.is_empty());
+    assert_eq!(content.document.as_ref().unwrap().diagnostics.len(), 0);
     let found = explain_query(&content, &query("--data")).unwrap();
     assert_eq!(found.total, 2);
     assert!(found.evidence[1].bases.iter().any(|b| matches!(b, EvidenceBasis::Related { from, declarations } if from.as_str() == "data" && declarations.iter().map(mant_ir::NodeId::as_str).collect::<Vec<_>>() == ["ascii"])));
@@ -188,7 +188,7 @@ fn native_and_markdown_owners_share_the_same_evidence_rules() {
                 .any(|basis| matches!(basis, EvidenceBasis::Name { .. }))
         );
         assert_eq!(result.class, mant_protocol::EvidenceClass::DirectEntry);
-        assert!(result.previews.is_empty());
+        assert_eq!(result.previews.len(), 0);
         assert!(!result.previews_omitted);
         assert!(matches!(
             result.content,
@@ -245,7 +245,7 @@ fn relation_depth_and_matching_owner_caps_report_incomplete_collection() {
     }
     source.push_str("- `--n40`: Body. <!-- mant:entry {\"id\":\"n40\"} -->\n");
     let content = load_markdown_text(&source, None).unwrap();
-    assert!(content.document.as_ref().unwrap().diagnostics.is_empty());
+    assert_eq!(content.document.as_ref().unwrap().diagnostics.len(), 0);
     let result = explain_query(&content, &query("--n0")).unwrap();
     assert_eq!(result.total, 33);
     assert!(result.truncation.relations);

@@ -67,7 +67,7 @@ fn projection(children: &[Inline], native_text: bool) -> String {
                 // This cohort has only Lk's empty portable suffix. Preserve
                 // every executed hard row and resolved row prefix, without
                 // importing the terminal-only ':' and target operand.
-                assert!(display.is_empty());
+                assert_eq!(display.len(), 0);
                 let raw = mant_ir::inline_plain_text(children);
                 for (index, row) in raw.split('\n').enumerate() {
                     if index > 0 {

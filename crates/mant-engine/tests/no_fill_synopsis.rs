@@ -117,7 +117,10 @@ fn synopsis_body_executes_fill_mode_changes_instead_of_flattening_every_child() 
             .iter()
             .any(|block| matches!(block, Block::VerticalSpace { lines: 2, .. }))
     );
-    assert!(mant_ir::validate_document(content.document.as_ref().unwrap()).is_empty());
+    assert_eq!(
+        mant_ir::validate_document(content.document.as_ref().unwrap()).len(),
+        0
+    );
 }
 
 #[test]
@@ -147,7 +150,10 @@ fn literal_display_executes_explicit_fill_switches_and_restores_literal_rows() {
                 Block::Paragraph { .. }
             ]
         ));
-        assert!(mant_ir::validate_document(content.document.as_ref().unwrap()).is_empty());
+        assert_eq!(
+            mant_ir::validate_document(content.document.as_ref().unwrap()).len(),
+            0
+        );
     }
 }
 

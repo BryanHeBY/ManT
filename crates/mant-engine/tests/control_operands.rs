@@ -100,7 +100,10 @@ fn legacy_manual_metadata_operands_are_not_body_content() {
                     .any(|line| matches!(line.trim(), "5" | "3" | "5 2")),
                 "{input}: {text:?}"
             );
-            assert!(mant_ir::validate_document(query.document.as_ref().unwrap()).is_empty());
+            assert_eq!(
+                mant_ir::validate_document(query.document.as_ref().unwrap()).len(),
+                0
+            );
         }
     }
     let query = load_roff_bytes(b".TH PROBE 1\n.SH TEST\n.B UC 5 AT 3\n").unwrap();

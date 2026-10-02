@@ -50,7 +50,10 @@ fn explicit_initial_body_requests_end_short_heads_without_adding_blank_rows() {
                     .unwrap();
                 assert_eq!(lines[head_row + 1].trim(), "BODY", "{source}\n{text}");
                 assert!(lines[head_row + 1].starts_with(' '), "{source}\n{text}");
-                assert!(mant_ir::validate_document(query.document.as_ref().unwrap()).is_empty());
+                assert_eq!(
+                    mant_ir::validate_document(query.document.as_ref().unwrap()).len(),
+                    0
+                );
                 if prefix == ".ft B\n" {
                     assert!(
                         serde_json::to_string(&owner.description)
@@ -454,7 +457,10 @@ fn ordinary_fitting_and_mdoc_targeted_definitions_keep_their_existing_contracts(
     }
     let query = load_roff_bytes(b".Dd September 11, 2026\n.Dt PROBE 1\n.Os\n.Sh TEST\n.Bl -tag -width Ds\n.Tg Exact.Target\n.It Fl x\nBODY\n.El\n").unwrap();
     assert!(item(&query).layout.inline_term());
-    assert!(mant_ir::validate_document(query.document.as_ref().unwrap()).is_empty());
+    assert_eq!(
+        mant_ir::validate_document(query.document.as_ref().unwrap()).len(),
+        0
+    );
     let json = serde_json::to_string(query.document.as_ref().unwrap()).unwrap();
     assert!(json.contains("Exact.Target"));
     assert!(render_query_text(&query).contains("BODY"));

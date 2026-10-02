@@ -26,7 +26,7 @@ mod escape_coverage_tests {
         let _ = context.lower_text(&word, &mut declined);
         assert!(declined.execution.escape_coverage.truncated());
         assert!(!live.execution.escape_coverage.truncated());
-        assert!(context.take_diagnostics().is_empty());
+        assert_eq!(context.take_diagnostics().len(), 0);
         drop(declined);
 
         let mut accepted = live.clone();

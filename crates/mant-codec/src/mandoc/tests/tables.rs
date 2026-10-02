@@ -389,7 +389,7 @@ fn ragged_matrix_keeps_later_column_rows_through_ir_json() {
         panic!("round-trip matrix");
     };
     assert_eq!(restored_value, &restored_expression.readable_text());
-    assert!(mant_ir::validate_document(&restored).is_empty());
+    assert_eq!(mant_ir::validate_document(&restored).len(), 0);
 }
 
 #[test]
@@ -412,7 +412,7 @@ fn ragged_matrix_keeps_earlier_column_rows_through_ir() {
     };
     assert_eq!(value, "matrix(a, c; b, )");
     assert_eq!(value, &expression.readable_text());
-    assert!(mant_ir::validate_document(&document).is_empty());
+    assert_eq!(mant_ir::validate_document(&document).len(), 0);
 }
 
 #[test]

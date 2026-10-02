@@ -21,7 +21,7 @@ fn dynamic_newline_selectors_are_rejected_before_diagnostic_interpolation() {
     fs::remove_dir_all(root).expect("remove diagnostic fixture");
 
     assert_eq!(output.status.code(), Some(2));
-    assert!(output.stdout.is_empty());
+    assert_eq!(output.stdout.len(), 0);
     let diagnostic = String::from_utf8(output.stderr).expect("UTF-8 diagnostic");
     assert!(
         diagnostic.contains("document selector must not contain control characters"),
@@ -59,7 +59,7 @@ fn every_cli_explain_surface_rejects_oversized_entries_before_lookup() {
             .output()
             .expect("reject oversized semantic entry");
         assert_eq!(output.status.code(), Some(2));
-        assert!(output.stdout.is_empty());
+        assert_eq!(output.stdout.len(), 0);
         let error = String::from_utf8(output.stderr).expect("UTF-8 diagnostic");
         assert!(
             error.contains("semantic entry must not exceed 512 Unicode scalar values"),
@@ -95,7 +95,7 @@ fn every_cli_explain_surface_rejects_oversized_entries_before_lookup() {
         .expect("write Markdown stdin");
     let output = child.wait_with_output().expect("finish stdin query");
     assert_eq!(output.status.code(), Some(2));
-    assert!(output.stdout.is_empty());
+    assert_eq!(output.stdout.len(), 0);
     let error = String::from_utf8(output.stderr).expect("UTF-8 diagnostic");
     assert!(
         error.contains("semantic entry must not exceed 512 Unicode scalar values"),
@@ -168,7 +168,7 @@ fn regex_search_rejects_patterns_that_can_split_utf8_characters() {
         .expect("run invalid regex search");
 
     assert_eq!(output.status.code(), Some(2), "{output:?}");
-    assert!(output.stdout.is_empty());
+    assert_eq!(output.stdout.len(), 0);
     assert!(
         String::from_utf8_lossy(&output.stderr).contains("UTF-8 character boundaries"),
         "{output:?}"
@@ -201,7 +201,7 @@ fn cli_json_remains_the_lowering_diagnostic_surface() {
     fs::remove_file(path).expect("remove diagnostic fixture");
 
     assert!(output.status.success(), "{output:?}");
-    assert!(output.stderr.is_empty());
+    assert_eq!(output.stderr.len(), 0);
     let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("query JSON");
     assert_eq!(
         value["document"]["diagnostics"][0]["code"],
@@ -235,7 +235,7 @@ fn cli_and_request_outlines_report_rejected_semantic_entries() {
         .output()
         .expect("query direct outline");
     assert!(direct.status.success(), "{direct:?}");
-    assert!(direct.stderr.is_empty());
+    assert_eq!(direct.stderr.len(), 0);
     let direct: serde_json::Value =
         serde_json::from_slice(&direct.stdout).expect("direct outline JSON");
     assert_eq!(direct["semanticsComplete"], false);
@@ -270,7 +270,7 @@ fn cli_and_request_outlines_report_rejected_semantic_entries() {
     fs::remove_file(path).expect("remove semantic outline fixture");
 
     assert!(protocol.status.success(), "{protocol:?}");
-    assert!(protocol.stderr.is_empty());
+    assert_eq!(protocol.stderr.len(), 0);
     let protocol: serde_json::Value =
         serde_json::from_slice(&protocol.stdout).expect("request outline JSON");
     assert_eq!(protocol["semanticsComplete"], false);
@@ -328,7 +328,7 @@ fn exact_semantic_option_spellings_survive_the_cli_boundary() {
     fs::remove_file(path).expect("remove exact-selector fixture");
 
     assert!(outline.status.success(), "{outline:?}");
-    assert!(outline.stderr.is_empty());
+    assert_eq!(outline.stderr.len(), 0);
     let outline: serde_json::Value = serde_json::from_slice(&outline.stdout).expect("outline JSON");
     assert!(outline.get("semanticsComplete").is_none());
     let certificate = outline["nodes"]
@@ -342,12 +342,12 @@ fn exact_semantic_option_spellings_survive_the_cli_boundary() {
     assert_eq!(certificate["children"][2]["names"][0], "--foo.bar");
 
     assert!(dotted.status.success(), "{dotted:?}");
-    assert!(dotted.stderr.is_empty());
+    assert_eq!(dotted.stderr.len(), 0);
     let dotted: serde_json::Value = serde_json::from_slice(&dotted.stdout).expect("dotted JSON");
     assert_eq!(dotted["evidence"][0]["entry"]["names"][0], "-ca.cert");
 
     assert!(positional_help.status.success(), "{positional_help:?}");
-    assert!(positional_help.stderr.is_empty());
+    assert_eq!(positional_help.stderr.len(), 0);
     let positional_help: serde_json::Value =
         serde_json::from_slice(&positional_help.stdout).expect("help JSON");
     assert_eq!(
@@ -390,7 +390,7 @@ fn text_outlines_include_resolved_semantic_relationships() {
         ],
     );
     assert!(output.status.success(), "{output:?}");
-    assert!(output.stderr.is_empty());
+    assert_eq!(output.stderr.len(), 0);
     let text = String::from_utf8(output.stdout).expect("UTF-8 text outline");
     assert!(
         text.contains(

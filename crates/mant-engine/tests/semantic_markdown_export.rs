@@ -93,7 +93,7 @@ fn ordinary_declared_entries_reimport_names_groups_relations_and_domains() {
   <!-- mant:domain entries=manual/5/ssh_config roles=configuration-key -->
 "#;
     let query = load_markdown_text(source, None).unwrap();
-    assert!(query.document.as_ref().unwrap().diagnostics.is_empty());
+    assert_eq!(query.document.as_ref().unwrap().diagnostics.len(), 0);
     let original = facts(query.document.as_ref().unwrap());
     for preserve_anchors in [false, true] {
         let markdown = render_markdown_with_options(
@@ -230,7 +230,7 @@ fn metadata_representation_limits_are_shared_by_import_and_export() {
             id: "i".repeat(id_length),
         }
         .visit_document_mut(document);
-        assert!(mant_ir::validate_document(document).is_empty());
+        assert_eq!(mant_ir::validate_document(document).len(), 0);
         let original = facts(document);
         assert_eq!(original.len(), 1);
         let json = serde_json::json!({
@@ -272,7 +272,7 @@ fn metadata_representation_limits_are_shared_by_import_and_export() {
                     "{:?}",
                     document.diagnostics
                 );
-                assert!(mant_ir::validate_document(&document).is_empty());
+                assert_eq!(mant_ir::validate_document(&document).len(), 0);
                 assert_eq!(facts(&document), original);
             } else {
                 let ordinary = render_markdown_with_options(

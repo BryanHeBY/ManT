@@ -74,7 +74,7 @@ fn every_partial_pager_setup_restores_before_returning_the_setup_error() {
             .chain(order[..=failed].iter().rev().copied().map(Event::Release))
             .collect();
         assert_eq!(state.lock().trace, expected);
-        assert!(state.lock().active.is_empty());
+        assert_eq!(state.lock().active.len(), 0);
         terminal.restore().unwrap();
         drop(terminal);
         assert_eq!(state.lock().trace, expected);
@@ -108,7 +108,7 @@ fn cleanup_attempts_all_modes_preserves_first_error_and_retries_only_failures() 
         &state.lock().trace[8..],
         &[Event::Release(HiddenCursor), Event::Release(RawMode)]
     );
-    assert!(state.lock().active.is_empty());
+    assert_eq!(state.lock().active.len(), 0);
 }
 
 #[test]
@@ -117,7 +117,7 @@ fn failure_cleanup_is_retried_by_the_same_owner_and_unused_owner_is_inert() {
     let terminal = owner(&state);
     terminal.restore().unwrap();
     drop(terminal);
-    assert!(state.lock().trace.is_empty());
+    assert_eq!(state.lock().trace.len(), 0);
 
     state.lock().fail_acquire = Some(MouseCapture);
     state.lock().fail_release = vec![MouseCapture];
@@ -131,7 +131,7 @@ fn failure_cleanup_is_retried_by_the_same_owner_and_unused_owner_is_inert() {
     let expected = state.lock().trace.clone();
     drop(terminal);
     assert_eq!(state.lock().trace, expected);
-    assert!(state.lock().active.is_empty());
+    assert_eq!(state.lock().active.len(), 0);
 }
 
 #[test]
@@ -182,7 +182,7 @@ fn simultaneous_cleanup_paths_release_each_mode_only_once() {
             Event::Release(AlternateScreen),
         ]
     );
-    assert!(state.lock().active.is_empty());
+    assert_eq!(state.lock().active.len(), 0);
 }
 
 #[test]
@@ -236,7 +236,7 @@ fn active_output_preserves_bytes_but_late_write_and_flush_fail_without_output() 
         io::ErrorKind::BrokenPipe
     );
     assert_eq!(writer.inner, bytes);
-    assert!(state.lock().trace.is_empty());
+    assert_eq!(state.lock().trace.len(), 0);
 }
 
 #[test]
@@ -249,7 +249,7 @@ fn stopped_search_returns_before_waiting_for_events_or_touching_output() {
     assert!(
         matches!(result, Err(MinusError::TerminalLifecycle(error)) if error.kind() == io::ErrorKind::BrokenPipe)
     );
-    assert!(output.is_empty());
+    assert_eq!(output.len(), 0);
 }
 
 #[test]
@@ -273,8 +273,8 @@ fn writer_waiting_on_stdout_observes_stop_before_touching_its_output() {
     drop(guard);
     let (bytes, result) = worker.join().unwrap();
     assert_eq!(result.unwrap_err().kind(), io::ErrorKind::BrokenPipe);
-    assert!(bytes.is_empty());
-    assert!(state.lock().active.is_empty());
+    assert_eq!(bytes.len(), 0);
+    assert_eq!(state.lock().active.len(), 0);
 }
 
 // Global hook tests run in a dedicated test process, never replacing another
@@ -331,7 +331,7 @@ fn panic_hook_child() {
         terminal
             .interactive(|| terminal.setup().map_err(MinusError::TerminalLifecycle))
             .unwrap();
-        assert!(state.lock().active.is_empty());
+        assert_eq!(state.lock().active.len(), 0);
         drop(terminal);
         assert!(
             weak.upgrade().is_none(),
@@ -351,7 +351,7 @@ fn panic_hook_child() {
         }))
         .is_err()
     );
-    assert!(state.lock().active.is_empty());
+    assert_eq!(state.lock().active.len(), 0);
     assert_eq!(
         state.lock().trace,
         [

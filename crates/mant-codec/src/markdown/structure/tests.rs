@@ -12,7 +12,7 @@ fn extracted_heading_keeps_original_unicode_span_and_exact_fragment_alias() {
             format!("{title}{newline}Intro.{newline}{newline}### Child{newline}Body.{newline}");
         let source = MarkdownSource::new(&text);
         let mut parsed = lower_document_structure(parser_events(&text), &source);
-        assert!(parsed.diagnostics.is_empty());
+        assert_eq!(parsed.diagnostics.len(), 0);
         let mut sections = nest_sections(parsed.flat_sections);
         let (heading, aliases) = extract_document_title(
             &mut parsed.root_blocks,

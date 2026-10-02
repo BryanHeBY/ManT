@@ -449,7 +449,7 @@ mod tests {
                 max_chars: 10,
             },
         );
-        assert!(empty.text.is_empty());
+        assert_eq!(empty.text.len(), 0);
         assert_eq!((empty.start_char, empty.end_char), (5, 5));
     }
 

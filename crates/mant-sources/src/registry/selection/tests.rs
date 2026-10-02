@@ -225,5 +225,5 @@ fn equal_priority_sources_keep_snapshot_order_and_candidate_order() {
         index.find(&candidates, None).unwrap().unwrap().logical_path,
         "z/tool"
     );
-    assert!(index.matches_after_builtin(&candidates).is_empty());
+    assert_eq!(index.matches_after_builtin(&candidates).len(), 0);
 }

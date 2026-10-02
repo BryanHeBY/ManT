@@ -453,7 +453,7 @@ mod tests {
         let argument = vec![Inline::Emphasis {
             children: vec![link(vec![text("-n,--FAKE")])],
         }];
-        assert!(super::super::option_names_from_terms(&[argument]).is_empty());
+        assert_eq!(super::super::option_names_from_terms(&[argument]).len(), 0);
         let slash = vec![link(vec![text("-n/-NUM")])];
         assert_eq!(
             super::super::option_names_from_terms(&[slash]),

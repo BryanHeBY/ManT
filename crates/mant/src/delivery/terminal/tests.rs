@@ -18,10 +18,9 @@ fn recovery_child() {
         )
         .unwrap();
         panic!("expected discovery callback to panic");
-    } else {
-        assert_eq!(case, "initialization");
-        initialization_failure(&content);
     }
+    assert_eq!(case, "initialization");
+    initialization_failure(&content);
 }
 
 #[test]

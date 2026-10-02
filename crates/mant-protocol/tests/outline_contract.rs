@@ -117,7 +117,7 @@ fn outline_optional_diagnostic_fields_default_to_a_complete_result() {
     .expect("outline optional-field defaults");
 
     assert!(outline.semantics_complete);
-    assert!(outline.diagnostics.is_empty());
+    assert_eq!(outline.diagnostics.len(), 0);
 }
 
 #[test]

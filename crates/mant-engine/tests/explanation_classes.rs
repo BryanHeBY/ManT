@@ -130,7 +130,7 @@ fn empty_names_still_have_a_real_owner_and_invalid_bindings_never_match_names() 
         matches!(&result.evidence[0].bases[..], [EvidenceBasis::Form { matches }, EvidenceBasis::Literal]
         if matches.len() == 1 && matches[0].text == "--help")
     );
-    assert!(result.evidence[0].entry.as_ref().unwrap().names.is_empty());
+    assert_eq!(result.evidence[0].entry.as_ref().unwrap().names.len(), 0);
     let mut content = mant_loader::load_roff_bytes(
         b".TH PROBE 1\n.SH DESCRIPTION\n.TP\n.B A\nRead --help here.\n",
     )
@@ -138,7 +138,7 @@ fn empty_names_still_have_a_real_owner_and_invalid_bindings_never_match_names() 
     NoNames.visit_document_mut(content.document.as_mut().unwrap());
     let result = explain_query(&content, &query()).unwrap();
     assert_eq!(result.evidence[0].class, EvidenceClass::EntryMention);
-    assert!(result.evidence[0].entry.as_ref().unwrap().names.is_empty());
+    assert_eq!(result.evidence[0].entry.as_ref().unwrap().names.len(), 0);
 }
 
 #[test]
@@ -167,22 +167,8 @@ fn unrecorded_or_invalid_forms_preserve_literal_ownership_and_nested_entries() {
         let evidence = mant_query::select_explanation(&content, "TOKEN").unwrap();
         assert_eq!(evidence.total, 1);
         assert_eq!(evidence.evidence[0].outline.node.id(), id.as_str());
-        assert!(
-            evidence.evidence[0]
-                .entry
-                .as_ref()
-                .unwrap()
-                .forms
-                .is_empty()
-        );
-        assert!(
-            evidence.evidence[0]
-                .entry
-                .as_ref()
-                .unwrap()
-                .names
-                .is_empty()
-        );
+        assert_eq!(evidence.evidence[0].entry.as_ref().unwrap().forms.len(), 0);
+        assert_eq!(evidence.evidence[0].entry.as_ref().unwrap().names.len(), 0);
         assert!(
             mant_query::select_excerpt(
                 &content,

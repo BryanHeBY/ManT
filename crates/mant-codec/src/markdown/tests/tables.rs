@@ -109,5 +109,5 @@ fn main() {}
         Block::VerticalSpace { lines: 1, .. }
     ));
     assert!(matches!(&options.blocks[5], Block::ThematicBreak { .. }));
-    assert!(document.diagnostics.is_empty());
+    assert_eq!(document.diagnostics.len(), 0);
 }

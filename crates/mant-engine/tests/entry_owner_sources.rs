@@ -83,6 +83,9 @@ fn transformed_native_owners_keep_the_first_head_for_explain_and_search() {
         .unwrap();
         assert_eq!(search.matches.len(), 1);
         assert_eq!(search.matches[0].node_source, Some(original));
-        assert!(mant_ir::validate_document(query.document.as_ref().unwrap()).is_empty());
+        assert_eq!(
+            mant_ir::validate_document(query.document.as_ref().unwrap()).len(),
+            0
+        );
     }
 }

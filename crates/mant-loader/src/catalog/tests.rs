@@ -92,7 +92,7 @@ fn catalog_pages_an_immutable_inventory_without_losing_scope_coverage() {
         },
     )
     .expect("past end page");
-    assert!(end.documents.is_empty());
+    assert_eq!(end.documents.len(), 0);
     assert_eq!((end.total, end.returned, end.offset), (3, 0, 3));
     assert_eq!(end.next_offset, None);
     assert!(!end.truncated);

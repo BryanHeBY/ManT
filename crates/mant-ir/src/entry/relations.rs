@@ -433,7 +433,7 @@ mod tests {
             vec!["-U".into(), "--until".into()],
         ];
         let doc = document(vec![item]);
-        assert!(crate::validate_document(&doc).is_empty());
+        assert_eq!(crate::validate_document(&doc).len(), 0);
         let decoded: Document =
             serde_json::from_str(&serde_json::to_string(&doc).unwrap()).unwrap();
         assert_eq!(doc, decoded);
@@ -487,7 +487,7 @@ mod tests {
         let mut first = entry("first", &["--first"]);
         first.entry.as_mut().unwrap().alias_of = Some("second".into());
         let second = entry("second", &["--second"]);
-        assert!(codes(vec![first.clone(), second.clone()]).is_empty());
+        assert_eq!(codes(vec![first.clone(), second.clone()]).len(), 0);
         assert!(codes(vec![first.clone()]).contains(&"ir.invalid-entry-alias-of".into()));
         assert!(
             codes(vec![first.clone(), second.clone(), second.clone()])

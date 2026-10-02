@@ -291,7 +291,7 @@ fn kind_filter_with_no_matches_returns_an_explicitly_empty_projection() {
     )
     .expect("empty environment projection");
 
-    assert!(outline.nodes.is_empty());
+    assert_eq!(outline.nodes.len(), 0);
 }
 
 #[test]
@@ -606,7 +606,7 @@ fn selects_paths_or_ids_in_source_order_and_suppresses_descendant_duplicates() {
         panic!("expected manual selection");
     };
     assert_eq!(section.children.len(), 2);
-    assert!(outline.ancestors.is_empty());
+    assert_eq!(outline.ancestors.len(), 0);
 }
 
 #[test]

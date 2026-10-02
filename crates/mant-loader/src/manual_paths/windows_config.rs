@@ -519,7 +519,7 @@ mod tests {
                 PathBuf::from(r"C:\Program Files\Tool\man")
             ]
         );
-        assert!(plan.diagnostics.is_empty());
+        assert_eq!(plan.diagnostics.len(), 0);
     }
 
     #[test]
@@ -563,7 +563,7 @@ mod tests {
                 PathBuf::from(r"C:\required")
             ]
         );
-        assert!(discovery.diagnostics.is_empty());
+        assert_eq!(discovery.diagnostics.len(), 0);
 
         assert!(split_arguments(r"C:\one C:\two C:\three", 2).is_err());
     }
@@ -576,7 +576,7 @@ mod tests {
             &HashMap::new(),
             true,
         );
-        assert!(plan.roots.is_empty());
+        assert_eq!(plan.roots.len(), 0);
         assert_eq!(
             plan.diagnostics
                 .iter()
@@ -763,7 +763,7 @@ mod tests {
             &environment,
             false,
         );
-        assert!(plan.include_patterns.is_empty());
+        assert_eq!(plan.include_patterns.len(), 0);
         assert_eq!(plan.roots, vec![PathBuf::from(r"C:\from-fragment")]);
     }
 
@@ -843,7 +843,7 @@ mod tests {
                 fixture.join("required root"),
             ]
         );
-        assert!(discovery.diagnostics.is_empty());
+        assert_eq!(discovery.diagnostics.len(), 0);
 
         fs::remove_dir_all(fixture).expect("remove configuration fixture");
     }

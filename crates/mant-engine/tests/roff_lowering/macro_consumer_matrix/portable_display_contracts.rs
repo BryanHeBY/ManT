@@ -191,6 +191,6 @@ fn visible_and_markdown_search_coordinates_describe_the_selected_projection() {
         let range = usize::try_from(occurrence.markdown.start_byte).unwrap()
             ..usize::try_from(occurrence.markdown.end_byte).unwrap();
         assert_eq!(&artifact.text()[range], occurrence.matched_text);
-        assert!(search(&query, scope, absent).matches.is_empty());
+        assert_eq!(search(&query, scope, absent).matches.len(), 0);
     }
 }

@@ -121,7 +121,7 @@ fn declared_fixed_attached_values_keep_their_official_identity() {
         None,
     )
     .expect("fixed attached option values");
-    assert!(parsed.document.diagnostics.is_empty());
+    assert_eq!(parsed.document.diagnostics.len(), 0);
     let query = ResolvedContent {
         address: None,
         label: "tool.md".to_owned(),

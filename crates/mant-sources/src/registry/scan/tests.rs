@@ -147,7 +147,7 @@ fn personal_documents_accept_only_regular_leaf_file_links() {
         vec![("mant".to_owned(), documents.join("mant.md"))]
     );
     let managed = scan_directory(&documents, false).expect("scan managed source");
-    assert!(managed.is_empty());
+    assert_eq!(managed.len(), 0);
     fs::remove_dir_all(base).expect("remove fixture");
 }
 

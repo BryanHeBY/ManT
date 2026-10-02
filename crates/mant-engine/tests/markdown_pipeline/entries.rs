@@ -155,7 +155,7 @@ fn declared_entries_expose_every_protocol_semantic_role() {
         Some("roles.md".to_owned()),
     )
     .expect("all declared semantic roles");
-    assert!(parsed.document.diagnostics.is_empty());
+    assert_eq!(parsed.document.diagnostics.len(), 0);
 
     let expected = [
         (
@@ -204,7 +204,7 @@ fn declared_non_option_code_spans_are_atomic_names() {
         Some("atomic.md".to_owned()),
     )
     .expect("atomic semantic entry names");
-    assert!(parsed.document.diagnostics.is_empty());
+    assert_eq!(parsed.document.diagnostics.len(), 0);
 
     let identities = parsed
         .document
@@ -250,7 +250,7 @@ fn declared_dotted_dash_options_preserve_their_exact_names() {
         Some("dot-option.md".to_owned()),
     )
     .expect("dotted semantic options");
-    assert!(parsed.document.diagnostics.is_empty());
+    assert_eq!(parsed.document.diagnostics.len(), 0);
 
     let Block::List { items, .. } = &parsed.document.sections[0].blocks[0] else {
         panic!("declared options should become definitions");
@@ -305,7 +305,7 @@ fn declared_variables_keep_shell_and_powershell_automatic_names() {
         Some("shell.md".to_owned()),
     )
     .expect("variable semantic entries");
-    assert!(parsed.document.diagnostics.is_empty());
+    assert_eq!(parsed.document.diagnostics.len(), 0);
 
     let query = ResolvedContent {
         address: None,
@@ -370,7 +370,7 @@ fn punctuation_bearing_names_remain_distinct_without_shorthand_fallback() {
         Some("help-spellings.md".to_owned()),
     )
     .expect("help spelling fixture");
-    assert!(parsed.document.diagnostics.is_empty());
+    assert_eq!(parsed.document.diagnostics.len(), 0);
     let query = ResolvedContent {
         address: None,
         label: "help-spellings.md".to_owned(),
@@ -508,7 +508,7 @@ fn declared_option_entries_cover_windows_native_token_families() {
         Some("native.md".to_owned()),
     )
     .expect("Windows-native semantic entries");
-    assert!(parsed.document.diagnostics.is_empty());
+    assert_eq!(parsed.document.diagnostics.len(), 0);
 
     let query = ResolvedContent {
         address: None,
@@ -642,7 +642,7 @@ fn declared_entries_preserve_roles_at_arbitrary_list_depth() {
         None,
     )
     .expect("deep semantic entry declarations");
-    assert!(parsed.document.diagnostics.is_empty());
+    assert_eq!(parsed.document.diagnostics.len(), 0);
 
     let outline = build_outline_with_detail(
         &ResolvedContent {
@@ -704,7 +704,7 @@ fn entry_domain_directives_resolve_cross_document_value_spaces() {
         None,
     )
     .expect("entry domain parses");
-    assert!(parsed.document.diagnostics.is_empty());
+    assert_eq!(parsed.document.diagnostics.len(), 0);
     let index = mant_ir::SemanticIndex::build(&parsed.document);
     let [entry] = index.root() else {
         panic!("one semantic option expected");
@@ -867,7 +867,7 @@ fn linked_code_terms_define_entry_document_destinations() {
         None,
     )
     .expect("linked entry terms parse");
-    assert!(parsed.document.diagnostics.is_empty());
+    assert_eq!(parsed.document.diagnostics.len(), 0);
 
     let index = mant_ir::SemanticIndex::build(&parsed.document);
     let entries = index.root();
@@ -894,7 +894,7 @@ fn linked_code_terms_define_entry_document_destinations() {
             && first_fragment == "install"
             && second_fragment == "install"
     ));
-    assert!(entries[1].document_targets.is_empty());
+    assert_eq!(entries[1].document_targets.len(), 0);
 
     let outline = build_outline_projection(
         &ResolvedContent {
@@ -955,7 +955,7 @@ fn declared_negated_dash_options_preserve_their_executable_spelling() {
         Some("negated-option.md".to_owned()),
     )
     .expect("negated dash semantic options");
-    assert!(parsed.document.diagnostics.is_empty());
+    assert_eq!(parsed.document.diagnostics.len(), 0);
 
     let Block::List { items, .. } = &parsed.document.sections[0].blocks[0] else {
         panic!("declared options should become definitions");

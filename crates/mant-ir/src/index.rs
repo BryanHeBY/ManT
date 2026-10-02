@@ -272,7 +272,7 @@ mod tests {
             indexed.roles(),
             &BTreeSet::from([IndexedRole::Entry, IndexedRole::Anchor])
         );
-        assert!(index.duplicates().is_empty());
+        assert_eq!(index.duplicates().len(), 0);
     }
 
     #[test]

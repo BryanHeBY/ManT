@@ -126,7 +126,7 @@ fn native_link_discovery_does_not_require_targets_but_opening_uses_exact_section
         assert!(
             String::from_utf8_lossy(&unavailable.stderr).contains("requires the 'roff' feature")
         );
-        assert!(unavailable.stdout.is_empty());
+        assert_eq!(unavailable.stdout.len(), 0);
     }
     assert!(!run(&home, &["manual/7/linkabsent"]).status.success());
     fs::remove_dir_all(home).unwrap();

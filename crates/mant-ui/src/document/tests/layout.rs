@@ -372,7 +372,7 @@ fn target_only_terms_are_zero_width_and_extreme_origins_are_bounded() {
                 0,
             );
             assert_eq!(builder.anchors.get("target"), Some(&0));
-            assert!(!builder.lines[0].spans.is_empty());
+            assert_ne!(builder.lines[0].spans.len(), 0);
             assert!(
                 builder
                     .lines

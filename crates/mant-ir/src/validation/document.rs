@@ -560,7 +560,7 @@ mod tests {
         let mut first = section("first");
         first.fragment_aliases = vec!["Mixed.Target".into(), "--option".into()];
         let diagnostics = validate_document(&document(vec![first.clone()], Vec::new()));
-        assert!(diagnostics.is_empty());
+        assert_eq!(diagnostics.len(), 0);
 
         let mut second = section("second");
         second.fragment_aliases = vec!["Mixed.Target".into(), "bad fragment".into()];

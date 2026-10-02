@@ -9,7 +9,10 @@ fn rendered(dialect: &str, body: &str) -> String {
         ".Dd September 11, 2026\n.Dt PROBE 1\n.Os\n.Sh TEST\n"
     };
     let query = load_roff_bytes(format!("{header}{body}\n").as_bytes()).unwrap();
-    assert!(mant_ir::validate_document(query.document.as_ref().unwrap()).is_empty());
+    assert_eq!(
+        mant_ir::validate_document(query.document.as_ref().unwrap()).len(),
+        0
+    );
     render_query_text(&query)
 }
 

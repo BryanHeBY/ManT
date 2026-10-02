@@ -30,7 +30,7 @@ fn default_file_stdin_and_request_outputs_are_text() {
     ] {
         let default = run_text_input(&arguments, &input);
         assert!(default.status.success(), "{:?}", default.stderr);
-        assert!(default.stderr.is_empty());
+        assert_eq!(default.stderr.len(), 0);
         let body = String::from_utf8_lossy(&default.stdout);
         assert!(body.contains("A strong description."), "{body}");
         assert!(body.contains("echo example"));
@@ -66,7 +66,7 @@ fn request_schema_is_discoverable_without_host_state() {
         .expect("run mant");
 
     assert!(output.status.success());
-    assert!(output.stderr.is_empty());
+    assert_eq!(output.stderr.len(), 0);
     let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("request schema");
     assert_eq!(
         value["$schema"],
@@ -88,7 +88,7 @@ fn protocol_version_is_a_clean_json_document() {
         .expect("run mant");
 
     assert!(output.status.success());
-    assert!(output.stderr.is_empty());
+    assert_eq!(output.stderr.len(), 0);
     let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("protocol JSON");
     assert_eq!(value["protocol"], "mant.cli/v0.12");
     assert_eq!(value["requestSchema"], "mant.request/v0.12");
@@ -171,7 +171,7 @@ fn invalid_stdin_request_uses_status_two_without_runtime_noise() {
     let output = child.wait_with_output().expect("wait for mant");
 
     assert_eq!(output.status.code(), Some(2));
-    assert!(output.stdout.is_empty());
+    assert_eq!(output.stdout.len(), 0);
     let diagnostic = String::from_utf8(output.stderr).expect("UTF-8 diagnostic");
     assert!(diagnostic.starts_with("mant: invalid query request JSON:"));
     assert!(!diagnostic.contains("panicked at"));
@@ -204,7 +204,7 @@ fn direct_stdin_reads_markdown_without_extending_the_request_schema() {
     let output = child.wait_with_output().expect("wait for mant");
 
     assert!(output.status.success());
-    assert!(output.stderr.is_empty());
+    assert_eq!(output.stderr.len(), 0);
     let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("query JSON");
     assert_eq!(value["label"], "stdin");
     assert_eq!(value["document"]["source"]["format"], "markdown");
@@ -236,7 +236,7 @@ fn explicit_roff_files_and_stdin_use_the_native_parser() {
         .expect("query roff file");
     fs::remove_file(path).expect("remove roff input");
     assert!(file.status.success(), "{file:?}");
-    assert!(file.stderr.is_empty());
+    assert_eq!(file.stderr.len(), 0);
     let file: serde_json::Value = serde_json::from_slice(&file.stdout).expect("roff file JSON");
     assert_eq!(file["document"]["source"]["format"], "man");
     assert_eq!(file["document"]["meta"]["manualSection"], "1");
@@ -264,7 +264,7 @@ fn explicit_roff_files_and_stdin_use_the_native_parser() {
         .expect("write roff stdin");
     let stdin = child.wait_with_output().expect("wait for roff stdin query");
     assert!(stdin.status.success(), "{stdin:?}");
-    assert!(stdin.stderr.is_empty());
+    assert_eq!(stdin.stderr.len(), 0);
     let stdin: serde_json::Value = serde_json::from_slice(&stdin.stdout).expect("roff stdin JSON");
     assert_eq!(stdin["label"], "DIRECT-ROFF");
     assert_eq!(stdin["document"]["source"]["format"], "man");
@@ -286,7 +286,7 @@ fn direct_and_protocol_queries_read_local_markdown_files_by_path() {
         .output()
         .expect("query Markdown file");
     assert!(direct.status.success());
-    assert!(direct.stderr.is_empty());
+    assert_eq!(direct.stderr.len(), 0);
     let value: serde_json::Value = serde_json::from_slice(&direct.stdout).expect("query JSON");
     assert_eq!(value["document"]["heading"]["content"][0]["value"], "Local");
     assert_eq!(
@@ -321,7 +321,7 @@ fn direct_and_protocol_queries_read_local_markdown_files_by_path() {
     let _ = fs::remove_file(&path);
 
     assert!(protocol.status.success());
-    assert!(protocol.stderr.is_empty());
+    assert_eq!(protocol.stderr.len(), 0);
     let value: serde_json::Value = serde_json::from_slice(&protocol.stdout).expect("query JSON");
     assert_eq!(
         value["label"].as_str(),

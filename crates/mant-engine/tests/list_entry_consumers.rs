@@ -77,7 +77,7 @@ fn query(annotated: bool) -> ResolvedContent {
 fn ordinary_owner_navigation_and_excerpts_preserve_the_original_item() {
     let query = query(true);
     let original = query.document.as_ref().unwrap().clone();
-    assert!(mant_ir::validate_document(&original).is_empty());
+    assert_eq!(mant_ir::validate_document(&original).len(), 0);
     assert_eq!(
         render_query_text(&query),
         render_query_text(&self::query(false))

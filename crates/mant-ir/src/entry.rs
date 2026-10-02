@@ -257,11 +257,9 @@ mod tests {
             }],
         }]];
 
-        assert!(
-            entry_from_definition(&item)
-                .unwrap()
-                .document_targets
-                .is_empty()
+        assert_eq!(
+            entry_from_definition(&item).unwrap().document_targets.len(),
+            0
         );
         item.entry.as_mut().unwrap().forms = vec![crate::EntryForm::term(0)];
 

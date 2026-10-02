@@ -64,11 +64,12 @@ fn assert_occurrences(query: &ResolvedContent, count: usize, source: &str) {
         "scope": "visible"
     }))
     .unwrap();
-    assert!(
+    assert_eq!(
         mant_query::search_query(query, &search)
             .unwrap()
             .matches
-            .is_empty()
+            .len(),
+        0
     );
 }
 

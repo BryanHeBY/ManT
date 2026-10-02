@@ -11,7 +11,7 @@ fn help_groups_the_public_query_surface() {
         .expect("run mant");
 
     assert!(output.status.success());
-    assert!(output.stderr.is_empty());
+    assert_eq!(output.stderr.len(), 0);
     let help = String::from_utf8(output.stdout).expect("UTF-8 help");
     assert!(help.contains("mant <SELECTOR> [OPTIONS]"));
     assert!(help.contains(
@@ -61,11 +61,11 @@ fn help_and_empty_invocations_offer_the_manual_without_reading_it() {
         let output = command.args(&flags).output().expect("run help entry point");
         let text = if flags.is_empty() {
             assert_eq!(output.status.code(), Some(2));
-            assert!(output.stdout.is_empty());
+            assert_eq!(output.stdout.len(), 0);
             String::from_utf8(output.stderr).expect("usage diagnostic")
         } else {
             assert!(output.status.success());
-            assert!(output.stderr.is_empty());
+            assert_eq!(output.stderr.len(), 0);
             let help = String::from_utf8(output.stdout).expect("help text");
             assert!(help.starts_with("Read or query structured local manuals and Markdown\n"));
             assert!(help.find("Document selection:").unwrap() < help.find("TLDR:").unwrap());
@@ -101,7 +101,7 @@ fn version_uses_the_standard_successful_clap_boundary() {
         .expect("run mant --version");
 
     assert!(output.status.success());
-    assert!(output.stderr.is_empty());
+    assert_eq!(output.stderr.len(), 0);
     assert_eq!(
         String::from_utf8(output.stdout).expect("UTF-8 version"),
         format!("mant {}\n", env!("CARGO_PKG_VERSION"))
@@ -130,7 +130,7 @@ fn doctor_is_offline_read_only_and_supports_stable_json() {
 
     let text = run(&["--doctor", "--color", "never"]);
     assert!(text.status.success());
-    assert!(text.stderr.is_empty());
+    assert_eq!(text.stderr.len(), 0);
     assert!(!text.stdout.contains(&0x1b));
     let text = String::from_utf8(text.stdout).expect("doctor text");
     assert!(text.starts_with("ManT doctor\n\n"));
@@ -148,7 +148,7 @@ fn doctor_is_offline_read_only_and_supports_stable_json() {
         "always",
     ]);
     assert!(json.status.success());
-    assert!(json.stderr.is_empty());
+    assert_eq!(json.stderr.len(), 0);
     assert!(!json.stdout.contains(&0x1b));
     let report: serde_json::Value = serde_json::from_slice(&json.stdout).expect("doctor JSON");
     assert_eq!(report["schema"], "mant.doctor/v1");
@@ -214,10 +214,10 @@ fn short_help_alias_matches_long_help() {
         .expect("run mant --help");
 
     assert!(short.status.success());
-    assert!(short.stderr.is_empty());
+    assert_eq!(short.stderr.len(), 0);
     assert_eq!(short.stdout, long.stdout);
     assert!(long.status.success());
-    assert!(long.stderr.is_empty());
+    assert_eq!(long.stderr.len(), 0);
 }
 
 #[test]
@@ -228,7 +228,7 @@ fn explicit_tui_requires_a_real_terminal_before_loading_a_document() {
         .expect("run redirected mant UI");
 
     assert_eq!(output.status.code(), Some(2));
-    assert!(output.stdout.is_empty());
+    assert_eq!(output.stdout.len(), 0);
     let diagnostic = String::from_utf8(output.stderr).expect("UTF-8 diagnostic");
     assert!(diagnostic.contains(if cfg!(feature = "tui") {
         "interactive display requires"
@@ -246,7 +246,7 @@ fn unknown_options_do_not_expose_rust_source_excerpts() {
         .expect("run mant");
 
     assert_eq!(output.status.code(), Some(2));
-    assert!(output.stdout.is_empty());
+    assert_eq!(output.stdout.len(), 0);
     let diagnostic = String::from_utf8(output.stderr).expect("UTF-8 diagnostic");
     assert!(diagnostic.starts_with("error: unexpected argument '--not-an-option'"));
     assert!(diagnostic.contains("Usage: mant"));

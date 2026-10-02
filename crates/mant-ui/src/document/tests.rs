@@ -352,10 +352,10 @@ fn manual_children_keep_the_same_gaps_as_the_established_layout() {
         .position(|line| line.to_string().starts_with('└'))
         .expect("bottom border");
 
-    assert!(rendered.text.lines[bottom + 1].to_string().is_empty());
+    assert_eq!(rendered.text.lines[bottom + 1].to_string().len(), 0);
     assert_eq!(rendered.text.lines[bottom + 2].to_string(), "─".repeat(32));
     assert_eq!(rendered.text.lines[bottom + 3].to_string(), "MANUAL");
-    assert!(rendered.text.lines[bottom + 4].to_string().is_empty());
+    assert_eq!(rendered.text.lines[bottom + 4].to_string().len(), 0);
 }
 
 #[test]

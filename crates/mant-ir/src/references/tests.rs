@@ -305,7 +305,7 @@ fn empty_labels_are_occurrences_and_depth_is_bounded_before_callback() {
             ..Default::default()
         },
         |occurrence| {
-            assert!(occurrence.label.is_empty());
+            assert_eq!(occurrence.label.len(), 0);
             assert!(occurrence.location.resolve_link(&document).is_some());
             ControlFlow::Continue(())
         },

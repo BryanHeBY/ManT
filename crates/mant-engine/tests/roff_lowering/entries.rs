@@ -111,7 +111,7 @@ fn line_continuations_do_not_merge_independent_tp_owners() {
     );
     assert!(items.iter().all(|item| item.terms.len() == 1));
     assert!(items[..1].iter().all(|item| item.description.is_empty()));
-    assert!(!items[1].description.is_empty());
+    assert_ne!(items[1].description.len(), 0);
 }
 
 #[test]
@@ -134,7 +134,7 @@ fn keeps_unrelated_consecutive_tp_definitions_separate() {
     };
     assert_eq!(items.len(), 2);
     assert_eq!(inline_text(&items[0].terms[0]), "-a");
-    assert!(items[0].description.is_empty());
+    assert_eq!(items[0].description.len(), 0);
     assert_eq!(inline_text(&items[1].terms[0]), "-b");
     let Block::Paragraph { children, .. } = &items[1].description[0] else {
         panic!("expected second tagged paragraph description");
@@ -163,7 +163,7 @@ fn paragraph_distance_zero_does_not_turn_tp_items_into_aliases() {
     };
     assert_eq!(items.len(), 2);
     assert_eq!(inline_text(&items[0].terms[0]), "-a");
-    assert!(items[0].description.is_empty());
+    assert_eq!(items[0].description.len(), 0);
     assert_eq!(inline_text(&items[1].terms[0]), "-b");
     let Block::Paragraph { children, .. } = &items[1].description[0] else {
         panic!("expected second tagged paragraph description");
@@ -201,7 +201,7 @@ fn restoring_paragraph_distance_keeps_tp_owners_independent() {
     );
     assert!(items.iter().all(|item| item.terms.len() == 1));
     assert!(items[..1].iter().all(|item| item.description.is_empty()));
-    assert!(!items[1].description.is_empty());
+    assert_ne!(items[1].description.len(), 0);
 }
 
 #[test]
@@ -234,7 +234,7 @@ fn head_paragraph_distance_keeps_tp_owners_independent() {
     );
     assert!(items.iter().all(|item| item.terms.len() == 1));
     assert!(items[..1].iter().all(|item| item.description.is_empty()));
-    assert!(!items[1].description.is_empty());
+    assert_ne!(items[1].description.len(), 0);
 }
 
 #[test]
@@ -269,7 +269,7 @@ fn compact_tp_heads_and_preceding_orphan_remain_independent() {
     );
     assert!(items.iter().all(|item| item.terms.len() == 1));
     assert!(items[..2].iter().all(|item| item.description.is_empty()));
-    assert!(!items[2].description.is_empty());
+    assert_ne!(items[2].description.len(), 0);
 }
 
 #[test]
@@ -355,7 +355,7 @@ fn compact_ip_heads_keep_independent_descriptions() {
     );
     assert!(items.iter().all(|item| item.terms.len() == 1));
     assert!(items[..1].iter().all(|item| item.description.is_empty()));
-    assert!(!items[1].description.is_empty());
+    assert_ne!(items[1].description.len(), 0);
 }
 
 #[test]
@@ -461,7 +461,7 @@ fn ip_does_not_absorb_unproven_definition_heads() {
         ["-a", "-b", "-c", "-d"]
     );
     assert!(items[..3].iter().all(|item| item.description.is_empty()));
-    assert!(!items[3].description.is_empty());
+    assert_ne!(items[3].description.len(), 0);
     assert!(!document.diagnostics.iter().any(|diagnostic| {
         diagnostic.code.as_deref() == Some("manual.definition-alias-boundary")
     }));
@@ -684,7 +684,7 @@ fn recognizes_one_source_proven_ip_ordinal_without_semantic_entry() {
             }
         ] if body.indent_columns == 1 && continuation.indent_columns == 1
     ));
-    assert!(SemanticIndex::build(&document).section("notes").is_empty());
+    assert_eq!(SemanticIndex::build(&document).section("notes").len(), 0);
 }
 
 #[test]
@@ -715,7 +715,7 @@ fn recognizes_tp_enumerations_nested_below_a_definition() {
     let index = SemanticIndex::build(&document);
     let entries = index.section("options");
     assert_eq!(entries.len(), 1);
-    assert!(entries[0].children.is_empty());
+    assert_eq!(entries[0].children.len(), 0);
 }
 
 #[test]
@@ -849,7 +849,7 @@ Forward a local socket.\n.El\n",
     );
     assert!(items.iter().all(|item| item.terms.len() == 1));
     assert!(items[..3].iter().all(|item| item.description.is_empty()));
-    assert!(!items[3].description.is_empty());
+    assert_ne!(items[3].description.len(), 0);
 }
 
 #[test]
@@ -878,7 +878,7 @@ Convert filenames from the specified encoding.\n\
     );
     assert!(items.iter().all(|item| item.terms.len() == 1));
     assert!(items[..1].iter().all(|item| item.description.is_empty()));
-    assert!(!items[1].description.is_empty());
+    assert_ne!(items[1].description.len(), 0);
 }
 
 #[test]
@@ -1047,10 +1047,10 @@ fn unclosed_compact_run_does_not_cross_a_section_boundary() {
     };
     assert_eq!(first_items.len(), 1);
     assert_eq!(inline_text(&first_items[0].terms[0]), "first");
-    assert!(first_items[0].description.is_empty());
+    assert_eq!(first_items[0].description.len(), 0);
     assert_eq!(second_items.len(), 1);
     assert_eq!(inline_text(&second_items[0].terms[0]), "second");
-    assert!(!second_items[0].description.is_empty());
+    assert_ne!(second_items[0].description.len(), 0);
 }
 
 #[test]
@@ -1075,7 +1075,7 @@ fn tq_continuation_starts_at_the_immediately_preceding_head() {
     };
     assert_eq!(items.len(), 2);
     assert_eq!(inline_text(&items[0].terms[0]), "-a");
-    assert!(items[0].description.is_empty());
+    assert_eq!(items[0].description.len(), 0);
     assert_eq!(
         items[1]
             .terms

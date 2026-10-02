@@ -148,9 +148,9 @@ fn normalized_content_budget_refuses_another_document_before_retaining_it() {
         resolution.content_bytes,
         MAX_SCOPE_CONTENT_BYTES - bytes + 1
     );
-    assert!(resolution.documents.is_empty());
-    assert!(resolution.graph.documents.is_empty());
-    assert!(resolution.graph.edges.is_empty());
+    assert_eq!(resolution.documents.len(), 0);
+    assert_eq!(resolution.graph.documents.len(), 0);
+    assert_eq!(resolution.graph.edges.len(), 0);
     assert!(resolution.positions.is_empty());
     assert!(resolution.queue.is_empty());
 }
@@ -214,9 +214,9 @@ fn assert_two_document_cycle(
         resolution.positions,
         BTreeMap::from([(address.clone(), 0), (child_address.clone(), 1)])
     );
-    assert!(resolution.graph.frontier.is_empty());
-    assert!(resolution.graph.unresolved.is_empty());
-    assert!(resolution.graph.reference_limits.is_empty());
+    assert_eq!(resolution.graph.frontier.len(), 0);
+    assert_eq!(resolution.graph.unresolved.len(), 0);
+    assert_eq!(resolution.graph.reference_limits.len(), 0);
 }
 
 #[test]
@@ -326,7 +326,7 @@ fn root_content_budget_is_reported_as_an_unresolved_root() {
 
     resolution.insert_root(content, &selector, 0);
 
-    assert!(resolution.documents.is_empty());
+    assert_eq!(resolution.documents.len(), 0);
     assert_eq!(resolution.graph.unresolved.len(), 1);
     assert!(
         resolution.graph.unresolved[0]

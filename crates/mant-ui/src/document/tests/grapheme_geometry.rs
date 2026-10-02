@@ -193,7 +193,7 @@ fn joined_emoji_search_highlight_copy_and_link_use_real_glyph_cells() {
     let emoji = rendered.search("👩‍💻");
     assert_eq!(emoji.len(), 1);
     assert_eq!((emoji[0].start_column, emoji[0].end_column), (2, 4));
-    assert!(emoji[0].additional_fragments.is_empty());
+    assert_eq!(emoji[0].additional_fragments.len(), 0);
     let component = rendered.search("💻");
     assert_eq!((component[0].start_column, component[0].end_column), (2, 4));
     let row = emoji[0].row;
@@ -234,7 +234,7 @@ fn wrapping_and_one_column_replacement_never_split_a_cluster() {
             let rendered = DocumentView::new(&bundle).render(width);
             let found = rendered.search(glyph);
             assert_eq!(found.len(), 1, "{glyph}, width={width}");
-            assert!(found[0].additional_fragments.is_empty());
+            assert_eq!(found[0].additional_fragments.len(), 0);
             let line = &rendered.text.lines[found[0].row];
             let actual = buffer(line, width);
             let glyph_width = mant_render::cells::graphemes(glyph)

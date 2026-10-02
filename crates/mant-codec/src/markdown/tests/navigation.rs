@@ -174,7 +174,7 @@ fn document_title_fragments_follow_the_normalized_root_destination() {
     );
 
     let document = parse_document("# Guide {#Empty.Root}\n\n## Details\n\nBody.\n", None);
-    assert!(document.sections[0].fragment_aliases.is_empty());
+    assert_eq!(document.sections[0].fragment_aliases.len(), 0);
     assert_eq!(
         document
             .fragment_aliases

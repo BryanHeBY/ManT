@@ -8,6 +8,8 @@
 //! shell still covered — plus row-grouping agreement with the snapshot
 //! on a sample.
 
+#![cfg(feature = "roff")]
+
 use std::{path::Path, path::PathBuf, process::Command};
 
 const CASES: &str = concat!(

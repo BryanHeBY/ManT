@@ -175,7 +175,7 @@ fn declared_entry_grammar_accepts_blank_lines_delimiters_and_colon_conventions()
         None,
     )
     .expect("declared root entries");
-    assert!(parsed.document.diagnostics.is_empty());
+    assert_eq!(parsed.document.diagnostics.len(), 0);
     let Block::List { items, .. } = &parsed.document.blocks[0] else {
         panic!("the next non-empty root list should become semantic entries");
     };
@@ -235,7 +235,7 @@ fn indented_code_does_not_activate_semantic_entry_directives() {
         None,
     )
     .expect("indented code remains ordinary Markdown");
-    assert!(parsed.document.diagnostics.is_empty());
+    assert_eq!(parsed.document.diagnostics.len(), 0);
     assert!(matches!(
         parsed.document.blocks.as_slice(),
         [Block::Preformatted { .. }]
@@ -295,7 +295,7 @@ fn entry_domains_on_nested_items_remain_independent() {
         None,
     )
     .expect("nested independent domains parse");
-    assert!(parsed.document.diagnostics.is_empty());
+    assert_eq!(parsed.document.diagnostics.len(), 0);
 
     let semantic_index = mant_ir::SemanticIndex::build(&parsed.document);
     let [parent] = semantic_index.root() else {

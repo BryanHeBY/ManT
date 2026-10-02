@@ -99,8 +99,8 @@ fn literal_scope_continuations_remain_searchable_after_terminal_wrapping() {
         let found = rendered.search("FIRSTSECONDTHIRD");
         assert_eq!(found.len(), 1, "width={width}: {:?}", rendered.text);
         assert!(found[0].row < rendered.row_count);
-        assert!(rendered.search("FIRST SECOND").is_empty());
-        assert!(rendered.search("SECOND THIRD").is_empty());
+        assert_eq!(rendered.search("FIRST SECOND").len(), 0);
+        assert_eq!(rendered.search("SECOND THIRD").len(), 0);
     }
 }
 
@@ -165,7 +165,7 @@ fn real_manuals_render_at_narrow_and_wide_terminal_widths() {
                 if item.kind == mant_ui::NavKind::ReferenceNotice {
                     // Budget disclosure is chrome, not manufactured document
                     // content or a navigable source coordinate.
-                    assert!(item.target_id.is_empty());
+                    assert_eq!(item.target_id, "");
                     assert!(rendered.anchor_row(&item.target_id).is_none());
                     continue;
                 }

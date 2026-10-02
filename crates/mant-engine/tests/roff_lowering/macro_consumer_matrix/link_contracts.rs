@@ -346,7 +346,7 @@ fn generic_links_do_not_invent_target_appendices_in_consumers() {
     targets.visit_document(document);
     assert_eq!(targets.0, ["https://example.com/x"]);
     assert_eq!(search(&query, "label").matches.len(), 1);
-    assert!(search(&query, "https://example.com/x").matches.is_empty());
+    assert_eq!(search(&query, "https://example.com/x").matches.len(), 0);
 }
 
 fn markdown_links(query: &ResolvedContent) -> Vec<(String, String)> {
@@ -414,7 +414,7 @@ fn invalid_targets_and_invisible_descriptions_keep_native_control_execution() {
         let source = format!("{PRE}.Lk \"\" {description}\n.No AFTER\n.Sh NEXT\n.No END\n");
         let query = roundtrip(&source);
         assert!(mant_render::render_query_man(&query).contains(":  AFTER"));
-        assert!(link_targets(&query).is_empty());
+        assert_eq!(link_targets(&query).len(), 0);
     }
     let source = format!("{PRE}.Lk \"::not a uri::\" label\n.No AFTER\n.Sh NEXT\n.No END\n");
     let query = roundtrip(&source);

@@ -166,7 +166,7 @@ fn search_rejects_a_complete_summary_after_known_content_loss() {
     let wire = serde_json::to_string(&search).unwrap();
     let bounded: mant_protocol::QuerySearch = serde_json::from_str(&wire).unwrap();
     assert!(!bounded.content_complete);
-    assert!(bounded.diagnostics.is_empty());
+    assert_eq!(bounded.diagnostics.len(), 0);
 }
 
 fn assert_inbound_coverage_contract<T: serde::de::DeserializeOwned>(
@@ -546,7 +546,7 @@ fn an_empty_catalog_is_protocol_owned_and_versioned() {
     assert_eq!(catalog.schema, mant_protocol::CatalogSchema::V0Dot12);
     assert_eq!(catalog.total, 0);
     assert_eq!(catalog.returned, 0);
-    assert!(catalog.documents.is_empty());
+    assert_eq!(catalog.documents.len(), 0);
     assert!(!catalog.truncated);
     assert_eq!(catalog.next_offset, None);
 }

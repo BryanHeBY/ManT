@@ -82,7 +82,7 @@ fn outline_reference_paging_and_strict_reads_share_one_source_snapshot() {
     for selector in ["run", "--run", "https://example.test", "#Mixed.Target"] {
         let output = run(&root, &[&format!("--node={selector}")], "json");
         assert!(!output.status.success(), "accepted {selector}");
-        assert!(output.stdout.is_empty());
+        assert_eq!(output.stdout.len(), 0);
     }
     let text = run(&root, &["--outline", "--outline-references=all"], "text");
     assert!(text.status.success());
@@ -114,7 +114,7 @@ fn invalid_reference_policy_is_rejected_before_discovery() {
             .output()
             .unwrap();
         assert!(!output.status.success());
-        assert!(output.stdout.is_empty());
+        assert_eq!(output.stdout.len(), 0);
         assert!(!String::from_utf8_lossy(&output.stderr).contains("was not found"));
     }
 }

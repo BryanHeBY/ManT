@@ -221,13 +221,14 @@ mod tests {
             }]
         );
         let other = item.clone();
-        assert!(
+        assert_eq!(
             map.ranges(
                 EntryOwner::List(&other)
                     .inline_root(&EntryInlineRoot::Block { index: 0 })
                     .unwrap()
             )
-            .is_empty()
+            .len(),
+            0
         );
     }
 

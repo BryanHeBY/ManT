@@ -51,7 +51,6 @@ impl<'text> CellGrapheme<'text> {
 /// An individual grapheme may contain many combining characters. Callers must
 /// retain any existing byte/scalar inspection bounds before invoking this API;
 /// a cell-width limit alone is not a bound on source work.
-#[must_use]
 pub fn graphemes(text: &str) -> impl DoubleEndedIterator<Item = CellGrapheme<'_>> {
     text.grapheme_indices(true)
         .map(|(start, grapheme)| CellGrapheme {

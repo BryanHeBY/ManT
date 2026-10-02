@@ -222,7 +222,7 @@ fn no_evidence_partial_sources_and_invalid_requests_have_distinct_outcomes() {
     assert_eq!(partial["scope"]["unresolved"].as_array().unwrap().len(), 1);
     let failed = run(&root, &["--document=documents/absent", "--explain=--help"]);
     assert_eq!(failed.status.code(), Some(1));
-    assert!(failed.stdout.is_empty());
+    assert_eq!(failed.stdout.len(), 0);
     for invalid in [
         "--limit=0",
         "--limit=257",
@@ -232,7 +232,7 @@ fn no_evidence_partial_sources_and_invalid_requests_have_distinct_outcomes() {
         for scope in ["first", "--document=first"] {
             let output = run(&root, &[scope, "--explain=--help", invalid]);
             assert_eq!(output.status.code(), Some(2), "{invalid}: {output:?}");
-            assert!(output.stdout.is_empty());
+            assert_eq!(output.stdout.len(), 0);
         }
     }
     fs::remove_dir_all(root).unwrap();

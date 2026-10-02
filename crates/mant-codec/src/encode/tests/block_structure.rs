@@ -359,7 +359,7 @@ fn detached_fragment_export_accepts_ir_beyond_markdown_metadata_limits() {
         panic!("semantic list");
     };
     items[0].entry.as_mut().unwrap().alias_groups = vec![names.clone()];
-    assert!(mant_ir::validate_document(document).is_empty());
+    assert_eq!(mant_ir::validate_document(document).len(), 0);
     assert!(!super::semantic::supported(document));
     for preserve_anchors in [false, true] {
         let options = super::MarkdownFragmentOptions { preserve_anchors };

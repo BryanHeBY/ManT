@@ -143,7 +143,7 @@ fn empty_and_rejected_declarations_cannot_complete_a_partial_enumeration() {
             ),
             "{source}"
         );
-        assert!(!index.root()[0].children.is_empty());
+        assert_ne!(index.root()[0].children.len(), 0);
     }
 }
 

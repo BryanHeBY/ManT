@@ -154,7 +154,7 @@ fn visible_search_maps_inline_formatting_to_markdown_and_option_nodes() {
     assert!(result.matches[0].occurrences[0].markdown.start_line > 1);
     assert!(result.matches[0].preview.contains("**access control**"));
     assert!(!result.matches[0].preview.contains("<a id="));
-    assert!(!result.matches[0].context.is_empty());
+    assert_ne!(result.matches[0].context.len(), 0);
 }
 
 #[test]
@@ -297,7 +297,7 @@ fn markdown_anchor_only_matches_do_not_become_phantom_results() {
     let result = search_query(&query(), &request).expect("search internal anchor text");
 
     assert_eq!(result.total, 0);
-    assert!(result.matches.is_empty());
+    assert_eq!(result.matches.len(), 0);
 }
 
 #[test]
@@ -316,7 +316,7 @@ fn markdown_matches_crossing_an_anchor_expose_only_presented_text() {
     let occurrence = &result.matches[0].occurrences[0];
 
     assert_eq!(occurrence.matched_text, "`--acls");
-    assert!(!occurrence.line_ranges.is_empty());
+    assert_ne!(occurrence.line_ranges.len(), 0);
     assert!(!result.matches[0].preview.contains("<a id="));
 }
 
@@ -489,7 +489,7 @@ fn root_content_search_resolves_to_an_addressable_document_root() {
         mant_protocol::OutlineNodeReference::DocumentRoot { path, id, .. }
             if path == "root" && id == "document-overview"
     ));
-    assert!(result.matches[0].outline.ancestors.is_empty());
+    assert_eq!(result.matches[0].outline.ancestors.len(), 0);
     assert!(result.matches[0].preview.contains("preface needle"));
 }
 

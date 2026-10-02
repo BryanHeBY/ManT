@@ -239,8 +239,8 @@ fn singleton_man_bullet_stays_readable_without_a_false_outline_entry() {
     assert!(!outline_text.contains('•'), "{outline_text}");
     assert!(outline_text.contains("--flag"), "{outline_text}");
     let rendered = DocumentView::new(&query).render(80);
-    assert!(!rendered.search("BODY").is_empty());
-    assert!(!rendered.search("real option").is_empty());
+    assert_ne!(rendered.search("BODY").len(), 0);
+    assert_ne!(rendered.search("real option").len(), 0);
 }
 
 #[test]
@@ -282,7 +282,7 @@ fn standalone_tq_bullet_remains_readable_without_a_semantic_entry() {
             .iter()
             .any(|line| line.to_string().contains('•'))
     );
-    assert!(!rendered.search("BODY").is_empty());
+    assert_ne!(rendered.search("BODY").len(), 0);
 }
 
 #[test]

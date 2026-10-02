@@ -666,12 +666,12 @@ fn terminal_markdown_masks_direct_input_controls_but_redirected_markdown_is_exac
 
     let (status, redirected, diagnostics) = invoke(&arguments, b"", &host);
     assert_eq!(status, 0);
-    assert!(diagnostics.is_empty());
+    assert_eq!(diagnostics.len(), 0);
     assert!(redirected.contains('\u{1b}'));
 
     let (status, terminal, diagnostics) = invoke_with_terminal_output(&arguments, b"", &host);
     assert_eq!(status, 0);
-    assert!(diagnostics.is_empty());
+    assert_eq!(diagnostics.len(), 0);
     assert!(!terminal.contains('\u{1b}'));
     assert!(terminal.contains("ris�c"));
 }
@@ -819,7 +819,7 @@ fn stdin_protocol_emits_only_compact_query_json() {
         output,
         "{\"schema\":\"mant.query/v0.12\",\"label\":\"git\"}\n"
     );
-    assert!(diagnostics.is_empty());
+    assert_eq!(diagnostics.len(), 0);
     assert_eq!(host.query_calls.get(), 1);
 }
 
@@ -846,7 +846,7 @@ fn malformed_or_extended_requests_fail_before_querying_the_host() {
                 &host,
             );
             assert_eq!(status, 2);
-            assert!(output.is_empty());
+            assert_eq!(output.len(), 0);
             assert!(diagnostics.starts_with("mant: "));
             assert_eq!(host.query_calls.get(), 0);
         }
@@ -864,7 +864,7 @@ fn stdin_requests_select_outline_and_excerpt_projections() {
     let outline: serde_json::Value = serde_json::from_str(&output).expect("outline JSON");
     assert_eq!(outline["schema"], "mant.outline/v0.12");
     assert_eq!(outline["entries"]["kind"], "none");
-    assert!(diagnostics.is_empty());
+    assert_eq!(diagnostics.len(), 0);
 
     let (status, output, diagnostics) = invoke(
             &["--request-json", "--format", "json", "--compact"],
@@ -875,7 +875,7 @@ fn stdin_requests_select_outline_and_excerpt_projections() {
     let excerpt: serde_json::Value = serde_json::from_str(&output).expect("excerpt JSON");
     assert_eq!(excerpt["schema"], "mant.excerpt/v0.12");
     assert_eq!(excerpt["selections"][0]["outline"]["node"]["path"], "2.1");
-    assert!(diagnostics.is_empty());
+    assert_eq!(diagnostics.len(), 0);
     assert_eq!(host.query_calls.get(), 2);
 }
 
@@ -888,7 +888,7 @@ fn direct_queries_render_outlines_and_selected_nodes_in_requested_formats() {
     assert!(output.contains("├─ 1 NAME\n│    ID: name-1"));
     assert!(output.contains("└─ 2 OPTIONS\n     ID: options-2"));
     assert!(output.contains("└─ 2.1 Common options\n       ID: common-3"));
-    assert!(diagnostics.is_empty());
+    assert_eq!(diagnostics.len(), 0);
 
     let (status, output, diagnostics) = invoke(
         &["demo", "--node", "2.1", "--format", "json", "--compact"],
@@ -903,7 +903,7 @@ fn direct_queries_render_outlines_and_selected_nodes_in_requested_formats() {
         value["selections"][0]["section"]["heading"]["content"][0]["value"],
         "Common options"
     );
-    assert!(diagnostics.is_empty());
+    assert_eq!(diagnostics.len(), 0);
 
     let (status, output, diagnostics) = invoke(
         &["demo", "--node", "0", "--format", "json", "--compact"],
@@ -917,13 +917,13 @@ fn direct_queries_render_outlines_and_selected_nodes_in_requested_formats() {
     assert_eq!(value["selections"][0]["document"]["title"], "demo");
     assert!(value.get("producer").is_none());
     assert!(value.get("diagnostics").is_none());
-    assert!(diagnostics.is_empty());
+    assert_eq!(diagnostics.len(), 0);
 
     let (status, output, diagnostics) = invoke(&["demo", "--tldr"], b"", &host);
     assert_eq!(status, 0);
     assert!(output.contains("A small demonstration."));
     assert!(!output.contains("## NAME"));
-    assert!(diagnostics.is_empty());
+    assert_eq!(diagnostics.len(), 0);
 }
 
 #[test]
@@ -932,13 +932,13 @@ fn markdown_is_clean_by_default_and_preserves_anchors_on_request() {
     let (status, output, diagnostics) = invoke(&["demo", "--format", "markdown"], b"", &host);
     assert_eq!(status, 0);
     assert!(!output.contains("<a "));
-    assert!(diagnostics.is_empty());
+    assert_eq!(diagnostics.len(), 0);
 
     let (status, output, diagnostics) = invoke(&["demo", "--preserve-anchors"], b"", &host);
     assert_eq!(status, 0);
     assert!(output.contains("<a id=\"name-1\"></a>"));
     assert!(output.contains("<a id=\"options-2\"></a>"));
-    assert!(diagnostics.is_empty());
+    assert_eq!(diagnostics.len(), 0);
 }
 
 #[test]
@@ -947,7 +947,7 @@ fn man_format_rejects_a_tldr_only_result() {
     let (status, output, diagnostics) = invoke(&["demo", "--format", "man"], b"", &host);
 
     assert_eq!(status, 1);
-    assert!(output.is_empty());
+    assert_eq!(output.len(), 0);
     assert_eq!(
         diagnostics,
         "mant: manual page is unavailable; --format man cannot render tldr-only content\n"
@@ -966,7 +966,7 @@ fn explains_semantic_evidence_without_turning_sections_into_entries() {
     );
     assert!(output.contains("--exclude=PATTERN"));
     assert!(output.contains("Exclude matching files from the archive."));
-    assert!(diagnostics.is_empty());
+    assert_eq!(diagnostics.len(), 0);
 
     let (status, output, diagnostics) = invoke(
         &[
@@ -984,12 +984,12 @@ fn explains_semantic_evidence_without_turning_sections_into_entries() {
     assert_eq!(value["schema"], "mant.explanation/v0.12");
     assert_eq!(value["outcome"], "evidence");
     assert_eq!(value["evidence"][0]["outline"]["node"]["id"], "exclude");
-    assert!(diagnostics.is_empty());
+    assert_eq!(diagnostics.len(), 0);
 
     let (status, output, diagnostics) = invoke(&["demo", "--explain=2"], b"", &host);
     assert_eq!(status, 0);
     assert!(output.contains("no-evidence"), "{output}");
-    assert!(diagnostics.is_empty());
+    assert_eq!(diagnostics.len(), 0);
 }
 
 #[test]
@@ -1015,7 +1015,7 @@ fn semantic_entries_work_through_cli_and_request_json() {
     assert!(encoded.contains("\"parameterKind\":\"option\""));
     assert!(encoded.contains("\"kind\":\"command\""));
     assert!(encoded.contains("\"kind\":\"environment-variable\""));
-    assert!(diagnostics.is_empty());
+    assert_eq!(diagnostics.len(), 0);
 
     let (status, output, diagnostics) = invoke(
         &[
@@ -1033,7 +1033,7 @@ fn semantic_entries_work_through_cli_and_request_json() {
     assert_eq!(status, 0);
     let outline: serde_json::Value = serde_json::from_str(&output).expect("alias outline");
     assert_eq!(outline["entries"]["kind"], "kinds");
-    assert!(diagnostics.is_empty());
+    assert_eq!(diagnostics.len(), 0);
 }
 
 #[test]
@@ -1054,7 +1054,7 @@ fn semantic_entry_selectors_work_through_cli_and_request_json() {
                 .iter()
                 .any(|basis| basis["kind"] == "name")
     }));
-    assert!(diagnostics.is_empty());
+    assert_eq!(diagnostics.len(), 0);
 
     let (status, output, _) = invoke(
         &[
@@ -1097,7 +1097,7 @@ fn semantic_entry_selectors_work_through_cli_and_request_json() {
         } else {
             assert_eq!(kind["kind"], role);
         }
-        assert!(diagnostics.is_empty());
+        assert_eq!(diagnostics.len(), 0);
     }
 
     let (status, output, diagnostics) = invoke(
@@ -1108,7 +1108,7 @@ fn semantic_entry_selectors_work_through_cli_and_request_json() {
     assert_eq!(status, 0);
     let excerpt: serde_json::Value = serde_json::from_str(&output).expect("request excerpt");
     assert_eq!(excerpt["evidence"][0]["entry"]["kind"]["kind"], "command");
-    assert!(diagnostics.is_empty());
+    assert_eq!(diagnostics.len(), 0);
 }
 
 #[test]
@@ -1118,7 +1118,7 @@ fn ambiguous_semantic_entries_remain_addressable_by_returned_id() {
     assert_eq!(status, 0);
     assert!(output.contains("option-f"));
     assert!(output.contains("owners=2"), "{output}");
-    assert!(diagnostics.is_empty());
+    assert_eq!(diagnostics.len(), 0);
     let multiple = output;
 
     let (status, outline, outline_diagnostics) = invoke(
@@ -1135,7 +1135,7 @@ fn ambiguous_semantic_entries_remain_addressable_by_returned_id() {
         &host,
     );
     assert_eq!(status, 0);
-    assert!(outline_diagnostics.is_empty());
+    assert_eq!(outline_diagnostics.len(), 0);
     let outline: serde_json::Value = serde_json::from_str(&outline).expect("outline JSON");
     let qualified_id = outline["nodes"][5]["children"][0]["id"]
         .as_str()
@@ -1155,7 +1155,7 @@ fn ambiguous_semantic_entries_remain_addressable_by_returned_id() {
         excerpt["evidence"][0]["outline"]["node"]["id"],
         qualified_id
     );
-    assert!(diagnostics.is_empty());
+    assert_eq!(diagnostics.len(), 0);
 }
 
 #[test]
@@ -1166,7 +1166,7 @@ fn manual_option_reaches_the_resolution_policy_without_stderr_noise() {
 
     assert_eq!(status, 0);
     assert!(output.contains("1 NAME\n│    ID: name-1"));
-    assert!(diagnostics.is_empty());
+    assert_eq!(diagnostics.len(), 0);
     assert_eq!(host.last_policy.get(), LoadPolicy::ManualOnly);
 }
 
@@ -1193,12 +1193,12 @@ fn searches_report_markdown_coordinates_and_reusable_outline_nodes() {
     assert_eq!(value["matches"][0]["outline"]["node"]["path"], "2.1");
     assert_eq!(value["matches"][0]["outline"]["node"]["id"], "common-3");
     assert!(value["matches"][0]["occurrences"][0]["markdown"]["startLine"].as_u64() > Some(1));
-    assert!(diagnostics.is_empty());
+    assert_eq!(diagnostics.len(), 0);
 
     let (status, output, diagnostics) = invoke(&["demo", "--grep", "missing"], b"", &host);
     assert_eq!(status, 0);
     assert_eq!(output, "No matches for \"missing\" in demo(1).\n");
-    assert!(diagnostics.is_empty());
+    assert_eq!(diagnostics.len(), 0);
 }
 
 #[test]
@@ -1220,7 +1220,7 @@ fn stdin_search_requests_use_the_same_projection_contract() {
             .as_array()
             .is_some_and(|matches| !matches.is_empty())
     );
-    assert!(diagnostics.is_empty());
+    assert_eq!(diagnostics.len(), 0);
 }
 
 #[test]
@@ -1258,7 +1258,7 @@ fn unknown_nodes_are_concise_usage_failures() {
         invoke(&["demo", "--node", "9", "--format", "text"], b"", &host);
 
     assert_eq!(status, 2);
-    assert!(output.is_empty());
+    assert_eq!(output.len(), 0);
     assert!(diagnostics.contains("document 'demo' has no outline node 'path:9'"));
     assert!(diagnostics.contains("mant demo --outline --outline-entries all --format json"));
 }
@@ -1272,7 +1272,7 @@ fn explain_reports_ordinary_support_without_inventing_a_definition() {
     assert!(output.contains("2.1"), "{output}");
     assert!(output.contains("Common options"), "{output}");
     assert!(output.contains("Matched by: text mention"), "{output}");
-    assert!(diagnostics.is_empty());
+    assert_eq!(diagnostics.len(), 0);
 }
 
 #[test]
@@ -1285,7 +1285,7 @@ fn update_results_are_stable_json_documents() {
         output,
         "{\"schema\":\"mant.tldr-update/v1\",\"action\":\"updated\",\"cacheDir\":\"/cache/tldr\",\"revision\":\"abc123\"}\n"
     );
-    assert!(diagnostics.is_empty());
+    assert_eq!(diagnostics.len(), 0);
     assert_eq!(host.update_calls.get(), 1);
 
     let (status, output, diagnostics) =
@@ -1295,7 +1295,7 @@ fn update_results_are_stable_json_documents() {
         output,
         "{\"schema\":\"mant.sources-prune/v1\",\"config\":\"/data/mant/sources.toml\",\"dryRun\":true,\"sources\":[]}\n"
     );
-    assert!(diagnostics.is_empty());
+    assert_eq!(diagnostics.len(), 0);
 }
 
 #[test]
@@ -1311,7 +1311,7 @@ fn protocol_results_are_stable_json_documents_without_optional_capabilities() {
     assert_eq!(value["excerptSchema"], "mant.excerpt/v0.12");
     assert_eq!(value["searchSchema"], "mant.search/v0.12");
     assert_eq!(value["catalogSchema"], "mant.catalog/v0.12");
-    assert!(diagnostics.is_empty());
+    assert_eq!(diagnostics.len(), 0);
 }
 
 #[test]
@@ -1321,7 +1321,7 @@ fn doctor_supports_copy_friendly_text_and_stable_json_exit_statuses() {
     assert_eq!(status, 0);
     assert!(output.starts_with("ManT doctor\n\n[ok] runtime.fixture"));
     assert!(output.ends_with("1 ok, 0 info, 0 warning(s), 0 error(s)\n"));
-    assert!(diagnostics.is_empty());
+    assert_eq!(diagnostics.len(), 0);
 
     let (status, output, diagnostics) = invoke(
         &["--doctor", "--format", "json", "--compact"],
@@ -1333,7 +1333,7 @@ fn doctor_supports_copy_friendly_text_and_stable_json_exit_statuses() {
     assert_eq!(value["schema"], "mant.doctor/v1");
     assert_eq!(value["outcome"], "error");
     assert_eq!(value["summary"]["errors"], 1);
-    assert!(diagnostics.is_empty());
+    assert_eq!(diagnostics.len(), 0);
 }
 
 #[test]
@@ -1342,7 +1342,7 @@ fn catalog_lists_grouped_documents_and_emits_flat_find_records() {
     let (status, output, diagnostics) = invoke(&["--list"], b"", &host);
     assert_eq!(status, 0);
     assert_eq!(output, "manual/3\n  printf\n\nsources/team\n  guide\n");
-    assert!(diagnostics.is_empty());
+    assert_eq!(diagnostics.len(), 0);
 
     let (status, output, diagnostics) = invoke(&["--find", "guide"], b"", &host);
     assert_eq!(status, 0);
@@ -1350,7 +1350,7 @@ fn catalog_lists_grouped_documents_and_emits_flat_find_records() {
         output,
         "sources/team/guide\tmarkdown\nmanual/3/printf\tmanual\n"
     );
-    assert!(diagnostics.is_empty());
+    assert_eq!(diagnostics.len(), 0);
 
     let (status, output, diagnostics) = invoke(
         &["--find", "guide", "--format", "json", "--compact"],
@@ -1362,7 +1362,7 @@ fn catalog_lists_grouped_documents_and_emits_flat_find_records() {
     assert_eq!(value["schema"], "mant.catalog/v0.12");
     assert_eq!(value["documents"][0]["address"]["path"], "guide");
     assert!(value["documents"][0].get("sourcePath").is_none());
-    assert!(diagnostics.is_empty());
+    assert_eq!(diagnostics.len(), 0);
 }
 
 #[test]
@@ -1370,7 +1370,7 @@ fn usage_errors_are_concise_and_never_trigger_side_effects() {
     let host = FakeHost::new();
     let (status, output, diagnostics) = invoke(&["--unknown"], b"", &host);
     assert_eq!(status, 2);
-    assert!(output.is_empty());
+    assert_eq!(output.len(), 0);
     assert!(diagnostics.starts_with("error: unexpected argument '--unknown'"));
     assert!(diagnostics.contains("Usage: mant"));
     assert!(diagnostics.contains("For more information, try '--help'."));
@@ -1391,7 +1391,7 @@ fn generated_schemas_are_json_only_and_side_effect_free() {
     );
     assert_eq!(value["additionalProperties"], false);
     assert!(output.contains("mant.request/v0.12"));
-    assert!(diagnostics.is_empty());
+    assert_eq!(diagnostics.len(), 0);
     assert_eq!(host.query_calls.get(), 0);
     assert_eq!(host.update_calls.get(), 0);
 
@@ -1405,7 +1405,7 @@ fn generated_schemas_are_json_only_and_side_effect_free() {
     assert!(value["search"].is_object());
     assert!(value["doctor"].is_object());
     assert!(value["tldr-update"].is_object());
-    assert!(diagnostics.is_empty());
+    assert_eq!(diagnostics.len(), 0);
     assert_eq!(host.query_calls.get(), 0);
     assert_eq!(host.update_calls.get(), 0);
 }

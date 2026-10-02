@@ -38,7 +38,7 @@ fn navigation_only_tables_emit_targets_without_empty_fences() {
         if preserve_anchors {
             assert_eq!(output, "<a id=\"target\"></a>\n<a id=\"Exact.Target\"></a>");
         } else {
-            assert!(output.is_empty());
+            assert_eq!(output, "");
         }
     }
     for cells in [

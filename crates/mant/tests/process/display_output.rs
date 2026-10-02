@@ -1,4 +1,6 @@
-use super::process_support::{executable, run_text_command, run_text_input};
+#[cfg(feature = "roff")]
+use super::process_support::run_text_command;
+use super::process_support::{executable, run_text_input};
 use std::fs;
 use std::process::Command;
 
@@ -276,7 +278,7 @@ fn clap_color_is_terminal_aware_and_explicitly_controllable() {
 
     let colored_help = run(&["--help", "--color", "always"]);
     assert!(colored_help.status.success());
-    assert!(colored_help.stderr.is_empty());
+    assert_eq!(colored_help.stderr.len(), 0);
     assert!(colored_help.stdout.contains(&0x1b));
 
     let plain_help = run(&["--help", "--color", "never"]);
@@ -285,7 +287,7 @@ fn clap_color_is_terminal_aware_and_explicitly_controllable() {
 
     let colored_error = run(&["--color", "always"]);
     assert_eq!(colored_error.status.code(), Some(2));
-    assert!(colored_error.stdout.is_empty());
+    assert_eq!(colored_error.stdout.len(), 0);
     assert!(colored_error.stderr.contains(&0x1b));
 
     let colored_semantic_error = run(&[
@@ -298,7 +300,7 @@ fn clap_color_is_terminal_aware_and_explicitly_controllable() {
         "always",
     ]);
     assert_eq!(colored_semantic_error.status.code(), Some(2));
-    assert!(colored_semantic_error.stdout.is_empty());
+    assert_eq!(colored_semantic_error.stdout.len(), 0);
     assert!(colored_semantic_error.stderr.contains(&0x1b));
 
     let missing_input = if cfg!(feature = "roff") {
@@ -308,7 +310,7 @@ fn clap_color_is_terminal_aware_and_explicitly_controllable() {
     };
     let colored_runtime_error = run(&[missing_input[0], missing_input[1], "--color", "always"]);
     assert_eq!(colored_runtime_error.status.code(), Some(1));
-    assert!(colored_runtime_error.stdout.is_empty());
+    assert_eq!(colored_runtime_error.stdout.len(), 0);
     assert!(colored_runtime_error.stderr.contains(&0x1b));
 
     let plain_runtime_error = run(&[missing_input[0], missing_input[1], "--color", "never"]);
@@ -331,7 +333,7 @@ fn self_manual_help_respects_disabled_colour_and_dumb_terminals() {
             .output()
             .expect("uncoloured help");
         assert!(output.status.success());
-        assert!(output.stderr.is_empty());
+        assert_eq!(output.stderr.len(), 0);
         assert!(!output.stdout.contains(&0x1b));
         assert!(String::from_utf8_lossy(&output.stdout).contains("ManT manual:"));
     }

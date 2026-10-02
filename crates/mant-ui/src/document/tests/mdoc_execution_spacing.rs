@@ -46,7 +46,7 @@ fn display_pp_keeps_independent_space_and_post_gap_target() {
         ));
         assert_rows(&query, "ALPHA", "BETA", 2);
         let document = query.document.as_ref().unwrap();
-        assert!(mant_ir::validate_document(document).is_empty());
+        assert_eq!(mant_ir::validate_document(document).len(), 0);
         let beta = document.sections[0]
             .blocks
             .iter()
@@ -117,7 +117,10 @@ fn invisible_native_siblings_are_not_confused_with_transparent_controls() {
                 };
                 let query = query(&body);
                 assert_rows(&query, "TEST", "BODY", blanks);
-                assert!(mant_ir::validate_document(query.document.as_ref().unwrap()).is_empty());
+                assert_eq!(
+                    mant_ir::validate_document(query.document.as_ref().unwrap()).len(),
+                    0
+                );
             }
         }
         // Entering a wrapper is not an earlier sibling of its own first

@@ -558,7 +558,7 @@ fn native_boundaries_stop_context_and_unclosed_heads_stay_independent() {
         ".TH PROBE 1\n.SH OPTIONS\n.TP\n.B --first\n.TP\n.B --last\n",
         "--first",
     );
-    assert!(response.supports.is_empty());
+    assert_eq!(response.supports.len(), 0);
 }
 
 #[test]
@@ -611,7 +611,7 @@ fn consecutive_declarations_supply_context_without_borrowing_ownership() {
         .unwrap();
         let first = &response.evidence[0];
         assert_eq!(first.class, EvidenceClass::DirectEntry);
-        assert!(first.entry.as_ref().unwrap().alias_groups.is_empty());
+        assert_eq!(first.entry.as_ref().unwrap().alias_groups.len(), 0);
         let json = serde_json::to_value(&response).unwrap();
         let owner = first
             .content
@@ -671,7 +671,7 @@ fn shared_context_is_copied_once_with_valid_owner_local_positions() {
         for basis in &e.bases {
             if let mant_protocol::EvidenceBasis::Name { matches } = basis {
                 for occurrence in matches.iter().flat_map(|m| &m.occurrences) {
-                    assert!(!occurrence.content.is_empty());
+                    assert_ne!(occurrence.content.len(), 0);
                     for range in &occurrence.content {
                         let root = e
                             .content
@@ -807,14 +807,7 @@ fn template_heads_keep_group_context_without_a_prefix_name() {
     let source = ".Dd September 8, 2026\n.Dt PROBE 1\n.Os\n.Sh ENVIRONMENT\n.Bl -tag -width Ds\n.It Ev DEMO_ Ns Ar NAME\n.It Ev DEMO_HOME\nEnvironment family explanation.\n.El\n";
     let response = explained(source, "DEMO_NAME");
     assert_eq!(response.supports.len(), 1);
-    assert!(
-        response.evidence[0]
-            .entry
-            .as_ref()
-            .unwrap()
-            .names
-            .is_empty()
-    );
+    assert_eq!(response.evidence[0].entry.as_ref().unwrap().names.len(), 0);
     assert!(
         response.evidence[0]
             .bases

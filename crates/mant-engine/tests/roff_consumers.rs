@@ -135,7 +135,7 @@ fn nested_wrapper_payloads() {
                 "{name}: {word}"
             );
         }
-        assert!(mant_ir::validate_document(doc).is_empty());
+        assert_eq!(mant_ir::validate_document(doc).len(), 0);
     }
 }
 

@@ -77,7 +77,7 @@ fn nested_display_offsets_compose_and_restore_for_each_mode() {
                     assert_column(&text, token, column);
                 }
                 let document = content.document.as_ref().unwrap();
-                assert!(mant_ir::validate_document(document).is_empty());
+                assert_eq!(mant_ir::validate_document(document).len(), 0);
                 assert!(document.diagnostics.iter().any(|diagnostic| {
                     diagnostic
                         .message

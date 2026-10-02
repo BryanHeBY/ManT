@@ -48,7 +48,7 @@ fn attached_policy_is_proven_for_the_whole_list() {
             .unwrap();
         }
         let query = load_markdown_text(&source, None).unwrap();
-        assert!(query.document.as_ref().unwrap().diagnostics.is_empty());
+        assert_eq!(query.document.as_ref().unwrap().diagnostics.len(), 0);
         let exported = export(&query);
         assert_eq!(exported.contains("attached=fixed"), !policy.is_empty());
         let document = load_markdown_text(&exported, None)
@@ -61,7 +61,7 @@ fn attached_policy_is_proven_for_the_whole_list() {
             document.diagnostics
         );
         assert_eq!(facts(query.document.as_ref().unwrap()), facts(&document));
-        assert!(mant_ir::validate_document(&document).is_empty());
+        assert_eq!(mant_ir::validate_document(&document).len(), 0);
     }
 }
 
@@ -79,7 +79,7 @@ fn fixed_groups_relations_and_nested_choices_survive_reimport() {
   - `slow`: Slow.
 "#;
     let query = load_markdown_text(source, None).unwrap();
-    assert!(query.document.as_ref().unwrap().diagnostics.is_empty());
+    assert_eq!(query.document.as_ref().unwrap().diagnostics.len(), 0);
     let exported = export(&query);
     let document = load_markdown_text(&exported, None)
         .unwrap()
@@ -109,7 +109,7 @@ fn incompatible_item_policies_fall_back_without_misleading_annotations() {
     };
     inferred_facts.id = items[1].entry.as_ref().unwrap().id.clone();
     items[1].entry = Some(inferred_facts);
-    assert!(mant_ir::validate_document(doc).is_empty());
+    assert_eq!(mant_ir::validate_document(doc).len(), 0);
     let exported = export(&query);
     assert!(!exported.contains("mant:entry"));
     assert!(!exported.contains("mant:entries"));

@@ -54,7 +54,7 @@ fn offline_report_separates_facts_source_type_and_query_matches() {
         .filter(|(s, _)| s.matched)
         .map(|(_, t)| t.as_str())
         .collect::<Vec<_>>();
-    assert!(!matches.is_empty());
+    assert_ne!(matches.len(), 0);
     assert!(matches.iter().all(|t| *t == "-x"), "{matches:?}");
     assert!(runs.iter().any(|(s, t)| t == "--language"
         && s.inline.entry_kind

@@ -79,11 +79,12 @@ fn facts_are_closed_but_content_references_are_semantically_validated() {
         if let Some(forms) = forms {
             value["forms"] = forms;
         }
-        assert!(
+        assert_eq!(
             serde_json::from_value::<EntryFacts>(value)
                 .unwrap()
                 .forms
-                .is_empty()
+                .len(),
+            0
         );
     }
     let mut bad_reference = facts.clone();

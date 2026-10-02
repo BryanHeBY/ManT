@@ -584,7 +584,7 @@ fn explicit_section_targets_preserve_fragments_beside_normalized_ids() {
         document.sections[0].children[0].heading.plain_text(),
         "SUBHEADING"
     );
-    assert!(anchor_ids(&document).is_empty());
+    assert_eq!(anchor_ids(&document).len(), 0);
 }
 
 #[test]

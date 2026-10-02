@@ -34,7 +34,7 @@ fn command_sections_qualify_tldr_topics_without_becoming_part_of_the_name() {
             .expect("run section-qualified tldr query");
 
         assert!(output.status.success(), "{output:?}");
-        assert!(output.stderr.is_empty());
+        assert_eq!(output.stderr.len(), 0);
         let text = String::from_utf8(output.stdout).expect("UTF-8 tldr output");
         assert!(text.contains("Archive files."));
         assert!(!text.contains("1-tar"));
@@ -48,7 +48,7 @@ fn command_sections_qualify_tldr_topics_without_becoming_part_of_the_name() {
         .output()
         .expect("run non-command section tldr query");
     assert_eq!(output.status.code(), Some(2));
-    assert!(output.stdout.is_empty());
+    assert_eq!(output.stdout.len(), 0);
     let diagnostic = String::from_utf8(output.stderr).expect("UTF-8 diagnostic");
     assert!(diagnostic.contains("section '5'"), "{diagnostic}");
     assert!(
@@ -97,7 +97,7 @@ fn cached_tldr_requires_an_explicit_tldr_query_when_the_document_is_missing() {
 
     let ordinary = run(&["--format", "markdown"]);
     assert_eq!(ordinary.status.code(), Some(1));
-    assert!(ordinary.stdout.is_empty());
+    assert_eq!(ordinary.stdout.len(), 0);
     let diagnostic = String::from_utf8(ordinary.stderr).expect("ordinary diagnostic");
     assert!(diagnostic.contains(if cfg!(feature = "roff") {
         "could not load manual 'quick-only'"
@@ -115,7 +115,7 @@ fn cached_tldr_requires_an_explicit_tldr_query_when_the_document_is_missing() {
 
     let explicit = run(&["--tldr"]);
     assert!(explicit.status.success(), "{explicit:?}");
-    assert!(explicit.stderr.is_empty());
+    assert_eq!(explicit.stderr.len(), 0);
     assert!(
         String::from_utf8(explicit.stdout)
             .expect("tldr output")
@@ -334,7 +334,7 @@ fn document_and_quick_reference_policies_remain_orthogonal() {
         assert!(
             String::from_utf8_lossy(&unavailable.stderr).contains("requires the 'roff' feature")
         );
-        assert!(unavailable.stdout.is_empty());
+        assert_eq!(unavailable.stdout.len(), 0);
     }
     fs::remove_dir_all(root).expect("remove explicit-content fixture");
 }
@@ -342,7 +342,7 @@ fn document_and_quick_reference_policies_remain_orthogonal() {
 fn assert_quick_reference_policy(run: &impl Fn(&[&str]) -> std::process::Output) {
     let tldr = run(&["--tldr"]);
     assert!(tldr.status.success(), "{tldr:?}");
-    assert!(tldr.stderr.is_empty());
+    assert_eq!(tldr.stderr.len(), 0);
     let tldr = String::from_utf8(tldr.stdout).expect("plain tldr output");
     assert!(tldr.contains("Cached quick reference."));
     assert!(!tldr.contains("native manual body"));
@@ -350,7 +350,7 @@ fn assert_quick_reference_policy(run: &impl Fn(&[&str]) -> std::process::Output)
 
     let colored = run(&["--tldr", "--color", "always"]);
     assert!(colored.status.success(), "{colored:?}");
-    assert!(colored.stderr.is_empty());
+    assert_eq!(colored.stderr.len(), 0);
     assert!(
         String::from_utf8(colored.stdout)
             .expect("colored tldr output")

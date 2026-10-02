@@ -53,7 +53,7 @@ fn explicit_groups_and_forward_relations_keep_independent_owners() {
     assert_eq!(entries["extra"].alias_groups, vec![vec!["-x", "--extra"]]);
     let copied: Document = serde_json::from_str(&serde_json::to_string(&doc).unwrap()).unwrap();
     assert_eq!(doc, copied);
-    assert!(mant_ir::validate_document(&doc).is_empty());
+    assert_eq!(mant_ir::validate_document(&doc).len(), 0);
 }
 
 #[test]
@@ -92,14 +92,14 @@ fn invalid_objects_are_atomic_and_always_nonvisible() {
         let doc = parse(&format!(
             "- `--help`: Help. <!-- mant:entry {{\"id\":\"first\"}} --> <!-- mant:entry {second} -->"
         ));
-        assert!(!doc.diagnostics.is_empty());
+        assert_ne!(doc.diagnostics.len(), 0);
         assert!(facts(&doc).contains_key("option-help"));
     }
     let doc = parse(
         "- `--help`: Help. <!-- mant:entry {\"id\":\"first\"} -->\n\n  Later paragraph. <!-- mant:entry {\"id\":\"second\"} -->",
     );
     assert!(facts(&doc).contains_key("option-help"));
-    assert!(!doc.diagnostics.is_empty());
+    assert_ne!(doc.diagnostics.len(), 0);
 }
 
 #[test]
@@ -113,7 +113,7 @@ fn field_rejections_preserve_ids_content_and_independent_facts() {
             "- `-h`, `--help`: Help. <!-- mant:entry {{\"id\":\"help\",\"aliasGroups\":{groups}}} -->"
         ));
         assert_eq!(facts(&doc)["help"].names, ["-h", "--help"]);
-        assert!(facts(&doc)["help"].alias_groups.is_empty());
+        assert_eq!(facts(&doc)["help"].alias_groups.len(), 0);
         assert!(doc.diagnostics.iter().any(|d| d.code.as_deref()
             == Some("ir.invalid-entry-alias-groups")
             && d.source.is_some()));
@@ -125,7 +125,7 @@ fn field_rejections_preserve_ids_content_and_independent_facts() {
         facts(&doc)["option-h"].alias_groups,
         vec![vec!["-h", "--help"]]
     );
-    assert!(!doc.diagnostics.is_empty());
+    assert_ne!(doc.diagnostics.len(), 0);
 }
 
 #[test]
@@ -170,7 +170,7 @@ fn block_and_inline_metadata_use_structural_item_ownership() {
     .document
     .unwrap();
     assert!(!facts(&doc).contains_key("wrong"));
-    assert!(!doc.diagnostics.is_empty());
+    assert_ne!(doc.diagnostics.len(), 0);
 }
 
 #[test]
@@ -223,7 +223,7 @@ fn metadata_limits_and_examples_never_invent_facts() {
             "- `-h`, `--help`: Help. <!-- mant:entry {json} -->"
         ));
         assert!(facts(&doc).contains_key("option-h"));
-        assert!(!doc.diagnostics.is_empty());
+        assert_ne!(doc.diagnostics.len(), 0);
     }
     let doc = parse(
         "- `--help`: Help; example `<!-- mant:entry {\"id\":\"wrong\"} -->`.\n\n  ```markdown\n  <!-- mant:entry {\"id\":\"wrong\"} -->\n  ```\n",

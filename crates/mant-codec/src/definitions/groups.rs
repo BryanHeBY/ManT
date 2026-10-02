@@ -544,7 +544,7 @@ mod tests {
         let Block::DefinitionList { items, .. } = &blocks[0] else {
             unreachable!();
         };
-        assert!(evidence.resolve(items, &[true; 2], &mut plan).is_empty());
+        assert_eq!(evidence.resolve(items, &[true; 2], &mut plan).len(), 0);
     }
 
     #[test]
@@ -614,10 +614,11 @@ mod tests {
         evidence.adjacent(20, 30, false);
 
         let mut plan = plan(&evidence, &items);
-        assert!(
+        assert_eq!(
             evidence
                 .resolve(&items, &[false, true, true], &mut plan)
-                .is_empty()
+                .len(),
+            0
         );
     }
 
@@ -706,10 +707,6 @@ mod tests {
                 end_item: 2,
             }]
         );
-        assert!(
-            evidence
-                .resolve(&outer, &[true, true], &mut plan)
-                .is_empty()
-        );
+        assert_eq!(evidence.resolve(&outer, &[true, true], &mut plan).len(), 0);
     }
 }

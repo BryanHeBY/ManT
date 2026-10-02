@@ -208,7 +208,7 @@ fn document_source_failures_keep_a_complete_json_report() {
         .output()
         .expect("run failing document update");
     assert_eq!(output.status.code(), Some(1));
-    assert!(output.stderr.is_empty());
+    assert_eq!(output.stderr.len(), 0);
     let report: serde_json::Value =
         serde_json::from_slice(&output.stdout).expect("failure report JSON");
     assert_eq!(report["sources"][0]["source"], "broken");

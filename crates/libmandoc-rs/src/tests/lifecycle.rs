@@ -67,7 +67,7 @@ fn parser_session_returns_an_owned_man_tree() {
     assert_eq!(document.metadata.section.as_deref(), Some("1"));
     assert!(document.metadata.has_body);
     assert_eq!(document.root.kind, NodeKind::Root);
-    assert!(!document.root.children.is_empty());
+    assert_ne!(document.root.children.len(), 0);
 }
 
 #[test]
@@ -76,7 +76,7 @@ fn parser_session_reports_file_errors_as_values() {
     let error = parse_file(&path, false).expect_err("missing source must fail");
 
     assert_eq!(error.path, path);
-    assert!(!error.message.is_empty());
+    assert_ne!(error.message.len(), 0);
 }
 
 #[test]

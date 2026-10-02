@@ -165,7 +165,7 @@ fn search_matches_one_logical_phrase_across_soft_wrapping() {
     let highlighted = rendered.highlighted_text(&matches, Some(0));
 
     assert_eq!(matches.len(), 1);
-    assert!(!matches[0].additional_fragments.is_empty());
+    assert_ne!(matches[0].additional_fragments.len(), 0);
     let highlighted_rows = highlighted
         .lines
         .iter()

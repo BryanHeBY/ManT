@@ -79,7 +79,10 @@ fn ordinary_list_entry_anchors_preserve_rows_and_numbering() {
             layout: LayoutHint::default(),
             source: None,
         });
-    assert!(mant_ir::validate_document(query.document.as_ref().unwrap()).is_empty());
+    assert_eq!(
+        mant_ir::validate_document(query.document.as_ref().unwrap()).len(),
+        0
+    );
     let annotated = DocumentView::new(&query);
     let Block::List { items, .. } = &mut query.document.as_mut().unwrap().sections[0].blocks[0]
     else {
@@ -180,7 +183,7 @@ fn width_matrix_keeps_rows_anchors_links_and_search_inside_the_rendered_geometry
         }
 
         assert_eq!(rendered.search("多语言 documentation").len(), 1);
-        assert!(!rendered.search("git status --short").is_empty());
+        assert_ne!(rendered.search("git status --short").len(), 0);
         assert_eq!(rendered.search("alpha beta gamma").len(), 1);
     }
 }

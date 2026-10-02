@@ -203,7 +203,7 @@ fn heading_targets_do_not_change_ids_or_infer_entries() {
         1,
         "empty labels are real link occurrences"
     );
-    assert!(mant_ir::SemanticIndex::build(&one).root().is_empty());
+    assert_eq!(mant_ir::SemanticIndex::build(&one).root(), []);
 }
 
 #[test]

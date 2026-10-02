@@ -257,7 +257,7 @@ mod tests {
         assert!(report.complete());
         assert_eq!(report.occurrences, 2);
         assert_eq!(records[0].forms, [0, 1]);
-        assert!(records[1].forms.is_empty());
+        assert_eq!(records[1].forms.len(), 0);
         assert!(
             records
                 .iter()
@@ -279,7 +279,7 @@ mod tests {
                 |occurrence, budget| {
                     let result = reference_form_associations(occurrence, budget);
                     assert_eq!(result.state, ReferenceFormAssociationState::Invalid);
-                    assert!(result.forms.is_empty());
+                    assert_eq!(result.forms.len(), 0);
                     ControlFlow::Continue(())
                 },
             );
@@ -309,7 +309,7 @@ mod tests {
                     result.state,
                     ReferenceFormAssociationState::Limited(ReferenceScanStop::Steps)
                 );
-                assert!(result.forms.is_empty());
+                assert_eq!(result.forms.len(), 0);
                 ControlFlow::Continue(())
             },
         );

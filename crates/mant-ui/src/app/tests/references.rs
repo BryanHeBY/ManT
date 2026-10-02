@@ -469,7 +469,7 @@ fn clicking_a_reference_only_reveals_and_resizing_keeps_its_typed_position() {
         let mut terminal = Terminal::new(TestBackend::new(width, 24)).unwrap();
         terminal.draw(|frame| app.draw(frame)).unwrap();
         if app.geometry.navigation.width == 0 {
-            assert!(app.geometry.navigation_rows.is_empty());
+            assert_eq!(app.geometry.navigation_rows.len(), 0);
             assert_eq!(
                 app.session.document.reference_location(&id),
                 Some(&location)

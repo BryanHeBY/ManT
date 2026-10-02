@@ -496,10 +496,10 @@ mod tests {
             ["install_rooted_file"]
         );
         assert_eq!(names("array[index]"), ["array[index]"]);
-        assert!(names("Using References").is_empty());
-        assert!(names("name[=literal]").is_empty());
-        assert!(names("Using ($example) text").is_empty());
-        assert!(names("function(argument)").is_empty());
-        assert!(names("zle -I").is_empty());
+        assert_eq!(names("Using References").len(), 0);
+        assert_eq!(names("name[=literal]").len(), 0);
+        assert_eq!(names("Using ($example) text").len(), 0);
+        assert_eq!(names("function(argument)").len(), 0);
+        assert_eq!(names("zle -I").len(), 0);
     }
 }

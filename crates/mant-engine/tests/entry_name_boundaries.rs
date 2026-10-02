@@ -124,7 +124,7 @@ fn enclosure_spacing_preserves_option_forms_names_and_explanation_sources() {
 fn check_bindings(owner: mant_ir::EntryOwner<'_>) {
     if let Some(facts) = owner.facts() {
         for binding in &facts.name_bindings {
-            assert!(!binding.occurrences.is_empty());
+            assert_ne!(binding.occurrences.len(), 0);
             for occurrence in &binding.occurrences {
                 assert_eq!(
                     inline_text(&owner.form(occurrence).unwrap()),

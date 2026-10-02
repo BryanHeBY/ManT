@@ -47,7 +47,7 @@ fn declared_items_fail_independently_and_bind_only_visible_name_occurrences() {
     assert_eq!(*kind, mant_ir::ListKind::Ordered { start: Some(3) });
     assert!(items[1].entry.is_none());
     assert!(items[2].entry.is_some());
-    assert!(!parsed.document.diagnostics.is_empty());
+    assert_ne!(parsed.document.diagnostics.len(), 0);
     let facts = items[0].entry.as_ref().unwrap();
     assert_eq!(facts.names, ["-a", "--all"]);
     assert_eq!(facts.name_bindings.len(), 2);

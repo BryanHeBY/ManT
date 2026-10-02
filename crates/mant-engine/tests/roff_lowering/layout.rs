@@ -70,7 +70,7 @@ fn unclosed_compact_run_stays_separate_and_resets_at_indent_scope() {
     };
     assert_eq!(items.len(), 3);
     assert_eq!(inline_text(&items[0].terms[0]), "--loose");
-    assert!(items[0].description.is_empty());
+    assert_eq!(items[0].description.len(), 0);
     assert_eq!(inline_text(&items[1].terms[0]), "--described");
     assert_eq!(inline_text(&items[2].terms[0]), "outer");
     let [
@@ -83,7 +83,7 @@ fn unclosed_compact_run_stays_separate_and_resets_at_indent_scope() {
     };
     assert_eq!(inner_items.len(), 1);
     assert_eq!(inline_text(&inner_items[0].terms[0]), "inner");
-    assert!(!inner_items[0].description.is_empty());
+    assert_ne!(inner_items[0].description.len(), 0);
 }
 
 #[test]
@@ -773,7 +773,7 @@ fn keeps_relative_indent_references_inside_man_ip_enumerations() {
                 |block| matches!(block, Block::Paragraph { layout, .. } if layout.indent_columns == 1),
             )
     }));
-    assert!(SemanticIndex::build(&document).section("notes").is_empty());
+    assert_eq!(SemanticIndex::build(&document).section("notes").len(), 0);
 }
 
 #[test]

@@ -37,7 +37,7 @@ fn headings_are_authoritative_visited_once_and_rebuild_after_serde() {
     assert!(doc.meta.title.is_none());
     assert_eq!(doc.sections[0].heading.plain_text(), "Topic");
     assert!(DocumentIndex::build(&doc).contains(mant_ir::DOCUMENT_ROOT_ID));
-    assert!(mant_ir::validate_document(&doc).is_empty());
+    assert_eq!(mant_ir::validate_document(&doc).len(), 0);
     let mut links = Links::default();
     links.visit_document(&doc);
     assert_eq!(links.0, 2);

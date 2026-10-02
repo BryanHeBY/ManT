@@ -52,7 +52,7 @@ fn summary_does_not_clone_labels_and_filters_before_target_bytes() {
     );
     assert_eq!(result.occurrences, ReferenceCount::Exact { value: 2 });
     assert_eq!(result.targets, ReferenceCount::Exact { value: 1 });
-    assert!(result.records.is_empty());
+    assert_eq!(result.records.len(), 0);
     assert_eq!(result.coverage.bytes, 136);
     let disabled = project_references(
         &document,
@@ -156,7 +156,7 @@ fn distinct_limits_and_return_limits_do_not_lie_about_scan_counts() {
         ReferenceCount::LowerBound { .. }
     ));
     assert_eq!(result.page.next_offset, None);
-    assert!(result.records.is_empty());
+    assert_eq!(result.records.len(), 0);
 }
 
 #[test]
@@ -165,7 +165,7 @@ fn labels_are_utf8_bounded_and_empty_labels_are_not_replaced() {
     let result = project_references(&document, None, ReferenceScope::Document, &all());
     assert_eq!(result.records[0].label.len(), 4096);
     assert!(result.records[0].label_truncated);
-    assert!(result.records[1].label.is_empty());
+    assert_eq!(result.records[1].label.len(), 0);
     assert!(!result.records[1].label_truncated);
 }
 
@@ -325,7 +325,7 @@ fn hard_distinct_cap_freezes_a_proven_lower_bound_while_scan_finishes() {
     );
     assert_eq!(result.occurrences, ReferenceCount::Exact { value: 5000 });
     assert_eq!(result.targets, ReferenceCount::LowerBound { value: 4096 });
-    assert!(result.records.is_empty());
+    assert_eq!(result.records.len(), 0);
 }
 
 #[test]
@@ -360,7 +360,7 @@ fn repeated_targets_page_by_occurrence_and_large_offset_does_not_allocate_record
             ..Default::default()
         },
     );
-    assert!(limited.records.is_empty());
+    assert_eq!(limited.records.len(), 0);
     assert!(matches!(
         limited.occurrences,
         ReferenceCount::LowerBound { .. }

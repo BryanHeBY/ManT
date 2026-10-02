@@ -211,7 +211,7 @@ fn shipped_manual_parses_without_lossy_fallbacks() {
         !markdown.contains("tldr-pages · CC BY 4.0"),
         "{name} must not claim the community cache licence for owned content"
     );
-    assert!(!render_query_text(&query).is_empty());
+    assert_ne!(render_query_text(&query), "");
 }
 
 #[test]
@@ -449,7 +449,7 @@ fn documented_semantic_entry_examples_are_executable_authoring_contracts() {
                 "{example}\n{:?}",
                 document.diagnostics
             );
-            assert!(!mant_ir::SemanticIndex::build(&document).root().is_empty());
+            assert_ne!(mant_ir::SemanticIndex::build(&document).root(), []);
         }
     }
 }

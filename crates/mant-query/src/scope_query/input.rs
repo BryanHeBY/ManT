@@ -139,7 +139,6 @@ impl<'a> QueryScopeView<'a> {
     }
 
     /// Paired records cannot silently truncate or refer to another content order.
-    #[must_use]
     pub fn iter(self) -> impl ExactSizeIterator<Item = (&'a ScopedDocument, &'a ResolvedContent)> {
         self.graph.documents.iter().zip(self.documents)
     }

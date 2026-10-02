@@ -268,5 +268,5 @@ fn initialize_with_modern_version_still_negotiates_legacy_lifecycle() {
             .as_array()
             .expect("negotiated tools/list"),
     );
-    assert!(session.close().is_empty());
+    assert_eq!(session.close().len(), 0);
 }

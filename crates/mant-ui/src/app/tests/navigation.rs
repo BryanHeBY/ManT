@@ -572,7 +572,7 @@ fn collapse_all_over_an_empty_navigation_does_not_panic() {
     let mut app = App::new(&empty_bundle());
     app.set_selected_index(3);
     app.activate_menu_action(MenuAction::CollapseAll);
-    assert!(app.session.document.navigation().is_empty());
+    assert_eq!(app.session.document.navigation().len(), 0);
 }
 
 #[test]
@@ -809,7 +809,7 @@ fn closing_search_removes_highlights_but_retains_navigation() {
     for character in "show".chars() {
         app.handle_key(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE));
     }
-    assert!(app.search.matches.is_empty());
+    assert_eq!(app.search.matches.len(), 0);
     assert!(app.search.is_editing());
 
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
@@ -820,13 +820,13 @@ fn closing_search_removes_highlights_but_retains_navigation() {
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert_eq!(app.search.mode, SearchMode::Closed);
     assert_eq!(app.search.query, "show");
-    assert!(app.search.matches.is_empty());
+    assert_eq!(app.search.matches.len(), 0);
     assert_eq!(app.search.scope_matches.len(), 1);
 
     app.handle_key(KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE));
-    assert!(app.search.matches.is_empty());
+    assert_eq!(app.search.matches.len(), 0);
     app.refresh_search(80);
-    assert!(app.search.matches.is_empty());
+    assert_eq!(app.search.matches.len(), 0);
 
     app.open_search();
     assert_eq!(app.search.matches.len(), 1);

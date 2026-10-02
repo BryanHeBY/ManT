@@ -83,7 +83,7 @@ fn actual_tui_setup_order_and_every_partial_failure_are_owned() {
             .chain(order[..=failed].iter().copied().rev().map(Event::Release))
             .collect();
         assert_eq!(state.borrow().trace, expected);
-        assert!(state.borrow().active.is_empty());
+        assert_eq!(state.borrow().active.len(), 0);
     }
 }
 
@@ -132,7 +132,7 @@ fn ratatui_cursor_changes_and_drop_share_the_session_ledger() {
             Event::Release(RawMode)
         ]
     );
-    assert!(state.borrow().active.is_empty());
+    assert_eq!(state.borrow().active.len(), 0);
 }
 
 #[test]
@@ -148,7 +148,7 @@ fn a_partial_hide_failure_is_recovered_even_when_ratatui_did_not_record_it() {
     drop(terminal);
     assert!(lease.borrow().has_pending(HiddenCursor));
     restore(&lease).unwrap();
-    assert!(state.borrow().active.is_empty());
+    assert_eq!(state.borrow().active.len(), 0);
     assert_eq!(
         &state.borrow().trace[4..],
         [
@@ -187,7 +187,7 @@ fn failed_cursor_release_is_retried_by_ratatui_without_releasing_other_modes_twi
             Event::Release(HiddenCursor)
         ]
     );
-    assert!(state.borrow().active.is_empty());
+    assert_eq!(state.borrow().active.len(), 0);
 }
 
 #[test]
@@ -214,7 +214,7 @@ fn explicit_show_failure_remains_pending_for_later_session_cleanup() {
             .count(),
         2
     );
-    assert!(state.borrow().active.is_empty());
+    assert_eq!(state.borrow().active.len(), 0);
 }
 
 #[test]
@@ -228,7 +228,7 @@ fn reentrant_ratatui_drop_returns_an_error_instead_of_panicking() {
     assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| drop(terminal))).is_ok());
     drop(busy);
     restore(&lease).unwrap();
-    assert!(state.borrow().active.is_empty());
+    assert_eq!(state.borrow().active.len(), 0);
 }
 
 #[test]
@@ -258,6 +258,6 @@ fn drawing_and_non_mode_commands_delegate_byte_for_byte_to_crossterm() {
         Backend::flush(&mut backend).unwrap();
     }
     assert_eq!(wrapped, plain);
-    assert!(!wrapped.is_empty());
-    assert!(state.borrow().trace.is_empty());
+    assert_ne!(wrapped.len(), 0);
+    assert_eq!(state.borrow().trace.len(), 0);
 }

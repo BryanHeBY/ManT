@@ -567,7 +567,7 @@ mod equation_transfer_tests {
             );
             assert_eq!(owned.children.len(), expected_children);
             assert_eq!(owned.children[0].text.as_deref(), Some("a"));
-            assert!(owned.children.last().unwrap().children.is_empty());
+            assert_eq!(owned.children.last().unwrap().children.len(), 0);
             assert!(!owned.readable_text().contains('d'));
         }
         let owned = unsafe { copy_equation(pointer, equation, 0, &mut EquationBudget::default()) }
@@ -916,10 +916,11 @@ mod tests {
     #[test]
     fn column_pointer_count_is_validated_before_allocation_or_dereference() {
         let mut budget = TransferBudget::default();
-        assert!(
+        assert_eq!(
             unsafe { copy_column_strings(std::ptr::null(), 0, &mut budget) }
                 .unwrap()
-                .is_empty()
+                .len(),
+            0
         );
         assert!(unsafe { copy_column_strings(std::ptr::null(), 1, &mut budget) }.is_err());
         let invalid = std::ptr::NonNull::<*const c_char>::dangling().as_ptr();

@@ -38,10 +38,10 @@ fn entry_fragments_validate_without_inserting_a_head_anchor() {
             "option-help"
         );
         assert_eq!(index.get("option-help").unwrap().roles().len(), 1);
-        assert!(mant_ir::validate_document(doc).is_empty());
+        assert_eq!(mant_ir::validate_document(doc).len(), 0);
         let copied = serde_json::from_str(&serde_json::to_string(doc).unwrap()).unwrap();
         assert_eq!(doc, &copied);
-        assert!(mant_ir::validate_document(&copied).is_empty());
+        assert_eq!(mant_ir::validate_document(&copied).len(), 0);
         if !definition_owner {
             let markdown = render_markdown_with_options(&query, MarkdownOptions::ADDRESSABLE);
             assert!(

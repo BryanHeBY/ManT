@@ -750,7 +750,7 @@ fn root_only_native_document_is_readable() {
 
     let result = load_request(&request(), LoadPolicy::default(), &host).expect("root content");
     let document = result.document.expect("manual");
-    assert!(document.sections.is_empty());
+    assert_eq!(document.sections.len(), 0);
     assert_eq!(document.blocks.len(), 1);
 }
 

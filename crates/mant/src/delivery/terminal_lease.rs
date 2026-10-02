@@ -179,7 +179,7 @@ mod tests {
         session.restore().unwrap();
         session.restore().unwrap();
         drop(session);
-        assert!(state.borrow().events.is_empty());
+        assert_eq!(state.borrow().events.len(), 0);
     }
 
     #[test]
@@ -234,7 +234,7 @@ mod tests {
                     .chain(attempted.iter().rev().copied().map(Event::Release))
                     .collect::<Vec<_>>();
                 assert_eq!(state.borrow().events, expected);
-                assert!(state.borrow().active.is_empty());
+                assert_eq!(state.borrow().active.len(), 0);
             }
         }
     }
@@ -322,7 +322,7 @@ mod tests {
                 .chain([Event::Release(failed)])
                 .collect::<Vec<_>>();
             assert_eq!(state.borrow().events, expected);
-            assert!(state.borrow().active.is_empty());
+            assert_eq!(state.borrow().active.len(), 0);
         }
     }
 

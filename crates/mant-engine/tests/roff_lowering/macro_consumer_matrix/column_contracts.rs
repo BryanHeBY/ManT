@@ -233,7 +233,7 @@ fn boxed_tbl_keeps_its_single_cell_without_copying_device_frame_glyphs() {
     else {
         panic!("boxed table boundaries changed: {:?}", document.sections);
     };
-    assert!(column_widths.is_empty());
+    assert_eq!(column_widths.len(), 0);
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].kind, TableRowKind::Data);
     assert_eq!(rows[0].cells.len(), 1);
@@ -263,7 +263,7 @@ fn spanning_tbl_keeps_covered_slots_and_the_authored_rule_in_every_export() {
     };
     assert_eq!(rows.len(), 3);
     assert_eq!(rows[1].kind, TableRowKind::HorizontalRule);
-    assert!(rows[1].cells.is_empty());
+    assert_eq!(rows[1].cells.len(), 0);
     for (row, expected) in [(&rows[0], "A"), (&rows[2], "B C")] {
         assert_eq!(row.kind, TableRowKind::Data);
         assert_eq!(row.cells.len(), 1);

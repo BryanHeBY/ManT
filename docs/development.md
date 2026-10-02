@@ -87,6 +87,16 @@ are not imported implicitly by choosing a parser baseline.
 - For native-manual work: GCC on Linux, Clang on macOS, or MSVC on Windows;
   Unix also needs zlib development headers
 
+CI formats and lints with the current stable Rust release, while a separate job
+checks the Rust 1.88 minimum. Update the local stable toolchain before checking a
+change, and run formatting and strict Clippy before the complete test boundary:
+
+```sh
+rustup update stable
+cargo fmt --all --check
+cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+```
+
 The workspace vendors libmandoc and maintains its own manual index, so system
 `man` and `mandoc` executables are not prerequisites. Markdown parsing and the
 deterministic fixture suite do not require installed manual sources either.
@@ -161,8 +171,10 @@ event dependencies do not grant this component terminal acquisition authority.
 features, each of `roff`, `tui`, `pager`, `mcp`, and `update` alone, the default
 product, and all features. It inspects normal/build dependency graphs, exercises
 the actual help and structured input/output boundary, and checks that schemas
-remain complete even when execution capabilities are absent. Native catalog
-metadata remains discoverable without a native parser; reading native content
+remain complete even when execution capabilities are absent. The minimal case
+also compiles all test targets, guarding imports and regression suites that
+require an optional capability. Native catalog metadata remains discoverable
+without a native parser; reading native content
 must then report the unavailable capability rather than a missing document.
 The script runs in Linux, macOS and Windows verification, using Python 3's
 standard library (`python3` on Unix, `python` on Windows). It does not replace

@@ -24,7 +24,7 @@ fn document_scopes_follow_typed_links_breadth_first_and_query_multiple_roots() {
         ],
     );
     assert!(search.status.success(), "{search:?}");
-    assert!(search.stderr.is_empty());
+    assert_eq!(search.stderr.len(), 0);
     let search: serde_json::Value =
         serde_json::from_slice(&search.stdout).expect("scope search JSON");
     assert_eq!(scope_document_paths(&search), ["alpha", "beta", "gamma"]);
@@ -84,7 +84,7 @@ fn document_scopes_follow_typed_links_breadth_first_and_query_multiple_roots() {
         ],
     );
     assert!(missing.status.success(), "{missing:?}");
-    assert!(missing.stderr.is_empty());
+    assert_eq!(missing.stderr.len(), 0);
     let missing = String::from_utf8(missing.stdout).expect("scope miss text");
     assert!(
         missing.contains("no-evidence; owners=0, returned=0"),

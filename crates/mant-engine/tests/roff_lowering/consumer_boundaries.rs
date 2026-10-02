@@ -146,7 +146,7 @@ fn literal_containers_preserve_nested_structural_payloads_and_targets() {
                     assert!(text.contains(word), "{inner}: missing {word}: {text}");
                 }
                 let doc = query.document.as_ref().unwrap();
-                assert!(mant_ir::validate_document(doc).is_empty());
+                assert_eq!(mant_ir::validate_document(doc).len(), 0);
                 let mut shapes = Shapes::default();
                 shapes.visit_document(doc);
                 if inner.contains(".TS") || inner.contains(".Bl -column") {

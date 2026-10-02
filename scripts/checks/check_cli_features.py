@@ -56,6 +56,12 @@ def verify(name, enabled, inputs, log):
     if not enabled:
         require(not packages.intersection({"cc", "zstd-sys", "flate2", "crossterm"}),
                 f"{name}: minimal build acquired native/terminal dependencies")
+        # Native and update-only regression suites must be gated with the
+        # capabilities they call; building only the binary misses that boundary.
+        subprocess.run(
+            ["cargo", "check", "--locked", "--package", "mant", *flags, "--all-targets"],
+            cwd=ROOT, env=environment, stdout=log, stderr=log, check=True,
+        )
 
     runtime_env = dict(environment, XDG_DATA_HOME=str(inputs), APPDATA=str(inputs),
                        HOME=str(inputs), USERPROFILE=str(inputs), LOCALAPPDATA=str(inputs),

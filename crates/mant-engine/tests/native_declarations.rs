@@ -34,14 +34,14 @@ fn compact_independent_heads_do_not_share_explain_bodies_or_sources() {
     ] {
         let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
         let document = query.document.as_ref().unwrap();
-        assert!(mant_ir::validate_document(document).is_empty());
+        assert_eq!(mant_ir::validate_document(document).len(), 0);
         let items = definitions(document);
         assert_eq!(items.len(), 3);
         assert_ne!(items[0].source, items[1].source);
         for (index, name) in ["--first", "--second", "--last"].iter().enumerate() {
             let entry = items[index].entry.as_ref().unwrap();
             assert_eq!(entry.names, [*name]);
-            assert!(entry.alias_groups.is_empty());
+            assert_eq!(entry.alias_groups.len(), 0);
             let result = mant_query::explain_query(
                 &query,
                 &ExplanationQuery {
@@ -85,13 +85,13 @@ fn explicit_tq_groups_only_the_immediately_preceding_empty_head() {
         let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
         let items = definitions(query.document.as_ref().unwrap());
         assert_eq!(items.len(), 2);
-        assert!(items[0].description.is_empty());
+        assert_eq!(items[0].description.len(), 0);
         assert_eq!(
             items[1].entry.as_ref().unwrap().names,
             ["--first", "--second", "--third"]
         );
         assert_eq!(items[1].description.is_empty(), tail.is_empty());
-        assert!(items[1].entry.as_ref().unwrap().alias_groups.is_empty());
+        assert_eq!(items[1].entry.as_ref().unwrap().alias_groups.len(), 0);
         assert_eq!(items[1].source.unwrap().line, 5);
     }
 }
@@ -151,7 +151,7 @@ fn named_tp_bullets_keep_presentation_terms_and_literal_operator_definitions() {
                 && text.contains("SECOND")
                 && text.contains("Nested continuation.")
         );
-        assert!(mant_ir::validate_document(document).is_empty());
+        assert_eq!(mant_ir::validate_document(document).len(), 0);
     }
 }
 
@@ -189,7 +189,7 @@ fn parameter_alternations_never_become_declared_command_names() {
         let source = format!(".TH PROBE 1\n.SH COMMANDS\n.TP\n{head}\nBODY\n");
         let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
         let document = query.document.as_ref().unwrap();
-        assert!(mant_ir::validate_document(document).is_empty());
+        assert_eq!(mant_ir::validate_document(document).len(), 0);
         let items = definitions(document);
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].entry.as_ref().unwrap().names, [expected], "{head}");
@@ -221,7 +221,10 @@ fn inferred_heads_require_whole_declarations_not_words_inside_prose() {
         );
         let text = mant_render::render_query_text(&query);
         assert!(text.contains("program"));
-        assert!(mant_ir::validate_document(query.document.as_ref().unwrap()).is_empty());
+        assert_eq!(
+            mant_ir::validate_document(query.document.as_ref().unwrap()).len(),
+            0
+        );
         for name in ["otherwise", "as", "-T"] {
             let result = mant_query::explain_query(
                 &query,
@@ -270,7 +273,7 @@ fn explicit_diagnostic_labels_remain_definitions_without_prose_fragment_names() 
     assert_eq!(items.len(), 1);
     let entry = items[0].entry.as_ref().unwrap();
     assert_eq!(entry.kind, mant_ir::EntryKind::Term);
-    assert!(entry.names.is_empty());
+    assert_eq!(entry.names.len(), 0);
     assert!(mant_render::render_query_text(&query).contains("Permission denied, otherwise"));
 }
 
@@ -328,7 +331,7 @@ fn native_head_evidence_survives_nesting_without_promoting_body_macros() {
                 .unwrap()
                 .contains(body)
         );
-        assert!(!item.entry.as_ref().unwrap().name_bindings.is_empty());
+        assert_ne!(item.entry.as_ref().unwrap().name_bindings.len(), 0);
     }
     let literals: Vec<_> = items
         .iter()
@@ -361,8 +364,11 @@ fn native_environment_role_and_names_are_independent_of_placeholder_support() {
         )
     );
     assert_eq!(items[0].entry.as_ref().unwrap().names, ["DEMO_HOME"]);
-    assert!(items[1].entry.as_ref().unwrap().names.is_empty());
-    assert!(mant_ir::validate_document(query.document.as_ref().unwrap()).is_empty());
+    assert_eq!(items[1].entry.as_ref().unwrap().names.len(), 0);
+    assert_eq!(
+        mant_ir::validate_document(query.document.as_ref().unwrap()).len(),
+        0
+    );
 }
 
 #[test]
@@ -444,14 +450,15 @@ fn named_declarations_keep_placeholders_annotations_and_assignment_values_in_for
     ] {
         let source = format!(".TH PROBE 1\n.SH {section}\n.TP\n{head}\nBODY\n");
         let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
-        let items = definitions(query.document.as_ref().unwrap());
+        let document = query.document.as_ref().unwrap();
+        let items = definitions(document);
         assert_eq!(items.len(), 1);
         let facts = items[0].entry.as_ref().unwrap();
         assert_eq!(facts.kind, kind, "{head}");
         assert_eq!(facts.names, expected, "{head}");
-        assert!(mant_ir::validate_document(query.document.as_ref().unwrap()).is_empty());
+        assert_eq!(mant_ir::validate_document(document).len(), 0);
         assert!(mant_render::render_query_text(&query).contains(head));
-        assert!(facts.alias_groups.is_empty());
+        assert_eq!(facts.alias_groups.len(), 0);
     }
     for head in [
         "[url-protocol]_PROXY",

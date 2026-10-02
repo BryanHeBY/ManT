@@ -24,7 +24,7 @@ fn keeps_nested_sections_examples_and_inline_grouping() {
             .iter()
             .any(|child| child.heading.plain_text() == "Git Diffs")
     );
-    assert!(!common::section(document, "GIT COMMANDS").blocks.is_empty());
+    assert_ne!(common::section(document, "GIT COMMANDS").blocks.len(), 0);
 
     let preformatted = common::document_blocks(document)
         .into_iter()

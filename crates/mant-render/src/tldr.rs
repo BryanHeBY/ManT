@@ -154,7 +154,7 @@ mod tests {
                 },
             ]
         );
-        assert!(lines[1].spans.is_empty());
+        assert_eq!(lines[1].spans.len(), 0);
         assert_eq!(lines.last().unwrap().spans[0].role, TldrRole::Link);
         page.origin = TldrOrigin::TldrPages;
         page.examples[0].command_parts.clear();

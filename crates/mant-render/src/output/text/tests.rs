@@ -161,7 +161,7 @@ fn man_format_does_not_invent_a_document_for_tldr_only_queries() {
         origin: TldrOrigin::TldrPages,
     });
 
-    assert!(render_query_man(&query).is_empty());
+    assert_eq!(render_query_man(&query).len(), 0);
 }
 
 #[test]

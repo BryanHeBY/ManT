@@ -9,7 +9,7 @@ fn duplicate_section_ids_cannot_redirect_path_selected_entry_metadata() {
     let document = query.document.as_mut().unwrap();
     document.sections[1].id = document.sections[0].id.clone();
     let index = mant_ir::SemanticIndex::build(document);
-    assert!(index.section(&document.sections[0].id).is_empty());
+    assert_eq!(index.section(&document.sections[0].id), []);
     assert_eq!(index.section_at(&[0])[0].names, ["first"]);
     assert_eq!(index.section_at(&[1])[0].names, ["second"]);
     for projection in [
@@ -148,7 +148,7 @@ fn namespaces_do_not_fall_through_and_duplicate_ids_remain_readable_by_path() {
 #[test]
 fn names_remain_multiple_explain_evidence_not_content_selectors() {
     let query = load_markdown_text("# Tool\n\n## force\n\nSection.\n\n## Commands\n\n<!-- mant:entries role=command case=sensitive -->\n- `force`: First.\n- `force`: Second.\n", None).unwrap();
-    assert!(query.document.as_ref().unwrap().diagnostics.is_empty());
+    assert_eq!(query.document.as_ref().unwrap().diagnostics.len(), 0);
     assert_eq!(
         select_excerpt(&query, &[ContentSelector::id("force")])
             .unwrap()

@@ -212,7 +212,7 @@ fn rejected_link_words_keep_occurrences_without_click_or_copy_ranges() {
         let references = inventory(&query);
         assert_eq!(references.occurrences, ReferenceCount::Exact { value: 1 });
         assert_eq!(references.records.len(), 1);
-        assert!(references.records[0].label.is_empty());
+        assert_eq!(references.records[0].label, "");
         let view = DocumentView::new(&query);
         for width in [20, 40, 80, 128, 240] {
             let rendered = view.render(width);
@@ -325,12 +325,7 @@ fn vertical_request_keeps_long_tag_blank_row_without_padding_the_short_tag() {
             let after = body_hit(&rendered, "AFTER");
             assert_eq!(after.row, head.row + delta, "{label}: {:?}", rendered.text);
             if delta == 2 {
-                assert!(
-                    rendered.text.lines[head.row + 1]
-                        .to_string()
-                        .trim()
-                        .is_empty()
-                );
+                assert_eq!(rendered.text.lines[head.row + 1].to_string().trim(), "");
             }
             body_hit(&rendered, "BodyWord");
         }

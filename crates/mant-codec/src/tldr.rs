@@ -499,7 +499,7 @@ mod tests {
         let page =
             parse_tldr_page("# demo\n- Explain only:\n", location()).expect("valid tldr page");
         assert_eq!(page.examples[0].description, "Explain only");
-        assert!(page.examples[0].command.is_empty());
+        assert_eq!(page.examples[0].command, "");
     }
 
     #[test]

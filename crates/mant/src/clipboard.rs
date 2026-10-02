@@ -245,7 +245,7 @@ mod tests {
 
         assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
         assert!(error.to_string().contains("400 KiB terminal limit"));
-        assert!(output.is_empty());
+        assert_eq!(output.len(), 0);
     }
 
     #[test]

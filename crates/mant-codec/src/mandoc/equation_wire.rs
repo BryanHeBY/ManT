@@ -479,7 +479,7 @@ mod tests {
         assert!(!wire_probe(&document));
         bound_wire_structure(&mut document);
         assert!(wire_probe(&document));
-        assert!(document.sections.is_empty());
+        assert_eq!(document.sections.len(), 0);
         assert_eq!(
             document.heading.as_ref().unwrap().plain_text(),
             "document title"

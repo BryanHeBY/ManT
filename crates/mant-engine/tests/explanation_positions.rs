@@ -189,7 +189,10 @@ fn synthetic(names: usize, repeats: usize) -> ResolvedContent {
         layout: LayoutHint::default(),
         source: None,
     }];
-    assert!(validate_document(content.document.as_ref().unwrap()).is_empty());
+    assert_eq!(
+        validate_document(content.document.as_ref().unwrap()).len(),
+        0
+    );
     content
 }
 
@@ -398,7 +401,7 @@ fn matched_facts_and_body_survive_when_expanded_form_metadata_does_not_fit() {
         panic!("name")
     };
     assert_eq!(matches[0].name, "name0");
-    assert!(matches[0].occurrences[0].forms.is_empty());
+    assert_eq!(matches[0].occurrences[0].forms.len(), 0);
     assert_eq!(
         text_at(evidence, &matches[0].occurrences[0].content[0]),
         "name0"
@@ -429,17 +432,21 @@ fn a_fragment_limit_never_returns_half_a_name_occurrence() {
             })
             .collect(),
     }];
-    assert!(validate_document(content.document.as_ref().unwrap()).is_empty());
+    assert_eq!(
+        validate_document(content.document.as_ref().unwrap()).len(),
+        0
+    );
     let result = explain_query(&content, &query(&"é".repeat(33), 1_048_576)).unwrap();
     let evidence = &result.evidence[0];
     let EvidenceBasis::Name { matches } = &evidence.bases[0] else {
         panic!("name")
     };
-    assert!(matches[0].occurrences.is_empty());
-    assert!(
+    assert_eq!(matches[0].occurrences.len(), 0);
+    assert_eq!(
         evidence.entry.as_ref().unwrap().name_bindings[0]
             .occurrences
-            .is_empty()
+            .len(),
+        0
     );
     assert!(evidence.match_details_omitted && evidence.name_bindings_omitted);
     assert!(!evidence.content_omitted);

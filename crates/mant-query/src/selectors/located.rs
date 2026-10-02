@@ -264,10 +264,10 @@ mod selection_tests {
                     entry,
                     ..
                 } => {
-                    assert!(title.is_empty());
+                    assert_eq!(title.len(), 0);
                     assert!(breadcrumbs.is_empty());
-                    assert!(entry.names().is_empty());
-                    assert!(!entry.block_path().is_empty());
+                    assert_eq!(entry.names().len(), 0);
+                    assert_ne!(entry.block_path().len(), 0);
                     assert!(entry.owner().facts().is_some());
                 }
             }

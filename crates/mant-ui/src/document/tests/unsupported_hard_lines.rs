@@ -107,5 +107,5 @@ fn unsupported_hard_breaks_do_not_weaken_terminal_control_masking() {
         rendered.text.lines[second.row].to_string().trim(),
         "SECOND�THIRD"
     );
-    assert!(rendered.search("SECOND\u{1b}THIRD").is_empty());
+    assert_eq!(rendered.search("SECOND\u{1b}THIRD").len(), 0);
 }

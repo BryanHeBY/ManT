@@ -117,7 +117,7 @@ fn repeated_physical_flushes_never_revisit_the_committed_head_prefix() {
             source.as_bytes(),
         )
         .unwrap();
-        assert!(!document.sections.is_empty());
+        assert_ne!(document.sections.len(), 0);
         let inspected = super::OWNER_NODES_VISITED.with(std::cell::Cell::get);
         assert!(
             inspected <= words * 8,
@@ -206,7 +206,7 @@ fn empty_native_flush_closes_only_an_already_occupied_overrun_row() {
     let mut empty = InlineBuilder::new();
     empty.begin_column_body(12, 0, false);
     empty.execute_native_newline();
-    assert!(empty.nodes.is_empty());
+    assert_eq!(empty.nodes.len(), 0);
 }
 
 #[test]

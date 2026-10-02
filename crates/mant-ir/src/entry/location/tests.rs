@@ -196,11 +196,11 @@ fn invalid_names_remain_addressable_and_location_only_scan_skips_names() {
     let locations = content_entry_locations(&blocks);
     assert_eq!(detailed.len(), 3);
     assert_eq!(detailed[0].names(), ["valid"]);
-    assert!(detailed[1].names().is_empty());
+    assert_eq!(detailed[1].names().len(), 0);
     assert_eq!(detailed[2].names(), ["child"]);
     assert_eq!(detailed[1].source().unwrap().line, 8);
     for (detail, location) in detailed.iter().zip(&locations) {
-        assert!(location.names().is_empty());
+        assert_eq!(location.names().len(), 0);
         assert_eq!(detail.indices(), location.indices());
         assert_eq!(detail.block_path(), location.block_path());
         assert_eq!(detail.owner().facts(), location.owner().facts());

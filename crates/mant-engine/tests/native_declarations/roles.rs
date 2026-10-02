@@ -22,7 +22,7 @@ fn split_literal_command_heads_keep_the_whole_name_and_stop_before_arguments() {
         assert_eq!(direct[0].entry.as_ref().unwrap().names, [name]);
         assert_eq!(direct[0].entry.as_ref().unwrap().kind, kind);
         assert!(mant_render::render_explanation_text(&result).contains(body));
-        assert!(direct[0].entry.as_ref().unwrap().alias_groups.is_empty());
+        assert_eq!(direct[0].entry.as_ref().unwrap().alias_groups.len(), 0);
     }
     for name in ["zfs", "get", "depth", "property", "{+"] {
         assert_eq!(
@@ -48,7 +48,7 @@ fn local_definitions_override_inherited_values_without_inventing_domains() {
     let source = b".TH PROBE 1\n.SH OPTIONS\n.TP\n.B --outer\nOUTER_BODY\n.RS 4\n.TP\n.B --inner=fast\nINNER_BODY\n.TP\n.B true\nVALUE_BODY\n.TP\n.B -42\nNEGATIVE_BODY\n.TP\n.B PROCESS_HOME\nVARIABLE_BODY\n.TP\n.B color=[yes|no]\nKEY_BODY\n.TP\n.B .*-fallthrough.*\nREGEX_BODY\n.RE\n.TP\n.B --next\nNEXT_BODY\n";
     let query = mant_loader::load_roff_bytes(source).unwrap();
     let document = query.document.as_ref().unwrap();
-    assert!(mant_ir::validate_document(document).is_empty());
+    assert_eq!(mant_ir::validate_document(document).len(), 0);
     let items = definitions(document);
     assert_eq!(items.len(), 8);
     for (name, kind, body) in [
@@ -75,7 +75,7 @@ fn local_definitions_override_inherited_values_without_inventing_domains() {
         let entry = item.entry.as_ref().unwrap();
         assert_eq!(entry.kind, kind, "{name}");
         assert!(entry.value_domain.is_none());
-        assert!(entry.alias_groups.is_empty());
+        assert_eq!(entry.alias_groups.len(), 0);
         assert!(
             serde_json::to_string(&item.description)
                 .unwrap()

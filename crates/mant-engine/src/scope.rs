@@ -211,7 +211,7 @@ mod tests {
             },
         )
         .unwrap();
-        assert!(explanation.failures.is_empty());
+        assert_eq!(explanation.failures.len(), 0);
         assert_eq!(explanation.total, 1);
         assert_eq!(explanation.documents[0].address, address);
         assert_eq!(explanation.evidence[0].document_index, 0);

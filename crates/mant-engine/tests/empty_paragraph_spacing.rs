@@ -5,7 +5,10 @@ use mant_render::render_query_text;
 
 fn load(body: &str) -> ResolvedContent {
     let query = load_roff_bytes(format!(".TH PROBE 1\n.SH TEST\n{body}\n").as_bytes()).unwrap();
-    assert!(mant_ir::validate_document(query.document.as_ref().unwrap()).is_empty());
+    assert_eq!(
+        mant_ir::validate_document(query.document.as_ref().unwrap()).len(),
+        0
+    );
     query
 }
 

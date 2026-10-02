@@ -93,7 +93,7 @@ fn all_entry_roles_color_only_bound_source_text_not_markers_or_body_mentions() {
         // No semantic-color mutation is written into the original IR or cached view.
         for width in [12, 40, 120, 12] {
             let current = view.render(width);
-            assert!(!current.search(name).is_empty());
+            assert_ne!(current.search(name).len(), 0);
             assert_eq!(current.text, view.render(width).text);
         }
     }
@@ -134,7 +134,10 @@ fn bound_link_name_keeps_type_and_modifiers_through_code_surface_and_wrapping() 
         source,
     });
     content.document.as_mut().unwrap().sections[0].blocks = blocks;
-    assert!(mant_ir::validate_document(content.document.as_ref().unwrap()).is_empty());
+    assert_eq!(
+        mant_ir::validate_document(content.document.as_ref().unwrap()).len(),
+        0
+    );
     let view = DocumentView::new(&content);
     for width in [12, 40, 120] {
         let rendered = view.render(width);
@@ -309,8 +312,8 @@ fn definition_lists_honour_compact_and_per_item_spacing() {
         .expect("second term");
 
     assert_eq!(second_term, first_description + 3);
-    assert!(rows[first_description + 1].trim().is_empty());
-    assert!(rows[first_description + 2].trim().is_empty());
+    assert_eq!(rows[first_description + 1].trim().len(), 0);
+    assert_eq!(rows[first_description + 2].trim().len(), 0);
 }
 
 fn assert_link_selection(

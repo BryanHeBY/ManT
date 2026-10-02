@@ -60,7 +60,7 @@ fn selected_definition_sources_execute_the_asserted_head_and_body_owners() {
         assert!(!bodies.is_empty(), "{}", case["name"]);
         match mechanism {
             "column-authored-row" => {
-                assert!(head.children.is_empty());
+                assert_eq!(head.children.len(), 0);
                 assert_eq!(bodies.len(), 2);
                 assert!(contains_word(bodies[1], "RightWord"));
             }
@@ -75,7 +75,7 @@ fn selected_definition_sources_execute_the_asserted_head_and_body_owners() {
                 assert!(contains_word(bodies[0], "BodyWord"));
                 assert!(!contains_word(head, "BodyWord"));
             }
-            "blank-head-final-receipt" => assert!(bodies[0].children.is_empty()),
+            "blank-head-final-receipt" => assert_eq!(bodies[0].children.len(), 0),
             _ => unreachable!(),
         }
     }

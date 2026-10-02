@@ -49,7 +49,7 @@ fn complete_hanging_heads_share_spacing_and_owner_rules_across_roles() {
             );
             let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
             let document = query.document.as_ref().unwrap();
-            assert!(mant_ir::validate_document(document).is_empty());
+            assert_eq!(mant_ir::validate_document(document).len(), 0);
             let items = definitions(document);
             assert_eq!(items.len(), 1, "{source}");
             let entry = items[0].entry.as_ref().unwrap();
@@ -98,7 +98,7 @@ fn hanging_heads_cannot_cross_prose_new_heads_outer_content_or_eof() {
             ".TH PROBE 1\n.SH {section}\n.PP\nThis ordinary paragraph explains an example, otherwise it continues.\n.sp\n.RS 4\nEXAMPLE_BODY\n.RE\n"
         );
         let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
-        assert!(definitions(query.document.as_ref().unwrap()).is_empty());
+        assert_eq!(definitions(query.document.as_ref().unwrap()).len(), 0);
     }
 }
 
@@ -116,8 +116,8 @@ fn finite_short_long_pairs_bind_names_without_rescanning_argument_tokens() {
         let items = definitions(document);
         let entry = items[0].entry.as_ref().unwrap();
         assert_eq!(entry.names, ["-a", "--ascii"], "{head}");
-        assert!(entry.alias_groups.is_empty());
-        assert!(mant_ir::validate_document(document).is_empty());
+        assert_eq!(entry.alias_groups.len(), 0);
+        assert_eq!(mant_ir::validate_document(document).len(), 0);
         let result = mant_query::explain_query(
             &query,
             &ExplanationQuery {
@@ -146,11 +146,14 @@ fn finite_short_long_pairs_bind_names_without_rescanning_argument_tokens() {
         let items = definitions(query.document.as_ref().unwrap());
         let names = &items[0].entry.as_ref().unwrap().names;
         assert_eq!(names.len(), 1, "{head}: {names:?}");
-        assert!(mant_ir::validate_document(query.document.as_ref().unwrap()).is_empty());
+        assert_eq!(
+            mant_ir::validate_document(query.document.as_ref().unwrap()).len(),
+            0
+        );
     }
     let source = b".TH PROBE 1\n.SH OPTIONS\n.PP\n.B -a --ascii\n.I FILE\ncontains an ordinary explanation of an example.\n.RS 4\nEXAMPLE\n.RE\n";
     let query = mant_loader::load_roff_bytes(source).unwrap();
-    assert!(definitions(query.document.as_ref().unwrap()).is_empty());
+    assert_eq!(definitions(query.document.as_ref().unwrap()).len(), 0);
 }
 #[test]
 fn unstyled_dotted_keys_italic_settings_and_repeated_arguments_keep_owners() {
@@ -304,5 +307,5 @@ fn compact_parameter_grammar_and_opaque_environment_templates_remain_declaration
         direct.entry.as_ref().unwrap().kind,
         mant_ir::EntryKind::EnvironmentVariable
     );
-    assert!(direct.entry.as_ref().unwrap().alias_groups.is_empty());
+    assert_eq!(direct.entry.as_ref().unwrap().alias_groups.len(), 0);
 }

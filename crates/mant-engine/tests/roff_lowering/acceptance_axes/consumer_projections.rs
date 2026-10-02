@@ -143,7 +143,7 @@ fn assert_query_views(query: &ResolvedContent, accepted: &[String], source: &str
             assert!(native.text().is_char_boundary(start));
             assert!(native.text().is_char_boundary(end));
             assert!(start < end && end <= native.text().len());
-            assert!(!occurrence.line_ranges.is_empty());
+            assert_ne!(occurrence.line_ranges.len(), 0);
         }
     }
 }

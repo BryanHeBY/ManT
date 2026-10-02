@@ -47,7 +47,7 @@ fn preserves_empty_tbl_rows_and_whole_row_rule_kinds() {
             mant_ir::TableRowKind::Data,
         ]
     );
-    assert!(rows[1].cells.is_empty());
+    assert_eq!(rows[1].cells.len(), 0);
     let rendered = mant_render::render_query_text(&query);
     assert!(rendered.contains("BEFORE\n\n---\n===\nAFTER"), "{rendered}");
 }
@@ -368,8 +368,8 @@ fn keeps_tbl_vertical_span_markers_out_of_visible_cells() {
     };
     assert_eq!(rows.len(), 4);
     assert_eq!(rows[1].cells[0].row_span, 3);
-    assert!(rows[2].cells[0].blocks.is_empty());
-    assert!(rows[3].cells[0].blocks.is_empty());
+    assert_eq!(rows[2].cells[0].blocks.len(), 0);
+    assert_eq!(rows[3].cells[0].blocks.len(), 0);
 }
 
 #[test]

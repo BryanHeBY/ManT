@@ -12,7 +12,10 @@ fn rendered(mode: &str, body: &str) -> String {
         ),
     };
     let query = load_roff_bytes(source.as_bytes()).unwrap();
-    assert!(mant_ir::validate_document(query.document.as_ref().unwrap()).is_empty());
+    assert_eq!(
+        mant_ir::validate_document(query.document.as_ref().unwrap()).len(),
+        0
+    );
     render_query_text(&query)
 }
 

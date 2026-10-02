@@ -27,7 +27,7 @@ fn plain_code_and_transparent_wrappers_share_literal_boundaries() {
                 1,
                 "{source}"
             );
-            assert!(query.document.unwrap().diagnostics.is_empty());
+            assert_eq!(query.document.unwrap().diagnostics.len(), 0);
         }
     }
     let query = load_markdown_text("Use (`--help=CLASS`), `-I`. 日本語。", None).unwrap();

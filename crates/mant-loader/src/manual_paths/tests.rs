@@ -23,7 +23,7 @@ fn injected_windows_discovery_uses_only_its_config_and_environment() {
         mant_config: Some(&config),
     };
     let result = super::host_default_manual_roots(&context);
-    assert!(result.diagnostics.is_empty());
+    assert_eq!(result.diagnostics.len(), 0);
     assert_eq!(
         result.roots,
         [

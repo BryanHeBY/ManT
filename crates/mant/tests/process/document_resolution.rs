@@ -26,7 +26,7 @@ fn unqualified_names_prefer_registered_markdown() {
         .expect("query registered document");
 
     assert!(output.status.success(), "{output:?}");
-    assert!(output.stderr.is_empty());
+    assert_eq!(output.stderr.len(), 0);
     let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("query JSON");
     assert_eq!(value["label"], "process-registered");
     assert_eq!(
@@ -95,7 +95,7 @@ fn manual_option_bypasses_registered_markdown_with_the_same_name() {
     {
         let manual = run(true);
         assert!(manual.status.success(), "{manual:?}");
-        assert!(manual.stderr.is_empty());
+        assert_eq!(manual.stderr.len(), 0);
         let manual: serde_json::Value =
             serde_json::from_slice(&manual.stdout).expect("manual JSON");
         assert_eq!(manual["document"]["source"]["format"], "man");
@@ -110,7 +110,7 @@ fn manual_option_bypasses_registered_markdown_with_the_same_name() {
         assert!(
             String::from_utf8_lossy(&unavailable.stderr).contains("unexpected argument '--manual'")
         );
-        assert!(unavailable.stdout.is_empty());
+        assert_eq!(unavailable.stdout.len(), 0);
     }
     fs::remove_dir_all(root).expect("remove source-policy fixture");
 }
@@ -143,7 +143,7 @@ fn registered_names_ignore_directory_symlinks() {
         .expect("query ignored linked document");
 
     assert_eq!(output.status.code(), Some(1), "{output:?}");
-    assert!(output.stdout.is_empty());
+    assert_eq!(output.stdout.len(), 0);
     assert!(!String::from_utf8_lossy(&output.stderr).contains("# Linked"));
 
     fs::remove_dir_all(root).expect("remove linked document fixture");
@@ -170,7 +170,7 @@ fn manual_queries_use_native_paths_without_a_man_executable() {
 
     if cfg!(feature = "roff") {
         assert!(output.status.success(), "{output:?}");
-        assert!(output.stderr.is_empty());
+        assert_eq!(output.stderr.len(), 0);
         let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("query JSON");
         assert_eq!(value["label"], "native-only");
         assert_eq!(value["document"]["meta"]["manualSection"], "1");
@@ -178,7 +178,7 @@ fn manual_queries_use_native_paths_without_a_man_executable() {
     } else {
         assert_eq!(output.status.code(), Some(1));
         assert!(String::from_utf8_lossy(&output.stderr).contains("requires the 'roff' feature"));
-        assert!(output.stdout.is_empty());
+        assert_eq!(output.stdout.len(), 0);
     }
 
     fs::remove_dir_all(root).expect("remove native manual fixture");
@@ -266,7 +266,7 @@ fn markdown_root_content_is_discoverable_selectable_and_searchable() {
             .output()
             .expect("query Markdown projection");
         assert!(output.status.success(), "{output:?}");
-        assert!(output.stderr.is_empty());
+        assert_eq!(output.stderr.len(), 0);
         serde_json::from_slice::<serde_json::Value>(&output.stdout).expect("projection JSON")
     };
 

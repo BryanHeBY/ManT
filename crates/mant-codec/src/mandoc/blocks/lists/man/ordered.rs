@@ -449,7 +449,7 @@ mod tests {
             0.into(),
             state
         ));
-        assert!(continuation.is_empty());
+        assert_eq!(continuation.len(), 0);
         assert_eq!(output[1], spacing);
         assert!(matches!(&output[0], Block::List { items, .. } if items[0].blocks.len() == 2));
         // In contrast, the next ordinal cannot join across that physical gap.

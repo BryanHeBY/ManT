@@ -337,8 +337,8 @@ fn real_literal_empty_lines_keep_their_rows_and_precise_anchor_positions() {
     );
     let built = builder.finish();
     assert_eq!(built.content.lines.len(), 3);
-    assert!(built.content.lines[0].spans.is_empty());
-    assert!(built.content.lines[1].spans.is_empty());
+    assert_eq!(built.content.lines[0].spans.len(), 0);
+    assert_eq!(built.content.lines[1].spans.len(), 0);
     assert_eq!(built.content.lines[2].spans[0].content, "BODY");
     assert_eq!(built.content.anchors.get("deferred"), Some(&0));
     assert_eq!(built.content.anchors.get("first"), Some(&0));

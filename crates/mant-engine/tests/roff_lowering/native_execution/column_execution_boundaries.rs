@@ -42,7 +42,7 @@ fn assert_empty_label(inlines: &[Inline], count: &mut usize) {
         match inline {
             Inline::Link { children, .. } => {
                 *count += 1;
-                assert!(mant_ir::inline_plain_text(children).is_empty());
+                assert_eq!(mant_ir::inline_plain_text(children).len(), 0);
                 assert_empty_label(children, count);
             }
             Inline::Strong { children } | Inline::Emphasis { children } => {

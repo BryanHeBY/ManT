@@ -255,13 +255,14 @@ fn command_discovery_requires_a_structural_or_syntactic_boundary() {
         commands[0].entry.as_ref().expect("command").names,
         ["Send Env"]
     );
-    assert!(
+    assert_eq!(
         commands[1]
             .entry
             .as_ref()
             .expect("unstyled prose")
             .names
-            .is_empty()
+            .len(),
+        0
     );
     assert_eq!(
         commands[2].entry.as_ref().expect("command form").names,
@@ -271,13 +272,14 @@ fn command_discovery_requires_a_structural_or_syntactic_boundary() {
         commands[3].entry.as_ref().expect("command form").names,
         ["set"]
     );
-    assert!(
+    assert_eq!(
         commands[4]
             .entry
             .as_ref()
             .expect("numeric prose")
             .names
-            .is_empty()
+            .len(),
+        0
     );
     let Block::DefinitionList {
         items: variables, ..
@@ -295,13 +297,14 @@ fn command_discovery_requires_a_structural_or_syntactic_boundary() {
             .as_ref()
             .is_some_and(|identity| identity.names == ["bind-tty-special-chars"])
     );
-    assert!(
+    assert_eq!(
         variables[2]
             .entry
             .as_ref()
             .expect("unclassified term")
             .names
-            .is_empty()
+            .len(),
+        0
     );
 }
 
@@ -582,7 +585,7 @@ fn generic_terms_bind_complete_invocation_heads_and_optional_parameters() {
     };
     assert_eq!(items[0].entry.as_ref().unwrap().names, ["istrip"]);
     assert_eq!(items[1].entry.as_ref().unwrap().names, ["getservbyname"]);
-    assert!(items[2].entry.as_ref().unwrap().names.is_empty());
+    assert_eq!(items[2].entry.as_ref().unwrap().names.len(), 0);
 }
 
 #[test]

@@ -564,7 +564,7 @@ mod tests {
             Some(ValueDomain::Choices { exhaustive: true });
         assert!(parent.has_value_choices());
         let doc = document(vec![list(vec![parent])]);
-        assert!(crate::validate_document(&doc).is_empty());
+        assert_eq!(crate::validate_document(&doc).len(), 0);
         let rebuilt: Document =
             serde_json::from_str(&serde_json::to_string(&doc).unwrap()).unwrap();
         assert_eq!(rebuilt, doc);
@@ -792,8 +792,8 @@ mod tests {
             assert!(!crate::semantics_complete(&diagnostics));
             let index = SemanticIndex::build(&doc);
             assert_eq!(index.root().len(), 1);
-            assert!(index.root()[0].forms.is_empty());
-            assert!(index.root()[0].names.is_empty());
+            assert_eq!(index.root()[0].forms.len(), 0);
+            assert_eq!(index.root()[0].names.len(), 0);
         }
     }
 
@@ -848,9 +848,9 @@ mod tests {
             source: None,
         }]);
         let index = SemanticIndex::build(&doc);
-        assert!(index.root()[0].forms.is_empty());
+        assert_eq!(index.root()[0].forms.len(), 0);
         assert_eq!(index.root()[0].children[0].id, "child");
-        assert!(crate::validate_document(&doc).is_empty());
+        assert_eq!(crate::validate_document(&doc).len(), 0);
     }
 
     #[test]
@@ -862,7 +862,7 @@ mod tests {
             .push(list(vec![item("child", EntryKind::Value, "auto")]));
         let doc = document(vec![list(vec![parent])]);
         let index = SemanticIndex::build(&doc);
-        assert!(index.root()[0].names.is_empty());
+        assert_eq!(index.root()[0].names.len(), 0);
         assert_eq!(index.root()[0].forms, ["run"]);
         assert_eq!(index.root()[0].children.len(), 1);
         assert!(
@@ -887,7 +887,7 @@ mod tests {
                 assert_eq!(projected.root()[0].id, "run");
                 assert_eq!(projected.root()[0].forms, ["run"]);
                 assert_eq!(projected.root()[0].names.is_empty(), !valid_names);
-                assert!(projected.root()[0].alias_groups.is_empty());
+                assert_eq!(projected.root()[0].alias_groups.len(), 0);
             }
         }
     }

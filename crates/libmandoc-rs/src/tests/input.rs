@@ -16,7 +16,7 @@ fn parser_decompresses_zstd_sources_before_calling_libmandoc() {
         .expect("parse zstd manual");
     fs::remove_file(path).expect("remove compressed manual source");
 
-    assert!(report.diagnostics.is_empty());
+    assert_eq!(report.diagnostics.len(), 0);
     let document = report.document;
     assert_eq!(document.macro_set, MacroSet::Man);
     assert_eq!(document.metadata.title.as_deref(), Some("ZSTD-MANT"));
