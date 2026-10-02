@@ -403,7 +403,6 @@ fn semantic_fingerprint(
                 Inline::Strong { .. } => self.field("strong"),
                 Inline::Emphasis { .. } => self.field("emphasis"),
                 Inline::Link { .. } => self.field("link"),
-                Inline::PortableDisplay { .. } => self.field("portable-display"),
                 Inline::LineBreak { .. } => self.field("line-break"),
                 Inline::Anchor { .. } => return,
             }

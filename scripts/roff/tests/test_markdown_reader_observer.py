@@ -75,15 +75,18 @@ class MarkdownReaderObserverTests(unittest.TestCase):
                 self.assertFalse(markdown_reader_axes(one, original,
                     bundle(phrasing([text(wrong)])))["content"])
 
-    def test_hidden_link_device_suffix_is_projected_with_its_hard_rows(self):
+    def test_accepted_link_suffix_and_its_hard_rows_remain_observable(self):
         one = case(carrier="Lk")
-        original = bundle(phrasing([text("A"), {"type": "portable-display",
-            "display": "", "children": [text(": https://ex.org"),
-                                            {"type": "line-break"}, text(" ")]}]))
-        reader = bundle(phrasing([text("A\n")]))
+        original = bundle(phrasing([
+            {"type": "link", "target": {"kind": "external", "uri": "https://ex.org"},
+             "children": [text("A")]},
+            text(": https://ex.org"), {"type": "line-break"}, text(" ")]))
+        reader = bundle(phrasing([text("A: https://ex.org\n")]))
         self.assertTrue(good(markdown_reader_axes(one, original, reader)))
         self.assertFalse(markdown_reader_axes(one, original,
-            bundle(phrasing([text("A")])))["rows"])
+            bundle(phrasing([text("A: https://ex.org")])))["rows"])
+        self.assertFalse(markdown_reader_axes(one, original,
+            bundle(phrasing([text("A\n")])))["content"])
 
     def test_definition_bullet_does_not_create_a_content_glyph_or_duplicate_origin(self):
         one = case(container="tag")
@@ -121,8 +124,8 @@ class MarkdownReaderObserverTests(unittest.TestCase):
 
     def test_plain_fence_retains_terminal_suffix_without_claiming_active_identity(self):
         one = case(container="literal", carrier="Lk")
-        original = bundle(phrasing([text("A\nAFTER"), {"type": "portable-display",
-            "display": "", "children": [text(": https://ex.org")]}], "preformatted"))
+        original = bundle(phrasing([text("A\nAFTER"), text(": https://ex.org")],
+                                  "preformatted"))
         reader = bundle(phrasing([text("A\nAFTER: https://ex.org")], "preformatted"))
         report = markdown_reader_axes(one, original, reader)
         self.assertTrue(good(report))

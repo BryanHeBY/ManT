@@ -43,7 +43,6 @@ fn visible_document_text(document: &mant_ir::Document) -> String {
                 Inline::LineBreak { .. } => self.0.push('\n'),
                 Inline::Strong { .. }
                 | Inline::Emphasis { .. }
-                | Inline::PortableDisplay { .. }
                 | Inline::Link { .. }
                 | Inline::Anchor { .. } => {}
             }
@@ -68,7 +67,6 @@ fn projected_document_text(document: &mant_ir::Document) -> String {
                 Inline::LineBreak { .. } => self.0.push('\n'),
                 Inline::Strong { .. }
                 | Inline::Emphasis { .. }
-                | Inline::PortableDisplay { .. }
                 | Inline::Link { .. }
                 | Inline::Anchor { .. } => {}
             }
@@ -112,7 +110,6 @@ fn inline_text(children: &[Inline]) -> String {
             }
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::PortableDisplay { children, .. }
             | Inline::Link { children, .. } => inline_text(children),
             Inline::Anchor { .. } => String::new(),
             Inline::LineBreak { .. } => "\n".to_owned(),

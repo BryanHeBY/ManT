@@ -292,8 +292,7 @@ fn native_acceptance_ranges_survive_link_and_style_wrappers() {
 #[test]
 fn portable_hidden_source_operand_retains_its_native_owner_range() {
     // Exact pristine CVS profiles retain X and URI, reject later Z.
-    // Portable Markdown suppresses the executed suffix, while native readers
-    // retain its accepted interval. Neither projection may revive rejected Z.
+    // All consumers receive the accepted suffix. None may revive rejected Z.
     let item = definition_item_from_source(
         ".Bl -hang -width 4n\n.It Xo\n.Lk \"https://example.org\\p \\p\" X\n.No Z\n.Xc\n.No BodyWord\n.El\n",
     );
@@ -301,7 +300,7 @@ fn portable_hidden_source_operand_retains_its_native_owner_range() {
     // CVS prints X/URI and BodyWord on adjacent rows. The pure identity has
     // an invalid trailing blank, so export must not hide its native URI.
     // With that suffix visible, the terminal HEAD close transfers once to
-    // Separate instead of being obscured inside a PortableDisplay subtree.
+    // Separate without a second public text representation.
     assert_eq!(
         inline_text(&item.terms[0]),
         "X: https://example.org",
@@ -323,8 +322,7 @@ fn assert_no_private_field_markers(item: &mant_ir::DefinitionItem) {
                 Inline::Anchor { id, .. } => assert!(!id.as_str().starts_with('\0')),
                 Inline::Strong { children }
                 | Inline::Emphasis { children }
-                | Inline::Link { children, .. }
-                | Inline::PortableDisplay { children, .. } => check(children),
+                | Inline::Link { children, .. } => check(children),
                 _ => {}
             }
         }

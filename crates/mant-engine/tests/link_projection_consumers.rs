@@ -123,8 +123,8 @@ fn assert_search_artifacts(query: &ResolvedContent, source: &str) {
 fn invisible_descriptions_keep_the_accepted_address_in_every_projection() {
     // Exact complete inputs ran pristine ASCII/UTF-8/HTML/tree/lint first.
     // mdoc_term.c::termp_lk_pre executes description -> ':' -> URI once;
-    // portable export keeps ':' and annotates the accepted URI when there
-    // is no accepted replacement label. It cannot hide the sole address.
+    // export keeps ':' and annotates the accepted URI when there is no
+    // accepted readable label. Both operands belong to the only visible body.
     for label in ["", r"\&", r"\zX", r"\fB"] {
         let source = source("", label);
         let query = round_trip(&source);
@@ -157,7 +157,7 @@ fn preceding_delayed_glyph_does_not_become_part_of_the_fallback_link() {
 }
 
 #[test]
-fn accepted_descriptions_retain_compact_portable_links() {
+fn accepted_descriptions_keep_the_uri_suffix_in_markdown() {
     let source = source("", "label");
     let query = round_trip(&source);
     assert_eq!(
@@ -170,7 +170,7 @@ fn accepted_descriptions_retain_compact_portable_links() {
     assert_reference(&reparsed, "label", &source);
     assert_eq!(
         description(&mant_render::render_query_man(&reparsed)),
-        "label AFTER"
+        format!("label: {ADDRESS} AFTER")
     );
 }
 

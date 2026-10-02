@@ -177,7 +177,7 @@ pub(super) fn append_inline_node_with_next(
     // words already enter through their own formatter-word methods below.
     if prepares_semantic_output_owner(node) {
         // Compact semantic wrappers capture their whole operand stream in
-        // one Link, Code, or PortableDisplay node. Their entry is still no
+        // one Link or Code node. Their entry is still no
         // word event, so the only preparation is an ownership checkpoint:
         // a `\z` glyph delayed from preceding source settles at the real
         // first operand's own word entry, and the checkpoint then returns

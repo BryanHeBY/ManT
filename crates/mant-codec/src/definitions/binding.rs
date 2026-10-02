@@ -86,7 +86,6 @@ fn collect(nodes: &[Inline], path: &mut Vec<usize>, text: &mut String, leaves: &
             }
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::PortableDisplay { children, .. }
             | Inline::Link { children, .. } => collect(children, path, text, leaves),
             Inline::Anchor { .. } => {}
             Inline::LineBreak { .. } => text.push('\n'),

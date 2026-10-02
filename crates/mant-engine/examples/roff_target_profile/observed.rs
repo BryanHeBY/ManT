@@ -292,7 +292,6 @@ fn collect_inlines(
             }
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::PortableDisplay { children, .. }
             | Inline::Link { children, .. } => {
                 if let Inline::Link {
                     target: mant_ir::LinkTarget::Section { id },

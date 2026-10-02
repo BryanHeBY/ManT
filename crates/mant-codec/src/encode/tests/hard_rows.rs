@@ -44,7 +44,7 @@ fn styles(children: &[Inline], mask: u8, output: &mut Vec<(char, u8)>) {
             Inline::Link { children, .. } => styles(children, mask, output),
             Inline::LineBreak { .. } => output.push(('\n', 0)),
             Inline::Anchor { .. } => {}
-            other => panic!("uncovered style carrier: {other:?}"),
+            other @ Inline::Equation { .. } => panic!("uncovered style carrier: {other:?}"),
         }
     }
 }

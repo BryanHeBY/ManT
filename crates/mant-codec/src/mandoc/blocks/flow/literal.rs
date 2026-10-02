@@ -453,7 +453,6 @@ impl CompletedTail {
                     }
                     Inline::Strong { children }
                     | Inline::Emphasis { children }
-                    | Inline::PortableDisplay { children, .. }
                     | Inline::Link { children, .. } => self.retire(children),
                     _ => self.active = false,
                 }

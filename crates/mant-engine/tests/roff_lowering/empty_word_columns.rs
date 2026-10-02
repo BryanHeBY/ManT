@@ -152,8 +152,8 @@ fn markdown_payloads(content: &ResolvedContent, exporting: bool) -> Vec<String> 
             Block::Paragraph { children, .. } => {
                 let raw = mant_ir::inline_plain_text(children);
                 let value = if exporting {
-                    // MarkdownOptions.native_text selects native portable-display
-                    // children; paragraph edge padding remains responsive. This
+                    // Accepted children are the only visible body. Paragraph
+                    // edge padding remains responsive. This
                     // explicit encoder contract does not trim authored NBSP or LF.
                     raw.split('\n')
                         .map(|row| row.trim_matches([' ', '\t']))

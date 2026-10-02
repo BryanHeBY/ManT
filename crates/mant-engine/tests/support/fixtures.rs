@@ -366,7 +366,6 @@ pub fn assert_document_has_no_source_markup(name: &str, document: &Document) {
                 | Inline::Equation { value, .. } => value,
                 Inline::Strong { .. }
                 | Inline::Emphasis { .. }
-                | Inline::PortableDisplay { .. }
                 | Inline::Link { .. }
                 | Inline::Anchor { .. }
                 | Inline::LineBreak { .. } => return,
@@ -515,9 +514,9 @@ fn find_preformatted<'a>(
 pub fn contains_strong(children: &[Inline], expected: &str) -> bool {
     children.iter().any(|inline| match inline {
         Inline::Strong { children } => inline_text(children) == expected,
-        Inline::Emphasis { children }
-        | Inline::PortableDisplay { children, .. }
-        | Inline::Link { children, .. } => contains_strong(children, expected),
+        Inline::Emphasis { children } | Inline::Link { children, .. } => {
+            contains_strong(children, expected)
+        }
         Inline::Text { .. }
         | Inline::Code { .. }
         | Inline::Equation { .. }
@@ -529,9 +528,9 @@ pub fn contains_strong(children: &[Inline], expected: &str) -> bool {
 pub fn contains_emphasis(children: &[Inline], expected: &str) -> bool {
     children.iter().any(|inline| match inline {
         Inline::Emphasis { children } => inline_text(children) == expected,
-        Inline::Strong { children }
-        | Inline::PortableDisplay { children, .. }
-        | Inline::Link { children, .. } => contains_emphasis(children, expected),
+        Inline::Strong { children } | Inline::Link { children, .. } => {
+            contains_emphasis(children, expected)
+        }
         Inline::Text { .. }
         | Inline::Code { .. }
         | Inline::Equation { .. }
@@ -547,7 +546,6 @@ pub fn count_line_breaks(children: &[Inline]) -> usize {
             Inline::LineBreak { .. } => 1,
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::PortableDisplay { children, .. }
             | Inline::Link { children, .. } => count_line_breaks(children),
             Inline::Text { .. }
             | Inline::Code { .. }
@@ -570,7 +568,6 @@ pub fn inline_text(children: &[Inline]) -> String {
             }
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::PortableDisplay { children, .. }
             | Inline::Link { children, .. } => inline_text(children),
             Inline::Anchor { .. } => String::new(),
             Inline::LineBreak { .. } => "\n".to_owned(),
@@ -679,7 +676,6 @@ fn visit_inlines(children: &[Inline], visitor: &mut impl FnMut(&Inline)) {
         match inline {
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::PortableDisplay { children, .. }
             | Inline::Link { children, .. } => visit_inlines(children, visitor),
             Inline::Text { .. }
             | Inline::Code { .. }

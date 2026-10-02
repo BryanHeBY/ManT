@@ -38,7 +38,6 @@ fn append(nodes: &[Inline], row: &mut String, present: &mut bool) {
             }
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::PortableDisplay { children, .. }
             | Inline::Link { children, .. } => append(children, row, present),
             Inline::LineBreak { .. } => {
                 row.clear();

@@ -1052,7 +1052,6 @@ Inline nodes are tagged by `type`:
 | `text` | `value` | Render literal text |
 | `strong` | `children` | Strong emphasis |
 | `emphasis` | `children` | Emphasis |
-| `portable-display` | `display`, `children` | Native children are authoritative; portable Markdown may use the display spelling |
 | `code` | `value` | Inline or preformatted code fragment |
 | `link` | `target`, optional `title`, `children` | Typed destination described below |
 | `anchor` | `id`, optional `fragmentAliases` | Zero-width normalized destination plus exact source fragments |
@@ -1070,15 +1069,13 @@ For example, `[{"type":"text","value":"Alpha"},
 {"type":"text","value":"Beta"}]` displays the second row six cells past
 the inline root's origin while retaining the source text `Alpha\nBeta`.
 
-`portable-display` has required `display` and `children` fields. Its children
-carry native text, styles, targets and hard boundaries; native query coordinates
-and TUI hit ranges refer to them. Portable Markdown substitutes `display` at
-accepted glyphs while preserving layout and anchors, and emits no replacement
-for a rejected interval without glyphs. An empty display hides an optional
-export suffix. Visible search uses native Markdown wording; Markdown-scope
-search uses the portable wording. Each response reports coordinates in the
-actual artifact selected by that scope. This remains the unreleased v0.12
-contract and requires no version increase.
+Visible children are authoritative in every consumer. Markdown does not add
+BSD lifecycle prose or hide accepted `Lk` URI suffixes. Search coordinates and
+TUI activation ranges refer to the same accepted body; Markdown byte ranges
+still address the exact artifact chosen for that query scope. The retired
+`portable-display` type is rejected, including when nested in otherwise valid
+styles or links. Current variants reject a legacy `display` field. This updates
+the unreleased v0.12 contract in place without a version increase.
 
 Every `link.target` is tagged by `kind`: `external { uri }`,
 `email { address }`, `document { name, fragment? }`,

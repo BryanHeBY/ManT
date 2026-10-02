@@ -55,15 +55,14 @@ fn split_origins(nodes: Vec<Inline>, inherited: usize) -> (Vec<Segment>, usize) 
         let children = match &mut node {
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::Link { children, .. }
-            | Inline::PortableDisplay { children, .. } => Some(std::mem::take(children)),
+            | Inline::Link { children, .. } => Some(std::mem::take(children)),
             _ => None,
         };
         if let Some(children) = children {
             let (pieces, last) = split_origins(children, origin);
             let mut first = true;
             for piece in pieces {
-                if !first && matches!(node, Inline::Link { .. } | Inline::PortableDisplay { .. }) {
+                if !first && matches!(node, Inline::Link { .. }) {
                     append_segment(&mut segments, piece);
                     continue;
                 }
@@ -71,8 +70,7 @@ fn split_origins(nodes: Vec<Inline>, inherited: usize) -> (Vec<Segment>, usize) 
                 match &mut wrapped {
                     Inline::Strong { children }
                     | Inline::Emphasis { children }
-                    | Inline::Link { children, .. }
-                    | Inline::PortableDisplay { children, .. } => {
+                    | Inline::Link { children, .. } => {
                         *children = piece.nodes;
                     }
                     // A semantic owner remains one identity. Later physical

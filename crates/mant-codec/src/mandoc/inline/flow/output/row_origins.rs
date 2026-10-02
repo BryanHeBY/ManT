@@ -75,7 +75,6 @@ fn apply_tail_origin(nodes: &mut [Inline], origin: u16) -> Option<bool> {
             }
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::PortableDisplay { children, .. }
             | Inline::Link { children, .. } => {
                 if let Some(applied) = apply_tail_origin(children, origin) {
                     return Some(applied);
@@ -106,7 +105,6 @@ fn materialize_origins(nodes: &mut Vec<Inline>, origin: &mut Option<u16>) {
             }
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::PortableDisplay { children, .. }
             | Inline::Link { children, .. } => materialize_origins(children, origin),
             Inline::Text { value } | Inline::Code { value } if !value.is_empty() => *origin = None,
             _ => {}
@@ -191,7 +189,6 @@ impl OriginCursor<'_> {
                 }
                 Inline::Strong { children }
                 | Inline::Emphasis { children }
-                | Inline::PortableDisplay { children, .. }
                 | Inline::Link { children, .. } => {
                     *children = self.project(std::mem::take(children));
                 }

@@ -410,7 +410,6 @@ fn remove_pending_row_hints(nodes: &mut Vec<Inline>) {
         Inline::Text { value } | Inline::Code { value } if value.is_empty() => false,
         Inline::Strong { children }
         | Inline::Emphasis { children }
-        | Inline::PortableDisplay { children, .. }
         | Inline::Link { children, .. } => {
             remove_pending_row_hints(children);
             true
@@ -434,7 +433,6 @@ fn find_literal_tail_row(nodes: &[Inline], visit: &mut impl FnMut()) -> Option<b
         }
         Inline::Strong { children }
         | Inline::Emphasis { children }
-        | Inline::PortableDisplay { children, .. }
         | Inline::Link { children, .. } => {
             visit();
             find_literal_tail_row(children, visit)

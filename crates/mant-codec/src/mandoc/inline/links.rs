@@ -1,7 +1,7 @@
 //! Dialect-specific link execution, separate from pure target construction.
 use super::{
     Font, Inline, InlineBuilder, Node, NodeKind, RoffInlineEvent, append_inline_node,
-    append_inline_nodes, decode, first_part_children, inline_children, visible_text,
+    append_inline_nodes, decode, first_part_children, inline_children,
 };
 
 pub(in crate::mandoc::inline) mod presentation;
@@ -44,8 +44,8 @@ pub(super) fn append_link(builder: &mut InlineBuilder, node: &Node, default_name
             },
         );
         // CVS termp_lk_pre() always executes this suffix for a syntactically
-        // present description. Its portable redundancy is decided only after
-        // the native field receipt has accepted or rejected the owned text.
+        // present description. The native receipt accepts or rejects its
+        // owned text; all projections retain that accepted result.
         append_terminal_link_suffix(builder, node.id, first, &address, default_name);
     }
     append_inline_nodes(builder, &children[label_end..], default_name);
@@ -53,7 +53,7 @@ pub(super) fn append_link(builder: &mut InlineBuilder, node: &Node, default_name
 
 /// CVS `termp_lk_pre()` font-pops after the label, selects NOSPACE, then
 /// executes the colon and URI. Annotation never starts another word or
-/// settles a pending glyph merely to decide its portable label.
+/// settles a pending glyph merely to decide its typed label.
 fn append_terminal_link_suffix(
     builder: &mut InlineBuilder,
     owner: u32,
@@ -83,8 +83,8 @@ fn append_terminal_link_suffix(
         None,
         |builder| append_inline_node(builder, first, default_name),
     );
-    // The suffix's colon scope has already been annotated; the outer owner
-    // makes its separator part of the same optional portable replacement.
+    // The outer owner keeps separators with their colon/URI interval until
+    // the native receipt has decided its accepted range.
     builder.wrap_output_scope(&marker, |children| {
         presentation::wrap_suffix(owner, address, children)
     });
@@ -287,26 +287,6 @@ fn split_visible_prefix(nodes: Vec<Inline>, remaining: &mut usize) -> (Vec<Inlin
                     });
                 }
             }
-            Inline::PortableDisplay { display, children } => {
-                let (before, after) = split_visible_prefix(children, remaining);
-                if before.is_empty() {
-                    suffix.push(Inline::PortableDisplay {
-                        display,
-                        children: after,
-                    });
-                } else {
-                    prefix.push(Inline::PortableDisplay {
-                        display,
-                        children: before,
-                    });
-                    if !after.is_empty() {
-                        suffix.push(Inline::PortableDisplay {
-                            display: String::new(),
-                            children: after,
-                        });
-                    }
-                }
-            }
             Inline::Equation { .. } => {
                 // A pending zero-advance glyph is never a structured equation.
                 // Preserve the node intact if an equation precedes the range.
@@ -387,26 +367,23 @@ fn split_boundary_prefix(children: Vec<Inline>) -> (Vec<Inline>, Vec<Inline>) {
                     suffix.push(Inline::Emphasis { children: after });
                 }
             }
-            Inline::PortableDisplay { display, children } => {
+            Inline::Link {
+                target,
+                title,
+                children,
+            } => {
                 let (before, after) = split_boundary_prefix(children);
-                if !before.is_empty() {
-                    prefix.push(Inline::PortableDisplay {
-                        display: if after.is_empty() {
-                            display.clone()
-                        } else {
-                            String::new()
-                        },
-                        children: before,
-                    });
-                }
-                if !after.is_empty() {
-                    suffix.push(Inline::PortableDisplay {
-                        display,
-                        children: after,
-                    });
-                }
+                prefix.extend(before);
+                // A boundary has no clickable label. The typed identity,
+                // including an empty private URI receipt, belongs to the
+                // remaining source owner and is never cloned onto the row.
+                suffix.push(Inline::Link {
+                    target,
+                    title,
+                    children: after,
+                });
             }
-            other => suffix.push(other),
+            other @ Inline::Equation { .. } => suffix.push(other),
         }
     }
     (prefix, suffix)
@@ -444,7 +421,7 @@ fn split_boundary_text(
 /// layout but is not part of mdoc's destination: CVS `mdoc_html.c` builds the
 /// `Lk`/`Mt` href from the logical operand while terminal rendering consumes
 /// the zero-advance glyph in the surrounding output flow.  Keeping this
-/// separate from [`visible_text`] prevents a later sibling from changing a
+/// separate from [`visible_text`](super::visible_text) prevents a later sibling from changing a
 /// typed destination and lets the label retain its own formatter state.
 fn link_identity_text(source: &str) -> String {
     let mut identity = String::new();
@@ -523,15 +500,11 @@ pub(in crate::mandoc) fn man_link_identity_text(head: &[Node]) -> String {
     )
 }
 
-/// Lower the portable semantic forms of mdoc `Bx` from its authored arguments.
+/// Execute the spelling normalized by CVS `mdoc_validate.c::post_bx()`.
 ///
-///
-/// libmandoc appends a generated `BSD` word and, before a second authored
-/// operand, generated `Ns`, `-`, and `Ns` nodes. The mdoc contract gives the
-/// lifecycle forms descriptive meanings, while an ordinary version and
-/// optional release render as `versionBSD-release`. The raw AST flags make
-/// this distinction explicit without reparsing source text or depending on a
-/// particular formatter's generated nodes.
+/// Authored operands retain their controls and wording, including lifecycle
+/// names. Generated `BSD`, `Ns`, and an optional release separator join those
+/// words; no alternate expansion replaces the accepted source content.
 pub(super) fn append_bsd_reference(builder: &mut InlineBuilder, node: &Node, name: Option<&str>) {
     let authored = node
         .children
@@ -544,35 +517,6 @@ pub(super) fn append_bsd_reference(builder: &mut InlineBuilder, node: &Node, nam
         builder.append_generated_word("BSD");
         return;
     };
-    if authored.len() == 1
-        && first
-            .text
-            .as_deref()
-            .is_none_or(|text| visible_text(text).is_empty())
-    {
-        // `.Bx \\fB` has no authored glyph, but CVS still executes the font
-        // escape before the validator-generated BSD text.
-        execute_bsd_spelling(builder, &authored, None, name);
-        return;
-    }
-    let first_text = visible_text(first.text.as_deref().unwrap_or_default());
-    if authored.len() == 1 {
-        let lifecycle = match first_text.as_str() {
-            "-alpha" => Some("BSD (currently in alpha test)"),
-            "-beta" => Some("BSD (currently in beta test)"),
-            "-devel" => Some("BSD (currently under development)"),
-            _ => None,
-        };
-        if let Some(lifecycle) = lifecycle {
-            // The native stream keeps the authored spelling and the
-            // generated `BSD` word exactly as CVS executes them; the
-            // descriptive lifecycle meaning is a portable display
-            // replacement carried beside that execution, never a rewrite
-            // of the native facts (external review section 9).
-            execute_bsd_spelling(builder, &authored, Some(lifecycle), name);
-            return;
-        }
-    }
     // Execute positional operands and generated spelling in the caller's one
     // formatter stream. The first authored child is the version even when it
     // contains only controls; every later child is a release/variant word.
@@ -589,38 +533,6 @@ pub(super) fn append_bsd_reference(builder: &mut InlineBuilder, node: &Node, nam
         if !builder.output_since_has_non_whitespace_glyph(checkpoint) {
             builder.consume_compacted_pending_padding();
         }
-    }
-}
-
-/// Execute one `.Bx` operand group natively and optionally annotate it with
-/// the portable display spelling the project retains for lifecycle forms.
-///
-/// Authored operands run first (their controls — font, `\\p`, `\\c`, `\\z`,
-/// KEEP — are executed source state), then the validator-generated `BSD`
-/// word joins them as one formatter word, mirroring the multi-operand path.
-/// `portable_display` wraps the executed range in
-/// [`Inline::PortableDisplay`](mant_ir::Inline::PortableDisplay) so
-/// native-faithful consumers keep the execution while reader-facing
-/// projections substitute the descriptive spelling.
-fn execute_bsd_spelling(
-    builder: &mut InlineBuilder,
-    nodes: &[&Node],
-    portable_display: Option<&str>,
-    default_name: Option<&str>,
-) {
-    let checkpoint = builder.begin_output_checkpoint();
-    for node in nodes {
-        append_inline_node(builder, node, default_name);
-    }
-    builder.tighten_next_boundary();
-    builder.append_generated_word("BSD");
-    if let Some(display) = portable_display {
-        builder.wrap_output_since(checkpoint, |children| {
-            vec![Inline::PortableDisplay {
-                display: display.to_owned(),
-                children,
-            }]
-        });
     }
 }
 
@@ -746,15 +658,18 @@ mod tests {
     use crate::mandoc::roff_escape::visible_text;
 
     #[test]
-    fn semantic_boundary_prefixes_remain_outside_styles_and_portable_labels() {
+    fn semantic_boundary_prefixes_remain_outside_link_labels() {
         // The exact X\p/ta/Lk é名 source ran pristine first. These wrappers
         // only annotate that already-executed native boundary; they cannot
         // turn the previous physical row into a link-label scalar.
         let children = vec![
             Inline::anchor("\0mant:field-word:0-0"),
             Inline::Emphasis {
-                children: vec![Inline::PortableDisplay {
-                    display: "portable label".into(),
+                children: vec![Inline::Link {
+                    target: mant_ir::LinkTarget::External {
+                        uri: "https://example.com".into(),
+                    },
+                    title: None,
                     children: vec![
                         Inline::line_break(),
                         Inline::Code {
@@ -768,13 +683,11 @@ mod tests {
         assert_eq!(mant_ir::inline_plain_text(&before), "\n");
         assert_eq!(mant_ir::inline_plain_text(&after), "é名");
         assert!(matches!(after.as_slice(), [Inline::Emphasis { children }]
-            if matches!(children.as_slice(), [Inline::PortableDisplay { display, children }]
-                if display == "portable label"
-                    && matches!(children.as_slice(), [Inline::Code { value }] if value == "é名"))));
+            if matches!(children.as_slice(), [Inline::Link { children, .. }]
+                if matches!(children.as_slice(), [Inline::Code { value }] if value == "é名"))));
         assert!(
             matches!(before.as_slice(), [Inline::Anchor { .. }, Inline::Emphasis { children }]
-            if matches!(children.as_slice(), [Inline::PortableDisplay { display, children }]
-                if display.is_empty() && matches!(children.as_slice(), [Inline::LineBreak { .. }])))
+            if matches!(children.as_slice(), [Inline::LineBreak { .. }]))
         );
     }
 

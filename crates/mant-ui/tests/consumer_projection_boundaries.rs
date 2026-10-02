@@ -259,6 +259,104 @@ fn assert_actions(query: &ResolvedContent, label: &str, target: Option<&str>) {
     }
 }
 
+fn wrapped_label_fragments(
+    query: &ResolvedContent,
+    rendered: &RenderedDocument,
+    label: &str,
+) -> Vec<(String, usize, usize)> {
+    assert!(!label.chars().any(char::is_whitespace));
+    let mut cells = Vec::new();
+    for row in body_range(query, rendered) {
+        let text = rendered.text.lines[row].to_string();
+        let mut column = 0;
+        for grapheme in mant_render::cells::graphemes(&text) {
+            if !grapheme.text().chars().all(char::is_whitespace) {
+                cells.push((grapheme.text().to_owned(), row, column));
+            }
+            column += grapheme.columns();
+        }
+    }
+    let length = mant_render::cells::graphemes(label).count();
+    let matches = cells
+        .windows(length)
+        .filter(|window| {
+            window
+                .iter()
+                .map(|cell| cell.0.as_str())
+                .collect::<String>()
+                == label
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(matches.len(), 1, "wrapped body label {label:?}");
+    let mut fragments: Vec<(String, usize, usize)> = Vec::new();
+    for (text, row, column) in matches[0] {
+        if let Some(last) = fragments.last_mut()
+            && last.1 == *row
+        {
+            assert_eq!(last.2 + last.0.width(), *column);
+            last.0.push_str(text);
+        } else {
+            fragments.push((text.clone(), *row, *column));
+        }
+    }
+    fragments
+}
+
+fn assert_wrapped_link_actions(query: &ResolvedContent, label: &str, target: &str) {
+    let mut app = App::new(query);
+    app.handle_key(KeyEvent::new(KeyCode::Char('b'), KeyModifiers::NONE));
+    let mut terminal = Terminal::new(TestBackend::new(24, 60)).unwrap();
+    for width in WIDTHS {
+        terminal.backend_mut().resize(width + 4, 60);
+        terminal.draw(|frame| app.draw(frame)).unwrap();
+        let rendered = DocumentView::new(query).render(width);
+        let fragments = wrapped_label_fragments(query, &rendered, label);
+        let hits = rendered
+            .search(label)
+            .into_iter()
+            .filter(|hit| body_range(query, &rendered).contains(&hit.row))
+            .collect::<Vec<_>>();
+        assert_eq!(hits.len(), 1, "{label}, width={width}");
+        assert_eq!(
+            (hits[0].row, hits[0].start_column),
+            (fragments[0].1, fragments[0].2)
+        );
+        let mut copied_fragments = String::new();
+        for (text, document_row, document_column) in fragments {
+            let row = u16::try_from(document_row).unwrap() + 2;
+            let column = u16::try_from(document_column).unwrap() + 1;
+            let mut offset = 0;
+            for grapheme in mant_render::cells::graphemes(&text) {
+                let cell = column + u16::try_from(offset).unwrap();
+                assert_eq!(
+                    terminal.backend().buffer()[(cell, row)].symbol(),
+                    grapheme.text()
+                );
+                click(&mut app, cell, row);
+                assert_eq!(opened_targets(&mut app), [target]);
+                offset += grapheme.columns();
+            }
+            let last = column + u16::try_from(text.width()).unwrap() - 1;
+            select_span(
+                &mut app,
+                column,
+                row,
+                last,
+                (last == column).then_some(column + 1),
+            );
+            let copied = copied_selections(&mut app, |request| {
+                let CopyRequest::Selection { text } = request else {
+                    panic!("visual selection expected")
+                };
+                text
+            });
+            assert_eq!(copied, [text.as_str()], "{label}, width={width}");
+            copied_fragments.push_str(&copied[0]);
+        }
+        assert_eq!(copied_fragments, label, "{label}, width={width}");
+    }
+}
+
 #[test]
 fn accepted_scalar_owners_keep_click_and_copy_ranges_after_resize() {
     // term.c::encode1 records P before the next Link; rejected suffixes
@@ -305,7 +403,7 @@ fn accepted_scalar_owners_keep_click_and_copy_ranges_after_resize() {
 #[test]
 fn source_styles_survive_the_real_terminal_cell_projection() {
     // mdoc_term.c::termp_em_pre/termp_sy_pre push the selected native fonts;
-    // native portable-display children retain the style of accepted cells.
+    // accepted children retain the style of native cells.
     let source = std::fs::read_to_string(format!("{RECORDED}/styled_units.1")).unwrap();
     let query = round_trip(&source);
     for width in WIDTHS {
@@ -333,4 +431,52 @@ fn source_styles_survive_the_real_terminal_cell_projection() {
     assert_actions(&query, "glowing", None);
     assert_actions(&query, "rigid", None);
     assert_actions(&query, "plain", None);
+}
+
+#[test]
+fn sole_visible_body_keeps_native_spelling_and_link_activation_ranges() {
+    // Each exact complete input ran the pristine five profiles first.
+    // mdoc_validate.c::post_bx adds BSD; mdoc_term.c::termp_lk_pre emits
+    // description, colon and URI. Accepted suffix glyphs are not hidden.
+    let pre =
+        ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n";
+    for (payload, expected, label, target) in [
+        (
+            ".Bx -alpha\n.No AFTER\n",
+            "-alphaBSD AFTER",
+            "-alphaBSD",
+            None,
+        ),
+        (
+            ".Lk https://example.org label\n.No AFTER\n",
+            "label: https://example.org AFTER",
+            "label",
+            Some("https://example.org"),
+        ),
+        (
+            ".Lk https://example.org \\&\n.No AFTER\n",
+            ": https://example.org AFTER",
+            "https://example.org",
+            Some("https://example.org"),
+        ),
+    ] {
+        let query = round_trip(&format!("{pre}{payload}.Sh NEXT\n.No END\n"));
+        let rendered = DocumentView::new(&query).render(78);
+        assert_eq!(body_rows(&query, &rendered), [expected]);
+        if label.starts_with("https://") {
+            assert_wrapped_link_actions(&query, label, target.unwrap());
+        } else {
+            assert_actions(&query, label, target);
+        }
+        let markdown = mant_codec::encode::render_markdown(&query);
+        let restored = mant_loader::load_markdown_text(&markdown, None).unwrap();
+        let rendered = DocumentView::new(&restored).render(78);
+        assert_eq!(body_rows(&restored, &rendered), [expected]);
+        if label.starts_with("https://") {
+            assert_wrapped_link_actions(&restored, label, target.unwrap());
+        } else {
+            assert_actions(&restored, label, target);
+        }
+        assert!(!markdown.contains("currently"));
+    }
 }

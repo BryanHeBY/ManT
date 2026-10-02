@@ -1,4 +1,4 @@
-//! Deferred Lk annotation over final accepted native output, never execution.
+//! Private Lk ownership over final accepted native output, never execution.
 
 use std::collections::{HashMap, HashSet};
 
@@ -42,8 +42,18 @@ pub(super) fn scope_marker(owner: u32, part: Part) -> String {
 }
 
 fn placeholder(owner: u32, part: Part, address: &str, children: Vec<Inline>) -> Inline {
-    Inline::PortableDisplay {
-        display: format!("{OWNER_PREFIX}{owner}:{}:{address}", part.spelling()),
+    // This NUL-prefixed target is an internal, invalid public-IR value. It
+    // never passes URI admission or executes as an href: finalization below
+    // removes it after native acceptance and before semantic recognition.
+    Inline::Link {
+        target: external_link_target(
+            format!("{OWNER_PREFIX}{owner}:{}:{address}", part.spelling()),
+            false,
+        ),
+        // Authored Lk targets cannot supply this matching private title.
+        // The pair distinguishes ownership metadata from an invalid authored
+        // address which merely resembles the NUL-prefixed target namespace.
+        title: Some(scope_marker(owner, part)),
         children,
     }
 }
@@ -91,8 +101,8 @@ pub(super) fn append_owned_part(
 }
 
 /// A label glyph released by the colon remains a description. Keep that
-/// prefix outside the optional suffix replacement; the colon and URI still
-/// execute in source order and their native children remain unchanged.
+/// prefix outside the suffix owner; the colon and URI still execute in source
+/// order and their accepted native children remain the sole public text.
 pub(super) fn wrap_suffix(owner: u32, address: &str, children: Vec<Inline>) -> Vec<Inline> {
     let mut prefix = Vec::new();
     let mut suffix = Vec::new();
@@ -111,10 +121,15 @@ pub(super) fn wrap_suffix(owner: u32, address: &str, children: Vec<Inline>) -> V
 }
 
 fn metadata(node: &Inline) -> Option<(u32, Part, &str)> {
-    let Inline::PortableDisplay { display, .. } = node else {
+    let Inline::Link {
+        target: mant_ir::LinkTarget::External { uri },
+        title: Some(title),
+        ..
+    } = node
+    else {
         return None;
     };
-    let mut fields = display.strip_prefix(OWNER_PREFIX)?.splitn(3, ':');
+    let mut fields = uri.strip_prefix(OWNER_PREFIX)?.splitn(3, ':');
     let owner = fields.next()?.parse().ok()?;
     let part = match fields.next()? {
         "d" => Part::Description,
@@ -123,7 +138,7 @@ fn metadata(node: &Inline) -> Option<(u32, Part, &str)> {
         "u" => Part::Uri,
         _ => return None,
     };
-    Some((owner, part, fields.next()?))
+    (title == &scope_marker(owner, part)).then_some((owner, part, fields.next()?))
 }
 
 /// The URI owner carries the same authored destination fact as a typed Link,
@@ -145,9 +160,13 @@ pub(in crate::mandoc::inline) fn same_link_owner(left: &Inline, right: &Inline) 
                 && left_address == right_address)
 }
 
-/// Portable replacement needs an actual readable cell, rather than merely a
-/// native graph scalar. A zero-width scalar remains accepted native content:
-/// it does not by itself prove that hiding the readable URI is redundant.
+pub(in crate::mandoc::inline) fn is_private_owner(node: &Inline) -> bool {
+    metadata(node).is_some()
+}
+
+/// Link activation needs an actual readable cell, rather than merely a native
+/// graph scalar. Zero-width scalars remain accepted content; they cannot by
+/// themselves provide a readable label instead of the authored address.
 fn text_is_readable(value: &str) -> bool {
     let mut scalar = [0; 4];
     value.chars().any(|character| {
@@ -166,7 +185,6 @@ fn has_readable_text(nodes: &[Inline]) -> bool {
             }
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::PortableDisplay { children, .. }
             | Inline::Link { children, .. } => has_readable_text(children),
             Inline::Anchor { .. } | Inline::LineBreak { .. } => false,
         }
@@ -206,7 +224,6 @@ fn collect_labels(
         match node {
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::PortableDisplay { children, .. }
             | Inline::Link { children, .. } => collect_labels(children, labels, description),
             Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. } => {
                 if let Some(owner) = description {
@@ -231,21 +248,15 @@ fn resolve_parts(
         match &mut node {
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::PortableDisplay { children, .. }
             | Inline::Link { children, .. } => resolve_parts(children, labels, bound),
             _ => {}
         }
         if let Some((owner, part, address)) = part {
-            let Inline::PortableDisplay { children, .. } = node else {
+            let Inline::Link { children, .. } = node else {
                 unreachable!();
             };
             let label = labels.get(&owner).is_some_and(|label| label.readable);
-            let compact = label && mant_ir::is_valid_external_uri(&address);
             match part {
-                Part::Suffix if compact => output.push(Inline::PortableDisplay {
-                    display: String::new(),
-                    children,
-                }),
                 Part::Description if label && !address.is_empty() => {
                     bind_accepted_link(&mut output, children, address, owner, part, bound);
                 }
@@ -284,7 +295,7 @@ fn bind_accepted_link(
     } else {
         // Rejection removes the clickable range, not the authored identity.
         // Resolve it once for this source owner, as an empty typed Link; no
-        // rejected glyph, physical row, or portable label is reconstructed.
+        // rejected glyph, physical row, or alternate label is reconstructed.
         if bound.insert((owner, part)) {
             output.push(Inline::Link {
                 target: external_link_target(address, false),
@@ -361,5 +372,30 @@ mod tests {
                 assert!(!format!("{nodes:?}").contains("mant:lk-presentation"));
             }
         }
+    }
+
+    #[test]
+    fn private_ownership_requires_the_matching_non_authored_scope_title() {
+        let mut node = placeholder(17, Part::Uri, "https://example.com", vec![text("URI")]);
+        assert!(metadata(&node).is_some());
+        let Inline::Link { title, .. } = &mut node else {
+            panic!("private ownership container");
+        };
+        *title = None;
+        assert!(
+            metadata(&node).is_none(),
+            "a target alone cannot forge an owner"
+        );
+        let Inline::Link { title, .. } = &mut node else {
+            unreachable!();
+        };
+        *title = Some(scope_marker(18, Part::Uri));
+        assert!(
+            metadata(&node).is_none(),
+            "another owner cannot lend its proof"
+        );
+        // This is an intentionally invalid public-IR target for a private
+        // metadata unit check, not an admitted public value or a roff oracle.
+        // Public validators reject its NUL independently of this detection.
     }
 }

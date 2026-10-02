@@ -63,17 +63,6 @@ fn split_nodes_at_boundaries(
                     )),
                 });
             }
-            Inline::PortableDisplay { display, children } => {
-                output.push(Inline::PortableDisplay {
-                    display: display.clone(),
-                    children: split_nodes_at_boundaries_owned(
-                        children,
-                        cell,
-                        next_boundary,
-                        boundaries,
-                    ),
-                });
-            }
             Inline::Link {
                 target,
                 title,
@@ -229,12 +218,12 @@ pub(super) fn advance_boundary(cell: &mut usize, next_boundary: &mut usize, boun
 /// wrapper's first real formatter word settles it (its own boundary, its
 /// marker blank, or a later graph's retreat, term.c:573-589 with 901-927).
 /// Wrappers that compact their whole operand stream into one Code, Link,
-/// or `PortableDisplay` node capture that projection, so this ejects the
+/// node capture that projection, so this ejects the
 /// first `remaining` visible characters back out of the annotation. The
 /// extracted glyphs keep their own node identity: an arm-time style run
 /// stays wrapped in its Strong/Emphasis container (mirroring the pre-wrap
 /// ledger split in `inline/links.rs`), while an annotation container
-/// (Link, `PortableDisplay`) is rebuilt from its unclaimed remainder only,
+/// (Link) is rebuilt from its unclaimed remainder only,
 /// because the delayed glyphs were never part of that annotation. A
 /// wrapper emptied by the split still survives when its typed identity is
 /// meaningful on its own.
@@ -299,14 +288,6 @@ pub(in crate::mandoc) fn split_owned_glyph_prefix(
                     children: after,
                 });
             }
-            Inline::PortableDisplay { display, children } => {
-                let (owned, after) = split_owned_glyph_prefix(children, remaining, original);
-                prefix.extend(owned);
-                suffix.push(Inline::PortableDisplay {
-                    display,
-                    children: after,
-                });
-            }
             Inline::Equation { .. } => {
                 // A delayed zero-advance glyph is never equation payload.
                 // Preserve the node intact to keep the visit order.
@@ -362,7 +343,6 @@ fn visible_character_count(node: &Inline) -> usize {
             .count(),
         Inline::Strong { children }
         | Inline::Emphasis { children }
-        | Inline::PortableDisplay { children, .. }
         | Inline::Link { children, .. } => children.iter().map(visible_character_count).sum(),
         Inline::Anchor { .. } | Inline::LineBreak { .. } => 0,
     }
@@ -415,11 +395,9 @@ pub(in crate::mandoc::inline::flow) fn retain_native_field_owners(
             match node {
                 Inline::Strong { children }
                 | Inline::Emphasis { children }
-                | Inline::PortableDisplay { children, .. }
                 | Inline::Link { children, .. } => {
                     retain(children, limits, owner, prefix_printed, positions, found);
-                    !children.is_empty()
-                        || matches!(node, Inline::Link { .. } | Inline::PortableDisplay { .. })
+                    !children.is_empty() || matches!(node, Inline::Link { .. })
                 }
                 _ if prefix_printed.is_some() => prefix_printed == &Some(true),
                 _ if owner.is_none() => true,

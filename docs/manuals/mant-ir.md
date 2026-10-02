@@ -185,7 +185,6 @@ The inline union contains:
 | `text` | Plain visible text |
 | `strong` | Strong importance or source bold semantics |
 | `emphasis` | Emphasis or source italic semantics |
-| `portable-display` | Accepted native `children` with an optional portable export spelling in `display` |
 | `code` | Literal inline text |
 | `equation` | Parsed equation in its original position between neighboring text |
 | `link` | Visible children plus a typed destination |
@@ -203,19 +202,16 @@ link ranges, and explanation coordinates do not gain those padding scalars:
 the structural break still counts as one source scalar. Unknown fields, null,
 negative, fractional, or values above 65535 are rejected.
 
-`portable-display` is transparent to native reading, text coordinates, entry
-recognition, navigation and TUI search/copy: those consumers traverse its
-`children`. Portable Markdown export uses `display` at the first accepted native
-glyph and keeps the children's executed hard breaks, indent hints, anchors and
-surrounding word boundaries. Empty `display` hides an optional export suffix;
-children without accepted glyphs do not produce replacement prose. A consumer
-can request native Markdown text instead. The two projections do not replay
-source execution or alter link targets. For example, native `BSD` may carry the
-portable spelling `BSD (currently supported)`. This is a presentation choice,
-not a second source text or a claim of oracle equivalence.
-Entry form and name-binding paths also descend through native children. A
-selected native subrange retains its styles and destinations, without copying
-the enclosing complete portable spelling into a partial name.
+Inline children are the only visible body. Reading, Markdown export, search,
+semantic recognition and TUI copy traverse the same accepted glyphs, styles,
+links and hard boundaries. There is no replacement spelling or hidden URI
+suffix. Source-specific macro execution is completed before constructing this
+source-neutral IR; ordinary Markdown links do not acquire roff-generated text.
+Entry forms and name-binding paths address the final accepted inline tree.
+A selected partial name keeps its style and destination ancestry without
+expanding into the complete label. The retired `portable-display` wire shape
+and `display` fields on current variants are rejected by the unreleased v0.12
+contract.
 
 Links use a closed `LinkTarget` union rather than stringly typed URLs:
 

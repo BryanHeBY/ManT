@@ -22,7 +22,6 @@ pub(in crate::mandoc) fn trailing_device_row_end_receipt(nodes: &[Inline]) -> bo
                 }
                 Inline::Strong { children }
                 | Inline::Emphasis { children }
-                | Inline::PortableDisplay { children, .. }
                 | Inline::Link { children, .. } => visit(children, protected),
                 Inline::Text { .. } | Inline::Code { .. } | Inline::Equation { .. } => {
                     *protected = false;
@@ -51,7 +50,6 @@ pub(in crate::mandoc) fn trailing_completed_row_receipts(nodes: &[Inline]) -> u1
                 }
                 Inline::Strong { children }
                 | Inline::Emphasis { children }
-                | Inline::PortableDisplay { children, .. }
                 | Inline::Link { children, .. } => visit(children, rows),
                 Inline::Text { value }
                 | Inline::Code { value }
@@ -86,7 +84,6 @@ pub(in crate::mandoc) fn trailing_completed_row_origins(
                 }
                 Inline::Strong { children }
                 | Inline::Emphasis { children }
-                | Inline::PortableDisplay { children, .. }
                 | Inline::Link { children, .. } => visit(children, rows),
                 Inline::Text { value }
                 | Inline::Code { value }
@@ -126,7 +123,6 @@ pub(super) fn split_output_scope_prefix(
         let children = match &mut node {
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::PortableDisplay { children, .. }
             | Inline::Link { children, .. } => Some(std::mem::take(children)),
             _ => None,
         };
@@ -160,7 +156,6 @@ fn replace_scope_children(node: &mut Inline, replacement: Vec<Inline>) {
     match node {
         Inline::Strong { children }
         | Inline::Emphasis { children }
-        | Inline::PortableDisplay { children, .. }
         | Inline::Link { children, .. } => *children = replacement,
         _ => unreachable!("only semantic and font containers have scope children"),
     }
@@ -184,9 +179,7 @@ pub(in crate::mandoc) fn retain_inline_identities(inlines: &mut Vec<Inline>) {
                 retain_inline_identities(children);
                 true
             }
-            Inline::Strong { children }
-            | Inline::Emphasis { children }
-            | Inline::PortableDisplay { children, .. } => {
+            Inline::Strong { children } | Inline::Emphasis { children } => {
                 retain_inline_identities(children);
                 identity || !children.is_empty()
             }
@@ -204,7 +197,6 @@ pub(in crate::mandoc) fn ends_with_executed_line_break(nodes: &[Inline]) -> bool
                 Inline::LineBreak { .. } => return Some(true),
                 Inline::Strong { children }
                 | Inline::Emphasis { children }
-                | Inline::PortableDisplay { children, .. }
                 | Inline::Link { children, .. } => {
                     if let Some(result) = ending(children) {
                         return Some(result);
@@ -232,7 +224,6 @@ pub(in crate::mandoc) fn consume_one_row_ending(nodes: &mut Vec<Inline>) -> bool
                 }
                 Inline::Strong { children }
                 | Inline::Emphasis { children }
-                | Inline::PortableDisplay { children, .. }
                 | Inline::Link { children, .. } => {
                     if let Some(result) = consume(children) {
                         return Some(result);
@@ -258,7 +249,6 @@ pub(super) fn trim_output_terminators(nodes: &mut Vec<Inline>) -> bool {
                 Inline::LineBreak { .. } => continue,
                 Inline::Strong { children }
                 | Inline::Emphasis { children }
-                | Inline::PortableDisplay { children, .. }
                 | Inline::Link { children, .. } => trimming = trim_output_terminators(children),
                 Inline::Text { .. } | Inline::Code { .. } | Inline::Equation { .. } => {
                     trimming = false;
@@ -290,7 +280,6 @@ pub(in crate::mandoc) fn strip_native_projection_markers(nodes: &mut Vec<Inline>
         Inline::Anchor { .. } => !super::is_private_output_marker(node),
         Inline::Strong { children }
         | Inline::Emphasis { children }
-        | Inline::PortableDisplay { children, .. }
         | Inline::Link { children, .. } => {
             strip_native_projection_markers(children);
             true
@@ -342,7 +331,6 @@ pub(in crate::mandoc::inline) fn trailing_ascii_spaces(nodes: &[Inline]) -> usiz
                 }
                 Inline::Strong { children }
                 | Inline::Emphasis { children }
-                | Inline::PortableDisplay { children, .. }
                 | Inline::Link { children, .. } => {
                     if !visit(children, count) {
                         return false;
@@ -366,7 +354,6 @@ fn join_authored_links(nodes: &mut Vec<Inline>) {
         match node {
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::PortableDisplay { children, .. }
             | Inline::Link { children, .. } => join_authored_links(children),
             Inline::Text { .. }
             | Inline::Code { .. }
@@ -468,14 +455,6 @@ pub(in crate::mandoc) fn trim_trailing_breakable_spaces(nodes: &mut Vec<Inline>,
                     }
                     false
                 }
-                Inline::PortableDisplay { children, .. } => {
-                    // The wrapper retains native terminal facts: trim blanks
-                    // inside it, but never discard the wrapper itself.
-                    if !trim(children, remaining) {
-                        return false;
-                    }
-                    false
-                }
             };
             if remove {
                 nodes.remove(index);
@@ -496,7 +475,6 @@ pub(super) fn line_break_count(nodes: &[Inline]) -> usize {
             Inline::LineBreak { .. } => 1,
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::PortableDisplay { children, .. }
             | Inline::Link { children, .. } => line_break_count(children),
             Inline::Text { .. }
             | Inline::Code { .. }

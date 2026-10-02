@@ -100,7 +100,6 @@ fn trim_code_framing_newline(children: &mut Vec<Inline>) {
         Inline::Strong { .. }
         | Inline::Emphasis { .. }
         | Inline::Link { .. }
-        | Inline::PortableDisplay { .. }
         | Inline::Anchor { .. } => {}
     }
 }

@@ -101,3 +101,6 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+mod inline_contract_tests;

@@ -132,7 +132,6 @@ where
     match inline {
         Inline::Strong { children }
         | Inline::Emphasis { children }
-        | Inline::PortableDisplay { children, .. }
         | Inline::Link { children, .. } => walk_inlines(visitor, children),
         Inline::Text { .. }
         | Inline::Code { .. }
@@ -288,7 +287,6 @@ where
     match inline {
         Inline::Strong { children }
         | Inline::Emphasis { children }
-        | Inline::PortableDisplay { children, .. }
         | Inline::Link { children, .. } => walk_inlines_mut(visitor, children),
         Inline::Text { .. }
         | Inline::Code { .. }

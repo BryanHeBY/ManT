@@ -123,7 +123,6 @@ impl InlineBuilder {
                 }
                 Inline::Strong { children }
                 | Inline::Emphasis { children }
-                | Inline::PortableDisplay { children, .. }
                 | Inline::Link { children, .. } => contains_glyph(children),
                 Inline::Anchor { .. } | Inline::LineBreak { .. } => false,
             })
@@ -419,7 +418,11 @@ impl InlineBuilder {
             let pending = inner.split_off(field_start - start);
             let accepted = wrap(inner);
             let pending = wrap(pending);
-            let split_link = matches!((accepted.last(), pending.last()),
+            let actual_link = accepted
+                .last()
+                .is_some_and(|node| !super::super::links::presentation::is_private_owner(node));
+            let split_link = actual_link
+                && matches!((accepted.last(), pending.last()),
                 (Some(Inline::Link { target: left, title: left_title, .. }),
                  Some(Inline::Link { target: right, title: right_title, .. }))
                     if left == right && left_title == right_title)

@@ -50,7 +50,6 @@ fn remove_inlines(inlines: &mut Vec<Inline>) {
             }
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::PortableDisplay { children, .. }
             | Inline::Link { children, .. } => remove_inlines(children),
             Inline::Text { .. }
             | Inline::Code { .. }

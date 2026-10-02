@@ -878,7 +878,6 @@ fn has_formatter_text_cell(nodes: &[Inline]) -> bool {
         Inline::Text { .. } | Inline::Code { .. } | Inline::Equation { .. } => true,
         Inline::Strong { children }
         | Inline::Emphasis { children }
-        | Inline::PortableDisplay { children, .. }
         | Inline::Link { children, .. } => has_formatter_text_cell(children),
         Inline::Anchor { .. } | Inline::LineBreak { .. } => false,
     })

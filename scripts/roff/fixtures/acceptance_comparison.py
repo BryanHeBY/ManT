@@ -160,8 +160,8 @@ def product_external_targets(bundle):
                     # keeps the address separately; compare that same href,
                     # retaining order and every authored occurrence.
                     targets.append("mailto:" + target.get("address", ""))
-            # A portableDisplay value is the native display, while children
-            # preserve rich identities. Only children carry typed links.
+            # Visible children and typed destinations are independent.
+            # Count every authored occurrence without traversing target data.
             for key, item in value.items():
                 if key != "target":
                     visit(item)

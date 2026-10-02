@@ -62,7 +62,6 @@ pub(super) fn flatten_inline(children: &[Inline]) -> String {
             }
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::PortableDisplay { children, .. }
             | Inline::Link { children, .. } => {
                 output.push_str(&flatten_inline(children));
             }
@@ -101,8 +100,7 @@ pub(super) fn preformatted_anchor_markers(children: &[Inline]) -> String {
             }
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::Link { children, .. }
-            | Inline::PortableDisplay { children, .. } => stack.extend(children.iter().rev()),
+            | Inline::Link { children, .. } => stack.extend(children.iter().rev()),
             _ => {}
         }
     }
@@ -227,18 +225,6 @@ fn inline_pieces(
     let mut index = 0;
     while let Some(child) = nodes.get(index) {
         match child {
-            Inline::PortableDisplay { display, children } => {
-                if options.native_text {
-                    pieces.extend(inline_pieces(children, options, manual_links));
-                } else {
-                    // Replace glyphs at their executed position, retaining
-                    // leading padding, anchors and every hard row boundary.
-                    let projected = super::portable::project(display, children);
-                    pieces.extend(inline_pieces(&projected, options, manual_links));
-                }
-                index += 1;
-                continue;
-            }
             Inline::Text { value } => {
                 // AST text segmentation must not change delimiter decisions.
                 // Merge only transparent text siblings: crossing a style or
@@ -706,14 +692,12 @@ mod tests {
     }
 
     #[test]
-    fn preformatted_portable_wrapper_keeps_native_anchor_order() {
-        // PortableDisplay changes glyph spelling only. Fenced output cannot
-        // embed anchors, so this structural traversal emits the same native
-        // zero-width destinations before the fence in either display mode.
+    fn preformatted_styles_keep_anchor_order() {
+        // Fenced output cannot embed anchors. Transparent style traversal
+        // retains the original zero-width destination order before the fence.
         let children = vec![
             mant_ir::Inline::anchor("first"),
-            mant_ir::Inline::PortableDisplay {
-                display: "portable".into(),
+            mant_ir::Inline::Strong {
                 children: vec![
                     mant_ir::Inline::anchor("second"),
                     mant_ir::Inline::Text {

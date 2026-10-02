@@ -221,7 +221,6 @@ pub(super) fn inline_text(inlines: &[Inline]) -> String {
             }
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::PortableDisplay { children, .. }
             | Inline::Link { children, .. } => output.push_str(&inline_text(children)),
             Inline::Anchor { .. } => {}
             Inline::LineBreak { .. } => output.push(' '),

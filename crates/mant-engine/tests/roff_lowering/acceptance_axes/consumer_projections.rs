@@ -213,12 +213,10 @@ fn assert_markdown_projection(
     let reparsed = mant_loader::load_markdown_text(&markdown, None).unwrap();
     let projected_rows = rows(&reparsed);
     let projected = projected_rows.join("\n");
-    // Portable Lk omits an accepted URI suffix, by the frozen
-    // PortableDisplay contract; native Markdown must retain it.
+    // Every accepted URI and punctuation cell belongs to the only body.
+    // Definition word seams are checked separately from these operands.
     for &unit in &card.gold.accepted_units.as_ref().unwrap().expect {
-        if (!native_text && (unit.ends_with(':') || unit.starts_with("https://")))
-            || unit.contains("BodyWord") && unit != "BodyWord"
-        {
+        if unit.contains("BodyWord") && unit != "BodyWord" {
             continue;
         }
         assert!(

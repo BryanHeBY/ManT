@@ -269,7 +269,6 @@ fn collect_document_targets(inlines: &[Inline], output: &mut Vec<SemanticDocumen
             }
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::PortableDisplay { children, .. }
             | Inline::Link { children, .. } => collect_document_targets(children, output),
             Inline::Text { .. }
             | Inline::Code { .. }
@@ -289,7 +288,6 @@ pub(super) fn inline_text(inlines: &[Inline]) -> String {
             }
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::PortableDisplay { children, .. }
             | Inline::Link { children, .. } => output.push_str(&inline_text(children)),
             Inline::Anchor { .. } => {}
             Inline::LineBreak { .. } => output.push('\n'),

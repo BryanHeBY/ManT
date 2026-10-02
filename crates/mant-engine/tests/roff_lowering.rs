@@ -125,7 +125,6 @@ fn visible_document_text(document: &mant_ir::Document) -> String {
                 Inline::Strong { .. }
                 | Inline::Emphasis { .. }
                 | Inline::Link { .. }
-                | Inline::PortableDisplay { .. }
                 | Inline::Anchor { .. } => {}
             }
             visit::walk_inline(self, inline);
@@ -146,8 +145,7 @@ fn inline_text(children: &[Inline]) -> String {
             }
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::Link { children, .. }
-            | Inline::PortableDisplay { children, .. } => inline_text(children),
+            | Inline::Link { children, .. } => inline_text(children),
             Inline::Anchor { .. } => String::new(),
             Inline::LineBreak { .. } => "\n".to_owned(),
         })

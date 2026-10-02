@@ -92,9 +92,9 @@ fn search_with_matcher(
     let artifact = render_addressable_markdown_with_options(
         query,
         MarkdownOptions {
-            // Visible search follows the executed reader text. Explicit
-            // Markdown search follows the portable export spelling. Both
-            // map against the exact artifact encoded for this request.
+            // Both scopes read the same accepted glyphs. Visible search
+            // also preserves executed definition word boundaries; ranges
+            // address the exact artifact encoded for this request.
             native_text: request.scope == mant_protocol::SearchScope::Visible,
             ..MarkdownOptions::ADDRESSABLE
         },

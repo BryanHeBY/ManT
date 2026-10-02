@@ -6,7 +6,6 @@ mod flat;
 mod fragments;
 mod inline;
 mod mapped;
-mod portable;
 mod semantic;
 
 use std::{borrow::Cow, ops::Range};
@@ -47,8 +46,8 @@ pub struct MarkdownOptions {
     /// Unsupported documents retain portable content without semantic comments;
     /// this is not a lossless serialization (use IR JSON for that).
     pub preserve_semantics: bool,
-    /// Project the executed native children of portable display annotations.
-    /// The default exports their portable spelling while keeping hard rows.
+    /// Preserve executed definition head/body word boundaries.
+    /// This option does not select a different visible text spelling.
     pub native_text: bool,
 }
 
@@ -204,9 +203,8 @@ pub fn render_addressable_markdown(query: &ResolvedContent) -> MarkdownArtifact<
     render_markdown_artifact(query, MarkdownOptions::ADDRESSABLE, true)
 }
 
-/// Encode addressable bytes using the requested visible-text projection.
-/// Returned coordinates refer to these exact bytes, including native text
-/// when [`MarkdownOptions::native_text`] is selected.
+/// Encode addressable bytes using the requested definition word-boundary policy.
+/// Returned coordinates always refer to these exact artifact bytes.
 #[must_use]
 pub fn render_addressable_markdown_with_options(
     query: &ResolvedContent,
@@ -577,10 +575,7 @@ pub fn heading_has_local_link(heading: &mant_ir::Heading) -> bool {
             } => true,
             mant_ir::Inline::Link { children, .. }
             | mant_ir::Inline::Strong { children }
-            | mant_ir::Inline::Emphasis { children }
-            | mant_ir::Inline::PortableDisplay { children, .. } => {
-                inlines_have_local_link(children)
-            }
+            | mant_ir::Inline::Emphasis { children } => inlines_have_local_link(children),
             mant_ir::Inline::Text { .. }
             | mant_ir::Inline::Code { .. }
             | mant_ir::Inline::Equation { .. }

@@ -59,31 +59,14 @@ fn first_children(blocks: &[Block]) -> &[Inline] {
     }
 }
 
-fn projection(children: &[Inline], native_text: bool) -> String {
+fn projection(children: &[Inline]) -> String {
     let mut output = String::new();
     for child in children {
         match child {
-            Inline::PortableDisplay { display, children } if !native_text => {
-                // This cohort has only Lk's empty portable suffix. Preserve
-                // every executed hard row and resolved row prefix, without
-                // importing the terminal-only ':' and target operand.
-                assert_eq!(display.len(), 0);
-                let raw = mant_ir::inline_plain_text(children);
-                for (index, row) in raw.split('\n').enumerate() {
-                    if index > 0 {
-                        output.push('\n');
-                    }
-                    output.extend(
-                        row.chars()
-                            .take_while(|character| character.is_whitespace()),
-                    );
-                }
-            }
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::Link { children, .. }
-            | Inline::PortableDisplay { children, .. } => {
-                output.push_str(&projection(children, native_text));
+            | Inline::Link { children, .. } => {
+                output.push_str(&projection(children));
             }
             other => output.push_str(&mant_ir::inline_plain_text(std::slice::from_ref(other))),
         }
@@ -111,7 +94,7 @@ fn styles_for_word(children: &[Inline], word: &str) -> Vec<u8> {
                 }
                 Inline::Strong { children } => append(children, mask | 1, output),
                 Inline::Emphasis { children } => append(children, mask | 2, output),
-                Inline::Link { children, .. } | Inline::PortableDisplay { children, .. } => {
+                Inline::Link { children, .. } => {
                     append(children, mask, output);
                 }
                 Inline::LineBreak { .. } => output.push(('\n', 0)),
@@ -183,12 +166,11 @@ fn assert_projection(
     case: &Case,
     original: &ResolvedContent,
     restored: &ResolvedContent,
-    native_text: bool,
     markdown: &str,
 ) {
     let original_children = first_children(description(original));
     let mut actual = mant_ir::inline_plain_text(first_children(description(restored)));
-    let mut expected = projection(original_children, native_text);
+    let mut expected = projection(original_children);
     if case.metadata.container == "column" {
         // A multiline column table exports a plain fenced row with ' | '
         // delimiters, not live links. Its first cell retains every hard row.
@@ -267,7 +249,7 @@ fn native_carrier_is_preserved(case: &Case, restored: &ResolvedContent, word: &s
 }
 
 #[test]
-fn hundred_native_carriers_keep_hard_rows_after_real_json_and_both_markdown_projections() {
+fn hundred_native_carriers_keep_hard_rows_after_json_and_markdown_boundary_policies() {
     // All 100 complete inputs ran registered pristine CVS ASCII, UTF-8, HTML,
     // tree and lint before freezing this fixture. ESCAPE_BREAK buffers '\n'
     // (term.c:657); term_fill (304) settles it at word ends. Native gold remains
@@ -311,7 +293,7 @@ fn hundred_native_carriers_keep_hard_rows_after_real_json_and_both_markdown_proj
             let readback = mant_render::render_query_man(&restored);
             assert!(!readback.contains("<br>"), "{}: {readback}", case.id);
             assert!(!readback.contains("<br />"), "{}: {readback}", case.id);
-            assert_projection(&case, &content, &restored, native_text, &markdown);
+            assert_projection(&case, &content, &restored, &markdown);
             assert!(
                 carrier_is_preserved(&case, &restored, word),
                 "{}: carrier lost\n{markdown}",

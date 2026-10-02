@@ -4,8 +4,8 @@ use super::*;
 // with pristine CVS ASCII, UTF-8, HTML and lint before changing expectations.
 // mdoc_term.c::termp_lk_pre() visits all description operands, then the
 // colon and URI in the same stream; post_bx() retains the authored spelling.
-// Native assertions preserve its visible word and hard-line sequence. Portable
-// enhancement assertions explicitly select the Markdown encoder.
+// Native and Markdown assertions preserve its accepted word and hard-line
+// sequence; output ownership is private until those receipts are complete.
 
 #[test]
 fn zero_advance_crosses_empty_enclosures_and_atomic_mdoc_output() {
@@ -43,7 +43,7 @@ fn zero_advance_crosses_empty_enclosures_and_atomic_mdoc_output() {
 }
 
 #[test]
-fn bsd_reference_executes_font_operands_before_native_and_portable_text() {
+fn bsd_reference_executes_font_operands_before_generated_words() {
     let document = parse_manual_bytes(
         std::path::Path::new("bsd-reference-font-state.1"),
         b".Dd September 12, 2026\n.Dt BSD-FONT 1\n.Os\n.Sh DESCRIPTION\n.Bx \\fB\n.Li \\fPZ\n.Bx \\fB-devel\n.Li \\fPZ\n",
@@ -54,23 +54,29 @@ fn bsd_reference_executes_font_operands_before_native_and_portable_text() {
     };
 
     // Pristine CVS mdoc_validate.c::post_bx() appends BSD to the authored
-    // argument after its font controls. Native readers retain that spelling;
-    // the separately selected portable Markdown spelling keeps the expansion.
+    // argument after its font controls. Native and Markdown readers retain
+    // that accepted spelling without expanding lifecycle names.
     assert_eq!(inline_text(children), "BSD Z -develBSD Z");
     assert_eq!(strong_native_text(children), "BSDZ-develBSDZ");
     let portable = crate::encode::render_inline_fragment(
         children,
         crate::encode::MarkdownFragmentOptions::default(),
     );
-    assert!(
-        portable.contains("BSD (currently under development)"),
-        "{portable}"
-    );
+    let visible = pulldown_cmark::Parser::new(&portable)
+        .filter_map(|event| match event {
+            pulldown_cmark::Event::Text(text) | pulldown_cmark::Event::Code(text) => {
+                Some(text.into_string())
+            }
+            _ => None,
+        })
+        .collect::<String>();
+    assert_eq!(visible, "BSD Z -develBSD Z", "{portable}");
+    assert!(!portable.contains("currently"), "{portable}");
     assert_eq!(portable.matches("**Z**").count(), 2, "{portable}");
 }
 
 #[test]
-fn bsd_native_and_portable_text_share_the_executed_word_boundaries() {
+fn bsd_reference_preserves_the_executed_word_boundaries() {
     for (label, operand, expected) in [
         ("lifecycle-word-end-break", r"-alpha\p", "-alphaBSD\nAFTER"),
         ("control-only-word-end-break", r"\p", "BSD\nAFTER"),
@@ -118,7 +124,7 @@ fn bsd_native_and_portable_text_share_the_executed_word_boundaries() {
 }
 
 #[test]
-fn bsd_reference_replacement_preserves_boundaries_and_exact_arity() {
+fn bsd_reference_preserves_boundaries_and_exact_arity() {
     let document = parse_manual_bytes(
         std::path::Path::new("bsd-reference-replacement-boundaries.1"),
         b".Dd September 12, 2026\n.Dt BSD-STATE 1\n.Os\n.Sh DESCRIPTION\n.No A\n.Bx \\fB\n.Li \\fPZ\n.No A\n.Bx \\p\n.No Z\n.Bx -alpha \"\"\n.Bx 4.3 Tahoe\n",
@@ -464,7 +470,7 @@ fn semantic_link_continuations_preserve_literal_rows() {
 }
 
 #[test]
-fn semantic_link_compaction_preserves_layout_and_final_execution_boundaries() {
+fn semantic_link_annotation_preserves_layout_and_final_execution_boundaries() {
     for (label, source, expected) in [
         (
             "empty-label-row",
@@ -541,23 +547,19 @@ fn empty_operands_are_words_before_generated_semantic_punctuation() {
 }
 
 #[test]
-fn generated_bsd_word_retains_break_markers_across_continuation_and_portable_display() {
+fn generated_bsd_word_retains_break_markers_across_continuation() {
     // Exact inputs verified with pristine CVS before adding the assertions.
     // term_word() buffers ESCAPE_BREAK even when ESCAPE_NOSPACE follows it;
     // post_bx() inserts Ns then the generated BSD word. The next ordinary
     // word blank realizes that buffered marker (term.c:294-305, 656-667).
-    for (operand, native, portable) in [
-        (r"\p\c", "BSD", "BSD"),
-        (r"\p", "BSD", "BSD"),
-        (r"\p\c\zX", "BSD", "BSD"),
-        (r"\p\&", "BSD", "BSD"),
-        (r"-alpha\p\c", "-alphaBSD", "BSD (currently in alpha test)"),
-        (r"-beta\p\c", "-betaBSD", "BSD (currently in beta test)"),
-        (
-            r"-devel\p\c",
-            "-develBSD",
-            "BSD (currently under development)",
-        ),
+    for (operand, native) in [
+        (r"\p\c", "BSD"),
+        (r"\p", "BSD"),
+        (r"\p\c\zX", "BSD"),
+        (r"\p\&", "BSD"),
+        (r"-alpha\p\c", "-alphaBSD"),
+        (r"-beta\p\c", "-betaBSD"),
+        (r"-devel\p\c", "-develBSD"),
     ] {
         for literal in [false, true] {
             let source = format!(
@@ -586,7 +588,7 @@ fn generated_bsd_word_retains_break_markers_across_continuation_and_portable_dis
                 children,
                 crate::encode::MarkdownFragmentOptions::default(),
             );
-            assert!(markdown.contains(portable), "{operand}: {markdown}");
+            assert!(markdown.contains(native), "{operand}: {markdown}");
             assert_eq!(markdown.matches('\n').count(), 1, "{operand}: {markdown}");
         }
     }
@@ -668,9 +670,9 @@ fn recovered_inline_man_links_share_the_document_head_identity_decoder() {
                     }
                     identities(children, output);
                 }
-                Inline::Strong { children }
-                | Inline::Emphasis { children }
-                | Inline::PortableDisplay { children, .. } => identities(children, output),
+                Inline::Strong { children } | Inline::Emphasis { children } => {
+                    identities(children, output);
+                }
                 _ => {}
             }
         }
@@ -729,9 +731,9 @@ fn recovered_inline_man_link_annotation_cannot_skip_native_post_words() {
                     output.push(inline_text(children));
                     labels(children, output);
                 }
-                Inline::Strong { children }
-                | Inline::Emphasis { children }
-                | Inline::PortableDisplay { children, .. } => labels(children, output),
+                Inline::Strong { children } | Inline::Emphasis { children } => {
+                    labels(children, output);
+                }
                 _ => {}
             }
         }
@@ -811,9 +813,9 @@ fn descriptive_link_labels_do_not_own_preceding_native_row_boundaries() {
         for node in nodes {
             match node {
                 Inline::Link { children, .. } => output.push(inline_text(children)),
-                Inline::Strong { children }
-                | Inline::Emphasis { children }
-                | Inline::PortableDisplay { children, .. } => labels(children, output),
+                Inline::Strong { children } | Inline::Emphasis { children } => {
+                    labels(children, output);
+                }
                 _ => {}
             }
         }
@@ -877,9 +879,9 @@ fn strong_native_text(children: &[Inline]) -> String {
         .iter()
         .map(|inline| match inline {
             Inline::Strong { children } => inline_text(children),
-            Inline::Emphasis { children }
-            | Inline::PortableDisplay { children, .. }
-            | Inline::Link { children, .. } => strong_native_text(children),
+            Inline::Emphasis { children } | Inline::Link { children, .. } => {
+                strong_native_text(children)
+            }
             _ => String::new(),
         })
         .collect()

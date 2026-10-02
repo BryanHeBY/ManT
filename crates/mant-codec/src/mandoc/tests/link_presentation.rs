@@ -50,10 +50,7 @@ fn links(children: &[Inline]) -> Vec<(String, String)> {
 
 fn assert_no_private_metadata(document: &mant_ir::Document) {
     let json = serde_json::to_string(document).expect("serialize final IR");
-    assert!(!json.contains("mant:lk-presentation"), "{json}");
-    assert!(!json.contains("mant:output-scope"), "{json}");
-    assert!(!json.contains("mant:field-word"), "{json}");
-    assert!(!json.contains("mant:field-link-split"), "{json}");
+    assert!(!json.contains(r"\u0000mant:"), "{json}");
     let decoded: mant_ir::Document = serde_json::from_str(&json).expect("actual JSON round trip");
     assert_eq!(&decoded, document);
 }
@@ -63,8 +60,8 @@ fn absent_accepted_descriptions_bind_only_the_accepted_uri() {
     // Exact complete sources were run with pristine ASCII/UTF-8/HTML/lint
     // before these assertions. termp_lk_pre() always prints colon + URI when
     // description operands exist, including empty TEXT, NBRZW, and BACKBEFORE.
-    // Portable compaction needs a surviving description, rather than merely
-    // the topology used by mdoc_lk_pre() to select its original HTML anchor.
+    // Activation needs a surviving description, rather than merely the
+    // topology used by mdoc_lk_pre() to select its original HTML anchor.
     for label in [r#""""#, r"\&", r"\zX", r"\fB", r"\z"] {
         for no_fill in [false, true] {
             let control = if no_fill { ".nf\n" } else { "" };
@@ -106,8 +103,8 @@ fn zero_cell_descriptions_keep_native_content_and_a_readable_uri() {
     // These exact complete sources passed pristine ASCII/UTF-8/HTML/tree/lint
     // before assertions. term_word()/encode1()/term_fill() retain each Unicode
     // scalar as native graph even when locale_getwidth() returns zero. Only
-    // the declared portable enhancement needs a readable, non-whitespace cell;
-    // isolated accents/format scalars are retained, never rejected as content.
+    // the clickable range needs a readable, non-whitespace cell; isolated
+    // accents/format scalars remain native content, not alternate wording.
     for (operand, text, readable) in [
         (r"\[u200B]", "\u{200b}", false),
         (r"\[u200D]", "\u{200d}", false),
@@ -157,15 +154,10 @@ fn zero_cell_descriptions_keep_native_content_and_a_readable_uri() {
             })
             .collect::<String>();
         let portable_label = text.trim_matches([' ', '\t']);
-        let expected_portable = if readable {
-            format!("{portable_label} AFTER")
-        } else {
-            format!("{portable_label}: {URI} AFTER")
-        };
+        let expected_portable = format!("{portable_label}: {URI} AFTER");
         assert_eq!(portable_text, expected_portable, "{source}\n{markdown:?}");
-        if readable {
-            assert!(!markdown.contains("\\:"), "compact label: {markdown:?}");
-        } else {
+        assert!(markdown.contains("\\:"), "accepted colon: {markdown:?}");
+        if !readable {
             assert!(
                 markdown.contains(&format!("\\: <{URI}> AFTER")),
                 "readable URI fallback: {markdown:?}"
@@ -215,9 +207,10 @@ fn previous_pending_glyphs_do_not_qualify_as_a_descriptive_label() {
 }
 
 #[test]
-fn accepted_descriptive_labels_keep_the_single_compact_anchor() {
+fn accepted_descriptive_labels_keep_one_anchor_and_all_native_words() {
     // Complete URI and suffix equality never shortcut native termp_lk_pre().
-    // Only export presentation is compact; all accepted native words remain.
+    // The one typed anchor annotates the description; every consumer receives
+    // the same accepted colon and address instead of a compact replacement.
     for label in ["label", URI, "example.com", "first second"] {
         let source = source(&format!(".Lk {URI} {label}\n.No AFTER\n"));
         let document = parse(&source);
@@ -236,11 +229,15 @@ fn accepted_descriptive_labels_keep_the_single_compact_anchor() {
             children,
             crate::encode::MarkdownFragmentOptions::default(),
         );
-        assert_eq!(markdown.matches(URI).count(), 1, "{markdown}");
-        assert!(
-            !markdown.contains(": "),
-            "native suffix is redundant only here: {markdown}"
-        );
+        let visible = pulldown_cmark::Parser::new(&markdown)
+            .filter_map(|event| match event {
+                pulldown_cmark::Event::Text(text) | pulldown_cmark::Event::Code(text) => {
+                    Some(text.into_string())
+                }
+                _ => None,
+            })
+            .collect::<String>();
+        assert_eq!(visible, format!("{label}: {URI} AFTER"), "{markdown}");
         assert_no_private_metadata(&document);
     }
 }
@@ -399,6 +396,150 @@ fn unusable_or_empty_targets_never_hide_accepted_native_text() {
                 "no identity was decoded: {children:#?}"
             );
         }
+        assert_no_private_metadata(&document);
+    }
+}
+
+#[test]
+fn link_acceptance_keeps_pending_prefix_ownership_across_styles_and_fields() {
+    // Every complete TAG/HANG × No/Em/Sy/Li source ran pristine before these
+    // assertions (i1/oracles styled-prefix). term.c::encode1() owns X before
+    // Lk's first word; term_fill() accepts L/M and rejects the marker-led Q,
+    // colon, URI and punctuation. The description owns only accepted L/M.
+    for kind in ["hang", "tag"] {
+        for style in ["No", "Em", "Sy", "Li"] {
+            let source = source(&format!(
+                ".Bl -{kind} -width 4n\n.It Xo\n.{style} BEFORE\\zX\n.Lk {URI} \"L\\p M\" \"\\p Q\" .\n.Xc\n.No BodyWord\n.El\n"
+            ));
+            let document = parse(&source);
+            let [Block::DefinitionList { items, .. }] = document.sections[1].blocks.as_slice()
+            else {
+                panic!("definition owner: {source}\n{document:#?}");
+            };
+            let [item] = items.as_slice() else {
+                panic!("one item: {source}");
+            };
+            let accepted = item
+                .terms
+                .iter()
+                .map(|term| inline_text(term))
+                .collect::<String>();
+            assert_eq!(
+                accepted.trim_end_matches('\n'),
+                "BEFOREXL\nM",
+                "{source}\n{item:#?}"
+            );
+            let identities = item
+                .terms
+                .iter()
+                .flat_map(|term| links(term))
+                .collect::<Vec<_>>();
+            assert_eq!(
+                identities,
+                [(URI.to_owned(), "L\nM".to_owned())],
+                "{source}\n{item:#?}"
+            );
+            assert_no_private_metadata(&document);
+        }
+    }
+}
+
+#[test]
+fn accepted_label_final_glyph_keeps_its_owner_when_the_suffix_is_rejected() {
+    // Exact pristine TAG/HANG sources (i1/oracles label-pending-owned) retain
+    // LXM as one accepted line. encode1() releases label-owned X before the
+    // in-word BREAK; rejected later fields cannot move it into URI identity.
+    for kind in ["hang", "tag"] {
+        let source = source(&format!(
+            ".Bl -{kind} -width 4n\n.It Xo\n.Lk {URI} \"L\\zX\\p M\" \"\\p Q\" .\n.Xc\n.No BodyWord\n.El\n"
+        ));
+        let document = parse(&source);
+        let [Block::DefinitionList { items, .. }] = document.sections[1].blocks.as_slice() else {
+            panic!("definition owner: {source}\n{document:#?}");
+        };
+        let accepted = items[0]
+            .terms
+            .iter()
+            .map(|term| inline_text(term))
+            .collect::<String>();
+        assert_eq!(
+            accepted.trim_end_matches('\n'),
+            "LXM",
+            "{source}\n{items:#?}"
+        );
+        let identities = items[0]
+            .terms
+            .iter()
+            .flat_map(|term| links(term))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            identities,
+            [(URI.to_owned(), "LXM".to_owned())],
+            "{source}\n{items:#?}"
+        );
+        assert_no_private_metadata(&document);
+    }
+}
+
+#[test]
+fn authored_owner_like_addresses_cannot_forge_private_output_metadata() {
+    // These exact sources ran pristine in five profiles first. The first two
+    // are legal authored URI spellings; raw NUL is a recovery source (lint 3).
+    // CVS read.c masks it to '?'. Our existing input-safety policy replaces
+    // unsafe source bytes with spaces before parsing; that exact transformed
+    // source was also run pristine before this assertion. Neither run is a
+    // claim that a NUL-prefixed authored target is a legal public IR value.
+    for (target, expected) in [
+        (
+            "mant:lk-presentation:7:u:https://evil.example",
+            "mant:lk-presentation:7:u:https://evil.example",
+        ),
+        ("mant:output-scope:lk:7:d", "mant:output-scope:lk:7:d"),
+        (
+            "\0mant:lk-presentation:7:u:https://evil.example",
+            " mant:lk-presentation:7:u:https://evil.example",
+        ),
+    ] {
+        let source = source(&format!(".Lk \"{target}\" LABEL\n.No AFTER\n"));
+        let document = parse(&source);
+        let children = paragraph(&document);
+        assert_eq!(
+            inline_text(children),
+            format!("LABEL: {expected} AFTER"),
+            "{source:?}"
+        );
+        assert_eq!(
+            links(children),
+            [(expected.to_owned(), "LABEL".to_owned())],
+            "{source:?}"
+        );
+        assert_no_private_metadata(&document);
+    }
+}
+
+#[test]
+fn bsd_lifecycle_names_remain_authored_words_in_every_projection() {
+    // Pristine term output and post_bx() retain the operand plus BSD, while
+    // mdoc_html.c::mdoc_xx_pre() only wraps those normalized children in Ux.
+    for lifecycle in ["alpha", "beta", "devel"] {
+        let source = source(&format!(".Bx -{lifecycle}\n.No AFTER\n"));
+        let document = parse(&source);
+        let children = paragraph(&document);
+        let expected = format!("-{lifecycle}BSD AFTER");
+        assert_eq!(inline_text(children), expected, "{source}");
+        let markdown = crate::encode::render_inline_fragment(
+            children,
+            crate::encode::MarkdownFragmentOptions::default(),
+        );
+        let visible = pulldown_cmark::Parser::new(&markdown)
+            .filter_map(|event| match event {
+                pulldown_cmark::Event::Text(text) | pulldown_cmark::Event::Code(text) => {
+                    Some(text.into_string())
+                }
+                _ => None,
+            })
+            .collect::<String>();
+        assert_eq!(visible, expected, "{source}\n{markdown}");
         assert_no_private_metadata(&document);
     }
 }

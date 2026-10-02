@@ -1007,9 +1007,9 @@ visible searches show columns in the displayed text instead, while
 Markdown-scope text searches show canonical Markdown columns. Reproduce the
 portable addressable `mant.markdown/v1` text for `--scope markdown` with
 `mant SELECTOR --format markdown --preserve-anchors`. Visible searches use
-the native reading projection, which can retain additional executed roff
-display text. Its coordinates may differ from the portable export. API
-consumers can reproduce that addressable artifact with
+the executed definition word-boundary policy. Both scopes retain the same
+accepted visible glyphs, but their artifact coordinates may differ at those
+layout seams. API consumers can reproduce the visible addressable artifact with
 `MarkdownOptions::ADDRESSABLE` and `native_text: true`.
 
 Use the `=` form when a value begins with a hyphen:

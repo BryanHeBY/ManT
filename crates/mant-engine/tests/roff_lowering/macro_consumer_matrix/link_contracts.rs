@@ -281,7 +281,9 @@ fn mdoc_link_labels_exclude_prior_rows_after_an_output_checkpoint() {
                     children,
                     mant_codec::encode::MarkdownFragmentOptions::default(),
                 ),
-                format!("{markdown_head}[{styled}](https://example.org) AFTER"),
+                format!(
+                    "{markdown_head}[{styled}](https://example.org)\\: https\\://example.org AFTER"
+                ),
                 "{source}"
             );
         }

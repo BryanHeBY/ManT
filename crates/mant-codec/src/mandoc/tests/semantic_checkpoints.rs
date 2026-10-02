@@ -57,7 +57,6 @@ fn matching_text(nodes: &[Inline], matches: impl Fn(&Inline) -> bool + Copy) -> 
         match node {
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::PortableDisplay { children, .. }
             | Inline::Link { children, .. } => {
                 found.extend(matching_text(children, matches));
             }

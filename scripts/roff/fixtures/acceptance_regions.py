@@ -195,13 +195,11 @@ def select_native_region(raw, tree, *, heading="DESCRIPTION", occurrence=0,
 
 
 def inline_text(nodes):
-    """Read section labels only; never combine both PortableDisplay projections."""
+    """Read section labels from their only visible inline body."""
     result = []
     for node in nodes:
         kind = node.get("type")
         if kind in ("text", "code"):
-            result.append(node.get("value", ""))
-        elif kind == "portableDisplay":
             result.append(node.get("value", ""))
         elif "children" in node:
             result.append(inline_text(node["children"]))

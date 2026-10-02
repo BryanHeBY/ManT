@@ -283,10 +283,7 @@ fn project_native_pass_nodes<'a>(
             Inline::Emphasis { children } => output.push(Inline::Emphasis {
                 children: project_native_pass_nodes(children, boundaries, cursor),
             }),
-            Inline::PortableDisplay { display, children } => output.push(Inline::PortableDisplay {
-                display: display.clone(),
-                children: project_native_pass_nodes(children, boundaries, cursor),
-            }),
+
             Inline::Link {
                 target,
                 title,
@@ -311,7 +308,6 @@ fn trim_native_pass_rows(nodes: &mut Vec<Inline>) {
         let starts_row = match &mut node {
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::PortableDisplay { children, .. }
             | Inline::Link { children, .. } => {
                 trim_native_pass_rows(children);
                 starts_with_native_break(children)
@@ -340,7 +336,6 @@ fn first_native_row_event(nodes: &[Inline]) -> Option<bool> {
             Inline::LineBreak { .. } => return Some(true),
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::PortableDisplay { children, .. }
             | Inline::Link { children, .. } => {
                 if let Some(event) = first_native_row_event(children) {
                     return Some(event);
@@ -374,7 +369,6 @@ fn trim_native_breakable_tail(nodes: &mut Vec<Inline>) -> bool {
             }
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::PortableDisplay { children, .. }
             | Inline::Link { children, .. } => {
                 let consumed = trim_native_breakable_tail(children);
                 if consumed && !children.is_empty() {

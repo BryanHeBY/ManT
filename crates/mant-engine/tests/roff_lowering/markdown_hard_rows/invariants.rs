@@ -13,8 +13,7 @@ fn alter_inlines(children: &mut [Inline], change: &mut impl FnMut(&mut Inline)) 
         match child {
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::Link { children, .. }
-            | Inline::PortableDisplay { children, .. } => alter_inlines(children, change),
+            | Inline::Link { children, .. } => alter_inlines(children, change),
             _ => {}
         }
     }

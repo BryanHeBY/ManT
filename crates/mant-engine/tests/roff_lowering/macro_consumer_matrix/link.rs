@@ -18,8 +18,8 @@ use mant_ir::{
 #[path = "link_contracts.rs"]
 mod contracts;
 
-#[path = "portable_display_contracts.rs"]
-mod portable;
+#[path = "accepted_spelling_contracts.rs"]
+mod accepted_spelling;
 
 // These two filled paragraphs have no authored row requests. Their native
 // width=78 breaks are device wrapping, covered separately below rather than

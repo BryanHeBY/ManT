@@ -2372,33 +2372,6 @@
             ]
           },
           {
-            "description": "A retained portable spelling over native terminal execution.\n\n`children` hold the native execution result exactly as the formatter\nrecorded it (for mdoc `.Bx` lifecycle operands: the authored operand\nglyphs plus the validator-generated `BSD` word). `display` is the\nportable replacement spelling the project retains for reader-facing\nprojections. Native-faithful consumers project `children`; the two\nare asserted separately and never conflated (external review\nsection 9: execution facts and display replacement stay separated).",
-            "type": "object",
-            "properties": {
-              "children": {
-                "description": "Native execution result this spelling replaces.",
-                "type": "array",
-                "items": {
-                  "$ref": "#/$defs/Inline"
-                }
-              },
-              "display": {
-                "description": "Reader-facing replacement spelling.",
-                "type": "string"
-              },
-              "type": {
-                "type": "string",
-                "const": "portable-display"
-              }
-            },
-            "additionalProperties": false,
-            "required": [
-              "type",
-              "display",
-              "children"
-            ]
-          },
-          {
             "description": "A zero-width, document-local navigation destination such as mdoc `Tg`.\n\nAnchor IDs and section IDs share one namespace within a document.",
             "type": "object",
             "properties": {
@@ -6251,33 +6224,6 @@
             "required": [
               "type",
               "target",
-              "children"
-            ]
-          },
-          {
-            "description": "A retained portable spelling over native terminal execution.\n\n`children` hold the native execution result exactly as the formatter\nrecorded it (for mdoc `.Bx` lifecycle operands: the authored operand\nglyphs plus the validator-generated `BSD` word). `display` is the\nportable replacement spelling the project retains for reader-facing\nprojections. Native-faithful consumers project `children`; the two\nare asserted separately and never conflated (external review\nsection 9: execution facts and display replacement stay separated).",
-            "type": "object",
-            "properties": {
-              "children": {
-                "description": "Native execution result this spelling replaces.",
-                "type": "array",
-                "items": {
-                  "$ref": "#/$defs/Inline"
-                }
-              },
-              "display": {
-                "description": "Reader-facing replacement spelling.",
-                "type": "string"
-              },
-              "type": {
-                "type": "string",
-                "const": "portable-display"
-              }
-            },
-            "additionalProperties": false,
-            "required": [
-              "type",
-              "display",
               "children"
             ]
           },
@@ -11342,33 +11288,6 @@
             ]
           },
           {
-            "description": "A retained portable spelling over native terminal execution.\n\n`children` hold the native execution result exactly as the formatter\nrecorded it (for mdoc `.Bx` lifecycle operands: the authored operand\nglyphs plus the validator-generated `BSD` word). `display` is the\nportable replacement spelling the project retains for reader-facing\nprojections. Native-faithful consumers project `children`; the two\nare asserted separately and never conflated (external review\nsection 9: execution facts and display replacement stay separated).",
-            "type": "object",
-            "properties": {
-              "children": {
-                "description": "Native execution result this spelling replaces.",
-                "type": "array",
-                "items": {
-                  "$ref": "#/$defs/Inline"
-                }
-              },
-              "display": {
-                "description": "Reader-facing replacement spelling.",
-                "type": "string"
-              },
-              "type": {
-                "type": "string",
-                "const": "portable-display"
-              }
-            },
-            "additionalProperties": false,
-            "required": [
-              "type",
-              "display",
-              "children"
-            ]
-          },
-          {
             "description": "A zero-width, document-local navigation destination such as mdoc `Tg`.\n\nAnchor IDs and section IDs share one namespace within a document.",
             "type": "object",
             "properties": {
@@ -15823,33 +15742,6 @@
             "required": [
               "type",
               "target",
-              "children"
-            ]
-          },
-          {
-            "description": "A retained portable spelling over native terminal execution.\n\n`children` hold the native execution result exactly as the formatter\nrecorded it (for mdoc `.Bx` lifecycle operands: the authored operand\nglyphs plus the validator-generated `BSD` word). `display` is the\nportable replacement spelling the project retains for reader-facing\nprojections. Native-faithful consumers project `children`; the two\nare asserted separately and never conflated (external review\nsection 9: execution facts and display replacement stay separated).",
-            "type": "object",
-            "properties": {
-              "children": {
-                "description": "Native execution result this spelling replaces.",
-                "type": "array",
-                "items": {
-                  "$ref": "#/$defs/Inline"
-                }
-              },
-              "display": {
-                "description": "Reader-facing replacement spelling.",
-                "type": "string"
-              },
-              "type": {
-                "type": "string",
-                "const": "portable-display"
-              }
-            },
-            "additionalProperties": false,
-            "required": [
-              "type",
-              "display",
               "children"
             ]
           },

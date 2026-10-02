@@ -373,7 +373,6 @@ pub(super) fn inline_anchor_ids(nodes: &[Inline], output: &mut Vec<String>) {
             Inline::Anchor { id, .. } => output.push(id.to_string()),
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::PortableDisplay { children, .. }
             | Inline::Link { children, .. } => inline_anchor_ids(children, output),
             Inline::Text { .. }
             | Inline::Code { .. }
@@ -389,7 +388,6 @@ pub(super) fn inline_anchor_owner_source(nodes: &[Inline]) -> Option<SourceSpan>
         Inline::Anchor { owner_source, .. } => *owner_source,
         Inline::Strong { children }
         | Inline::Emphasis { children }
-        | Inline::PortableDisplay { children, .. }
         | Inline::Link { children, .. } => inline_anchor_owner_source(children),
         Inline::Text { .. }
         | Inline::Code { .. }
@@ -545,7 +543,6 @@ fn inlines_contain_anchor(nodes: &[Inline], target: &str) -> bool {
         Inline::Anchor { id, .. } => id == target,
         Inline::Strong { children }
         | Inline::Emphasis { children }
-        | Inline::PortableDisplay { children, .. }
         | Inline::Link { children, .. } => inlines_contain_anchor(children, target),
         Inline::Text { .. }
         | Inline::Code { .. }

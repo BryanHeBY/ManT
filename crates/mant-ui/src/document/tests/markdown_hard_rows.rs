@@ -224,8 +224,7 @@ fn remove_leading_hard_row(children: &mut Vec<Inline>) -> bool {
             }
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::Link { children, .. }
-            | Inline::PortableDisplay { children, .. } => {
+            | Inline::Link { children, .. } => {
                 if remove_leading_hard_row(children) {
                     return true;
                 }

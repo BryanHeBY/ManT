@@ -39,7 +39,6 @@ pub fn has_literal_rows(nodes: &[crate::Inline]) -> bool {
         | crate::Inline::LineBreak { .. } => true,
         crate::Inline::Strong { children }
         | crate::Inline::Emphasis { children }
-        | crate::Inline::PortableDisplay { children, .. }
         | crate::Inline::Link { children, .. } => has_literal_rows(children),
         crate::Inline::Anchor { .. } => false,
     })

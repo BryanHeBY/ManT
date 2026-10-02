@@ -49,16 +49,7 @@ def _text(children, *, native=False):
             pieces.append("\n" + " " * child.get("indentColumns", 0))
         elif kind == "anchor":
             continue
-        elif kind == "portable-display" and not native:
-            if child["display"] != "":
-                raise ValueError("RC05 permits only Lk's empty portable display")
-            # The hidden terminal ':' and address are not portable glyphs;
-            # their executed row events and resolved origins still are.
-            raw = _text(child["children"], native=True)
-            rows = raw.split("\n")
-            prefixes = [row[:len(row) - len(row.lstrip(" \t\u00a0"))] for row in rows]
-            pieces.append("\n".join(prefixes))
-        elif kind in ("strong", "emphasis", "link", "portable-display"):
+        elif kind in ("strong", "emphasis", "link"):
             pieces.append(_text(child["children"], native=native))
         else:
             raise ValueError("unexpected RC05 inline kind: " + kind)

@@ -54,21 +54,6 @@ pub enum Inline {
         /// Visible linked content.
         children: Vec<Inline>,
     },
-    /// A retained portable spelling over native terminal execution.
-    ///
-    /// `children` hold the native execution result exactly as the formatter
-    /// recorded it (for mdoc `.Bx` lifecycle operands: the authored operand
-    /// glyphs plus the validator-generated `BSD` word). `display` is the
-    /// portable replacement spelling the project retains for reader-facing
-    /// projections. Native-faithful consumers project `children`; the two
-    /// are asserted separately and never conflated (external review
-    /// section 9: execution facts and display replacement stay separated).
-    PortableDisplay {
-        /// Reader-facing replacement spelling.
-        display: String,
-        /// Native execution result this spelling replaces.
-        children: Vec<Inline>,
-    },
     /// A zero-width, document-local navigation destination such as mdoc `Tg`.
     ///
     /// Anchor IDs and section IDs share one namespace within a document.

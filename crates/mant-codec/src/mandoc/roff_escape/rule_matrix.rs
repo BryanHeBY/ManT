@@ -47,7 +47,6 @@ fn native_inline(nodes: &[Inline]) -> String {
                 text.push_str(value);
             }
             Inline::Strong { children }
-            | Inline::PortableDisplay { children, .. }
             | Inline::Emphasis { children }
             | Inline::Link { children, .. } => text.push_str(&native_inline(children)),
             Inline::LineBreak { .. } => text.push('\n'),
@@ -323,7 +322,7 @@ fn styled_characters(nodes: &[Inline], style: u8, output: &mut Vec<(char, u8)>) 
             }
             Inline::Strong { children } => styled_characters(children, style | 1, output),
             Inline::Emphasis { children } => styled_characters(children, style | 2, output),
-            Inline::PortableDisplay { children, .. } | Inline::Link { children, .. } => {
+            Inline::Link { children, .. } => {
                 styled_characters(children, style, output);
             }
             Inline::LineBreak { .. } => output.push(('\n', 0)),

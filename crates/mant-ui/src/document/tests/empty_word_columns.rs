@@ -228,7 +228,7 @@ fn check_reader_column(
         .unwrap();
     let native_prefix = text(&position["prefix"]);
     // Ordinary Markdown phrasing discards edge ASCII padding; native_text
-    // selects native portable-display children, not terminal page geometry.
+    // preserves definition word boundaries without selecting another spelling.
     // Fenced literal rows and authored NBSP retain their exact cell origins.
     let prefix = if owner["no_fill"].as_bool().unwrap() {
         native_prefix

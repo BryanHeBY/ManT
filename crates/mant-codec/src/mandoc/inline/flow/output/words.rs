@@ -154,7 +154,7 @@ impl InlineBuilder {
     /// The checkpoint's single duty is ownership: a `\z` glyph delayed
     /// from preceding source stays pending until that real word settles
     /// it, and must then keep its own owner and style instead of being
-    /// captured by the wrapper's Link, Code, or `PortableDisplay`
+    /// captured by the wrapper's Link or Code
     /// annotation. The zero-advance owner ledger carries that receipt
     /// across the whole handler execution.
     pub(in crate::mandoc) fn begin_semantic_owner_checkpoint(&mut self) -> SemanticOwnerCheckpoint {

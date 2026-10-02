@@ -4,7 +4,7 @@ The eleven complete sources in `cases/` have independent pristine CVS
 `.expected` windows. The windows include the next section's spacing; the
 axis cards state which rows, word boundaries, identities and styles are
 applicable. `main_examples` executes the six main cards; `consumer_projections`
-also exercises all eleven through real queries and both Markdown projections.
+also exercises all eleven through real queries and Markdown boundary policies.
 `consumer_ownership` checks their source owners and pending scalar boundaries.
 Comparator mutations remain separate from product assertions.
 
@@ -34,8 +34,8 @@ same cohort and checks real buffers at effective content widths 20/40/78/120,
 resize, search, styles, activation and exact visual copy. Unicode scalars,
 UTF-8 byte offsets and terminal-cell columns are deliberately separate.
 
-Native reading keeps accepted `PortableDisplay.children`; portable Markdown
-may omit a valid Lk target suffix while retaining the accepted label. Portable
+Every consumer retains the same accepted inline body, including each accepted
+Lk colon and URI. Portable
 CommonMark is not an IR serialization: native vertical-space blocks, responsive
 field padding, and rich identities inside code fences are not reconstructed by
 that exporter. Markdown assertions therefore test accepted content, rejected

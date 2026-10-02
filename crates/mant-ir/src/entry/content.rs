@@ -169,7 +169,6 @@ impl<'a> EntryOwner<'a> {
                     nodes = match node {
                         Inline::Strong { children }
                         | Inline::Emphasis { children }
-                        | Inline::PortableDisplay { children, .. }
                         | Inline::Link { children, .. } => children,
                         _ => return false,
                     };
@@ -266,16 +265,10 @@ impl<'a> EntryOwner<'a> {
             nodes = match parent {
                 Inline::Strong { children }
                 | Inline::Emphasis { children }
-                | Inline::PortableDisplay { children, .. }
                 | Inline::Link { children, .. } => children,
                 _ => return None,
             };
-            // A selected native subrange does not own its enclosing export
-            // spelling. Keep styles and destinations, but do not expand a
-            // partial name into the complete portable alias.
-            if !matches!(parent, Inline::PortableDisplay { .. }) {
-                wrappers.push(parent);
-            }
+            wrappers.push(parent);
         }
         let node = nodes.get(last)?;
         let mut selected = if let Some(range) = &slice.bytes {
@@ -370,7 +363,6 @@ impl<'a> EntryOwner<'a> {
             let Some(
                 Inline::Strong { children }
                 | Inline::Emphasis { children }
-                | Inline::PortableDisplay { children, .. }
                 | Inline::Link { children, .. },
             ) = nodes.get(index)
             else {
@@ -434,7 +426,6 @@ fn consume_text(nodes: &[Inline], expected: &mut &str) -> bool {
             Inline::Anchor { .. } => continue,
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::PortableDisplay { children, .. }
             | Inline::Link { children, .. } => {
                 if !consume_text(children, expected) {
                     return false;
@@ -692,29 +683,26 @@ mod tests {
     }
 
     #[test]
-    fn portable_native_slices_validate_bindings_without_expanding_partial_names() {
-        let mut item = item("portable-name", EntryKind::Term, "é");
+    fn styled_link_slices_validate_scalar_name_bindings() {
+        let mut item = item("styled-name", EntryKind::Term, "é");
         let Block::Paragraph { children, .. } = &mut item.blocks[0] else {
             panic!("paragraph");
         };
-        children[0] = Inline::PortableDisplay {
-            display: "portable complete description".into(),
-            children: vec![Inline::Link {
-                target: crate::LinkTarget::Document {
-                    name: "other".into(),
-                    fragment: None,
-                },
-                title: None,
-                children: vec![Inline::Strong {
-                    children: vec![Inline::Code {
-                        value: "é名".into(),
-                    }],
+        children[0] = Inline::Link {
+            target: crate::LinkTarget::Document {
+                name: "other".into(),
+                fragment: None,
+            },
+            title: None,
+            children: vec![Inline::Strong {
+                children: vec![Inline::Code {
+                    value: "é名".into(),
                 }],
             }],
         };
         let slice = EntryContentSlice {
             root: EntryInlineRoot::Block { index: 0 },
-            path: vec![0, 0, 0, 0],
+            path: vec![0, 0, 0],
             bytes: Some(0..2),
         };
         let form = EntryForm {
@@ -728,7 +716,7 @@ mod tests {
         let owner = EntryOwner::List(&decoded);
         assert_eq!(owner.validated_form_count(), Some(1));
         assert!(owner.form_text_equals(&form, "é"));
-        assert!(!owner.form_text_equals(&form, "portable complete description"));
+        assert!(!owner.form_text_equals(&form, "é名"));
         let selected = owner.content_slice(&slice).unwrap();
         assert_eq!(crate::inline_plain_text(&selected), "é");
         assert_eq!(
@@ -742,10 +730,7 @@ mod tests {
                 bytes: None,
             })
             .unwrap();
-        assert!(
-            matches!(complete.as_slice(), [Inline::PortableDisplay { display, .. }]
-            if display == "portable complete description")
-        );
+        assert!(matches!(complete.as_slice(), [Inline::Link { .. }]));
         assert!(
             matches!(selected.as_slice(), [Inline::Link { children, .. }]
             if matches!(children.as_slice(), [Inline::Strong { children }]

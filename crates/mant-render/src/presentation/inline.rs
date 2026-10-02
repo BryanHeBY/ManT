@@ -124,9 +124,6 @@ fn walk<'a>(
                     emit,
                 );
             }
-            Inline::PortableDisplay { children, .. } => {
-                walk(children, style, target, names, cursor, emit);
-            }
             Inline::LineBreak { indent_columns } => text(
                 "\n",
                 InlinePresentation {

@@ -468,10 +468,10 @@ fn ip_does_not_absorb_unproven_definition_heads() {
 }
 
 #[test]
-fn separates_native_bsd_spelling_from_portable_lifecycle_display() {
+fn exports_the_accepted_bsd_lifecycle_spelling() {
     // Exact source rerun with pristine CVS before changing this assertion.
     // mdoc_validate.c::post_bx() adds BSD after the authored operand; native
-    // reading retains it, while portable Markdown has a separate enhancement.
+    // reading and Markdown both retain that accepted spelling.
     let source = b".Dd August 19, 2026\n.Dt BSD-LIFECYCLE 7\n.Os\n.Sh DESCRIPTION\n.Bx\n.Bx -alpha\n.Bx -beta\n.Bx -devel .\n.Bx 4.3 .\n.Bx 4.3 Net/2 .\n.Bx 386 0.1 .\n";
     let document = parse_manual_bytes(std::path::Path::new("bsd-lifecycle.7"), source)
         .expect("lower mdoc BSD lifecycle forms");
@@ -490,13 +490,10 @@ fn separates_native_bsd_spelling_from_portable_lifecycle_display() {
         tldr: None,
     };
     let portable = mant_codec::encode::render_markdown(&query);
-    for display in [
-        "BSD (currently in alpha test)",
-        "BSD (currently in beta test)",
-        "BSD (currently under development)",
-    ] {
-        assert!(portable.contains(display), "{portable}");
+    for operand in ["-alphaBSD", "-betaBSD", "-develBSD"] {
+        assert!(portable.contains(operand), "{portable}");
     }
+    assert!(!portable.contains("currently"), "{portable}");
 }
 
 #[test]

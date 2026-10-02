@@ -46,7 +46,7 @@ immutable source files in `shared_execution_matrix/cases`.
 | `kept_word_rows` | 96 | Keep, spacing and word boundaries |
 | `generated_word_styles` | 48 | Styles retain generated-word ownership |
 | `output_owner_rows` | 69 | Output transfers retain execution facts |
-| `portable_word_rows` | 108 | Native and portable reading contracts |
+| `portable_word_rows` | 108 | Accepted native word receipts and public-body ownership |
 | `container_word_rows` | 21 | Container pre/post and word order |
 | `node_body_rows` | 310 | Actual HEAD post fitting, BODY events and edge rows |
 | `section_edge_rows` | 297 | Completed empty HEAD rows and section/EOF handoffs |

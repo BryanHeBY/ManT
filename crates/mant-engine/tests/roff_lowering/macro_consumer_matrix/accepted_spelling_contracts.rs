@@ -59,53 +59,27 @@ fn search(
 }
 
 #[test]
-fn bsd_portable_replacements_keep_source_spacing_and_hard_rows() {
+fn bsd_lifecycle_operands_keep_source_spacing_and_hard_rows() {
     // post_bx adds the native BSD word tightly; term_word/term_fill consume
-    // source p/c/z in that same execution stream. The portable spelling
-    // substitutes glyphs; it cannot remove an accepted row or add native text.
-    for (before, operand, portable_rows, native_rows) in [
-        (
-            "BEFORE",
-            "-alpha",
-            vec!["BEFORE BSD (currently in alpha test) AFTER"],
-            vec!["BEFORE -alphaBSD AFTER"],
-        ),
-        (
-            r"BEFORE\p",
-            "-alpha",
-            vec!["BEFORE", "BSD (currently in alpha test) AFTER"],
-            vec!["BEFORE", "-alphaBSD AFTER"],
-        ),
-        (
-            "BEFORE",
-            r"-alpha\p",
-            vec!["BEFORE BSD (currently in alpha test)", "AFTER"],
-            vec!["BEFORE -alphaBSD", "AFTER"],
-        ),
+    // source p/c/z in that same execution stream. Default Markdown exports
+    // those same accepted glyphs without replacement English prose.
+    for (before, operand, native_rows) in [
+        ("BEFORE", "-alpha", vec!["BEFORE -alphaBSD AFTER"]),
+        (r"BEFORE\p", "-alpha", vec!["BEFORE", "-alphaBSD AFTER"]),
+        ("BEFORE", r"-alpha\p", vec!["BEFORE -alphaBSD", "AFTER"]),
         (
             r"BEFORE\p",
             r"-alpha\p",
-            vec!["BEFORE", "BSD (currently in alpha test)", "AFTER"],
             vec!["BEFORE", "-alphaBSD", "AFTER"],
         ),
-        (
-            r"BEFORE\c",
-            "-alpha",
-            vec!["BEFOREBSD (currently in alpha test) AFTER"],
-            vec!["BEFORE-alphaBSD AFTER"],
-        ),
-        (
-            r"BEFORE\c",
-            r"-alpha\p",
-            vec!["BEFOREBSD (currently in alpha test)", "AFTER"],
-            vec!["BEFORE-alphaBSD", "AFTER"],
-        ),
+        (r"BEFORE\c", "-alpha", vec!["BEFORE-alphaBSD AFTER"]),
+        (r"BEFORE\c", r"-alpha\p", vec!["BEFORE-alphaBSD", "AFTER"]),
     ] {
         let source = format!("{PRE}.No {before}\n.Bx {operand}\n.No AFTER\n.Sh NEXT\n.No END\n");
         let query = roundtrip(&source);
         assert_eq!(
             description_rows(&mant_codec::encode::render_markdown(&query)),
-            portable_rows,
+            native_rows,
             "{before}/{operand}: portable"
         );
         let native = mant_codec::encode::render_markdown_with_options(
@@ -133,7 +107,7 @@ fn bsd_portable_replacements_keep_source_spacing_and_hard_rows() {
 }
 
 #[test]
-fn hidden_lk_suffix_keeps_its_executed_break_in_portable_markdown() {
+fn accepted_link_suffix_keeps_its_executed_break_in_markdown() {
     // termp_lk_pre emits label -> ':' -> address. A label-final p stays
     // pending through ':' and ends the row at the address word boundary.
     let query = roundtrip(&format!(
@@ -141,7 +115,7 @@ fn hidden_lk_suffix_keeps_its_executed_break_in_portable_markdown() {
     ));
     assert_eq!(
         description_rows(&mant_codec::encode::render_markdown(&query)),
-        ["label", "AFTER"]
+        ["label:", "https://e.example/x AFTER"]
     );
     assert_eq!(
         description_rows(&mant_codec::encode::render_markdown_with_options(
@@ -156,7 +130,7 @@ fn hidden_lk_suffix_keeps_its_executed_break_in_portable_markdown() {
 }
 
 #[test]
-fn visible_and_markdown_search_coordinates_describe_the_selected_projection() {
+fn visible_and_markdown_search_coordinates_use_the_only_spelling() {
     let query = roundtrip(&format!(
         "{PRE}.No BEFORE\\p\n.Bx -alpha\n.No AFTER\n.Sh NEXT\n.No END\n"
     ));
@@ -169,8 +143,8 @@ fn visible_and_markdown_search_coordinates_describe_the_selected_projection() {
         ),
         (
             SearchScope::Markdown,
-            "currently in alpha test",
             "-alpha",
+            "currently in alpha test",
             false,
         ),
     ] {

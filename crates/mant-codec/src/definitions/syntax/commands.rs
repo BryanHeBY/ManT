@@ -35,7 +35,7 @@ fn append_literal_head(inlines: &[Inline], output: &mut String) -> bool {
             }
             Inline::Strong { children } => output.push_str(&plain_text(children)),
             Inline::Code { value } | Inline::Equation { value, .. } => output.push_str(value),
-            Inline::PortableDisplay { children, .. } | Inline::Link { children, .. } => {
+            Inline::Link { children, .. } => {
                 if !append_literal_head(children, output) {
                     return false;
                 }
@@ -90,8 +90,11 @@ mod tests {
             }];
             for content in [
                 term.to_vec(),
-                vec![Inline::PortableDisplay {
-                    display: "unrelated export spelling".into(),
+                vec![Inline::Link {
+                    target: mant_ir::LinkTarget::External {
+                        uri: "https://example.invalid".into(),
+                    },
+                    title: None,
                     children: term.to_vec(),
                 }],
             ] {

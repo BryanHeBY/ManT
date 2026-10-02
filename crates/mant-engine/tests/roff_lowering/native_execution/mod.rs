@@ -1,5 +1,6 @@
 //! Native formatter execution, accepted fields and semantic owners.
 
+mod accepted_word_rows;
 mod column_execution_boundaries;
 mod column_margin_rows;
 mod container_word_rows;
@@ -18,7 +19,6 @@ mod native_execution_matrices;
 mod node_body_rows;
 mod output_owner_rows;
 mod plain_field_rows;
-mod portable_word_rows;
 mod section_edge_rows;
 mod skipped_list_heads;
 mod structural_row_handoffs;

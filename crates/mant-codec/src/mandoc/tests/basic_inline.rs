@@ -79,8 +79,8 @@ fn zero_advance_crosses_leading_scopes_generated_prefixes_and_link_labels() {
         assert_eq!(inline_text(children), expected, "{label}: {children:?}");
         if label == "link-label" {
             assert!(
-                matches!(children.as_slice(), [Inline::Text { value: prefix }, Inline::Text { value: glyph }, Inline::Link { .. }, Inline::PortableDisplay { .. }]
-                    if prefix == "A" && glyph == "X"),
+                matches!(children.as_slice(), [Inline::Text { value: prefix }, Inline::Text { value: glyph }, Inline::Link { .. }, suffix @ ..]
+                    if prefix == "A" && glyph == "X" && inline_text(suffix) == ": https://example.org"),
                 "the pending glyph precedes the label; the native colon and URI execute after it: {children:?}"
             );
         }
