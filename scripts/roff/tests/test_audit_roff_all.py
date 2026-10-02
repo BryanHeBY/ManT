@@ -180,7 +180,9 @@ class AllAuditTests(unittest.TestCase):
     def test_invalid_source_utf8_skips_strings_but_runs_all_native_profiles(self):
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / 'generated.roff'
-            path.write_bytes(b'\xff')
+            # CVS preconv.c::preconv_encode accepts this Latin-1 source;
+            # native structure observation no longer uses a lossy source scan.
+            path.write_bytes(b'.TH RAW 7 "October 3, 2026"\n.SH DESCRIPTION\nraw \xe9\n')
             row = AUDIT.inspect_source((path, [{'id': 'one'}]), argparse.Namespace())
         self.assertFalse(row['sourceValidUtf8'])
         self.assertEqual(set(row['dimensions']), set(AUDIT.DIMENSIONS) - set(AUDIT.PROFILES))
@@ -192,8 +194,7 @@ class AllAuditTests(unittest.TestCase):
             self.assertEqual(profile.call_args.args[0], [path])
             self.assertEqual(row['dimensions'][name]['execution'], 'success')
             self.assertEqual(row['dimensions'][name]['status'], 'clean')
-            coverage = 'partial-non-utf8-source' if name == 'structure' else 'legacy-dimensions-covered'
-            self.assertEqual(row['dimensions'][name]['coverage'], coverage)
+            self.assertEqual(row['dimensions'][name]['coverage'], 'legacy-dimensions-covered')
         self.assertEqual(set(row['dimensions']), set(AUDIT.DIMENSIONS))
 
     def test_source_budget_type_not_detail_words_controls_classification(self):
@@ -218,10 +219,10 @@ class AllAuditTests(unittest.TestCase):
                      {'xz': None, 'bzip2': '/resolved/bzip2'}.get(name, '/backend')):
                 _, report = AUDIT.plan(args)
             self.assertEqual(report['dependencyAvailability']['zstd'], decoder is not None)
-            self.assertFalse(report['dependencyAvailability']['xz'])
+            self.assertNotIn('xz', report['dependencyAvailability'])
             self.assertNotIn('xz', report['binaries'])
-            self.assertTrue(report['dependencyAvailability']['bzip2'])
-            self.assertEqual(report['binaries']['bzip2'], {'path': '/resolved/bzip2', 'sha256': 'bound'})
+            self.assertNotIn('bzip2', report['dependencyAvailability'])
+            self.assertNotIn('bzip2', report['binaries'])
             if decoder:
                 self.assertEqual(report['binaries']['zstd'], {'path': str(decoder), 'sha256': 'bound'})
             else:

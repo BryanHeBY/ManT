@@ -178,14 +178,6 @@ def plan(args):
     dependencies = {'zstd': SOURCES.ZSTD_BINARY is not None}
     if SOURCES.ZSTD_BINARY is not None:
         binaries['zstd'] = identity(SOURCES.ZSTD_BINARY)
-    # The structure profiler's auxiliary table-equation scan invokes these
-    # decoders through PATH. Absence is an observation, not a global preflight
-    # failure for a manifest that may not contain either compressed format.
-    for name in ('xz', 'bzip2'):
-        decoder = shutil.which(name)
-        dependencies[name] = decoder is not None
-        if decoder is not None:
-            binaries[name] = identity(Path(decoder).resolve())
     for name in PROFILES:
         binaries[name] = identity(args.profiler_dir / EXAMPLES[name])
     # groff launches these backends; record them independently of host man(1).
@@ -220,7 +212,7 @@ def plan(args):
                   'Source hashes bind manifest leaves; include dependencies outside the manifest are not fully inventoried.',
                   'External-context sources retain explicit partial coverage even after successful rendering.',
                   'Profile modes differ by existing contract: indexed source for structure/projection, same native session for targets, production standalone for semantics.',
-                  'Non-UTF8 source skips string-based fidelity/layout only; native profiles still run. Structure source-equation scanning uses lossy UTF-8 and retains explicit partial coverage.',
+                  'Non-UTF8 source skips string-based fidelity/layout only; native profiles still run against native-decoded input.',
                   'Timeouts bound individual renderer/comparison subprocesses and each profiler batch, not the total wall time of a page or the complete census. Source I/O and final hashing have no separate wall-time deadline.',
                   'groff macro/font data are host resources, not independently attested by executable hashes.',
                   'Local trusted-source POSIX audit only; no cross-platform or security-sandbox claim.',
@@ -600,11 +592,6 @@ def profile_dimension(name, records, args):
                              'coverage': 'uncovered' if finding.status == 'hard-failure' else
                                  'partial-external-context' if row['externalContext'] else 'legacy-dimensions-covered',
                              **bounded_finding(asdict(finding))}
-                if name == 'structure' and row.get('sourceValidUtf8') is False and finding.status != 'hard-failure':
-                    value['coverage'] = 'partial-non-utf8-source'
-                    value['coverageReasons'] = ['legacy structure source-equation scan uses String::from_utf8_lossy']
-                    if row['externalContext']:
-                        value['coverageReasons'].append('external source context is not fully inventoried')
             row['dimensions'][name] = value
     except Exception as error:
         for row in selected:

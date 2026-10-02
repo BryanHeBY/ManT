@@ -6,10 +6,11 @@ manuals, they exist to exercise combinations that a structural oracle must see
 on every local fixture run. They are not copied from an operating system or
 third-party manual.
 
-`equation-contexts.7` combines a configuration-only `.EQ`, inline delimited
-equations, a display equation, and delimiter-driven tbl cells. Focused Rust
-tests remain the behavioral gate; the fixture proves that the corpus profiler
-itself observes each placement class.
+`equation-contexts.7` combines a configuration-only `.EQ`, native inline and
+display equations, and delimiter-like text in tbl cells. The profiler observes
+only finalized native equation nodes. The tbl text is an opaque-payload
+negative control: source delimiters alone do not establish a table equation's
+executed framing or environment. Focused Rust tests remain the behavioral gate.
 
 `projection-escapes.7` locks source entity spellings, trailing brace text in a
 heading, and dollar-prefixed variable text across the native-IR-to-CommonMark
