@@ -181,3 +181,90 @@ fn bounded_item_census_keeps_actual_owner_witnesses() {
         assert!(!row["ancestorIds"].as_array().unwrap().is_empty());
     }
 }
+
+fn continuation_is_retained(census: &serde_json::Value) -> bool {
+    census["ir"].as_array().unwrap().iter().any(|item| {
+        item["origin"]["line"] == 13 && item["body"] == "powershell: rclone cat remote:path [flags]"
+    })
+}
+
+#[test]
+fn headless_continuation_is_located_without_waiving_a_lower_item_count() {
+    // This exact original rclone slice ran all five pristine profiles first.
+    // man_term.c::pre_IP/post_IP retain its separate physical paragraph; the
+    // documented reading-owner normalization attaches an empty-head IP after
+    // RS to the previous tag, preserving its original body and spacing.
+    let case = cases()
+        .into_iter()
+        .find(|case| case["id"] == "headless-continuation-owner")
+        .unwrap();
+    let source = case["source"].as_str().unwrap();
+    let report = Parser::new(ParseOptions {
+        includes: IncludePolicy::Deny,
+        compression: Compression::Plain,
+    })
+    .parse_bytes("audit.1", source.as_bytes())
+    .unwrap();
+    let (expected, _) = ast_profile(&report.document.root);
+    let mut document =
+        mant_codec::parse_roff_bytes(std::path::Path::new("audit.1"), source.as_bytes()).unwrap();
+    let observed = ir_profile(&document).0;
+    // Retain the original lower category/count observation. It is not proof
+    // of deletion or an automatic allowance for other unmatched owners.
+    assert_eq!(
+        (expected.generic_list_items, expected.definition_items),
+        (2, 3)
+    );
+    assert_eq!(
+        (observed.generic_list_items, observed.definition_items),
+        (0, 4)
+    );
+    let census = serde_json::to_value(structure_items::item_census(
+        &report.document.root,
+        &document,
+    ))
+    .unwrap();
+    assert_eq!(
+        (census["nativeTotal"].as_u64(), census["irTotal"].as_u64()),
+        (Some(5), Some(4))
+    );
+    assert_eq!(census["unmatchedNative"], json!([4]));
+    assert_eq!(census["unmatchedIr"], json!([]));
+    assert_eq!(census["ambiguousOrigins"], json!([]));
+    assert_eq!(
+        census["native"][4]["origin"],
+        json!({"line": 23, "column": 2})
+    );
+    assert_eq!(census["native"][4]["head"], "");
+    assert!(continuation_is_retained(&census));
+    let Block::DefinitionList { items, .. } = &mut document.sections[0].blocks[1] else {
+        panic!("original labelled powershell owner");
+    };
+    let Block::Preformatted {
+        children,
+        source,
+        layout,
+        ..
+    } = &items[0].description[2]
+    else {
+        panic!("headless command's original literal carrier");
+    };
+    assert_eq!(
+        children,
+        &[Inline::Code {
+            value: "rclone cat remote:path [flags]".to_owned()
+        }]
+    );
+    assert_eq!(source.map(|span| (span.line, span.column)), Some((25, 1)));
+    assert_eq!(layout.spacing_before_lines, 1);
+    items[0].description.remove(2);
+    let damaged = serde_json::to_value(structure_items::item_census(
+        &report.document.root,
+        &document,
+    ))
+    .unwrap();
+    // Removing actual body text leaves the same item totals: owner evidence,
+    // rather than aggregate count forgiveness, detects the destructive change.
+    assert_eq!(damaged["irTotal"], census["irTotal"]);
+    assert!(!continuation_is_retained(&damaged));
+}

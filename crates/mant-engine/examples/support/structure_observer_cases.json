@@ -518,6 +518,60 @@
           "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
         }
       }
+    },
+    {
+      "id": "headless-continuation-owner",
+      "source": ".TH OWNER 1 \"October 3, 2026\"\n.SH DESCRIPTION\n.IP \\[bu] 2\nbash:\n.RS 2\n.IP\n.nf\n\\f[C]\nrclone --include \\[dq]*.txt\\[dq] --separator $\\[aq]\\[rs]n\\[aq] cat remote:path/to/dir\n\\f[R]\n.fi\n.RE\n.IP \\[bu] 2\npowershell:\n.RS 2\n.IP\n.nf\n\\f[C]\nrclone --include \\[dq]*.txt\\[dq] --separator \\[dq]\\[ga]n\\[dq] cat remote:path/to/dir\n\\f[R]\n.fi\n.RE\n.IP\n.nf\n\\f[C]\nrclone cat remote:path [flags]\n\\f[R]\n.fi\n.SH NEXT\nAFTER_BOUNDARY\n",
+      "sourceSha256": "630838fe498ab4768bae43d5a6e64ae899beaf47c48da24692ec4322f35353d8",
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "code": 0,
+          "stdoutSha256": "bc97e4090969ddb9825df77e064f1d8ad187c33e99b1acfbf7340b1d0ce36304",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "code": 0,
+          "stdoutSha256": "3476443a66ccd6f30326838b4be1a819d8a21abd7eece9dded5f507a6db39b55",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Thtml"
+          ],
+          "code": 0,
+          "stdoutSha256": "c3a88ccd941617a09e923e48743a2406f13effc99351971c74895a8a1c169f55",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Ttree"
+          ],
+          "code": 0,
+          "stdoutSha256": "c2ac5dbfbbfb2a7f9ae5bb3d327db5f7b4b67783df0720acb505456814b92d57",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tlint"
+          ],
+          "code": 2,
+          "stdoutSha256": "508abccb9f40068fcfb6ad980bc63057440aca4fe71a4ed9e9161f9080189b40",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
     }
   ]
 }
