@@ -1,0 +1,421 @@
+{
+  "referenceSha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+  "cases": [
+    {
+      "id": "duplicate-moved-owner",
+      "source": ".TH OBSERVER 1 \"October 3, 2026\"\n.SH BODY\n.nf\nFirstStart\nSame first row\nSame second row\nFirstEnd\n.fi\n.PP\n.nf\nSecondStart\nSame first row\nSame second row\nSecondEnd\n.fi\n",
+      "sourceSha256": "0c1a5672107be4c7256974e361cd0c2e90190cc8f9d55ebee944c09483b18bcb",
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tascii",
+            "-Owidth=78",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/duplicate-moved-owner/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "c432fb4db52d161485d1c58eadba142bc46b9be3d54791abbf4b223a02cb36fc",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tutf8",
+            "-Owidth=78",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/duplicate-moved-owner/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "c432fb4db52d161485d1c58eadba142bc46b9be3d54791abbf4b223a02cb36fc",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Thtml",
+            "-Ofragment",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/duplicate-moved-owner/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "87f501db0ca2e821d3229674c44727fb8b91ad0ffbf1a49e726c651a308e18fc",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Ttree",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/duplicate-moved-owner/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "50e10c79193fcaf1138059b680442f2690f3eb4be7d6826661f7c6800153840a",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tlint",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/duplicate-moved-owner/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "reference": "OBSERVER(1)                 General Commands Manual                OBSERVER(1)\n\nB\bBO\bOD\bDY\bY\n     FirstStart\n     Same first row\n     Same second row\n     FirstEnd\n\n     SecondStart\n     Same first row\n     Same second row\n     SecondEnd\n\n                                October 3, 2026                    OBSERVER(1)\n"
+    },
+    {
+      "id": "literal-blank-gap",
+      "source": ".TH OBSERVER 1 \"October 3, 2026\"\n.SH BODY\n.nf\nFirst row\n\nSecond row\n.fi\n",
+      "sourceSha256": "2138c1d6fb0453c8dbe52857d0cb265e2660df8a7daaf5ba7307482ef965d077",
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tascii",
+            "-Owidth=78",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/literal-blank-gap/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "1be334edb43f177b8d7de9589b276429531d3c58e642c43d8d8d992f22999c42",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tutf8",
+            "-Owidth=78",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/literal-blank-gap/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "1be334edb43f177b8d7de9589b276429531d3c58e642c43d8d8d992f22999c42",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Thtml",
+            "-Ofragment",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/literal-blank-gap/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "93926dcc54dc2c0e6b331c2a2fb659a18ec6bd4287692420d71d1be9b822bf2f",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Ttree",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/literal-blank-gap/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "566fa4c817bb4d81c0224d21bd373a96685218bcb237cdb22bf6b74f2379e40b",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tlint",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/literal-blank-gap/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "reference": "OBSERVER(1)                 General Commands Manual                OBSERVER(1)\n\nB\bBO\bOD\bDY\bY\n     First row\n\n     Second row\n\n                                October 3, 2026                    OBSERVER(1)\n"
+    },
+    {
+      "id": "literal-continuation",
+      "source": ".TH OBSERVER 1 \"October 3, 2026\"\n.SH BODY\n.nf\nFirst row\\c\nSecond row\n.fi\n",
+      "sourceSha256": "4c813ca147b0ac467353c5a59906bf89faa6ffafa5d5d12dce8a851ff26d4606",
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tascii",
+            "-Owidth=78",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/literal-continuation/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "3382ff5a6a02757a29d90242fd7b5a20d5e63c179a59208d4d498de29293c47e",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tutf8",
+            "-Owidth=78",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/literal-continuation/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "3382ff5a6a02757a29d90242fd7b5a20d5e63c179a59208d4d498de29293c47e",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Thtml",
+            "-Ofragment",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/literal-continuation/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "93926dcc54dc2c0e6b331c2a2fb659a18ec6bd4287692420d71d1be9b822bf2f",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Ttree",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/literal-continuation/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "b400b217eaaca3b8fa5eff6948408d6a9620a70028d0312fbf815c3dcb73a632",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tlint",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/literal-continuation/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "reference": "OBSERVER(1)                 General Commands Manual                OBSERVER(1)\n\nB\bBO\bOD\bDY\bY\n     First rowSecond row\n\n                                October 3, 2026                    OBSERVER(1)\n"
+    },
+    {
+      "id": "rclone-duplicate-flow-literal",
+      "sourceSha256": "37d6d91ca847200209ea391ea1690a65faaf9997b7934f1488f4329566ab50b1",
+      "sourceBytes": 281,
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tascii",
+            "-O",
+            "width=200"
+          ],
+          "exit": 0,
+          "stdoutSha256": "5e84ee1a5538afd546d5e80ee3aacfc2772806062d5f2993a018bcb97412ea66",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tutf8",
+            "-O",
+            "width=200"
+          ],
+          "exit": 0,
+          "stdoutSha256": "5e84ee1a5538afd546d5e80ee3aacfc2772806062d5f2993a018bcb97412ea66",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Thtml"
+          ],
+          "exit": 0,
+          "stdoutSha256": "bb72d76504b78e3894b5a9c33a1d530aba7a90a78358b6d321fd89858a275380",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Ttree"
+          ],
+          "exit": 0,
+          "stdoutSha256": "535e15e62a45ca93b6941bbf64f93e87c1604a0802d70a137351aa1ec490e9c7",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tlint"
+          ],
+          "exit": 2,
+          "stdoutSha256": "8f11e6419baaa5a2f7adb8608fa834874237b70d6fc897adf4c4c30c05afb789",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "candidate": "FIXTURE-REVIEW(7)\n\nDESCRIPTION\nIf the acl is an empty string then no X-Amz-Acl: header is added and the default (private) will be used.\n\nIf the acl is an empty string then no X-Amz-Acl: header is added and\nthe default (private) will be used.\n",
+      "legacyLayout": {
+        "reference": {
+          "nonblank_lines": 6,
+          "blank_line_runs": 3,
+          "blank_lines": 3,
+          "max_indent": 93,
+          "indent_levels": [
+            0,
+            5,
+            93
+          ]
+        },
+        "mant": {
+          "nonblank_lines": 5,
+          "blank_line_runs": 2,
+          "blank_lines": 2,
+          "max_indent": 0,
+          "indent_levels": [
+            0
+          ]
+        },
+        "shared_anchors": 4,
+        "reference_baseline_indent": 5,
+        "mant_baseline_indent": 0,
+        "candidates": [
+          "reference line boundaries may merge in ManT for 1 short pair(s): 'if the acl is an empty string th' + 'the default (private) will be us'"
+        ]
+      },
+      "source": ".TH FIXTURE-REVIEW 7 \"October 3, 2026\"\n.SH DESCRIPTION\n.PP\nIf the acl is an empty string then no X-Amz-Acl: header is added and the\ndefault (private) will be used.\n.PP\n.nf\nIf the acl is an empty string then no X-Amz-Acl: header is added and\nthe default (private) will be used.\n.fi\n",
+      "reference": "FIXTURE-REVIEW(7)                                                                   Miscellaneous Information Manual                                                                   FIXTURE-REVIEW(7)\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     If the acl is an empty string then no X-Amz-Acl: header is added and the default (private) will be used.\n\n     If the acl is an empty string then no X-Amz-Acl: header is added and\n     the default (private) will be used.\n\n                                                                                             October 3, 2026                                                                           FIXTURE-REVIEW(7)\n"
+    },
+    {
+      "id": "rclone-single-literal",
+      "sourceSha256": "f9f961ae8401fd7617167bad6fca5e3c240533bf1083ddbbffe75e504e82ef4e",
+      "sourceBytes": 168,
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tascii",
+            "-O",
+            "width=200"
+          ],
+          "exit": 0,
+          "stdoutSha256": "89f0fd6b29ecd722528a97b83681566f9f67e028879f33a5af3755623f7342fd",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tutf8",
+            "-O",
+            "width=200"
+          ],
+          "exit": 0,
+          "stdoutSha256": "89f0fd6b29ecd722528a97b83681566f9f67e028879f33a5af3755623f7342fd",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Thtml"
+          ],
+          "exit": 0,
+          "stdoutSha256": "b2e6d7dd1c8ab8c548c0cdc0bca4ba2311d8042980c83b03858552f718940114",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Ttree"
+          ],
+          "exit": 0,
+          "stdoutSha256": "5bc9536d168e7ab9604ee892ecdf6174dde0e7c4af1c174b3426fdd2abc65979",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tlint"
+          ],
+          "exit": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "candidate": "FIXTURE-REVIEW(7)\n\nDESCRIPTION\nIf the acl is an empty string then no X-Amz-Acl: header is added and\nthe default (private) will be used.\n",
+      "legacyLayout": {
+        "reference": {
+          "nonblank_lines": 5,
+          "blank_line_runs": 2,
+          "blank_lines": 2,
+          "max_indent": 93,
+          "indent_levels": [
+            0,
+            5,
+            93
+          ]
+        },
+        "mant": {
+          "nonblank_lines": 4,
+          "blank_line_runs": 1,
+          "blank_lines": 1,
+          "max_indent": 0,
+          "indent_levels": [
+            0
+          ]
+        },
+        "shared_anchors": 3,
+        "reference_baseline_indent": 5,
+        "mant_baseline_indent": 0,
+        "candidates": []
+      },
+      "source": ".TH FIXTURE-REVIEW 7 \"October 3, 2026\"\n.SH DESCRIPTION\n.nf\nIf the acl is an empty string then no X-Amz-Acl: header is added and\nthe default (private) will be used.\n.fi\n",
+      "reference": "FIXTURE-REVIEW(7)                                                                   Miscellaneous Information Manual                                                                   FIXTURE-REVIEW(7)\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     If the acl is an empty string then no X-Amz-Acl: header is added and\n     the default (private) will be used.\n\n                                                                                             October 3, 2026                                                                           FIXTURE-REVIEW(7)\n"
+    },
+    {
+      "id": "duplicate-owner-blank-gap",
+      "source": ".TH OBSERVER 1 \"October 3, 2026\"\n.SH BODY\n.nf\nSame first row\n\nSame second row\n.fi\n.PP\n.nf\nSame first row\n\nSame second row\n.fi\n",
+      "sourceSha256": "106be175165993d64dcc59c26d4f96bcdf0cd372932d23819e59a1a3c3a16481",
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tascii",
+            "-Owidth=78",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/duplicate-owner-blank-gap/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "3733c9bd7d4e7d0dc1041ab7217e46bc4b50f322a70cd689618ed915055f8666",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tutf8",
+            "-Owidth=78",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/duplicate-owner-blank-gap/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "3733c9bd7d4e7d0dc1041ab7217e46bc4b50f322a70cd689618ed915055f8666",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Thtml",
+            "-Ofragment",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/duplicate-owner-blank-gap/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "ca3b41dd4dc334fdbe11b9a6099a025c1828a9c9fec926ac921d2dea986b26b6",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Ttree",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/duplicate-owner-blank-gap/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "12b46744d67723069d2ca75189d21584957f0513f818be5abc9b68e12f85ec26",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tlint",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/duplicate-owner-blank-gap/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "reference": "OBSERVER(1)                 General Commands Manual                OBSERVER(1)\n\nB\bBO\bOD\bDY\bY\n     Same first row\n\n     Same second row\n\n     Same first row\n\n     Same second row\n\n                                October 3, 2026                    OBSERVER(1)\n"
+    }
+  ]
+}

@@ -57,6 +57,8 @@ run "check roff fidelity audit" python3 -m scripts.roff.audit.audit_roff_fidelit
 run "test bidirectional roff content comparison" python3 -m scripts.roff.lib.roff_content_compare
 run "test source-bound presentation explanations" python3 -m scripts.roff.tests.test_roff_content_explanations
 run "test source-bound roff layout geometry" python3 -m scripts.roff.tests.test_roff_layout_geometry
+run "test source-owned hard lines and empty-row mutations" \
+  python3 -m unittest scripts.roff.tests.test_roff_line_observations
 run "test roff acceptance axes and structural edges" \
   python3 -m unittest scripts.roff.tests.test_acceptance_replay
 run "test finite rule registry and mutation boundaries" \

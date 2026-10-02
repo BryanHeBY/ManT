@@ -218,6 +218,7 @@ class AllAuditTests(unittest.TestCase):
                  patch.object(AUDIT.shutil, 'which', side_effect=lambda name:
                      {'xz': None, 'bzip2': '/resolved/bzip2'}.get(name, '/backend')):
                 _, report = AUDIT.plan(args)
+            self.assertEqual(report['rules']['scripts/roff/lib/roff_line_observations.py'], 'rule')
             self.assertEqual(report['dependencyAvailability']['zstd'], decoder is not None)
             self.assertNotIn('xz', report['dependencyAvailability'])
             self.assertNotIn('xz', report['binaries'])

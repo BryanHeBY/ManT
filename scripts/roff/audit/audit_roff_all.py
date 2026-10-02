@@ -192,7 +192,8 @@ def plan(args):
     # The source helper imports these modules. Freeze them too; do not invoke
     # their oracles or imply their full-corpus coverage in this runner.
     rules += [ROOT / name for name in ('scripts/roff/lib/roff_content_compare.py', 'scripts/roff/lib/roff_layout_geometry.py',
-        'scripts/roff/lib/roff_rendering_frame.py', 'scripts/roff/lib/roff_content_explanations.py', 'scripts/roff/lib/roff_review_queue.py')]
+        'scripts/roff/lib/roff_rendering_frame.py', 'scripts/roff/lib/roff_content_explanations.py', 'scripts/roff/lib/roff_review_queue.py',
+        'scripts/roff/lib/roff_line_observations.py')]
     report = {'schema': 'mant.roff-all-audit/v1', 'status': 'planned', 'started': stamp(),
               'manifestSha256': args._manifest_sha256, 'producerCommit': git('rev-parse', 'HEAD'),
               'producerGitStatus': git('status', '--porcelain'), 'binaries': binaries,

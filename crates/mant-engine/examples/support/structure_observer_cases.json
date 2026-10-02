@@ -1,0 +1,523 @@
+{
+  "referenceSha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+  "cases": [
+    {
+      "id": "whole-rule",
+      "source": ".TH OBSERVER 1 \"October 3, 2026\"\n.SH BODY\n.TS\nl l.\nA\tB\n_\nC\tD\n.TE\n",
+      "sourceSha256": "0255d48d8e97c933fe2b3074f8215b5e1e72997ed847652bf7435d1a19f8f119",
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tascii",
+            "-Owidth=78",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/whole-rule/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "06f0833a09de29dcf1319e823355f967322a3ee6cd1c2d28f8ed35b7428c852d",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tutf8",
+            "-Owidth=78",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/whole-rule/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "52b008f26254e57e57b1699f076ca241f83f7c820833a6e7ed57d82412a2e721",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Thtml",
+            "-Ofragment",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/whole-rule/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "5b658b4848697ae93170118d0769d435418a4209c91a9a304f87c17cd93443aa",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Ttree",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/whole-rule/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "f9e08fcab6600dd554bb54c13ac1c97fdccf4951133bf7eb2cc0ec71f3daa0b7",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tlint",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/whole-rule/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "rowKinds": [
+        "data",
+        "horizontal-rule",
+        "data"
+      ]
+    },
+    {
+      "id": "leading-and-trailing-rules",
+      "source": ".TH OBSERVER 1 \"October 3, 2026\"\n.SH BODY\n.TS\nl l.\n_\nA\tB\n=\nC\tD\n_\n.TE\n",
+      "sourceSha256": "ae02acb21f1dd274a8468e433d718306bc93b17b565636f887f6adbc8681f444",
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tascii",
+            "-Owidth=78",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/leading-and-trailing-rules/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "96fa7c8418cd9717d73fe82ae9fac5cf70eb872833b4e2867aa1c0193c09d91b",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tutf8",
+            "-Owidth=78",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/leading-and-trailing-rules/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "34feab7d49fe3cb39a7b4aa98a3e2622be0f740a5e9cd55b739f07811d019006",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Thtml",
+            "-Ofragment",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/leading-and-trailing-rules/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "dc68687a50084fb0883487a3f12942570684ea83fedbe1225ea7ccc50acbeea1",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Ttree",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/leading-and-trailing-rules/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "831c0db2dae654b66e4616315e83a48bbc0f139cf35850a10ee27784b1f6847b",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tlint",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/leading-and-trailing-rules/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "rowKinds": [
+        "horizontal-rule",
+        "data",
+        "double-horizontal-rule",
+        "data",
+        "horizontal-rule"
+      ]
+    },
+    {
+      "id": "empty-data-row",
+      "source": ".TH OBSERVER 1 \"October 3, 2026\"\n.SH BODY\n.TS\nl l.\nA\tB\n\nC\tD\n.TE\n",
+      "sourceSha256": "3de227a9a47657b63916802a6815257c5829098c8da257a32ecbe954fe488200",
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tascii",
+            "-Owidth=78",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/empty-data-row/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "49b70e02d86a7fbd9c745b5c4e0077fd06ebba14abbf47818f0d8c2561898e28",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tutf8",
+            "-Owidth=78",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/empty-data-row/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "49b70e02d86a7fbd9c745b5c4e0077fd06ebba14abbf47818f0d8c2561898e28",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Thtml",
+            "-Ofragment",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/empty-data-row/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "cea2843c71580b0c79424c47092264ff39731cf97220929b09f2df6949c9cf84",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Ttree",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/empty-data-row/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "23e5ade6912d093b61091fbc0be6dc47a2f56bab7293a2bd8db52fa48a7214da",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tlint",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/empty-data-row/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "rowKinds": [
+        "data",
+        "data",
+        "data"
+      ]
+    },
+    {
+      "id": "layout-rule",
+      "source": ".TH OBSERVER 1 \"October 3, 2026\"\n.SH BODY\n.TS\nl l\n_ =\nl l.\nA\tB\nC\tD\n.TE\n",
+      "sourceSha256": "fcb8a842890f011637f4f59769a9bbd6cccbc57350cabc5524e1f5607b457a7f",
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tascii",
+            "-Owidth=78",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/layout-rule/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "6a7b6fdfeb2abcf18c030848e9fee5154cdb27f3fb6909498afd5d68bc5e0b4a",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tutf8",
+            "-Owidth=78",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/layout-rule/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "75e2a33e7b7a9fe92d5e44e92d2405c66f9fc494bbf6e3297555dc13a959a960",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Thtml",
+            "-Ofragment",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/layout-rule/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "cea2843c71580b0c79424c47092264ff39731cf97220929b09f2df6949c9cf84",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Ttree",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/layout-rule/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "a5ac37a51340a39d22f1952f1966fb96c6b9b2f9bcf5b3fb2c52124237a775c2",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tlint",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/layout-rule/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "rowKinds": [
+        "data",
+        "layout-rule",
+        "data"
+      ]
+    },
+    {
+      "id": "two-tables",
+      "source": ".TH OBSERVER 1 \"October 3, 2026\"\n.SH BODY\n.TS\nl l.\nA\tB\n_\nC\tD\n.TE\n.PP\n.TS\nl.\n=\nSECOND\n.TE\n",
+      "sourceSha256": "9e106f7e6f71f257242c0d6a7150513296049d97608be9af9763fd78fdf7f366",
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tascii",
+            "-Owidth=78",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/two-tables/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "7785c7ba8a4670b12ed386a3c245ec23d31868e9d140778f3003a36a4f2388a9",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tutf8",
+            "-Owidth=78",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/two-tables/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "b9ab67b226106cadb21d4d557516df898202255ab076985d3047b2b96a867e11",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Thtml",
+            "-Ofragment",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/two-tables/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "d48c313d24d75fd96a9273a6cd4302be4a8a91f8f6f2c0779289b64c289e7708",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Ttree",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/two-tables/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "2bfff1c091981aaccde024ee5e52e7aae737fd4c83076cd9754ea38c1224a45e",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tlint",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/two-tables/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "rowKinds": [
+        "data",
+        "horizontal-rule",
+        "data",
+        "double-horizontal-rule",
+        "data"
+      ]
+    },
+    {
+      "id": "spanning-table",
+      "source": ".TH OBSERVER 1 \"October 3, 2026\"\n.SH BODY\n.TS\nl s\nl l\nl ^.\nA\t\nB\tC\nD\t\\^\n.TE\n",
+      "sourceSha256": "f907b31010d31b28ddd846bff19990eb43f0a4e468794af68a4e056bae430680",
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tascii",
+            "-Owidth=78",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/spanning-table/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "e4ddfeee860d8c909a3c3d8d34f44744f50922ccc8fa82891c3c73d5a8de4e9c",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tutf8",
+            "-Owidth=78",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/spanning-table/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "e4ddfeee860d8c909a3c3d8d34f44744f50922ccc8fa82891c3c73d5a8de4e9c",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Thtml",
+            "-Ofragment",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/spanning-table/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "99c851dbdf86abfeec9618a9a1f05c1158f75a83c3cda909133eaa433014fb7e",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Ttree",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/spanning-table/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "c5a3f3c181dbbb53014a891156cea52eecb71eb7ac1c6c74ea8deab5e89a9a05",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tlint",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/spanning-table/source.roff"
+          ],
+          "code": 3,
+          "stdoutSha256": "0840199b08b3fea314ac376779d23521e55cdc7ae23b784b4ec36a6fb73099e9",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "rowKinds": [
+        "data",
+        "data",
+        "data"
+      ]
+    },
+    {
+      "id": "column-list",
+      "source": ".Dd October 3, 2026\n.Dt OBSERVER 1\n.Os\n.Sh BODY\n.Bl -column one two\n.It A Ta B\n.It C Ta D\n.El\n",
+      "sourceSha256": "d549046d41605201dec2c85453140463b91fe74db8208792542250828de6e675",
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tascii",
+            "-Owidth=78",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/column-list/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "bcfec97c7a65e92e8f99aef4b053115d9dca6e199769d013b36f26ce78367b79",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tutf8",
+            "-Owidth=78",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/column-list/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "bcfec97c7a65e92e8f99aef4b053115d9dca6e199769d013b36f26ce78367b79",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Thtml",
+            "-Ofragment",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/column-list/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "37227c58064d50271f8c7060acd844b8ca69871245014438e82985c99778256b",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Ttree",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/column-list/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "4b5ffb5a58107263e351f8e88e82c43b0e6a8eb3e79b51b140cfdf0d5fa37d9b",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tlint",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/column-list/source.roff"
+          ],
+          "code": 2,
+          "stdoutSha256": "5ea319f908fc3415f7c2d55a668f7aa2249e3e16a89e5e0e87b1d13ecf963eee",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "rowKinds": [
+        "data",
+        "data"
+      ]
+    },
+    {
+      "id": "item-census",
+      "source": ".TH OBSERVER 1 \"October 3, 2026\"\n.SH BODY\n.IP \"one\" 4\nFirstBody\n.IP * 4\nBulletBody\n.IP \"two\" 4\nSecondBody\n",
+      "sourceSha256": "07c0ab4756ba9147a97a4cf9ddd6f8fc524d54dc29c372dc8abf80996ee11fd8",
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tascii",
+            "-Owidth=78",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/item-census/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "c1362b897489378fdcf05d02196d5b187cec3afbf8a7db89bf021aa2d1c230ad",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tutf8",
+            "-Owidth=78",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/item-census/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "c1362b897489378fdcf05d02196d5b187cec3afbf8a7db89bf021aa2d1c230ad",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Thtml",
+            "-Ofragment",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/item-census/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "f1dc8695ec0d56075ee62d8ac6680d2d146d57d8c33ad1a0b40db30a67654856",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Ttree",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/item-census/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "ed7d906b9669a7f64a736b3e6b6738cb98b30c95c8decb15a839a44a0be24c15",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tlint",
+            "/home/hby/dev/ManT/target/audits/ast-closeout-h05-h08-20261003/h07/observer-repair/item-census/source.roff"
+          ],
+          "code": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    }
+  ]
+}

@@ -26,6 +26,8 @@ use serde_json::{Value, json};
 
 #[path = "support/profile_io.rs"]
 mod profile_io;
+#[path = "support/structure_items.rs"]
+mod structure_items;
 
 const PROFILE_SCHEMA: &str = "mant.roff-structure-profile/v4";
 
@@ -166,8 +168,13 @@ struct IrListTopology {
     items: usize,
 }
 
-#[derive(Eq, PartialEq, Serialize)]
+#[derive(PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct AstTableRowTopology {
+    table_source_line: u32,
+    table_source_column: u32,
+    row_index: usize,
+    kind: mant_ir::TableRowKind,
     cells: Vec<AstTableCellTopology>,
 }
 
@@ -179,8 +186,13 @@ struct AstTableCellTopology {
     vertical_continuation: bool,
 }
 
-#[derive(Eq, PartialEq, Serialize)]
+#[derive(PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct IrTableRowTopology {
+    table_source_line: u32,
+    table_source_column: u32,
+    row_index: usize,
+    kind: mant_ir::TableRowKind,
     cells: Vec<IrTableCellTopology>,
 }
 
@@ -246,6 +258,11 @@ fn profile_request(line: &str) -> Result<Value, String> {
         compare_structure(&expected, &observed, &expected_topology, &observed_topology)
     };
 
+    let item_census = request
+        .get("itemCensus")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+        .then(|| structure_items::item_census(&report.document.root, &document));
     Ok(json!({
         "schema": PROFILE_SCHEMA,
         "id": id,
@@ -269,6 +286,7 @@ fn profile_request(line: &str) -> Result<Value, String> {
         },
         "alias": is_alias,
         "violations": violations,
+        "itemCensus": item_census,
     }))
 }
 
@@ -367,7 +385,7 @@ fn collect_ast_structure(
     if node.macro_name.as_deref() == Some("br") && node.kind == NodeKind::Element {
         profile.hard_breaks += 1;
     }
-    if node.kind == NodeKind::Table && !node.table_cells.is_empty() {
+    if node.kind == NodeKind::Table && node.table_row_kind.is_some() {
         profile.table_rows += 1;
         profile.table_spanning_cells += node
             .table_cells
@@ -714,7 +732,18 @@ fn mdoc_column_rows(node: &Node) -> Vec<AstTableRowTopology> {
                     vertical_continuation: false,
                 })
                 .collect::<Vec<_>>();
-            (!cells.is_empty()).then_some(AstTableRowTopology { cells })
+            (!cells.is_empty()).then_some(AstTableRowTopology {
+                table_source_line: node.line,
+                table_source_column: node.column,
+                row_index: 0,
+                kind: mant_ir::TableRowKind::Data,
+                cells,
+            })
+        })
+        .enumerate()
+        .map(|(index, mut row)| {
+            row.row_index = index;
+            row
         })
         .collect()
 }
@@ -769,9 +798,22 @@ fn collect_ast_topology(node: &Node, inside_table: bool, topology: &mut AstTopol
         });
     }
 
+    let mut table_origin = None;
+    let mut row_index = 0;
     for child in &node.children {
-        if child.kind == NodeKind::Table && !child.table_cells.is_empty() {
+        if child.kind == NodeKind::Table
+            && let Some(kind) = native_table_kind(child)
+        {
+            if child.flags.table_start || table_origin.is_none() {
+                table_origin = Some((child.line, child.column));
+                row_index = 0;
+            }
+            let (table_source_line, table_source_column) = table_origin.expect("native tbl start");
             topology.table_rows.push(AstTableRowTopology {
+                table_source_line,
+                table_source_column,
+                row_index,
+                kind,
                 cells: child
                     .table_cells
                     .iter()
@@ -782,6 +824,8 @@ fn collect_ast_topology(node: &Node, inside_table: bool, topology: &mut AstTopol
                     })
                     .collect(),
             });
+            row_index += 1;
+            collect_ast_topology(child, true, topology);
             continue;
         }
         collect_ast_topology(
@@ -972,22 +1016,33 @@ fn collect_blocks(
                     collect_blocks(&item.description, inside_table, profile, topology);
                 }
             }
-            Block::Table { rows, layout, .. } => {
+            Block::Table {
+                rows,
+                layout,
+                source,
+                ..
+            } => {
                 profile.max_indent_columns = profile.max_indent_columns.max(layout.indent_columns);
                 profile.table_rows += rows.len();
-                topology.table_rows.extend(rows.iter().map(|row| {
-                    IrTableRowTopology {
-                        cells: row
-                            .cells
-                            .iter()
-                            .map(|cell| IrTableCellTopology {
-                                column_span: cell.column_span,
-                                row_span: cell.row_span,
-                                empty: cell.blocks.is_empty(),
-                            })
-                            .collect(),
-                    }
-                }));
+                topology
+                    .table_rows
+                    .extend(rows.iter().enumerate().map(|(row_index, row)| {
+                        IrTableRowTopology {
+                            table_source_line: source.map_or(0, |origin| origin.line),
+                            table_source_column: source.map_or(0, |origin| origin.column),
+                            row_index,
+                            kind: row.kind.clone(),
+                            cells: row
+                                .cells
+                                .iter()
+                                .map(|cell| IrTableCellTopology {
+                                    column_span: cell.column_span,
+                                    row_span: cell.row_span,
+                                    empty: cell.blocks.is_empty(),
+                                })
+                                .collect(),
+                        }
+                    }));
                 for row in rows {
                     profile.table_spanning_cells += row
                         .cells
@@ -1318,53 +1373,123 @@ fn compare_list_topology(
     }
 }
 
+/// CVS `tbl_data.c` retains whole-rule and empty spans in the same table chain.
+/// Compare that complete chain within its actual first-span source identity;
+/// dropping rules before a global zip shifts every subsequent cell obligation.
 fn compare_table_topology(
     violations: &mut Vec<String>,
     expected: &[AstTableRowTopology],
     observed: &[IrTableRowTopology],
 ) {
-    if expected.len() != observed.len() {
-        violations.push(format!(
-            "table-topology: expected {} rows, observed {}",
-            expected.len(),
-            observed.len(),
-        ));
+    let mut native = BTreeMap::<_, Vec<_>>::new();
+    let mut lowered = BTreeMap::<_, Vec<_>>::new();
+    for row in expected {
+        native
+            .entry((row.table_source_line, row.table_source_column))
+            .or_default()
+            .push(row);
     }
-    for (row_index, (expected_row, observed_row)) in expected.iter().zip(observed).enumerate() {
-        if observed_row.cells.len() < expected_row.cells.len() {
+    for row in observed {
+        lowered
+            .entry((row.table_source_line, row.table_source_column))
+            .or_default()
+            .push(row);
+    }
+    for (origin, native_rows) in native {
+        if origin.0 == 0 || origin.1 == 0 {
+            violations.push("table-topology: unknown native table source identity".to_owned());
+            lowered.remove(&origin);
+            continue;
+        }
+        let Some(lowered_rows) = lowered.remove(&origin) else {
             violations.push(format!(
-                "table-topology at row {}: expected at least {} cells, observed {}",
-                row_index + 1,
-                expected_row.cells.len(),
-                observed_row.cells.len(),
+                "table-topology at {}:{}: expected table, observed none",
+                origin.0, origin.1
+            ));
+            continue;
+        };
+        if native_rows.iter().skip(1).any(|row| row.row_index == 0)
+            || lowered_rows.iter().skip(1).any(|row| row.row_index == 0)
+        {
+            violations.push(format!(
+                "table-topology at {}:{}: ambiguous repeated table source identity",
+                origin.0, origin.1
+            ));
+            continue;
+        }
+        if native_rows.len() != lowered_rows.len() {
+            violations.push(format!(
+                "table-topology at {}:{}: expected {} rows, observed {}",
+                origin.0,
+                origin.1,
+                native_rows.len(),
+                lowered_rows.len()
             ));
         }
-        for (cell_index, (expected_cell, observed_cell)) in expected_row
-            .cells
-            .iter()
-            .zip(&observed_row.cells)
-            .enumerate()
+        for (expected_row, observed_row) in native_rows.iter().zip(lowered_rows) {
+            compare_table_row(violations, expected_row, observed_row);
+        }
+    }
+    for (origin, rows) in lowered {
+        violations.push(format!(
+            "table-topology at {}:{}: unexpected table with {} rows",
+            origin.0,
+            origin.1,
+            rows.len()
+        ));
+    }
+}
+
+fn compare_table_row(
+    violations: &mut Vec<String>,
+    expected_row: &AstTableRowTopology,
+    observed_row: &IrTableRowTopology,
+) {
+    if expected_row.kind != observed_row.kind {
+        violations.push(format!(
+            "table-topology at {}:{}, row {}: expected kind {:?}, observed {:?}",
+            expected_row.table_source_line,
+            expected_row.table_source_column,
+            expected_row.row_index + 1,
+            expected_row.kind,
+            observed_row.kind
+        ));
+    }
+    if observed_row.cells.len() != expected_row.cells.len() {
+        violations.push(format!(
+            "table-topology at {}:{}, row {}: expected {} cells, observed {}",
+            expected_row.table_source_line,
+            expected_row.table_source_column,
+            expected_row.row_index + 1,
+            expected_row.cells.len(),
+            observed_row.cells.len()
+        ));
+    }
+    for (cell_index, (expected_cell, observed_cell)) in expected_row
+        .cells
+        .iter()
+        .zip(&observed_row.cells)
+        .enumerate()
+    {
+        if expected_cell.column_span != observed_cell.column_span
+            || expected_cell.row_span != observed_cell.row_span
         {
-            if expected_cell.column_span != observed_cell.column_span
-                || expected_cell.row_span != observed_cell.row_span
-            {
-                violations.push(format!(
-                    "table-topology at row {}, cell {}: expected span {}x{}, observed {}x{}",
-                    row_index + 1,
-                    cell_index + 1,
-                    expected_cell.column_span,
-                    expected_cell.row_span,
-                    observed_cell.column_span,
-                    observed_cell.row_span,
-                ));
-            }
-            if expected_cell.vertical_continuation && !observed_cell.empty {
-                violations.push(format!(
-                    "table-topology at row {}, cell {}: vertical continuation retained visible content",
-                    row_index + 1,
-                    cell_index + 1,
-                ));
-            }
+            violations.push(format!(
+                "table-topology at row {}, cell {}: expected span {}x{}, observed {}x{}",
+                expected_row.row_index + 1,
+                cell_index + 1,
+                expected_cell.column_span,
+                expected_cell.row_span,
+                observed_cell.column_span,
+                observed_cell.row_span,
+            ));
+        }
+        if expected_cell.vertical_continuation && !observed_cell.empty {
+            violations.push(format!(
+                "table-topology at row {}, cell {}: vertical continuation retained visible content",
+                expected_row.row_index + 1,
+                cell_index + 1,
+            ));
         }
     }
 }
@@ -1376,6 +1501,30 @@ fn underflow(violations: &mut Vec<String>, property: &str, expected: usize, obse
         ));
     }
 }
+
+fn native_table_kind(node: &Node) -> Option<mant_ir::TableRowKind> {
+    use libmandoc_rs::{TableRowKind, TableRuleCellKind};
+    node.table_row_kind.as_ref().map(|kind| match kind {
+        TableRowKind::Data => mant_ir::TableRowKind::Data,
+        TableRowKind::HorizontalRule => mant_ir::TableRowKind::HorizontalRule,
+        TableRowKind::DoubleHorizontalRule => mant_ir::TableRowKind::DoubleHorizontalRule,
+        TableRowKind::LayoutRule { cells } => mant_ir::TableRowKind::LayoutRule {
+            cells: cells
+                .iter()
+                .map(|cell| match cell {
+                    TableRuleCellKind::Horizontal => mant_ir::TableRuleCellKind::Horizontal,
+                    TableRuleCellKind::DoubleHorizontal => {
+                        mant_ir::TableRuleCellKind::DoubleHorizontal
+                    }
+                })
+                .collect(),
+        },
+    })
+}
+
+#[cfg(test)]
+#[path = "support/structure_observer_tests.rs"]
+mod structure_observer_tests;
 
 #[cfg(test)]
 mod tests {

@@ -32,6 +32,7 @@ from pathlib import Path, PurePosixPath
 from typing import Iterable, Sequence
 
 from scripts.roff.oracle import mandoc_oracle
+from scripts.roff.lib.roff_line_observations import SourceRow, observe_hard_lines
 from scripts.roff.lib.roff_reference import reference_environment, run_renderer
 from scripts.roff.lib.roff_reference import self_check as reference_runner_self_check
 
@@ -183,6 +184,7 @@ class LayoutProfile:
     indent_levels: list[int]
 
 
+
 @dataclass
 class LayoutComparison:
     reference: LayoutProfile
@@ -191,6 +193,7 @@ class LayoutComparison:
     reference_baseline_indent: int | None
     mant_baseline_indent: int | None
     candidates: list[str]
+    hard_line_observation: dict
 
 
 @dataclass(frozen=True)
@@ -211,6 +214,9 @@ class NoFillSourceLayout:
     consecutive_pairs: frozenset[tuple[str, str]]
     source_lines: frozenset[str]
     flowed_pairs: frozenset[tuple[str, str]]
+    ordered_rows: tuple[SourceRow, ...]
+    unclassified_literal_count: int
+    unclassified_literal_rows: tuple[dict, ...]
 
 
 @dataclass
@@ -1432,24 +1438,32 @@ def no_fill_source_layout(source: str) -> NoFillSourceLayout:
     previous: str | None = None
     flowed_previous: str | None = None
     pending_space = False
-    for raw_line in source.splitlines():
+    ordered_rows: list[SourceRow] = []
+    owner = 0
+    island = 0
+    unclassified_literal_count = 0
+    unclassified_literal_rows: list[dict] = []
+    for source_number, raw_line in enumerate(source.splitlines(), 1):
         match = ROFF_REQUEST.fullmatch(raw_line)
         name = match.group("name") if match else None
         arguments = match.group("args") if match and match.group("args") else ""
         if name == "Bd" and "-literal" in arguments.split():
             depth += 1
+            owner = source_number
             previous = None
             flowed_previous = None
             pending_space = False
             continue
         if name in starts:
             depth += 1
+            owner = source_number
             previous = None
             flowed_previous = None
             pending_space = False
             continue
         if name == "Ed" or name in ends:
             depth = max(0, depth - 1)
+            owner = source_number
             previous = None
             flowed_previous = None
             pending_space = False
@@ -1473,6 +1487,16 @@ def no_fill_source_layout(source: str) -> NoFillSourceLayout:
         candidate = ROFF_FONT_ESCAPE.sub("", candidate)
         candidate = candidate.replace(r"\&", "").replace(r"\~", " ")
         key = layout_key(candidate)
+        if key:
+            ordered_rows.append(SourceRow(source_number, owner, key, depth > 0, island))
+        elif name not in {"sp", "br", "ft", "ad", "na", "hy", "nh", "ne"}:
+            # An unmodeled request may generate visible text; do not claim
+            # adjacency across it. All source rows still compete by occurrence.
+            island += 1
+            if depth > 0:
+                unclassified_literal_count += 1
+                if len(unclassified_literal_rows) < 256:
+                    unclassified_literal_rows.append({"reason": "unclassified-literal-request", "sourceLine": source_number, "owner": owner, "request": name})
         if depth == 0:
             if useful_layout_anchor(key):
                 source_lines.add(key)
@@ -1505,6 +1529,9 @@ def no_fill_source_layout(source: str) -> NoFillSourceLayout:
         consecutive_pairs=frozenset(consecutive_pairs),
         source_lines=frozenset(source_lines),
         flowed_pairs=frozenset(flowed_pairs),
+        ordered_rows=tuple(ordered_rows),
+        unclassified_literal_count=unclassified_literal_count,
+        unclassified_literal_rows=tuple(unclassified_literal_rows),
     )
 
 
@@ -1645,27 +1672,40 @@ def layout_comparison(reference: str, mant: str, source: str | None) -> LayoutCo
             f"adjacent aligned lines have {len(spacing)} spacing divergence(s): {samples}"
         )
 
-    mant_whole_lines = {line.key for line in mant_lines if useful_layout_anchor(line.key)}
-    merged = []
-    for first, second in zip(reference_lines, reference_lines[1:]):
-        if (
-            useful_layout_anchor(first.key)
-            and useful_layout_anchor(second.key)
-            and source_layout is not None
-            and (first.key, second.key) in source_layout.consecutive_pairs
-            and f"{first.key} {second.key}" not in source_layout.source_lines
-            and (first.key, second.key) not in source_layout.flowed_pairs
-            and len(first.key) <= 96
-            and len(second.key) <= 96
-            and f"{first.key} {second.key}" in mant_whole_lines
-        ):
-            merged.append((first.key, second.key))
-    if merged:
+    hard_lines = observe_hard_lines(
+        source_layout.ordered_rows if source_layout is not None else (),
+        reference_lines,
+        mant_lines,
+    )
+    if source_layout is not None and source_layout.unclassified_literal_count:
+        hard_lines["uncoveredCount"] += source_layout.unclassified_literal_count
+        hard_lines["uncovered"].extend(source_layout.unclassified_literal_rows[:256 - len(hard_lines["uncovered"])])
+        if hard_lines["status"] != "review":
+            hard_lines["status"] = "partial"
+    if hard_lines["mergedCount"]:
         samples = ", ".join(
-            f"{first[:32]!r} + {second[:32]!r}" for first, second in merged[:3]
+            f"owner {item['owner']} at source {item['sourceLines']}: "
+            f"{item['first'][:32]!r} + {item['second'][:32]!r}"
+            for item in hard_lines["merged"][:3]
         )
         candidates.append(
-            f"reference line boundaries may merge in ManT for {len(merged)} short pair(s): {samples}"
+            f"reference line boundaries may merge in ManT for {hard_lines['mergedCount']} "
+            f"source-owned pair(s): {samples}"
+        )
+    if hard_lines["gapDifferenceCount"]:
+        samples = ", ".join(
+            f"owner {item['owner']} at source {item['sourceLines']} "
+            f"(reference={item['referenceBlankLines']}, ManT={item['mantBlankLines']})"
+            for item in hard_lines["gapDifferences"][:3]
+        )
+        candidates.append(
+            f"source-owned literal lines have {hard_lines['gapDifferenceCount']} "
+            f"spacing divergence(s): {samples}"
+        )
+    if hard_lines["uncoveredCount"]:
+        candidates.append(
+            f"hard-line observation has {hard_lines['uncoveredCount']} "
+            "uncovered owner/occurrence obligation(s); inspect hard_line_observation"
         )
 
     return LayoutComparison(
@@ -1675,6 +1715,7 @@ def layout_comparison(reference: str, mant: str, source: str | None) -> LayoutCo
         reference_baseline_indent=reference_baseline if pairs else None,
         mant_baseline_indent=mant_baseline if pairs else None,
         candidates=candidates,
+        hard_line_observation=hard_lines,
     )
 
 
