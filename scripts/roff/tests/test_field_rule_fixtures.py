@@ -212,6 +212,126 @@ class FieldRuleFixtures(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'status format'):
             supplements.validate_admission(dict(case, oracle_class='diagnosed'), profiles)
 
+    def test_empty_word_sources_bind_five_profiles_ordinary_body_and_exact_columns(self):
+        # All 472 exact sources ran ASCII/UTF-8/HTML/tree/lint through the
+        # active pristine reference before this assertion. term_word() writes
+        # its separator before encoding glyphs (term.c:573-589); term_newln()
+        # selects NOSPACE even when the native buffer is empty (475-481).
+        frozen = json.loads(supplements.EMPTY_WORD_FIXTURE.read_text())
+        checked = supplements.validate_empty_word_fixture(frozen)
+        self.assertEqual(len(checked), 472)
+        self.assertEqual(sum(case['row_observation'] == 'asserted' for case in checked), 460)
+        self.assertEqual(sum(case['row_observation'].startswith('uncovered-') for case in checked), 12)
+        self.assertEqual(sum(supplements.FIXTURES[name][0] for name in supplements.FIXTURES), 833)
+        self.assertEqual(sum(supplements.FIXTURES[name][1] for name in supplements.FIXTURES), 831)
+
+    def test_empty_word_binding_and_coverage_mutations_are_rejected(self):
+        frozen = json.loads(supplements.EMPTY_WORD_FIXTURE.read_text())
+        mutations = ('duplicate-id', 'identity-source', 'source-hash', 'axes-source', 'Cartesian-axis', 'missing-profile',
+                     'profile-hash', 'missing-status', 'boolean-code', 'status-total', 'oracle',
+                     'product-gold', 'count', 'cohort-total', 'row-format', 'row-column', 'row-prefix',
+                     'BODY-coordinate', 'BODY-owner', 'BODY-ancestor', 'BODY-flag', 'uncovered-axis')
+        for mutation in mutations:
+            changed = copy.deepcopy(frozen)
+            first = changed['cases'][0]
+            if mutation == 'duplicate-id':
+                changed['cases'][1]['id'] = first['id']
+            elif mutation == 'identity-source':
+                first['id'] = 'different-unique-identity'
+            elif mutation == 'source-hash':
+                first['source_sha256'] = '0' * 64
+            elif mutation == 'axes-source':
+                first['source'] = first['source'].replace('.No BODY_0', '.No ALTERED_0')
+                first['source_sha256'] = digest(first['source'])
+            elif mutation == 'Cartesian-axis':
+                first['metadata']['carrier'] = 'Unknown'
+            elif mutation == 'missing-profile':
+                del first['profile_sha256']['tree']
+            elif mutation == 'profile-hash':
+                first['profile_sha256']['utf8'] = 'invalid'
+            elif mutation == 'missing-status':
+                del first['profile_status']['lint']
+            elif mutation == 'boolean-code':
+                first['profile_status']['lint'] = True
+            elif mutation == 'status-total':
+                first['profile_status']['lint'] = 0
+            elif mutation == 'oracle':
+                changed['header']['oracle_identity'] = 'unregistered'
+            elif mutation == 'product-gold':
+                changed['header']['expectations_from_product'] = True
+            elif mutation == 'count':
+                changed['header']['count'] -= 1
+            elif mutation == 'cohort-total':
+                changed['header']['word_flag_count'] -= 1
+            elif mutation == 'row-format':
+                first['expected_rows'] = ['two\nphysical rows']
+            elif mutation == 'row-column':
+                first['body_positions'][0]['column'] += 1
+            elif mutation == 'row-prefix':
+                first['body_positions'][0]['prefix'] = ''
+            elif mutation == 'BODY-coordinate':
+                first['ordinary_body_owners'][0]['column'] += 1
+            elif mutation == 'BODY-owner':
+                first['ordinary_body_owners'][0]['owner'] = 'It HEAD'
+            elif mutation == 'BODY-ancestor':
+                first['ordinary_body_owners'][0]['ancestors'].remove(['Sh', 'body', 7])
+            elif mutation == 'BODY-flag':
+                first['ordinary_body_owners'][0]['no_fill'] = 1
+            else:
+                first['row_observation'] = 'uncovered-bold-combining-backspace'
+            with self.subTest(mutation=mutation), self.assertRaises(ValueError):
+                supplements.validate_empty_word_fixture(changed)
+
+    def test_empty_word_live_observer_rejects_status_row_and_body_owner_mutations(self):
+        # Synthetic transport tests the live observer, independently of the
+        # fixture gold. It is not an additional behavioral oracle. Ancestry
+        # follows tree.c::print_mdoc's actual Sh BODY records; the source
+        # operand, exact rows and five process statuses are bound separately.
+        case = copy.deepcopy(json.loads(supplements.EMPTY_WORD_FIXTURE.read_text())['cases'][0])
+        tree = ('Sh (block) *7:1\n    Sh (head) 7:1\n        DESCRIPTION (text) 7:5\n'
+                '    Sh (body) 7:1\n        No (elem) *12:1\n            BODY_0 (text) 12:5\n'
+                'Sh (block) *13:1\n    Sh (head) 13:1\n        NEXT (text) 13:5\n'
+                '    Sh (body) 13:1\n        END (text) 14:5\n')
+        output = 'DESCRIPTION\n      BODY_0\n\nNEXT\n     END\n'
+        profiles = {}
+        for name in supplements.PROFILES:
+            stdout = tree if name == 'tree' else output if name == 'utf8' else ''
+            profiles[name] = dict(code=case['profile_status'][name], stdout=stdout, stderr='',
+                                  stdout_sha256=digest(stdout), stderr_sha256=digest(''),
+                                  stdout_bytes_hex=stdout.encode().hex(), stderr_bytes_hex='',
+                                  utf8_valid=True, timeout=False)
+        case['profile_sha256'] = {name: value['stdout_sha256'] for name, value in profiles.items()}
+        self.assertEqual(supplements.validate_live_empty_word_case(case, profiles)['status'], 'verified')
+        for mutation in ('raw-hash', 'wrong-admission', 'boolean-code', 'invalid-utf8', 'timeout',
+                         'BODY-ancestor', 'BODY-coordinate', 'BODY-line-flag', 'column', 'empty-row'):
+            changed, transport = copy.deepcopy(case), copy.deepcopy(profiles)
+            if mutation == 'raw-hash':
+                transport['utf8']['stdout_sha256'] = '0' * 64
+            elif mutation == 'wrong-admission':
+                transport['lint']['code'] = 0
+            elif mutation == 'boolean-code':
+                transport['lint']['code'] = True
+            elif mutation == 'invalid-utf8':
+                transport['utf8']['utf8_valid'] = False
+            elif mutation == 'timeout':
+                transport['tree']['timeout'] = True
+            elif mutation in ('BODY-ancestor', 'BODY-coordinate', 'BODY-line-flag'):
+                original, replacement = {
+                    'BODY-ancestor': ('Sh (body) 7:1', 'Sh (head) 7:1'),
+                    'BODY-coordinate': ('BODY_0 (text) 12:5', 'BODY_0 (text) 12:6'),
+                    'BODY-line-flag': ('BODY_0 (text) 12:5', 'BODY_0 (text) *12:5'),
+                }[mutation]
+                transport['tree']['stdout'] = tree.replace(original, replacement)
+                transport['tree']['stdout_sha256'] = digest(transport['tree']['stdout'])
+                transport['tree']['stdout_bytes_hex'] = transport['tree']['stdout'].encode().hex()
+                changed['profile_sha256']['tree'] = transport['tree']['stdout_sha256']
+            elif mutation == 'column':
+                changed['body_positions'][0]['column'] += 1
+            else:
+                changed['expected_rows'].insert(0, '')
+            with self.subTest(mutation=mutation), self.assertRaises(ValueError):
+                supplements.validate_live_empty_word_case(changed, transport)
+
     def test_core_and_supplement_pairs_cover_the_declared_cartesian_axes(self):
         generated = list(cases())
         core = [case for case in generated if case['family'] == 'field-pre-br-core']
