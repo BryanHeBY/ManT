@@ -36,7 +36,7 @@ struct OwnerProof {
 fn cases() -> Vec<Case> {
     let fixture: serde_json::Value =
         serde_json::from_str(include_str!("declaration_names/cases.json")).unwrap();
-    assert_eq!(fixture["header"]["count"], 62);
+    assert_eq!(fixture["header"]["count"], 88);
     serde_json::from_value(fixture["cases"].clone()).unwrap()
 }
 
@@ -160,7 +160,7 @@ fn assert_owner(case: &Case, owner: EntryOwner<'_>) {
 
 #[test]
 fn ordered_native_heads_keep_complete_names_fonts_and_actual_content_bindings() {
-    // All 62 exact sources ran pristine ASCII/UTF-8/HTML/tree/lint first.
+    // All 88 exact sources ran pristine ASCII/UTF-8/HTML/tree/lint first.
     // man_term.c::pre_alternate calls term_word once per actual TEXT child;
     // term.c::term_word changes fonts inside that operand without a new word.
     // Mandoc proves the visible HEAD and fonts; semantic names/kinds below

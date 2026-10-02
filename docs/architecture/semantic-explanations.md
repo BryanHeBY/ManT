@@ -75,6 +75,27 @@ Facts and projected `names` fields expose selector spellings, not
 proof that the corresponding options can be substituted for one another.
 Complete forms preserve documented usage, not an executable argv grammar.
 
+Native option heads use a bounded scan of the complete accepted head. A group
+such as `-a --argument -literal-value` contains three written names when no
+argument boundary is present, just as `-c --stdout --to-stdout` does. The
+meaning of an option name cannot establish a parameter boundary. Numeric and
+metavariable syntax, an assignment, a quoted or bracketed value, or a proven
+argument operand can establish that boundary; punctuation or a temporary font
+change within the argument cannot restart name recognition. Original forms and
+name ranges remain attached to the same content owner, without inferring aliases.
+
+Accepted native operand roles take precedence over font hints. An opening
+quotation owned by an actual `Ar` operand remains a parameter boundary. An
+inherited italic quotation can enclose a real `Fl` declaration; its accepted
+option operand supplies independent evidence for that declaration. Without
+native operand evidence, changing the font inside a quoted value supplies no
+such proof.
+
+Explicit definition tags provide an authored owner boundary. Inferring a new
+owner from a paragraph and an indented successor requires complete declaration
+syntax and local family evidence as well. Bold text alone is insufficient;
+source coordinates and equal indentation do not supply missing evidence.
+
 The implemented model separates documented names, explicit same-owner
 `aliasGroups`, and explicit same-document `aliasOf` relationships between
 independent entries. Markdown declares these fields in a closed `mant:entry`

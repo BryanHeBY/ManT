@@ -136,13 +136,20 @@ fn is_command_head(inlines: &[Inline]) -> bool {
     // Bold alone does not establish a command owner in an ordinary paragraph.
     // A real syntax tail or a typed manual reference supplies independent
     // evidence; explicit It/IP/TP tags need no such inferred-owner proof.
-    (!tail.trim().is_empty() || matched_manual)
+    (!tail.trim().is_empty() || matched_manual || compound_command_name(&name))
         && arguments(tail.split_whitespace().filter(|token| {
             // A command's literal invocation may contain an actual option
             // token. Option-declaration arguments use the stricter grammar
             // below: a dash-shaped parameter there is never another alias.
             options::option_prefix(token) != Some(*token)
         }))
+}
+
+fn compound_command_name(name: &str) -> bool {
+    name.contains('-')
+        && name
+            .split('-')
+            .all(|part| !part.is_empty() && part.chars().all(|c| c.is_alphanumeric() || c == '_'))
 }
 
 fn is_option_head(inlines: &[Inline]) -> bool {
@@ -305,6 +312,10 @@ mod tests {
             ("launch -p [FILE]", true),
             ("launch --verbose FILE", true),
             ("launch -p [FILE", false),
+            ("show-environment", true),
+            ("list-units", true),
+            ("list--units", false),
+            ("list-units ordinary prose", false),
             ("Note", false),
             ("Note ordinary prose sentence", false),
         ] {

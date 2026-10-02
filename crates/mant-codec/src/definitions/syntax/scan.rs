@@ -16,6 +16,22 @@ const MAX_NESTING: usize = 64;
 
 mod lexical;
 use lexical::LexicalState;
+mod arguments;
+use arguments::valid_arguments;
+
+#[derive(Clone, Copy)]
+enum Wrapper {
+    Bracket(char),
+    Quote(char),
+}
+
+impl Wrapper {
+    fn closer(self) -> char {
+        match self {
+            Self::Bracket(closer) | Self::Quote(closer) => closer,
+        }
+    }
+}
 
 #[derive(PartialEq, Eq)]
 enum OwnerAdmission {
@@ -35,9 +51,8 @@ impl Placeholder {
     fn observe(self, character: char) -> Self {
         match (self, character) {
             (Self::Start, '=') => Self::Assigned,
-            (Self::Assigned, 'A'..='Z') | (Self::Uppercase, 'A'..='Z' | '0'..='9' | '_' | '-') => {
-                Self::Uppercase
-            }
+            (Self::Start | Self::Assigned, 'A'..='Z')
+            | (Self::Uppercase, 'A'..='Z' | '0'..='9' | '_' | '-') => Self::Uppercase,
             (Self::Uppercase, c) if c.is_whitespace() => Self::Uppercase,
             _ => Self::Invalid,
         }
@@ -162,6 +177,11 @@ impl<'a> HeadView<'a> {
         self.literal_starts.binary_search(&offset).is_ok()
     }
 
+    fn explicit_argument(&self, offset: usize) -> bool {
+        self.operand(offset)
+            .is_some_and(|operand| operand.role == NativeOperandRole::Argument)
+    }
+
     fn explicit_option(&self, offset: usize) -> bool {
         self.operand(offset)
             .is_some_and(|operand| operand.role == NativeOperandRole::ExplicitOption)
@@ -202,15 +222,22 @@ struct Scanner<'a> {
     view: &'a HeadView<'a>,
     cursor: usize,
     names: Vec<RecognizedName>,
-    argument_start: Option<usize>,
-    arguments: Vec<Range<usize>>,
+    argument_start: Option<Argument>,
+    arguments: Vec<Argument>,
     styled_argument: bool,
     structured_argument: bool,
     lexical: LexicalState,
-    wrapper: Option<char>,
+    wrappers: Vec<Wrapper>,
     admission: OwnerAdmission,
     separator: Option<usize>,
     placeholder: Placeholder,
+}
+
+struct Argument {
+    bytes: Range<usize>,
+    /// Recorded when the argument begins at the previous name's exact end,
+    /// before any parameter token projection can alter its punctuation.
+    attached_to_name: bool,
 }
 
 impl<'a> Scanner<'a> {
@@ -224,7 +251,7 @@ impl<'a> Scanner<'a> {
             styled_argument: false,
             structured_argument: false,
             lexical: LexicalState::default(),
-            wrapper: None,
+            wrappers: Vec::new(),
             admission: OwnerAdmission::Proved,
             separator: None,
             placeholder: Placeholder::Start,
@@ -232,77 +259,28 @@ impl<'a> Scanner<'a> {
     }
 
     fn scan(mut self) -> OptionHead {
-        if let Some(character) = self.current()
-            && let Some(closer) = closing(character)
-            && self.view.text[self.cursor + character.len_utf8()..]
-                .trim_start()
-                .starts_with('-')
-        {
-            self.wrapper = Some(closer);
-            self.cursor += character.len_utf8();
-        }
+        self.open_wrappers();
         while let Some(character) = self.current() {
             if self.names.len() > MAX_NAMES {
                 return OptionHead::name_limit();
+            }
+            if self.close_wrapper(character) {
+                continue;
             }
             if self.argument_start.is_some() {
                 self.consume_argument(character);
                 continue;
             }
             if character.is_whitespace() || matches!(character, ',' | '|' | '/') {
-                let separator = character;
-                self.cursor += character.len_utf8();
-                self.skip_whitespace();
-                if self.view.text[self.cursor..].starts_with("or ") {
-                    self.cursor += 3;
-                    self.skip_whitespace();
-                }
-                if self.current().is_some_and(|c| c != '-')
-                    || self.view.is_parameter(self.cursor)
-                    || (separator.is_whitespace()
-                        && self.next_is_parameter_token()
-                        && !self.view.explicit_option(self.cursor)
-                        && !self.names.is_empty()
-                        && self.wrapper.is_none())
-                {
-                    self.begin_argument();
-                }
-                continue;
-            }
-            if Some(character) == self.wrapper {
-                self.wrapper = None;
-                self.cursor += character.len_utf8();
+                self.consume_separator(character);
                 continue;
             }
             if self.view.is_parameter(self.cursor) {
                 self.begin_argument();
                 continue;
             }
-            if character == '-' {
-                let start = self.cursor;
-                let mut end = start + 1;
-                for (index, next) in self.view.text[end..].char_indices() {
-                    let offset = start + 1 + index;
-                    if !option_character(next) || self.view.is_parameter(offset) {
-                        break;
-                    }
-                    end = offset + next.len_utf8();
-                }
-                if let Some(name) = super::options::option_prefix(&self.view.text[start..end]) {
-                    self.names.push(RecognizedName::contiguous(name, start));
-                    self.cursor = start + name.len();
-                    if self.cursor < end {
-                        self.begin_argument();
-                    }
-                    continue;
-                }
-                let pattern_end = self.view.text[start..]
-                    .find(|c: char| !matches!(c, '-' | '#'))
-                    .map_or(self.view.text.len(), |end| start + end);
-                if pattern_end > start + 1 && self.view.text[start..pattern_end].contains('#') {
-                    self.cursor = pattern_end;
-                    continue;
-                }
+            if character == '-' && self.consume_name() {
+                continue;
             }
             self.begin_argument();
         }
@@ -310,13 +288,23 @@ impl<'a> Scanner<'a> {
         if self.names.len() > MAX_NAMES {
             return OptionHead::name_limit();
         }
+        // A quoted value with no closing quote cannot prove that its dash
+        // spelling is an entire declaration. Native incomplete bracket tags
+        // retain their existing partial-name contract, but never infer owners.
+        if self
+            .wrappers
+            .iter()
+            .any(|wrapper| matches!(wrapper, Wrapper::Quote(_)))
+        {
+            self.names.clear();
+        }
         let complete = self.lexical.is_top_level()
-            && self.wrapper.is_none()
+            && self.wrappers.is_empty()
             && !self.names.is_empty()
             && self
                 .arguments
                 .iter()
-                .all(|range| valid_arguments(self.view, range.clone()));
+                .all(|argument| valid_arguments(self.view, argument));
         OptionHead {
             names: self.names,
             #[cfg(test)]
@@ -336,6 +324,131 @@ impl<'a> Scanner<'a> {
         }
     }
 
+    fn open_wrappers(&mut self) {
+        let start = self.cursor;
+        let mut inherited_parameter_font = false;
+        while let Some(character) = self.current() {
+            let wrapper = quote_closer(character)
+                .map(Wrapper::Quote)
+                .or_else(|| closing(character).map(Wrapper::Bracket));
+            let Some(wrapper) = wrapper else { break };
+            if self.wrappers.len() == MAX_NESTING || self.view.explicit_argument(self.cursor) {
+                self.wrappers.clear();
+                self.cursor = start;
+                return;
+            }
+            // quote_pre keeps the outer font, while a real Fl supplies its
+            // own accepted ExplicitOption receipt. That proof may override
+            // presentation alone, never an actual Ar opening operand.
+            inherited_parameter_font |= self.view.is_parameter(self.cursor);
+            self.wrappers.push(wrapper);
+            self.cursor += character.len_utf8();
+            self.skip_whitespace();
+        }
+        if !self.view.text[self.cursor..].starts_with('-')
+            || self.view.is_parameter(self.cursor)
+            || inherited_parameter_font && !self.view.explicit_option(self.cursor)
+        {
+            self.wrappers.clear();
+            self.cursor = start;
+        }
+    }
+
+    fn close_wrapper(&mut self, character: char) -> bool {
+        if !self.lexical.is_top_level()
+            || self
+                .wrappers
+                .last()
+                .is_none_or(|wrapper| wrapper.closer() != character)
+        {
+            return false;
+        }
+        self.finish_argument();
+        self.wrappers.pop();
+        self.cursor += character.len_utf8();
+        true
+    }
+
+    fn consume_separator(&mut self, separator: char) {
+        self.cursor += separator.len_utf8();
+        self.skip_whitespace();
+        if let Some(rest) = self.view.text[self.cursor..].strip_prefix("or")
+            && !self.view.is_parameter(self.cursor)
+            && !self.view.is_parameter(self.cursor + 1)
+            && rest.starts_with(char::is_whitespace)
+            && rest.trim_start().starts_with('-')
+        {
+            self.cursor += 2;
+            self.skip_whitespace();
+        }
+        if self.current().is_some_and(|c| c != '-')
+            && self
+                .current()
+                .is_none_or(|c| self.wrappers.last().is_none_or(|w| w.closer() != c))
+            || self.view.is_parameter(self.cursor)
+            || separator.is_whitespace()
+                && self.next_is_parameter_token()
+                && !self.view.explicit_option(self.cursor)
+                && !self.names.is_empty()
+                && !self.numeric_enumeration()
+        {
+            self.begin_argument();
+        }
+    }
+
+    fn numeric_enumeration(&self) -> bool {
+        !self.wrappers.is_empty()
+            && self.names.iter().all(|name| {
+                name.name
+                    .strip_prefix('-')
+                    .is_some_and(|value| value.chars().all(|c| c.is_ascii_digit()))
+            })
+    }
+
+    fn consume_name(&mut self) -> bool {
+        let start = self.cursor;
+        let mut end = start + 1;
+        for (index, next) in self.view.text[end..].char_indices() {
+            let offset = start + 1 + index;
+            if !option_character(next) || self.view.is_parameter(offset) {
+                break;
+            }
+            end = offset + next.len_utf8();
+        }
+        if let Some(name) = super::options::option_prefix(&self.view.text[start..end]) {
+            self.names.push(RecognizedName::contiguous(name, start));
+            self.cursor = start + name.len();
+            if self.cursor < end {
+                self.begin_argument();
+            }
+            return true;
+        }
+        let pattern_end = self.view.text[start..]
+            .find(|c: char| !matches!(c, '-' | '#'))
+            .map_or(self.view.text.len(), |end| start + end);
+        if pattern_end > start + 1 && self.view.text[start..pattern_end].contains('#') {
+            self.cursor = pattern_end;
+            return true;
+        }
+        let mut suffix = self.view.text[start + 1..].chars();
+        if let Some(character) = suffix.next()
+            && character.is_ascii_punctuation()
+            && !matches!(
+                character,
+                '-' | '=' | '[' | ']' | '{' | '}' | '(' | ')' | '<' | '>' | ',' | '|'
+            )
+            && suffix
+                .next()
+                .is_none_or(|next| next.is_whitespace() || matches!(next, ',' | '|' | '/'))
+        {
+            // Complete punctuation flags are declaration syntax even when
+            // the selectable-name grammar intentionally does not name them.
+            self.cursor += 2;
+            return true;
+        }
+        false
+    }
+
     fn next_is_parameter_token(&self) -> bool {
         let token = self.view.text[self.cursor..]
             .split_whitespace()
@@ -348,13 +461,21 @@ impl<'a> Scanner<'a> {
     }
 
     fn begin_argument(&mut self) {
-        self.argument_start.get_or_insert(self.cursor);
+        self.argument_start.get_or_insert_with(|| Argument {
+            bytes: self.cursor..self.cursor,
+            attached_to_name: self.names.last().is_some_and(|name| {
+                name.parts
+                    .last()
+                    .is_some_and(|part| part.end == self.cursor)
+            }),
+        });
         self.styled_argument |= self.view.is_parameter(self.cursor);
     }
 
     fn finish_argument(&mut self) {
-        if let Some(start) = self.argument_start.take() {
-            self.arguments.push(start..self.cursor);
+        if let Some(mut argument) = self.argument_start.take() {
+            argument.bytes.end = self.cursor;
+            self.arguments.push(argument);
         }
         self.styled_argument = false;
         self.structured_argument = false;
@@ -399,7 +520,11 @@ impl<'a> Scanner<'a> {
                     || matches!(self.placeholder, Placeholder::Uppercase)
                     || self.view.literal_operand_starts(restart))
             {
-                if role.is_none() && self.styled_argument && !self.structured_argument {
+                if role.is_none()
+                    && self.styled_argument
+                    && !self.structured_argument
+                    && !matches!(self.placeholder, Placeholder::Uppercase)
+                {
                     self.admission = OwnerAdmission::UnprovedStyleRestart;
                 }
                 self.finish_argument();
@@ -450,69 +575,6 @@ fn quote_closer(character: char) -> Option<char> {
         '‘' => Some('’'),
         _ => None,
     }
-}
-
-fn valid_arguments(view: &HeadView<'_>, range: Range<usize>) -> bool {
-    let mut literal = String::new();
-    let mut offset = range.start;
-    let mut lexical = LexicalState::default();
-    let mut opaque = false;
-    while offset < range.end {
-        let character = view.text[offset..].chars().next().expect("argument scalar");
-        let nested = lexical.within_group();
-        let opening = lexical.is_top_level()
-            && (closing(character).is_some() || quote_closer(character).is_some());
-        lexical.observe(character);
-        if view.is_parameter(offset) {
-            if !opaque {
-                literal.push_str(" \0 ");
-            }
-            opaque = true;
-        } else if opening {
-            literal.push_str(" \0 ");
-            opaque = false;
-        } else if nested {
-            if lexical.is_top_level() {
-                literal.push(' ');
-            }
-        } else {
-            literal.push(character);
-            opaque = false;
-        }
-        offset += character.len_utf8();
-    }
-    let mut bare = 0;
-    for token in literal.split_whitespace() {
-        if token == "\0" || token == "..." || token == "=" {
-            continue;
-        }
-        if token.starts_with('=')
-            || token.starts_with('/')
-            || token.split_once('=').is_some_and(|(name, value)| {
-                super::named::is_variable_term(name) && !value.is_empty()
-            })
-            || token.contains(':')
-                && token
-                    .split(':')
-                    .all(|part| part == "\0" || super::named::is_variable_term(part))
-            || token.chars().any(char::is_uppercase)
-                && token
-                    .chars()
-                    .all(|c| c.is_uppercase() || c.is_ascii_digit() || matches!(c, '_' | '-'))
-        {
-            continue;
-        }
-        if !token.starts_with('-')
-            && token
-                .chars()
-                .all(|c| c.is_alphanumeric() || matches!(c, '_' | '-'))
-        {
-            bare += 1;
-        } else {
-            return false;
-        }
-    }
-    lexical.is_top_level() && bare <= 1
 }
 
 #[cfg(test)]

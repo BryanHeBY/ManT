@@ -103,25 +103,37 @@ fn hanging_heads_cannot_cross_prose_new_heads_outer_content_or_eof() {
 }
 
 #[test]
-fn finite_short_long_pairs_bind_names_without_rescanning_argument_tokens() {
-    for head in [
-        "-a --ascii",
-        "-a or --ascii",
-        "-a  or\t--ascii",
-        "-a, --ascii",
+fn complete_option_groups_do_not_rescan_argument_tokens() {
+    for (head, names) in [
+        ("-a --ascii", &["-a", "--ascii"][..]),
+        ("-a or --ascii", &["-a", "--ascii"][..]),
+        ("-a  or\t--ascii", &["-a", "--ascii"][..]),
+        ("-a, --ascii", &["-a", "--ascii"][..]),
+        // pre_B selects one font for this complete literal operand. None
+        // of its three dash tokens supplies native parameter evidence; the
+        // complete declaration contract retains every spelling, like gzip.
+        (
+            "-a --argument -literal-value",
+            &["-a", "--argument", "-literal-value"][..],
+        ),
     ] {
         let source = format!(".TH PROBE 1\n.SH OPTIONS\n.TP\n.B {head}\nBODY\n");
         let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
         let document = query.document.as_ref().unwrap();
         let items = definitions(document);
         let entry = items[0].entry.as_ref().unwrap();
-        assert_eq!(entry.names, ["-a", "--ascii"], "{head}");
+        assert_eq!(entry.names, names, "{head}");
+        if names.len() == 3 {
+            // The retained three-name source has no inter-argument whitespace
+            // to normalize. Other cases test names, not raw roff argument bytes.
+            assert_eq!(mant_ir::inline_plain_text(&items[0].terms[0]), head);
+        }
         assert_eq!(entry.alias_groups.len(), 0);
         assert_eq!(mant_ir::validate_document(document).len(), 0);
         let result = mant_query::explain_query(
             &query,
             &ExplanationQuery {
-                entry: "--ascii".into(),
+                entry: names[1].into(),
                 options: ExplanationOptions::default(),
             },
         )
@@ -136,12 +148,14 @@ fn finite_short_long_pairs_bind_names_without_rescanning_argument_tokens() {
         );
     }
     for head in [
-        "-a --argument -literal-value",
-        "-o path --later",
-        "--mode {a|b}",
-        "--opt=value/with/path",
+        // Exact pristine pre_alternate: the second TEXT operand is a real
+        // italic parameter; its dash words remain arguments, not spellings.
+        ".BI \"-a \" \"--argument -literal-value\"",
+        ".B -o path --later",
+        ".B --mode {a|b}",
+        ".B --opt=value/with/path",
     ] {
-        let source = format!(".TH PROBE 1\n.SH OPTIONS\n.TP\n.B {head}\nBODY\n");
+        let source = format!(".TH PROBE 1\n.SH OPTIONS\n.TP\n{head}\nBODY\n");
         let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
         let items = definitions(query.document.as_ref().unwrap());
         let names = &items[0].entry.as_ref().unwrap().names;

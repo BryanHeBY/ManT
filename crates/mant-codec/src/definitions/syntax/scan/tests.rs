@@ -384,7 +384,10 @@ fn one_long_argument_whitespace_run_is_consumed_without_suffix_restarts() {
     let view = HeadView::new(&[text(&value)], &[]);
     let mut scanner = Scanner::new(&view);
     scanner.cursor = "--opt VALUE".len();
-    scanner.argument_start = Some("--opt ".len());
+    scanner.argument_start = Some(Argument {
+        bytes: "--opt ".len().."--opt ".len(),
+        attached_to_name: false,
+    });
     scanner.consume_argument(' ');
     assert_eq!(scanner.cursor, value.find("ordinary").unwrap());
 }
@@ -424,5 +427,226 @@ fn uppercase_metavariables_after_an_option_are_arguments_even_when_bold() {
         ("-NUM", &["-NUM"][..]),
     ] {
         assert_names(&[strong(vec![text(value)])], &[], expected);
+    }
+}
+
+#[test]
+fn paired_outer_wrappers_are_declarations_but_parameter_quotes_stay_opaque() {
+    // The exact visible quote/bracket carriers ran pinned pre_B and
+    // pre_alternate first. Those handlers preserve spelling and join BR
+    // operands; this source-neutral grammar never gives parameter quotes
+    // or escaped quotes a fresh declaration boundary.
+    for value in [
+        "\"--foo\"",
+        "'--foo'",
+        "“--foo”",
+        "‘--foo’",
+        "({--foo})",
+        "[“({--foo})”]",
+        "“--foo FILE”",
+        "(--foo \"one --fake\")",
+    ] {
+        let nodes = [strong(vec![text(value)])];
+        assert_names(&nodes, &[], &["--foo"]);
+        assert!(option_head(&nodes, &[]).inferred_complete, "{value}");
+    }
+    let split = [strong(vec![text("“--")]), text("foo”")];
+    assert_names(&split, &[], &["--foo"]);
+    for value in ["“--foo", "“--foo’", "“ordinary --fake”", "\\\"--fake\\\""] {
+        assert_names(&[strong(vec![text(value)])], &[], &[]);
+        assert!(!option_head(&[text(value)], &[]).inferred_complete);
+    }
+    for value in ["--set=\"--fake\"", "--set \"--fake\"", "--set=[{--fake}]"] {
+        assert_names(&[strong(vec![text(value)])], &[], &["--set"]);
+        assert!(option_head(&[text(value)], &[]).inferred_complete);
+    }
+    let value = "“--fake”";
+    assert_names(
+        &[strong(vec![text(value)])],
+        &[NativeOperand {
+            bytes: 0..value.len(),
+            role: NativeOperandRole::Argument,
+        }],
+        &[],
+    );
+    let uncertain = format!("{}--fake{}", "[".repeat(65), "]".repeat(65));
+    assert_names(&[text(&uncertain)], &[], &[]);
+}
+
+#[test]
+fn alias_separators_consume_whole_or_tokens_and_complete_punctuation_flags() {
+    for value in ["-a or --ascii", "-a  or\t--ascii", "-a or\n--ascii"] {
+        assert_names(&[strong(vec![text(value)])], &[], &["-a", "--ascii"]);
+        assert!(option_head(&[text(value)], &[]).inferred_complete);
+    }
+    for value in ["-., --hidden", "-@, --hidden"] {
+        assert_names(&[text(value)], &[], &["--hidden"]);
+        assert!(option_head(&[text(value)], &[]).inferred_complete);
+    }
+    for value in [
+        "-a ordinary --fake",
+        "-a orordinary --fake",
+        "-a orphan --fake",
+    ] {
+        assert_names(&[text(value)], &[], &["-a"]);
+        assert!(!option_head(&[text(value)], &[]).inferred_complete);
+    }
+}
+
+#[test]
+fn connected_parameter_fragments_keep_their_source_punctuation() {
+    let nodes = [
+        strong(vec![text("-L")]),
+        emphasis(vec![text("<start>")]),
+        text(","),
+        emphasis(vec![text("<end>")]),
+        text(":"),
+        emphasis(vec![text("<file>")]),
+        text(", "),
+        strong(vec![text("-L")]),
+        text(":"),
+        emphasis(vec![text("<funcname>")]),
+        text(":"),
+        emphasis(vec![text("<file>")]),
+    ];
+    assert_names(&nodes, &[], &["-L", "-L"]);
+    assert!(option_head(&nodes, &[]).inferred_complete);
+    let nodes = [
+        strong(vec![text("--map-users ")]),
+        emphasis(vec![text("inner")]),
+        text(":_outer_:"),
+        emphasis(vec![text("count")]),
+    ];
+    assert!(option_head(&nodes, &[]).inferred_complete);
+    for (before, inner, after) in [
+        ("--sd-id ", "name", "[@digits]"),
+        ("--trailer ", "<token>", "[(=|:)<value>]"),
+    ] {
+        let nodes = [
+            strong(vec![text(before)]),
+            emphasis(vec![text(inner)]),
+            text(after),
+        ];
+        assert!(
+            option_head(&nodes, &[]).inferred_complete,
+            "{before}{inner}{after}"
+        );
+    }
+    let nodes = [
+        strong(vec![text("-g ")]),
+        emphasis(vec![text("GLOB")]),
+        text(", "),
+        strong(vec![text("--glob=")]),
+        emphasis(vec![text("GLOB")]),
+    ];
+    assert_names(&nodes, &[], &["-g", "--glob"]);
+    assert!(option_head(&nodes, &[]).inferred_complete);
+}
+
+#[test]
+fn alias_or_cannot_skip_a_real_parameter_operand() {
+    // Exact pinned mdoc Ar/No siblings ran first: Ar selects parameter
+    // styling and owns its word independently of the following No text.
+    let nodes = [
+        strong(vec![text("-a ")]),
+        emphasis(vec![text("or")]),
+        text(" --ascii"),
+    ];
+    assert_names(&nodes, &[], &["-a"]);
+    let value = "-a or --ascii";
+    let operands = [NativeOperand {
+        bytes: 3..5,
+        role: NativeOperandRole::Argument,
+    }];
+    assert_names(&[strong(vec![text(value)])], &operands, &["-a"]);
+    // Ns joins an ordinary `o` to a distinct Ar `r`; qualification belongs
+    // to both accepted scalars of the alias token, not just its first one.
+    let nodes = [
+        strong(vec![text("-a ")]),
+        text("o"),
+        emphasis(vec![text("r")]),
+        text(" --ascii"),
+    ];
+    assert_names(&nodes, &[], &["-a"]);
+    let operands = [NativeOperand {
+        bytes: 4..5,
+        role: NativeOperandRole::Argument,
+    }];
+    assert_names(&[strong(vec![text(value)])], &operands, &["-a"]);
+    for value in ["-L:<funcname>:<file>", "-L@<file>"] {
+        assert!(
+            option_head(&[text(value)], &[]).inferred_complete,
+            "{value}"
+        );
+    }
+    for value in ["-L :<file>", "-L:<file>::<other>", "-L:<file>:"] {
+        assert!(
+            !option_head(&[text(value)], &[]).inferred_complete,
+            "{value}"
+        );
+    }
+}
+
+#[test]
+fn parameter_owned_openers_do_not_wrap_new_declarations() {
+    // Pinned Ar/No/Ar executes three distinct term_word calls; Ar selects
+    // UNDER before its opening quote. A generated Dq wrapper around Fl
+    // instead supplies ordinary delimiters around an actual option.
+    let nodes = [
+        emphasis(vec![text("“")]),
+        text(" --fake "),
+        emphasis(vec![text("”")]),
+    ];
+    assert_names(&nodes, &[], &[]);
+    let value = "“ --fake ”";
+    let operands = [NativeOperand {
+        bytes: 0.."“".len(),
+        role: NativeOperandRole::Argument,
+    }];
+    assert_names(&[strong(vec![text(value)])], &operands, &[]);
+    assert_names(
+        &[text("“"), strong(vec![text("-foo")]), text("”")],
+        &[],
+        &["-foo"],
+    );
+}
+
+#[test]
+fn inherited_wrapper_fonts_require_explicit_inner_options() {
+    // Exact Dq/Bq under ft I or Bf -emphasis ran pristine first. quote_pre
+    // retains that font; Fl supplies a distinct generated dash and child.
+    for (open, close) in [("“", "”"), ("[", "]")] {
+        let nodes = [
+            emphasis(vec![text(open)]),
+            strong(vec![text("-foo")]),
+            emphasis(vec![text(close)]),
+        ];
+        let end = open.len() + "-foo".len();
+        let mut operands = [
+            NativeOperand {
+                bytes: 0..open.len(),
+                role: NativeOperandRole::Literal,
+            },
+            NativeOperand {
+                bytes: open.len()..open.len() + 1,
+                role: NativeOperandRole::ExplicitOption,
+            },
+            NativeOperand {
+                bytes: open.len() + 1..end,
+                role: NativeOperandRole::ExplicitOption,
+            },
+            NativeOperand {
+                bytes: end..end + close.len(),
+                role: NativeOperandRole::Literal,
+            },
+        ];
+        assert_names(&nodes, &operands, &["-foo"]);
+        assert_names(&nodes, &[], &[]);
+        operands[0].role = NativeOperandRole::Argument;
+        assert_names(&nodes, &operands, &[]);
+        operands[0].role = NativeOperandRole::Literal;
+        operands[1].role = NativeOperandRole::Literal;
+        operands[2].role = NativeOperandRole::Literal;
+        assert_names(&nodes, &operands, &[]);
     }
 }
