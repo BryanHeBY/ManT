@@ -2,6 +2,8 @@
 //!
 //! The projection is `ManT`'s reading contract, not a terminal or `MathML` formatter.
 
+use super::is_false;
+
 /// Structural role of one parsed equation box.
 #[derive(
     serde::Deserialize, serde::Serialize, schemars::JsonSchema, Clone, Copy, Debug, Eq, PartialEq,
@@ -427,12 +429,6 @@ impl EquationExpression {
             .first()
             .is_some_and(EquationExpression::needs_operand_group)
     }
-}
-
-// serde's skip_serializing_if callback takes a reference to the field.
-#[expect(clippy::trivially_copy_pass_by_ref, reason = "serde requires &bool")]
-fn is_false(value: &bool) -> bool {
-    !*value
 }
 
 #[cfg(test)]

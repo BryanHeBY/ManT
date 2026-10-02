@@ -113,7 +113,18 @@ pub struct Section {
     pub source: Option<SourceSpan>,
 }
 
-#[allow(clippy::trivially_copy_pass_by_ref)]
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde predicates borrow their field"
+)]
 const fn is_zero_u16(value: &u16) -> bool {
     *value == 0
+}
+
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde predicates borrow their field"
+)]
+const fn is_false(value: &bool) -> bool {
+    !*value
 }

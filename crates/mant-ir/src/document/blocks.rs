@@ -1,5 +1,5 @@
 //! Block, item and table models with resolved source layout facts.
-use super::{EquationExpression, Inline, SourceSpan, is_zero_u16};
+use super::{EquationExpression, Inline, SourceSpan, is_false, is_zero_u16};
 use crate::EntryFacts;
 use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize};
@@ -663,9 +663,4 @@ const fn is_one_u16(value: &u16) -> bool {
 
 const fn one_u16() -> u16 {
     1
-}
-
-#[allow(clippy::trivially_copy_pass_by_ref)]
-const fn is_false(value: &bool) -> bool {
-    !*value
 }

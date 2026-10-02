@@ -1,5 +1,6 @@
 //! Stable request and response contracts for structure-aware document search.
 
+use crate::coverage::{content_is_complete, default_content_complete};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -320,13 +321,4 @@ pub struct SearchContextLine {
     pub text: String,
     /// Whether this is one of the lines intersecting the match.
     pub matched: bool,
-}
-
-const fn default_content_complete() -> bool {
-    true
-}
-// Serde's `skip_serializing_if` predicate receives a reference.
-#[allow(clippy::trivially_copy_pass_by_ref)]
-const fn content_is_complete(value: &bool) -> bool {
-    *value
 }

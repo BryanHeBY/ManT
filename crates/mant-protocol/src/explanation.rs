@@ -3,6 +3,7 @@ mod classification;
 mod locations;
 mod matches;
 mod support;
+use crate::coverage::{content_is_complete, default_content_complete};
 use crate::{OutlineTrail, Producer};
 pub use classification::*;
 pub use locations::ExplanationTextRoot;
@@ -413,13 +414,4 @@ impl<'de> Deserialize<'de> for QueryExplanation {
             .map_err(serde::de::Error::custom)?;
         Ok(value)
     }
-}
-
-const fn default_content_complete() -> bool {
-    true
-}
-// Serde's `skip_serializing_if` predicate receives a reference.
-#[allow(clippy::trivially_copy_pass_by_ref)]
-const fn content_is_complete(value: &bool) -> bool {
-    *value
 }

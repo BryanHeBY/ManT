@@ -1,5 +1,6 @@
 //! Stable contracts for bounded queries over a linked set of documents.
 
+use crate::coverage::{content_is_complete, default_content_complete};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -645,13 +646,4 @@ impl<'de> Deserialize<'de> for ScopeExplanation {
             .map_err(serde::de::Error::custom)?;
         Ok(value)
     }
-}
-
-const fn default_content_complete() -> bool {
-    true
-}
-// Serde's `skip_serializing_if` predicate receives a reference.
-#[allow(clippy::trivially_copy_pass_by_ref)]
-const fn content_is_complete(value: &bool) -> bool {
-    *value
 }

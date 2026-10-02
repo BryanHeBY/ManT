@@ -1,5 +1,5 @@
 //! Inline content and typed navigation intent, independent of host actions.
-use super::{EquationExpression, SourceSpan};
+use super::{EquationExpression, SourceSpan, is_zero_u16};
 use crate::NodeId;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -83,14 +83,9 @@ pub enum Inline {
     /// hint for that row without adding padding to source coordinates.
     LineBreak {
         /// Columns the following row indents to.
-        #[serde(default, skip_serializing_if = "is_zero_indent")]
+        #[serde(default, skip_serializing_if = "is_zero_u16")]
         indent_columns: u16,
     },
-}
-
-#[allow(clippy::trivially_copy_pass_by_ref)] // Serde predicate.
-const fn is_zero_indent(value: &u16) -> bool {
-    *value == 0
 }
 
 impl Inline {

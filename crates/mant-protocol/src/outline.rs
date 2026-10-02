@@ -1,5 +1,6 @@
 //! Stable contracts for lightweight query outlines and selected excerpts.
 
+use crate::coverage::{content_is_complete as is_true, default_content_complete as default_true};
 use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize};
 
@@ -214,16 +215,6 @@ pub enum EntryValueDomain {
         #[schemars(length(min = 1, max = 9))]
         entry_kinds: Vec<EntryKind>,
     },
-}
-
-const fn default_true() -> bool {
-    true
-}
-
-// Serde's `skip_serializing_if` predicate receives a reference.
-#[allow(clippy::trivially_copy_pass_by_ref)]
-const fn is_true(value: &bool) -> bool {
-    *value
 }
 
 /// One uniquely addressable node in a query outline.
