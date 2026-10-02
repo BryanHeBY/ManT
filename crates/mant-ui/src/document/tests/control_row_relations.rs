@@ -26,10 +26,7 @@ fn tab_head_word_seams_survive_real_json_ui_resize_and_native_readback() {
         let query: ResolvedContent = decoded.into();
         let markdown = mant_codec::encode::render_markdown_with_options(
             &query,
-            mant_codec::encode::MarkdownOptions {
-                native_text: true,
-                ..Default::default()
-            },
+            mant_codec::encode::MarkdownOptions::default(),
         );
         let readback = mant_loader::load_markdown_text(&markdown, None).unwrap();
         for content in [&query, &readback] {

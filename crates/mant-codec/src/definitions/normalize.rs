@@ -300,7 +300,7 @@ mod tests {
                         unreachable!()
                     };
                     items[0].layout.head_body_relation = if inline_term {
-                        mant_ir::HeadBodyRelation::RunIn
+                        mant_ir::HeadBodyRelation::from(true)
                     } else {
                         mant_ir::HeadBodyRelation::Separate
                     };

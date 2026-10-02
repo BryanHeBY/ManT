@@ -82,18 +82,6 @@ fn bsd_lifecycle_operands_keep_source_spacing_and_hard_rows() {
             native_rows,
             "{before}/{operand}: portable"
         );
-        let native = mant_codec::encode::render_markdown_with_options(
-            &query,
-            MarkdownOptions {
-                native_text: true,
-                ..MarkdownOptions::default()
-            },
-        );
-        assert_eq!(
-            description_rows(&native),
-            native_rows,
-            "{before}/{operand}: native"
-        );
         let terminal = mant_render::render_query_man(&query);
         let rows: Vec<_> = terminal.lines().map(str::trim_start).collect();
         let start = rows.iter().position(|row| *row == "DESCRIPTION").unwrap() + 1;
@@ -117,16 +105,6 @@ fn accepted_link_suffix_keeps_its_executed_break_in_markdown() {
         description_rows(&mant_codec::encode::render_markdown(&query)),
         ["label:", "https://e.example/x AFTER"]
     );
-    assert_eq!(
-        description_rows(&mant_codec::encode::render_markdown_with_options(
-            &query,
-            MarkdownOptions {
-                native_text: true,
-                ..MarkdownOptions::default()
-            }
-        )),
-        ["label:", "https://e.example/x AFTER"]
-    );
 }
 
 #[test]
@@ -134,27 +112,12 @@ fn visible_and_markdown_search_coordinates_use_the_only_spelling() {
     let query = roundtrip(&format!(
         "{PRE}.No BEFORE\\p\n.Bx -alpha\n.No AFTER\n.Sh NEXT\n.No END\n"
     ));
-    for (scope, found, absent, native_text) in [
-        (
-            SearchScope::Visible,
-            "-alpha",
-            "currently in alpha test",
-            true,
-        ),
-        (
-            SearchScope::Markdown,
-            "-alpha",
-            "currently in alpha test",
-            false,
-        ),
+    for (scope, found, absent) in [
+        (SearchScope::Visible, "-alpha", "currently in alpha test"),
+        (SearchScope::Markdown, "-alpha", "currently in alpha test"),
     ] {
-        let artifact = render_addressable_markdown_with_options(
-            &query,
-            MarkdownOptions {
-                native_text,
-                ..MarkdownOptions::ADDRESSABLE
-            },
-        );
+        let artifact =
+            render_addressable_markdown_with_options(&query, MarkdownOptions::ADDRESSABLE);
         let found = search(&query, scope, found);
         assert_eq!(found.matches.len(), 1);
         assert_eq!(

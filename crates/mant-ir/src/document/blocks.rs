@@ -324,26 +324,81 @@ pub struct DefinitionLayout {
     pub spacing_before_lines: Option<u16>,
 }
 
-/// Row relationship between a definition head and its first body row.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+/// Source-neutral row, word-boundary and preferred first-body alignment facts.
+/// Column hints never override a joined word boundary.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, JsonSchema)]
+#[serde(
+    tag = "type",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
 pub enum HeadBodyRelation {
-    /// The body starts on its own row at the description indent (tag-style
-    /// and over-long heads; mdoc `tag`/`diag`, man TP past the tag width).
+    /// The body starts on a separate row at its own content origin.
     #[default]
     Separate,
-    /// The body shares the head's row behind a minimum separator (mdoc
-    /// `hang`, man TP/HP inside the tag width).
-    RunIn,
-    /// The body shares the head's row with no separator: a request cleared
-    /// `TERMP_NOBREAK` and armed `TERMP_NOSPACE` (`roff_term.c:75-78`), so
-    /// the first body word prints against the last head cell.
-    JoinedNoSpace,
-    /// The body shares the head's row starting at the description column
-    /// because the cleared field filled its capacity (term.c:250-253 with
-    /// 205-207): the first body column is the further of the head's end
-    /// and the description indent.
-    FlushAtBody,
+    /// The first body row shares the final head row. Its word seam is
+    /// independent from the preferred alignment and later body origins.
+    Shared {
+        /// Whether consumers may insert separation after the accepted head.
+        word_boundary: DefinitionWordBoundary,
+        /// Preferred first-body alignment. A joined seam forbids extra
+        /// padding even when a column hint would prefer a later origin.
+        body_alignment: DefinitionBodyAlignment,
+    },
+}
+
+// A tagged unit variant silently accepts extra fields during Serde decoding.
+// Keep the public default ergonomic while closing every wire variant.
+#[derive(Deserialize)]
+#[serde(
+    tag = "type",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+enum ClosedHeadBodyRelation {
+    Separate {},
+    Shared {
+        word_boundary: DefinitionWordBoundary,
+        body_alignment: DefinitionBodyAlignment,
+    },
+}
+
+impl<'de> Deserialize<'de> for HeadBodyRelation {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Ok(match ClosedHeadBodyRelation::deserialize(deserializer)? {
+            ClosedHeadBodyRelation::Separate {} => Self::Separate,
+            ClosedHeadBodyRelation::Shared {
+                word_boundary,
+                body_alignment,
+            } => Self::Shared {
+                word_boundary,
+                body_alignment,
+            },
+        })
+    }
+}
+
+/// Word boundary at a shared definition head/body seam.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum DefinitionWordBoundary {
+    /// The accepted head and body are adjacent; add no synthetic cells.
+    Joined,
+    /// Apply the minimum gap and preferred first-body alignment.
+    Separated,
+}
+
+/// Preferred alignment for only the first body row of a shared definition.
+/// Hard/wrapped continuations and later blocks use their own body origins.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum DefinitionBodyAlignment {
+    /// Follow the final head row, with only the resolved minimum gap.
+    AfterTerm,
+    /// Prefer the body content origin, without moving before the head end.
+    Indented,
 }
 
 impl DefinitionLayout {
@@ -364,12 +419,43 @@ impl DefinitionLayout {
 }
 
 impl HeadBodyRelation {
-    /// Whether the executed BODY word follows the final HEAD glyph without
-    /// a separating cell. Responsive origins cannot insert a word boundary
-    /// after this fact was established by the formatter's final receipt.
+    /// Share the final head row behind a word separator.
+    #[must_use]
+    pub const fn separated(body_alignment: DefinitionBodyAlignment) -> Self {
+        Self::Shared {
+            word_boundary: DefinitionWordBoundary::Separated,
+            body_alignment,
+        }
+    }
+
+    /// Share the final head row with no synthetic word separator or padding.
+    #[must_use]
+    pub const fn joined(body_alignment: DefinitionBodyAlignment) -> Self {
+        Self::Shared {
+            word_boundary: DefinitionWordBoundary::Joined,
+            body_alignment,
+        }
+    }
+
+    /// Whether the accepted BODY follows the final HEAD without extra cells.
     #[must_use]
     pub const fn joins_without_separator(self) -> bool {
-        matches!(self, Self::JoinedNoSpace | Self::FlushAtBody)
+        matches!(
+            self,
+            Self::Shared {
+                word_boundary: DefinitionWordBoundary::Joined,
+                ..
+            }
+        )
+    }
+
+    /// Preferred first-body alignment, independently of later body origins.
+    #[must_use]
+    pub const fn preferred_alignment(self) -> Option<DefinitionBodyAlignment> {
+        match self {
+            Self::Separate => None,
+            Self::Shared { body_alignment, .. } => Some(body_alignment),
+        }
     }
 
     /// Whether the relation carries the generic default.
@@ -380,8 +466,12 @@ impl HeadBodyRelation {
 }
 
 impl From<bool> for HeadBodyRelation {
-    fn from(runs_in: bool) -> Self {
-        if runs_in { Self::RunIn } else { Self::Separate }
+    fn from(shares_row: bool) -> Self {
+        if shares_row {
+            Self::separated(DefinitionBodyAlignment::Indented)
+        } else {
+            Self::Separate
+        }
     }
 }
 

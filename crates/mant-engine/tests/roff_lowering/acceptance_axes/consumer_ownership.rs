@@ -161,13 +161,8 @@ fn pending_and_unicode_cells_keep_exact_scalar_owner_boundaries() {
                 .sum::<usize>(),
             1
         );
-        let artifact = render_addressable_markdown_with_options(
-            &query,
-            MarkdownOptions {
-                native_text: true,
-                ..MarkdownOptions::ADDRESSABLE
-            },
-        );
+        let artifact =
+            render_addressable_markdown_with_options(&query, MarkdownOptions::ADDRESSABLE);
         let occurrence = &found.matches[0].occurrences[0];
         assert_eq!(
             &artifact.text()[usize::try_from(occurrence.markdown.start_byte).unwrap()

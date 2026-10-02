@@ -263,7 +263,6 @@ fn local_heading_links_force_addressable_export_even_when_semantics_were_request
         mant_codec::encode::MarkdownOptions {
             preserve_semantics: true,
             preserve_anchors: false,
-            native_text: false,
         },
     ] {
         let markdown = mant_codec::encode::render_markdown_with_options(&query, options);

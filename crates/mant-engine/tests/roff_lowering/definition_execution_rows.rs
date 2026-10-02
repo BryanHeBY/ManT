@@ -404,7 +404,7 @@ fn empty_head_operands_do_not_predict_a_native_line_end() {
             };
             assert_eq!(
                 items[0].layout.head_body_relation,
-                mant_ir::HeadBodyRelation::RunIn
+                mant_ir::HeadBodyRelation::separated(mant_ir::DefinitionBodyAlignment::Indented)
             );
         }
     }

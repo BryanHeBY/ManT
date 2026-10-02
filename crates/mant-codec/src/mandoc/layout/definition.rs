@@ -56,7 +56,7 @@ impl DefinitionGeometry {
         terms: &[Vec<Inline>],
     ) -> DefinitionLayout {
         let body_indent_columns = body_origin.offset_from(origin);
-        let head_body_relation = self.relation_override.unwrap_or(match self.placement {
+        let mut head_body_relation = self.relation_override.unwrap_or(match self.placement {
             TermPlacement::Fit
                 if !mant_ir::terms_fit_inline(
                     terms,
@@ -66,14 +66,73 @@ impl DefinitionGeometry {
             {
                 HeadBodyRelation::Separate
             }
-            TermPlacement::Fit | TermPlacement::RunIn => HeadBodyRelation::RunIn,
+            TermPlacement::Fit | TermPlacement::RunIn => HeadBodyRelation::from(true),
             TermPlacement::Stacked => HeadBodyRelation::Separate,
         });
+        // term_flushln() places a following HANG field after the last printed
+        // HEAD row. Resolve this preference once, instead of making each
+        // renderer infer it from historical rows. Leading empty rows alone
+        // do not consume that origin (term.c:134-136,205-207,235-253).
+        if head_body_relation == HeadBodyRelation::from(true)
+            && final_head_has_completed_content_row(terms)
+        {
+            head_body_relation =
+                HeadBodyRelation::separated(mant_ir::DefinitionBodyAlignment::AfterTerm);
+        }
         DefinitionLayout {
             head_body_relation,
             body_indent_columns,
             min_term_gap_columns: self.gap,
             spacing_before_lines: None,
+        }
+    }
+}
+
+fn final_head_has_completed_content_row(terms: &[Vec<Inline>]) -> bool {
+    for term in terms.iter().rev() {
+        let mut rows = HeadRows::default();
+        rows.observe(term);
+        if rows.present || rows.current_cells {
+            return rows.completed_cells;
+        }
+    }
+    false
+}
+
+#[derive(Default)]
+struct HeadRows {
+    present: bool,
+    current_cells: bool,
+    completed_cells: bool,
+}
+
+impl HeadRows {
+    fn end_row(&mut self) {
+        self.present = true;
+        self.completed_cells |= self.current_cells;
+        self.current_cells = false;
+    }
+
+    fn observe(&mut self, nodes: &[Inline]) {
+        for node in nodes {
+            match node {
+                Inline::Text { value }
+                | Inline::Code { value }
+                | Inline::Equation { value, .. } => {
+                    for character in value.chars() {
+                        if character == '\n' {
+                            self.end_row();
+                        } else {
+                            self.current_cells = true;
+                        }
+                    }
+                }
+                Inline::LineBreak { .. } => self.end_row(),
+                Inline::Strong { children }
+                | Inline::Emphasis { children }
+                | Inline::Link { children, .. } => self.observe(children),
+                Inline::Anchor { .. } => {}
+            }
         }
     }
 }

@@ -227,8 +227,8 @@ fn check_reader_column(
         .find(|owner| text(&owner["label"]) == source_word)
         .unwrap();
     let native_prefix = text(&position["prefix"]);
-    // Ordinary Markdown phrasing discards edge ASCII padding; native_text
-    // preserves definition word boundaries without selecting another spelling.
+    // Ordinary Markdown phrasing discards edge ASCII padding while retaining
+    // accepted definition word boundaries and the same visible spelling.
     // Fenced literal rows and authored NBSP retain their exact cell origins.
     let prefix = if owner["no_fill"].as_bool().unwrap() {
         native_prefix
@@ -266,7 +266,6 @@ fn native_markdown_reader_coordinates_map_to_its_declared_phrasing_projection() 
         let markdown = mant_codec::encode::render_markdown_with_options(
             &content,
             mant_codec::encode::MarkdownOptions {
-                native_text: true,
                 ..mant_codec::encode::MarkdownOptions::default()
             },
         );

@@ -119,13 +119,8 @@ fn styles_for_word(children: &[Inline], word: &str) -> Vec<u8> {
 
 fn assert_artifact_ranges(content: &ResolvedContent, word: &str) {
     for scope in [SearchScope::Visible, SearchScope::Markdown] {
-        let artifact = render_addressable_markdown_with_options(
-            content,
-            MarkdownOptions {
-                native_text: scope == SearchScope::Visible,
-                ..MarkdownOptions::ADDRESSABLE
-            },
-        );
+        let artifact =
+            render_addressable_markdown_with_options(content, MarkdownOptions::ADDRESSABLE);
         let found = mant_query::search_query(
             content,
             &SearchQuery {
@@ -280,14 +275,8 @@ fn hundred_native_carriers_keep_hard_rows_after_json_and_markdown_boundary_polic
             case.id
         );
         assert_artifact_ranges(&content, word);
-        for native_text in [false, true] {
-            let markdown = render_markdown_with_options(
-                &content,
-                MarkdownOptions {
-                    native_text,
-                    ..Default::default()
-                },
-            );
+        {
+            let markdown = render_markdown_with_options(&content, MarkdownOptions::default());
             let restored =
                 mant_loader::load_markdown_text(&markdown, Some("exported.md".into())).unwrap();
             let readback = mant_render::render_query_man(&restored);

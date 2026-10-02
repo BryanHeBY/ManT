@@ -640,7 +640,18 @@ Native reading retains each accepted automatic separator written by `term_word()
 
 Accepted inline children are the only visible body in native reading, Markdown, search, explain and TUI copy. BSD lifecycle operands keep the pinned validator's native spelling (for example, `-alphaBSD`); export does not insert lifecycle commentary. An accepted `Lk` colon and URI remain visible even when a descriptive label is clickable. Link identity is resolved after native field acceptance, including partial rejection. Private description and URI owners preserve output identity through field splits and are removed at IR drain; they neither execute another formatter word nor keep a page execution history. An earlier operand's delayed glyph cannot qualify a description or enter the fallback URI's activation range. If the native field rejects every link glyph, the authored destination still survives as typed identity with an empty label, matching the existing HTML identity contract; it has no visible activation range and does not recreate rejected prose or hard rows. Two authored occurrences with the same destination keep separate identities. Ordinary Markdown links retain their authored labels without roff-generated suffixes.
 
-`MarkdownOptions.native_text` currently selects the executed definition HEAD/BODY word-boundary policy; it does not select another visible spelling. Visible search uses that boundary policy, while Markdown-scope search describes the default artifact. Each response's byte ranges and line counts describe its exact addressable bytes. Container closers and generated syntax retain their own final word decisions. `In` retains code presentation while following the native prose/synopsis font scope; `Xr` does not create a font scope.
+Definition HEAD/BODY relations record whether the row is separate or shared;
+shared rows carry their accepted joined/separated word boundary and preferred
+first-body alignment independently. Plain text and TUI consume the same gap
+rule. Canonical Markdown also retains joined paragraph words; it has no
+alternate native-text switch. A literal BODY stays in a separate fenced block
+within its list item with the same accepted payload. Those syntax lines do not
+change native hard rows or owner identity. Visible and Markdown search address
+the same canonical artifact, with scope controlling syntax visibility; each
+response's byte ranges and line counts describe its exact addressable bytes.
+Container closers and generated syntax retain their own final word decisions.
+`In` retains code presentation while following the native prose/synopsis font
+scope; `Xr` does not create a font scope.
 
 Inside `Fo`, a generated comma separates adjacent logical `Fa` parameters. Nonprinting controls and targets do not break that adjacency, but intervening prose or a visible container does; an authored closing delimiter is not duplicated. Generated punctuation is emitted before following controls, so `.Fa x`, `.Sm off`, `.Fa y` retains `x, y`.
 

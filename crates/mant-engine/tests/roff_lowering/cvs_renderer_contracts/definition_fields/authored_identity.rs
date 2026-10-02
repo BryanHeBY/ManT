@@ -1,4 +1,5 @@
 use super::*;
+use mant_ir::{DefinitionBodyAlignment, HeadBodyRelation};
 
 #[test]
 fn one_authored_link_keeps_one_identity_across_committed_and_rejected_fields() {
@@ -72,9 +73,12 @@ fn one_authored_link_keeps_one_identity_across_committed_and_rejected_fields() {
             assert_eq!(
                 item.layout.head_body_relation,
                 if style == "hang" && !rejected {
-                    mant_ir::HeadBodyRelation::RunIn
+                    // The exact accepted X/Y rows above resolve the first
+                    // BODY alignment after the final HEAD row; consumers
+                    // no longer infer that preference from a multiline term.
+                    HeadBodyRelation::separated(DefinitionBodyAlignment::AfterTerm)
                 } else {
-                    mant_ir::HeadBodyRelation::Separate
+                    HeadBodyRelation::Separate
                 },
                 "{style} {label}"
             );

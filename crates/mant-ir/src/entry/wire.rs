@@ -202,3 +202,101 @@ fn only_ordered_lists_accept_start_in_actual_decoders() {
         assert_eq!(kind.for_excerpt(8), kind);
     }
 }
+
+#[test]
+fn definition_relations_round_trip_independent_word_and_alignment_facts() {
+    use crate::{
+        DefinitionBodyAlignment, DefinitionLayout, DefinitionWordBoundary, HeadBodyRelation,
+    };
+    for word_boundary in [
+        DefinitionWordBoundary::Joined,
+        DefinitionWordBoundary::Separated,
+    ] {
+        for body_alignment in [
+            DefinitionBodyAlignment::AfterTerm,
+            DefinitionBodyAlignment::Indented,
+        ] {
+            let layout = DefinitionLayout {
+                head_body_relation: HeadBodyRelation::Shared {
+                    word_boundary,
+                    body_alignment,
+                },
+                body_indent_columns: -7,
+                min_term_gap_columns: 2,
+                spacing_before_lines: Some(0),
+            };
+            let wire = serde_json::to_string(&layout).unwrap();
+            assert_eq!(
+                serde_json::from_str::<DefinitionLayout>(&wire).unwrap(),
+                layout
+            );
+            let value: Value = serde_json::from_str(&wire).unwrap();
+            assert_eq!(value["headBodyRelation"]["type"], "shared");
+            assert!(!wire.contains("inlineTerm"));
+            assert!(!wire.contains("flush-at-body"));
+        }
+    }
+    for relation in [
+        json!("separate"),
+        json!("run-in"),
+        json!("joined-no-space"),
+        json!("flush-at-body"),
+        json!({"type":"shared"}),
+        json!({"type":"shared","wordBoundary":"joined"}),
+        json!({"type":"shared","wordBoundary":"unknown","bodyAlignment":"indented"}),
+        json!({"type":"shared","wordBoundary":"joined","bodyAlignment":"unknown"}),
+        json!({"type":"shared","wordBoundary":"joined","bodyAlignment":"indented","unknown":0}),
+        json!({"type":"separate","wordBoundary":"joined"}),
+    ] {
+        let wire = json!({"headBodyRelation":relation}).to_string();
+        assert!(
+            serde_json::from_str::<DefinitionLayout>(&wire).is_err(),
+            "{wire}"
+        );
+    }
+    for invalid in [
+        json!({"headBodyRelation":{"type":"shared","wordBoundary":"joined","bodyAlignment":"indented"},"inlineTerm":true}),
+        json!({"headBodyRelation":{"type":"shared","wordBoundary":"joined","bodyAlignment":"indented"},"minTermGapColumns":65536}),
+    ] {
+        assert!(serde_json::from_str::<DefinitionLayout>(&invalid.to_string()).is_err());
+    }
+}
+
+#[test]
+fn shared_definition_gap_preserves_word_boundaries_under_origin_translation() {
+    use crate::{
+        DefinitionBodyAlignment, DefinitionLayout, DefinitionWordBoundary, HeadBodyRelation,
+    };
+    for parent in [-11, 0, 9] {
+        for word_boundary in [
+            DefinitionWordBoundary::Joined,
+            DefinitionWordBoundary::Separated,
+        ] {
+            for body_alignment in [
+                DefinitionBodyAlignment::AfterTerm,
+                DefinitionBodyAlignment::Indented,
+            ] {
+                let layout = DefinitionLayout {
+                    head_body_relation: HeadBodyRelation::Shared {
+                        word_boundary,
+                        body_alignment,
+                    },
+                    body_indent_columns: 12,
+                    min_term_gap_columns: 1,
+                    ..Default::default()
+                };
+                let gap = crate::geometry::definition_body_gap(&layout, parent, 3, parent + 12);
+                let expected = match (word_boundary, body_alignment) {
+                    (DefinitionWordBoundary::Joined, _) => 0,
+                    (DefinitionWordBoundary::Separated, DefinitionBodyAlignment::AfterTerm) => 1,
+                    (DefinitionWordBoundary::Separated, DefinitionBodyAlignment::Indented) => {
+                        crate::geometry::padding(parent + 12)
+                            .saturating_sub(crate::geometry::padding(parent) + 3)
+                            .max(1)
+                    }
+                };
+                assert_eq!(gap, expected, "{parent}: {layout:?}");
+            }
+        }
+    }
+}

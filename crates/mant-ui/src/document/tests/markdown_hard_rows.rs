@@ -141,19 +141,10 @@ fn assert_rendered_carrier(
     }
 }
 
-fn assert_reader_view(
-    content: &ResolvedContent,
-    container: &str,
-    carrier: &str,
-    topology: usize,
-    native_text: bool,
-) {
+fn assert_reader_view(content: &ResolvedContent, container: &str, carrier: &str, topology: usize) {
     let markdown = mant_codec::encode::render_markdown_with_options(
         content,
-        mant_codec::encode::MarkdownOptions {
-            native_text,
-            ..Default::default()
-        },
+        mant_codec::encode::MarkdownOptions::default(),
     );
     let parsed = mant_loader::load_markdown_text(&markdown, None).unwrap();
     let before = parsed.clone();
@@ -261,9 +252,7 @@ fn hundred_roff_carriers_keep_visible_hard_rows_through_reader_buffer_and_resize
                     serde_json::from_str::<mant_protocol::QueryBundle>(&wire)
                         .unwrap()
                         .into();
-                for native_text in [false, true] {
-                    assert_reader_view(&content, container, carrier, topology, native_text);
-                }
+                assert_reader_view(&content, container, carrier, topology);
             }
         }
     }

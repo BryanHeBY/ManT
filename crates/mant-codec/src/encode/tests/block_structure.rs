@@ -244,24 +244,18 @@ fn preserves_definition_prose_row_relation_in_both_markdown_projections() {
             )])),
             tldr: None,
         };
-        for native_text in [false, true] {
-            let markdown = render_markdown_with_options(
-                &query,
-                MarkdownOptions {
-                    native_text,
-                    ..Default::default()
-                },
-            );
+        {
+            let markdown = render_markdown_with_options(&query, MarkdownOptions::default());
             assert_eq!(
                 Parser::new(&markdown)
                     .filter(|event| matches!(event, Event::HardBreak))
                     .count(),
                 usize::from(!inline),
-                "inline={inline}, native={native_text}: {markdown}"
+                "inline={inline}: {markdown}"
             );
             assert!(
                 !Parser::new(&markdown).any(|event| matches!(event, Event::SoftBreak)),
-                "inline={inline}, native={native_text}: {markdown}"
+                "inline={inline}: {markdown}"
             );
         }
     }

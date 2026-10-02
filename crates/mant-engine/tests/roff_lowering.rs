@@ -24,6 +24,8 @@ mod acceptance_axes;
 mod consumer_boundaries;
 #[path = "roff_lowering/cvs_renderer_contracts.rs"]
 mod cvs_renderer_contracts;
+#[path = "roff_lowering/definition_relations.rs"]
+mod definition_relations;
 #[path = "roff_lowering/driver.rs"]
 mod driver;
 #[path = "roff_lowering/empty_word_columns.rs"]

@@ -89,6 +89,9 @@ fn bare_zero_advance_keeps_generated_closing_glyph_in_its_row() {
 
 #[test]
 fn author_split_restarts_an_overrun_tag_field() {
+    // Exact inputs rerun with pristine five profiles before this assertion.
+    // AfterTerm is a responsive preference after a printed prior HEAD row,
+    // independent of the native restarted-field columns.
     // Fixed CVS -Tascii: an author split that overruns the tag field ends
     // its row (term.c:250-253 through mdoc_term.c:1084-1085), but the
     // field restarts — NOBREAK and BRIND survive until the item post — so
@@ -99,7 +102,7 @@ fn author_split_restarts_an_overrun_tag_field() {
     );
     assert_eq!(
         item.layout.head_body_relation,
-        HeadBodyRelation::RunIn,
+        HeadBodyRelation::separated(mant_ir::DefinitionBodyAlignment::AfterTerm),
         "{item:#?}"
     );
     let rows = item
@@ -124,10 +127,15 @@ fn author_split_families_keep_the_reference_row_shapes() {
     // - tag/A: `A  Bob  BODY` — the fitting field keeps its row;
     // - hang/LONGTEXT and hang/A: one row with BODY behind the trailspace.
     for (style, head, expected_rows, expected_relation) in [
-        ("tag", "LONGTEXT", 2, HeadBodyRelation::RunIn),
-        ("tag", "A", 1, HeadBodyRelation::RunIn),
-        ("hang", "LONGTEXT", 1, HeadBodyRelation::RunIn),
-        ("hang", "A", 1, HeadBodyRelation::RunIn),
+        (
+            "tag",
+            "LONGTEXT",
+            2,
+            HeadBodyRelation::separated(mant_ir::DefinitionBodyAlignment::AfterTerm),
+        ),
+        ("tag", "A", 1, HeadBodyRelation::from(true)),
+        ("hang", "LONGTEXT", 1, HeadBodyRelation::from(true)),
+        ("hang", "A", 1, HeadBodyRelation::from(true)),
     ] {
         let item = definition_item_from_source(&format!(
             ".Bl -{style} -width 6n\n.It Xo\n.No {head}\n.An -split\n.An Bob\n.Xc\n.No BODY\n.El\n"

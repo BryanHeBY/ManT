@@ -171,7 +171,6 @@ fn man_link_identity_uses_html_decoding_while_its_target_word_stays_native() {
             let artifact = mant_codec::encode::render_addressable_markdown_with_options(
                 &query,
                 mant_codec::encode::MarkdownOptions {
-                    native_text: true,
                     ..mant_codec::encode::MarkdownOptions::ADDRESSABLE
                 },
             );
@@ -521,7 +520,6 @@ fn pending_mail_glyphs_keep_original_styles_and_stay_outside_address_identity() 
         let artifact = mant_codec::encode::render_addressable_markdown_with_options(
             &query,
             mant_codec::encode::MarkdownOptions {
-                native_text: true,
                 ..mant_codec::encode::MarkdownOptions::ADDRESSABLE
             },
         );

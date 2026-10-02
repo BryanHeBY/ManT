@@ -122,13 +122,8 @@ fn real_outline_excerpt_explain_and_search_preserve_coverage_and_text_ranges() {
 
 fn assert_search_ranges_and_pagination(content: &ResolvedContent, complete: bool, case: &Value) {
     for scope in [SearchScope::Visible, SearchScope::Markdown] {
-        let artifact = render_addressable_markdown_with_options(
-            content,
-            MarkdownOptions {
-                native_text: scope == SearchScope::Visible,
-                ..MarkdownOptions::ADDRESSABLE
-            },
-        );
+        let artifact =
+            render_addressable_markdown_with_options(content, MarkdownOptions::ADDRESSABLE);
         for offset in [0, 1] {
             let query = SearchQuery {
                 pattern: "AFTER|END".to_owned(),

@@ -30,13 +30,7 @@ fn paragraph_children(content: &mut ResolvedContent) -> &mut [Inline] {
 
 fn reader(case: &Case) -> ResolvedContent {
     let source = mant_loader::load_roff_bytes(case.source.as_bytes()).unwrap();
-    let markdown = render_markdown_with_options(
-        &source,
-        MarkdownOptions {
-            native_text: true,
-            ..Default::default()
-        },
-    );
+    let markdown = render_markdown_with_options(&source, MarkdownOptions::default());
     mant_loader::load_markdown_text(&markdown, None).unwrap()
 }
 
@@ -209,13 +203,8 @@ fn canonical_search_uses_real_unicode_artifact_bytes_and_distinct_link_occurrenc
     links.visit_document(content.document.as_ref().unwrap());
     assert_eq!(links.0.len(), 2);
     for scope in [SearchScope::Visible, SearchScope::Markdown] {
-        let artifact = render_addressable_markdown_with_options(
-            &content,
-            MarkdownOptions {
-                native_text: scope == SearchScope::Visible,
-                ..MarkdownOptions::ADDRESSABLE
-            },
-        );
+        let artifact =
+            render_addressable_markdown_with_options(&content, MarkdownOptions::ADDRESSABLE);
         let found = search(&content, scope);
         assert_eq!(
             found

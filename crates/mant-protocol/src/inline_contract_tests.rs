@@ -52,7 +52,7 @@ fn accepted_styles_links_and_rows_round_trip_without_a_second_spelling() {
 }
 
 // Package-local contract construction: no workspace-only include resource.
-fn query_fixture() -> serde_json::Value {
+pub(super) fn query_fixture() -> serde_json::Value {
     json!({
         "schema": "mant.query/v0.12", "label": "test",
         "document": {

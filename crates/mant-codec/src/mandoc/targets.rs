@@ -293,7 +293,7 @@ pub(super) fn attach_definition_targets(
                 .map(|target| Inline::anchor_at(target, source))
                 .collect(),
         );
-        item.layout.head_body_relation = mant_ir::HeadBodyRelation::RunIn;
+        item.layout.head_body_relation = mant_ir::HeadBodyRelation::from(true);
     }
 }
 
@@ -334,7 +334,7 @@ pub(super) fn append_definition_targets(
                 .map(|target| Inline::anchor_at(target, source))
                 .collect(),
         );
-        item.layout.head_body_relation = mant_ir::HeadBodyRelation::RunIn;
+        item.layout.head_body_relation = mant_ir::HeadBodyRelation::from(true);
     }
 }
 

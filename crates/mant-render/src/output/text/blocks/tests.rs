@@ -5,6 +5,7 @@ use mant_ir::LayoutHint;
 
 mod container_geometry;
 mod decorated_tables;
+mod definition_relations;
 mod definition_rows;
 mod fixtures;
 mod physical_rows;

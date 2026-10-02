@@ -229,13 +229,7 @@ fn native_markdown_readback_preserves_literal_columns_and_phrasing_hard_rows() {
         .filter(|case| case.row_observation == "asserted")
     {
         let content = roundtrip(&case);
-        let markdown = render_markdown_with_options(
-            &content,
-            MarkdownOptions {
-                native_text: true,
-                ..MarkdownOptions::default()
-            },
-        );
+        let markdown = render_markdown_with_options(&content, MarkdownOptions::default());
         let decoded = mant_loader::load_markdown_text(&markdown, None).unwrap();
         let expected = markdown_payloads(&content, true);
         let actual = markdown_payloads(&decoded, false);

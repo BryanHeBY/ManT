@@ -239,8 +239,7 @@ fn render_definition_list(
                     let prose = matches!(item.description.first(), Some(Block::Paragraph { .. }));
                     let sep = match (item.layout.inline_term(), prose) {
                         (true, true)
-                            if options.native_text
-                                && item.layout.head_body_relation.joins_without_separator() =>
+                            if item.layout.head_body_relation.joins_without_separator() =>
                         {
                             ""
                         }

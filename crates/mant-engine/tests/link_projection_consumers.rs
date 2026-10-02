@@ -83,13 +83,8 @@ fn assert_reference(query: &ResolvedContent, label: &str, source: &str) {
 
 fn assert_search_artifacts(query: &ResolvedContent, source: &str) {
     for scope in [SearchScope::Visible, SearchScope::Markdown] {
-        let artifact = render_addressable_markdown_with_options(
-            query,
-            MarkdownOptions {
-                native_text: scope == SearchScope::Visible,
-                ..MarkdownOptions::ADDRESSABLE
-            },
-        );
+        let artifact =
+            render_addressable_markdown_with_options(query, MarkdownOptions::ADDRESSABLE);
         let result = mant_query::search_query(
             query,
             &SearchQuery {

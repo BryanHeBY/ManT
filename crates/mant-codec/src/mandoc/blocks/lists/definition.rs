@@ -299,13 +299,17 @@ fn apply_executed_definition_body_layout(
         // The cleared field filled its capacity (term.c:250-253 with
         // 205-207): the body shares the head's row starting at the
         // description column, with no separator cell to count.
-        geometry.relation_override = Some(mant_ir::HeadBodyRelation::FlushAtBody);
+        geometry.relation_override = Some(mant_ir::HeadBodyRelation::joined(
+            mant_ir::DefinitionBodyAlignment::Indented,
+        ));
         geometry.gap = 0;
     } else if !closed_head_row && !definition_field_exited && observed.first_word_concatenated() {
         // TERMP_NOSPACE at the body's first word leaves no separator cell:
         // the body column starts at the head's end (roff_term.c:75-78),
         // so the layout carries no minimum gap.
-        geometry.relation_override = Some(mant_ir::HeadBodyRelation::JoinedNoSpace);
+        geometry.relation_override = Some(mant_ir::HeadBodyRelation::joined(
+            mant_ir::DefinitionBodyAlignment::AfterTerm,
+        ));
         geometry.gap = 0;
     }
     if matches!(description.first(), Some(Block::Preformatted { .. }))

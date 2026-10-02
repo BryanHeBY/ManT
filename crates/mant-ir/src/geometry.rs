@@ -84,6 +84,32 @@ pub fn padding(origin: i32) -> usize {
     usize::try_from(origin.clamp(0, 4096)).unwrap_or(0)
 }
 
+/// Resolve padding on a shared definition row from source-neutral facts.
+///
+/// Origins remain signed until this leaf. A preferred alignment is a layout
+/// hint: it cannot insert cells across a proven joined word boundary. Accepted
+/// authored padding in the term remains untouched. Continuation origins are
+/// deliberately outside this first-row calculation.
+#[must_use]
+pub fn definition_body_gap(
+    layout: &crate::DefinitionLayout,
+    term_origin: i32,
+    term_width: usize,
+    preferred_body_origin: i32,
+) -> usize {
+    let head_end = compose_origin(term_origin, coordinate(term_width));
+    let preferred = match layout.head_body_relation.preferred_alignment() {
+        Some(crate::DefinitionBodyAlignment::AfterTerm) | None => head_end,
+        Some(crate::DefinitionBodyAlignment::Indented) => preferred_body_origin.max(head_end),
+    };
+    if layout.head_body_relation.joins_without_separator() {
+        return 0;
+    }
+    padding(preferred)
+        .saturating_sub(padding(term_origin).saturating_add(term_width))
+        .max(usize::from(layout.min_term_gap_columns))
+}
+
 /// Convert an in-memory cell count to a signed coordinate without wrapping.
 #[must_use]
 pub fn coordinate(cells: usize) -> i32 {

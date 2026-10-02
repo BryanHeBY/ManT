@@ -72,20 +72,38 @@ The block union preserves structures that matter across renderers:
 
 Paragraph `continuationIndentColumns` is an additional signed displacement from its first-line origin (default zero). Hard-line continuations and visual wraps share that origin; later sibling blocks do not inherit it. It expresses hanging paragraphs without inserting spaces into source text or changing search/link coordinates. A terminal applies wrapping at its current width; unbounded text preserves hard breaks only.
 
+The TUI reserves a readable content area when indentation would leave fewer
+than 16 columns, or fewer than half the columns in a narrow viewport. It
+reduces the line's first and continuation presentation origins by the same
+amount, then bounds them at zero. The logical origins and IR remain unchanged;
+link hits, selection and search positions follow the resulting displayed cells.
+At sufficient width, these logical origins are presented without that reduction.
+
 Block `spacingBeforeLines` is already resolved by the producer: zero means a tight boundary, including when omitted from JSON. It is not an invitation for a frontend to supply paragraph spacing. Independent `VerticalSpace` blocks add their already-resolved blank rows to that boundary, including repeated equal blocks; each executed row has one IR consumption point. Empty anchors and transparent containers do not reset the boundary. Presentation bounds each accumulated gap at 4096 rows, independently of literal blank lines inside text. Native lowering reports `manual.vertical-spacing-limit` when this loses requested spacing. Definition-item optional spacing is different: absence inherits list compactness, while explicit zero suppresses that default.
 
 A definition description starts at its resolved `layout.bodyIndentColumns` relative to the label origin (generic default: four cells), before applying each child's layout. `minTermGapColumns` controls minimum separation after a run-in label (default: one). `DefinitionItem::inline_description()` identifies the first paragraph or literal fragment that may share the term's line when the producer records a shared row; explicit leading spacing prevents that presentation. A literal fragment shares the row only with native continuation evidence, so ordinary no-fill input remains on separate lines. The first line clears the displayed label; hard and wrapped continuation lines, later paragraphs, nested blocks and code use the structural body origin, not the label's width. Separate source term roots retain their original lines rather than acquiring invented commas. Native continuation normalization, plain text, and the TUI share this distinction. Markdown expresses definition ownership through its own block syntax. Inferring a semantic definition from separate source paragraphs preserves their line boundary; it does not authorize run-in presentation.
 
 `DefinitionItem.layout: DefinitionLayout` groups these item-level choices:
-`headBodyRelation` defaults to `separate`; `run-in`, `joined-no-space`, and
-`flush-at-body` share the first body row, with the resolved origin and minimum
-gap carrying their fixed-width placement. Consumers use this relation for row
-structure and do not infer it again from measured label width. Optional `spacingBeforeLines` defaults to
+`headBodyRelation` defaults to `{"type":"separate"}`. A `shared` object records
+independent `wordBoundary` (`joined` or `separated`) and `bodyAlignment`
+(`after-term` or `indented`). Joined words receive no invented separator;
+accepted label padding remains content. Separated words retain at least the
+minimum term gap. `after-term` uses that gap, while `indented` also considers
+the preferred first BODY origin. This choice does not change continuation
+origins or semantic ownership. Plain text and TUI use the same bounded gap
+calculation without guessing whether a native field flushed. Optional `spacingBeforeLines` defaults to
 inheriting list compactness. Explicit zero spacing is preserved and does not
 mean inheritance. Missing layout and `{}` have the same default; `layout:null`,
-unknown fields, the former `layout.inlineTerm`, and the former top-level `inlineTerm`/`spacingBeforeLines` fields
+unknown fields, former string relations (`separate`, `run-in`,
+`joined-no-space`, `flush-at-body`), the former `layout.inlineTerm`, and the former top-level `inlineTerm`/`spacingBeforeLines` fields
 are rejected. Canonical output omits empty layout but retains
 `"layout":{"spacingBeforeLines":0}`. Semantic annotation never changes layout.
+
+Canonical Markdown preserves joined paragraph words instead of adding a
+readability separator. A literal description remains a separate fenced code
+block in the corresponding list item, preserving its payload and type. The
+fence's formatting lines are export syntax, not extra hard rows in the IR;
+Markdown semantic readback does not promise native DefinitionItem identities.
 
 `ListItem.layout: ListItemLayout` has optional `spacingBeforeLines` with the same inheritance and closed-object rules. An explicit value precedes the entire marker and body, including a display or nested list as the first block; it is not extra spacing inside the body. This preserves per-item native paragraph distance without splitting a list or changing its entry paths.
 

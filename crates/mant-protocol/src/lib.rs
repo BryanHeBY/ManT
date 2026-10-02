@@ -104,3 +104,6 @@ mod tests {
 
 #[cfg(test)]
 mod inline_contract_tests;
+
+#[cfg(test)]
+mod definition_contract_tests;

@@ -1122,6 +1122,21 @@
           "endItem"
         ]
       },
+      "DefinitionBodyAlignment": {
+        "description": "Preferred alignment for only the first body row of a shared definition.\nHard/wrapped continuations and later blocks use their own body origins.",
+        "oneOf": [
+          {
+            "description": "Follow the final head row, with only the resolved minimum gap.",
+            "type": "string",
+            "const": "after-term"
+          },
+          {
+            "description": "Prefer the body content origin, without moving before the head end.",
+            "type": "string",
+            "const": "indented"
+          }
+        ]
+      },
       "DefinitionItem": {
         "description": "Displayed terms share a description containing arbitrary blocks.\nSharing that content does not establish behavioral equivalence of the terms.",
         "type": "object",
@@ -1208,6 +1223,21 @@
           }
         },
         "additionalProperties": false
+      },
+      "DefinitionWordBoundary": {
+        "description": "Word boundary at a shared definition head/body seam.",
+        "oneOf": [
+          {
+            "description": "The accepted head and body are adjacent; add no synthetic cells.",
+            "type": "string",
+            "const": "joined"
+          },
+          {
+            "description": "Apply the minimum gap and preferred first-body alignment.",
+            "type": "string",
+            "const": "separated"
+          }
+        ]
       },
       "Diagnostic": {
         "description": "Recoverable parser or IR validation finding attached to the document.",
@@ -2176,27 +2206,45 @@
         "type": "string"
       },
       "HeadBodyRelation": {
-        "description": "Row relationship between a definition head and its first body row.",
+        "description": "Source-neutral row, word-boundary and preferred first-body alignment facts.\nColumn hints never override a joined word boundary.",
         "oneOf": [
           {
-            "description": "The body starts on its own row at the description indent (tag-style\nand over-long heads; mdoc `tag`/`diag`, man TP past the tag width).",
-            "type": "string",
-            "const": "separate"
+            "description": "The body starts on a separate row at its own content origin.",
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "separate"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "type"
+            ]
           },
           {
-            "description": "The body shares the head's row behind a minimum separator (mdoc\n`hang`, man TP/HP inside the tag width).",
-            "type": "string",
-            "const": "run-in"
-          },
-          {
-            "description": "The body shares the head's row with no separator: a request cleared\n`TERMP_NOBREAK` and armed `TERMP_NOSPACE` (`roff_term.c:75-78`), so\nthe first body word prints against the last head cell.",
-            "type": "string",
-            "const": "joined-no-space"
-          },
-          {
-            "description": "The body shares the head's row starting at the description column\nbecause the cleared field filled its capacity (term.c:250-253 with\n205-207): the first body column is the further of the head's end\nand the description indent.",
-            "type": "string",
-            "const": "flush-at-body"
+            "description": "The first body row shares the final head row. Its word seam is\nindependent from the preferred alignment and later body origins.",
+            "type": "object",
+            "properties": {
+              "bodyAlignment": {
+                "description": "Preferred first-body alignment. A joined seam forbids extra\npadding even when a column hint would prefer a later origin.",
+                "$ref": "#/$defs/DefinitionBodyAlignment"
+              },
+              "type": {
+                "type": "string",
+                "const": "shared"
+              },
+              "wordBoundary": {
+                "description": "Whether consumers may insert separation after the accepted head.",
+                "$ref": "#/$defs/DefinitionWordBoundary"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "type",
+              "wordBoundary",
+              "bodyAlignment"
+            ]
           }
         ]
       },
@@ -4162,6 +4210,21 @@
           "endItem"
         ]
       },
+      "DefinitionBodyAlignment": {
+        "description": "Preferred alignment for only the first body row of a shared definition.\nHard/wrapped continuations and later blocks use their own body origins.",
+        "oneOf": [
+          {
+            "description": "Follow the final head row, with only the resolved minimum gap.",
+            "type": "string",
+            "const": "after-term"
+          },
+          {
+            "description": "Prefer the body content origin, without moving before the head end.",
+            "type": "string",
+            "const": "indented"
+          }
+        ]
+      },
       "DefinitionItem": {
         "description": "Displayed terms share a description containing arbitrary blocks.\nSharing that content does not establish behavioral equivalence of the terms.",
         "type": "object",
@@ -4248,6 +4311,21 @@
           }
         },
         "additionalProperties": false
+      },
+      "DefinitionWordBoundary": {
+        "description": "Word boundary at a shared definition head/body seam.",
+        "oneOf": [
+          {
+            "description": "The accepted head and body are adjacent; add no synthetic cells.",
+            "type": "string",
+            "const": "joined"
+          },
+          {
+            "description": "Apply the minimum gap and preferred first-body alignment.",
+            "type": "string",
+            "const": "separated"
+          }
+        ]
       },
       "Diagnostic": {
         "description": "Recoverable parser or IR validation finding attached to the document.",
@@ -6060,27 +6138,45 @@
         "type": "string"
       },
       "HeadBodyRelation": {
-        "description": "Row relationship between a definition head and its first body row.",
+        "description": "Source-neutral row, word-boundary and preferred first-body alignment facts.\nColumn hints never override a joined word boundary.",
         "oneOf": [
           {
-            "description": "The body starts on its own row at the description indent (tag-style\nand over-long heads; mdoc `tag`/`diag`, man TP past the tag width).",
-            "type": "string",
-            "const": "separate"
+            "description": "The body starts on a separate row at its own content origin.",
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "separate"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "type"
+            ]
           },
           {
-            "description": "The body shares the head's row behind a minimum separator (mdoc\n`hang`, man TP/HP inside the tag width).",
-            "type": "string",
-            "const": "run-in"
-          },
-          {
-            "description": "The body shares the head's row with no separator: a request cleared\n`TERMP_NOBREAK` and armed `TERMP_NOSPACE` (`roff_term.c:75-78`), so\nthe first body word prints against the last head cell.",
-            "type": "string",
-            "const": "joined-no-space"
-          },
-          {
-            "description": "The body shares the head's row starting at the description column\nbecause the cleared field filled its capacity (term.c:250-253 with\n205-207): the first body column is the further of the head's end\nand the description indent.",
-            "type": "string",
-            "const": "flush-at-body"
+            "description": "The first body row shares the final head row. Its word seam is\nindependent from the preferred alignment and later body origins.",
+            "type": "object",
+            "properties": {
+              "bodyAlignment": {
+                "description": "Preferred first-body alignment. A joined seam forbids extra\npadding even when a column hint would prefer a later origin.",
+                "$ref": "#/$defs/DefinitionBodyAlignment"
+              },
+              "type": {
+                "type": "string",
+                "const": "shared"
+              },
+              "wordBoundary": {
+                "description": "Whether consumers may insert separation after the accepted head.",
+                "$ref": "#/$defs/DefinitionWordBoundary"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "type",
+              "wordBoundary",
+              "bodyAlignment"
+            ]
           }
         ]
       },
@@ -10084,6 +10180,21 @@
           "endItem"
         ]
       },
+      "DefinitionBodyAlignment": {
+        "description": "Preferred alignment for only the first body row of a shared definition.\nHard/wrapped continuations and later blocks use their own body origins.",
+        "oneOf": [
+          {
+            "description": "Follow the final head row, with only the resolved minimum gap.",
+            "type": "string",
+            "const": "after-term"
+          },
+          {
+            "description": "Prefer the body content origin, without moving before the head end.",
+            "type": "string",
+            "const": "indented"
+          }
+        ]
+      },
       "DefinitionItem": {
         "description": "Displayed terms share a description containing arbitrary blocks.\nSharing that content does not establish behavioral equivalence of the terms.",
         "type": "object",
@@ -10170,6 +10281,21 @@
           }
         },
         "additionalProperties": false
+      },
+      "DefinitionWordBoundary": {
+        "description": "Word boundary at a shared definition head/body seam.",
+        "oneOf": [
+          {
+            "description": "The accepted head and body are adjacent; add no synthetic cells.",
+            "type": "string",
+            "const": "joined"
+          },
+          {
+            "description": "Apply the minimum gap and preferred first-body alignment.",
+            "type": "string",
+            "const": "separated"
+          }
+        ]
       },
       "Diagnostic": {
         "description": "Recoverable parser or IR validation finding attached to the document.",
@@ -11092,27 +11218,45 @@
         "type": "string"
       },
       "HeadBodyRelation": {
-        "description": "Row relationship between a definition head and its first body row.",
+        "description": "Source-neutral row, word-boundary and preferred first-body alignment facts.\nColumn hints never override a joined word boundary.",
         "oneOf": [
           {
-            "description": "The body starts on its own row at the description indent (tag-style\nand over-long heads; mdoc `tag`/`diag`, man TP past the tag width).",
-            "type": "string",
-            "const": "separate"
+            "description": "The body starts on a separate row at its own content origin.",
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "separate"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "type"
+            ]
           },
           {
-            "description": "The body shares the head's row behind a minimum separator (mdoc\n`hang`, man TP/HP inside the tag width).",
-            "type": "string",
-            "const": "run-in"
-          },
-          {
-            "description": "The body shares the head's row with no separator: a request cleared\n`TERMP_NOBREAK` and armed `TERMP_NOSPACE` (`roff_term.c:75-78`), so\nthe first body word prints against the last head cell.",
-            "type": "string",
-            "const": "joined-no-space"
-          },
-          {
-            "description": "The body shares the head's row starting at the description column\nbecause the cleared field filled its capacity (term.c:250-253 with\n205-207): the first body column is the further of the head's end\nand the description indent.",
-            "type": "string",
-            "const": "flush-at-body"
+            "description": "The first body row shares the final head row. Its word seam is\nindependent from the preferred alignment and later body origins.",
+            "type": "object",
+            "properties": {
+              "bodyAlignment": {
+                "description": "Preferred first-body alignment. A joined seam forbids extra\npadding even when a column hint would prefer a later origin.",
+                "$ref": "#/$defs/DefinitionBodyAlignment"
+              },
+              "type": {
+                "type": "string",
+                "const": "shared"
+              },
+              "wordBoundary": {
+                "description": "Whether consumers may insert separation after the accepted head.",
+                "$ref": "#/$defs/DefinitionWordBoundary"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "type",
+              "wordBoundary",
+              "bodyAlignment"
+            ]
           }
         ]
       },
@@ -13528,6 +13672,21 @@
           "endItem"
         ]
       },
+      "DefinitionBodyAlignment": {
+        "description": "Preferred alignment for only the first body row of a shared definition.\nHard/wrapped continuations and later blocks use their own body origins.",
+        "oneOf": [
+          {
+            "description": "Follow the final head row, with only the resolved minimum gap.",
+            "type": "string",
+            "const": "after-term"
+          },
+          {
+            "description": "Prefer the body content origin, without moving before the head end.",
+            "type": "string",
+            "const": "indented"
+          }
+        ]
+      },
       "DefinitionItem": {
         "description": "Displayed terms share a description containing arbitrary blocks.\nSharing that content does not establish behavioral equivalence of the terms.",
         "type": "object",
@@ -13614,6 +13773,21 @@
           }
         },
         "additionalProperties": false
+      },
+      "DefinitionWordBoundary": {
+        "description": "Word boundary at a shared definition head/body seam.",
+        "oneOf": [
+          {
+            "description": "The accepted head and body are adjacent; add no synthetic cells.",
+            "type": "string",
+            "const": "joined"
+          },
+          {
+            "description": "Apply the minimum gap and preferred first-body alignment.",
+            "type": "string",
+            "const": "separated"
+          }
+        ]
       },
       "Diagnostic": {
         "description": "Recoverable parser or IR validation finding attached to the document.",
@@ -15578,27 +15752,45 @@
         "type": "string"
       },
       "HeadBodyRelation": {
-        "description": "Row relationship between a definition head and its first body row.",
+        "description": "Source-neutral row, word-boundary and preferred first-body alignment facts.\nColumn hints never override a joined word boundary.",
         "oneOf": [
           {
-            "description": "The body starts on its own row at the description indent (tag-style\nand over-long heads; mdoc `tag`/`diag`, man TP past the tag width).",
-            "type": "string",
-            "const": "separate"
+            "description": "The body starts on a separate row at its own content origin.",
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "separate"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "type"
+            ]
           },
           {
-            "description": "The body shares the head's row behind a minimum separator (mdoc\n`hang`, man TP/HP inside the tag width).",
-            "type": "string",
-            "const": "run-in"
-          },
-          {
-            "description": "The body shares the head's row with no separator: a request cleared\n`TERMP_NOBREAK` and armed `TERMP_NOSPACE` (`roff_term.c:75-78`), so\nthe first body word prints against the last head cell.",
-            "type": "string",
-            "const": "joined-no-space"
-          },
-          {
-            "description": "The body shares the head's row starting at the description column\nbecause the cleared field filled its capacity (term.c:250-253 with\n205-207): the first body column is the further of the head's end\nand the description indent.",
-            "type": "string",
-            "const": "flush-at-body"
+            "description": "The first body row shares the final head row. Its word seam is\nindependent from the preferred alignment and later body origins.",
+            "type": "object",
+            "properties": {
+              "bodyAlignment": {
+                "description": "Preferred first-body alignment. A joined seam forbids extra\npadding even when a column hint would prefer a later origin.",
+                "$ref": "#/$defs/DefinitionBodyAlignment"
+              },
+              "type": {
+                "type": "string",
+                "const": "shared"
+              },
+              "wordBoundary": {
+                "description": "Whether consumers may insert separation after the accepted head.",
+                "$ref": "#/$defs/DefinitionWordBoundary"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "type",
+              "wordBoundary",
+              "bodyAlignment"
+            ]
           }
         ]
       },

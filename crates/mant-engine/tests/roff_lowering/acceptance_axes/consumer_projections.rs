@@ -106,13 +106,7 @@ fn assert_query_views(query: &ResolvedContent, accepted: &[String], source: &str
         mant_render::render_excerpt_text(&restored)
     );
     let excerpt_text = mant_render::render_excerpt_text(&excerpt);
-    let native = render_addressable_markdown_with_options(
-        query,
-        MarkdownOptions {
-            native_text: true,
-            ..MarkdownOptions::ADDRESSABLE
-        },
-    );
+    let native = render_addressable_markdown_with_options(query, MarkdownOptions::ADDRESSABLE);
     for unit in accepted
         .iter()
         .flat_map(|row| row.split(' '))
@@ -199,17 +193,10 @@ fn mechanism_controls_preserve_completed_rows_and_accepted_text_through_query_vi
 fn assert_markdown_projection(
     query: &ResolvedContent,
     card: &super::axis_model::AcceptanceCase,
-    native_text: bool,
 ) -> Vec<String> {
     let name = card.id;
     let mut markdown_row_failures = Vec::new();
-    let markdown = render_markdown_with_options(
-        query,
-        MarkdownOptions {
-            native_text,
-            ..Default::default()
-        },
-    );
+    let markdown = render_markdown_with_options(query, MarkdownOptions::default());
     let reparsed = mant_loader::load_markdown_text(&markdown, None).unwrap();
     let projected_rows = rows(&reparsed);
     let projected = projected_rows.join("\n");
@@ -221,15 +208,12 @@ fn assert_markdown_projection(
         }
         assert!(
             projected.contains(unit),
-            "{name}, native={native_text}: lost {unit:?}\n{markdown}\n{projected}"
+            "{name}: lost {unit:?}\n{markdown}\n{projected}"
         );
     }
     if let Some(forbidden) = &card.gold.forbidden_units {
         for unit in &forbidden.expect {
-            assert!(
-                !projected.contains(unit),
-                "{name}, native={native_text}: revived {unit:?}"
-            );
+            assert!(!projected.contains(unit), "{name}: revived {unit:?}");
         }
     }
     if let Some(hard_rows) = &card.gold.hard_rows {
@@ -253,7 +237,7 @@ fn assert_markdown_projection(
             );
             if (left == right) != same_row {
                 markdown_row_failures.push(format!(
-                    "{name}, native={native_text}: Markdown changed {:?}/{:?} row relation\n{markdown}\nreparsed={projected_rows:?}",
+                    "{name}: Markdown changed {:?}/{:?} row relation\n{markdown}\nreparsed={projected_rows:?}",
                     boundary.left, boundary.right
                 ));
             }
@@ -265,7 +249,7 @@ fn assert_markdown_projection(
             assert_eq!(
                 super::axis_model::blank_count_between(&projected_rows, "D", "AFTER"),
                 Some(2),
-                "{name}, native={native_text}: {markdown}"
+                "{name}: {markdown}"
             );
         }
     }
@@ -273,7 +257,7 @@ fn assert_markdown_projection(
 }
 
 #[test]
-fn recorded_examples_project_native_and_portable_content_without_reviving_rejected_words() {
+fn recorded_examples_export_accepted_content_without_reviving_rejected_words() {
     let mut markdown_row_failures = Vec::new();
     for name in super::case_names() {
         let files = super::load_case(&name);
@@ -300,9 +284,7 @@ fn recorded_examples_project_native_and_portable_content_without_reviving_reject
                 );
             }
         }
-        for native_text in [false, true] {
-            markdown_row_failures.extend(assert_markdown_projection(&query, &card, native_text));
-        }
+        markdown_row_failures.extend(assert_markdown_projection(&query, &card));
         if let Some(identities) = &card.gold.identities {
             let inventory = mant_query::project_references(
                 query.document.as_ref().unwrap(),

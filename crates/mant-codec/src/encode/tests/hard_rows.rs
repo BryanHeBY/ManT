@@ -95,14 +95,8 @@ impl<'ir> Visit<'ir> for Links {
     }
 }
 
-fn assert_reader_projection(original: &ResolvedContent, carrier: u8, native_text: bool) {
-    let markdown = render_markdown_with_options(
-        original,
-        MarkdownOptions {
-            native_text,
-            ..Default::default()
-        },
-    );
+fn assert_reader_projection(original: &ResolvedContent, carrier: u8) {
+    let markdown = render_markdown_with_options(original, MarkdownOptions::default());
     let restored = parse_content(&markdown, Some("hard-rows.md".into())).unwrap();
     assert_eq!(
         mant_ir::inline_plain_text(phrasing(&restored)),
@@ -172,9 +166,7 @@ fn every_edge_and_repeated_row_preserves_supported_styles_and_link_occurrences()
                 )
                 .unwrap();
                 assert_eq!(original.document.as_ref().unwrap(), &document);
-                for native_text in [false, true] {
-                    assert_reader_projection(&original, carrier, native_text);
-                }
+                assert_reader_projection(&original, carrier);
             }
         }
     }

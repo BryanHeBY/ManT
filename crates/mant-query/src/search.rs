@@ -89,16 +89,9 @@ fn search_with_matcher(
     request: &SearchQuery,
     matcher: &grep_regex::RegexMatcher,
 ) -> Result<QuerySearch, SearchError> {
-    let artifact = render_addressable_markdown_with_options(
-        query,
-        MarkdownOptions {
-            // Both scopes read the same accepted glyphs. Visible search
-            // also preserves executed definition word boundaries; ranges
-            // address the exact artifact encoded for this request.
-            native_text: request.scope == mant_protocol::SearchScope::Visible,
-            ..MarkdownOptions::ADDRESSABLE
-        },
-    );
+    // Both scopes address one artifact with the accepted definition word
+    // boundaries. Scope controls whether Markdown syntax is searchable.
+    let artifact = render_addressable_markdown_with_options(query, MarkdownOptions::ADDRESSABLE);
     let markdown = artifact.text();
     let lines = LineIndex::with_anchors(markdown, artifact.anchor_ranges().to_vec());
     let owners = OwnerIndex::new(&artifact);

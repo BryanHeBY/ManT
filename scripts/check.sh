@@ -69,6 +69,8 @@ run "test Markdown hard-row fixture bindings" \
   python3 -m unittest scripts.roff.tests.test_markdown_rule_fixtures
 run "test Markdown reader structural observation" \
   python3 -m unittest scripts.roff.tests.test_markdown_reader_observer
+run "test definition relation fixture identities and profile admission" \
+  python3 -m unittest scripts.roff.tests.test_definition_relation_fixture
 run "test controlled omission fixture bindings" \
   python3 -m unittest scripts.roff.tests.test_integrity_rule_fixtures
 run "test source recovery card scopes" \

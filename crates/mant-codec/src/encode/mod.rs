@@ -46,9 +46,6 @@ pub struct MarkdownOptions {
     /// Unsupported documents retain portable content without semantic comments;
     /// this is not a lossless serialization (use IR JSON for that).
     pub preserve_semantics: bool,
-    /// Preserve executed definition head/body word boundaries.
-    /// This option does not select a different visible text spelling.
-    pub native_text: bool,
 }
 
 impl MarkdownOptions {
@@ -56,7 +53,6 @@ impl MarkdownOptions {
     pub const ADDRESSABLE: Self = Self {
         preserve_anchors: true,
         preserve_semantics: false,
-        native_text: false,
     };
 }
 

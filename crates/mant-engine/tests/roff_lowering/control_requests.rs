@@ -275,13 +275,7 @@ mod head_word_padding {
     }
 
     fn check_native_markdown(case: &Case, content: &ResolvedContent, failures: &mut Vec<String>) {
-        let markdown = render_markdown_with_options(
-            content,
-            MarkdownOptions {
-                native_text: true,
-                ..MarkdownOptions::default()
-            },
-        );
+        let markdown = render_markdown_with_options(content, MarkdownOptions::default());
         let reader =
             mant_loader::load_markdown_text(&markdown, Some("head-padding.md".into())).unwrap();
         let mut readback = String::new();

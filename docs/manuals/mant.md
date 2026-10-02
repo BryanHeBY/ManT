@@ -1001,16 +1001,16 @@ case-sensitive when the pattern contains uppercase text. In regex mode, `^`
 and `$` match the beginning and end of each rendered line. Regex patterns must
 preserve Unicode mode and UTF-8 character boundaries; byte-oriented forms that
 disable Unicode, such as `(?-u:.)`, are rejected before document matching.
-Structured results retain coordinates in the Markdown projection selected
-for that search scope. Plain-text
+Structured results retain coordinates in the canonical Markdown artifact.
+Plain-text
 visible searches show columns in the displayed text instead, while
 Markdown-scope text searches show canonical Markdown columns. Reproduce the
 portable addressable `mant.markdown/v1` text for `--scope markdown` with
-`mant SELECTOR --format markdown --preserve-anchors`. Visible searches use
-the executed definition word-boundary policy. Both scopes retain the same
-accepted visible glyphs, but their artifact coordinates may differ at those
-layout seams. API consumers can reproduce the visible addressable artifact with
-`MarkdownOptions::ADDRESSABLE` and `native_text: true`.
+`mant SELECTOR --format markdown --preserve-anchors`. Both scopes use the same
+accepted glyphs and definition word boundaries; visible scope excludes syntax
+from matching. API consumers reproduce the artifact with
+`MarkdownOptions::ADDRESSABLE`. Literal descriptions remain fenced code within
+their list item, so fence formatting lines can differ from native shared rows.
 
 Use the `=` form when a value begins with a hyphen:
 

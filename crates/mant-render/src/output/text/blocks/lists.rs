@@ -85,11 +85,8 @@ impl BlockRenderer<'_> {
                 (rows.len() > 1 || rows.iter().any(|(row, _)| !row.is_empty())).then_some(rows)
             })
             .collect::<Vec<_>>();
-        // Row structure comes from the semantic relation the producer
-        // decided; the column-valued layout fields are fixed-width hints.
-        // RunIn/JoinedNoSpace/FlushAtBody all share the head's row — the
-        // numeric gap/origin fields already resolve the exact column, and
-        // at terminal width the latter two coincide with RunIn's formula.
+        // The relation records the word boundary and first-row alignment.
+        // Layout hints resolve columns without changing accepted adjacency.
         if !matches!(
             item.layout.head_body_relation,
             mant_ir::HeadBodyRelation::Separate
@@ -100,16 +97,6 @@ impl BlockRenderer<'_> {
                 origin,
                 i32::from(last_rows.last().map_or(0, |(_, indent)| *indent)),
             );
-            // A leading executed empty row did not wrap the label's graph
-            // or consume its HANG origin. Keep the recorded BODY column
-            // for that case instead of deriving a wrap from row count.
-            let head_wrapped = matches!(
-                item.layout.head_body_relation,
-                mant_ir::HeadBodyRelation::RunIn
-            ) && last_rows
-                .iter()
-                .take(last_rows.len().saturating_sub(1))
-                .any(|(row, _)| !row.is_empty());
             let last = LayoutText::join(
                 last_rows.into_iter().map(|(row, row_indent)| {
                     row.indented(padding(compose_origin(origin, i32::from(row_indent))))
@@ -117,42 +104,20 @@ impl BlockRenderer<'_> {
                 "\n",
             );
             let last_width = mant_ir::geometry::definition_run_in_width(&item.terms).unwrap_or(0);
-            // A run-in head that already wrapped past its first row has
-            // consumed the hang indent (term.c: the offset only locates a
-            // single-row head); the body then continues after one blank.
             let mut lines = self.inline_rows(children, TextRole::Body).into_iter();
             let first_line = lines.next().unwrap_or_default();
-            let first_origin = if head_wrapped {
-                compose_origin(
-                    term_origin,
-                    coordinate(
-                        last_width.saturating_add(usize::from(item.layout.min_term_gap_columns)),
-                    ),
-                )
-            } else {
-                compose_origin(
-                    compose_origin(body_origin, layout.indent_columns),
-                    i32::from(first_line.1),
-                )
-                .max(compose_origin(
-                    term_origin,
-                    coordinate(
-                        last_width.saturating_add(usize::from(item.layout.min_term_gap_columns)),
-                    ),
-                ))
-            };
+            let preferred_body_origin = compose_origin(
+                compose_origin(body_origin, layout.indent_columns),
+                i32::from(first_line.1),
+            );
             let mut output = definition_term_rows(terms, origin);
             let mut joined = last;
-            // Native row coordinates are layout hints. A consumed HEAD
-            // receipt can already prove that BODY has no separator; an
-            // unexpanded literal tab or responsive width must not add one.
-            let gap = if item.layout.head_body_relation.joins_without_separator() {
-                0
-            } else {
-                padding(first_origin)
-                    .saturating_sub(padding(term_origin).saturating_add(last_width))
-                    .max(usize::from(item.layout.min_term_gap_columns))
-            };
+            let gap = mant_ir::geometry::definition_body_gap(
+                &item.layout,
+                term_origin,
+                last_width,
+                preferred_body_origin,
+            );
             joined.push_plain(&" ".repeat(gap));
             joined.append(&first_line.0);
             output.push(joined);

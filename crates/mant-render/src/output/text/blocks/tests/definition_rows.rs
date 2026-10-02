@@ -91,7 +91,13 @@ fn empty_head_prefix_rows_preserve_the_recorded_run_in_body_origin() {
                 terms: vec![head],
                 description: vec![paragraph("BODY", 0)],
                 layout: mant_ir::DefinitionLayout {
-                    head_body_relation: mant_ir::HeadBodyRelation::RunIn,
+                    head_body_relation: mant_ir::HeadBodyRelation::separated(
+                        if prefix.is_empty() {
+                            mant_ir::DefinitionBodyAlignment::Indented
+                        } else {
+                            mant_ir::DefinitionBodyAlignment::AfterTerm
+                        },
+                    ),
                     body_indent_columns: 14,
                     min_term_gap_columns: 1,
                     spacing_before_lines: None,

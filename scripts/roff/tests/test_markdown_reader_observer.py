@@ -34,10 +34,14 @@ def bundle(block):
                                        "blocks": [block]}]}}
 
 
-def definition(children, relation="separate"):
+def definition(children, relation=None):
     return bundle({"type": "definition-list", "items": [{"source": {"line": 9},
         "terms": [children], "description": [phrasing([text("BodyWord")])],
-        "layout": {"headBodyRelation": relation}}]})
+        "layout": {"headBodyRelation": relation or {"type": "separate"}}}]})
+
+
+def shared(boundary="separated", alignment="indented"):
+    return {"type": "shared", "wordBoundary": boundary, "bodyAlignment": alignment}
 
 
 def bullet(children):
@@ -100,15 +104,31 @@ class MarkdownReaderObserverTests(unittest.TestCase):
 
     def test_body_ownership_and_original_source_are_distinct_from_equal_text(self):
         one = case(container="hang")
-        original = definition([text("A")], relation="run-in")
+        original = definition([text("A")], relation=shared())
         reader = bullet([text("A BodyWord")])
         self.assertTrue(good(markdown_reader_axes(one, original, reader)))
         wrong = copy.deepcopy(original)
         wrong["document"]["sections"][0]["blocks"][0]["items"][0]["source"]["line"] += 1
         self.assertFalse(markdown_reader_axes(one, wrong, reader)["body-ownership"])
-        wrong = definition([text("A BodyWord")], relation="run-in")
+        wrong = definition([text("A BodyWord")], relation=shared())
         wrong["document"]["sections"][0]["blocks"][0]["items"][0]["description"] = [phrasing([])]
         self.assertFalse(markdown_reader_axes(one, wrong, reader)["body-ownership"])
+
+    def test_shared_word_boundaries_are_independent_of_preferred_columns(self):
+        one = case(container="hang")
+        for alignment in ("after-term", "indented"):
+            for boundary, seam, wrong in (("joined", "ABodyWord", "A BodyWord"),
+                                           ("separated", "A BodyWord", "ABodyWord")):
+                original = definition([text("A")], relation=shared(boundary, alignment))
+                with self.subTest(alignment=alignment, boundary=boundary):
+                    self.assertTrue(good(markdown_reader_axes(one, original, bullet([text(seam)]))))
+                    self.assertFalse(markdown_reader_axes(one, original,
+                        bullet([text(wrong)]))["separators"])
+        for relation in ("run-in", "joined-no-space", "flush-at-body",
+                         {"type": "shared", "wordBoundary": "joined"},
+                         dict(shared(), nativeCause="field-flush")):
+            self.assertFalse(good(markdown_reader_axes(one,
+                definition([text("A")], relation=relation), bullet([text("A BodyWord")]))))
 
     def test_column_fence_keeps_all_left_rows_and_the_real_neighbor(self):
         one = case(container="column", hardline="leading-one")

@@ -190,22 +190,13 @@ impl DocumentBuilder<'_> {
             let first_indent = compose_origin(block_origin, layout.indent_columns);
             let continuation_indent =
                 compose_origin(first_indent, layout.continuation_indent_columns);
-            let description_indent =
-                compose_origin(first_indent, i32::from(first_row_indent)).max(compose_origin(
-                    term_origin,
-                    coordinate(
-                        term_width.saturating_add(usize::from(item.layout.min_term_gap_columns)),
-                    ),
-                ));
-            // Word adjacency is an executed formatter fact. The responsive
-            // glyph width (including an unexpanded tab) cannot overrule it.
-            let gap = if item.layout.head_body_relation.joins_without_separator() {
-                0
-            } else {
-                padding(description_indent)
-                    .saturating_sub(padding(term_origin).saturating_add(term_width))
-                    .max(usize::from(item.layout.min_term_gap_columns))
-            };
+            let preferred_body_origin = compose_origin(first_indent, i32::from(first_row_indent));
+            let gap = mant_ir::geometry::definition_body_gap(
+                &item.layout,
+                term_origin,
+                term_width,
+                preferred_body_origin,
+            );
             term_spans.push(Span::raw(" ".repeat(gap)));
             // A run-in literal keeps its authored spacing: the shared row and
             // its continuations wrap as characters, never as words.

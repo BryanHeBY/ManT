@@ -184,8 +184,10 @@ impl InlineBuilder {
                 .definition
                 .as_ref()
                 .is_some_and(|state| !state.field_buffer.is_empty())
-            && native.as_ref().is_some_and(NativeFieldDevice::ends_row)
-            && !has_printable_character(&self.nodes)
+            // Earlier accepted HEAD rows are already committed. Their IR
+            // glyphs cannot represent the final NBRZW-only row that this
+            // precise flush closes (term_fill():340-349, term_flushln():250-253).
+            && native.as_ref().is_some_and(NativeFieldDevice::closes_unprinted_row)
             && !self.execution.zero_advance.has_buffered_glyph();
         // The actual HEAD post receipt also supplies its occupied row to
         // BODY; observing it cannot require a second numeric field sweep.

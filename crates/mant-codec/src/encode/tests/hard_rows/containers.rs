@@ -73,7 +73,7 @@ fn restored_children(block: &Block) -> &[Inline] {
     }
 }
 
-fn assert_container(children: &[Inline], container: u8, native_text: bool) {
+fn assert_container(children: &[Inline], container: u8) {
     let mut original = query(vec![]);
     original.document.as_mut().unwrap().sections[0].blocks =
         vec![enclosed(children.to_vec(), container)];
@@ -82,13 +82,7 @@ fn assert_container(children: &[Inline], container: u8, native_text: bool) {
         serde_json::from_str::<Document>(&wire).unwrap(),
         *original.document.as_ref().unwrap()
     );
-    let markdown = render_markdown_with_options(
-        &original,
-        MarkdownOptions {
-            native_text,
-            ..Default::default()
-        },
-    );
+    let markdown = render_markdown_with_options(&original, MarkdownOptions::default());
     let restored = parse_content(&markdown, None).unwrap();
     let actual = restored_children(&restored.document.as_ref().unwrap().sections[0].blocks[0]);
     let actual_text = mant_ir::inline_plain_text(actual);
@@ -138,9 +132,7 @@ fn hard_rows_cross_list_definition_body_and_fenced_container_boundaries() {
             for carrier in 0..6 {
                 let children = wrap(&rows, carrier);
                 for container in 0..7 {
-                    for native_text in [false, true] {
-                        assert_container(&children, container, native_text);
-                    }
+                    assert_container(&children, container);
                 }
             }
         }
@@ -150,11 +142,11 @@ fn hard_rows_cross_list_definition_body_and_fenced_container_boundaries() {
 #[test]
 fn row_only_containers_and_unsupported_block_quotes_keep_their_contracts() {
     for container in [5, 6] {
-        assert_container(&[], container, false);
+        assert_container(&[], container);
     }
     for rows in [1, 2, 3] {
         for container in 0..7 {
-            assert_container(&vec![Inline::line_break(); rows], container, false);
+            assert_container(&vec![Inline::line_break(); rows], container);
         }
     }
     // There is no BlockQuote variant in public IR. That reader container

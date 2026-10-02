@@ -98,12 +98,20 @@ def _observe(core, original_bundle, reader_bundle):
         body = _text(_phrasing(_one(item["description"]), "paragraph"))
         ownership = ("BodyWord" not in term and body == "BodyWord"
                      and item.get("source", {}).get("line") == 9)
-        relation = item.get("layout", {}).get("headBodyRelation", "separate")
-        if relation not in ("separate", "run-in", "joined-no-space", "flush-at-body"):
+        relation = item.get("layout", {}).get("headBodyRelation", {"type": "separate"})
+        if relation == {"type": "separate"}:
+            separator = "\n"
+        elif (isinstance(relation, dict)
+              and set(relation) == {"type", "wordBoundary", "bodyAlignment"}
+              and relation["type"] == "shared"
+              and relation["wordBoundary"] in ("joined", "separated")
+              and relation["bodyAlignment"] in ("after-term", "indented")):
+            separator = "" if relation["wordBoundary"] == "joined" else " "
+        else:
             raise ValueError("unknown RC05 HEAD/BODY relation")
-        # Portable Markdown has an ordinary separator for each inline relation.
-        # It does not inherit terminal-only field padding or no-space geometry.
-        expected = term + ("\n" if relation == "separate" else " ") + body
+        # Canonical Markdown keeps the accepted joined/separated word seam.
+        # Preferred terminal columns do not add syntax-space content here.
+        expected = term + separator + body
         actual = _text(_phrasing(_one(_one(reader["items"])["blocks"]), "paragraph"))
     elif container == "column":
         if original["type"] != "table":

@@ -695,7 +695,7 @@ fn append_list_targets(
                     ],
                     description: Vec::new(),
                     layout: mant_ir::DefinitionLayout {
-                        head_body_relation: mant_ir::HeadBodyRelation::RunIn,
+                        head_body_relation: mant_ir::HeadBodyRelation::from(true),
                         spacing_before_lines: None,
                         ..Default::default()
                     },

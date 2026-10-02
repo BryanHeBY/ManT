@@ -113,7 +113,7 @@ fn assert_case(source: &str, mode: &str, runs_in: bool) {
     assert_eq!(
         item.layout.head_body_relation,
         if runs_in {
-            HeadBodyRelation::RunIn
+            HeadBodyRelation::separated(mant_ir::DefinitionBodyAlignment::Indented)
         } else {
             HeadBodyRelation::Separate
         },
