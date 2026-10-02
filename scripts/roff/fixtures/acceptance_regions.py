@@ -6,6 +6,7 @@ An unqualified boundary stays uncovered instead of guessing a content range.
 """
 
 import json
+import hashlib
 import re
 
 from scripts.roff.lib.roff_content_compare import visible_text
@@ -125,7 +126,35 @@ def footer_start(rows, tree):
     return None
 
 
-def select_native_region(raw, tree, *, heading="DESCRIPTION", occurrence=0):
+def qualified_margin_rows(raw, tree, policy):
+    """Apply only bound, terminal-tail decoration cells; preserve every row.
+
+    The caller additionally qualifies the complete source and oracle identity.
+    term.c::endline() emits mc after the accepted row, at the device margin or
+    the current overrun column. This helper never chooses those coordinates.
+    """
+    for key, value in (("native_utf8_sha256", raw), ("native_tree_sha256", tree)):
+        if policy.get(key) != hashlib.sha256(value.encode()).hexdigest():
+            return None, {"status": "uncovered", "reason": "margin policy raw binding changed"}
+    rows = visible_text(raw).splitlines()
+    visited = set()
+    for cell in policy.get("tail_cells", []):
+        row, column, glyph = cell.get("row"), cell.get("column"), cell.get("glyph")
+        if (not isinstance(row, int) or not isinstance(column, int)
+                or not isinstance(glyph, str) or len(glyph) != 1
+                or row < 0 or row >= len(rows) or row in visited
+                or column < 0 or rows[row][column:] != glyph):
+            return None, {"status": "uncovered", "reason": "margin tail cell binding changed"}
+        visited.add(row)
+        rows[row] = rows[row][:column].rstrip(" ")
+    if not visited:
+        return None, {"status": "uncovered", "reason": "margin policy has no witnessed cells"}
+    return rows, {"status": "asserted", "rule": "bound-scoped-margin-tail",
+                  "cells": len(visited)}
+
+
+def select_native_region(raw, tree, *, heading="DESCRIPTION", occurrence=0,
+                         margin_policy=None):
     """Select a section by AST occurrence and preserve its exact content edges."""
     sections = native_sections(tree)
     matches = [index for index, section in enumerate(sections)
@@ -134,8 +163,10 @@ def select_native_region(raw, tree, *, heading="DESCRIPTION", occurrence=0):
         return {"status": "uncovered", "reason": "missing native section owner"}
     owner = matches[occurrence]
     following = sections[owner + 1]["heading"] if owner + 1 < len(sections) else None
-    rows = visible_text(raw).splitlines()
-    rows, margin = margin_projection(rows, tree, following)
+    if margin_policy is None:
+        rows, margin = margin_projection(visible_text(raw).splitlines(), tree, following)
+    else:
+        rows, margin = qualified_margin_rows(raw, tree, margin_policy)
     if margin["status"] == "uncovered":
         return {"status": "uncovered", "reason": margin["reason"], "margin": margin}
     positions = [i for i, row in enumerate(rows) if row == heading]

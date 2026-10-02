@@ -1,0 +1,67 @@
+[
+  {
+    "id": "coverage-control-source-spelling-fallback",
+    "policy_id": "integrity-reading-coverage-control-source-spelling-fallback",
+    "source_sha256": "91d155d119a25fef5f04dd799b0b1d73b9457fe0fb8f86d30a965acc8699d48a",
+    "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+    "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+    "native_utf8_sha256": "8c650991a9f9bcdb47aab3a597f7b3fce08fdc8fa9ab20adf661d1dcb83364ea",
+    "native_tree_sha256": "e4ebd2bab9f2bd0db6e8d00e802179a6411d3c3d71cc5b2ae4ef380e1e5069e9",
+    "expected_product_rows": [
+      "A\\N|65535|Z AFTER"
+    ],
+    "rule": "documented-source-spelling-recovery",
+    "contract": "docs/manuals/mant-roff.md: Escapes and transactional closed Tables recovery",
+    "uncovered": [
+      "style",
+      "source",
+      "scalar-range",
+      "query",
+      "tui"
+    ]
+  },
+  {
+    "id": "coverage-table-source-fragment-255",
+    "policy_id": "integrity-reading-coverage-table-source-fragment-255",
+    "source_sha256": "fc53a35b3fb3eab9fe0342b49386318e6a5bc4952a4a3263a60e722208f37594",
+    "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+    "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+    "native_utf8_sha256": "c60d1f20a7912344527ceb6b85cb2874fd1c5d4da5f0c25f976f4b515220ac58",
+    "native_tree_sha256": "726019362be41c9663ff8444b3b04de9fc22de92e30fc1015d5897da1ad92cf1",
+    "expected_product_rows": [
+      "AZ",
+      "AFTER"
+    ],
+    "rule": "closed-table-inline-recovery",
+    "contract": "docs/manuals/mant-roff.md: Escapes and transactional closed Tables recovery",
+    "uncovered": [
+      "style",
+      "source",
+      "scalar-range",
+      "query",
+      "tui"
+    ]
+  },
+  {
+    "id": "coverage-table-source-fragment-256",
+    "policy_id": "integrity-reading-coverage-table-source-fragment-256",
+    "source_sha256": "319fee88f09537b58660516b8cba0651fec2d028e5488029cb0395b30f462fb7",
+    "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+    "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+    "native_utf8_sha256": "c60d1f20a7912344527ceb6b85cb2874fd1c5d4da5f0c25f976f4b515220ac58",
+    "native_tree_sha256": "d6248dbfa973af2500fe5f763e8554bbf4c27484aa286f290736113a9d910a32",
+    "expected_product_rows": [
+      "AZ",
+      "AFTER"
+    ],
+    "rule": "closed-table-inline-recovery",
+    "contract": "docs/manuals/mant-roff.md: Escapes and transactional closed Tables recovery",
+    "uncovered": [
+      "style",
+      "source",
+      "scalar-range",
+      "query",
+      "tui"
+    ]
+  }
+]

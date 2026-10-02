@@ -57,6 +57,22 @@ run "test source-bound presentation explanations" python3 -m scripts.roff.tests.
 run "test source-bound roff layout geometry" python3 -m scripts.roff.tests.test_roff_layout_geometry
 run "test roff acceptance axes and structural edges" \
   python3 -m unittest scripts.roff.tests.test_acceptance_replay
+run "test finite rule registry and mutation boundaries" \
+  python3 -m unittest scripts.roff.tests.test_rule_boundary_replay
+run "test escape grammar fixture bindings" \
+  python3 -m unittest scripts.roff.tests.test_escape_rule_fixtures
+run "test field rule source and owner bindings" \
+  python3 -m unittest scripts.roff.tests.test_field_rule_fixtures
+run "test Markdown hard-row fixture bindings" \
+  python3 -m unittest scripts.roff.tests.test_markdown_rule_fixtures
+run "test Markdown reader structural observation" \
+  python3 -m unittest scripts.roff.tests.test_markdown_reader_observer
+run "test controlled omission fixture bindings" \
+  python3 -m unittest scripts.roff.tests.test_integrity_rule_fixtures
+run "test source recovery card scopes" \
+  python3 -m unittest scripts.roff.tests.test_source_recovery_cards
+run "test generated device cell card scopes" \
+  python3 -m unittest scripts.roff.tests.test_rule_projection_cards
 run "test immutable roff consumer fixture bindings" \
   python3 -m unittest scripts.roff.tests.test_consumer_fixture_contract
 run "test rendering matrix mutation sensitivity" python3 -m scripts.roff.audit.check_roff_behavior_matrix --self-test

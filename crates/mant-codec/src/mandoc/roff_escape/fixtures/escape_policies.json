@@ -1,0 +1,1398 @@
+{
+  "format_version": 1,
+  "count": 24,
+  "policies": [
+    {
+      "id": "e03_1550_N_opening_no",
+      "policy_id": "numbered-source-recovery-e03_1550_N_opening_no",
+      "rule": "numbered-source-spelling-recovery",
+      "contract": "docs/manuals/mant-roff.md:Escapes (N numbered glyph)",
+      "upstream": "roff_escape.c::roff_escape_impl() iend/unclosed recovery; term.c::term_word() ERROR",
+      "source_sha256": "e7f82cb53ca869ee3f587e46a3130d9f748c3878f5ec1339567b5ad55811b3ff",
+      "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+      "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+      "native_utf8_sha256": "45f092f85f0acaed47bca8f89a23b26e0302c515151977979d5cfbe1cc67bcc5",
+      "native_tree_sha256": "823a386363f22d98e7ce90594a835c0702a8b271bf0abc0c0e33f2833fbbd9c5",
+      "source_class": "legal",
+      "match": {
+        "rule_id": "E03",
+        "carrier": "No",
+        "metadata": {
+          "outer": "N",
+          "delimiter": "'",
+          "completion": "opening"
+        }
+      },
+      "native_rows": [
+        "     A' AFTER"
+      ],
+      "expected_product_readable_rows": [
+        "A\\N' AFTER"
+      ],
+      "reference": {
+        "utf8": {
+          "status": 0,
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     A' AFTER\n\nN\bNE\bEX\bXT\bT\n     END\n\nHistorical Oracle Footer        October 2, 2026                        TEST(1)\n",
+          "stderr": "",
+          "stdout_sha256": "45f092f85f0acaed47bca8f89a23b26e0302c515151977979d5cfbe1cc67bcc5",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdout": "title = \"TEST\"\nname  = \"test\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Historical Oracle Footer\"\ndate  = \"October 2, 2026\"\n\nDd (elem) *1:2 NOPRT\n    October 2, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    TEST (text) 2:5\n    1 (text) 2:10\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          test (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            probe (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      No (elem) *8:2\n          A\\N' (text) 8:5\n      No (elem) *9:2\n          AFTER (text) 9:5\nSh (block) *10:2\n  Sh (head) 10:2 ID=HREF\n      NEXT (text) 10:5\n  Sh (body) 10:2\n      No (elem) *11:2\n          END (text) 11:5\n",
+          "stderr": "",
+          "stdout_sha256": "823a386363f22d98e7ce90594a835c0702a8b271bf0abc0c0e33f2833fbbd9c5",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected_axes": [
+        "content",
+        "rows",
+        "separators"
+      ],
+      "uncovered": [
+        "style",
+        "identity",
+        "source",
+        "scalar-range",
+        "query",
+        "tui"
+      ],
+      "limits": "Only this exact source/id and opening or unclosed numbered argument; no closed valid N, no family exemption"
+    },
+    {
+      "id": "e03_1551_N_opening_lk",
+      "policy_id": "numbered-source-recovery-e03_1551_N_opening_lk",
+      "rule": "numbered-source-spelling-recovery",
+      "contract": "docs/manuals/mant-roff.md:Escapes (N numbered glyph)",
+      "upstream": "roff_escape.c::roff_escape_impl() iend/unclosed recovery; term.c::term_word() ERROR",
+      "source_sha256": "81bd00268dd74689970a889faca449c2374382ed289d4030fe01349a4e6ec905",
+      "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+      "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+      "native_utf8_sha256": "d5e2336912fbe737abfcb804f00968f56422400ed5c5c96adcb83fb345cc3977",
+      "native_tree_sha256": "025b95b18570d8f4913f5f2e74de2f8b5534857ec09bf0c959449b2131bb9fb9",
+      "source_class": "legal",
+      "match": {
+        "rule_id": "E03",
+        "carrier": "Lk",
+        "metadata": {
+          "outer": "N",
+          "delimiter": "'",
+          "completion": "opening"
+        }
+      },
+      "native_rows": [
+        "     A': https://example.org AFTER"
+      ],
+      "expected_product_readable_rows": [
+        "A\\N': https://example.org AFTER"
+      ],
+      "reference": {
+        "utf8": {
+          "status": 0,
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     _\bA_\b': https://example.org AFTER\n\nN\bNE\bEX\bXT\bT\n     END\n\nHistorical Oracle Footer        October 2, 2026                        TEST(1)\n",
+          "stderr": "",
+          "stdout_sha256": "d5e2336912fbe737abfcb804f00968f56422400ed5c5c96adcb83fb345cc3977",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdout": "title = \"TEST\"\nname  = \"test\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Historical Oracle Footer\"\ndate  = \"October 2, 2026\"\n\nDd (elem) *1:2 NOPRT\n    October 2, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    TEST (text) 2:5\n    1 (text) 2:10\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          test (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            probe (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      Lk (elem) *8:2\n          https://example.org (text) 8:5\n          A\\N' (text) 8:25\n      No (elem) *9:2\n          AFTER (text) 9:5\nSh (block) *10:2\n  Sh (head) 10:2 ID=HREF\n      NEXT (text) 10:5\n  Sh (body) 10:2\n      No (elem) *11:2\n          END (text) 11:5\n",
+          "stderr": "",
+          "stdout_sha256": "025b95b18570d8f4913f5f2e74de2f8b5534857ec09bf0c959449b2131bb9fb9",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected_axes": [
+        "content",
+        "rows",
+        "separators"
+      ],
+      "uncovered": [
+        "style",
+        "identity",
+        "source",
+        "scalar-range",
+        "query",
+        "tui"
+      ],
+      "limits": "Only this exact source/id and opening or unclosed numbered argument; no closed valid N, no family exemption"
+    },
+    {
+      "id": "e03_1552_N_unclosed_no",
+      "policy_id": "numbered-source-recovery-e03_1552_N_unclosed_no",
+      "rule": "numbered-source-spelling-recovery",
+      "contract": "docs/manuals/mant-roff.md:Escapes (N numbered glyph)",
+      "upstream": "roff_escape.c::roff_escape_impl() iend/unclosed recovery; term.c::term_word() ERROR",
+      "source_sha256": "7840059c1c7d6eaf7665f89c696cde9d8dfa1ea74d56b43975e2edc680a64b73",
+      "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+      "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+      "native_utf8_sha256": "3186899c5a9d54f94f36b87efb41b44f91906931b82f4afafdb45388eb4be436",
+      "native_tree_sha256": "b36befb503f8ecca522ad69c6aaf61d056f920a2bd9e52ada391b4661a50c68c",
+      "source_class": "legal",
+      "match": {
+        "rule_id": "E03",
+        "carrier": "No",
+        "metadata": {
+          "outer": "N",
+          "delimiter": "'",
+          "completion": "unclosed"
+        }
+      },
+      "native_rows": [
+        "     A AFTER"
+      ],
+      "expected_product_readable_rows": [
+        "A\\N'65 AFTER"
+      ],
+      "reference": {
+        "utf8": {
+          "status": 0,
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     A AFTER\n\nN\bNE\bEX\bXT\bT\n     END\n\nHistorical Oracle Footer        October 2, 2026                        TEST(1)\n",
+          "stderr": "",
+          "stdout_sha256": "3186899c5a9d54f94f36b87efb41b44f91906931b82f4afafdb45388eb4be436",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdout": "title = \"TEST\"\nname  = \"test\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Historical Oracle Footer\"\ndate  = \"October 2, 2026\"\n\nDd (elem) *1:2 NOPRT\n    October 2, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    TEST (text) 2:5\n    1 (text) 2:10\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          test (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            probe (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      No (elem) *8:2\n          A\\N'65 (text) 8:5\n      No (elem) *9:2\n          AFTER (text) 9:5\nSh (block) *10:2\n  Sh (head) 10:2 ID=HREF\n      NEXT (text) 10:5\n  Sh (body) 10:2\n      No (elem) *11:2\n          END (text) 11:5\n",
+          "stderr": "",
+          "stdout_sha256": "b36befb503f8ecca522ad69c6aaf61d056f920a2bd9e52ada391b4661a50c68c",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected_axes": [
+        "content",
+        "rows",
+        "separators"
+      ],
+      "uncovered": [
+        "style",
+        "identity",
+        "source",
+        "scalar-range",
+        "query",
+        "tui"
+      ],
+      "limits": "Only this exact source/id and opening or unclosed numbered argument; no closed valid N, no family exemption"
+    },
+    {
+      "id": "e03_1553_N_unclosed_lk",
+      "policy_id": "numbered-source-recovery-e03_1553_N_unclosed_lk",
+      "rule": "numbered-source-spelling-recovery",
+      "contract": "docs/manuals/mant-roff.md:Escapes (N numbered glyph)",
+      "upstream": "roff_escape.c::roff_escape_impl() iend/unclosed recovery; term.c::term_word() ERROR",
+      "source_sha256": "3398d7b3d21a16b9443040a48b24d4643f4cc4813f3f10a4a3f513d5cb2a3120",
+      "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+      "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+      "native_utf8_sha256": "d3cac889928b34e9eda57a0ec81d54bbd4e0a5449e5c736fec9c6d5a5c5b57f1",
+      "native_tree_sha256": "361dd2431cc3120796a8151c8ac9e619a2a54f03121397fcce296fed333be4ae",
+      "source_class": "legal",
+      "match": {
+        "rule_id": "E03",
+        "carrier": "Lk",
+        "metadata": {
+          "outer": "N",
+          "delimiter": "'",
+          "completion": "unclosed"
+        }
+      },
+      "native_rows": [
+        "     A: https://example.org AFTER"
+      ],
+      "expected_product_readable_rows": [
+        "A\\N'65: https://example.org AFTER"
+      ],
+      "reference": {
+        "utf8": {
+          "status": 0,
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     _\bA: https://example.org AFTER\n\nN\bNE\bEX\bXT\bT\n     END\n\nHistorical Oracle Footer        October 2, 2026                        TEST(1)\n",
+          "stderr": "",
+          "stdout_sha256": "d3cac889928b34e9eda57a0ec81d54bbd4e0a5449e5c736fec9c6d5a5c5b57f1",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdout": "title = \"TEST\"\nname  = \"test\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Historical Oracle Footer\"\ndate  = \"October 2, 2026\"\n\nDd (elem) *1:2 NOPRT\n    October 2, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    TEST (text) 2:5\n    1 (text) 2:10\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          test (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            probe (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      Lk (elem) *8:2\n          https://example.org (text) 8:5\n          A\\N'65 (text) 8:25\n      No (elem) *9:2\n          AFTER (text) 9:5\nSh (block) *10:2\n  Sh (head) 10:2 ID=HREF\n      NEXT (text) 10:5\n  Sh (body) 10:2\n      No (elem) *11:2\n          END (text) 11:5\n",
+          "stderr": "",
+          "stdout_sha256": "361dd2431cc3120796a8151c8ac9e619a2a54f03121397fcce296fed333be4ae",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected_axes": [
+        "content",
+        "rows",
+        "separators"
+      ],
+      "uncovered": [
+        "style",
+        "identity",
+        "source",
+        "scalar-range",
+        "query",
+        "tui"
+      ],
+      "limits": "Only this exact source/id and opening or unclosed numbered argument; no closed valid N, no family exemption"
+    },
+    {
+      "id": "e03_1556_N_opening_no",
+      "policy_id": "numbered-source-recovery-e03_1556_N_opening_no",
+      "rule": "numbered-source-spelling-recovery",
+      "contract": "docs/manuals/mant-roff.md:Escapes (N numbered glyph)",
+      "upstream": "roff_escape.c::roff_escape_impl() iend/unclosed recovery; term.c::term_word() ERROR",
+      "source_sha256": "9ae8ed3f510e11eda9d4f08fb307148396808366c58b8d34b63592a943eb9161",
+      "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+      "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+      "native_utf8_sha256": "be1ab10e175751be45fbdac7de0c3e357ea90588e454a91b7c020fc51daea066",
+      "native_tree_sha256": "bca44585983e6783412329449af5d074c93439952d0ed1d202aee90c6dc4663a",
+      "source_class": "native-diagnostics",
+      "match": {
+        "rule_id": "E03",
+        "carrier": "No",
+        "metadata": {
+          "outer": "N",
+          "delimiter": "|",
+          "completion": "opening"
+        }
+      },
+      "native_rows": [
+        "     A| AFTER"
+      ],
+      "expected_product_readable_rows": [
+        "A\\N| AFTER"
+      ],
+      "reference": {
+        "utf8": {
+          "status": 0,
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     A| AFTER\n\nN\bNE\bEX\bXT\bT\n     END\n\nHistorical Oracle Footer        October 2, 2026                        TEST(1)\n",
+          "stderr": "",
+          "stdout_sha256": "be1ab10e175751be45fbdac7de0c3e357ea90588e454a91b7c020fc51daea066",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdout": "title = \"TEST\"\nname  = \"test\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Historical Oracle Footer\"\ndate  = \"October 2, 2026\"\n\nDd (elem) *1:2 NOPRT\n    October 2, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    TEST (text) 2:5\n    1 (text) 2:10\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          test (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            probe (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      No (elem) *8:2\n          A\\N| (text) 8:5\n      No (elem) *9:2\n          AFTER (text) 9:5\nSh (block) *10:2\n  Sh (head) 10:2 ID=HREF\n      NEXT (text) 10:5\n  Sh (body) 10:2\n      No (elem) *11:2\n          END (text) 11:5\n",
+          "stderr": "",
+          "stdout_sha256": "bca44585983e6783412329449af5d074c93439952d0ed1d202aee90c6dc4663a",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected_axes": [
+        "content",
+        "rows",
+        "separators"
+      ],
+      "uncovered": [
+        "style",
+        "identity",
+        "source",
+        "scalar-range",
+        "query",
+        "tui"
+      ],
+      "limits": "Only this exact source/id and opening or unclosed numbered argument; no closed valid N, no family exemption"
+    },
+    {
+      "id": "e03_1557_N_opening_lk",
+      "policy_id": "numbered-source-recovery-e03_1557_N_opening_lk",
+      "rule": "numbered-source-spelling-recovery",
+      "contract": "docs/manuals/mant-roff.md:Escapes (N numbered glyph)",
+      "upstream": "roff_escape.c::roff_escape_impl() iend/unclosed recovery; term.c::term_word() ERROR",
+      "source_sha256": "22f03f0a811807d03aef79f7c644abdaa6898e6066b3f119a5bf8cd96d18800d",
+      "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+      "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+      "native_utf8_sha256": "97394ca62188187fc63ef836a91210ab4c9d184e60c8b9010f480548394617fb",
+      "native_tree_sha256": "d6cc93555e82198aba106a7773f9e4497ac445b606585c8a0726ee706c52917f",
+      "source_class": "native-diagnostics",
+      "match": {
+        "rule_id": "E03",
+        "carrier": "Lk",
+        "metadata": {
+          "outer": "N",
+          "delimiter": "|",
+          "completion": "opening"
+        }
+      },
+      "native_rows": [
+        "     A|: https://example.org AFTER"
+      ],
+      "expected_product_readable_rows": [
+        "A\\N|: https://example.org AFTER"
+      ],
+      "reference": {
+        "utf8": {
+          "status": 0,
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     _\bA_\b|: https://example.org AFTER\n\nN\bNE\bEX\bXT\bT\n     END\n\nHistorical Oracle Footer        October 2, 2026                        TEST(1)\n",
+          "stderr": "",
+          "stdout_sha256": "97394ca62188187fc63ef836a91210ab4c9d184e60c8b9010f480548394617fb",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdout": "title = \"TEST\"\nname  = \"test\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Historical Oracle Footer\"\ndate  = \"October 2, 2026\"\n\nDd (elem) *1:2 NOPRT\n    October 2, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    TEST (text) 2:5\n    1 (text) 2:10\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          test (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            probe (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      Lk (elem) *8:2\n          https://example.org (text) 8:5\n          A\\N| (text) 8:25\n      No (elem) *9:2\n          AFTER (text) 9:5\nSh (block) *10:2\n  Sh (head) 10:2 ID=HREF\n      NEXT (text) 10:5\n  Sh (body) 10:2\n      No (elem) *11:2\n          END (text) 11:5\n",
+          "stderr": "",
+          "stdout_sha256": "d6cc93555e82198aba106a7773f9e4497ac445b606585c8a0726ee706c52917f",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected_axes": [
+        "content",
+        "rows",
+        "separators"
+      ],
+      "uncovered": [
+        "style",
+        "identity",
+        "source",
+        "scalar-range",
+        "query",
+        "tui"
+      ],
+      "limits": "Only this exact source/id and opening or unclosed numbered argument; no closed valid N, no family exemption"
+    },
+    {
+      "id": "e03_1558_N_unclosed_no",
+      "policy_id": "numbered-source-recovery-e03_1558_N_unclosed_no",
+      "rule": "numbered-source-spelling-recovery",
+      "contract": "docs/manuals/mant-roff.md:Escapes (N numbered glyph)",
+      "upstream": "roff_escape.c::roff_escape_impl() iend/unclosed recovery; term.c::term_word() ERROR",
+      "source_sha256": "c1ca612f75df1b1c8ab481610f6acccfda2d1f8d920db9e22c2387896b5c770a",
+      "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+      "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+      "native_utf8_sha256": "3186899c5a9d54f94f36b87efb41b44f91906931b82f4afafdb45388eb4be436",
+      "native_tree_sha256": "cc702a66998acb816d38dd8e9d4bee8909e09486a5ffa4ed6eb4369495134a34",
+      "source_class": "legal",
+      "match": {
+        "rule_id": "E03",
+        "carrier": "No",
+        "metadata": {
+          "outer": "N",
+          "delimiter": "|",
+          "completion": "unclosed"
+        }
+      },
+      "native_rows": [
+        "     A AFTER"
+      ],
+      "expected_product_readable_rows": [
+        "A\\N|65 AFTER"
+      ],
+      "reference": {
+        "utf8": {
+          "status": 0,
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     A AFTER\n\nN\bNE\bEX\bXT\bT\n     END\n\nHistorical Oracle Footer        October 2, 2026                        TEST(1)\n",
+          "stderr": "",
+          "stdout_sha256": "3186899c5a9d54f94f36b87efb41b44f91906931b82f4afafdb45388eb4be436",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdout": "title = \"TEST\"\nname  = \"test\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Historical Oracle Footer\"\ndate  = \"October 2, 2026\"\n\nDd (elem) *1:2 NOPRT\n    October 2, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    TEST (text) 2:5\n    1 (text) 2:10\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          test (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            probe (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      No (elem) *8:2\n          A\\N|65 (text) 8:5\n      No (elem) *9:2\n          AFTER (text) 9:5\nSh (block) *10:2\n  Sh (head) 10:2 ID=HREF\n      NEXT (text) 10:5\n  Sh (body) 10:2\n      No (elem) *11:2\n          END (text) 11:5\n",
+          "stderr": "",
+          "stdout_sha256": "cc702a66998acb816d38dd8e9d4bee8909e09486a5ffa4ed6eb4369495134a34",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected_axes": [
+        "content",
+        "rows",
+        "separators"
+      ],
+      "uncovered": [
+        "style",
+        "identity",
+        "source",
+        "scalar-range",
+        "query",
+        "tui"
+      ],
+      "limits": "Only this exact source/id and opening or unclosed numbered argument; no closed valid N, no family exemption"
+    },
+    {
+      "id": "e03_1559_N_unclosed_lk",
+      "policy_id": "numbered-source-recovery-e03_1559_N_unclosed_lk",
+      "rule": "numbered-source-spelling-recovery",
+      "contract": "docs/manuals/mant-roff.md:Escapes (N numbered glyph)",
+      "upstream": "roff_escape.c::roff_escape_impl() iend/unclosed recovery; term.c::term_word() ERROR",
+      "source_sha256": "ad78f7ad93040968a5cec441ba84009b5f585a386b69724e380e1438d1191257",
+      "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+      "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+      "native_utf8_sha256": "d3cac889928b34e9eda57a0ec81d54bbd4e0a5449e5c736fec9c6d5a5c5b57f1",
+      "native_tree_sha256": "228086520af98f6621ea14ece4a8bc4bba17d9c64c7be71548f8426e354f7178",
+      "source_class": "legal",
+      "match": {
+        "rule_id": "E03",
+        "carrier": "Lk",
+        "metadata": {
+          "outer": "N",
+          "delimiter": "|",
+          "completion": "unclosed"
+        }
+      },
+      "native_rows": [
+        "     A: https://example.org AFTER"
+      ],
+      "expected_product_readable_rows": [
+        "A\\N|65: https://example.org AFTER"
+      ],
+      "reference": {
+        "utf8": {
+          "status": 0,
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     _\bA: https://example.org AFTER\n\nN\bNE\bEX\bXT\bT\n     END\n\nHistorical Oracle Footer        October 2, 2026                        TEST(1)\n",
+          "stderr": "",
+          "stdout_sha256": "d3cac889928b34e9eda57a0ec81d54bbd4e0a5449e5c736fec9c6d5a5c5b57f1",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdout": "title = \"TEST\"\nname  = \"test\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Historical Oracle Footer\"\ndate  = \"October 2, 2026\"\n\nDd (elem) *1:2 NOPRT\n    October 2, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    TEST (text) 2:5\n    1 (text) 2:10\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          test (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            probe (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      Lk (elem) *8:2\n          https://example.org (text) 8:5\n          A\\N|65 (text) 8:25\n      No (elem) *9:2\n          AFTER (text) 9:5\nSh (block) *10:2\n  Sh (head) 10:2 ID=HREF\n      NEXT (text) 10:5\n  Sh (body) 10:2\n      No (elem) *11:2\n          END (text) 11:5\n",
+          "stderr": "",
+          "stdout_sha256": "228086520af98f6621ea14ece4a8bc4bba17d9c64c7be71548f8426e354f7178",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected_axes": [
+        "content",
+        "rows",
+        "separators"
+      ],
+      "uncovered": [
+        "style",
+        "identity",
+        "source",
+        "scalar-range",
+        "query",
+        "tui"
+      ],
+      "limits": "Only this exact source/id and opening or unclosed numbered argument; no closed valid N, no family exemption"
+    },
+    {
+      "id": "e03_1562_N_opening_no",
+      "policy_id": "numbered-source-recovery-e03_1562_N_opening_no",
+      "rule": "numbered-source-spelling-recovery",
+      "contract": "docs/manuals/mant-roff.md:Escapes (N numbered glyph)",
+      "upstream": "roff_escape.c::roff_escape_impl() iend/unclosed recovery; term.c::term_word() ERROR",
+      "source_sha256": "d26475534411a7ea311010d4f0f109c1b5e016ab180c0675c38d1a19d6f8df44",
+      "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+      "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+      "native_utf8_sha256": "45f092f85f0acaed47bca8f89a23b26e0302c515151977979d5cfbe1cc67bcc5",
+      "native_tree_sha256": "dcfd0a1fb6ad2e286fea9d06b137162b51b2e545efc2f0d0066ee85c2d12d0e6",
+      "source_class": "legal",
+      "match": {
+        "rule_id": "E03",
+        "carrier": "No",
+        "metadata": {
+          "outer": "N",
+          "delimiter": "\\(aq",
+          "completion": "opening"
+        }
+      },
+      "native_rows": [
+        "     A' AFTER"
+      ],
+      "expected_product_readable_rows": [
+        "A\\N' AFTER"
+      ],
+      "reference": {
+        "utf8": {
+          "status": 0,
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     A' AFTER\n\nN\bNE\bEX\bXT\bT\n     END\n\nHistorical Oracle Footer        October 2, 2026                        TEST(1)\n",
+          "stderr": "",
+          "stdout_sha256": "45f092f85f0acaed47bca8f89a23b26e0302c515151977979d5cfbe1cc67bcc5",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdout": "title = \"TEST\"\nname  = \"test\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Historical Oracle Footer\"\ndate  = \"October 2, 2026\"\n\nDd (elem) *1:2 NOPRT\n    October 2, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    TEST (text) 2:5\n    1 (text) 2:10\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          test (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            probe (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      No (elem) *8:2\n          A\\N\\(aq (text) 8:5\n      No (elem) *9:2\n          AFTER (text) 9:5\nSh (block) *10:2\n  Sh (head) 10:2 ID=HREF\n      NEXT (text) 10:5\n  Sh (body) 10:2\n      No (elem) *11:2\n          END (text) 11:5\n",
+          "stderr": "",
+          "stdout_sha256": "dcfd0a1fb6ad2e286fea9d06b137162b51b2e545efc2f0d0066ee85c2d12d0e6",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected_axes": [
+        "content",
+        "rows",
+        "separators"
+      ],
+      "uncovered": [
+        "style",
+        "identity",
+        "source",
+        "scalar-range",
+        "query",
+        "tui"
+      ],
+      "limits": "Only this exact source/id and opening or unclosed numbered argument; no closed valid N, no family exemption"
+    },
+    {
+      "id": "e03_1563_N_opening_lk",
+      "policy_id": "numbered-source-recovery-e03_1563_N_opening_lk",
+      "rule": "numbered-source-spelling-recovery",
+      "contract": "docs/manuals/mant-roff.md:Escapes (N numbered glyph)",
+      "upstream": "roff_escape.c::roff_escape_impl() iend/unclosed recovery; term.c::term_word() ERROR",
+      "source_sha256": "3f83bf01d2ccd0ff685ed56717fcc3c6a1ff2783adee13a0c42897b615907fef",
+      "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+      "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+      "native_utf8_sha256": "d5e2336912fbe737abfcb804f00968f56422400ed5c5c96adcb83fb345cc3977",
+      "native_tree_sha256": "8efbd95f032d0591f3057ae339554a11c20198c2e316e36bd298ddcb6c1901ab",
+      "source_class": "legal",
+      "match": {
+        "rule_id": "E03",
+        "carrier": "Lk",
+        "metadata": {
+          "outer": "N",
+          "delimiter": "\\(aq",
+          "completion": "opening"
+        }
+      },
+      "native_rows": [
+        "     A': https://example.org AFTER"
+      ],
+      "expected_product_readable_rows": [
+        "A\\N': https://example.org AFTER"
+      ],
+      "reference": {
+        "utf8": {
+          "status": 0,
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     _\bA_\b': https://example.org AFTER\n\nN\bNE\bEX\bXT\bT\n     END\n\nHistorical Oracle Footer        October 2, 2026                        TEST(1)\n",
+          "stderr": "",
+          "stdout_sha256": "d5e2336912fbe737abfcb804f00968f56422400ed5c5c96adcb83fb345cc3977",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdout": "title = \"TEST\"\nname  = \"test\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Historical Oracle Footer\"\ndate  = \"October 2, 2026\"\n\nDd (elem) *1:2 NOPRT\n    October 2, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    TEST (text) 2:5\n    1 (text) 2:10\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          test (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            probe (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      Lk (elem) *8:2\n          https://example.org (text) 8:5\n          A\\N\\(aq (text) 8:25\n      No (elem) *9:2\n          AFTER (text) 9:5\nSh (block) *10:2\n  Sh (head) 10:2 ID=HREF\n      NEXT (text) 10:5\n  Sh (body) 10:2\n      No (elem) *11:2\n          END (text) 11:5\n",
+          "stderr": "",
+          "stdout_sha256": "8efbd95f032d0591f3057ae339554a11c20198c2e316e36bd298ddcb6c1901ab",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected_axes": [
+        "content",
+        "rows",
+        "separators"
+      ],
+      "uncovered": [
+        "style",
+        "identity",
+        "source",
+        "scalar-range",
+        "query",
+        "tui"
+      ],
+      "limits": "Only this exact source/id and opening or unclosed numbered argument; no closed valid N, no family exemption"
+    },
+    {
+      "id": "e03_1564_N_unclosed_no",
+      "policy_id": "numbered-source-recovery-e03_1564_N_unclosed_no",
+      "rule": "numbered-source-spelling-recovery",
+      "contract": "docs/manuals/mant-roff.md:Escapes (N numbered glyph)",
+      "upstream": "roff_escape.c::roff_escape_impl() iend/unclosed recovery; term.c::term_word() ERROR",
+      "source_sha256": "fabc0e334aa7b7e61d2e27a80878da74dbfa38928b861a35ed635fcb06062fbb",
+      "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+      "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+      "native_utf8_sha256": "3186899c5a9d54f94f36b87efb41b44f91906931b82f4afafdb45388eb4be436",
+      "native_tree_sha256": "68935ce412471b8aa5ef0690e0f997d4cac279a8858fe9de40db034e4ac0f5b1",
+      "source_class": "legal",
+      "match": {
+        "rule_id": "E03",
+        "carrier": "No",
+        "metadata": {
+          "outer": "N",
+          "delimiter": "\\(aq",
+          "completion": "unclosed"
+        }
+      },
+      "native_rows": [
+        "     A AFTER"
+      ],
+      "expected_product_readable_rows": [
+        "A\\N\\(aq65 AFTER"
+      ],
+      "reference": {
+        "utf8": {
+          "status": 0,
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     A AFTER\n\nN\bNE\bEX\bXT\bT\n     END\n\nHistorical Oracle Footer        October 2, 2026                        TEST(1)\n",
+          "stderr": "",
+          "stdout_sha256": "3186899c5a9d54f94f36b87efb41b44f91906931b82f4afafdb45388eb4be436",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdout": "title = \"TEST\"\nname  = \"test\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Historical Oracle Footer\"\ndate  = \"October 2, 2026\"\n\nDd (elem) *1:2 NOPRT\n    October 2, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    TEST (text) 2:5\n    1 (text) 2:10\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          test (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            probe (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      No (elem) *8:2\n          A\\N\\(aq65 (text) 8:5\n      No (elem) *9:2\n          AFTER (text) 9:5\nSh (block) *10:2\n  Sh (head) 10:2 ID=HREF\n      NEXT (text) 10:5\n  Sh (body) 10:2\n      No (elem) *11:2\n          END (text) 11:5\n",
+          "stderr": "",
+          "stdout_sha256": "68935ce412471b8aa5ef0690e0f997d4cac279a8858fe9de40db034e4ac0f5b1",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected_axes": [
+        "content",
+        "rows",
+        "separators"
+      ],
+      "uncovered": [
+        "style",
+        "identity",
+        "source",
+        "scalar-range",
+        "query",
+        "tui"
+      ],
+      "limits": "Only this exact source/id and opening or unclosed numbered argument; no closed valid N, no family exemption"
+    },
+    {
+      "id": "e03_1565_N_unclosed_lk",
+      "policy_id": "numbered-source-recovery-e03_1565_N_unclosed_lk",
+      "rule": "numbered-source-spelling-recovery",
+      "contract": "docs/manuals/mant-roff.md:Escapes (N numbered glyph)",
+      "upstream": "roff_escape.c::roff_escape_impl() iend/unclosed recovery; term.c::term_word() ERROR",
+      "source_sha256": "e9b5a12d08a74fd5e47d1f572ad7bd03ef431909849ed170cd2b416c275f5317",
+      "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+      "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+      "native_utf8_sha256": "d3cac889928b34e9eda57a0ec81d54bbd4e0a5449e5c736fec9c6d5a5c5b57f1",
+      "native_tree_sha256": "c01482af0857fd5d26fc5979711a0e425971a7c2140eed1788d70963c5559942",
+      "source_class": "legal",
+      "match": {
+        "rule_id": "E03",
+        "carrier": "Lk",
+        "metadata": {
+          "outer": "N",
+          "delimiter": "\\(aq",
+          "completion": "unclosed"
+        }
+      },
+      "native_rows": [
+        "     A: https://example.org AFTER"
+      ],
+      "expected_product_readable_rows": [
+        "A\\N\\(aq65: https://example.org AFTER"
+      ],
+      "reference": {
+        "utf8": {
+          "status": 0,
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     _\bA: https://example.org AFTER\n\nN\bNE\bEX\bXT\bT\n     END\n\nHistorical Oracle Footer        October 2, 2026                        TEST(1)\n",
+          "stderr": "",
+          "stdout_sha256": "d3cac889928b34e9eda57a0ec81d54bbd4e0a5449e5c736fec9c6d5a5c5b57f1",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdout": "title = \"TEST\"\nname  = \"test\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Historical Oracle Footer\"\ndate  = \"October 2, 2026\"\n\nDd (elem) *1:2 NOPRT\n    October 2, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    TEST (text) 2:5\n    1 (text) 2:10\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          test (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            probe (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      Lk (elem) *8:2\n          https://example.org (text) 8:5\n          A\\N\\(aq65 (text) 8:25\n      No (elem) *9:2\n          AFTER (text) 9:5\nSh (block) *10:2\n  Sh (head) 10:2 ID=HREF\n      NEXT (text) 10:5\n  Sh (body) 10:2\n      No (elem) *11:2\n          END (text) 11:5\n",
+          "stderr": "",
+          "stdout_sha256": "c01482af0857fd5d26fc5979711a0e425971a7c2140eed1788d70963c5559942",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected_axes": [
+        "content",
+        "rows",
+        "separators"
+      ],
+      "uncovered": [
+        "style",
+        "identity",
+        "source",
+        "scalar-range",
+        "query",
+        "tui"
+      ],
+      "limits": "Only this exact source/id and opening or unclosed numbered argument; no closed valid N, no family exemption"
+    },
+    {
+      "id": "e03_1568_N_opening_no",
+      "policy_id": "numbered-source-recovery-e03_1568_N_opening_no",
+      "rule": "numbered-source-spelling-recovery",
+      "contract": "docs/manuals/mant-roff.md:Escapes (N numbered glyph)",
+      "upstream": "roff_escape.c::roff_escape_impl() iend/unclosed recovery; term.c::term_word() ERROR",
+      "source_sha256": "f685d6bd78ab411ed817a5602c95664d496e93854e19ffa15e5e7b0c2d857f35",
+      "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+      "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+      "native_utf8_sha256": "45f092f85f0acaed47bca8f89a23b26e0302c515151977979d5cfbe1cc67bcc5",
+      "native_tree_sha256": "2bcad50d2898d25d4d24301d5588ed4b37ad435ec07a3bbf8356c83bbf19b7ca",
+      "source_class": "legal",
+      "match": {
+        "rule_id": "E03",
+        "carrier": "No",
+        "metadata": {
+          "outer": "N",
+          "delimiter": "\\[aq]",
+          "completion": "opening"
+        }
+      },
+      "native_rows": [
+        "     A' AFTER"
+      ],
+      "expected_product_readable_rows": [
+        "A\\N' AFTER"
+      ],
+      "reference": {
+        "utf8": {
+          "status": 0,
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     A' AFTER\n\nN\bNE\bEX\bXT\bT\n     END\n\nHistorical Oracle Footer        October 2, 2026                        TEST(1)\n",
+          "stderr": "",
+          "stdout_sha256": "45f092f85f0acaed47bca8f89a23b26e0302c515151977979d5cfbe1cc67bcc5",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdout": "title = \"TEST\"\nname  = \"test\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Historical Oracle Footer\"\ndate  = \"October 2, 2026\"\n\nDd (elem) *1:2 NOPRT\n    October 2, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    TEST (text) 2:5\n    1 (text) 2:10\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          test (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            probe (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      No (elem) *8:2\n          A\\N\\[aq] (text) 8:5\n      No (elem) *9:2\n          AFTER (text) 9:5\nSh (block) *10:2\n  Sh (head) 10:2 ID=HREF\n      NEXT (text) 10:5\n  Sh (body) 10:2\n      No (elem) *11:2\n          END (text) 11:5\n",
+          "stderr": "",
+          "stdout_sha256": "2bcad50d2898d25d4d24301d5588ed4b37ad435ec07a3bbf8356c83bbf19b7ca",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected_axes": [
+        "content",
+        "rows",
+        "separators"
+      ],
+      "uncovered": [
+        "style",
+        "identity",
+        "source",
+        "scalar-range",
+        "query",
+        "tui"
+      ],
+      "limits": "Only this exact source/id and opening or unclosed numbered argument; no closed valid N, no family exemption"
+    },
+    {
+      "id": "e03_1569_N_opening_lk",
+      "policy_id": "numbered-source-recovery-e03_1569_N_opening_lk",
+      "rule": "numbered-source-spelling-recovery",
+      "contract": "docs/manuals/mant-roff.md:Escapes (N numbered glyph)",
+      "upstream": "roff_escape.c::roff_escape_impl() iend/unclosed recovery; term.c::term_word() ERROR",
+      "source_sha256": "bc358c4aeb5ceecff7c226f70a11141f420ac109e1bfcb82d3bd223c1dd9dd0a",
+      "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+      "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+      "native_utf8_sha256": "d5e2336912fbe737abfcb804f00968f56422400ed5c5c96adcb83fb345cc3977",
+      "native_tree_sha256": "bc91296f43e6517f28245744ef6168d5d9d697d39b2f18fc7eedd101a155dcf0",
+      "source_class": "legal",
+      "match": {
+        "rule_id": "E03",
+        "carrier": "Lk",
+        "metadata": {
+          "outer": "N",
+          "delimiter": "\\[aq]",
+          "completion": "opening"
+        }
+      },
+      "native_rows": [
+        "     A': https://example.org AFTER"
+      ],
+      "expected_product_readable_rows": [
+        "A\\N': https://example.org AFTER"
+      ],
+      "reference": {
+        "utf8": {
+          "status": 0,
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     _\bA_\b': https://example.org AFTER\n\nN\bNE\bEX\bXT\bT\n     END\n\nHistorical Oracle Footer        October 2, 2026                        TEST(1)\n",
+          "stderr": "",
+          "stdout_sha256": "d5e2336912fbe737abfcb804f00968f56422400ed5c5c96adcb83fb345cc3977",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdout": "title = \"TEST\"\nname  = \"test\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Historical Oracle Footer\"\ndate  = \"October 2, 2026\"\n\nDd (elem) *1:2 NOPRT\n    October 2, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    TEST (text) 2:5\n    1 (text) 2:10\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          test (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            probe (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      Lk (elem) *8:2\n          https://example.org (text) 8:5\n          A\\N\\[aq] (text) 8:25\n      No (elem) *9:2\n          AFTER (text) 9:5\nSh (block) *10:2\n  Sh (head) 10:2 ID=HREF\n      NEXT (text) 10:5\n  Sh (body) 10:2\n      No (elem) *11:2\n          END (text) 11:5\n",
+          "stderr": "",
+          "stdout_sha256": "bc91296f43e6517f28245744ef6168d5d9d697d39b2f18fc7eedd101a155dcf0",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected_axes": [
+        "content",
+        "rows",
+        "separators"
+      ],
+      "uncovered": [
+        "style",
+        "identity",
+        "source",
+        "scalar-range",
+        "query",
+        "tui"
+      ],
+      "limits": "Only this exact source/id and opening or unclosed numbered argument; no closed valid N, no family exemption"
+    },
+    {
+      "id": "e03_1570_N_unclosed_no",
+      "policy_id": "numbered-source-recovery-e03_1570_N_unclosed_no",
+      "rule": "numbered-source-spelling-recovery",
+      "contract": "docs/manuals/mant-roff.md:Escapes (N numbered glyph)",
+      "upstream": "roff_escape.c::roff_escape_impl() iend/unclosed recovery; term.c::term_word() ERROR",
+      "source_sha256": "e0b8d6beecdb7f06700cfb9468c961c73c1a34da54f37677cf545dbd25ec1f73",
+      "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+      "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+      "native_utf8_sha256": "3186899c5a9d54f94f36b87efb41b44f91906931b82f4afafdb45388eb4be436",
+      "native_tree_sha256": "626ec9a5452f93ef66196f0e9118129e303dbebf12615a518a1968108e412553",
+      "source_class": "legal",
+      "match": {
+        "rule_id": "E03",
+        "carrier": "No",
+        "metadata": {
+          "outer": "N",
+          "delimiter": "\\[aq]",
+          "completion": "unclosed"
+        }
+      },
+      "native_rows": [
+        "     A AFTER"
+      ],
+      "expected_product_readable_rows": [
+        "A\\N\\[aq]65 AFTER"
+      ],
+      "reference": {
+        "utf8": {
+          "status": 0,
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     A AFTER\n\nN\bNE\bEX\bXT\bT\n     END\n\nHistorical Oracle Footer        October 2, 2026                        TEST(1)\n",
+          "stderr": "",
+          "stdout_sha256": "3186899c5a9d54f94f36b87efb41b44f91906931b82f4afafdb45388eb4be436",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdout": "title = \"TEST\"\nname  = \"test\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Historical Oracle Footer\"\ndate  = \"October 2, 2026\"\n\nDd (elem) *1:2 NOPRT\n    October 2, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    TEST (text) 2:5\n    1 (text) 2:10\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          test (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            probe (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      No (elem) *8:2\n          A\\N\\[aq]65 (text) 8:5\n      No (elem) *9:2\n          AFTER (text) 9:5\nSh (block) *10:2\n  Sh (head) 10:2 ID=HREF\n      NEXT (text) 10:5\n  Sh (body) 10:2\n      No (elem) *11:2\n          END (text) 11:5\n",
+          "stderr": "",
+          "stdout_sha256": "626ec9a5452f93ef66196f0e9118129e303dbebf12615a518a1968108e412553",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected_axes": [
+        "content",
+        "rows",
+        "separators"
+      ],
+      "uncovered": [
+        "style",
+        "identity",
+        "source",
+        "scalar-range",
+        "query",
+        "tui"
+      ],
+      "limits": "Only this exact source/id and opening or unclosed numbered argument; no closed valid N, no family exemption"
+    },
+    {
+      "id": "e03_1571_N_unclosed_lk",
+      "policy_id": "numbered-source-recovery-e03_1571_N_unclosed_lk",
+      "rule": "numbered-source-spelling-recovery",
+      "contract": "docs/manuals/mant-roff.md:Escapes (N numbered glyph)",
+      "upstream": "roff_escape.c::roff_escape_impl() iend/unclosed recovery; term.c::term_word() ERROR",
+      "source_sha256": "24c65a2e7c536fd78e171f44acfce529cadd857e7c3c12e920e5c655557dd444",
+      "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+      "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+      "native_utf8_sha256": "d3cac889928b34e9eda57a0ec81d54bbd4e0a5449e5c736fec9c6d5a5c5b57f1",
+      "native_tree_sha256": "dd36075a63fb6973d2d84edce08f57648f2cd1695210277ed159e124ced88e2d",
+      "source_class": "legal",
+      "match": {
+        "rule_id": "E03",
+        "carrier": "Lk",
+        "metadata": {
+          "outer": "N",
+          "delimiter": "\\[aq]",
+          "completion": "unclosed"
+        }
+      },
+      "native_rows": [
+        "     A: https://example.org AFTER"
+      ],
+      "expected_product_readable_rows": [
+        "A\\N\\[aq]65: https://example.org AFTER"
+      ],
+      "reference": {
+        "utf8": {
+          "status": 0,
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     _\bA: https://example.org AFTER\n\nN\bNE\bEX\bXT\bT\n     END\n\nHistorical Oracle Footer        October 2, 2026                        TEST(1)\n",
+          "stderr": "",
+          "stdout_sha256": "d3cac889928b34e9eda57a0ec81d54bbd4e0a5449e5c736fec9c6d5a5c5b57f1",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdout": "title = \"TEST\"\nname  = \"test\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Historical Oracle Footer\"\ndate  = \"October 2, 2026\"\n\nDd (elem) *1:2 NOPRT\n    October 2, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    TEST (text) 2:5\n    1 (text) 2:10\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          test (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            probe (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      Lk (elem) *8:2\n          https://example.org (text) 8:5\n          A\\N\\[aq]65 (text) 8:25\n      No (elem) *9:2\n          AFTER (text) 9:5\nSh (block) *10:2\n  Sh (head) 10:2 ID=HREF\n      NEXT (text) 10:5\n  Sh (body) 10:2\n      No (elem) *11:2\n          END (text) 11:5\n",
+          "stderr": "",
+          "stdout_sha256": "dd36075a63fb6973d2d84edce08f57648f2cd1695210277ed159e124ced88e2d",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected_axes": [
+        "content",
+        "rows",
+        "separators"
+      ],
+      "uncovered": [
+        "style",
+        "identity",
+        "source",
+        "scalar-range",
+        "query",
+        "tui"
+      ],
+      "limits": "Only this exact source/id and opening or unclosed numbered argument; no closed valid N, no family exemption"
+    },
+    {
+      "id": "e03_1574_N_opening_no",
+      "policy_id": "numbered-source-recovery-e03_1574_N_opening_no",
+      "rule": "numbered-source-spelling-recovery",
+      "contract": "docs/manuals/mant-roff.md:Escapes (N numbered glyph)",
+      "upstream": "roff_escape.c::roff_escape_impl() iend/unclosed recovery; term.c::term_word() ERROR",
+      "source_sha256": "8c5edd7280e61d7b81c09114d1e0fc84b1328ec7cd0f603a832f68295412caee",
+      "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+      "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+      "native_utf8_sha256": "3186899c5a9d54f94f36b87efb41b44f91906931b82f4afafdb45388eb4be436",
+      "native_tree_sha256": "530e703c1e7d3c1d80c1098d33b3cda662d6eff70d83ca81eb4f0b1d1914ae79",
+      "source_class": "legal",
+      "match": {
+        "rule_id": "E03",
+        "carrier": "No",
+        "metadata": {
+          "outer": "N",
+          "delimiter": "\\m[red]",
+          "completion": "opening"
+        }
+      },
+      "native_rows": [
+        "     A AFTER"
+      ],
+      "expected_product_readable_rows": [
+        "A\\N AFTER"
+      ],
+      "reference": {
+        "utf8": {
+          "status": 0,
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     A AFTER\n\nN\bNE\bEX\bXT\bT\n     END\n\nHistorical Oracle Footer        October 2, 2026                        TEST(1)\n",
+          "stderr": "",
+          "stdout_sha256": "3186899c5a9d54f94f36b87efb41b44f91906931b82f4afafdb45388eb4be436",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdout": "title = \"TEST\"\nname  = \"test\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Historical Oracle Footer\"\ndate  = \"October 2, 2026\"\n\nDd (elem) *1:2 NOPRT\n    October 2, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    TEST (text) 2:5\n    1 (text) 2:10\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          test (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            probe (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      No (elem) *8:2\n          A\\N\\m[red] (text) 8:5\n      No (elem) *9:2\n          AFTER (text) 9:5\nSh (block) *10:2\n  Sh (head) 10:2 ID=HREF\n      NEXT (text) 10:5\n  Sh (body) 10:2\n      No (elem) *11:2\n          END (text) 11:5\n",
+          "stderr": "",
+          "stdout_sha256": "530e703c1e7d3c1d80c1098d33b3cda662d6eff70d83ca81eb4f0b1d1914ae79",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected_axes": [
+        "content",
+        "rows",
+        "separators"
+      ],
+      "uncovered": [
+        "style",
+        "identity",
+        "source",
+        "scalar-range",
+        "query",
+        "tui"
+      ],
+      "limits": "Only this exact source/id and opening or unclosed numbered argument; no closed valid N, no family exemption"
+    },
+    {
+      "id": "e03_1575_N_opening_lk",
+      "policy_id": "numbered-source-recovery-e03_1575_N_opening_lk",
+      "rule": "numbered-source-spelling-recovery",
+      "contract": "docs/manuals/mant-roff.md:Escapes (N numbered glyph)",
+      "upstream": "roff_escape.c::roff_escape_impl() iend/unclosed recovery; term.c::term_word() ERROR",
+      "source_sha256": "e005ccdf34c1686903b5f0e069ace1d68646359d4d668abf404bb000f92798b7",
+      "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+      "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+      "native_utf8_sha256": "d3cac889928b34e9eda57a0ec81d54bbd4e0a5449e5c736fec9c6d5a5c5b57f1",
+      "native_tree_sha256": "925e56d0f9e6169b7bc6f308786f5c87f7a9c6ebcc00646b6b9d929d52b148c0",
+      "source_class": "legal",
+      "match": {
+        "rule_id": "E03",
+        "carrier": "Lk",
+        "metadata": {
+          "outer": "N",
+          "delimiter": "\\m[red]",
+          "completion": "opening"
+        }
+      },
+      "native_rows": [
+        "     A: https://example.org AFTER"
+      ],
+      "expected_product_readable_rows": [
+        "A\\N: https://example.org AFTER"
+      ],
+      "reference": {
+        "utf8": {
+          "status": 0,
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     _\bA: https://example.org AFTER\n\nN\bNE\bEX\bXT\bT\n     END\n\nHistorical Oracle Footer        October 2, 2026                        TEST(1)\n",
+          "stderr": "",
+          "stdout_sha256": "d3cac889928b34e9eda57a0ec81d54bbd4e0a5449e5c736fec9c6d5a5c5b57f1",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdout": "title = \"TEST\"\nname  = \"test\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Historical Oracle Footer\"\ndate  = \"October 2, 2026\"\n\nDd (elem) *1:2 NOPRT\n    October 2, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    TEST (text) 2:5\n    1 (text) 2:10\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          test (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            probe (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      Lk (elem) *8:2\n          https://example.org (text) 8:5\n          A\\N\\m[red] (text) 8:25\n      No (elem) *9:2\n          AFTER (text) 9:5\nSh (block) *10:2\n  Sh (head) 10:2 ID=HREF\n      NEXT (text) 10:5\n  Sh (body) 10:2\n      No (elem) *11:2\n          END (text) 11:5\n",
+          "stderr": "",
+          "stdout_sha256": "925e56d0f9e6169b7bc6f308786f5c87f7a9c6ebcc00646b6b9d929d52b148c0",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected_axes": [
+        "content",
+        "rows",
+        "separators"
+      ],
+      "uncovered": [
+        "style",
+        "identity",
+        "source",
+        "scalar-range",
+        "query",
+        "tui"
+      ],
+      "limits": "Only this exact source/id and opening or unclosed numbered argument; no closed valid N, no family exemption"
+    },
+    {
+      "id": "e03_1576_N_unclosed_no",
+      "policy_id": "numbered-source-recovery-e03_1576_N_unclosed_no",
+      "rule": "numbered-source-spelling-recovery",
+      "contract": "docs/manuals/mant-roff.md:Escapes (N numbered glyph)",
+      "upstream": "roff_escape.c::roff_escape_impl() iend/unclosed recovery; term.c::term_word() ERROR",
+      "source_sha256": "3f8d40e7866aa36bb887d0633b3c9505ae1c731bf9363bf0fb6e6e7c6b1ac32b",
+      "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+      "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+      "native_utf8_sha256": "3186899c5a9d54f94f36b87efb41b44f91906931b82f4afafdb45388eb4be436",
+      "native_tree_sha256": "1430a8cc33685e6bfa13629e49a540235b0ce688708fae4c14b85d76597cccbb",
+      "source_class": "legal",
+      "match": {
+        "rule_id": "E03",
+        "carrier": "No",
+        "metadata": {
+          "outer": "N",
+          "delimiter": "\\m[red]",
+          "completion": "unclosed"
+        }
+      },
+      "native_rows": [
+        "     A AFTER"
+      ],
+      "expected_product_readable_rows": [
+        "A\\N\\m[red]65 AFTER"
+      ],
+      "reference": {
+        "utf8": {
+          "status": 0,
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     A AFTER\n\nN\bNE\bEX\bXT\bT\n     END\n\nHistorical Oracle Footer        October 2, 2026                        TEST(1)\n",
+          "stderr": "",
+          "stdout_sha256": "3186899c5a9d54f94f36b87efb41b44f91906931b82f4afafdb45388eb4be436",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdout": "title = \"TEST\"\nname  = \"test\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Historical Oracle Footer\"\ndate  = \"October 2, 2026\"\n\nDd (elem) *1:2 NOPRT\n    October 2, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    TEST (text) 2:5\n    1 (text) 2:10\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          test (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            probe (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      No (elem) *8:2\n          A\\N\\m[red]65 (text) 8:5\n      No (elem) *9:2\n          AFTER (text) 9:5\nSh (block) *10:2\n  Sh (head) 10:2 ID=HREF\n      NEXT (text) 10:5\n  Sh (body) 10:2\n      No (elem) *11:2\n          END (text) 11:5\n",
+          "stderr": "",
+          "stdout_sha256": "1430a8cc33685e6bfa13629e49a540235b0ce688708fae4c14b85d76597cccbb",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected_axes": [
+        "content",
+        "rows",
+        "separators"
+      ],
+      "uncovered": [
+        "style",
+        "identity",
+        "source",
+        "scalar-range",
+        "query",
+        "tui"
+      ],
+      "limits": "Only this exact source/id and opening or unclosed numbered argument; no closed valid N, no family exemption"
+    },
+    {
+      "id": "e03_1577_N_unclosed_lk",
+      "policy_id": "numbered-source-recovery-e03_1577_N_unclosed_lk",
+      "rule": "numbered-source-spelling-recovery",
+      "contract": "docs/manuals/mant-roff.md:Escapes (N numbered glyph)",
+      "upstream": "roff_escape.c::roff_escape_impl() iend/unclosed recovery; term.c::term_word() ERROR",
+      "source_sha256": "f3c2c446b681e614a0758d3776398430f409f3e4c77ac8e0bcd8645d900ee92e",
+      "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+      "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+      "native_utf8_sha256": "d3cac889928b34e9eda57a0ec81d54bbd4e0a5449e5c736fec9c6d5a5c5b57f1",
+      "native_tree_sha256": "9b7c3f877ea2713f687aef017f59ab17cdf691ffeffd4225589d3390b9e44014",
+      "source_class": "legal",
+      "match": {
+        "rule_id": "E03",
+        "carrier": "Lk",
+        "metadata": {
+          "outer": "N",
+          "delimiter": "\\m[red]",
+          "completion": "unclosed"
+        }
+      },
+      "native_rows": [
+        "     A: https://example.org AFTER"
+      ],
+      "expected_product_readable_rows": [
+        "A\\N\\m[red]65: https://example.org AFTER"
+      ],
+      "reference": {
+        "utf8": {
+          "status": 0,
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     _\bA: https://example.org AFTER\n\nN\bNE\bEX\bXT\bT\n     END\n\nHistorical Oracle Footer        October 2, 2026                        TEST(1)\n",
+          "stderr": "",
+          "stdout_sha256": "d3cac889928b34e9eda57a0ec81d54bbd4e0a5449e5c736fec9c6d5a5c5b57f1",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdout": "title = \"TEST\"\nname  = \"test\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Historical Oracle Footer\"\ndate  = \"October 2, 2026\"\n\nDd (elem) *1:2 NOPRT\n    October 2, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    TEST (text) 2:5\n    1 (text) 2:10\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          test (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            probe (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      Lk (elem) *8:2\n          https://example.org (text) 8:5\n          A\\N\\m[red]65 (text) 8:25\n      No (elem) *9:2\n          AFTER (text) 9:5\nSh (block) *10:2\n  Sh (head) 10:2 ID=HREF\n      NEXT (text) 10:5\n  Sh (body) 10:2\n      No (elem) *11:2\n          END (text) 11:5\n",
+          "stderr": "",
+          "stdout_sha256": "9b7c3f877ea2713f687aef017f59ab17cdf691ffeffd4225589d3390b9e44014",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected_axes": [
+        "content",
+        "rows",
+        "separators"
+      ],
+      "uncovered": [
+        "style",
+        "identity",
+        "source",
+        "scalar-range",
+        "query",
+        "tui"
+      ],
+      "limits": "Only this exact source/id and opening or unclosed numbered argument; no closed valid N, no family exemption"
+    },
+    {
+      "id": "e03_1580_N_opening_no",
+      "policy_id": "numbered-source-recovery-e03_1580_N_opening_no",
+      "rule": "numbered-source-spelling-recovery",
+      "contract": "docs/manuals/mant-roff.md:Escapes (N numbered glyph)",
+      "upstream": "roff_escape.c::roff_escape_impl() iend/unclosed recovery; term.c::term_word() ERROR",
+      "source_sha256": "8c38773d83e6487e893a17d51b0c1e38be17640a7ce0cb484bc3af0c9a627f25",
+      "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+      "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+      "native_utf8_sha256": "3186899c5a9d54f94f36b87efb41b44f91906931b82f4afafdb45388eb4be436",
+      "native_tree_sha256": "82c2c1812742eae0312197f822a2c3f34e05031ed93ffe37bff665012d1e539c",
+      "source_class": "legal",
+      "match": {
+        "rule_id": "E03",
+        "carrier": "No",
+        "metadata": {
+          "outer": "N",
+          "delimiter": "\\fB",
+          "completion": "opening"
+        }
+      },
+      "native_rows": [
+        "     A AFTER"
+      ],
+      "expected_product_readable_rows": [
+        "A\\N AFTER"
+      ],
+      "reference": {
+        "utf8": {
+          "status": 0,
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     A AFTER\n\nN\bNE\bEX\bXT\bT\n     END\n\nHistorical Oracle Footer        October 2, 2026                        TEST(1)\n",
+          "stderr": "",
+          "stdout_sha256": "3186899c5a9d54f94f36b87efb41b44f91906931b82f4afafdb45388eb4be436",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdout": "title = \"TEST\"\nname  = \"test\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Historical Oracle Footer\"\ndate  = \"October 2, 2026\"\n\nDd (elem) *1:2 NOPRT\n    October 2, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    TEST (text) 2:5\n    1 (text) 2:10\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          test (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            probe (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      No (elem) *8:2\n          A\\N\\fB (text) 8:5\n      No (elem) *9:2\n          AFTER (text) 9:5\nSh (block) *10:2\n  Sh (head) 10:2 ID=HREF\n      NEXT (text) 10:5\n  Sh (body) 10:2\n      No (elem) *11:2\n          END (text) 11:5\n",
+          "stderr": "",
+          "stdout_sha256": "82c2c1812742eae0312197f822a2c3f34e05031ed93ffe37bff665012d1e539c",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected_axes": [
+        "content",
+        "rows",
+        "separators"
+      ],
+      "uncovered": [
+        "style",
+        "identity",
+        "source",
+        "scalar-range",
+        "query",
+        "tui"
+      ],
+      "limits": "Only this exact source/id and opening or unclosed numbered argument; no closed valid N, no family exemption"
+    },
+    {
+      "id": "e03_1581_N_opening_lk",
+      "policy_id": "numbered-source-recovery-e03_1581_N_opening_lk",
+      "rule": "numbered-source-spelling-recovery",
+      "contract": "docs/manuals/mant-roff.md:Escapes (N numbered glyph)",
+      "upstream": "roff_escape.c::roff_escape_impl() iend/unclosed recovery; term.c::term_word() ERROR",
+      "source_sha256": "4b8f1e654c7093aa0b79d8f896a22648e70c9d23259dbe10548e3c6c5a740c5b",
+      "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+      "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+      "native_utf8_sha256": "d3cac889928b34e9eda57a0ec81d54bbd4e0a5449e5c736fec9c6d5a5c5b57f1",
+      "native_tree_sha256": "f4c183e17cf65027e06f76830bf8a98b4a53906e3d95df5bf4ce63c2cf64b20e",
+      "source_class": "legal",
+      "match": {
+        "rule_id": "E03",
+        "carrier": "Lk",
+        "metadata": {
+          "outer": "N",
+          "delimiter": "\\fB",
+          "completion": "opening"
+        }
+      },
+      "native_rows": [
+        "     A: https://example.org AFTER"
+      ],
+      "expected_product_readable_rows": [
+        "A\\N: https://example.org AFTER"
+      ],
+      "reference": {
+        "utf8": {
+          "status": 0,
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     _\bA: https://example.org AFTER\n\nN\bNE\bEX\bXT\bT\n     END\n\nHistorical Oracle Footer        October 2, 2026                        TEST(1)\n",
+          "stderr": "",
+          "stdout_sha256": "d3cac889928b34e9eda57a0ec81d54bbd4e0a5449e5c736fec9c6d5a5c5b57f1",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdout": "title = \"TEST\"\nname  = \"test\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Historical Oracle Footer\"\ndate  = \"October 2, 2026\"\n\nDd (elem) *1:2 NOPRT\n    October 2, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    TEST (text) 2:5\n    1 (text) 2:10\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          test (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            probe (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      Lk (elem) *8:2\n          https://example.org (text) 8:5\n          A\\N\\fB (text) 8:25\n      No (elem) *9:2\n          AFTER (text) 9:5\nSh (block) *10:2\n  Sh (head) 10:2 ID=HREF\n      NEXT (text) 10:5\n  Sh (body) 10:2\n      No (elem) *11:2\n          END (text) 11:5\n",
+          "stderr": "",
+          "stdout_sha256": "f4c183e17cf65027e06f76830bf8a98b4a53906e3d95df5bf4ce63c2cf64b20e",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected_axes": [
+        "content",
+        "rows",
+        "separators"
+      ],
+      "uncovered": [
+        "style",
+        "identity",
+        "source",
+        "scalar-range",
+        "query",
+        "tui"
+      ],
+      "limits": "Only this exact source/id and opening or unclosed numbered argument; no closed valid N, no family exemption"
+    },
+    {
+      "id": "e03_1582_N_unclosed_no",
+      "policy_id": "numbered-source-recovery-e03_1582_N_unclosed_no",
+      "rule": "numbered-source-spelling-recovery",
+      "contract": "docs/manuals/mant-roff.md:Escapes (N numbered glyph)",
+      "upstream": "roff_escape.c::roff_escape_impl() iend/unclosed recovery; term.c::term_word() ERROR",
+      "source_sha256": "17494244ee2f2a164ae11b72ed3809514f129f959c8e36eb1c062af1ca60a02d",
+      "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+      "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+      "native_utf8_sha256": "3186899c5a9d54f94f36b87efb41b44f91906931b82f4afafdb45388eb4be436",
+      "native_tree_sha256": "aee7bd56af94604217330b61e042c09a370196297a583f6b8f74f988d043928d",
+      "source_class": "legal",
+      "match": {
+        "rule_id": "E03",
+        "carrier": "No",
+        "metadata": {
+          "outer": "N",
+          "delimiter": "\\fB",
+          "completion": "unclosed"
+        }
+      },
+      "native_rows": [
+        "     A AFTER"
+      ],
+      "expected_product_readable_rows": [
+        "A\\N\\fB65 AFTER"
+      ],
+      "reference": {
+        "utf8": {
+          "status": 0,
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     A AFTER\n\nN\bNE\bEX\bXT\bT\n     END\n\nHistorical Oracle Footer        October 2, 2026                        TEST(1)\n",
+          "stderr": "",
+          "stdout_sha256": "3186899c5a9d54f94f36b87efb41b44f91906931b82f4afafdb45388eb4be436",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdout": "title = \"TEST\"\nname  = \"test\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Historical Oracle Footer\"\ndate  = \"October 2, 2026\"\n\nDd (elem) *1:2 NOPRT\n    October 2, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    TEST (text) 2:5\n    1 (text) 2:10\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          test (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            probe (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      No (elem) *8:2\n          A\\N\\fB65 (text) 8:5\n      No (elem) *9:2\n          AFTER (text) 9:5\nSh (block) *10:2\n  Sh (head) 10:2 ID=HREF\n      NEXT (text) 10:5\n  Sh (body) 10:2\n      No (elem) *11:2\n          END (text) 11:5\n",
+          "stderr": "",
+          "stdout_sha256": "aee7bd56af94604217330b61e042c09a370196297a583f6b8f74f988d043928d",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected_axes": [
+        "content",
+        "rows",
+        "separators"
+      ],
+      "uncovered": [
+        "style",
+        "identity",
+        "source",
+        "scalar-range",
+        "query",
+        "tui"
+      ],
+      "limits": "Only this exact source/id and opening or unclosed numbered argument; no closed valid N, no family exemption"
+    },
+    {
+      "id": "e03_1583_N_unclosed_lk",
+      "policy_id": "numbered-source-recovery-e03_1583_N_unclosed_lk",
+      "rule": "numbered-source-spelling-recovery",
+      "contract": "docs/manuals/mant-roff.md:Escapes (N numbered glyph)",
+      "upstream": "roff_escape.c::roff_escape_impl() iend/unclosed recovery; term.c::term_word() ERROR",
+      "source_sha256": "b20de4a49c0916a2160a8c4b92d06d159b7e918246dfd64ed3695ffb6567a998",
+      "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+      "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+      "native_utf8_sha256": "d3cac889928b34e9eda57a0ec81d54bbd4e0a5449e5c736fec9c6d5a5c5b57f1",
+      "native_tree_sha256": "eeb19fa50087727d2ebee8551cd6415cd9ad0f53ed0a65b11937cb40b8cb7bc6",
+      "source_class": "legal",
+      "match": {
+        "rule_id": "E03",
+        "carrier": "Lk",
+        "metadata": {
+          "outer": "N",
+          "delimiter": "\\fB",
+          "completion": "unclosed"
+        }
+      },
+      "native_rows": [
+        "     A: https://example.org AFTER"
+      ],
+      "expected_product_readable_rows": [
+        "A\\N\\fB65: https://example.org AFTER"
+      ],
+      "reference": {
+        "utf8": {
+          "status": 0,
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     _\bA: https://example.org AFTER\n\nN\bNE\bEX\bXT\bT\n     END\n\nHistorical Oracle Footer        October 2, 2026                        TEST(1)\n",
+          "stderr": "",
+          "stdout_sha256": "d3cac889928b34e9eda57a0ec81d54bbd4e0a5449e5c736fec9c6d5a5c5b57f1",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdout": "title = \"TEST\"\nname  = \"test\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Historical Oracle Footer\"\ndate  = \"October 2, 2026\"\n\nDd (elem) *1:2 NOPRT\n    October 2, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    TEST (text) 2:5\n    1 (text) 2:10\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          test (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            probe (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      Lk (elem) *8:2\n          https://example.org (text) 8:5\n          A\\N\\fB65 (text) 8:25\n      No (elem) *9:2\n          AFTER (text) 9:5\nSh (block) *10:2\n  Sh (head) 10:2 ID=HREF\n      NEXT (text) 10:5\n  Sh (body) 10:2\n      No (elem) *11:2\n          END (text) 11:5\n",
+          "stderr": "",
+          "stdout_sha256": "eeb19fa50087727d2ebee8551cd6415cd9ad0f53ed0a65b11937cb40b8cb7bc6",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected_axes": [
+        "content",
+        "rows",
+        "separators"
+      ],
+      "uncovered": [
+        "style",
+        "identity",
+        "source",
+        "scalar-range",
+        "query",
+        "tui"
+      ],
+      "limits": "Only this exact source/id and opening or unclosed numbered argument; no closed valid N, no family exemption"
+    }
+  ]
+}

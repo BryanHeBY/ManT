@@ -28,6 +28,7 @@ python3 -m unittest discover -s scripts/roff/tests -t .
 python3 -m scripts.roff.audit.audit_roff_projection --self-check
 python3 -m scripts.roff.fixtures.generate_roff_execution_fixtures --check-sources
 bash scripts/roff/fixtures/regen_definition_matrix.sh --check
+python3 -m scripts.roff.fixtures.replay_rule_boundaries --check-generation
 ```
 
 `install.sh`, `install.ps1`, `check.sh`, `check-windows.ps1`,
@@ -52,3 +53,12 @@ and hashes of their original producer; new runs record current tool identities.
 
 See [the development guide](../docs/development.md) for fixture assertion scopes
 and the complete local verification boundary.
+
+Rule-boundary replay keeps execution identities, distinct sources, raw native
+differences, qualified failures and unasserted consumer axes separate. Collect
+all five pristine profiles with `--collect` before `--replay`; cached bytes,
+source hashes and the active reference identity are checked before execution.
+The escape, field, Markdown and integrity recorders under `roff/fixtures/`
+maintain their source-bound permanent fixtures. Projection cards permit only
+documented edits at witnessed generated cells or exact source-recovery inputs;
+they cannot waive a family or erase authored Unicode and hard rows.
