@@ -31,6 +31,7 @@
 /// overflow early return 350-351, tail acceptance 362-366); `term_field()`
 /// 374-444; `encode1()` BACKBEFORE retreat 901-908 (blank: `col--`,
 /// otherwise buffer `'\b'`); `term_word()` separator blanks 573-576.
+use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use super::tab_stops::TabStops;
@@ -41,11 +42,16 @@ const EN: usize = 24;
 pub(in crate::mandoc) enum FieldCell {
     /// One printable graph with its terminal width.
     Graph { text: char, width: usize },
+    /// Native `ASCII_HYPH`: its first real scan uses it as a width-break
+    /// candidate and immediately converts it to '-' (term.c:307-324),
+    /// including lookahead not accepted by that pass.
+    Hyphen,
     /// An ordinary breakable blank (`bufferc(' ')`, term.c:576 and 574-576
     /// for empty operands).
     BreakableBlank,
     /// A non-breaking blank (`ASCII_NBRSP`: `\~`, `\0`, KEPT separators).
-    /// `term_fill` counts its width (342-347) and never breaks on it.
+    /// Its first scan counts its width and normalizes `ASCII_NBRSP` to an
+    /// ordinary blank (term.c:340-347); a later pass can break on that byte.
     NonBreakingBlank,
     /// A `\p` break marker (`bufferc('\n')`, term.c:657-658). A pass only
     /// arms its LOCAL `breakline` from it (304-306); `term_field` skips it.
@@ -140,6 +146,9 @@ pub(super) struct WordWriteReceipt {
     pub(super) first_content_cell: usize,
     /// `cells.len()` after the writes executed.
     pub(super) end_cell: usize,
+    /// `term_field()` writes deferred vbl only at a Graph or backspace.
+    /// NBRZW contributes graph acceptance, but never prints this padding.
+    pub(super) prints_padding: bool,
 }
 
 /// One `term_fill()` result: the slice accepted for the current output
@@ -163,6 +172,9 @@ pub(super) enum FillBoundary {
     BufferEnd,
     WordEndBreak,
     Width,
+    /// A native break candidate after `ASCII_HYPH`. It locates BODY's
+    /// final device row without asserting a hard break in source text.
+    Hyphen,
 }
 
 impl FillPass {
@@ -210,12 +222,26 @@ impl FillTargets {
 pub(super) enum FlushReceipt {
     Accepted {
         passes: Vec<FillPass>,
+        native_cells: Vec<FieldCell>,
     },
     Rejected {
         passes: Vec<FillPass>,
         rejected_from: usize,
         definitive: bool,
+        native_cells: Vec<FieldCell>,
     },
+}
+
+impl FlushReceipt {
+    /// The normalized cells of this same `term_fill()` sweep. Source ownership
+    /// remains in `FieldBuffer`, while native skip/tail rules use these bytes.
+    pub(super) fn native_cells(&self) -> &[FieldCell] {
+        match self {
+            Self::Accepted { native_cells, .. } | Self::Rejected { native_cells, .. } => {
+                native_cells
+            }
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -248,6 +274,10 @@ pub(in crate::mandoc::inline) struct FieldBuffer {
     backbefore_armed: bool,
     backafter_armed: bool,
     committed_passes: Vec<FillPass>,
+    // term_fill() normalizes scanned ASCII_HYPH cells in-place, even when
+    // the pass accepted an earlier prefix. Only real/committed scans own
+    // this prefix; uncommitted width predictions leave native input intact.
+    normalized_until: usize,
     /// A configuration change invalidated pending width scans. Subsequent
     /// words only append cells until the real flush runs one fresh scan.
     /// Repeated .ta/word pairs must not replay their growing field history.
@@ -257,8 +287,8 @@ pub(in crate::mandoc::inline) struct FieldBuffer {
     /// width scanning, but cannot execute the same marker pass twice.
     projected_pass_ends: std::collections::BTreeSet<usize>,
     word_space_ready: bool,
-    significant_positions: Vec<usize>,
-    blank_positions: Vec<usize>,
+    significant_positions: BTreeSet<usize>,
+    blank_positions: BTreeSet<usize>,
     scan: Option<FillScanner>,
     #[cfg(test)]
     scan_work: usize,
@@ -282,6 +312,24 @@ struct FillRegisters {
     breakline: bool,
     graph: bool,
     tab_offset: i64,
+    break_candidate: Option<FillBoundary>,
+}
+
+impl FillRegisters {
+    fn consume_hyphen(&mut self, target: usize) -> Option<PassStop> {
+        self.graph = true;
+        self.vis += EN;
+        if self.vis > target {
+            self.index += 1;
+            let result = finish_pass(*self, target)
+                .map(|pass| pass.stopped_at(self.break_candidate.unwrap_or(FillBoundary::Hyphen)));
+            return Some(PassStop::from(result));
+        }
+        self.nbr = self.index + 1;
+        self.vbr = self.vis;
+        self.break_candidate = Some(FillBoundary::Hyphen);
+        None
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -290,6 +338,7 @@ struct FillScanner {
     registers: FillRegisters,
     before_last: FillRegisters,
     stopped: Option<PassStop>,
+    scanned_end: usize,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -317,17 +366,22 @@ impl FieldBuffer {
             self.word_first_content = Some(self.cells.len());
         }
         match &cell {
-            FieldCell::BreakableBlank => self.blank_positions.push(self.cells.len()),
+            FieldCell::BreakableBlank => {
+                self.blank_positions.insert(self.cells.len());
+            }
             FieldCell::BreakMarker
             | FieldCell::Tab
             | FieldCell::TabReference
             | FieldCell::ZeroWidthGraph
             | FieldCell::Breakpoint => {}
-            _ => self.significant_positions.push(self.cells.len()),
+            _ => {
+                self.significant_positions.insert(self.cells.len());
+            }
         }
         let projection = usize::from(matches!(
             cell,
             FieldCell::Graph { .. }
+                | FieldCell::Hyphen
                 | FieldCell::BreakableBlank
                 | FieldCell::NonBreakingBlank
                 | FieldCell::Tab
@@ -358,6 +412,12 @@ impl FieldBuffer {
     /// remain a separate caller-owned register.
     pub(super) const fn word_boundary_ready(&self) -> bool {
         self.word_space_ready
+    }
+
+    /// A native handler can clear NOSPACE after retiring its buffer.
+    /// That register transition still applies to the next empty word.
+    pub(super) fn release_word_boundary(&mut self) {
+        self.word_space_ready = true;
     }
 
     /// Whether this word's automatic separator still occupies its native
@@ -458,6 +518,7 @@ impl FieldBuffer {
         self.backbefore_armed = false;
         self.backafter_armed = false;
         self.committed_passes.clear();
+        self.normalized_until = 0;
         self.word_scan = WordScanPolicy::Incremental;
         self.last_break_marker = None;
         self.projected_pass_ends.clear();
@@ -498,6 +559,10 @@ impl FieldBuffer {
                 FieldWrite::Cell(FieldCell::Graph { text, width }) => {
                     self.encode_graph(*text, *width, true);
                 }
+                FieldWrite::Cell(FieldCell::Hyphen) => {
+                    self.encode_graph('-', 1, true);
+                    *self.cells.last_mut().expect("encoded hyphen") = FieldCell::Hyphen;
+                }
                 FieldWrite::OwnedBlank { projected } => self.encode_graph('\u{a0}', 1, *projected),
                 FieldWrite::Cell(cell) => {
                     if matches!(cell, FieldCell::BreakMarker) {
@@ -525,9 +590,16 @@ impl FieldBuffer {
         ) {
             first_content_cell += 1;
         }
+        let prints_padding = self.cells[first_content_cell..end_cell].iter().any(|cell| {
+            matches!(
+                cell,
+                FieldCell::Graph { .. } | FieldCell::Hyphen | FieldCell::Backline
+            )
+        });
         WordWriteReceipt {
             first_content_cell,
             end_cell,
+            prints_padding,
         }
     }
     pub(super) fn has_projected_pass(&self, end: usize) -> bool {
@@ -590,9 +662,10 @@ impl FieldBuffer {
                 Some(FieldCell::Tab | FieldCell::BreakableBlank) => {
                     self.invalidate_projection_scan(self.cells.len().saturating_sub(1));
                     if matches!(self.cells.last(), Some(FieldCell::BreakableBlank)) {
-                        self.blank_positions.pop();
+                        self.blank_positions.pop_last();
                     }
                     self.cells.pop();
+                    self.normalized_until = self.normalized_until.min(self.cells.len());
                     self.projection_prefix.pop();
                     self.pending_projection_graph = None;
                 }
@@ -645,25 +718,17 @@ impl FieldBuffer {
     /// final blank, so keep the checkpoint immediately before that cell.
     #[cfg(test)]
     pub(super) fn fill_pass(&mut self, vtarget: usize) -> Option<FillPass> {
-        self.fill_pass_units(vtarget.saturating_mul(EN))
+        self.scan_fill_pass(vtarget.saturating_mul(EN), true)
     }
 
     pub(super) fn fill_pass_units(&mut self, vtarget: usize) -> Option<FillPass> {
+        self.scan_fill_pass(vtarget, false)
+    }
+
+    fn scan_fill_pass(&mut self, vtarget: usize, native: bool) -> Option<FillPass> {
         // term_fill() compares basic units with half an EN of tolerance.
         let vtarget = vtarget.saturating_add(EN / 2);
-        if self.scan.as_ref().is_none_or(|scan| scan.target != vtarget) {
-            let registers = FillRegisters {
-                index: self.resume,
-                tab_offset: self.pass_tab_offset,
-                ..FillRegisters::default()
-            };
-            self.scan = Some(FillScanner {
-                target: vtarget,
-                registers,
-                before_last: registers,
-                stopped: None,
-            });
-        }
+        self.prepare_fill_scan(vtarget);
         let scan = self.scan.as_mut().expect("initialized field scan");
         if let Some(result) = scan.stopped {
             return result.accepted();
@@ -676,15 +741,23 @@ impl FieldBuffer {
             scan.before_last = scan.registers;
             let registers = &mut scan.registers;
             let ic = registers.index;
-            match self.cells[ic] {
+            scan.scanned_end = scan.scanned_end.max(ic + 1);
+            let cell = self.cells[ic].clone();
+            if native {
+                Self::normalize_scanned_cell(
+                    &mut self.cells[ic],
+                    ic,
+                    &mut self.significant_positions,
+                    &mut self.blank_positions,
+                );
+                self.normalized_until = self.normalized_until.max(ic + 1);
+            }
+            match cell {
                 FieldCell::Backline => {
-                    let width =
-                        ic.checked_sub(1)
-                            .map_or(0, |previous| match self.cells[previous] {
-                                FieldCell::Graph { width, .. } => width.saturating_mul(EN),
-                                FieldCell::NonBreakingBlank | FieldCell::BreakableBlank => EN,
-                                _ => 0,
-                            });
+                    let width = ic
+                        .checked_sub(1)
+                        .and_then(|previous| self.cells.get(previous))
+                        .map_or(0, cell_units);
                     registers.vis = registers.vis.saturating_sub(width);
                 }
                 FieldCell::BreakableBlank | FieldCell::Breakpoint => {
@@ -705,23 +778,30 @@ impl FieldBuffer {
                         registers.nbr = ic;
                         registers.vbr = registers.vis;
                         registers.graph = false;
+                        registers.break_candidate = Some(FillBoundary::Width);
                     }
                     registers.vis = vn;
                 }
                 FieldCell::BreakMarker => registers.breakline = true,
+                FieldCell::Hyphen => {
+                    if let Some(stop) = registers.consume_hyphen(vtarget) {
+                        scan.stopped = Some(stop);
+                        return stop.accepted();
+                    }
+                }
                 FieldCell::ZeroWidthGraph => registers.graph = true,
                 FieldCell::NonBreakingBlank | FieldCell::Graph { .. } => {
-                    let width = match self.cells[ic] {
+                    let width = match cell {
                         FieldCell::Graph { width, .. } => width,
                         _ => 1,
                     };
                     registers.vis += width.saturating_mul(EN);
                     registers.graph = true;
                     if registers.vis > vtarget && registers.nbr > 0 {
-                        let result = Some(
-                            FillPass::new(registers.nbr, registers.vbr)
-                                .stopped_at(FillBoundary::Width),
-                        );
+                        let result =
+                            Some(FillPass::new(registers.nbr, registers.vbr).stopped_at(
+                                registers.break_candidate.unwrap_or(FillBoundary::Width),
+                            ));
                         scan.stopped = Some(PassStop::from(result));
                         return result;
                     }
@@ -732,10 +812,10 @@ impl FieldBuffer {
                     registers.vis = advance_tab(&self.tabs, registers.vis, registers.tab_offset);
                     registers.graph = true;
                     if registers.vis > vtarget && registers.nbr > 0 {
-                        let result = Some(
-                            FillPass::new(registers.nbr, registers.vbr)
-                                .stopped_at(FillBoundary::Width),
-                        );
+                        let result =
+                            Some(FillPass::new(registers.nbr, registers.vbr).stopped_at(
+                                registers.break_candidate.unwrap_or(FillBoundary::Width),
+                            ));
                         scan.stopped = Some(PassStop::from(result));
                         return result;
                     }
@@ -747,6 +827,23 @@ impl FieldBuffer {
             registers.index += 1;
         }
         finish_pass(scan.registers, vtarget)
+    }
+
+    fn prepare_fill_scan(&mut self, vtarget: usize) {
+        if self.scan.as_ref().is_none_or(|scan| scan.target != vtarget) {
+            let registers = FillRegisters {
+                index: self.resume,
+                tab_offset: self.pass_tab_offset,
+                ..FillRegisters::default()
+            };
+            self.scan = Some(FillScanner {
+                target: vtarget,
+                registers,
+                before_last: registers,
+                stopped: None,
+                scanned_end: self.resume,
+            });
+        }
     }
 
     fn invalidate_projection_scan(&mut self, position: usize) {
@@ -765,12 +862,17 @@ impl FieldBuffer {
 
     pub(super) fn flush_receipt(&self, targets: FillTargets, brtrsp: bool) -> FlushReceipt {
         let mut scan = self.clone();
+        // A width prediction has not executed term_fill(). Start the real
+        // remaining pass from its native col, preserving only committed
+        // marker passes and their in-place byte normalization.
+        scan.scan = None;
         let mut passes = self.committed_passes.clone();
         loop {
             let first = passes.is_empty();
-            let Some(pass) = scan.fill_pass_units(targets.scan(first)) else {
+            let Some(pass) = scan.scan_fill_pass(targets.scan(first), true) else {
                 return FlushReceipt::Rejected {
                     passes,
+                    native_cells: std::mem::take(&mut scan.cells),
                     rejected_from: scan.resume_offset(),
                     definitive: scan
                         .scan
@@ -785,7 +887,10 @@ impl FieldBuffer {
             // term_flushln() tests the remaining buffer before consuming
             // ordinary blanks at a genuine continuation boundary.
             if scan.resume_offset() >= scan.cells.len() || scan.only_ignorable_remainder(brtrsp) {
-                return FlushReceipt::Accepted { passes };
+                return FlushReceipt::Accepted {
+                    passes,
+                    native_cells: std::mem::take(&mut scan.cells),
+                };
             }
             scan.consume_break_blanks();
         }
@@ -811,7 +916,11 @@ impl FieldBuffer {
                     column += EN;
                     pending_units += EN;
                 }
-                FieldCell::Graph { width, .. } => {
+                FieldCell::Graph { .. } | FieldCell::Hyphen => {
+                    let width = match self.cells[index] {
+                        FieldCell::Graph { width, .. } => width,
+                        _ => 1,
+                    };
                     // term_field() advances deferred blanks before EACH
                     // graph. ascii_advance() rounds that individual advance
                     // with half-EN tolerance, capped at 256 EN; rounding the
@@ -823,11 +932,10 @@ impl FieldBuffer {
                     printed = Some(device_columns);
                 }
                 FieldCell::Backline => {
-                    let width = match index.checked_sub(1).and_then(|i| self.cells.get(i)) {
-                        Some(FieldCell::Graph { width, .. }) => width.saturating_mul(EN),
-                        Some(FieldCell::BreakableBlank | FieldCell::NonBreakingBlank) => EN,
-                        _ => 0,
-                    };
+                    let width = index
+                        .checked_sub(1)
+                        .and_then(|previous| self.cells.get(previous))
+                        .map_or(0, cell_units);
                     device_columns = (device_columns + columns(pending_units.min(256 * EN)))
                         .saturating_sub(columns(width));
                     pending_units = 0;
@@ -866,12 +974,52 @@ impl FieldBuffer {
     /// appends. A changed Tab configuration invalidates these pending scans;
     /// a real flush retires them. Neither operation re-feeds printed fields.
     pub(super) fn commit_pass(&mut self, pass: FillPass, tab_target: usize) {
+        if let Some(scan) = &self.scan {
+            self.normalize_scanned_cells(scan.scanned_end);
+        }
         self.advance_tab_offset(pass.units, tab_target);
         self.committed_passes.push(pass);
         self.projected_pass_ends.insert(pass.end);
         self.scan = None;
         self.advance_past(pass.end);
         self.consume_break_blanks();
+    }
+
+    fn normalize_scanned_cells(&mut self, through: usize) {
+        let end = through.min(self.cells.len());
+        for index in self.normalized_until.min(end)..end {
+            Self::normalize_scanned_cell(
+                &mut self.cells[index],
+                index,
+                &mut self.significant_positions,
+                &mut self.blank_positions,
+            );
+        }
+        self.normalized_until = self.normalized_until.max(end);
+    }
+
+    fn normalize_scanned_cell(
+        cell: &mut FieldCell,
+        index: usize,
+        significant: &mut BTreeSet<usize>,
+        blanks: &mut BTreeSet<usize>,
+    ) {
+        // term.c:316/340 normalizes each sentinel before its own current
+        // pass guard, including lookahead beyond the accepted prefix.
+        match cell {
+            FieldCell::Hyphen => {
+                *cell = FieldCell::Graph {
+                    text: '-',
+                    width: 1,
+                }
+            }
+            FieldCell::NonBreakingBlank => {
+                *cell = FieldCell::BreakableBlank;
+                significant.remove(&index);
+                blanks.insert(index);
+            }
+            _ => {}
+        }
     }
 
     pub(super) fn has_committed_pass(&self) -> bool {
@@ -929,9 +1077,15 @@ impl FieldBuffer {
     /// to the next configured stop while `TERMP_BRTRSP` is set; markers and
     /// zero-width cells never stop the sweep, everything else does. The
     /// result is the `vbr` the final row decision at term.c:250-253 sees.
-    pub(super) fn brtrsp_tail_sweep(&self, from: usize, vbr: usize, brtrsp: bool) -> usize {
+    pub(super) fn brtrsp_tail_sweep(
+        &self,
+        native_cells: &[FieldCell],
+        from: usize,
+        vbr: usize,
+        brtrsp: bool,
+    ) -> usize {
         let mut vbr = vbr;
-        for cell in self.cells.iter().skip(from.min(self.cells.len())) {
+        for cell in native_cells.iter().skip(from.min(native_cells.len())) {
             match cell {
                 FieldCell::BreakableBlank => {
                     if brtrsp {
@@ -947,7 +1101,10 @@ impl FieldBuffer {
                 | FieldCell::TabReference
                 | FieldCell::ZeroWidthGraph
                 | FieldCell::Breakpoint => {}
-                FieldCell::Graph { .. } | FieldCell::NonBreakingBlank | FieldCell::Backline => {
+                FieldCell::Graph { .. }
+                | FieldCell::Hyphen
+                | FieldCell::NonBreakingBlank
+                | FieldCell::Backline => {
                     break;
                 }
             }
@@ -980,6 +1137,14 @@ fn finish_pass(registers: FillRegisters, target: usize) -> Option<FillPass> {
         width = registers.vis;
     }
     (end > 0).then_some(FillPass::new(end, width))
+}
+
+fn cell_units(cell: &FieldCell) -> usize {
+    match cell {
+        FieldCell::Graph { width, .. } => width.saturating_mul(EN),
+        FieldCell::Hyphen | FieldCell::BreakableBlank | FieldCell::NonBreakingBlank => EN,
+        _ => 0,
+    }
 }
 
 fn columns(units: usize) -> usize {

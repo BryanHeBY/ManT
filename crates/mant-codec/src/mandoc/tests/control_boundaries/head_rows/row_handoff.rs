@@ -239,11 +239,15 @@ fn head_body_relation_classifies_shared_rows() {
             HeadBodyRelation::Separate,
         ),
         (
-            // f3 family: `.fi` arms TERMP_NOSPACE inside the still-open
-            // head, so the body's first word concatenates onto it; the
-            // reference prints `body linetail text` as one row.
+            // This exact source was rechecked with pristine UTF-8/ASCII:
+            // it prints `body linetail text` at the description origin.
+            // pre_br moves the empty HANG field before the no-fill words
+            // arrive, and the later HEAD post keeps its device row open
+            // (roff_term.c:69-78; term.c:250-253). The shared old-state
+            // receipt therefore classifies FlushAtBody, not a zero-origin
+            // concatenation inferred only from the visible word seam.
             ".Bl -hang -width 4n\n.It Xo\n.nf\n.No body line\n.fi\n.Xc\n.No tail text\n.El\n",
-            HeadBodyRelation::JoinedNoSpace,
+            HeadBodyRelation::FlushAtBody,
         ),
         (
             // c family: the control cleared NOBREAK and the field word

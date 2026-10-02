@@ -1,6 +1,54 @@
 use super::*;
 
 #[test]
+fn native_hyphen_candidates_keep_the_final_body_boundary_without_splitting_the_word() {
+    // All eight exact sources ran registered pristine ASCII/UTF-8/HTML/tree/
+    // lint before assertions. Ordinary input TEXT buffers ASCII_HYPH;
+    // macro operands and escaped \- buffer a literal graph instead.
+    // term_fill():307-324 records the candidate after the hyphen. Its last
+    // device row decides BODY spacing, while responsive IR keeps the word.
+    fn has_hyphen(node: &libmandoc_rs::Node) -> bool {
+        node.decoder_text()
+            .is_some_and(|value| value.contains('\u{1c}'))
+            || node.children.iter().any(has_hyphen)
+    }
+    for (middle, native_breaks) in [
+        ("YYYYY-Z\n", true),
+        (".Bf -emphasis\nYYYYY-Z\n.Ef\n", true),
+        (".Bf -literal\nYYYYY-Z\n.Ef\n", true),
+        (".No YYYYY-Z\n", false),
+        (".Em YYYYY-Z\n", false),
+        (".Sy YYYYY-Z\n", false),
+        (".Li YYYYY-Z\n", false),
+        ("YYYYY\\-Z\n", false),
+    ] {
+        let source = format!(
+            ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo X\n.br\n{middle}.Xc\n.No BODY\n.El\n"
+        );
+        let parsed = libmandoc_rs::Parser::default()
+            .parse_bytes("native-hyphen.1", source.as_bytes())
+            .unwrap();
+        assert_eq!(has_hyphen(&parsed.document.root), native_breaks, "{middle}");
+        let native = native_terminal(&source);
+        let expected = if native_breaks {
+            assert!(
+                native.contains("YYYYY-\n     Z     BODY"),
+                "{middle}: {native:?}"
+            );
+            "YYYYY-Z BODY"
+        } else {
+            assert!(native.contains("YYYYY-ZBODY"), "{middle}: {native:?}");
+            "YYYYY-ZBODY"
+        };
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+        let json = serde_json::to_string(&mant_protocol::QueryBundle::from(&query)).unwrap();
+        let decoded: mant_protocol::QueryBundle = serde_json::from_str(&json).unwrap();
+        let output = mant_render::render_query_man(&decoded.into());
+        assert!(output.contains(expected), "{middle}: {output:?}");
+    }
+}
+
+#[test]
 fn no_fill_hang_source_line_and_explicit_br_keep_distinct_field_gaps() {
     // All exact inputs passed fixed CVS -Tutf8/-Tlint. mdoc_term.c gives
     // HANG HEAD trailspace=1; NODE_LINE calls term_newln() before the next

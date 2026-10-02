@@ -5,7 +5,7 @@ use super::super::{
     FormatterColumn, Inline, InlineBuilder, KeepPhase, PendingBoundary, TrailingOutput,
     WordEndBreak, has_printable_character, last_visible_character,
 };
-use super::projection::has_non_whitespace_glyph;
+use super::projection::has_rendered_formatter_glyph;
 use crate::mandoc::inline::is_formatter_word_blank;
 
 /// Ownership receipt for one semantic wrapper macro (`Lk`, `Mt`, `Sx`,
@@ -467,7 +467,7 @@ impl InlineBuilder {
         }
         let last = last_visible_character(&incoming);
         let printable = has_printable_character(&incoming);
-        let has_glyph = has_non_whitespace_glyph(&incoming);
+        let has_glyph = has_rendered_formatter_glyph(&incoming);
         self.nodes.append(&mut incoming);
         if last.is_some() {
             self.execution.last_visible_character = last;

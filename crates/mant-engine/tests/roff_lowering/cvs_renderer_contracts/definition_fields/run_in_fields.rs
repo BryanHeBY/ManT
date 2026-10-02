@@ -159,32 +159,48 @@ fn no_break_field_preserves_formatter_word_order_for_empty_fixed_and_zero_width_
 
 #[test]
 fn invisible_formatter_fields_still_own_their_empty_word_boundary() {
+    // These twenty exact sources ran registered pristine in all five
+    // profiles first. roff_term_pre_mc() clears NOSPACE after retirement;
+    // term_word() writes each empty operand's distinct automatic blank
+    // (term.c:573-589). Deferred minbl and buffered blanks have different
+    // ownership, including when the first field printed no graph.
     for (label, first) in [
         ("zero-width", r"\&"),
         ("word-end-break", r"\p"),
         ("zero-advance-break", r"\z\p"),
+        ("visible", "A"),
     ] {
-        let source = format!(
-            ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.No {first}\n.mc\n.No \"\"\n.No BODY\n"
-        );
-        let native = native_terminal(&source);
-        assert!(
-            native.contains("\n       BODY"),
-            "native {label}: {native:?}"
-        );
+        for (middle, spaces) in [
+            (".No \"\"\n", 2),
+            (".No \\&\n", 2),
+            (".No \"\"\n.No \"\"\n", 3),
+            (".No \\fB\n", 2),
+            (".Ns\n.No \"\"\n", 2),
+        ] {
+            let source = format!(
+                ".Dd September 13, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.No {first}\n.mc\n{middle}.No BODY\n"
+            );
+            let prefix = if first == "A" { "A" } else { "" };
+            let expected = format!("{prefix}{}BODY", " ".repeat(spaces));
+            let native = native_terminal(&source);
+            assert!(
+                native.contains(&format!("\n     {expected}")),
+                "native {label} {middle}: {native:?}"
+            );
 
-        let query = mant_loader::load_roff_bytes(source.as_bytes())
-            .expect("lower invisible no-break field");
-        let document = query.document.as_ref().expect("lowered document");
-        let paragraph = document.sections[1]
-            .blocks
-            .iter()
-            .find_map(|block| match block {
-                Block::Paragraph { children, .. } => Some(super::inline_text(children)),
-                _ => None,
-            })
-            .expect("description paragraph");
-        assert_eq!(paragraph, "  BODY", "lowered {label}");
+            let query = mant_loader::load_roff_bytes(source.as_bytes())
+                .expect("lower invisible no-break field");
+            let document = query.document.as_ref().expect("lowered document");
+            let paragraph = document.sections[1]
+                .blocks
+                .iter()
+                .find_map(|block| match block {
+                    Block::Paragraph { children, .. } => Some(super::inline_text(children)),
+                    _ => None,
+                })
+                .expect("description paragraph");
+            assert_eq!(paragraph, expected, "lowered {label} {middle}");
+        }
     }
 }
 

@@ -1,7 +1,7 @@
 use super::super::super::reference::trailing_sphinx_manual_reference;
 use super::style::{flush_segment, styled_segment};
 use super::{
-    Font, FontState, Inline, RoffInlineEvent, TrailingOutput, ZeroAdvanceState, decode,
+    Font, FontState, Inline, RoffInlineEvent, TrailingOutput, ZeroAdvanceState,
     is_formatter_word_blank,
 };
 
@@ -39,6 +39,17 @@ pub(in crate::mandoc) fn parse_roff_text_with_state(
     state: &mut FontState,
     recognize_generated_references: bool,
 ) -> Vec<Inline> {
+    parse_roff_text_with_scan_status(source, state, recognize_generated_references).0
+}
+
+pub(in crate::mandoc) fn parse_roff_text_with_scan_status(
+    source: &str,
+    state: &mut FontState,
+    recognize_generated_references: bool,
+) -> (
+    Vec<Inline>,
+    crate::mandoc::escape_coverage::EscapeScanStatus,
+) {
     let mut zero_advance = ZeroAdvanceState::default();
     let execution = parse_roff_text_with_zero_advance(
         source,
@@ -58,12 +69,13 @@ pub(in crate::mandoc) fn parse_roff_text_with_state(
         output.push(Inline::line_break());
     }
     zero_advance.finish_into(&mut output);
-    output
+    (output, execution.escape_scan)
 }
 
 // Native joining, continuation, breaks and acceptance are independent results.
 #[allow(clippy::struct_excessive_bools)]
 pub(in crate::mandoc) struct TextExecution {
+    pub(in crate::mandoc) escape_scan: crate::mandoc::escape_coverage::EscapeScanStatus,
     pub(in crate::mandoc) output: Vec<Inline>,
     /// Native writes in decode order; semantic wrappers never supply cells.
     pub(in crate::mandoc) native_writes: Vec<super::super::flow::field_buffer::FieldWrite>,
@@ -273,28 +285,40 @@ pub(in crate::mandoc) fn parse_roff_text_with_zero_advance(
     source: &str,
     context: TextExecutionContext<'_>,
 ) -> TextExecution {
-    let events = decode(source)
+    let decoded = crate::mandoc::roff_escape::decode_with_status(source);
+    let events = decoded
+        .events
         .into_iter()
         .map(FormatterWordEvent::Source)
         .collect::<Vec<_>>();
-    execute_formatter_word_events(&events, context)
+    let mut execution = execute_formatter_word_events(&events, context);
+    execution.escape_scan = decoded.budget_exhausted.into();
+    execution
 }
 
 pub(in crate::mandoc) fn parse_formatter_word_parts_with_zero_advance(
     parts: &[FormatterWordPart<'_>],
     context: TextExecutionContext<'_>,
 ) -> TextExecution {
+    let mut budget_exhausted = false;
     let events = parts
         .iter()
         .flat_map(|part| match part {
-            FormatterWordPart::Source(source) => decode(source)
-                .into_iter()
-                .map(FormatterWordEvent::Source)
-                .collect::<Vec<_>>(),
+            FormatterWordPart::Source(source) => {
+                let decoded = crate::mandoc::roff_escape::decode_with_status(source);
+                budget_exhausted |= decoded.budget_exhausted;
+                decoded
+                    .events
+                    .into_iter()
+                    .map(FormatterWordEvent::Source)
+                    .collect::<Vec<_>>()
+            }
             FormatterWordPart::Code(value) => vec![FormatterWordEvent::Code(value.clone())],
         })
         .collect::<Vec<_>>();
-    execute_formatter_word_events(&events, context)
+    let mut execution = execute_formatter_word_events(&events, context);
+    execution.escape_scan = budget_exhausted.into();
+    execution
 }
 
 /// One word's presentation and native-write sink, before the caller receives
@@ -370,6 +394,7 @@ impl WordExecution {
             } => {
                 self.append_glyph(value, context.zero_advance);
             }
+            RoffInlineEvent::BreakableHyphen => self.append_glyph("-", context.zero_advance),
             RoffInlineEvent::FallbackGlyph(value) => {
                 self.append_fallback_glyph(value, context.zero_advance);
             }
@@ -563,6 +588,9 @@ fn record_native_event(
         FormatterWordEvent::Source(RoffInlineEvent::DeviceName) => {
             FieldWrite::append_literal(writes, "utf8");
         }
+        FormatterWordEvent::Source(RoffInlineEvent::BreakableHyphen) => {
+            writes.push(FieldWrite::Cell(FieldCell::Hyphen));
+        }
         FormatterWordEvent::Source(RoffInlineEvent::ZeroAdvance) => {
             writes.push(FieldWrite::ArmBackafter);
         }
@@ -624,6 +652,7 @@ fn finish_text_execution(
         }
     };
     TextExecution {
+        escape_scan: crate::mandoc::escape_coverage::EscapeScanStatus::Complete,
         output,
         native_writes,
         joins_preceding_node: zero_advance.take_preceding_join(),
@@ -667,6 +696,7 @@ fn trailing_breakable_spaces(events: &[FormatterWordEvent]) -> usize {
             FormatterWordEvent::Code(_)
             | FormatterWordEvent::Source(
                 RoffInlineEvent::Glyph(_)
+                | RoffInlineEvent::BreakableHyphen
                 | RoffInlineEvent::FallbackGlyph(_)
                 | RoffInlineEvent::DeviceName
                 | RoffInlineEvent::Overstrike { .. }

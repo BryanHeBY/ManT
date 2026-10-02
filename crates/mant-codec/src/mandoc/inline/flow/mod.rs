@@ -23,9 +23,9 @@ pub(in crate::mandoc) use no_fill::{NoFillInlineState, lower_no_fill_fragment_wi
 pub(super) use output::trailing_ascii_spaces;
 pub(in crate::mandoc) use output::trim_trailing_breakable_spaces;
 pub(in crate::mandoc) use output::{
-    CompletedRowOrigin, consume_one_row_ending, ends_with_executed_line_break, native_row_origin,
-    prepare_inline_output, retain_inline_identities, strip_native_projection_markers,
-    trailing_completed_row_origins,
+    CompletedRowOrigin, consume_one_row_ending, ends_with_executed_line_break,
+    has_rendered_formatter_glyph, native_row_origin, prepare_inline_output,
+    retain_inline_identities, strip_native_projection_markers, trailing_completed_row_origins,
 };
 
 /// A stable source-word range plus the device cells its IR owner already
@@ -87,6 +87,7 @@ enum CellProduction {
 // The formatter registers are independent native flags, not a state chart.
 #[allow(clippy::struct_excessive_bools)]
 pub(in crate::mandoc) struct InlineExecutionState {
+    pub(in crate::mandoc) escape_coverage: crate::mandoc::escape_coverage::EscapeCoverage,
     pub(in crate::mandoc) boundary: PendingBoundary,
     spacing: SpacingMode,
     last_visible_character: Option<char>,
@@ -102,6 +103,7 @@ pub(in crate::mandoc) struct InlineExecutionState {
     trailing_output: TrailingOutput,
     pending_breakable_spaces: usize,
     pending_field_spaces: usize,
+    pending_field_gap_origin: definition::PendingFieldGapOrigin,
     pending_line_indent: usize,
     word_end_break: WordEndBreak,
     /// The pending `\p` was separated from the last graph by a breakable
@@ -228,6 +230,7 @@ struct AuthorExecution {
 struct DetachedDeviceRow {
     viscol: usize,
     minbl: usize,
+    page_origin_printed: bool,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -716,6 +719,7 @@ impl InlineExecutionState {
 
     pub(in crate::mandoc) fn with_spacing(spacing_enabled: bool) -> Self {
         Self {
+            escape_coverage: crate::mandoc::escape_coverage::EscapeCoverage::default(),
             boundary: PendingBoundary::Ordinary,
             spacing: SpacingMode::from_enabled(spacing_enabled),
             last_visible_character: None,
@@ -726,6 +730,7 @@ impl InlineExecutionState {
             trailing_output: TrailingOutput::None,
             pending_breakable_spaces: 0,
             pending_field_spaces: 0,
+            pending_field_gap_origin: definition::PendingFieldGapOrigin::Other,
             pending_line_indent: 0,
             word_end_break: WordEndBreak::Clear,
             word_end_break_separated: false,
@@ -846,10 +851,15 @@ impl InlineExecutionState {
                 field.row.retire_row_origin();
             }
         } else if let Some(field) = self.definition.take() {
-            self.detached_device_row = (field.hang_row.viscol > 0).then_some(DetachedDeviceRow {
-                viscol: field.hang_row.viscol,
-                minbl: field.hang_row.minbl,
-            });
+            self.detached_device_row =
+                field
+                    .hang_row
+                    .native_row_occupied()
+                    .then_some(DetachedDeviceRow {
+                        viscol: field.hang_row.viscol,
+                        minbl: field.hang_row.minbl,
+                        page_origin_printed: field.hang_row.page_origin_printed,
+                    });
         }
     }
 

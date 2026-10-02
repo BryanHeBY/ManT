@@ -48,6 +48,7 @@ struct mant_mandoc_document {
 	int			 ok;
 	char			*error;
 	char			*diagnostics;
+	int			 escape_depth_truncated;
 	struct mparse		*parser;
 	const struct roff_meta	*meta;
 #ifdef MANT_MANDOC_RENDER
@@ -55,6 +56,28 @@ struct mant_mandoc_document {
 	int			 render_status;
 #endif
 };
+
+/*
+ * roff_escape.c reports the actual controlled omission, including ln == 0
+ * renderer calls. Keep the fact on this synchronous result, never on a
+ * diagnostic number or message. The pointer is cleared on every cleanup
+ * path before its owning result can be released.
+ */
+MANT_THREAD_LOCAL struct mant_mandoc_document *active_escape_document;
+
+void
+mant_mandoc_note_escape_depth_limit(void)
+{
+	if (active_escape_document != NULL)
+		active_escape_document->escape_depth_truncated = 1;
+}
+
+int
+mant_mandoc_document_escape_depth_truncated(
+    const struct mant_mandoc_document *document)
+{
+	return document != NULL && document->escape_depth_truncated;
+}
 
 /*
  * Ask the pinned parser's request table rather than duplicating the roff
@@ -311,6 +334,7 @@ parse_input(const char *path, const unsigned char *buffer, size_t length,
 #endif
 	mandoc_msg_setoutfile(messages);
 	mandoc_msg_setmin(MANDOCERR_BASE);
+	active_escape_document = document;
 	source_resolver = resolver;
 	source_resolver_context = resolver_context;
 #ifndef MANDOC_MEMORY_ONLY
@@ -375,6 +399,7 @@ parse_input(const char *path, const unsigned char *buffer, size_t length,
 	}
 
 cleanup:
+	active_escape_document = NULL;
 	mandoc_msg_setinfilename(NULL);
 	mandoc_msg_setoutfile(stderr);
 	document->diagnostics = read_diagnostics(messages);

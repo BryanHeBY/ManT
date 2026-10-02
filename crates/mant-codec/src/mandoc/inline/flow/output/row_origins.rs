@@ -6,29 +6,31 @@ use super::{INTERNAL_FIELD_PREFIX, INTERNAL_FIELD_WORD, INTERNAL_ROW_ORIGIN, Inl
 
 pub(in crate::mandoc::inline::flow) fn project_native_positions(
     nodes: &mut Vec<Inline>,
-    origins: &[(String, usize, usize)],
-    padding: &[(String, usize, usize)],
+    origins: &[(String, usize, usize, bool)],
+    padding: &[(String, usize, usize, bool)],
     output_start: usize,
     materialize_line_origins: bool,
 ) {
     if origins.is_empty() && padding.is_empty() {
         return;
     }
-    let mut positions = BTreeMap::<String, Vec<(usize, NativePosition)>>::new();
-    for (owner, scalar, origin) in origins {
-        positions
-            .entry(owner.clone())
-            .or_default()
-            .push((*scalar, NativePosition::RowOrigin(*origin)));
+    let mut positions = BTreeMap::<String, Vec<(usize, NativePosition, bool)>>::new();
+    for (owner, scalar, origin, hidden_graph) in origins {
+        positions.entry(owner.clone()).or_default().push((
+            *scalar,
+            NativePosition::RowOrigin(*origin),
+            *hidden_graph,
+        ));
     }
-    for (owner, scalar, cells) in padding {
-        positions
-            .entry(owner.clone())
-            .or_default()
-            .push((*scalar, NativePosition::FieldPadding(*cells)));
+    for (owner, scalar, cells, hidden_graph) in padding {
+        positions.entry(owner.clone()).or_default().push((
+            *scalar,
+            NativePosition::FieldPadding(*cells),
+            *hidden_graph,
+        ));
     }
     for values in positions.values_mut() {
-        values.sort_by_key(|(scalar, _)| *scalar);
+        values.sort_by_key(|(scalar, _, _)| *scalar);
     }
     let mut cursor = OriginCursor {
         positions: &positions,
@@ -119,7 +121,7 @@ enum NativePosition {
 }
 
 struct OriginCursor<'a> {
-    positions: &'a BTreeMap<String, Vec<(usize, NativePosition)>>,
+    positions: &'a BTreeMap<String, Vec<(usize, NativePosition, bool)>>,
     owner: Option<String>,
     scalar: usize,
     next: usize,
@@ -137,7 +139,7 @@ impl OriginCursor<'_> {
                 // word's origin. Do not advance the content owner's scalar
                 // cursor: these cells are device padding, not input glyphs.
                 if let Some(positions) = self.positions.get(id.as_str()) {
-                    for (scalar, position) in positions {
+                    for (scalar, position, _) in positions {
                         if *scalar == 0
                             && let NativePosition::RowOrigin(origin) = position
                         {
@@ -151,6 +153,14 @@ impl OriginCursor<'_> {
             if let Inline::Anchor { id, .. } = &node
                 && id.as_str().starts_with(INTERNAL_FIELD_WORD)
             {
+                // encode1() can write an accepted graph that the next word
+                // overstrikes before it acquires an IR scalar (term.c:901-
+                // 927). Its term_field() padding nevertheless printed. The
+                // receipt owns that positioning even for an empty projected
+                // owner; discharge it before advancing to the replacement.
+                if self.has_unprojected_graph_here() {
+                    self.emit_here(&mut output);
+                }
                 if let Some(owner) = self.owner.take() {
                     #[cfg(test)]
                     OWNER_HISTORY_STORES.with(|stores| stores.set(stores.get().saturating_add(1)));
@@ -192,6 +202,18 @@ impl OriginCursor<'_> {
         output
     }
 
+    fn has_unprojected_graph_here(&self) -> bool {
+        self.owner
+            .as_ref()
+            .and_then(|owner| self.positions.get(owner))
+            .is_some_and(|positions| {
+                positions[self.next..]
+                    .iter()
+                    .take_while(|(scalar, _, _)| *scalar == self.scalar)
+                    .any(|(_, _, hidden_graph)| *hidden_graph)
+            })
+    }
+
     fn emit_here(&mut self, output: &mut Vec<Inline>) {
         let Some(positions) = self
             .owner
@@ -200,7 +222,7 @@ impl OriginCursor<'_> {
         else {
             return;
         };
-        while let Some((scalar, position)) = positions.get(self.next) {
+        while let Some((scalar, position, _)) = positions.get(self.next) {
             if *scalar != self.scalar {
                 break;
             }
@@ -231,7 +253,7 @@ impl OriginCursor<'_> {
                 .as_ref()
                 .and_then(|owner| self.positions.get(owner))
                 .and_then(|positions| positions.get(self.next))
-                .is_some_and(|(scalar, _)| *scalar == self.scalar)
+                .is_some_and(|(scalar, _, _)| *scalar == self.scalar)
             {
                 append_piece(node, &mut piece, output);
                 self.emit_here(output);

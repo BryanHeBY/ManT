@@ -75,10 +75,7 @@ impl ParagraphFlow {
         else {
             return false;
         };
-        if !mant_ir::inline_plain_text(&self.nodes[..break_index])
-            .chars()
-            .all(char::is_whitespace)
-        {
+        if crate::mandoc::inline::has_rendered_formatter_glyph(&self.nodes[..break_index]) {
             return false;
         }
         let mut identities = self.nodes.drain(..=break_index).collect::<Vec<_>>();

@@ -50,12 +50,15 @@ pub(super) fn formatter_control(name: Option<&str>) -> Option<FormatterControl> 
         // `mc` uses TERMP_NOBREAK around term_flushln(); `ti` calls the
         // ordinary break handler before installing its temporary indent.
         "mc" => (FormatterBoundary::NoBreak, false, false),
-        "ti" => (FormatterBoundary::Line, false, true),
+        // The shared ti handler now owns pre_br as well. A block-level
+        // preparatory hard_break would consume that same row twice.
         // roff_term_pre_ce() calls pre_br() before centering/right-justifying;
         // man_term.c::pre_in() calls term_newln() before changing its offset.
         "ce" | "rj" | "in" => (FormatterBoundary::Line, true, true),
         // These requests own additional behavior in block/display lowering.
-        "br" | "fi" | "nf" | "EX" | "EE" | "sp" | "Pp" => (FormatterBoundary::Line, true, false),
+        "br" | "fi" | "nf" | "EX" | "EE" | "sp" | "Pp" | "ti" => {
+            (FormatterBoundary::Line, true, false)
+        }
         // State-only or device/page presentation controls do not flush.
         "ft" | "PD" | "Sm" | "Tg" | "ad" | "na" | "hy" | "nh" | "ne" | "nr" | "ta" | "DT"
         | "ll" | "po" => (FormatterBoundary::None, true, false),

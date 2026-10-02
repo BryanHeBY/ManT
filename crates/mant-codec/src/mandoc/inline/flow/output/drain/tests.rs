@@ -1,5 +1,5 @@
 use super::*;
-use crate::mandoc::formatter::AuthorFlow;
+use crate::mandoc::formatter::FormatterState;
 use crate::mandoc::inline::flow::{AuthorBreakEffect, FieldFlags};
 
 const MDOC_HEADER: &str =
@@ -52,10 +52,10 @@ fn actual_head_post_uses_one_device_view_for_visible_invisible_and_pending_cells
         let parsed = libmandoc_rs::Parser::default()
             .parse_bytes("head-post-device-view.1", source.as_bytes())
             .unwrap();
-        let mut builder = InlineBuilder::new();
-        builder.execution.macro_set = parsed.document.macro_set;
-        builder.inherit_author_execution_with_effect(
-            AuthorFlow::default(),
+        let mut formatter = FormatterState::default();
+        formatter.execution.macro_set = parsed.document.macro_set;
+        let mut builder = formatter.begin_inline_session(
+            true,
             false,
             AuthorBreakEffect::Field {
                 gap_cells: u8::try_from(flags.trailspace()).unwrap(),
@@ -71,11 +71,15 @@ fn actual_head_post_uses_one_device_view_for_visible_invisible_and_pending_cells
         );
         assert_eq!(builder.zero_advance.has_buffered_glyph(), pending_glyph);
         InlineBuilder::reset_native_field_device_views();
-        let (output, _, occupied) = builder.finish_formatter_line(true);
+        let finished = formatter.finish_inline_line_with_rows(builder, true);
         assert_eq!(InlineBuilder::native_field_device_views(), 1, "{source}");
-        assert_eq!(occupied, operand != "\\&", "{source}");
         assert_eq!(
-            crate::mandoc::inline::plain_text(&output).contains('X'),
+            formatter.definition_head_row_occupied(),
+            operand != "\\&",
+            "{source}"
+        );
+        assert_eq!(
+            crate::mandoc::inline::plain_text(&finished.output).contains('X'),
             operand != "\\&",
             "{source}"
         );

@@ -8,6 +8,9 @@ use std::collections::BTreeMap;
 pub(in crate::mandoc::inline::flow) struct OwnerAcceptance {
     pub(in crate::mandoc::inline::flow) scalars: usize,
     pub(in crate::mandoc::inline::flow) native_cells: bool,
+    /// The first accepted interval printed this word's deferred device pad.
+    /// An accepted NBRZW prefix alone cannot print it (term.c:389-427).
+    pub(in crate::mandoc::inline::flow) prefix_printed: bool,
 }
 
 /// Accepted projection range of each stable source word. A delayed glyph
@@ -57,6 +60,10 @@ pub(in crate::mandoc::inline::flow) fn accepted_owner_lengths(
             if start < accepted_end {
                 acceptance.scalars += buffer.projection_length(start, accepted_end);
                 acceptance.native_cells = true;
+                if start == *content {
+                    acceptance.prefix_printed =
+                        buffer.printed_columns(start, accepted_end, 0, 0).is_some();
+                }
             }
             if pass.end >= end {
                 break;
@@ -94,7 +101,7 @@ pub(in crate::mandoc::inline::flow) fn project_accepted_native_passes(
     projected_passes: usize,
     output_start: usize,
 ) -> usize {
-    use super::super::field_buffer::FieldCell;
+    use super::super::field_buffer::{FieldCell, FillBoundary};
 
     let first = projected_passes.max(buffer.committed_pass_count());
     let count = passes.len().saturating_sub(1);
@@ -109,7 +116,11 @@ pub(in crate::mandoc::inline::flow) fn project_accepted_native_passes(
             cell += 1;
         }
         let represented = buffer.has_projected_pass(pass.end);
-        if index < first || represented {
+        if index < first || represented || pass.boundary == FillBoundary::Hyphen {
+            // An encoded ASCII_HYPH candidate locates the final device row
+            // for BODY. The responsive reading projection keeps that source
+            // word complete rather than hardening its discretionary split
+            // (term.c:307-324); authored \p events remain independent.
             continue;
         }
         let owner = anchors.partition_point(|anchor| anchor.content <= cell);

@@ -75,19 +75,23 @@ impl InlineBuilder {
     /// Source `NODE_LINE` and macro posts share this flush; `roff_pre_br()` is
     /// separate because it also changes the field flags and row origin.
     pub(in crate::mandoc) fn execute_native_newline(&mut self) {
+        let _ = self.execute_native_newline_with_tail();
+    }
+
+    /// Return the consumed native tail to callers with a real post effect.
+    /// This is the same execution, never another IR-width observation.
+    pub(in crate::mandoc::inline::flow) fn execute_native_newline_with_tail(&mut self) -> bool {
         self.commit_definition_row_origin();
-        if self
-            .execution
-            .definition
-            .as_ref()
-            .is_some_and(|state| state.field_buffer.is_empty() && state.hang_row.viscol == 0)
-        {
+        self.execution.boundary = PendingBoundary::Tight;
+        if self.execution.definition.as_ref().is_some_and(|state| {
+            state.field_buffer.is_empty() && !state.hang_row.native_row_occupied()
+        }) {
             // term.c::term_newln tests lastcol || viscol before flushing.
             // A second vspace after endline still selects NOSPACE, but may
             // not revive the previous field's padding or reset BACKAFTER.
             self.execution.boundary = PendingBoundary::Tight;
             self.reset_native_tab_origin();
-            return;
+            return false;
         }
         let resumed = self.begin_resumed_native_line();
         let field = self
@@ -109,11 +113,25 @@ impl InlineBuilder {
                 )),
                 AuthorBreakEffect::Line => None,
             });
+        let ends_row;
         if let Some((start, gap, body, field_width, flags)) = field {
-            self.flush_definition_field(start, gap, body, field_width, flags, false);
+            let native = self.native_field_device_at(false, None, start);
+            ends_row = native
+                .as_ref()
+                .is_some_and(super::NativeFieldDevice::ends_row);
+            self.flush_captured_definition_field(
+                super::flush::FieldFlush {
+                    start,
+                    gap,
+                    body,
+                    width: field_width,
+                    flags,
+                    boundary: super::flush::FieldFlushBoundary::Continue,
+                },
+                native,
+            );
             if self.execution.pending_field_spaces > 0 {
-                self.definition_state_mut().pending_gap_origin =
-                    PendingFieldGapOrigin::CommittedFlush;
+                self.execution.pending_field_gap_origin = PendingFieldGapOrigin::CommittedFlush;
             }
             // NODE_LINE and termp_fd_post() both request term_newln().
             // Even if that flush has no buffered glyph, term_newln() sets
@@ -129,6 +147,9 @@ impl InlineBuilder {
             // (term.c:475-481; mdoc_term.c:437-439). Capture the accepted
             // print positions before hard_break retires its native cells.
             let native = self.native_field_device(false);
+            ends_row = native
+                .as_ref()
+                .is_some_and(super::NativeFieldDevice::ends_row);
             self.hard_break();
             self.retire_native_field_with_device(native.as_ref());
         }
@@ -140,6 +161,7 @@ impl InlineBuilder {
         // without any output, but that cannot skip the register transition.
         self.execution.boundary = PendingBoundary::Tight;
         self.reset_native_tab_origin();
+        ends_row
     }
 
     /// Execute an explicit formatter line request inside a definition HEAD.
@@ -149,136 +171,105 @@ impl InlineBuilder {
     /// so `.br`, `.ti`, and the break phase of `.sp` must use this entrypoint.
     pub(in crate::mandoc) fn control_line_break(&mut self) -> bool {
         self.commit_definition_row_origin();
-        if self
+        // term_newln selects NOSPACE before its lastcol/viscol test or flush
+        // (term.c:475-481). BRIND/NOBREAK still describe the old buffer here.
+        self.execution.boundary = PendingBoundary::Tight;
+        let resumed = self
             .execution
             .definition
             .as_ref()
-            .is_some_and(|state| state.no_break_cleared)
-        {
-            // BRIND is cleared once, not at every later request. With that
-            // flag gone pre_br only calls term_newln (roff_term.c:69-78).
-            // Reusing HEAD's original flags would move the origin again.
-            let occupied = self.has_formatter_cell();
-            self.execute_native_newline();
-            return occupied;
-        }
-        if self.finish_empty_native_line_request() {
-            return false;
-        }
-        if let Some(field) = self.take_no_break_field() {
-            let capacity = field.field_capacity_columns;
-            self.settle_no_break_field_line(field, 0);
-            self.note_field_control_cleared_no_break(true, capacity);
-            self.reset_native_tab_origin();
-            return true;
-        }
-        let Some((start, gap, body, field_width_columns, flags)) = self
-            .execution
-            .author_execution
-            .as_ref()
-            .and_then(|execution| match execution.break_effect {
-                AuthorBreakEffect::Field {
-                    gap_cells,
-                    body_width_columns,
-                    field_width_columns,
-                    flags,
-                } => Some((
-                    execution.field_output_start,
-                    gap_cells,
-                    body_width_columns,
-                    field_width_columns,
-                    flags,
-                )),
-                AuthorBreakEffect::Line => None,
-            })
-        else {
-            let had_cell = self.has_formatter_cell();
-            self.execute_native_newline();
-            return had_cell;
-        };
-        let changed = self.flush_definition_field(
-            start,
-            gap,
-            body,
-            field_width_columns,
-            flags,
-            flags.contains(FieldFlag::Brind),
-        );
-        self.note_field_control_cleared_no_break(
-            flags.contains(FieldFlag::Brind),
-            field_width_columns,
-        );
-        self.reset_native_tab_origin();
-        changed
-    }
-
-    /// With neither `lastcol` nor `viscol`, `term_newln()` only selects NOSPACE.
-    /// `pre_br()` still applies BRIND's flag/origin transition, but must not
-    /// restore an earlier field's provisional separator or invent a row.
-    fn finish_empty_native_line_request(&mut self) -> bool {
-        let Some(state) = self.execution.definition.as_ref() else {
-            return false;
-        };
-        if !state.field_buffer.is_empty() || state.hang_row.viscol > 0 {
-            return false;
-        }
-        let configuration = state
-            .no_break
-            .map(|field| {
-                (
-                    u16::try_from(field.body_width).unwrap_or(u16::MAX),
-                    field.field_capacity_columns,
-                    field.flags,
-                )
+            .and_then(|state| state.no_break);
+        let configuration = resumed
+            .map(|field| super::flush::FieldFlush {
+                start: field.resumed_output_start,
+                gap: u8::try_from(field.trailspace_cells).unwrap_or(u8::MAX),
+                body: u16::try_from(field.body_width).unwrap_or(u16::MAX),
+                width: field.field_capacity_columns,
+                flags: field.flags,
+                boundary: super::flush::FieldFlushBoundary::Continue,
             })
             .or_else(|| {
                 self.execution.author_execution.as_ref().and_then(|author| {
-                    if let AuthorBreakEffect::Field {
-                        body_width_columns,
-                        field_width_columns,
-                        flags,
-                        ..
-                    } = author.break_effect
-                    {
-                        Some((body_width_columns, field_width_columns, flags))
-                    } else {
-                        None
+                    match author.break_effect {
+                        AuthorBreakEffect::Field {
+                            gap_cells,
+                            body_width_columns,
+                            field_width_columns,
+                            flags,
+                        } => Some(super::flush::FieldFlush {
+                            start: author.field_output_start,
+                            gap: gap_cells,
+                            body: body_width_columns,
+                            width: field_width_columns,
+                            flags,
+                            boundary: super::flush::FieldFlushBoundary::Continue,
+                        }),
+                        AuthorBreakEffect::Line => None,
                     }
                 })
             });
-        let Some((body, capacity, mut flags)) = configuration else {
-            return false;
+        let Some(mut field) = configuration else {
+            let occupied = self.has_formatter_cell();
+            self.execute_native_newline();
+            return occupied;
         };
-        if self.definition_state_mut().no_break_cleared {
-            flags = flags.without(FieldFlag::NoBreak).without(FieldFlag::Brind);
+        if let Some((flags, _, trailspace)) = self.native_field_parameters(false, resumed) {
+            field.flags = flags;
+            field.gap = u8::try_from(trailspace).unwrap_or(u8::MAX);
         }
-        self.execution.boundary = PendingBoundary::Tight;
-        self.reset_native_tab_origin();
-        if flags.contains(FieldFlag::Brind) {
+        #[cfg(test)]
+        {
+            let state = self.execution.definition.as_ref().expect("field session");
+            super::control_trace::begin(
+                field.flags,
+                state.field_buffer.cells().len(),
+                state.hang_row.viscol,
+                self.execution.boundary == PendingBoundary::Tight,
+            );
+        }
+        let brind = field.flags.contains(FieldFlag::Brind);
+        let (body, capacity, old_flags) = (field.body, field.width, field.flags);
+        field.boundary = if brind {
+            super::flush::FieldFlushBoundary::ExitField
+        } else {
+            super::flush::FieldFlushBoundary::Continue
+        };
+        // Capture once while the old field and flags still exist. Projection
+        // and the field tail borrow this receipt; the flush owns retirement.
+        let occupied = self.execution.definition.as_ref().is_some_and(|state| {
+            !state.field_buffer.is_empty() || state.hang_row.native_row_occupied()
+        });
+        let changed = if occupied {
+            let native = self.native_field_device_at(false, resumed, field.start);
+            self.flush_captured_definition_field(field, native)
+        } else {
+            // An empty term_newln has no flush. pre-br nevertheless performs
+            // its BRIND post below; it cannot revive a previous separator.
+            self.execution.pending_field_spaces = 0;
+            if brind {
+                self.exit_empty_definition_field(body, capacity, old_flags);
+            }
+            false
+        };
+        self.definition_state_mut().no_break = None;
+        if brind {
             self.note_field_control_cleared_no_break(true, capacity);
             self.move_definition_field_origin_to_body(body);
-            let start = self.nodes.len();
-            let state = self.definition_state_mut();
-            state.no_break = None;
-            state.pending_indent = None;
-            if flags.wraps() {
-                state.outcome.mark_field_exited();
-            }
-            if let Some(author) = &mut self.execution.author_execution {
-                author.field_output_start = start;
-                author.break_effect = if flags.wraps() {
-                    AuthorBreakEffect::Line
-                } else {
-                    AuthorBreakEffect::Field {
-                        gap_cells: 0,
-                        body_width_columns: body,
-                        field_width_columns: capacity,
-                        flags,
-                    }
-                };
-            }
+            self.definition_state_mut().pending_indent = None;
         }
-        true
+        // Neither clearing BRIND nor changing fill mode executes a new word.
+        // Preserve an authored NONEWLINE continuation; NOSPACE is independent.
+        self.execution.boundary = PendingBoundary::Tight;
+        self.definition_state_mut()
+            .hang_row
+            .suppress_next_auto_space = true;
+        self.reset_native_tab_origin();
+        #[cfg(test)]
+        super::control_trace::finish(
+            self.native_field_parameters(false, None)
+                .map(|value| value.0),
+        );
+        changed
     }
 
     /// `roff_term_pre_br()` clears `TERMP_NOBREAK` (with `TERMP_BRIND`) for the

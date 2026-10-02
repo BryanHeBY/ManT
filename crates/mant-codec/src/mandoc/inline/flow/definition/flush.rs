@@ -17,12 +17,23 @@ pub(super) enum FieldFlushBoundary {
     ColumnPost,
 }
 
+/// Configuration of one real field flush, before pre-br changes its flags.
+#[derive(Clone, Copy)]
+pub(super) struct FieldFlush {
+    pub(super) start: usize,
+    pub(super) gap: u8,
+    pub(super) body: u16,
+    pub(super) width: u16,
+    pub(super) flags: FieldFlags,
+    pub(super) boundary: FieldFlushBoundary,
+}
+
 /// `minbl` survives a graphless flush (term.c:235), but `term_field()` only
 /// prints it with a later graph (397-434). Within an already printed row it
 /// is a real word separator; at an unprinted origin the responsive layout
 /// already represents positioning and must not add authored-looking cells.
 fn projected_next_field_gap(device: &NativeFieldDevice) -> usize {
-    if device.viscol > 0 {
+    if device.has_occupied_row() {
         device.next_field_gap_cells
     } else {
         0
@@ -30,29 +41,6 @@ fn projected_next_field_gap(device: &NativeFieldDevice) -> usize {
 }
 
 impl InlineBuilder {
-    pub(in crate::mandoc::inline::flow) fn flush_definition_field(
-        &mut self,
-        field_output_start: usize,
-        gap_cells: u8,
-        body_width_columns: u16,
-        field_width_columns: u16,
-        flags: FieldFlags,
-        exit_field: bool,
-    ) -> bool {
-        self.flush_definition_field_at(
-            field_output_start,
-            gap_cells,
-            body_width_columns,
-            field_width_columns,
-            flags,
-            if exit_field {
-                FieldFlushBoundary::ExitField
-            } else {
-                FieldFlushBoundary::Continue
-            },
-        )
-    }
-
     // The NOBREAK flush commits field, row, and BRIND state in native order.
     pub(super) fn flush_definition_field_at(
         &mut self,
@@ -63,14 +51,43 @@ impl InlineBuilder {
         flags: FieldFlags,
         boundary: FieldFlushBoundary,
     ) -> bool {
+        let native = self.native_field_device(false);
+        self.flush_captured_definition_field(
+            FieldFlush {
+                start: field_output_start,
+                gap: gap_cells,
+                body: body_width_columns,
+                width: field_width_columns,
+                flags,
+                boundary,
+            },
+            native,
+        )
+    }
+
+    /// Consume one old-state receipt. This method owns it and cannot obtain
+    /// a second tail decision after flags or the projection have changed.
+    pub(super) fn flush_captured_definition_field(
+        &mut self,
+        field: FieldFlush,
+        mut native: Option<NativeFieldDevice>,
+    ) -> bool {
+        let FieldFlush {
+            start: field_output_start,
+            gap: gap_cells,
+            body: body_width_columns,
+            width: field_width_columns,
+            flags,
+            boundary,
+        } = field;
         let exit_field = boundary == FieldFlushBoundary::ExitField;
         self.commit_definition_row_origin();
-        self.discard_unprinted_definition_field_output();
-        // Source-line and request flushes consume the same native cells as
-        // .mc. A projected tab has no IR glyph width, and BRTRSP considers
-        // its tail even when term_field() prints no trailing padding.
+        if let Some(device) = &native {
+            self.project_captured_definition_field(device);
+        } else {
+            self.discard_unprinted_definition_field_output();
+        }
         let had_open_device_row = self.execution.has_open_native_device_row();
-        let mut native = self.native_field_device(false);
         if let Some(device) = &mut native {
             // Rejection projection may have advanced the author cursor to
             // its accepted tail. This real flush still owns its original
@@ -134,7 +151,7 @@ impl InlineBuilder {
         // fitting TAG field (term.c:250-253); overrun alone is insufficient.
         let ends_row = native.as_ref().map_or(overruns, |field| field.ends_row);
         if ends_row {
-            self.hard_break();
+            self.hard_break_after_field_projection(native.as_ref());
         } else if field_is_printable {
             if !exit_field {
                 // term_flushln() retains trailspace as minbl. A following
@@ -262,7 +279,7 @@ impl InlineBuilder {
         self.execution.empty_word = false;
         self.execution.pending_breakable_spaces = 0;
         self.execution.pending_field_spaces = deferred_field_cells;
-        self.definition_state_mut().pending_gap_origin = PendingFieldGapOrigin::Other;
+        self.execution.pending_field_gap_origin = PendingFieldGapOrigin::Other;
         self.execution.word_end_break = WordEndBreak::Clear;
         self.execution.wipe_remainder = false;
         self.execution.row_zero_graph = false;
@@ -297,7 +314,7 @@ impl InlineBuilder {
         }
     }
 
-    fn exit_empty_definition_field(
+    pub(super) fn exit_empty_definition_field(
         &mut self,
         body_width_columns: u16,
         field_width_columns: u16,
@@ -370,7 +387,10 @@ impl InlineBuilder {
             if let Some(width) = pending_glyph_width {
                 definition.hang_row.pending_glyph(width);
             }
-            if had_cell || pending_glyph_width.is_some() || definition.hang_row.viscol > 0 {
+            if had_cell
+                || pending_glyph_width.is_some()
+                || definition.hang_row.native_row_occupied()
+            {
                 definition.hang_row.flush(usize::from(gap));
             }
             if exit_field {

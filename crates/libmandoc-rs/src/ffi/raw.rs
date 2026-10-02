@@ -199,6 +199,7 @@ unsafe extern "C" {
     pub(super) fn mant_mandoc_document_ok(document: *const CDocument) -> i32;
     pub(super) fn mant_mandoc_document_error(document: *const CDocument) -> *const c_char;
     pub(super) fn mant_mandoc_document_diagnostics(document: *const CDocument) -> *const c_char;
+    pub(super) fn mant_mandoc_document_escape_depth_truncated(document: *const CDocument) -> i32;
     pub(super) fn mant_mandoc_document_macroset(document: *const CDocument) -> i32;
     pub(super) fn mant_mandoc_document_title(document: *const CDocument) -> *const c_char;
     pub(super) fn mant_mandoc_document_section(document: *const CDocument) -> *const c_char;

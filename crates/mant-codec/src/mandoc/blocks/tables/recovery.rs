@@ -8,6 +8,49 @@ use crate::mandoc::{
 use libmandoc_rs::{Node, NodeKind};
 use mant_ir::Inline;
 
+#[cfg(test)]
+mod escape_coverage_tests {
+    use super::{CellCandidate, LoweringContext};
+    use crate::mandoc::formatter::FormatterState;
+
+    #[test]
+    fn declined_cell_candidates_do_not_publish_a_scanner_omission() {
+        // Exact D04 native-cell depth 300 source ran all five pristine
+        // profiles first. This isolates the recovery transaction: only
+        // accepted content can publish its scanner completion receipt.
+        let word = format!("A{}Q{}Z", "\\X'".repeat(300), "'".repeat(300));
+        let context = LoweringContext::new(None, None);
+        let mut live = FormatterState::default();
+        live.execution.escape_coverage = context.escape_coverage.clone();
+        let mut declined = live.clone();
+        let _ = context.lower_text(&word, &mut declined);
+        assert!(declined.execution.escape_coverage.truncated());
+        assert!(!live.execution.escape_coverage.truncated());
+        assert!(context.take_diagnostics().is_empty());
+        drop(declined);
+
+        let mut accepted = live.clone();
+        let inlines = context.lower_text(&word, &mut accepted);
+        let candidate = CellCandidate {
+            inlines,
+            formatter: accepted,
+            diagnostics: Vec::new(),
+        };
+        let _ = candidate.commit(&context, &mut live);
+        assert!(live.execution.escape_coverage.truncated());
+        let findings = context.take_diagnostics();
+        assert_eq!(findings.len(), 1);
+        assert_eq!(
+            findings[0].code.as_deref(),
+            Some("manual.escape-scan-truncated")
+        );
+        assert_eq!(
+            findings[0].impact,
+            mant_ir::DiagnosticImpact::ContentCoverage
+        );
+    }
+}
+
 pub(in crate::mandoc::blocks) struct TableEmbedding {
     pub(super) blocks: Vec<TableTextBlock>,
 }
@@ -121,8 +164,11 @@ impl CellCandidate {
         // speculative T{} parser may contribute executed text registers,
         // but its private BODY-post record must not replace the live one.
         let scope_posts = formatter.execution.scope_posts.clone();
+        let escape_coverage = formatter.execution.escape_coverage.clone();
+        escape_coverage.accept(&self.formatter.execution.escape_coverage);
         *formatter = self.formatter;
         formatter.execution.scope_posts = scope_posts;
+        formatter.execution.escape_coverage = escape_coverage;
         context.diagnostics.borrow_mut().extend(self.diagnostics);
         self.inlines
     }

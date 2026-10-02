@@ -26,9 +26,11 @@ impl InlineBuilder {
     fn printed_origin_advance(&self, padding: usize, viscol: usize) -> usize {
         let state = self.execution.definition.as_ref().expect("field session");
         state.column_origin_units.map_or(0, |origin| {
-            let declared_padding = origin
-                .saturating_sub(viscol.saturating_mul(24))
-                .max(state.hang_row.minbl.saturating_mul(24));
+            let declared_padding = if viscol == state.hang_row.viscol {
+                state.hang_row.padding_units(origin)
+            } else {
+                origin.saturating_sub(viscol.saturating_mul(24))
+            };
             padding.saturating_sub(declared_padding)
         })
     }
@@ -38,7 +40,7 @@ impl InlineBuilder {
         start: usize,
         end: usize,
         row_origin_units: usize,
-    ) -> Option<(String, usize, usize)> {
+    ) -> Option<(String, usize, usize, bool)> {
         use super::super::super::field_buffer::FieldCell;
         let state = self.execution.definition.as_ref()?;
         let declared_origin = state
@@ -48,7 +50,7 @@ impl InlineBuilder {
         let graph = (start..end).find(|cell| {
             matches!(
                 state.field_buffer.cells().get(*cell),
-                Some(FieldCell::Graph { .. })
+                Some(FieldCell::Graph { .. } | FieldCell::Hyphen)
             )
         })?;
         let owner = state
@@ -87,6 +89,7 @@ impl InlineBuilder {
                 .saturating_sub(declared_origin)
                 .saturating_add(11)
                 / 24,
+            state.field_buffer.projection_length(graph, graph + 1) == 0,
         ))
     }
 
@@ -95,7 +98,7 @@ impl InlineBuilder {
         start: usize,
         end: usize,
         padding_units: usize,
-    ) -> Option<(String, usize, usize)> {
+    ) -> Option<(String, usize, usize, bool)> {
         use super::super::super::field_buffer::FieldCell;
         let state = self.execution.definition.as_ref()?;
         // DeclaredColumns already carries table cell positioning. Its live
@@ -107,7 +110,7 @@ impl InlineBuilder {
         let graph = (start..end).find(|cell| {
             matches!(
                 state.field_buffer.cells().get(*cell),
-                Some(FieldCell::Graph { .. })
+                Some(FieldCell::Graph { .. } | FieldCell::Hyphen)
             )
         })?;
         let owner = state
@@ -116,11 +119,9 @@ impl InlineBuilder {
         let anchor = owner
             .checked_sub(1)
             .and_then(|index| state.field_word_anchors.get(index))?;
-        let declared_padding = state.declared_body_origin_units.map_or(0, |origin| {
-            origin
-                .saturating_sub(state.hang_row.viscol.saturating_mul(24))
-                .max(state.hang_row.minbl.saturating_mul(24))
-        });
+        let declared_padding = state
+            .declared_body_origin_units
+            .map_or(0, |origin| state.hang_row.padding_units(origin));
         let cells = padding_units
             .saturating_sub(declared_padding)
             .saturating_add(11)
@@ -133,6 +134,7 @@ impl InlineBuilder {
                     .field_buffer
                     .projection_length(anchor.content, start.max(anchor.content)),
                 cells,
+                state.field_buffer.projection_length(graph, graph + 1) == 0,
             )
         })
     }
@@ -154,7 +156,7 @@ impl InlineBuilder {
         let graph = (start..end).find(|cell| {
             matches!(
                 state.field_buffer.cells().get(*cell),
-                Some(FieldCell::Graph { .. })
+                Some(FieldCell::Graph { .. } | FieldCell::Hyphen)
             )
         })?;
         let owner = state
@@ -207,7 +209,7 @@ impl InlineBuilder {
             return;
         };
         if print.first {
-            sweep.separator_retention = if sweep.viscol == 0 {
+            sweep.separator_retention = if sweep.printed_row.is_none() {
                 self.printed_separator_retention(
                     resumed,
                     print.start,
@@ -219,12 +221,12 @@ impl InlineBuilder {
             };
         }
         sweep.emission = NativeFieldEmission::Printed;
-        if sweep.viscol == 0
+        if sweep.printed_row.is_none()
             && let Some(origin) =
                 self.printed_row_origin(print.start, print.end, print.origin_units)
         {
             sweep.row_origins.push(origin);
-        } else if sweep.viscol > 0
+        } else if sweep.printed_row.is_some()
             && let Some(padding) =
                 self.printed_field_padding(print.start, print.end, print.padding_units)
         {

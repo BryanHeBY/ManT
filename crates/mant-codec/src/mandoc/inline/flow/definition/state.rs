@@ -64,7 +64,6 @@ pub(in crate::mandoc::inline::flow) struct DefinitionFieldState {
     // pre-handler can then start its field at the BODY margin.
     pub(in crate::mandoc::inline::flow) vertical_started_row: bool,
     pub(in crate::mandoc::inline::flow) hang_row: HangNativeRow,
-    pub(in crate::mandoc::inline::flow) pending_gap_origin: PendingFieldGapOrigin,
 }
 /// A definition field that stays open across the HEAD/BODY ownership split.
 ///
@@ -84,6 +83,9 @@ pub(in crate::mandoc::inline::flow) enum PendingFieldGapOrigin {
     #[default]
     Other,
     CommittedFlush,
+    /// Plain .mc's projected next-word separator. It represents a future
+    /// `term_word` blank, not device minbl; an empty word can consume it.
+    AutomaticWord,
 }
 /// The two persistent columns in `term.c::term_flushln()`, plus its unflushed
 /// input field. Generated IR padding never enters this ledger.
@@ -92,6 +94,10 @@ pub(in crate::mandoc::inline::flow) enum PendingFieldGapOrigin {
 #[derive(Clone, Default)]
 pub(in crate::mandoc::inline::flow) struct HangNativeRow {
     pub(in crate::mandoc::inline::flow) viscol: usize,
+    /// `term_field()` already advanced to the page's common left origin.
+    /// A printed zero-width Unicode graph can establish it even when the
+    /// relative viscol stays zero; NBRZW cannot (term.c:397-434).
+    pub(in crate::mandoc::inline::flow) page_origin_printed: bool,
     /// Actual origin advances printed on this device row beyond declared
     /// column placement (`term.c::term_field()`). Node geometry restoration
     /// cannot undo them; only a real endline retires the receipt.
@@ -127,6 +133,28 @@ pub(in crate::mandoc::inline::flow) enum HangRowTransition {
 }
 
 impl HangNativeRow {
+    pub(in crate::mandoc::inline::flow) fn native_row_occupied(&self) -> bool {
+        self.page_origin_printed || self.viscol > 0
+    }
+
+    /// Numeric `term_flushln()` padding with the page's common offset removed
+    /// once. `term_ascii.c` sets defindent=5; `mdoc_term.c::termp_sh_pre()` adds
+    /// it to offset. On a fresh row that offset covers minbl. After any
+    /// actual graph prints, minbl is independent spacing on the same row.
+    pub(super) fn padding_units(&self, offset_units: usize) -> usize {
+        const PAGE_ORIGIN_UNITS: usize = 5 * 24;
+        let unprinted_origin = if self.native_row_occupied() {
+            0
+        } else {
+            PAGE_ORIGIN_UNITS
+        };
+        offset_units
+            .saturating_add(unprinted_origin)
+            .saturating_sub(self.viscol.saturating_mul(24))
+            .max(self.minbl.saturating_mul(24))
+            .saturating_sub(unprinted_origin)
+    }
+
     pub(in crate::mandoc::inline::flow) fn word(
         &mut self,
         separator: usize,
@@ -197,6 +225,7 @@ impl HangNativeRow {
 
     pub(in crate::mandoc::inline::flow) fn endline(&mut self) {
         self.viscol = 0;
+        self.page_origin_printed = false;
         self.unprojected_origin_units = 0;
         self.minbl = 0;
         self.field_width = 0;
@@ -211,21 +240,6 @@ impl HangNativeRow {
         self.field_discarded = false;
         self.field_last_unbreakable_width = 0;
         self.transition = HangRowTransition::Flushed;
-    }
-
-    pub(super) fn final_column(&self) -> usize {
-        if self.field_printable && !self.field_discarded {
-            self.viscol
-                .saturating_add(self.minbl)
-                .saturating_add(self.field_width)
-        } else {
-            // An unprinted field does not erase the previous field's
-            // trailspace. term_flushln() keeps minbl for the BODY word even
-            // when term_fill() returns nbr=0 for the current field.
-            self.viscol
-                .saturating_add(self.minbl)
-                .max(self.field_offset)
-        }
     }
 }
 impl InlineBuilder {
@@ -248,6 +262,7 @@ impl InlineBuilder {
         if let Some(row) = detached_row {
             state.hang_row.viscol = row.viscol;
             state.hang_row.minbl = row.minbl;
+            state.hang_row.page_origin_printed = row.page_origin_printed;
         }
         if state.field_buffer.configure_tabs(&tabs) {
             state.projected_passes = 0;

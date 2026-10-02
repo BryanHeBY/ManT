@@ -309,10 +309,15 @@ pub(in crate::mandoc) fn native_row_origin(node: &Inline) -> Option<usize> {
         .ok()
 }
 
-pub(super) fn has_non_whitespace_glyph(nodes: &[Inline]) -> bool {
+pub(in crate::mandoc) fn has_rendered_formatter_glyph(nodes: &[Inline]) -> bool {
     let mut found = false;
     mant_ir::visit_inline_plain_text(nodes, |text| {
-        found |= text.chars().any(|character| !character.is_whitespace());
+        // term_field() buffers ordinary SP/TAB until an encoded glyph.
+        // An authored Unicode fixed blank is itself that encoded glyph
+        // (term.c:389-427), so it cannot become an invisible row receipt.
+        found |= text
+            .chars()
+            .any(|character| !matches!(character, ' ' | '\t' | '\r' | '\n'));
     });
     found
 }

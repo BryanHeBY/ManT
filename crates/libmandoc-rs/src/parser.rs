@@ -365,9 +365,10 @@ impl Parser {
             kind: ParseErrorKind::Parse,
             message,
         })?;
-        let mut findings = diagnostics::parse_diagnostics(&raw.diagnostics);
+        let mut findings = diagnostics::report_diagnostics(&raw.diagnostics, raw.escape_truncated);
         if raw.node_truncated {
             findings.push(Diagnostic {
+                code: Some(crate::DiagnosticCode::SyntaxTreeDepthLimit),
                 level: DiagnosticLevel::Warning,
                 message: diagnostics::SYNTAX_TREE_DEPTH_MESSAGE.into(),
                 location: None,
@@ -375,6 +376,7 @@ impl Parser {
         }
         if raw.equation_truncated {
             findings.push(Diagnostic {
+                code: Some(crate::DiagnosticCode::EquationTreeDepthLimit),
                 level: DiagnosticLevel::Warning,
                 message: diagnostics::EQUATION_TREE_DEPTH_MESSAGE.into(),
                 location: None,

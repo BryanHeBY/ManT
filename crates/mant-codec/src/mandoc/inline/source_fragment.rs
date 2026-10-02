@@ -13,9 +13,7 @@ use libmandoc_rs::{
 };
 use mant_ir::Inline;
 
-use super::{
-    InlineBuilder, append_inline_node_with_next, append_man_link, parse_roff_text_with_state,
-};
+use super::{InlineBuilder, append_inline_node_with_next, append_man_link};
 
 #[must_use]
 pub(in crate::mandoc) struct RecoveredFragment {
@@ -59,14 +57,7 @@ pub(in crate::mandoc) fn lower_source_fragment_with_formatter_state(
         return None;
     }
 
-    let fallback = || {
-        let mut font = formatter.font.clone();
-        RecoveredFragment {
-            inlines: parse_roff_text_with_state(source, &mut font, true),
-            complete: false,
-            formatter: formatter.clone(),
-        }
-    };
+    let fallback = || incomplete_fragment(source, &formatter);
     // A separate parser invocation is intentionally small and finite.  More
     // importantly, strings, registers and macro arguments would otherwise be
     // evaluated against the synthetic document rather than the real session.
@@ -147,6 +138,24 @@ pub(in crate::mandoc) fn lower_source_fragment_with_formatter_state(
     })
 }
 
+/// A declined recovery retains its scan receipt only in the speculative cell.
+/// The caller must explicitly accept the cell before publishing that fact.
+fn incomplete_fragment(
+    source: &str,
+    formatter: &crate::mandoc::formatter::FormatterState,
+) -> RecoveredFragment {
+    let mut font = formatter.font.clone();
+    let candidate = formatter.clone();
+    let (inlines, escape_scan) =
+        super::font::parse_roff_text_with_scan_status(source, &mut font, true);
+    candidate.execution.escape_coverage.record(escape_scan);
+    RecoveredFragment {
+        inlines,
+        complete: false,
+        formatter: candidate,
+    }
+}
+
 /// True when the visible value depends on surrounding roff execution state.
 fn requires_native_evaluation(source: &str, escape: Option<u8>) -> bool {
     let Some(escape) = escape.map(char::from) else {
@@ -177,6 +186,7 @@ fn lower_body(
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> Vec<Inline> {
     let mut builder = InlineBuilder::with_spacing(formatter.spacing_enabled());
+    builder.escape_coverage = formatter.execution.escape_coverage.clone();
     builder.font = formatter.font.clone();
     builder.inherit_vertical_space_debt(formatter.vertical_space_debt);
     builder.inherit_zero_advance_armed(formatter.take_zero_advance_armed());

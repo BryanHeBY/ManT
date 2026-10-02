@@ -51,12 +51,14 @@ struct RawDocument {
     diagnostics: String,
     node_truncated: bool,
     equation_truncated: bool,
+    escape_truncated: bool,
 }
 
 #[cfg(feature = "render")]
 struct RawRender {
     output: Vec<u8>,
     diagnostics: String,
+    escape_truncated: bool,
 }
 
 #[cfg(test)]

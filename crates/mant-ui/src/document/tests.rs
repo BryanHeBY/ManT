@@ -453,6 +453,7 @@ fn case_folding_maps_expanding_unicode_back_to_the_source_character() {
 }
 
 mod control_line_payloads;
+mod control_row_relations;
 mod entries;
 mod grapheme_geometry;
 mod headings;

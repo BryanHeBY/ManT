@@ -14,7 +14,8 @@ pub(super) fn lower_diagnostics(input: &[MandocDiagnostic]) -> Vec<Diagnostic> {
             impact: match diagnostic.code() {
                 Some(
                     MandocDiagnosticCode::SyntaxTreeDepthLimit
-                    | MandocDiagnosticCode::EquationTreeDepthLimit,
+                    | MandocDiagnosticCode::EquationTreeDepthLimit
+                    | MandocDiagnosticCode::EscapeDepthLimit,
                 ) => mant_ir::DiagnosticImpact::ContentCoverage,
                 None => mant_ir::DiagnosticImpact::None,
             },
@@ -30,6 +31,7 @@ pub(super) fn lower_diagnostics(input: &[MandocDiagnostic]) -> Vec<Diagnostic> {
                     MandocDiagnosticCode::EquationTreeDepthLimit => {
                         "manual.equation-depth-truncated"
                     }
+                    MandocDiagnosticCode::EscapeDepthLimit => "manual.escape-depth-truncated",
                 }
                 .to_owned()
             }),
@@ -90,7 +92,17 @@ impl LoweringContext<'_> {
     }
 
     pub(super) fn take_diagnostics(&self) -> Vec<Diagnostic> {
-        self.diagnostics.take()
+        let mut diagnostics = self.diagnostics.take();
+        if self.escape_coverage.truncated() {
+            diagnostics.push(Diagnostic {
+                impact: mant_ir::DiagnosticImpact::ContentCoverage,
+                level: DiagnosticLevel::Unsupported,
+                code: Some("manual.escape-scan-truncated".to_owned()),
+                message: "escape argument scanning reached its bounded work limit; some source text could not be projected".to_owned(),
+                source: None,
+            });
+        }
+        diagnostics
     }
 }
 
@@ -105,16 +117,19 @@ mod tests {
     fn preserves_each_finding_and_classifies_known_levels() {
         let diagnostics = lower_diagnostics(&[
             MandocDiagnostic {
+                code: None,
                 level: MandocDiagnosticLevel::Unsupported,
                 message: "unsupported roff request: ab".into(),
                 location: None,
             },
             MandocDiagnostic {
+                code: None,
                 level: MandocDiagnosticLevel::Warning,
                 message: "skipping paragraph macro".into(),
                 location: None,
             },
             MandocDiagnostic {
+                code: Some(libmandoc_rs::DiagnosticCode::SyntaxTreeDepthLimit),
                 level: MandocDiagnosticLevel::Warning,
                 message: "owned syntax tree exceeded the 256-level copy limit; deeper descendants were omitted".into(),
                 location: None,

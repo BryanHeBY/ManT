@@ -32,6 +32,9 @@
 
 #define ROFF_ESCAPE_DEPTH_LIMIT 256
 
+/* Private embedding hook: record actual omission without exporting mandocerr. */
+void mant_mandoc_note_escape_depth_limit(void);
+
 static enum mandoc_esc roff_escape_impl(const char *, int, int,
 		int *, int *, int *, int *, int *, unsigned int, int *);
 
@@ -107,6 +110,7 @@ roff_escape_impl(const char *buf, const int ln, const int aesc,
 	 * repeatedly re-enter the same rejected nesting suffix.
 	 */
 	if (depth >= ROFF_ESCAPE_DEPTH_LIMIT) {
+		mant_mandoc_note_escape_depth_limit();
 		inam = aesc;
 		do {
 			inam++;

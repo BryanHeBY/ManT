@@ -20,7 +20,7 @@ use super::super::super::{AuthorBreakEffect, InlineBuilder};
 use super::super::state::NoBreakField;
 
 impl InlineBuilder {
-    pub(super) fn native_field_parameters(
+    pub(in crate::mandoc::inline::flow::definition) fn native_field_parameters(
         &self,
         force_no_break: bool,
         resumed: Option<NoBreakField>,
@@ -106,10 +106,7 @@ impl InlineBuilder {
         let row = &state.hang_row;
         let rmargin = self.native_margin_units(rmargin);
         let viscol = row.viscol.saturating_mul(24);
-        let vbl = state
-            .field_offset_units
-            .saturating_sub(viscol)
-            .max(row.minbl.saturating_mul(24));
+        let vbl = row.padding_units(state.field_offset_units);
         let no_break = self.native_no_break(flags, force_no_break, resumed);
         // term.c:113-137,229-230 computes each pass from its current device
         // position. Zero is a real target: a leading blank can reject the
@@ -147,6 +144,7 @@ impl InlineBuilder {
         end: usize,
         width_units: usize,
         flags: FieldFlags,
+        native_cells: &[super::super::super::field_buffer::FieldCell],
     ) -> usize {
         if rejected {
             0
@@ -156,7 +154,12 @@ impl InlineBuilder {
                 .as_ref()
                 .expect("field session")
                 .field_buffer
-                .brtrsp_tail_sweep(end, width_units, flags.contains(FieldFlag::BrTrsp))
+                .brtrsp_tail_sweep(
+                    native_cells,
+                    end,
+                    width_units,
+                    flags.contains(FieldFlag::BrTrsp),
+                )
         }
     }
 }

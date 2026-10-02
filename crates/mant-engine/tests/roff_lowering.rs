@@ -179,3 +179,8 @@ mod shared_execution_contracts;
 
 #[path = "roff_lowering/shared_execution_owners.rs"]
 mod shared_execution_owners;
+
+#[path = "roff_lowering/control_request_matrix.rs"]
+mod control_request_matrix;
+#[path = "roff_lowering/control_requests.rs"]
+mod control_requests;

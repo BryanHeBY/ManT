@@ -686,6 +686,53 @@ Requests with direct lowering behavior are:
 | `mc` | Margin-character decoration omitted; its no-break formatter flush is retained |
 | `ti` | Device temporary indentation omitted; its preceding line boundary is retained |
 
+`br`, `nf`, `fi`, and `ti` share the native pre-break sequence: select
+`NOSPACE`, consume the current buffer under its existing field flags, then
+update `BRIND`/`NOBREAK` and the fill mode. Source no-fill row events remain
+separate from that request. An output-owner change does not execute either
+event. For `ti`, the reading projection retains declared field origins and
+omits the optional numerical temporary offset; its pre-break result therefore
+agrees with `br` in the same context. The native device can position a later
+field differently when that numerical offset is applied.
+
+The native field calculation keeps the common manual-page origin separate
+from the public relative column. On a fresh row that origin already covers
+the minimum field spacing; after an accepted encoded graph actually prints,
+the spacing belongs to the same device row. A zero-width Unicode graph can
+print that origin, whereas `\\&`, a tab reference, an empty field, or a
+rejected field cannot. A real line end clears it; switching an IR owner or
+restoring a node's geometry preserves it. Reading the final HEAD receipt
+does not replace the minimum-spacing register or execute another flush.
+
+An accepted graph overwritten by a later character still owns any field
+padding that printed before it. The projection retains that padding at its
+source-word boundary even when no corresponding character survives in the
+IR, including an `Lk` label whose `\\z` glyph is covered by its generated
+colon. Native acceptance and the print receipt determine this positioning;
+link or font wrappers do not supply a second width-based decision.
+
+Margin flushes also preserve native word state after consuming their buffer.
+An empty word following `mc` can write an automatic blank without printing
+deferred device padding. That blank belongs to the new buffer; later words
+obey their current spacing state, including `Sm off`, without consuming or
+printing the same reservation twice.
+
+The native parser's breakable hyphen marker stays distinct from a literal
+hyphen in a macro operand or an escaped `\-`. Its field candidate determines
+the final HEAD row and BODY word boundary. The responsive projection keeps
+the authored word complete rather than inserting a hard row at that device
+hyphenation point. The first actual scan normalizes the marker to a literal
+hyphen before deciding its accepted interval; later passes cannot break on
+that same marker again. An uncommitted width prediction does not normalize
+the live input cells.
+
+Authored fixed blanks (`\0`, `\~`, or a Unicode nonbreaking space) are
+encoded glyphs, including at a physical row's end. They survive a paragraph
+or HEAD/BODY ownership drain; ordinary buffered spaces, tabs, and empty
+formatter cells can instead be represented by completed empty-row counts.
+Generated inset/diagnostic BODY separators retain their separate ownership
+and cannot authorize deletion of an authored fixed blank.
+
 Control operands are never printable descendants. The block, inline and display paths share this distinction while still executing supported font, fill and spacing effects. Logical-sibling transparency is separate: an ignored device effect does not automatically make its source node transparent, and a transparent `ft` or `Tg` still changes font state or retains a target.
 
 `ce` and `rj` omit device-specific centering/right alignment but preserve their counted text rows, entry/exit line boundaries and nested requests. Their first native child is the control count, including a synthesized default or invalid count spelling; only subsequent children own content. Numeric words in that content remain visible. A native line-group flush can produce an empty literal row even after another request already ended that group; it is not another paragraph-distance request.
@@ -732,8 +779,16 @@ Font names map as follows:
 | `C`, `CR`, `CW`, `V` | Code |
 | `CB`, `VB` | Strong code |
 | `CI`, `VI` | Emphasized code |
-| `P` or empty font operand | Restore the previous font selection |
-| Other names, `R`, `1` | Regular |
+| `P` or a complete empty font operand | Restore the previous font selection |
+| `R`, `1` | Regular |
+| Unknown names or incomplete `\f` operands | Keep the current and previous font registers |
+
+Font escapes execute only after the shared scanner accepts a complete operand
+and `mandoc_font()` recognizes its spelling. A complete empty operand (`\f[]`)
+selects the previous font, as does `\fP`; a bare `\f`, an unclosed name, or a
+complete unknown name does not select Roman or the previous font. Empty standard
+shape openings at end of input (`\f[` and `\f(`) remain literal text because
+the native consumed extent does not include them.
 
 Continuous man text retains font state across source line breaks. A font macro establishes its initial font without overriding later escapes inside its operands; ordinary man paragraph/font scopes reset to regular, while `SM` retains the current font. These rules also apply to inline-only table recovery.
 
@@ -830,10 +885,15 @@ ManT preserves the owned structure and its shared readable projection for text, 
 Deeply nested equations and document trees are bounded before recursive Rust lowering. The owned native tree stops descending after 256 levels and returns the finite prefix. A separate native construction guard stops input dispatch after a syntax node exceeds 512 parent levels, before finalization and validation; that larger violation returns a whole-document parse error. Native reference renderers reject syntax or equation nesting beyond 256 levels independently of output size. Native tree cleanup is iterative.
 Nested native escape arguments are likewise limited to 256 levels; a deeper
 suffix is consumed as one rejected escape argument so parsing remains finite
-without exposing its control spelling as prose.
+without exposing its control spelling as prose. This actual omission carries
+`manual.escape-depth-truncated`; ordinary native warnings do not imply lost
+content. The Rust escape scanner has an independent finite work budget and
+reports an exhausted scan as `manual.escape-scan-truncated`. A speculative
+table recovery publishes this fact only when that cell candidate is accepted;
+declined recoveries retain the original cell and do not taint the document.
 The retained document carries `manual.syntax-depth-truncated` or
 `manual.equation-depth-truncated`, respectively. Both have `content-coverage`
-impact, so structured consumers can use the shared `contentComplete=false`
+impact, as do the two escape omission reasons, so structured consumers can use the shared `contentComplete=false`
 signal without matching diagnostic prose. Cumulative owned-transfer budgets
 can instead reject an unsafe parse rather than return a misleading partial tree.
 

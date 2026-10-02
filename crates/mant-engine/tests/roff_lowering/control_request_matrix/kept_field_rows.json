@@ -1,0 +1,4372 @@
+{
+  "header": {
+    "count": 72,
+    "unique_sources": 72,
+    "expectations_from_product": false,
+    "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6"
+  },
+  "cases": [
+    {
+      "id": "kept-field-000",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 0n\n.It Xo X\n.Bk -words\n.No A No B No C\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "dfcb7da3bea8362f58d2a193e0b030a9bf309ce18406a60d099f8bc456714714",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X A B C BODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "5b528d1b2da0ce61d343f6df84b9cbac5c2bc3462357d1e61ee470421deab9ca",
+        "utf8": "d92b59a42b757e9df0b61a2694cbc7898a64d4b09e9208544291d0087a23e46f",
+        "html": "71bfe6d1a038ba751086568b3e637234eecd45660c49ec931d7a445b818e1a1a",
+        "tree": "69dc37801eb716846ae6438c2394a37aa0bff3dc60f23b25e4fab843a7cdf848",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-001",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 0n\n.It Xo X\n.Bk -words\n.No \"A\\p\" No \"\\p\" No \"\" No Z\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "a7d4d360c5b5dd18370335590662b83786311ebd9a1966914c245f6592de88d1",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 1,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X A   Z BODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "58a45f060f5f7c0565440a32c4d2204bbc06dfd952d75dff07e0b2ae5fe5cfa2",
+        "utf8": "050ab96d5dd6878fff361a8d1c6fa6a61fc5376a7f186e048cab8b6d2374ca80",
+        "html": "54a9278d4b460b7d32601d49b74d2fd3d00837ecfbf201030628ed8f231c1cca",
+        "tree": "a7a0f27669735afa88c7c644806a3669ccba4569859619c277fcbfb425083467",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-002",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 0n\n.It Xo X\n.Bk -words\n.No \"A\\p\" No \"\\p\\&\" No Z\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "35aec34b5460c61a4f912ba4e0c01fe76e3d7d904c68dfa031205e037b0eb92c",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X A  Z BODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "4585a62d478a51c408857f409e92f2926704aa02c11567781016b46495f8ed43",
+        "utf8": "52f374838182830eaae511a2de1cbbff5412789218f74192dfced6228ab9637d",
+        "html": "be4207089681d30b3edd3236158bdc6485f384e4a2522743cc5084c1a5e7d351",
+        "tree": "51e90041342cc6e42973224989e1e4a209d1570a3779c754fa6efe186088416d",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-003",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 0n\n.It Xo X\n.Bk -words\n.No \"A\\p\" No \"\\p\" No \"\\zY\" No Z\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "d57812b0199313af033fe5ff7088ad19c9385901e93d57ead5b1945deb693738",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X A  YZ BODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "8b2979890a4ea6a087238301fee68001f320f17bd1100920661a9861084d31b1",
+        "utf8": "44a0fb59de071d6aed96f660feff2fdf7d31c95e226a7363d5a297a83d62c5a9",
+        "html": "54a9278d4b460b7d32601d49b74d2fd3d00837ecfbf201030628ed8f231c1cca",
+        "tree": "10142d4ff903e85225748451a95a1c6ab3afd29d187377ac1cd41ed6865d33f5",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-004",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 0n\n.It Xo X\n.Bk -words\n.No \"\" No \"\" No Z\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "dcac1a77b7f4f4088f76774a8c58386463e940d2d1c20381906adf4b078bd97c",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 2,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X   Z BODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "4cca0ee33177564a6d70d09bbc0af8c6671b224d7d0c323fa5a5703c85728c2a",
+        "utf8": "0de1bb2c8ba38f09245b5ae8d7a8288f20cef286d2cdcd2eae379f041a5de976",
+        "html": "24a05b1989cc675b16e38c127e2b4af57ac649d859d63b8a465cacf9d4ed8aef",
+        "tree": "42b6ed682c0231e013ce84af5dd1137d8f0ad73e6401d7cfa1f0897a20c8d6d7",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-005",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 0n\n.It Xo X\n.Bk -words\n.No ABC No DEF No GHI\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "d0fb68396f3da53bee4adb85ef26ddc65518779e88c03e477c87660a4089d77c",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X ABC DEF GHI BODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "eea9bd4741a1da64486f3151d8fdc58c07c8ea23bd747ffdb77a77550a9a5226",
+        "utf8": "585446f2b915d7416aab5b3accd869073cc69fdee020ce3581426597d5a2a3bc",
+        "html": "4e2e7e52af5b123afe72b91cab007d986753fbe630f8578a0f0d0f8902398e55",
+        "tree": "b9c85f13bfb5fc4d1da48409c6adcd208a8a99a648ebc1fa7ac2dd90da1d1f36",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-006",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 0n\n.It Xo X\n.br\n.Bk -words\n.No A No B No C\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "d18ebca58b3479c31c30890faae1aae6acbef65b6250ee1ae60a504788ed9019",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 15,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X A B CBODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "5ed7ab5d8dbf13b94743b75e4823758126969b03aa72f0172487efbb53e03e73",
+        "utf8": "070aa7408064cb253ad7e8cdb669ada1fdec3e0c835faa65a0108b510c782e74",
+        "html": "7e9f0c7320c9a2b4bb318888907eaeb58db46de8e6de84a61c2d3ea33c7c3937",
+        "tree": "7b08874006c145380ed6fb7264526c9365bfed463464f1bf5eeb942b8439160c",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-007",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 0n\n.It Xo X\n.br\n.Bk -words\n.No \"A\\p\" No \"\\p\" No \"\" No Z\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "604572454d44bf4df86461f8dd38e5cfd58dadb228ce89e5d8be43263828c402",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 15,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 1,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X A   ZBODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "a462565af82b1774015014063c29df2071981bbb3137b76179121e8f96bd1451",
+        "utf8": "1f7dd566220c284001abcd6ffedc0e67ef8f25553049af4c558661896a7a8344",
+        "html": "9b25598504d2ee92c44cb2bab2af7c4eba924b96bdd1550799a001a671c8e684",
+        "tree": "c0d6de8a0c2ee3ec35a55a576516f81d60326e1e8e1ad0f9428e4ade529a84cc",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-008",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 0n\n.It Xo X\n.br\n.Bk -words\n.No \"A\\p\" No \"\\p\\&\" No Z\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "ecd79a0e66c5fa89e53f1bf454d232cd826c8a64e8092aecaa7acdc632e7c048",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 15,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X A  ZBODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "8fd5ed78efc3970495e5497626f4560d42a53c0457af0efad2dfa5910740fe7b",
+        "utf8": "c7ae8db0d32a11b074bd055ea0100165e568d12212d4df4a6877527921220117",
+        "html": "a9822ad5930e7afa777a0f2631d98a4fa6288a11e11296a33ad9e4b99e8ff26e",
+        "tree": "31c75f154f5b9b34e14f5b12b266f2c4d2d8f84c26bf3eda18144e8acb56f56c",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-009",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 0n\n.It Xo X\n.br\n.Bk -words\n.No \"A\\p\" No \"\\p\" No \"\\zY\" No Z\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "7e525acbe1d89d42a4a66746c6e38bf16478491de6f0effc7e4c6b28aac55285",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 15,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X A  YZBODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "43dab9b02926cfd14a68302ae339566d5ff5a16738135a28e9f6ff0a688a9029",
+        "utf8": "bafdd383c9308cbd013c6e45c77b719783f7a8c56f9bd87297a9e9d93cb5c837",
+        "html": "9b25598504d2ee92c44cb2bab2af7c4eba924b96bdd1550799a001a671c8e684",
+        "tree": "335fb3c8fadb0708207988e468d2e6b53b94253ccf175096d45520a24bd0887e",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-010",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 0n\n.It Xo X\n.br\n.Bk -words\n.No \"\" No \"\" No Z\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "2adcbd6fa11ae20c9f262a8c15add82907b9d527c0856a7b4c66455e4a7a042d",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 15,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 2,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X   ZBODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "93c3df60cceffd155dfc802aeb68e3253ea403908433b938f83b213725c61a47",
+        "utf8": "73b483de0bcff1d4044187215c934ede6b666a55f7c1acb18dcbd9f917b835b9",
+        "html": "45a5dd8d57f78fd825d7a6726923e96997228e6d26dfa3f861db3809de2e646d",
+        "tree": "82e6a60fd4f36aebb07d1132c3b5843da85bc8f6d7ea35a30a6c95c286da766a",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-011",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 0n\n.It Xo X\n.br\n.Bk -words\n.No ABC No DEF No GHI\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "2a2462707f0a6bd32751e0839f88b9faf7c407012eea5bff2c3b5d376423b0ca",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 15,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X ABC DEF GHIBODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "4eb8f735dfcf276e3373bb65869da7be47afc2ee949541cc71ef6f935a75be25",
+        "utf8": "27809cc8602fb92cc4bda9acce608568f4113d4274b5ed400d8237fd2abac82f",
+        "html": "011ad8a3a2b9b0e7a3307972e9c6794f1b876028ca7aa00f7888a3d08aa6ff8f",
+        "tree": "6cb1399b83a29a35f774ed93fd4f655150e344da5b93883f78d6516a9d75b02d",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-012",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 2n\n.It Xo X\n.Bk -words\n.No A No B No C\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "525c1294197f2c983af74769fb8f517382e66730528a146fbcb54b54e29a9de3",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X A B C BODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "5b528d1b2da0ce61d343f6df84b9cbac5c2bc3462357d1e61ee470421deab9ca",
+        "utf8": "d92b59a42b757e9df0b61a2694cbc7898a64d4b09e9208544291d0087a23e46f",
+        "html": "71bfe6d1a038ba751086568b3e637234eecd45660c49ec931d7a445b818e1a1a",
+        "tree": "8964138b4ea362de4d2574b50cf93ac32c6b19c7eb7be6b803e023a7504f6b7e",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-013",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 2n\n.It Xo X\n.Bk -words\n.No \"A\\p\" No \"\\p\" No \"\" No Z\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "29f774b9bb173e4ba568f9ca5fb66301493fa461303342412bde921f4550f88a",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 1,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X A   Z BODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "58a45f060f5f7c0565440a32c4d2204bbc06dfd952d75dff07e0b2ae5fe5cfa2",
+        "utf8": "050ab96d5dd6878fff361a8d1c6fa6a61fc5376a7f186e048cab8b6d2374ca80",
+        "html": "54a9278d4b460b7d32601d49b74d2fd3d00837ecfbf201030628ed8f231c1cca",
+        "tree": "a164277dcd878ffa0bd09e56d9ebb7154020cca4e1e21c430215c9b5ef42c0e2",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-014",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 2n\n.It Xo X\n.Bk -words\n.No \"A\\p\" No \"\\p\\&\" No Z\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "87b04dae4bd7b8a5dca507e98835dd4a51884c7d234c41a57afa2f2ab47aa965",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X A  Z BODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "4585a62d478a51c408857f409e92f2926704aa02c11567781016b46495f8ed43",
+        "utf8": "52f374838182830eaae511a2de1cbbff5412789218f74192dfced6228ab9637d",
+        "html": "be4207089681d30b3edd3236158bdc6485f384e4a2522743cc5084c1a5e7d351",
+        "tree": "a4f70da57737b1391e7c2dd62ef089aa1001dcacce97d8f09ff8db7cbce3ba53",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-015",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 2n\n.It Xo X\n.Bk -words\n.No \"A\\p\" No \"\\p\" No \"\\zY\" No Z\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "025ffa3218092180b027f8fbec4a3c67d7d37b559adc0daedeaa5d3ea451d7cb",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X A  YZ BODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "8b2979890a4ea6a087238301fee68001f320f17bd1100920661a9861084d31b1",
+        "utf8": "44a0fb59de071d6aed96f660feff2fdf7d31c95e226a7363d5a297a83d62c5a9",
+        "html": "54a9278d4b460b7d32601d49b74d2fd3d00837ecfbf201030628ed8f231c1cca",
+        "tree": "f718e1055a00c44f660cda145e7dd7c998665093d85cecc7bcb9d0e226cf08ea",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-016",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 2n\n.It Xo X\n.Bk -words\n.No \"\" No \"\" No Z\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "e2a4b3605ddbc243c2fe42b07d9885fa0f292dfb9400f8769a45bfac439c8740",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 2,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X   Z BODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "4cca0ee33177564a6d70d09bbc0af8c6671b224d7d0c323fa5a5703c85728c2a",
+        "utf8": "0de1bb2c8ba38f09245b5ae8d7a8288f20cef286d2cdcd2eae379f041a5de976",
+        "html": "24a05b1989cc675b16e38c127e2b4af57ac649d859d63b8a465cacf9d4ed8aef",
+        "tree": "283dc7515d62e267b7f8a9bdcea35e6bbaa8c7fd15fb11ca9f8e9d2e0ae643c0",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-017",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 2n\n.It Xo X\n.Bk -words\n.No ABC No DEF No GHI\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "750df6e08e976d1bfaebf807f3b8f49fe9c7a6e34e7679b7c2eb8ff6aaf800bd",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X ABC DEF GHI BODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "eea9bd4741a1da64486f3151d8fdc58c07c8ea23bd747ffdb77a77550a9a5226",
+        "utf8": "585446f2b915d7416aab5b3accd869073cc69fdee020ce3581426597d5a2a3bc",
+        "html": "4e2e7e52af5b123afe72b91cab007d986753fbe630f8578a0f0d0f8902398e55",
+        "tree": "49fe5beabc042dea5634d8a8548d3151bd70c549bd55a9376619197329caba37",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-018",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 2n\n.It Xo X\n.br\n.Bk -words\n.No A No B No C\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "dccb6e8dd053646073a5788e06644c72a48bbc8d594b669cd89f5d3056ca0f70",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 15,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X A B CBODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "5ed7ab5d8dbf13b94743b75e4823758126969b03aa72f0172487efbb53e03e73",
+        "utf8": "070aa7408064cb253ad7e8cdb669ada1fdec3e0c835faa65a0108b510c782e74",
+        "html": "7e9f0c7320c9a2b4bb318888907eaeb58db46de8e6de84a61c2d3ea33c7c3937",
+        "tree": "266448aeb6abf49bdf5e1df06fcdde0686704c7b205d85f91fb1374edb0bd4b8",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-019",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 2n\n.It Xo X\n.br\n.Bk -words\n.No \"A\\p\" No \"\\p\" No \"\" No Z\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "b9830fa7dfaa490a5be8531845338ae801abf3c9bfb23a5795a2e09ef10d9183",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 15,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 1,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X A   ZBODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "a462565af82b1774015014063c29df2071981bbb3137b76179121e8f96bd1451",
+        "utf8": "1f7dd566220c284001abcd6ffedc0e67ef8f25553049af4c558661896a7a8344",
+        "html": "9b25598504d2ee92c44cb2bab2af7c4eba924b96bdd1550799a001a671c8e684",
+        "tree": "e8cf0018ee87f843177089046e4819633fc5d38cdf6016e0a91b4fe70185aea9",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-020",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 2n\n.It Xo X\n.br\n.Bk -words\n.No \"A\\p\" No \"\\p\\&\" No Z\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "ec8058679440f7350715d98587bb6b660c69470b81f07ade154b9dc4930b5d0b",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 15,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X A  ZBODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "8fd5ed78efc3970495e5497626f4560d42a53c0457af0efad2dfa5910740fe7b",
+        "utf8": "c7ae8db0d32a11b074bd055ea0100165e568d12212d4df4a6877527921220117",
+        "html": "a9822ad5930e7afa777a0f2631d98a4fa6288a11e11296a33ad9e4b99e8ff26e",
+        "tree": "1289d2a2ee304b2f6243e4f961b17206bfdb6dea730a1774b8c19086ed0cc648",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-021",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 2n\n.It Xo X\n.br\n.Bk -words\n.No \"A\\p\" No \"\\p\" No \"\\zY\" No Z\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "364d6371cdab4972c7ec272f9bfb70143d97bc1e4589755d6037de498d4acf5f",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 15,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X A  YZBODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "43dab9b02926cfd14a68302ae339566d5ff5a16738135a28e9f6ff0a688a9029",
+        "utf8": "bafdd383c9308cbd013c6e45c77b719783f7a8c56f9bd87297a9e9d93cb5c837",
+        "html": "9b25598504d2ee92c44cb2bab2af7c4eba924b96bdd1550799a001a671c8e684",
+        "tree": "fe5fa576ec1a4c155ba80d6d470cc0bf51bdbe368b5210c77f3ff71337fae25b",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-022",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 2n\n.It Xo X\n.br\n.Bk -words\n.No \"\" No \"\" No Z\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "b5fea97d00b2723ee298fc326b10686a7057c7a6bb30401f1418d18f7f8a12f7",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 15,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 2,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X   ZBODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "93c3df60cceffd155dfc802aeb68e3253ea403908433b938f83b213725c61a47",
+        "utf8": "73b483de0bcff1d4044187215c934ede6b666a55f7c1acb18dcbd9f917b835b9",
+        "html": "45a5dd8d57f78fd825d7a6726923e96997228e6d26dfa3f861db3809de2e646d",
+        "tree": "a6b30d2ff70760431713ae77d9839fc4fbd66ae6a81d0a5f885337e2a8257d40",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-023",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 2n\n.It Xo X\n.br\n.Bk -words\n.No ABC No DEF No GHI\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "5165bd00499b85b99480139e2946aae2649a5dad932a16d987f5a12d5c97ed44",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 15,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X ABC DEF GHIBODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "4eb8f735dfcf276e3373bb65869da7be47afc2ee949541cc71ef6f935a75be25",
+        "utf8": "27809cc8602fb92cc4bda9acce608568f4113d4274b5ed400d8237fd2abac82f",
+        "html": "011ad8a3a2b9b0e7a3307972e9c6794f1b876028ca7aa00f7888a3d08aa6ff8f",
+        "tree": "2076abf89e2b5e2aaf87a0835e74fadaf8602b7659b771e9a4a672bbfab0423c",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-024",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo X\n.Bk -words\n.No A No B No C\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "38fb797f94364130db0b7342cffd4c659dac68d52aaff8cc0f0d59c78cf38766",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X A B C BODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "5b528d1b2da0ce61d343f6df84b9cbac5c2bc3462357d1e61ee470421deab9ca",
+        "utf8": "d92b59a42b757e9df0b61a2694cbc7898a64d4b09e9208544291d0087a23e46f",
+        "html": "71bfe6d1a038ba751086568b3e637234eecd45660c49ec931d7a445b818e1a1a",
+        "tree": "48d2afca24b72f4c42886f35ce307b032b89fcfd8085bc8724ad00cfb389a871",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-025",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo X\n.Bk -words\n.No \"A\\p\" No \"\\p\" No \"\" No Z\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "ca597e8f847baa29d918a40f0e022e94a66781d30941e10309bb6ec0fc37916d",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 1,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X A   Z BODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "58a45f060f5f7c0565440a32c4d2204bbc06dfd952d75dff07e0b2ae5fe5cfa2",
+        "utf8": "050ab96d5dd6878fff361a8d1c6fa6a61fc5376a7f186e048cab8b6d2374ca80",
+        "html": "54a9278d4b460b7d32601d49b74d2fd3d00837ecfbf201030628ed8f231c1cca",
+        "tree": "6fd81ef1191f5f6fa8141a5bbca8c5506e4a9409b3eb03a3e4a3018517676170",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-026",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo X\n.Bk -words\n.No \"A\\p\" No \"\\p\\&\" No Z\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "a92c574de694e2e132b104412925d0e01f2b467d14718f03f1e959a281a0d16b",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X A  Z BODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "4585a62d478a51c408857f409e92f2926704aa02c11567781016b46495f8ed43",
+        "utf8": "52f374838182830eaae511a2de1cbbff5412789218f74192dfced6228ab9637d",
+        "html": "be4207089681d30b3edd3236158bdc6485f384e4a2522743cc5084c1a5e7d351",
+        "tree": "e384c0d5dfe6f56822d6171ee09ca896d381f07be2e6c490e3209ce2333be7c0",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-027",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo X\n.Bk -words\n.No \"A\\p\" No \"\\p\" No \"\\zY\" No Z\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "50698e378f9a7c860260e5b200eadd4f61ccefb104bc89509f1dcc49ddfadd46",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X A  YZ BODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "8b2979890a4ea6a087238301fee68001f320f17bd1100920661a9861084d31b1",
+        "utf8": "44a0fb59de071d6aed96f660feff2fdf7d31c95e226a7363d5a297a83d62c5a9",
+        "html": "54a9278d4b460b7d32601d49b74d2fd3d00837ecfbf201030628ed8f231c1cca",
+        "tree": "1fe28a81e52288aebd9584f9a58091ba99bf9a413fcb9f10702cce3d9ea3f327",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-028",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo X\n.Bk -words\n.No \"\" No \"\" No Z\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "6032fc7cf9a197f32bc2283f0e795a3900c97351001673b22d55d97f80c2de92",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 2,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X   Z BODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "4cca0ee33177564a6d70d09bbc0af8c6671b224d7d0c323fa5a5703c85728c2a",
+        "utf8": "0de1bb2c8ba38f09245b5ae8d7a8288f20cef286d2cdcd2eae379f041a5de976",
+        "html": "24a05b1989cc675b16e38c127e2b4af57ac649d859d63b8a465cacf9d4ed8aef",
+        "tree": "418f548a2a351a2f11d6555aa2937202de1631d5862dab2b5e4b416280123f55",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-029",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo X\n.Bk -words\n.No ABC No DEF No GHI\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "2a5b214c74858d7e7bc7435574a83a69d59292e27611e374ce324f2c859e8dcb",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X ABC DEF GHI BODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "eea9bd4741a1da64486f3151d8fdc58c07c8ea23bd747ffdb77a77550a9a5226",
+        "utf8": "585446f2b915d7416aab5b3accd869073cc69fdee020ce3581426597d5a2a3bc",
+        "html": "4e2e7e52af5b123afe72b91cab007d986753fbe630f8578a0f0d0f8902398e55",
+        "tree": "27cdfe545ea496d043ce0f1cd58d85e949b7b74e4f425ecbefefe7e1c25818db",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-030",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo X\n.br\n.Bk -words\n.No A No B No C\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "da85d7f51a836b4c81e1b239099c6dfab3d3f40c9575701be5a435b3e82a011a",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 15,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X A B CBODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "5ed7ab5d8dbf13b94743b75e4823758126969b03aa72f0172487efbb53e03e73",
+        "utf8": "070aa7408064cb253ad7e8cdb669ada1fdec3e0c835faa65a0108b510c782e74",
+        "html": "7e9f0c7320c9a2b4bb318888907eaeb58db46de8e6de84a61c2d3ea33c7c3937",
+        "tree": "cfba615dda80f2b2cd2124289fcf2d09ff38b31782e498a57492a6c9e7cd06f6",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-031",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo X\n.br\n.Bk -words\n.No \"A\\p\" No \"\\p\" No \"\" No Z\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "075266a83225067a1ab3d140e5ee4b4cfee3d1f9c720b5e0dcdca64df81021cf",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 15,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 1,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X A   ZBODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "a462565af82b1774015014063c29df2071981bbb3137b76179121e8f96bd1451",
+        "utf8": "1f7dd566220c284001abcd6ffedc0e67ef8f25553049af4c558661896a7a8344",
+        "html": "9b25598504d2ee92c44cb2bab2af7c4eba924b96bdd1550799a001a671c8e684",
+        "tree": "22b65e6c25853ecc9c7b042558ecb90b934814fc9629968c2d58a73b71247d18",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-032",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo X\n.br\n.Bk -words\n.No \"A\\p\" No \"\\p\\&\" No Z\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "8a8d916994f4c51f169c3a7f6df4cd602bcd91e0cab020482df7e25cad6ea91e",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 15,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X A  ZBODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "8fd5ed78efc3970495e5497626f4560d42a53c0457af0efad2dfa5910740fe7b",
+        "utf8": "c7ae8db0d32a11b074bd055ea0100165e568d12212d4df4a6877527921220117",
+        "html": "a9822ad5930e7afa777a0f2631d98a4fa6288a11e11296a33ad9e4b99e8ff26e",
+        "tree": "ca1bc6d63587535a9b91c8836e1b2eb3e5227a10a39e130315eb91dd900f82a7",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-033",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo X\n.br\n.Bk -words\n.No \"A\\p\" No \"\\p\" No \"\\zY\" No Z\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "3dfe4972f8721346338ba13f6031c5488a4454e40bebc6f761ae8505905eca96",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 15,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X A  YZBODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "43dab9b02926cfd14a68302ae339566d5ff5a16738135a28e9f6ff0a688a9029",
+        "utf8": "bafdd383c9308cbd013c6e45c77b719783f7a8c56f9bd87297a9e9d93cb5c837",
+        "html": "9b25598504d2ee92c44cb2bab2af7c4eba924b96bdd1550799a001a671c8e684",
+        "tree": "70d5e4141ca734cba38bdb92f7d68813095928adfb969cf8b8549ac59a13a18a",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-034",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo X\n.br\n.Bk -words\n.No \"\" No \"\" No Z\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "dcc5820cfc1935b368df7aeb6e3de447a6bb9c126efc8e5dfa7670a23c5965de",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 15,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 2,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X   Z BODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "4cca0ee33177564a6d70d09bbc0af8c6671b224d7d0c323fa5a5703c85728c2a",
+        "utf8": "0de1bb2c8ba38f09245b5ae8d7a8288f20cef286d2cdcd2eae379f041a5de976",
+        "html": "45a5dd8d57f78fd825d7a6726923e96997228e6d26dfa3f861db3809de2e646d",
+        "tree": "45ebb8b728e956ea186f072e7a9d09a8ada9a9f4dc37fb8f268f26902528e953",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-035",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo X\n.br\n.Bk -words\n.No ABC No DEF No GHI\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "416c61cf68056e80ee65685f9d690f29b5641fab8ed90efcb2996c61702bfd53",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 15,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X ABC DEF GHIBODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "4eb8f735dfcf276e3373bb65869da7be47afc2ee949541cc71ef6f935a75be25",
+        "utf8": "27809cc8602fb92cc4bda9acce608568f4113d4274b5ed400d8237fd2abac82f",
+        "html": "011ad8a3a2b9b0e7a3307972e9c6794f1b876028ca7aa00f7888a3d08aa6ff8f",
+        "tree": "840d14e8547cababb375164ff75cd4577fa85b69bc6889412e982e100be44220",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-036",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 0n\n.It Xo X\n.Bk -words\n.No A No B No C\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "144e9f7e2c8c5447c7bec456e1bfbb1ffa38177ec5c6d67be5737109832473dd",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X A B C",
+        "       BODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "f8a831d0825cd8fb3d676f0e6e46aeff42185bb1c47fde0b027b57df3b5ac9dd",
+        "utf8": "e6029f391cf8a35ef14fd9f2f82a4c798a67d5e7334d1f2608011566ac69f102",
+        "html": "3d23f4306a224cd8b7e78b5f5bd5b90ac65e4ad3a9942f94f035958e21a1903c",
+        "tree": "0df8048dbd57d6be0d8051185aeb5254bdc70154f0e2b337e106c0b5f1526e6c",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-037",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 0n\n.It Xo X\n.Bk -words\n.No \"A\\p\" No \"\\p\" No \"\" No Z\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "52715bdc24e33f3d7526caa4be635973fdb565684497a38382c57adcdb266195",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 1,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X A   Z",
+        "       BODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "4a5419659be84e48037b9acb87abe2219f2da399f31349b896e4675599ffd58a",
+        "utf8": "ac32df2a56588d00a3b6f3461e6a86bab2640cf26956dd1a5419b4ad85921f82",
+        "html": "d05830fcf49a96058fec361af2407b28fd8befeba58ea06ba6fca6354d475180",
+        "tree": "6b7683a57042db254e2a63eb011bf667a7bc09f3a6ea074fad13cc9cb73b8a9a",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-038",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 0n\n.It Xo X\n.Bk -words\n.No \"A\\p\" No \"\\p\\&\" No Z\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "b9038db3e51af1ce5cfe4b524c09ddf58e3ef0c059c51a6b1acca3f5e89cc610",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X A  Z",
+        "       BODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "1d9f821eca38d25b7569237ef3fd87d1284ff6d2d14aed6a4036423f139b5613",
+        "utf8": "ae9c67f60e83741999417c33fa41699d39de6e4e9de6d7e6a1cfe1fc6cb89d94",
+        "html": "6858c9fdaf826239757a0eaab85dda825b375cb98256aa7a7006908b6bcc7664",
+        "tree": "f2811c83120a6d984d6c95fb06c91a632aae30240ce520b5995e2ea0ab0d9076",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-039",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 0n\n.It Xo X\n.Bk -words\n.No \"A\\p\" No \"\\p\" No \"\\zY\" No Z\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "f7057c6a61c5f0c098cf6cf721df9a5b7aa3b0406c22e0b92ea9ca80abf24c47",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X A  YZ",
+        "       BODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "853eda44817f0429c792fc9f5bce325f4a7502745d2679c64b35662534179825",
+        "utf8": "0a2a070bb0a38644a7d664889b3810216b014577f69be3311a383abdea415673",
+        "html": "d05830fcf49a96058fec361af2407b28fd8befeba58ea06ba6fca6354d475180",
+        "tree": "77e49e8f601ae8b0dddab9c7d8bd9a65847d09519beb128ce80301cc84e6c7da",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-040",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 0n\n.It Xo X\n.Bk -words\n.No \"\" No \"\" No Z\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "53573b5a66a844a7f488e7af550addfb678da37ddda8cac14071cad7edad0d29",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 2,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X   Z",
+        "       BODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "1ef00cc62b881b86c1e69808532555b5d2e3e94ae47f9e44f4089d9b723fcf31",
+        "utf8": "663c2d4cf93a72e649fc264acc0bbc175606ec90859e37ab64c6e1e10e9a69f7",
+        "html": "837d94c9977f8562fa5ebaf33c607faf41a1751a892a8f9971c55c2a279fb76c",
+        "tree": "a837d3f116a0edc75cee973932d8f02ef0dcd386f0080a3f5041fa9b0f2c9a36",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-041",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 0n\n.It Xo X\n.Bk -words\n.No ABC No DEF No GHI\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "04d714df006c01f01c7e00106ce34738bd1692a2f82e6928effad8e979cba0c3",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X ABC DEF GHI",
+        "       BODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "d91a631c5ecc19cec484fe5ab6b4de52145aa704c70b1405b07b030f957afff6",
+        "utf8": "adc0c23a795889f8ac0227d59c35607d94d8d601ffbbf1288d54ab4e2b84e2d8",
+        "html": "e1c6570283465b6d29ba478ee94ef12503601bdde920bad702a633867fef68a2",
+        "tree": "ef564223eb6233a608dfbc1ecd204dea0993733f50385222aec3e6762ff46650",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-042",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 0n\n.It Xo X\n.br\n.Bk -words\n.No A No B No C\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "afa0d26fc2ba72ff2432fda4ae1d1ebe189485787ded479047bba0e16d105c4f",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 15,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X",
+        "     A B C",
+        "       BODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "ce5db85c364a683a97fcf2c3d1e407fe4aa6822c2cc5a799d1506fa4a2941099",
+        "utf8": "50edcebeb01acad296969e41c7e1302686cbeb74723ea4eb7aeb5210816a7c58",
+        "html": "acd2824740c66bf4ed01a9b2b8aec01e3a6db29cb56f5470fce1d4b57e326207",
+        "tree": "01be042663c38f90564484880171357f64250c7effe353e58f6739bfa0d4d412",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-043",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 0n\n.It Xo X\n.br\n.Bk -words\n.No \"A\\p\" No \"\\p\" No \"\" No Z\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "a137414a0acf3f8513f21ee8be78f68bcce550de2df335e0d07cfc92a7f52095",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 15,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 1,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X",
+        "     A   Z",
+        "       BODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "2810295a83a2b4f4af5e06fbe1911f06181d396f8e0805890b060d3dd10b21db",
+        "utf8": "2ebd39640e6bba2c900c0029442854285549074b8a483ded1b04f17ced6524b4",
+        "html": "e0a8c49663d196fdd044a190248c83cfcb3fb15984db7bae4926f6ccc6b11a0c",
+        "tree": "d7fc0c0e0253a04c2509149885d64c54e4a988fa0c5851497d3db47989d37bac",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-044",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 0n\n.It Xo X\n.br\n.Bk -words\n.No \"A\\p\" No \"\\p\\&\" No Z\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "52da549789b0dbb4de35be4568525cfc05c0cbf372ecb4c1d2f17f0e5f4424e6",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 15,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X",
+        "     A  Z",
+        "       BODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "518ea826b7563c8e64a266fd23f2254205331e63c2f19bda0caf85d48a0285c3",
+        "utf8": "43c1dad4ea11fbaf5cb89b88211d8eb9f94e3f78d00ea18a8857acd6cda5e829",
+        "html": "209e3207f5f579d4b34462baa280560c4794c8e8f0c9986e8b694c26e9370d0d",
+        "tree": "973e7a269cc987b21f7639e3a3591ca9f15ca921748fd7ff95aadfed1df3ac13",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-045",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 0n\n.It Xo X\n.br\n.Bk -words\n.No \"A\\p\" No \"\\p\" No \"\\zY\" No Z\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "295859ce3eb604a835a3ee08826f60be25ba55c75755dca54af80093a01ce731",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 15,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X",
+        "     A  YZ",
+        "       BODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "b0873796a6a97d81eeb2000ed8618e257d3233fa2a00d28a8ce19dbfaf36fda1",
+        "utf8": "046a07dc7d40a87044977e5744a56277caf26c64db4ce0cefd2faa010ab7f2b3",
+        "html": "e0a8c49663d196fdd044a190248c83cfcb3fb15984db7bae4926f6ccc6b11a0c",
+        "tree": "03ba601769e38b7810a4827a4a14791024197e4b11b84152a049cccddfa0ac71",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-046",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 0n\n.It Xo X\n.br\n.Bk -words\n.No \"\" No \"\" No Z\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "15d410907cb753b946094f81580c18854a565c23d262b3b7facfb874bc9d4023",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 15,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 2,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X",
+        "       Z",
+        "       BODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "24eee2657f5752cc0e46b8f331e3f84049f7d9143c4f199c19cf1266817fa5f6",
+        "utf8": "c18c983103d0bbad42fbf7039269831071052dd8ddbd18bc45ca5b57a61770de",
+        "html": "7f7224972ac5392bbab4ca86b9d1562d324b7902d470b04c52d42001e244f576",
+        "tree": "4623dc5782584c3914c06d4604b5e194508a3a643d2031787425764aae2b3590",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-047",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 0n\n.It Xo X\n.br\n.Bk -words\n.No ABC No DEF No GHI\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "057c30a8d86021604c4b363d65cbc2299da251196c6ffacbc754421a81bf9924",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 15,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X",
+        "     ABC DEF GHI",
+        "       BODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "60688980b6405bee15629f6d1cab71e33e786e0226e1e7c553acea3a36b6d31e",
+        "utf8": "ac468026b1ccdf83677444b9f5ad5c42d4e267f4bf70aa3f191d0b67c9ef8a89",
+        "html": "0cdb67005f8801a1c9f1ce6b27c2eac044c8a157e08c538e7846cda73234cf5c",
+        "tree": "5a742e456d2108adb12fcd0c53848fe5ec4575c1568a5a01212c5dd32280b09b",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-048",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 2n\n.It Xo X\n.Bk -words\n.No A No B No C\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "0f4d3ca28611cf7ab93c8f70bb322c1350b88fc91f8001872386bf1c78d09df1",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X A B C",
+        "         BODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "d75a6baa217c107b30b8307c0146b9ee22f260d8d717a87c5fc62079a389947d",
+        "utf8": "03d57c50a662ec7bfdbab2159342534139d8b2448dcdd599efbd37583bcaca36",
+        "html": "3d23f4306a224cd8b7e78b5f5bd5b90ac65e4ad3a9942f94f035958e21a1903c",
+        "tree": "dec42833c20afc2d88f033c282e2ab4a8e2fa1b693f38edf0049803d7aa1b60e",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-049",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 2n\n.It Xo X\n.Bk -words\n.No \"A\\p\" No \"\\p\" No \"\" No Z\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "757d899dfa6116bb0d2a40a7d0b425c14f05fced2f840510bad5a8cb2de009cc",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 1,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X A   Z",
+        "         BODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "859ed0b394dd9bfa248c1404be8505f0740831c469c839c324475f2c0a965bb8",
+        "utf8": "fb7f97c005f8a1968b5ddac2b94c671d176a5e6ed5b7ca1a66d03265c0874b69",
+        "html": "d05830fcf49a96058fec361af2407b28fd8befeba58ea06ba6fca6354d475180",
+        "tree": "97ef0137b09acb756ff4237395a3d59b8fa972c668c684469c54bacfec38b8ff",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-050",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 2n\n.It Xo X\n.Bk -words\n.No \"A\\p\" No \"\\p\\&\" No Z\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "743b1123ee84bc8e9b484ecd9d767042526b225da966f43a4afe7147dd8c79a6",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X A  Z",
+        "         BODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "3ff8c38dd5e827205ddcccf302be2662b641cd57e00c0fde80dd8e8d62e49025",
+        "utf8": "094b2760adc41dfd21168a3b0d518af0a32ddab14f1054d3245645efe8756384",
+        "html": "6858c9fdaf826239757a0eaab85dda825b375cb98256aa7a7006908b6bcc7664",
+        "tree": "196e36a69549280c12a78076b11b253174a56f0a6890d8d69766665f99a989fc",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-051",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 2n\n.It Xo X\n.Bk -words\n.No \"A\\p\" No \"\\p\" No \"\\zY\" No Z\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "b9c4d5b12d297306c9e65f8b0fad89d4cd02d533170ce842bcab28f2b1114f5e",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X A  YZ",
+        "         BODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "4438d6db8d97a31c02594a703f71d09d18696ba70d1c89df24e69fc7f51e2894",
+        "utf8": "de452e89a03a247a63985ce983200dade8525431c775417ab4f351e6f9b35ebb",
+        "html": "d05830fcf49a96058fec361af2407b28fd8befeba58ea06ba6fca6354d475180",
+        "tree": "92368291f6de1811f5054113ef6a282e569f5849483d75b45cee4b18898247c2",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-052",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 2n\n.It Xo X\n.Bk -words\n.No \"\" No \"\" No Z\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "89211f063b0f08aab9ab9b77c879c76f131b095f16c4faeea3aa014f102d69b1",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 2,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X   Z",
+        "         BODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "fec6d5dbbf6cd700a933529516171a1c7062c515b78279364e48e3ba1b4a85b5",
+        "utf8": "6bfc853a25640362de3ab1ba2ba147e329812c0e0b58da80075b72fa5f9a52ea",
+        "html": "837d94c9977f8562fa5ebaf33c607faf41a1751a892a8f9971c55c2a279fb76c",
+        "tree": "616f681af1c30c0610060d747abd83e9e0283e2478691f9fb628a1616816f4b1",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-053",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 2n\n.It Xo X\n.Bk -words\n.No ABC No DEF No GHI\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "45c27f910857f47a75f30dcd094c01531759dfed12cf811780358260fa109932",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X ABC DEF GHI",
+        "         BODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "a72b3ae94e978b1f23dfbf2c30c33ddd3ca7f9c94f3bceb759f5b130a521d017",
+        "utf8": "a6c0fcce0ad91f5cee5787f6800beacf480db105a4c1692b163f92378bf62682",
+        "html": "e1c6570283465b6d29ba478ee94ef12503601bdde920bad702a633867fef68a2",
+        "tree": "702f53fbfc4dc2aca4b56cf659e9025782fa8d4a976ded39510ace132847ec7d",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-054",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 2n\n.It Xo X\n.br\n.Bk -words\n.No A No B No C\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "70d0563c78700d0f91958560361d93986f0ede9771b133e6612643e301b42b33",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 15,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X  A B C",
+        "         BODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "5f70e8112102b81be959d027b272972f09dcd0332980cfba61351b603bf55a1d",
+        "utf8": "629740d469f90a81650470e371081f0a92a9aaded495fae033d506f239dbf688",
+        "html": "acd2824740c66bf4ed01a9b2b8aec01e3a6db29cb56f5470fce1d4b57e326207",
+        "tree": "2a50b93601081fbef1cbee0d94989c72c6d15d593445146ee8ddf24d7c5a6299",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-055",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 2n\n.It Xo X\n.br\n.Bk -words\n.No \"A\\p\" No \"\\p\" No \"\" No Z\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "70de8d3f22b19a6e07d2c8c22ad1b2ddaba1b965e131436b065923c3792cb95a",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 15,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 1,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X  A   Z",
+        "         BODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "d614b0698095639fddc372cda90955baaa56257f4b64604468baa7e990b6f060",
+        "utf8": "d20321e9d588a0b8090af904a24366e82864a71ec34f1e5a17090fb76a9a5912",
+        "html": "e0a8c49663d196fdd044a190248c83cfcb3fb15984db7bae4926f6ccc6b11a0c",
+        "tree": "53e954a383147e8c2c6e6fef328efc0d7ee9145615d1313baca7dc91150abf7b",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-056",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 2n\n.It Xo X\n.br\n.Bk -words\n.No \"A\\p\" No \"\\p\\&\" No Z\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "3c273b181246d80815b1e885e1fdae2a2500facaa97eeafef2b2b872cd0c9f66",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 15,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X  A  Z",
+        "         BODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "0e1a02e483bcf1c4c5c8b71a2e2867eabe14636daa837b9d760b476cca58a681",
+        "utf8": "d0b5496d4dbfe84c17faa70d858d7c514ed7d69bb8f06785b8553ef7a26471f9",
+        "html": "209e3207f5f579d4b34462baa280560c4794c8e8f0c9986e8b694c26e9370d0d",
+        "tree": "12c7fd79ca4bf63f3f23c09244d2ef6296d699839c7fff1617f9fc300e0404c1",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-057",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 2n\n.It Xo X\n.br\n.Bk -words\n.No \"A\\p\" No \"\\p\" No \"\\zY\" No Z\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "c5f53c3ca05d12ffaa060df29ed06ffec0fcb81583f08df4f5d2120eeb8a5e06",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 15,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X  A  YZ",
+        "         BODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "5def99c53fedb3763371389188a2f3484a4f07c62b29e595c6117da86401852a",
+        "utf8": "925535d67bc5282f826e44acb7dbb513d726257724eb8e1a83111daae8eb02b9",
+        "html": "e0a8c49663d196fdd044a190248c83cfcb3fb15984db7bae4926f6ccc6b11a0c",
+        "tree": "990c66ee8e14650cc46f0976f68f1ae1b2e52820aea0386ae86d324f2b4df47d",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-058",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 2n\n.It Xo X\n.br\n.Bk -words\n.No \"\" No \"\" No Z\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "34bc63573a9b4b8a57e9f92fff31bf09d94df92c99da2259144dad47be1cbdc5",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 15,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 2,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X    Z",
+        "         BODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "616f5970496db945520bfc8246c3d8295bdbfc71129970d61505c6d74fc69a37",
+        "utf8": "6855caf44a8e25f0940c26b1163726b3f4aec246bd542e8404ba545ca19f8200",
+        "html": "7f7224972ac5392bbab4ca86b9d1562d324b7902d470b04c52d42001e244f576",
+        "tree": "254ee00768261bd6b57a9d8b972d0710b25a2edada4fb32542976c00ded1da44",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-059",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 2n\n.It Xo X\n.br\n.Bk -words\n.No ABC No DEF No GHI\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "6bdae8f80628ad164ac0ca5476877beea59fa4dae3e872baf79e5dd78701ac23",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 15,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X  ABC DEF GHI",
+        "         BODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "cb7aa669d257c8d61bb15b7fdb51feb04335f7cca603b1d909af76f07e0f10e2",
+        "utf8": "91cfae9b7585912713fec4793917542d138dc643202bedab53e5b2d15d0f26f9",
+        "html": "0cdb67005f8801a1c9f1ce6b27c2eac044c8a157e08c538e7846cda73234cf5c",
+        "tree": "d2f3367b781fdc42d5bca16e38856a29ccc81fbd75f4424836a92d79b889e1ec",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-060",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It Xo X\n.Bk -words\n.No A No B No C\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "2599159ad48fb76e33bec2322316e1be2e92b09f8ce724ee0ee03a435a34d727",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X A B C",
+        "           BODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "ef9a3962f9e0e584675e4b9140c729549434b6aca426c224744577ff6f8b28f5",
+        "utf8": "634c0664f2807cd17f3946b40227a0323bc872721f39c97f767cd7938a022f41",
+        "html": "3d23f4306a224cd8b7e78b5f5bd5b90ac65e4ad3a9942f94f035958e21a1903c",
+        "tree": "f7b1f18287b4fa2dab570a76c16df522ec9c32b41db72bb1b0be84dcc6faff1c",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-061",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It Xo X\n.Bk -words\n.No \"A\\p\" No \"\\p\" No \"\" No Z\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "47eb8c0e9fde3f75e2af8b82cb91c93275d8c1d73dc7c2cb0da37e96516aa24f",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 1,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X A   Z",
+        "           BODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "765cb5d7cd58d963c1919fcd9c6264637187f620a613ea80bf656ec145c07d00",
+        "utf8": "fe022c68f7c9b765986d22b687743842a1ce930121702ec8ce0467a7b4ec1bc5",
+        "html": "d05830fcf49a96058fec361af2407b28fd8befeba58ea06ba6fca6354d475180",
+        "tree": "339ee423fa8f899cba4990f8f8ecb2a563c041232bd982059891bb7ef1812744",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-062",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It Xo X\n.Bk -words\n.No \"A\\p\" No \"\\p\\&\" No Z\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "00f29db26dac99add6016e103367f49c8137ba4cec4c7b81945a4a7d927a9186",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X A  Z",
+        "           BODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "c5324510e8042133c2c725a9fd3d289e6b9e8f334eab567cacee73b42ceb9206",
+        "utf8": "144585428749b09b3def2447b0433ee6cb4a2b759fa41b86519ec540f3d56520",
+        "html": "6858c9fdaf826239757a0eaab85dda825b375cb98256aa7a7006908b6bcc7664",
+        "tree": "cefa000df3f3c4ede7db9389e967b92ad42080f1f75969b872b4c4e43004d6b4",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-063",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It Xo X\n.Bk -words\n.No \"A\\p\" No \"\\p\" No \"\\zY\" No Z\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "b737435992c81ca95c39352da2d2fc1975a34a5465652d00d96d110a2c26fbfa",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X A  YZ",
+        "           BODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "809d93981f1f313c0ccd30fbb311693a02a7bf674034ff864a5cfff892a10f69",
+        "utf8": "5365ccd71b2274ca4b34c30a560ef3dbbe634d727420dc5a7fd0633bc88c1a25",
+        "html": "d05830fcf49a96058fec361af2407b28fd8befeba58ea06ba6fca6354d475180",
+        "tree": "5ee3105e1504d7b6157fb74aeadd3eb147c82400c674dc793c258916d3cb75a7",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-064",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It Xo X\n.Bk -words\n.No \"\" No \"\" No Z\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "c1f1406eeb844aac4284e91b697cb741bdb5356d9b02df2857e17353ebf5706c",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 2,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X   Z",
+        "           BODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "00a381a4e8db726007b6443e89c5c6dab149e99324540599a415ffd8a4d045b5",
+        "utf8": "73553eb20658c1d722e370c11ab2490d7fb2fe242824669379ea4c025a2b7a11",
+        "html": "837d94c9977f8562fa5ebaf33c607faf41a1751a892a8f9971c55c2a279fb76c",
+        "tree": "674e45390c356de5bd22149111cb2995b0e67d46137703c9acf22230ff583bff",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-065",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It Xo X\n.Bk -words\n.No ABC No DEF No GHI\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "0ce8a1fa28596ad9540b9fae8c5a6d9f6aabc8a95d8a5f72397b1c3cd86b3c15",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 10,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X ABC DEF GHI",
+        "           BODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "abba5dbcc80676b342906d45530e0ffa887cc0d15b1d76b3b1e2b5b2f8afceae",
+        "utf8": "a87345244e9e304d2b1449f71f9722f1492f9378b446dcc6d00cbc777e511684",
+        "html": "e1c6570283465b6d29ba478ee94ef12503601bdde920bad702a633867fef68a2",
+        "tree": "81a1e6679ab248670ba8d2282e919856bb53d4e43406903856946fd46c99d9d3",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-066",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It Xo X\n.br\n.Bk -words\n.No A No B No C\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "b68a42a14de10732f4b883b1291bcd31b15cff853b04c6adf2be65f1772bc277",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 15,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X  A B C",
+        "           BODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "0da42633c59e590590b48fb2eb54d081079ba0baa58a058443e381534035cf60",
+        "utf8": "29bca37a6f425d14165fba6269cced300ddac4bb35a34fc3bc1b699ed43b081a",
+        "html": "acd2824740c66bf4ed01a9b2b8aec01e3a6db29cb56f5470fce1d4b57e326207",
+        "tree": "f52da1a7e398ac5624df05319adeb10f60d1b37d15a0720057d1a5a1f9edf6a1",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-067",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It Xo X\n.br\n.Bk -words\n.No \"A\\p\" No \"\\p\" No \"\" No Z\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "d4a2cda970770c61bfa83c65e9211604533a89cb9c41c2642bc12e1d2353d114",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 15,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 1,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X  A   Z",
+        "           BODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "b5686f402d3abb8159bf898b166f9617a6b5b0cd494208fcafb9649a7d616b1b",
+        "utf8": "498b7c365cc46dcd0291cd41f074c3df48d0dc674549fdda9bb6d99921375de9",
+        "html": "e0a8c49663d196fdd044a190248c83cfcb3fb15984db7bae4926f6ccc6b11a0c",
+        "tree": "c4a473f2e6ef58ffb9b6f9805fa8033cd79b84ed4441157bdd580481d3a2bda3",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-068",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It Xo X\n.br\n.Bk -words\n.No \"A\\p\" No \"\\p\\&\" No Z\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "bcf0d4ded8440e48c75246da7bc5d8ee0657c9702200e6ae4b49376ee412fa88",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 15,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X  A  Z",
+        "           BODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "2cac07e2ca80fbfebdafaad67e65e6d0ca142aed4adb17ca5097c30286556d25",
+        "utf8": "1021d5352facbe592ef815ed5bf9f39ac947bab889a6f31a0e6fd9c7de30a9e2",
+        "html": "209e3207f5f579d4b34462baa280560c4794c8e8f0c9986e8b694c26e9370d0d",
+        "tree": "23fa54a7f976cb8a80fe583860afdb798351e14bc024d46e3ae30f61184dec0d",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-069",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It Xo X\n.br\n.Bk -words\n.No \"A\\p\" No \"\\p\" No \"\\zY\" No Z\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "34fac630fd79e79dda20b64dfac4a1c4858f9c5902db18799bbe461a0ace5227",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 15,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X  A  YZ",
+        "           BODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "f6f43afc0e15041140a82f1797be8d9e6da60436d692fd09d666ced9f8f99aa5",
+        "utf8": "84894c9d041cbb402dee1a09a5f124e59b58612d12b320158d97dfbdb0ec997b",
+        "html": "e0a8c49663d196fdd044a190248c83cfcb3fb15984db7bae4926f6ccc6b11a0c",
+        "tree": "5f2a1178129b8b6cdc037b7dfaa58f5f92214e03240eee178e6bd6439dd61642",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-070",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It Xo X\n.br\n.Bk -words\n.No \"\" No \"\" No Z\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "362322da4979262dee8bb792f28d3eb12f66b0a9ca8e92a383a8592b7bbb9a35",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 15,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 2,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X    Z",
+        "           BODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "b64f125d80264428e8d2d2311b0b6841008d23e2b859dc73f8220315da6df604",
+        "utf8": "f897612ccb6997a9677c10886189a4c34101cd87d3013585ea658bc3b219c126",
+        "html": "7f7224972ac5392bbab4ca86b9d1562d324b7902d470b04c52d42001e244f576",
+        "tree": "6d692e6f20f52b3fc0c508ab2995dad2febd3f6e96119b81dd5be0f2539c1030",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "kept-field-071",
+      "family": "kept-field-consumption",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It Xo X\n.br\n.Bk -words\n.No ABC No DEF No GHI\n.Ek\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "e8e0a07defafd63ca82ed51d7b531cd9a5217fb51f4b84194c9a696330cce9cd",
+      "oracle_class": "legal",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 15,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [
+          {
+            "label": "Bk",
+            "kind": "block",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "head",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          },
+          {
+            "label": "Bk",
+            "kind": "body",
+            "line": 11,
+            "column": 2,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     X  ABC DEF GHI",
+        "           BODY"
+      ],
+      "projection": {
+        "product_table_seams": []
+      },
+      "profile_sha256": {
+        "ascii": "6176fac318b5d005c7bb4fe393295d12d1890cd46459331902aaf5763ed097dc",
+        "utf8": "2cacbd0ca277730f606fbccc932fbd734dd10069564c55a4def70e627d1a6718",
+        "html": "0cdb67005f8801a1c9f1ce6b27c2eac044c8a157e08c538e7846cda73234cf5c",
+        "tree": "2503bebf477c2474461165ade99e362b1b98472170cc7258c5766f4a7894e766",
+        "lint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    }
+  ]
+}

@@ -7,6 +7,7 @@ pub(super) struct WordPassProjection {
     pub(super) closes_before: usize,
     pub(super) leading_cells: usize,
     pub(super) native_separator: bool,
+    pub(super) prints_padding: bool,
     pub(super) split_word: Option<Vec<Inline>>,
 }
 
@@ -78,10 +79,12 @@ impl InlineBuilder {
                 } else {
                     receipt.first_content_cell
                 },
-                projected_device_padding: self
-                    .execution
-                    .pending_field_spaces
-                    .max(materialized_field_padding),
+                projected_device_padding: if receipt.prints_padding {
+                    self.execution.pending_field_spaces
+                } else {
+                    0
+                }
+                .max(materialized_field_padding),
                 projected_field_prefix: false,
             });
         let projected = super::super::super::plain_text(incoming);
@@ -110,6 +113,7 @@ impl InlineBuilder {
         let mut projection =
             self.record_authored_native_passes(incoming, receipt.first_content_cell);
         projection.native_separator = native_separator;
+        projection.prints_padding = receipt.prints_padding;
         projection
     }
 
@@ -185,6 +189,7 @@ impl InlineBuilder {
             receipt.first_content_cell,
         );
         result.native_separator = native_separator;
+        result.prints_padding = receipt.prints_padding;
         self.execution.flush_unit = buffer;
         self.execution.flush_unit_anchors = anchors;
         result
@@ -324,6 +329,7 @@ impl InlineBuilder {
             leading_cells,
             split_word,
             native_separator: false,
+            prints_padding: false,
         }
     }
 }

@@ -298,6 +298,13 @@ impl BlockState {
     pub(super) fn hard_break(&mut self) {
         self.formatter.note_definition_boundary();
         self.paragraph.hard_break(&mut self.formatter);
+        self.settle_definition_line_boundary();
+    }
+
+    /// The native request can close a row whose glyphs belong to HEAD.
+    /// Its BODY owner consumes that same row once, before another word
+    /// writes cells; request dispatch must not bypass this ownership seam.
+    fn settle_definition_line_boundary(&mut self) {
         if self.formatter.definition_head_row_pending()
             && self.paragraph.consume_invisible_head_row()
         {
@@ -460,6 +467,26 @@ impl BlockState {
         };
         self.literal.adopt(children, source, layout);
         true
+    }
+
+    /// A request's `pre_br` consumes the live row without changing IR owner.
+    /// `ti` uses exactly this entry with or without numeric operands; source
+    /// `NODE_LINE` and the request are separate `term_newln` events.
+    pub(super) fn pre_break_request(&mut self) {
+        self.formatter.note_definition_boundary();
+        if self.formatter.no_fill || self.column_uses_literal_output() {
+            self.literal
+                .with_inline_builder(&mut self.formatter, |builder| {
+                    builder.control_line_break();
+                });
+        } else {
+            self.paragraph
+                .with_inline_builder(&mut self.formatter, |builder| {
+                    builder.control_line_break();
+                });
+        }
+        self.formatter.no_fill_inline.retire_consumed_cell();
+        self.settle_definition_line_boundary();
     }
 
     pub(super) fn no_break_formatter_flush(&mut self) {
@@ -642,9 +669,7 @@ impl BlockState {
                     children,
                     layout,
                     source,
-                } if mant_ir::inline_plain_text(&children)
-                    .chars()
-                    .all(char::is_whitespace)
+                } if !crate::mandoc::inline::has_rendered_formatter_glyph(&children)
                     && has_formatter_text_cell(&children) =>
                 {
                     // An empty or whitespace-only formatter word owns one

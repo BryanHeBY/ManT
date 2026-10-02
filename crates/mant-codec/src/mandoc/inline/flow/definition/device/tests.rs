@@ -73,9 +73,93 @@ fn a_source_origin_overrides_existing_minimum_field_spacing() {
     let device = builder.native_field_device(false).unwrap();
     assert_eq!(device.row_origins.len(), 1);
     assert_eq!(device.row_origins[0].2, 6);
-    // This distinct excess is used only to deliver an otherwise hidden
-    // actual row end; it is not the row's presentation origin.
-    assert_eq!(device.unprojected_origin_units, 5 * 24);
+    // The pristine D1 column source keeps all six offset cells. On a fresh
+    // row the common five-cell page origin already covers minbl=1; its
+    // removal cannot subtract that register again (term.c:113-116).
+    assert_eq!(device.unprojected_origin_units, 6 * 24);
+    assert_eq!(builder.definition.as_ref().unwrap().hang_row.minbl, 1);
+}
+
+#[test]
+fn common_page_origin_covers_minbl_only_before_the_first_real_print() {
+    // Exact width-4 HANG/sp-debt and combining-graph sources ran all five
+    // pristine profiles before this assertion. term_ascii.c:81 and
+    // mdoc_term.c::termp_sh_pre() establish the common five-cell offset;
+    // term_field()397-434 advances it for a printed graph, including a
+    // zero-width Unicode graph, but skips ASCII_NBRZW altogether.
+    let mut builder = InlineBuilder::new();
+    builder.begin_column_body(12, 0, false);
+    let row = &mut builder.definition_state_mut().hang_row;
+    row.minbl = 1;
+    assert_eq!(row.padding_units(0), 0);
+    assert_eq!(row.padding_units(6 * 24), 6 * 24);
+    assert_eq!(row.minbl, 1, "observing padding cannot replace minbl");
+    row.page_origin_printed = true;
+    assert_eq!(row.padding_units(0), 24);
+    assert_eq!(row.padding_units(6 * 24), 6 * 24);
+    row.endline();
+    row.minbl = 1;
+    assert_eq!(row.padding_units(0), 0);
+}
+
+#[test]
+fn only_accepted_encoded_prints_retire_an_occupied_common_origin() {
+    // Exact D1 X/\zX/\&/combining column sources ran pristine before this
+    // assertion. term_field()397-434 skips NBRZW/tab references but prints
+    // a zero-width Unicode graph; a leading marker's rejected pass never
+    // calls it (term.c:143-146). One captured receipt transfers that fact.
+    for (cells, printed) in [
+        (
+            vec![FieldCell::Graph {
+                text: '\u{301}',
+                width: 0,
+            }],
+            true,
+        ),
+        (vec![FieldCell::ZeroWidthGraph], false),
+        (vec![FieldCell::TabReference], false),
+        (Vec::new(), false),
+        (
+            vec![
+                FieldCell::BreakMarker,
+                FieldCell::BreakableBlank,
+                FieldCell::Graph {
+                    text: 'X',
+                    width: 1,
+                },
+            ],
+            false,
+        ),
+        (
+            vec![
+                FieldCell::Graph {
+                    text: 'X',
+                    width: 1,
+                },
+                FieldCell::Backline,
+                FieldCell::Graph {
+                    text: 'Y',
+                    width: 1,
+                },
+            ],
+            true,
+        ),
+    ] {
+        let mut builder = InlineBuilder::new();
+        builder.begin_column_body(12, 0, false);
+        let writes: Vec<_> = cells.into_iter().map(FieldWrite::Cell).collect();
+        builder
+            .definition_state_mut()
+            .field_buffer
+            .apply_writes(&writes);
+        let device = builder.native_field_device(false).unwrap();
+        assert_eq!(device.has_occupied_row(), printed, "{writes:?}");
+        builder.retire_native_field_with_device(Some(&device));
+        let row = &mut builder.definition_state_mut().hang_row;
+        assert_eq!(row.page_origin_printed, printed, "{writes:?}");
+        row.endline();
+        assert!(!row.page_origin_printed, "real endline retires the origin");
+    }
 }
 
 #[test]

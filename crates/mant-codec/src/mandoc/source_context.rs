@@ -47,6 +47,7 @@ pub(super) struct LoweringContext<'a> {
     /// Immutable `NODE_ID` owners collected before structural lowering.
     pub(super) native_target_owners: HashSet<String>,
     pub(super) diagnostics: RefCell<Vec<Diagnostic>>,
+    pub(super) escape_coverage: super::escape_coverage::EscapeCoverage,
     /// Private pre/children/post execution shared by detached output buffers.
     pub(super) scope_posts: super::containers::ScopePostState,
     active_mdoc_section: std::cell::Cell<MdocSectionContext>,
@@ -142,6 +143,7 @@ impl<'a> LoweringContext<'a> {
             explicit_targets: HashSet::new(),
             native_target_owners: HashSet::new(),
             diagnostics: RefCell::new(Vec::new()),
+            escape_coverage: super::escape_coverage::EscapeCoverage::default(),
             scope_posts: super::containers::ScopePostState::default(),
             active_mdoc_section: std::cell::Cell::new(MdocSectionContext::Other),
         }
@@ -372,6 +374,10 @@ impl<'a> LoweringContext<'a> {
                 },
             },
         );
+        formatter
+            .execution
+            .escape_coverage
+            .record(execution.escape_scan);
         let mut output = execution.output;
         if execution.pending_word_end_break {
             output.push(mant_ir::Inline::line_break());
@@ -408,6 +414,10 @@ impl<'a> LoweringContext<'a> {
                 },
             },
         );
+        formatter
+            .execution
+            .escape_coverage
+            .record(execution.escape_scan);
         let mut output = execution.output;
         if execution.pending_word_end_break {
             output.push(mant_ir::Inline::line_break());

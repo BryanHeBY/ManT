@@ -41,8 +41,8 @@ struct NativeFieldSweep {
     printed_row: Option<usize>,
     emission: NativeFieldEmission,
     separator_retention: Option<usize>,
-    row_origins: Vec<(String, usize, usize)>,
-    field_padding: Vec<(String, usize, usize)>,
+    row_origins: Vec<(String, usize, usize, bool)>,
+    field_padding: Vec<(String, usize, usize, bool)>,
     unprojected_origin_units: usize,
     /// Outcome of the last pass-loop endline (term.c:217) of this flush.
     loop_row_end: LoopRowEnd,
@@ -111,8 +111,10 @@ impl NativeFieldSweep {
         tail: &NativeFieldTail,
         separator_field: Option<NoBreakField>,
         output_start: usize,
+        receipt: FlushReceipt,
     ) -> NativeFieldDevice {
         NativeFieldDevice {
+            receipt,
             width,
             viscol: if tail.ends_row { 0 } else { self.viscol },
             ends_row: tail.ends_row,
@@ -144,7 +146,11 @@ impl NativeFieldSweep {
 /// `width` is the last printed pass's fill width; `overruns` and `ends_row`
 /// already carry the term.c:250-253 decision over the sweep-widened `vbr`
 /// (computed inside `native_field_device_with_resume`).
-pub(in crate::mandoc::inline::flow) struct NativeFieldDevice {
+pub(in crate::mandoc) struct NativeFieldDevice {
+    /// Accepted passes and rejected suffix of this exact old-state sweep.
+    /// Projection and retirement consume the same decision, never a rescan
+    /// after a control changed BRIND/NOBREAK.
+    pub(in crate::mandoc::inline::flow) receipt: FlushReceipt,
     pub(super) width: usize,
     pub(super) viscol: usize,
     pub(super) ends_row: bool,
@@ -174,11 +180,11 @@ pub(in crate::mandoc::inline::flow) struct NativeFieldDevice {
     /// Stable source-word positions of actually printed new rows. The
     /// projector consumes these only after native acceptance, never at a
     /// tentative word append or from its visible IR width.
-    pub(super) row_origins: Vec<(String, usize, usize)>,
+    pub(super) row_origins: Vec<(String, usize, usize, bool)>,
     /// Same-row device padding at stable source-word scalar positions.
     /// Only a real accepted print determines these cells, after node geometry
     /// restoration; already materialized field padding is subtracted.
-    pub(super) field_padding: Vec<(String, usize, usize)>,
+    pub(super) field_padding: Vec<(String, usize, usize, bool)>,
     /// Outcome of the pass loop's last `endline()` (term.c:217). With
     /// [`LoopRowEnd::Authored`], an authored hard row end exists even
     /// though the final tail comparison (250-253) left the fresh row open;
@@ -195,10 +201,16 @@ impl NativeFieldDevice {
         self.ends_row
     }
 
+    pub(in crate::mandoc::inline::flow) fn closes_unprinted_row(&self) -> bool {
+        self.ends_row
+            && self.emission == NativeFieldEmission::Unprinted
+            && self.printed_row.is_none()
+    }
+
     /// The consumed field left a printed device row open for BODY.
     /// `term_flushln()`250-253 can retain that row after its cells retire.
     pub(in crate::mandoc::inline::flow) fn has_occupied_row(&self) -> bool {
-        !self.ends_row && self.viscol > 0
+        !self.ends_row && self.printed_row.is_some()
     }
 
     /// The pass loop ended an accepted row on an authored `\p` boundary
@@ -276,10 +288,12 @@ impl InlineBuilder {
         // (term.c:143-146,233-253); it is not an absent device receipt.
         let receipt = state.field_buffer.flush_receipt(targets, false);
         let (passes, rejected) = match &receipt {
-            FlushReceipt::Accepted { passes } => (passes, false),
+            FlushReceipt::Accepted { passes, .. } => (passes, false),
             FlushReceipt::Rejected { passes, .. } => (passes, true),
         };
         let (flags, rmargin, trailspace) = self.native_field_parameters(force_no_break, resumed)?;
+        #[cfg(test)]
+        super::control_trace::capture(&receipt, flags);
         let no_break = self.native_no_break(flags, force_no_break, resumed);
         let rmargin = self.native_margin_units(rmargin);
         let NativePassSweep {
@@ -298,10 +312,13 @@ impl InlineBuilder {
             passes.last().map_or(0, |pass| pass.end),
             width_units,
             flags,
+            receipt.native_cells(),
         );
         let overruns =
             final_vbr.saturating_add(trailspace.saturating_mul(24)) > vfield.saturating_add(12);
         let ends_row = !flags.contains(FieldFlag::Hang) && (!no_break || overruns);
+        #[cfg(test)]
+        super::control_trace::device_tail(if ends_row { 0 } else { sweep.viscol }, ends_row);
         Some(sweep.into_device(
             width,
             tab_offset,
@@ -313,6 +330,7 @@ impl InlineBuilder {
             },
             state.no_break.or(resumed),
             self.native_field_output_start(),
+            receipt,
         ))
     }
 

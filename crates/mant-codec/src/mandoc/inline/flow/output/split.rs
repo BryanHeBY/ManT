@@ -391,13 +391,23 @@ pub(in crate::mandoc::inline::flow) fn retain_native_field_owners(
         nodes: &mut Vec<Inline>,
         limits: &std::collections::BTreeMap<String, super::native_passes::OwnerAcceptance>,
         owner: &mut Option<String>,
+        prefix_printed: &mut Option<bool>,
         positions: &mut std::collections::BTreeMap<String, usize>,
         found: &mut bool,
     ) {
         nodes.retain_mut(|node| {
             if let Inline::Anchor { id, .. } = node {
-                if limits.contains_key(id.as_str()) {
+                if let Some(serial) = id.as_str().strip_prefix(super::INTERNAL_FIELD_PREFIX) {
+                    // Generated minbl precedes the source word marker. It is
+                    // not a scalar of the preceding word and cannot consume
+                    // that word's accepted interval. term_field()389-427 prints
+                    // it only with this next word's first accepted graph.
+                    let word = format!("{}{serial}", super::INTERNAL_FIELD_WORD);
+                    *prefix_printed =
+                        Some(limits.get(&word).is_some_and(|range| range.prefix_printed));
+                } else if limits.contains_key(id.as_str()) {
                     *owner = Some(id.as_str().to_owned());
+                    *prefix_printed = None;
                     *found = true;
                 }
                 return true;
@@ -407,10 +417,11 @@ pub(in crate::mandoc::inline::flow) fn retain_native_field_owners(
                 | Inline::Emphasis { children }
                 | Inline::PortableDisplay { children, .. }
                 | Inline::Link { children, .. } => {
-                    retain(children, limits, owner, positions, found);
+                    retain(children, limits, owner, prefix_printed, positions, found);
                     !children.is_empty()
                         || matches!(node, Inline::Link { .. } | Inline::PortableDisplay { .. })
                 }
+                _ if prefix_printed.is_some() => prefix_printed == &Some(true),
                 _ if owner.is_none() => true,
                 Inline::Text { value }
                 | Inline::Code { value }
@@ -450,6 +461,7 @@ pub(in crate::mandoc::inline::flow) fn retain_native_field_owners(
     retain(
         nodes,
         limits,
+        &mut None,
         &mut None,
         &mut std::collections::BTreeMap::new(),
         &mut found,

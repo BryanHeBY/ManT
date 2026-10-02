@@ -14,6 +14,10 @@ struct mant_mandoc_table_cell;
 struct mant_mandoc_eqn_box;
 struct mparse;
 
+/* Private controlled-omission hook and result, not a CVS error-number ABI. */
+void mant_mandoc_note_escape_depth_limit(void);
+int mant_mandoc_document_escape_depth_truncated(const struct mant_mandoc_document *);
+
 struct mant_mandoc_source {
 	const char		*path;
 	const unsigned char	*data;

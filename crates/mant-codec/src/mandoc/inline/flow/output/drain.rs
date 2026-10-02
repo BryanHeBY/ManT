@@ -6,9 +6,24 @@ use super::super::{
     PreservedInlineState, WordEndBreak, has_printable_character,
 };
 use super::projection::{
-    finalize_inline_output, has_non_whitespace_glyph, retain_inline_identities,
+    finalize_inline_output, has_rendered_formatter_glyph, retain_inline_identities,
     trim_output_terminators,
 };
+
+/// The one real HEAD post captured before acceptance can advance its output
+/// cursor. Inspection and retirement consume this same old-state receipt.
+pub(in crate::mandoc) struct FormatterLineBoundary {
+    native: Option<NativeFieldDevice>,
+    invisible_native_row_end: bool,
+    occupied_head_row: bool,
+    native_tail_end: bool,
+}
+
+impl FormatterLineBoundary {
+    pub(in crate::mandoc) fn native(&self) -> Option<&NativeFieldDevice> {
+        self.native.as_ref()
+    }
+}
 
 impl InlineBuilder {
     pub(in crate::mandoc) fn finish(mut self) -> Vec<Inline> {
@@ -71,7 +86,7 @@ impl InlineBuilder {
                     };
                     row_has_glyph = false;
                 } else {
-                    row_has_glyph |= has_non_whitespace_glyph(std::slice::from_ref(node));
+                    row_has_glyph |= has_rendered_formatter_glyph(std::slice::from_ref(node));
                 }
             }
             rows
@@ -101,7 +116,7 @@ impl InlineBuilder {
                     .iter()
                     .rev()
                     .take_while(|node| !matches!(node, Inline::LineBreak { .. }))
-                    .any(|node| has_non_whitespace_glyph(std::slice::from_ref(node)));
+                    .any(|node| has_rendered_formatter_glyph(std::slice::from_ref(node)));
             completed_vertical_rows = completed_vertical_rows
                 .saturating_add(u16::from(active_invisible_cell && !requested_invisible_row));
             // The completed-row owner now accounts for this cell. The old
@@ -110,7 +125,7 @@ impl InlineBuilder {
             let mut identities = Vec::new();
             while self.nodes.last().is_some_and(|node| {
                 matches!(node, Inline::LineBreak { .. })
-                    || !has_non_whitespace_glyph(std::slice::from_ref(node))
+                    || !has_rendered_formatter_glyph(std::slice::from_ref(node))
             }) {
                 if let Some(node) = self.nodes.pop() {
                     identities.push(node);
@@ -145,10 +160,12 @@ impl InlineBuilder {
     /// `TERMP_BACKAFTER` live for the next formatter word.  Returning the
     /// surviving flag together with the committed output prevents callers
     /// from exporting state before this boundary has executed.
-    pub(in crate::mandoc) fn finish_formatter_line(
-        mut self,
-        preserve_rows: bool,
-    ) -> (Vec<Inline>, InlineExecutionState, bool) {
+    pub(in crate::mandoc) fn prepare_formatter_line(&mut self) -> FormatterLineBoundary {
+        if self.discarded_exited_definition_buffer() {
+            // A prior rejected TAG field can leave an occupied, unprinted
+            // row. Its close precedes this HEAD post (mdoc_term.c::termp_it_post).
+            self.hard_break();
+        }
         self.commit_definition_row_origin();
         // This is the HEAD post's real term_newln()/term_flushln(), not an
         // owner drain. Capture before acceptance advances projection ranges;
@@ -175,7 +192,31 @@ impl InlineBuilder {
         let occupied_head_row = native
             .as_ref()
             .is_some_and(NativeFieldDevice::has_occupied_row);
-        let native_tail_end = self.discard_unprinted_definition_field_output();
+        let native_tail_end = if let Some(device) = &native {
+            self.project_captured_definition_field(device)
+        } else {
+            self.discard_unprinted_definition_field_output()
+        };
+        self.settle_provisional_definition_break();
+        FormatterLineBoundary {
+            native,
+            invisible_native_row_end,
+            occupied_head_row,
+            native_tail_end,
+        }
+    }
+
+    pub(in crate::mandoc) fn finish_captured_formatter_line(
+        mut self,
+        preserve_rows: bool,
+        boundary: FormatterLineBoundary,
+    ) -> (Vec<Inline>, InlineExecutionState, bool) {
+        let FormatterLineBoundary {
+            native,
+            invisible_native_row_end,
+            occupied_head_row,
+            native_tail_end,
+        } = boundary;
         let surviving_armed = if self.has_formatter_cell() {
             false
         } else {
@@ -242,7 +283,11 @@ impl InlineBuilder {
             let native = self.native_field_device(false);
             self.commit_definition_row_origin();
             self.flush_zero_advance();
-            let extra_row_end = self.discard_unprinted_definition_field_output();
+            let extra_row_end = if let Some(device) = &native {
+                self.project_captured_definition_field(device)
+            } else {
+                self.discard_unprinted_definition_field_output()
+            };
             self.retire_native_field_with_device(native.as_ref());
             self.record_completed_vertical_rows(u16::from(
                 extra_row_end && !closes_represented_head,

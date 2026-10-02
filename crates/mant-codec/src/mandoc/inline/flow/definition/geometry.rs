@@ -18,9 +18,8 @@
 use super::super::native_field::FieldFlag;
 use super::super::{
     AuthorBreakEffect, FormatterColumn, Inline, InlineBuilder, PendingBoundary, TrailingOutput,
-    has_printable_character,
 };
-use super::state::{DefinitionFieldStyle, HangRowTransition};
+use super::device::NativeFieldDevice;
 
 impl InlineBuilder {
     /// Read the actual HEAD post flush receipt before retiring its IR owner.
@@ -28,7 +27,7 @@ impl InlineBuilder {
     /// left on an open row can make a later `term_newln` flush the HEAD again.
     pub(in crate::mandoc) fn definition_head_row_occupied(&self) -> bool {
         self.native_field_device(false)
-            .is_some_and(|device| !device.ends_row && device.viscol > 0)
+            .is_some_and(|device| device.has_occupied_row())
     }
     /// `term.c::encode1()` buffers the character following `\\z` in the
     /// current field. It has not reached an IR node yet, but `term_fill()` and
@@ -46,7 +45,10 @@ impl InlineBuilder {
     /// A HANG head that filled its capacity while a request had cleared
     /// `TERMP_NOBREAK` reaches the body column with no trailspace
     /// (term.c:250-253 with 205-207): the body's first word concatenates.
-    pub(in crate::mandoc) fn cleared_field_filled_capacity(&self) -> bool {
+    pub(in crate::mandoc) fn cleared_field_filled_capacity(
+        &self,
+        native: Option<&NativeFieldDevice>,
+    ) -> bool {
         let Some(state) = &self.execution.definition else {
             return false;
         };
@@ -62,7 +64,7 @@ impl InlineBuilder {
         let body_origin = state.native_margin_units.unwrap_or_else(|| {
             usize::from(state.cleared_field_capacity_columns).saturating_mul(24)
         });
-        self.native_field_device(false).is_some_and(|field| {
+        native.is_some_and(|field| {
             let column = field.viscol.saturating_mul(24);
             !field.ends_row
                 && (column > body_origin || column == body_origin && field.final_pass_continued)
@@ -78,7 +80,10 @@ impl InlineBuilder {
             .is_some_and(|state| state.outcome.is_field_restarted())
     }
 
-    pub(in crate::mandoc) fn definition_field_exited(&self) -> bool {
+    pub(in crate::mandoc) fn definition_field_exited(
+        &self,
+        native: Option<&NativeFieldDevice>,
+    ) -> bool {
         self.execution.definition.as_ref().is_some_and(|state| {
             state.outcome.field_exited()
                 || matches!(
@@ -87,9 +92,7 @@ impl InlineBuilder {
                         .as_ref()
                         .map(|author| author.break_effect),
                     Some(AuthorBreakEffect::Field { .. })
-                ) && self
-                    .native_field_device(false)
-                    .is_some_and(|field| field.ends_row)
+                ) && native.is_some_and(|field| field.ends_row)
         })
     }
 
@@ -100,7 +103,10 @@ impl InlineBuilder {
         }
     }
 
-    pub(in crate::mandoc) fn definition_body_gap_consumed(&mut self) -> bool {
+    pub(in crate::mandoc) fn definition_body_gap_consumed(
+        &self,
+        native: Option<&NativeFieldDevice>,
+    ) -> bool {
         let Some(AuthorBreakEffect::Field {
             body_width_columns,
             gap_cells,
@@ -118,79 +124,20 @@ impl InlineBuilder {
                 .as_ref()
                 .is_some_and(|state| state.outcome.body_gap_consumed());
         };
-        let enters_proof = self.execution.definition.as_ref().is_some_and(|state| {
-            !state.hang_row.margin_flush_seen
-                && !state.field_buffer.is_empty()
-                && (state.hang_row.transition == HangRowTransition::WordAfterFlush
-                    || state.no_break_cleared)
-        }) && flags.contains(FieldFlag::Hang);
-        if !enters_proof {
-            return self
-                .execution
-                .definition
-                .as_ref()
-                .is_some_and(|state| state.outcome.body_gap_consumed());
+        if !flags.contains(FieldFlag::Hang) {
+            return false;
         }
-        // At HEAD post, term_newln() flushes the final HANG field. Only
-        let mut final_row = self
-            .execution
-            .definition
-            .as_ref()
-            .expect("definition field session")
-            .hang_row
-            .clone();
-        if let Some(width) = self.pending_hang_glyph_width() {
-            final_row.pending_glyph(width);
-        }
-        let body_column = usize::from(body_width_columns);
-        if final_row.field_discarded {
-            // No new glyph reached the device. The preceding field's
-            // viscol and minbl still locate BODY; source text inside the
-            // discarded field cannot create a soft-wrap uncertainty.
-            // A rejected final field produced no new device graph and
-            // cannot supersede a separator already represented by the
-            // preceding committed field. Node geometry restoration
-            // may have reset offset before this final flush.
-            return self
-                .execution
-                .definition
-                .as_ref()
-                .unwrap()
-                .outcome
-                .body_gap_consumed()
-                || final_row.final_column() >= body_column;
-        }
-        // The It HEAD post's term_newln() has run by the time the BODY
-        // word asks this question. Its term_flushln() reassigned
-        // p->minbl = p->trailspace (term.c:233-237) — zero once a request
-        // cleared NOBREAK — and printed the still-buffered head words,
-        // which ManT keeps buffered until the item drain. Redo that
-        // reassignment for the sweep below. A row that never advanced
-        // past its own origin also printed at the absolute page offset,
-        // which already met the hang trailspace, so the latched minbl
-        // padded nothing there (term.c:113-116); a row that did advance
-        // keeps the latched separator, which really printed between two
-        // head words (the reference `X YYYZBODY` glues exactly there).
-        if final_row.viscol <= final_row.field_offset {
-            self.definition_state_mut().hang_row.minbl = 0;
-        }
-        // term.c:156-229 prints the unconsumed field using the current
-        // tab stops and may finish on a later physical row. Its actual
-        // device column, not the widths accumulated before a .ta or a
-        // field wrap, is the only column that can prove BODY's origin.
-        let cumulative_column = self
-            .native_field_device(false)
-            .map_or_else(|| final_row.final_column(), |field| field.viscol);
-        // CVS term.c::term_fill() may wrap at a breakable cell *inside*
-        // this final field. Its summed width then says nothing about the
-        // last physical row. Retain the word boundary unless the field
-        // provably stayed on one row (or had no breakable cell).
-        let final_row_proven = !final_row.field_unproven_break
-            && (cumulative_column <= body_column
-                || (!final_row.field_discretionary_break
-                    && (final_row.field_last_unbreakable_width >= body_column
-                        || !final_row.field_breakable)));
-        gap_cells == 0 && final_row_proven && cumulative_column >= body_column
+        // HEAD post flushes the final buffer after enclosing nodes restored
+        // offset. Only that receipt locates BODY; an earlier .mc or empty
+        // pre-br field cannot permanently consume its eventual gap.
+        // At the page origin, the device's common left margin already covers
+        // minbl (term.c:113-116); it is not another projected separator.
+        // The captured print already applied max(offset - viscol, minbl).
+        // Observing its responsive layout must not replace the native minbl
+        // register or execute another field pass (term.c:113-116,233-253).
+        native.is_some_and(|field| {
+            gap_cells == 0 && !field.ends_row && field.viscol >= usize::from(body_width_columns)
+        })
     }
 
     pub(in crate::mandoc::inline::flow) fn append_fixed_cells(&mut self, count: usize) {
@@ -211,112 +158,10 @@ impl InlineBuilder {
     /// the current field.  Retain the field's own trailspace and boundary,
     /// then discard the temporary device position as documented.
     pub(in crate::mandoc) fn temporary_indent(&mut self) {
-        if let Some(field) = self.take_no_break_field() {
-            let prior_offset = self.execution.definition.as_ref().map(|definition| {
-                (
-                    definition.hang_row.field_offset,
-                    definition.field_offset_units,
-                )
-            });
-            self.restore_no_break_field_projection(field, false);
-            match field.style {
-                DefinitionFieldStyle::Tag => {
-                    self.force_output_line_break();
-                    self.execution
-                        .definition
-                        .as_mut()
-                        .expect("definition field session")
-                        .outcome
-                        .mark_field_exited();
-                }
-                DefinitionFieldStyle::Hang => {
-                    // `term_newln()` leaves NOSPACE set.  HANG keeps the
-                    // device row alive, so a following control-only author
-                    // transition must not synthesize an ordinary word blank
-                    // between the prior field and its eventual head text.
-                    self.execution.boundary = PendingBoundary::Tight;
-                    self.execution.pending_field_spaces = 1;
-                }
-            }
-            self.finish_definition_field_control(field, 0, false);
-            if let Some((columns, units)) = prior_offset {
-                // pre_ti executes pre_br then replaces that temporary body
-                // offset with its operand (roff_term.c:225-275). The chosen
-                // responsive contract omits this numeric device position;
-                // its provisional pre_br offset must not become text either.
-                let definition = self.definition_state_mut();
-                definition.hang_row.field_offset = columns;
-                definition.field_offset_units = units;
-            }
-            return;
-        }
-        let Some((start, gap, body, field_width_columns, flags)) = self
-            .execution
-            .author_execution
-            .as_ref()
-            .and_then(|execution| match execution.break_effect {
-                AuthorBreakEffect::Field {
-                    gap_cells,
-                    body_width_columns,
-                    field_width_columns,
-                    flags,
-                } => Some((
-                    execution.field_output_start,
-                    gap_cells,
-                    body_width_columns,
-                    field_width_columns,
-                    flags,
-                )),
-                AuthorBreakEffect::Line => None,
-            })
-        else {
-            self.control_line_break();
-            return;
-        };
-        if !self.has_formatter_cell() {
-            self.flush_definition_field(start, gap, body, field_width_columns, flags, true);
-            return;
-        }
-        self.flush_zero_advance();
-        let field = self.nodes.get(start..).unwrap_or_default();
-        if !has_printable_character(field) {
-            self.flush_definition_field(start, gap, body, field_width_columns, flags, true);
-            return;
-        }
-        let field_width = mant_ir::geometry::text_width(&super::super::super::plain_text(field));
-        let overruns =
-            flags.wraps() && field_width.saturating_add(usize::from(gap)) > usize::from(body);
-        if overruns {
-            self.hard_break();
-        } else {
-            self.append_fixed_cells(usize::from(gap));
-        }
-        if let Some(execution) = &mut self.execution.author_execution {
-            execution.field_output_start = self.nodes.len();
-            if flags.wraps() {
-                self.execution
-                    .definition
-                    .as_mut()
-                    .expect("definition field session")
-                    .outcome
-                    .mark_field_exited();
-                execution.break_effect = AuthorBreakEffect::Line;
-            } else {
-                self.execution
-                    .definition
-                    .as_mut()
-                    .expect("definition field session")
-                    .outcome
-                    .mark_body_gap_consumed();
-                execution.break_effect = AuthorBreakEffect::Field {
-                    gap_cells: 0,
-                    body_width_columns: body,
-                    field_width_columns,
-                    flags,
-                };
-            }
-        }
-        self.execution.boundary = PendingBoundary::Tight;
+        // pre_ti always calls pre_br before inspecting its optional operand
+        // (roff_term.c:233-236). Numeric temporary offset is a responsive
+        // layout policy, never another field-exit or hard-row decision.
+        self.control_line_break();
     }
 
     /// The row origin survives each flush until a document scope restores it.
@@ -431,7 +276,7 @@ impl super::super::InlineExecutionState {
     pub(in crate::mandoc) fn has_open_native_device_row(&self) -> bool {
         self.definition
             .as_ref()
-            .is_some_and(|definition| definition.hang_row.viscol > 0)
+            .is_some_and(|definition| definition.hang_row.native_row_occupied())
     }
 
     pub(in crate::mandoc) fn definition_geometry_checkpoint(

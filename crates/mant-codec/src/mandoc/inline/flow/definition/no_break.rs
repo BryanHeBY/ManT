@@ -235,6 +235,16 @@ impl InlineBuilder {
         // delimiter flags and replaces the next word's automatic boundary.
         self.execution.pending_breakable_spaces = 0;
         self.execution.pending_field_spaces = 1;
+        self.execution.pending_field_gap_origin =
+            super::state::PendingFieldGapOrigin::AutomaticWord;
+        // roff_term_pre_mc() clears NOSPACE after resetting the old buffer
+        // (roff_term.c:147-150). The next graphless term_word() therefore
+        // writes a real automatic blank even on a fresh plain flush unit;
+        // its deferred display padding cannot stand in for this input cell.
+        self.execution.flush_unit.release_word_boundary();
+        if let Some(state) = &mut self.execution.definition {
+            state.field_buffer.release_word_boundary();
+        }
         self.execution.word_end_break = WordEndBreak::Clear;
         self.execution.wipe_remainder = false;
         self.execution.row_zero_graph = false;
@@ -484,7 +494,7 @@ impl InlineBuilder {
         } else {
             usize::from(gap).saturating_add(1)
         };
-        if overrun || native.is_some_and(|field| field.viscol == 0) {
+        if overrun || native.is_some_and(|field| !field.has_occupied_row()) {
             if overrun {
                 self.hard_break();
             }
@@ -579,37 +589,5 @@ impl InlineBuilder {
         }
         self.retire_native_field_with_device(native.as_ref());
         resumed_has_cell
-    }
-
-    pub(super) fn settle_no_break_field_line(&mut self, field: NoBreakField, row_indent: u16) {
-        // Sample before the restore: its flush settles a pending
-        // zero-advance glyph and thereby closes the row (mdoc_term.c:1085).
-        self.restore_no_break_field_projection(field, false);
-        match field.style {
-            DefinitionFieldStyle::Tag => {
-                // roff_term.c:73-75: a fill-mode boundary (`.nf`/`.fi`, the
-                // same pre_br dispatch, roff_term.c:52) moves the row origin
-                // to the field's right margin; the `.br` family already
-                // materializes it through the pending-indent arm below.
-                if row_indent > 0 {
-                    self.definition_state_mut().row.indent_columns = row_indent;
-                }
-                self.force_output_line_break();
-                self.definition_state_mut().pending_indent = None;
-                self.execution
-                    .definition
-                    .as_mut()
-                    .expect("definition field session")
-                    .outcome
-                    .mark_field_exited();
-            }
-            DefinitionFieldStyle::Hang => {
-                // HANG keeps this physical row open. pre_br changes its
-                // offset; the next accepted print's receipt determines the
-                // actual pad after all enclosing node geometry restores.
-                self.execution.boundary = PendingBoundary::Tight;
-            }
-        }
-        self.finish_definition_field_control(field, 0, true);
     }
 }

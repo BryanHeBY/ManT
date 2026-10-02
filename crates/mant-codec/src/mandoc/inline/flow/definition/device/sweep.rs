@@ -40,13 +40,13 @@ impl InlineBuilder {
     ) -> NativePassSweep {
         use super::super::super::field_buffer::FieldCell;
         let (passes, rejected) = match receipt {
-            FlushReceipt::Accepted { passes } => (passes.as_slice(), false),
+            FlushReceipt::Accepted { passes, .. } => (passes.as_slice(), false),
             FlushReceipt::Rejected { passes, .. } => (passes.as_slice(), true),
         };
         let row = &state.hang_row;
         let mut sweep = NativeFieldSweep {
             viscol: row.viscol,
-            printed_row: (row.viscol > 0).then_some(row.viscol),
+            printed_row: row.native_row_occupied().then_some(row.viscol),
             emission: NativeFieldEmission::Unprinted,
             separator_retention: None,
             row_origins: Vec::new(),
@@ -55,10 +55,7 @@ impl InlineBuilder {
             loop_row_end: LoopRowEnd::Open,
             loop_rows: Vec::new(),
         };
-        let mut vbl = state
-            .field_offset_units
-            .saturating_sub(sweep.viscol.saturating_mul(24))
-            .max(row.minbl.saturating_mul(24));
+        let mut vbl = row.padding_units(state.field_offset_units);
         let mut row_origin_units = state.field_offset_units;
         let mut start = 0;
         let mut vfield =
@@ -95,7 +92,7 @@ impl InlineBuilder {
                 .saturating_add(24);
             start = pass.end;
             while matches!(
-                state.field_buffer.cells().get(start),
+                receipt.native_cells().get(start),
                 Some(FieldCell::BreakableBlank)
             ) {
                 start += 1;

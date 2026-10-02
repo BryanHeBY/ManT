@@ -15,6 +15,7 @@
 
 //! Accepted and rejected definition-field receipts over one execution state.
 
+#[cfg(test)]
 use super::super::native_field::FieldFlags;
 use super::super::{
     AuthorBreakEffect, FormatterColumn, Inline, InlineBuilder, TrailingOutput, WordEndBreak,
@@ -22,7 +23,6 @@ use super::super::{
 };
 use super::device::NativeFieldDevice;
 use super::flush::retain_unprinted_field_targets;
-use super::state::{DefinitionFieldStyle, NoBreakField};
 
 impl InlineBuilder {
     pub(in crate::mandoc::inline::flow) fn native_field_closes_unprinted_row(&self) -> bool {
@@ -57,45 +57,62 @@ impl InlineBuilder {
         owner_boundary: bool,
         no_break_flush: bool,
     ) -> bool {
-        use super::super::field_buffer::FlushReceipt;
-        let Some(targets) = self.native_field_targets(no_break_flush, None) else {
-            return false;
-        };
+        self.project_definition_field_receipt_using(owner_boundary, no_break_flush, None)
+    }
 
-        let Some(receipt) = self.execution.definition.as_ref().and_then(|state| {
-            (!state.field_buffer.is_empty())
-                .then(|| state.field_buffer.flush_receipt(targets, false))
-        }) else {
+    /// Project the same old-state acceptance that the real request captured.
+    pub(in crate::mandoc::inline::flow) fn project_captured_definition_field(
+        &mut self,
+        native: &NativeFieldDevice,
+    ) -> bool {
+        #[cfg(test)]
+        super::control_trace::projected();
+        self.project_definition_field_receipt_using(false, false, Some(native))
+    }
+
+    fn project_definition_field_receipt_using(
+        &mut self,
+        owner_boundary: bool,
+        no_break_flush: bool,
+        native: Option<&NativeFieldDevice>,
+    ) -> bool {
+        use super::super::field_buffer::FlushReceipt;
+        if self
+            .execution
+            .definition
+            .as_ref()
+            .is_none_or(|state| state.field_buffer.is_empty())
+        {
             return false;
+        }
+        let uncaptured;
+        let receipt = if let Some(native) = native {
+            &native.receipt
+        } else {
+            let Some(targets) = self.native_field_targets(no_break_flush, None) else {
+                return false;
+            };
+            uncaptured = self
+                .execution
+                .definition
+                .as_ref()
+                .expect("native field")
+                .field_buffer
+                .flush_receipt(targets, false);
+            &uncaptured
         };
 
         // term_flushln() only reaches loop endline (term.c:217) when an
         // accepted pass has a remaining field. Only authored marker ends
         // can supply the unprinted rows consumed here; device-width ends
         // do not. The actual device tail still runs with its original flags.
-        let empty_pass_ends = if owner_boundary || !receipt_has_authored_loop_rows(&receipt) {
+        let empty_pass_ends = if owner_boundary || !receipt_has_authored_loop_rows(receipt) {
             Vec::new()
         } else {
-            #[cfg(test)]
-            EMPTY_LOOP_DEVICE_VIEWS.with(|views| views.set(views.get().saturating_add(1)));
-            self.native_field_device(no_break_flush)
-                .filter(|device| device.printed_row.is_none())
-                .map_or_else(Vec::new, |device| {
-                    device
-                        .loop_rows
-                        .iter()
-                        .rev()
-                        .take_while(|row| {
-                            !row.printed
-                                && row.boundary
-                                    == super::super::field_buffer::FillBoundary::WordEndBreak
-                        })
-                        .map(|row| row.end_cell)
-                        .collect::<Vec<_>>()
-                })
+            self.empty_authored_loop_ends(native, no_break_flush)
         };
 
-        if let FlushReceipt::Accepted { passes } = &receipt {
+        if let FlushReceipt::Accepted { passes, .. } = receipt {
             if !owner_boundary {
                 self.project_accepted_field_passes(passes);
             }
@@ -103,7 +120,7 @@ impl InlineBuilder {
             self.project_completed_empty_passes(&empty_pass_ends);
             return false;
         }
-        if !owner_boundary && let FlushReceipt::Rejected { passes, .. } = &receipt {
+        if !owner_boundary && let FlushReceipt::Rejected { passes, .. } = receipt {
             // term_flushln() executes every accepted pass before nbr == 0
             // rejects its suffix. NBRZW can end a pass without a visible
             // scalar (term.c:340-349), so projecting only the final boundary
@@ -111,28 +128,24 @@ impl InlineBuilder {
             self.project_accepted_field_passes(passes);
         }
         let definition = self.execution.definition.as_mut().expect("native field");
-        let (passes, rejected_from) = match receipt {
-            FlushReceipt::Accepted { passes } => {
-                assert!(!passes.is_empty());
-                definition.hang_row.field_discarded = false;
-                return false;
-            }
-            FlushReceipt::Rejected {
-                passes,
-                rejected_from,
-                definitive,
-            } => {
-                if owner_boundary && !definitive {
-                    return false;
-                }
-                (passes, rejected_from)
-            }
+        let FlushReceipt::Rejected {
+            passes,
+            rejected_from,
+            definitive,
+            ..
+        } = receipt
+        else {
+            unreachable!("accepted field returned before rejection projection")
         };
+        if owner_boundary && !*definitive {
+            return false;
+        }
+        let rejected_from = *rejected_from;
         definition.hang_row.field_discarded = true;
         let accepted_owners = super::super::output::native_passes::accepted_owner_lengths(
             &definition.field_buffer,
             &definition.field_word_anchors,
-            &passes,
+            passes,
         );
         let accepted_owned_prefix = !passes.is_empty()
             && definition
@@ -171,7 +184,45 @@ impl InlineBuilder {
             author.field_output_start = self.nodes.len();
         }
         self.project_completed_empty_passes(&empty_pass_ends);
-        self.finish_rejected_field_state(owner_boundary, no_break_flush)
+        self.finish_rejected_field_state(
+            owner_boundary,
+            no_break_flush,
+            native.map(|device| device.ends_row),
+        )
+    }
+
+    /// Observe only authored loop endlines of this exact flush. Captured
+    /// control receipts already own the numeric device sweep; legacy owner
+    /// drains obtain a view only when such an empty loop actually exists.
+    fn empty_authored_loop_ends(
+        &self,
+        native: Option<&NativeFieldDevice>,
+        no_break_flush: bool,
+    ) -> Vec<usize> {
+        let uncaptured_device;
+        let device = if let Some(native) = native {
+            Some(native)
+        } else {
+            #[cfg(test)]
+            EMPTY_LOOP_DEVICE_VIEWS.with(|views| views.set(views.get().saturating_add(1)));
+            uncaptured_device = self.native_field_device(no_break_flush);
+            uncaptured_device.as_ref()
+        };
+        device
+            .filter(|device| device.printed_row.is_none())
+            .map_or_else(Vec::new, |device| {
+                device
+                    .loop_rows
+                    .iter()
+                    .rev()
+                    .take_while(|row| {
+                        !row.printed
+                            && row.boundary
+                                == super::super::field_buffer::FillBoundary::WordEndBreak
+                    })
+                    .map(|row| row.end_cell)
+                    .collect::<Vec<_>>()
+            })
     }
 
     fn project_completed_empty_passes(&mut self, ends: &[usize]) {
@@ -217,7 +268,12 @@ impl InlineBuilder {
     /// Retire only the rejected native buffer's registers after its exact
     /// output interval was projected. The ordinary field tail is a separate
     /// device event and is returned to the actual flush caller.
-    fn finish_rejected_field_state(&mut self, owner_boundary: bool, no_break_flush: bool) -> bool {
+    fn finish_rejected_field_state(
+        &mut self,
+        owner_boundary: bool,
+        no_break_flush: bool,
+        captured_row_end: Option<bool>,
+    ) -> bool {
         let Some(exited_field) = self
             .execution
             .author_execution
@@ -259,9 +315,10 @@ impl InlineBuilder {
         }
         // The same numeric tail rule handles accepted and rejected final
         // passes; an IR owner drain executes neither device endline.
-        let flags_end_row = self
-            .native_field_device(no_break_flush)
-            .is_some_and(|field| field.ends_row);
+        let flags_end_row = captured_row_end.unwrap_or_else(|| {
+            self.native_field_device(no_break_flush)
+                .is_some_and(|field| field.ends_row)
+        });
         !owner_boundary && flags_end_row
     }
 
@@ -340,11 +397,6 @@ impl InlineBuilder {
     /// A real `term_flushln()` commits this input field irreversibly. Keep
     /// device viscol/minbl and the enclosing BODY lifetime, but retire its
     /// cells and projection ranges before another formatter word executes.
-    pub(super) fn retire_consumed_native_field(&mut self) {
-        let device = self.native_field_device(false);
-        self.retire_native_field_with_device(device.as_ref());
-    }
-
     pub(in crate::mandoc::inline::flow) fn retire_native_field_with_device(
         &mut self,
         device: Option<&NativeFieldDevice>,
@@ -357,6 +409,8 @@ impl InlineBuilder {
         device: Option<&NativeFieldDevice>,
         boundary: super::flush::FieldFlushBoundary,
     ) {
+        #[cfg(test)]
+        super::control_trace::retired();
         if let Some(device) = device {
             let mut output_start = device.output_start;
             self.retire_unprinted_no_break_separator(
@@ -392,6 +446,8 @@ impl InlineBuilder {
                 // a detached HEAD post. NOBREAK may leave that printed row
                 // occupied after the input cells have retired (term.c:250-253).
                 state.hang_row.viscol = device.viscol;
+                state.hang_row.page_origin_printed =
+                    !device.ends_row && device.printed_row.is_some();
                 state.hang_row.minbl = device.next_field_gap_cells;
                 // Geometry return retires no printed device content. Real
                 // flushes atomically transfer their row receipt, while a
@@ -407,60 +463,12 @@ impl InlineBuilder {
             state.projected_passes = 0;
         }
     }
-
-    pub(super) fn finish_definition_field_control(
-        &mut self,
-        field: NoBreakField,
-        hang_gap_cells: u8,
-        consume_body_gap: bool,
-    ) {
-        if field.style == DefinitionFieldStyle::Hang {
-            let had_cell = self.has_formatter_cell();
-            let definition = self.definition_state_mut();
-            if had_cell || definition.hang_row.viscol > 0 {
-                definition.hang_row.flush(usize::from(hang_gap_cells));
-            }
-        }
-        // pre_br moves offset under BRIND for TAG and HANG alike; this
-        // numeric origin remains scoped until a node restores it. Only a
-        // later accepted native print turns it into projected positioning.
-        self.move_definition_field_origin_to_body(
-            u16::try_from(field.body_width).unwrap_or(u16::MAX),
-        );
-        if consume_body_gap {
-            self.execution
-                .definition
-                .as_mut()
-                .expect("definition field session")
-                .outcome
-                .mark_body_gap_consumed();
-        }
-        if let Some(execution) = &mut self.execution.author_execution {
-            execution.field_output_start = self.nodes.len();
-            execution.break_effect = match field.style {
-                DefinitionFieldStyle::Tag => AuthorBreakEffect::Line,
-                DefinitionFieldStyle::Hang => AuthorBreakEffect::Field {
-                    gap_cells: hang_gap_cells,
-                    body_width_columns: u16::try_from(field.body_width).unwrap_or(u16::MAX),
-                    field_width_columns: field.field_capacity_columns,
-                    flags: FieldFlags::hang(),
-                },
-            };
-        }
-        self.execution.word_end_break = WordEndBreak::Clear;
-        self.execution.wipe_remainder = false;
-        self.execution.row_zero_graph = false;
-        self.execution.formatter_column = FormatterColumn::Origin;
-        self.execution.empty_word = false;
-        self.execution.final_word_join = Some(false);
-        self.retire_consumed_native_field();
-    }
 }
 
 fn receipt_has_authored_loop_rows(receipt: &super::super::field_buffer::FlushReceipt) -> bool {
     use super::super::field_buffer::{FillBoundary, FlushReceipt};
     let loop_passes = match receipt {
-        FlushReceipt::Accepted { passes } => &passes[..passes.len().saturating_sub(1)],
+        FlushReceipt::Accepted { passes, .. } => &passes[..passes.len().saturating_sub(1)],
         FlushReceipt::Rejected { passes, .. } => passes.as_slice(),
     };
     loop_passes
@@ -554,7 +562,9 @@ mod tests {
                 false,
             );
             let passes = match &receipt {
-                FlushReceipt::Accepted { passes } | FlushReceipt::Rejected { passes, .. } => passes,
+                FlushReceipt::Accepted { passes, .. } | FlushReceipt::Rejected { passes, .. } => {
+                    passes
+                }
             };
             assert!(passes.len() > 1, "{word:?} must exercise multiple passes");
             assert!(!receipt_has_authored_loop_rows(&receipt), "{word:?}");

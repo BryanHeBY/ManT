@@ -1,0 +1,2304 @@
+{
+  "header": {
+    "count": 32,
+    "expectations_from_product": false,
+    "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+    "unique_sources": 32
+  },
+  "cases": [
+    {
+      "id": "review-rule-02013",
+      "family": "fixed-blank-run-in",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -width 8n\n.It Xo\n.No \"\\0\"\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "e9c9ddbb8d262419671f065208e8df379752ad3075b5f14614b480cc8edab0d0",
+      "oracle_class": "diagnosed",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 11,
+            "column": 5,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "       AFTER BodyWord"
+      ],
+      "authored_fixed_blank": {
+        "line": 10,
+        "column": 5,
+        "owner": "It HEAD",
+        "no_fill": false
+      },
+      "projection": {
+        "id": "review-rule-02013",
+        "source_sha256": "e9c9ddbb8d262419671f065208e8df379752ad3075b5f14614b480cc8edab0d0",
+        "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+        "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+        "native_utf8_sha256": "ca1d488e36fa15bf3042ad07478879a25db05f362e006c59463b5f160b0dda48",
+        "native_tree_sha256": "6ef99d6bc9e96affc418236a077c970d12bdaf6c963c27403951a9fdbb14e472",
+        "indent": "responsive",
+        "padding": "responsive",
+        "tab": "device-expansion",
+        "native_replacements": [
+          {
+            "row": 0,
+            "column": 12,
+            "from": " ",
+            "to": " "
+          }
+        ],
+        "native_row_joins": [],
+        "product_table_seams": [],
+        "rules": [
+          "mdoc_term.c:764 LIST_inset/diag generated BODY only; separate authored \\0 preserved"
+        ],
+        "original_region_status": "asserted",
+        "type": "device-projection",
+        "contract": "docs/manuals/mant-roff.md: mdoc definition generated cells; responsive layout",
+        "scope": "exact source/id and observed native row/scalar cells; no authored-space or hard-row edit"
+      },
+      "profile_sha256": {
+        "ascii": "5fb473f3185bba37902cdf2e4bc5103af624a29c78e467e65405fc77d437ee5f",
+        "utf8": "ca1d488e36fa15bf3042ad07478879a25db05f362e006c59463b5f160b0dda48",
+        "html": "d0232c27d67d1af7974ebe8bc3b4d4d388a00c35c6d641df427ef9cf486331ae",
+        "tree": "6ef99d6bc9e96affc418236a077c970d12bdaf6c963c27403951a9fdbb14e472",
+        "lint": "21d380f0417ed3b0e76bdf454b961b692e44e2ed8d1b3d4a02cc51596c997c98"
+      }
+    },
+    {
+      "id": "review-rule-02014",
+      "family": "fixed-blank-run-in",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -width 8n\n.It Xo\n.No \"\\0\"\n.nf\n.fi\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "7a187064c0cf594a35072749ce223a8b053b841a17b993ddca6f9659225041c8",
+      "oracle_class": "diagnosed",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 13,
+            "column": 5,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "      ",
+        "     AFTER BodyWord"
+      ],
+      "authored_fixed_blank": {
+        "line": 10,
+        "column": 5,
+        "owner": "It HEAD",
+        "no_fill": false
+      },
+      "projection": {
+        "id": "review-rule-02014",
+        "source_sha256": "7a187064c0cf594a35072749ce223a8b053b841a17b993ddca6f9659225041c8",
+        "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+        "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+        "native_utf8_sha256": "33647f89878c2add8d4db0f197b460029707148082cb65bc1000d266f384dd99",
+        "native_tree_sha256": "48e5c1acfdb8c6878cd74044783f2a997bc52bca4a715ac272a0463205886191",
+        "indent": "responsive",
+        "padding": "responsive",
+        "tab": "device-expansion",
+        "native_replacements": [
+          {
+            "row": 1,
+            "column": 10,
+            "from": " ",
+            "to": " "
+          }
+        ],
+        "native_row_joins": [],
+        "product_table_seams": [],
+        "rules": [
+          "mdoc_term.c:764 LIST_inset/diag generated BODY only; separate authored \\0 preserved"
+        ],
+        "original_region_status": "asserted",
+        "type": "device-projection",
+        "contract": "docs/manuals/mant-roff.md: mdoc definition generated cells; responsive layout",
+        "scope": "exact source/id and observed native row/scalar cells; no authored-space or hard-row edit"
+      },
+      "profile_sha256": {
+        "ascii": "5094e977eb0bd3c56ca66e7850e8ce2675fb5ce06f06a5e7c803fa458ac58a61",
+        "utf8": "33647f89878c2add8d4db0f197b460029707148082cb65bc1000d266f384dd99",
+        "html": "630172a892cc462fad75dcf38d60ef9e7165142a5d06a35b286e96654cad01fb",
+        "tree": "48e5c1acfdb8c6878cd74044783f2a997bc52bca4a715ac272a0463205886191",
+        "lint": "21d380f0417ed3b0e76bdf454b961b692e44e2ed8d1b3d4a02cc51596c997c98"
+      }
+    },
+    {
+      "id": "review-rule-02015",
+      "family": "fixed-blank-run-in",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -width 8n\n.It Xo\n.No \"\\0\"\n.nf\n.br\n.fi\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "31ded157d8bb8d14ec16e73c9e91fbbc82fb2ededa58be6c33aff7d18f25fad3",
+      "oracle_class": "diagnosed",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "      ",
+        "     AFTER BodyWord"
+      ],
+      "authored_fixed_blank": {
+        "line": 10,
+        "column": 5,
+        "owner": "It HEAD",
+        "no_fill": false
+      },
+      "projection": {
+        "id": "review-rule-02015",
+        "source_sha256": "31ded157d8bb8d14ec16e73c9e91fbbc82fb2ededa58be6c33aff7d18f25fad3",
+        "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+        "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+        "native_utf8_sha256": "33647f89878c2add8d4db0f197b460029707148082cb65bc1000d266f384dd99",
+        "native_tree_sha256": "2d2245902fe36fb9af93197f3ae3785c8802ed7f600e1aea373f6ed020b92b3d",
+        "indent": "responsive",
+        "padding": "responsive",
+        "tab": "device-expansion",
+        "native_replacements": [
+          {
+            "row": 1,
+            "column": 10,
+            "from": " ",
+            "to": " "
+          }
+        ],
+        "native_row_joins": [],
+        "product_table_seams": [],
+        "rules": [
+          "mdoc_term.c:764 LIST_inset/diag generated BODY only; separate authored \\0 preserved"
+        ],
+        "original_region_status": "asserted",
+        "type": "device-projection",
+        "contract": "docs/manuals/mant-roff.md: mdoc definition generated cells; responsive layout",
+        "scope": "exact source/id and observed native row/scalar cells; no authored-space or hard-row edit"
+      },
+      "profile_sha256": {
+        "ascii": "5094e977eb0bd3c56ca66e7850e8ce2675fb5ce06f06a5e7c803fa458ac58a61",
+        "utf8": "33647f89878c2add8d4db0f197b460029707148082cb65bc1000d266f384dd99",
+        "html": "8150b370722c7fd3aa980044e71698298e92896f1cabcd4df2ea08492d38f339",
+        "tree": "2d2245902fe36fb9af93197f3ae3785c8802ed7f600e1aea373f6ed020b92b3d",
+        "lint": "21d380f0417ed3b0e76bdf454b961b692e44e2ed8d1b3d4a02cc51596c997c98"
+      }
+    },
+    {
+      "id": "review-rule-02016",
+      "family": "fixed-blank-run-in",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -width 8n\n.It Xo\n.No \"\\0\"\n.br\n.nf\n.fi\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "d3b4064a6a69ca2d07b39f09d15f323dc2bcddc83b5a8ae696a765042ca7c3d7",
+      "oracle_class": "diagnosed",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "      ",
+        "     AFTER BodyWord"
+      ],
+      "authored_fixed_blank": {
+        "line": 10,
+        "column": 5,
+        "owner": "It HEAD",
+        "no_fill": false
+      },
+      "projection": {
+        "id": "review-rule-02016",
+        "source_sha256": "d3b4064a6a69ca2d07b39f09d15f323dc2bcddc83b5a8ae696a765042ca7c3d7",
+        "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+        "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+        "native_utf8_sha256": "33647f89878c2add8d4db0f197b460029707148082cb65bc1000d266f384dd99",
+        "native_tree_sha256": "526a16c638b0cccf5174a028e3c11c2f150433bcc3ffab82fec2357351c09581",
+        "indent": "responsive",
+        "padding": "responsive",
+        "tab": "device-expansion",
+        "native_replacements": [
+          {
+            "row": 1,
+            "column": 10,
+            "from": " ",
+            "to": " "
+          }
+        ],
+        "native_row_joins": [],
+        "product_table_seams": [],
+        "rules": [
+          "mdoc_term.c:764 LIST_inset/diag generated BODY only; separate authored \\0 preserved"
+        ],
+        "original_region_status": "asserted",
+        "type": "device-projection",
+        "contract": "docs/manuals/mant-roff.md: mdoc definition generated cells; responsive layout",
+        "scope": "exact source/id and observed native row/scalar cells; no authored-space or hard-row edit"
+      },
+      "profile_sha256": {
+        "ascii": "5094e977eb0bd3c56ca66e7850e8ce2675fb5ce06f06a5e7c803fa458ac58a61",
+        "utf8": "33647f89878c2add8d4db0f197b460029707148082cb65bc1000d266f384dd99",
+        "html": "4238cc534bb1e4ebc4b2715e7b46c78d4799a8c1a9c185fd1facd30604e64fd2",
+        "tree": "526a16c638b0cccf5174a028e3c11c2f150433bcc3ffab82fec2357351c09581",
+        "lint": "21d380f0417ed3b0e76bdf454b961b692e44e2ed8d1b3d4a02cc51596c997c98"
+      }
+    },
+    {
+      "id": "review-rule-02017",
+      "family": "fixed-blank-run-in",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -width 8n\n.It Xo\n.No \"\\0\"\n.nf\n.fi\n.br\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "4e2c579d7856a858ccfd8ddb4eb8c8b49c5e83bafe6049d793bfea003580a209",
+      "oracle_class": "diagnosed",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "      ",
+        "     AFTER BodyWord"
+      ],
+      "authored_fixed_blank": {
+        "line": 10,
+        "column": 5,
+        "owner": "It HEAD",
+        "no_fill": false
+      },
+      "projection": {
+        "id": "review-rule-02017",
+        "source_sha256": "4e2c579d7856a858ccfd8ddb4eb8c8b49c5e83bafe6049d793bfea003580a209",
+        "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+        "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+        "native_utf8_sha256": "33647f89878c2add8d4db0f197b460029707148082cb65bc1000d266f384dd99",
+        "native_tree_sha256": "5317d79a7e452400115b74736cd5912c8d7c69fe7211121bf00bad9ccb7bdb0c",
+        "indent": "responsive",
+        "padding": "responsive",
+        "tab": "device-expansion",
+        "native_replacements": [
+          {
+            "row": 1,
+            "column": 10,
+            "from": " ",
+            "to": " "
+          }
+        ],
+        "native_row_joins": [],
+        "product_table_seams": [],
+        "rules": [
+          "mdoc_term.c:764 LIST_inset/diag generated BODY only; separate authored \\0 preserved"
+        ],
+        "original_region_status": "asserted",
+        "type": "device-projection",
+        "contract": "docs/manuals/mant-roff.md: mdoc definition generated cells; responsive layout",
+        "scope": "exact source/id and observed native row/scalar cells; no authored-space or hard-row edit"
+      },
+      "profile_sha256": {
+        "ascii": "5094e977eb0bd3c56ca66e7850e8ce2675fb5ce06f06a5e7c803fa458ac58a61",
+        "utf8": "33647f89878c2add8d4db0f197b460029707148082cb65bc1000d266f384dd99",
+        "html": "fb114f5cac2fdaf09006ffaed85bba7ad8e3d442959be2ec0beb992bc395f5a6",
+        "tree": "5317d79a7e452400115b74736cd5912c8d7c69fe7211121bf00bad9ccb7bdb0c",
+        "lint": "21d380f0417ed3b0e76bdf454b961b692e44e2ed8d1b3d4a02cc51596c997c98"
+      }
+    },
+    {
+      "id": "review-rule-02018",
+      "family": "fixed-blank-run-in",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -width 8n\n.It Xo\n.No \"\\0\"\n.nf\n.ft B\n.fi\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "7f1db368430249dbb167caf21504f2c8f49a719789047f2dbe164686e4888864",
+      "oracle_class": "diagnosed",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "      ",
+        "     AFTER BodyWord"
+      ],
+      "authored_fixed_blank": {
+        "line": 10,
+        "column": 5,
+        "owner": "It HEAD",
+        "no_fill": false
+      },
+      "projection": {
+        "id": "review-rule-02018",
+        "source_sha256": "7f1db368430249dbb167caf21504f2c8f49a719789047f2dbe164686e4888864",
+        "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+        "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+        "native_utf8_sha256": "794019804141763362919fe108718deddf00093302d7890e578e307ce209de38",
+        "native_tree_sha256": "82887e78e2ab666f7befab041cd319b234b5b319a172811b5ff7aa0db95ce94b",
+        "indent": "responsive",
+        "padding": "responsive",
+        "tab": "device-expansion",
+        "native_replacements": [
+          {
+            "row": 1,
+            "column": 10,
+            "from": " ",
+            "to": " "
+          }
+        ],
+        "native_row_joins": [],
+        "product_table_seams": [],
+        "rules": [
+          "mdoc_term.c:764 LIST_inset/diag generated BODY only; separate authored \\0 preserved"
+        ],
+        "original_region_status": "asserted",
+        "type": "device-projection",
+        "contract": "docs/manuals/mant-roff.md: mdoc definition generated cells; responsive layout",
+        "scope": "exact source/id and observed native row/scalar cells; no authored-space or hard-row edit"
+      },
+      "profile_sha256": {
+        "ascii": "5094e977eb0bd3c56ca66e7850e8ce2675fb5ce06f06a5e7c803fa458ac58a61",
+        "utf8": "794019804141763362919fe108718deddf00093302d7890e578e307ce209de38",
+        "html": "4d0ff508977342b1706d973315a6157a8d36801c9cdbeb82aff02699b51d5f22",
+        "tree": "82887e78e2ab666f7befab041cd319b234b5b319a172811b5ff7aa0db95ce94b",
+        "lint": "21d380f0417ed3b0e76bdf454b961b692e44e2ed8d1b3d4a02cc51596c997c98"
+      }
+    },
+    {
+      "id": "review-rule-02019",
+      "family": "fixed-blank-run-in",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -width 8n\n.It Xo\n.No \"\\0\"\n.nf\n.No MID\n.fi\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "283a5f383b2ca4b60d25e61a6a96084720cae00845d4f0a6bc876f8c3aa0b29d",
+      "oracle_class": "diagnosed",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "      ",
+        "     MID",
+        "     AFTER BodyWord"
+      ],
+      "authored_fixed_blank": {
+        "line": 10,
+        "column": 5,
+        "owner": "It HEAD",
+        "no_fill": false
+      },
+      "projection": {
+        "id": "review-rule-02019",
+        "source_sha256": "283a5f383b2ca4b60d25e61a6a96084720cae00845d4f0a6bc876f8c3aa0b29d",
+        "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+        "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+        "native_utf8_sha256": "3318021989f0b2ca394141d18ac50b2c739543d1eb5d1853f0a23c429b0c2d7a",
+        "native_tree_sha256": "0ede597d98b8b56ae2b29726f820aa94d9866d8269ea5a7b7ef5cb292bbbf71d",
+        "indent": "responsive",
+        "padding": "responsive",
+        "tab": "device-expansion",
+        "native_replacements": [
+          {
+            "row": 2,
+            "column": 10,
+            "from": " ",
+            "to": " "
+          }
+        ],
+        "native_row_joins": [],
+        "product_table_seams": [],
+        "rules": [
+          "mdoc_term.c:764 LIST_inset/diag generated BODY only; separate authored \\0 preserved"
+        ],
+        "original_region_status": "asserted",
+        "type": "device-projection",
+        "contract": "docs/manuals/mant-roff.md: mdoc definition generated cells; responsive layout",
+        "scope": "exact source/id and observed native row/scalar cells; no authored-space or hard-row edit"
+      },
+      "profile_sha256": {
+        "ascii": "decbc4f00ceda4e6b963b8156f88f044e3d27ec179e93ab5382d89d00ab12016",
+        "utf8": "3318021989f0b2ca394141d18ac50b2c739543d1eb5d1853f0a23c429b0c2d7a",
+        "html": "c8394c76a8c118bc4f884074c6f7ff72dd15bf673c2912bb5056dbba9c95451d",
+        "tree": "0ede597d98b8b56ae2b29726f820aa94d9866d8269ea5a7b7ef5cb292bbbf71d",
+        "lint": "21d380f0417ed3b0e76bdf454b961b692e44e2ed8d1b3d4a02cc51596c997c98"
+      }
+    },
+    {
+      "id": "review-rule-02020",
+      "family": "fixed-blank-run-in",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -width 8n\n.It Xo\n.No \"\\0\"\n.nf\n.No \"\\&\"\n.fi\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "3e1e28fd1d781691d5d80c8c3ef11f43139b8b913f116fe7d84addbeea02bff2",
+      "oracle_class": "diagnosed",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "      ",
+        "",
+        "     AFTER BodyWord"
+      ],
+      "authored_fixed_blank": {
+        "line": 10,
+        "column": 5,
+        "owner": "It HEAD",
+        "no_fill": false
+      },
+      "projection": {
+        "id": "review-rule-02020",
+        "source_sha256": "3e1e28fd1d781691d5d80c8c3ef11f43139b8b913f116fe7d84addbeea02bff2",
+        "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+        "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+        "native_utf8_sha256": "5029933077771ec0135e8ad489360e7302248e9aeb155071fa3bef56554b2379",
+        "native_tree_sha256": "b4b2d732ffd5ac752b2ea7ca4800b35b15394acb62c749add57a40612648d399",
+        "indent": "responsive",
+        "padding": "responsive",
+        "tab": "device-expansion",
+        "native_replacements": [
+          {
+            "row": 2,
+            "column": 10,
+            "from": " ",
+            "to": " "
+          }
+        ],
+        "native_row_joins": [],
+        "product_table_seams": [],
+        "rules": [
+          "mdoc_term.c:764 LIST_inset/diag generated BODY only; separate authored \\0 preserved"
+        ],
+        "original_region_status": "asserted",
+        "type": "device-projection",
+        "contract": "docs/manuals/mant-roff.md: mdoc definition generated cells; responsive layout",
+        "scope": "exact source/id and observed native row/scalar cells; no authored-space or hard-row edit"
+      },
+      "profile_sha256": {
+        "ascii": "f2d987b6ed047719c5f08736337bd6d1f5e2b0abac7ba10fc901907dceda9f80",
+        "utf8": "5029933077771ec0135e8ad489360e7302248e9aeb155071fa3bef56554b2379",
+        "html": "32189c1f1807730a6afb41ec9e894440b8f517c53ec385eeca28d6cce14d4f7d",
+        "tree": "b4b2d732ffd5ac752b2ea7ca4800b35b15394acb62c749add57a40612648d399",
+        "lint": "21d380f0417ed3b0e76bdf454b961b692e44e2ed8d1b3d4a02cc51596c997c98"
+      }
+    },
+    {
+      "id": "review-rule-02021",
+      "family": "fixed-blank-run-in",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -width 8n\n.It Xo\n.No \"\\0\"\n.nf\n.sp 1\n.fi\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "c9664eef0613e76e84c276950afc77fcd263249d356e5153178a9e51f341d9ca",
+      "oracle_class": "diagnosed",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "      ",
+        "",
+        "     AFTER BodyWord"
+      ],
+      "authored_fixed_blank": {
+        "line": 10,
+        "column": 5,
+        "owner": "It HEAD",
+        "no_fill": false
+      },
+      "projection": {
+        "id": "review-rule-02021",
+        "source_sha256": "c9664eef0613e76e84c276950afc77fcd263249d356e5153178a9e51f341d9ca",
+        "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+        "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+        "native_utf8_sha256": "5029933077771ec0135e8ad489360e7302248e9aeb155071fa3bef56554b2379",
+        "native_tree_sha256": "c41d6bf222eb0ff21bd66f963467bf504e31eaf69939d2db67725545b2c98db8",
+        "indent": "responsive",
+        "padding": "responsive",
+        "tab": "device-expansion",
+        "native_replacements": [
+          {
+            "row": 2,
+            "column": 10,
+            "from": " ",
+            "to": " "
+          }
+        ],
+        "native_row_joins": [],
+        "product_table_seams": [],
+        "rules": [
+          "mdoc_term.c:764 LIST_inset/diag generated BODY only; separate authored \\0 preserved"
+        ],
+        "original_region_status": "asserted",
+        "type": "device-projection",
+        "contract": "docs/manuals/mant-roff.md: mdoc definition generated cells; responsive layout",
+        "scope": "exact source/id and observed native row/scalar cells; no authored-space or hard-row edit"
+      },
+      "profile_sha256": {
+        "ascii": "f2d987b6ed047719c5f08736337bd6d1f5e2b0abac7ba10fc901907dceda9f80",
+        "utf8": "5029933077771ec0135e8ad489360e7302248e9aeb155071fa3bef56554b2379",
+        "html": "43394134aac73171e786863a791e599e7e340d0dbe93ef82d3bad19b2d4cf5a3",
+        "tree": "c41d6bf222eb0ff21bd66f963467bf504e31eaf69939d2db67725545b2c98db8",
+        "lint": "21d380f0417ed3b0e76bdf454b961b692e44e2ed8d1b3d4a02cc51596c997c98"
+      }
+    },
+    {
+      "id": "review-rule-02022",
+      "family": "fixed-blank-run-in",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -width 8n\n.It Xo\n.No \"\\0\"\n.nf\n.sp -1\n.fi\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "e7ec8aa4e5737481d880450cea268967909e3c48cda208df06d81647dee04a9a",
+      "oracle_class": "diagnosed",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "      ",
+        "     AFTER BodyWord"
+      ],
+      "authored_fixed_blank": {
+        "line": 10,
+        "column": 5,
+        "owner": "It HEAD",
+        "no_fill": false
+      },
+      "projection": {
+        "id": "review-rule-02022",
+        "source_sha256": "e7ec8aa4e5737481d880450cea268967909e3c48cda208df06d81647dee04a9a",
+        "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+        "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+        "native_utf8_sha256": "33647f89878c2add8d4db0f197b460029707148082cb65bc1000d266f384dd99",
+        "native_tree_sha256": "412f48a551db5966c90b30f0c7aa8b90ce2db0ae26a6a6a9768fdaebd9f748a7",
+        "indent": "responsive",
+        "padding": "responsive",
+        "tab": "device-expansion",
+        "native_replacements": [
+          {
+            "row": 1,
+            "column": 10,
+            "from": " ",
+            "to": " "
+          }
+        ],
+        "native_row_joins": [],
+        "product_table_seams": [],
+        "rules": [
+          "mdoc_term.c:764 LIST_inset/diag generated BODY only; separate authored \\0 preserved"
+        ],
+        "original_region_status": "asserted",
+        "type": "device-projection",
+        "contract": "docs/manuals/mant-roff.md: mdoc definition generated cells; responsive layout",
+        "scope": "exact source/id and observed native row/scalar cells; no authored-space or hard-row edit"
+      },
+      "profile_sha256": {
+        "ascii": "5094e977eb0bd3c56ca66e7850e8ce2675fb5ce06f06a5e7c803fa458ac58a61",
+        "utf8": "33647f89878c2add8d4db0f197b460029707148082cb65bc1000d266f384dd99",
+        "html": "43394134aac73171e786863a791e599e7e340d0dbe93ef82d3bad19b2d4cf5a3",
+        "tree": "412f48a551db5966c90b30f0c7aa8b90ce2db0ae26a6a6a9768fdaebd9f748a7",
+        "lint": "21d380f0417ed3b0e76bdf454b961b692e44e2ed8d1b3d4a02cc51596c997c98"
+      }
+    },
+    {
+      "id": "review-rule-02023",
+      "family": "fixed-blank-run-in",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -width 8n\n.It Xo\n.No \"\\0\"\n.nf\n.fi\n.nf\n.fi\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "fddc9e3d68e6090eaa4eb1a7d57fa1c1189807ed235436b588041389f362b469",
+      "oracle_class": "diagnosed",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 15,
+            "column": 5,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "      ",
+        "     AFTER BodyWord"
+      ],
+      "authored_fixed_blank": {
+        "line": 10,
+        "column": 5,
+        "owner": "It HEAD",
+        "no_fill": false
+      },
+      "projection": {
+        "id": "review-rule-02023",
+        "source_sha256": "fddc9e3d68e6090eaa4eb1a7d57fa1c1189807ed235436b588041389f362b469",
+        "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+        "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+        "native_utf8_sha256": "33647f89878c2add8d4db0f197b460029707148082cb65bc1000d266f384dd99",
+        "native_tree_sha256": "83d097c11592b37aeee4278207953097b7367522eac427badffbf2197fb34265",
+        "indent": "responsive",
+        "padding": "responsive",
+        "tab": "device-expansion",
+        "native_replacements": [
+          {
+            "row": 1,
+            "column": 10,
+            "from": " ",
+            "to": " "
+          }
+        ],
+        "native_row_joins": [],
+        "product_table_seams": [],
+        "rules": [
+          "mdoc_term.c:764 LIST_inset/diag generated BODY only; separate authored \\0 preserved"
+        ],
+        "original_region_status": "asserted",
+        "type": "device-projection",
+        "contract": "docs/manuals/mant-roff.md: mdoc definition generated cells; responsive layout",
+        "scope": "exact source/id and observed native row/scalar cells; no authored-space or hard-row edit"
+      },
+      "profile_sha256": {
+        "ascii": "5094e977eb0bd3c56ca66e7850e8ce2675fb5ce06f06a5e7c803fa458ac58a61",
+        "utf8": "33647f89878c2add8d4db0f197b460029707148082cb65bc1000d266f384dd99",
+        "html": "9e7e97c9d6be7806f4203c25b47ee213fa3236dcbe5daa9c5b756004fb75d750",
+        "tree": "83d097c11592b37aeee4278207953097b7367522eac427badffbf2197fb34265",
+        "lint": "21d380f0417ed3b0e76bdf454b961b692e44e2ed8d1b3d4a02cc51596c997c98"
+      }
+    },
+    {
+      "id": "review-rule-02024",
+      "family": "fixed-blank-run-in",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -width 8n\n.It Xo\n.No \"\\0\"\n.mc |\n.nf\n.fi\n.mc\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "523a182836484d82e55f738610f68a8539bb1ae8f951f10f307d945f3caabb36",
+      "oracle_class": "diagnosed",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 15,
+            "column": 5,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "      ",
+        "     AFTER BodyWord"
+      ],
+      "authored_fixed_blank": {
+        "line": 10,
+        "column": 5,
+        "owner": "It HEAD",
+        "no_fill": false
+      },
+      "projection": {
+        "id": "review-rule-02024",
+        "source_sha256": "523a182836484d82e55f738610f68a8539bb1ae8f951f10f307d945f3caabb36",
+        "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+        "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+        "native_utf8_sha256": "97d1215c4968a4a1bacc577d97a174db00b0ce68dd7ec954cc3c7a0fdc6b4ba3",
+        "native_tree_sha256": "6abff93063e7750a742cecade921bd8e6ffb1cb7997439e9f29454d57ea11187",
+        "indent": "responsive",
+        "padding": "responsive",
+        "tab": "device-expansion",
+        "native_replacements": [
+          {
+            "row": 1,
+            "column": 10,
+            "from": " ",
+            "to": " "
+          }
+        ],
+        "native_row_joins": [],
+        "product_table_seams": [],
+        "rules": [
+          "term.c:450-465 installed mc endline cell only",
+          "mdoc_term.c:764 LIST_inset/diag generated BODY only; separate authored \\0 preserved"
+        ],
+        "margin_policy": {
+          "native_utf8_sha256": "97d1215c4968a4a1bacc577d97a174db00b0ce68dd7ec954cc3c7a0fdc6b4ba3",
+          "native_tree_sha256": "6abff93063e7750a742cecade921bd8e6ffb1cb7997439e9f29454d57ea11187",
+          "tail_cells": [
+            {
+              "row": 6,
+              "column": 79,
+              "glyph": "|"
+            }
+          ]
+        },
+        "original_region_status": "uncovered",
+        "type": "device-projection",
+        "contract": "docs/manuals/mant-roff.md: mdoc definition generated cells; responsive layout",
+        "scope": "exact source/id and observed native row/scalar cells; no authored-space or hard-row edit"
+      },
+      "profile_sha256": {
+        "ascii": "b747442238ccd03b6c90ae62d7e19773fb06d88d9f789daea0eb867422c82e43",
+        "utf8": "97d1215c4968a4a1bacc577d97a174db00b0ce68dd7ec954cc3c7a0fdc6b4ba3",
+        "html": "630172a892cc462fad75dcf38d60ef9e7165142a5d06a35b286e96654cad01fb",
+        "tree": "6abff93063e7750a742cecade921bd8e6ffb1cb7997439e9f29454d57ea11187",
+        "lint": "21d380f0417ed3b0e76bdf454b961b692e44e2ed8d1b3d4a02cc51596c997c98"
+      }
+    },
+    {
+      "id": "review-rule-02025",
+      "family": "fixed-blank-run-in",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -width 8n\n.It Xo\n.No \"\\0\"\n.nf\n.mc |\n.fi\n.mc\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "91eeb64327e3da6046243bd2ede3449ed87f24e5fa3f869db47306f1787ef156",
+      "oracle_class": "diagnosed",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 15,
+            "column": 5,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "      ",
+        "     AFTER BodyWord"
+      ],
+      "authored_fixed_blank": {
+        "line": 10,
+        "column": 5,
+        "owner": "It HEAD",
+        "no_fill": false
+      },
+      "projection": {
+        "id": "review-rule-02025",
+        "source_sha256": "91eeb64327e3da6046243bd2ede3449ed87f24e5fa3f869db47306f1787ef156",
+        "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+        "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+        "native_utf8_sha256": "0a1389de10e8e05bfafcfe17bacb7558745a3eda99733d0f8d90715f04dcb5a1",
+        "native_tree_sha256": "e5ef401618e3604b27ddf81a77c769a90d3073c7f7a553730676de7e69fdb867",
+        "indent": "responsive",
+        "padding": "responsive",
+        "tab": "device-expansion",
+        "native_replacements": [
+          {
+            "row": 1,
+            "column": 10,
+            "from": " ",
+            "to": " "
+          }
+        ],
+        "native_row_joins": [],
+        "product_table_seams": [],
+        "rules": [
+          "term.c:450-465 installed mc endline cell only",
+          "mdoc_term.c:764 LIST_inset/diag generated BODY only; separate authored \\0 preserved"
+        ],
+        "margin_policy": {
+          "native_utf8_sha256": "0a1389de10e8e05bfafcfe17bacb7558745a3eda99733d0f8d90715f04dcb5a1",
+          "native_tree_sha256": "e5ef401618e3604b27ddf81a77c769a90d3073c7f7a553730676de7e69fdb867",
+          "tail_cells": [
+            {
+              "row": 7,
+              "column": 79,
+              "glyph": "|"
+            }
+          ]
+        },
+        "original_region_status": "uncovered",
+        "type": "device-projection",
+        "contract": "docs/manuals/mant-roff.md: mdoc definition generated cells; responsive layout",
+        "scope": "exact source/id and observed native row/scalar cells; no authored-space or hard-row edit"
+      },
+      "profile_sha256": {
+        "ascii": "245f7a2d7109e571460b6976910f5852bae692ae275f45c11cfab55d80f61d01",
+        "utf8": "0a1389de10e8e05bfafcfe17bacb7558745a3eda99733d0f8d90715f04dcb5a1",
+        "html": "630172a892cc462fad75dcf38d60ef9e7165142a5d06a35b286e96654cad01fb",
+        "tree": "e5ef401618e3604b27ddf81a77c769a90d3073c7f7a553730676de7e69fdb867",
+        "lint": "21d380f0417ed3b0e76bdf454b961b692e44e2ed8d1b3d4a02cc51596c997c98"
+      }
+    },
+    {
+      "id": "review-rule-02026",
+      "family": "fixed-blank-run-in",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -width 8n\n.It Xo\n.No \"\\0\"\n.ti 2n\n.nf\n.fi\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "bc3e9e9b5b1f466ab8c28504954e86ba8f1ceec966a6bb595cdb4cfd4de66d5d",
+      "oracle_class": "diagnosed",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "      ",
+        "     AFTER BodyWord"
+      ],
+      "authored_fixed_blank": {
+        "line": 10,
+        "column": 5,
+        "owner": "It HEAD",
+        "no_fill": false
+      },
+      "projection": {
+        "id": "review-rule-02026",
+        "source_sha256": "bc3e9e9b5b1f466ab8c28504954e86ba8f1ceec966a6bb595cdb4cfd4de66d5d",
+        "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+        "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+        "native_utf8_sha256": "33647f89878c2add8d4db0f197b460029707148082cb65bc1000d266f384dd99",
+        "native_tree_sha256": "5dc95d3a3abb9c84bb92f8f4d46038e6ab6c8e54d0bf9a84df6c5c916c359390",
+        "indent": "responsive",
+        "padding": "responsive",
+        "tab": "device-expansion",
+        "native_replacements": [
+          {
+            "row": 1,
+            "column": 10,
+            "from": " ",
+            "to": " "
+          }
+        ],
+        "native_row_joins": [],
+        "product_table_seams": [],
+        "rules": [
+          "mdoc_term.c:764 LIST_inset/diag generated BODY only; separate authored \\0 preserved"
+        ],
+        "original_region_status": "asserted",
+        "type": "device-projection",
+        "contract": "docs/manuals/mant-roff.md: mdoc definition generated cells; responsive layout",
+        "scope": "exact source/id and observed native row/scalar cells; no authored-space or hard-row edit"
+      },
+      "profile_sha256": {
+        "ascii": "5094e977eb0bd3c56ca66e7850e8ce2675fb5ce06f06a5e7c803fa458ac58a61",
+        "utf8": "33647f89878c2add8d4db0f197b460029707148082cb65bc1000d266f384dd99",
+        "html": "630172a892cc462fad75dcf38d60ef9e7165142a5d06a35b286e96654cad01fb",
+        "tree": "5dc95d3a3abb9c84bb92f8f4d46038e6ab6c8e54d0bf9a84df6c5c916c359390",
+        "lint": "21d380f0417ed3b0e76bdf454b961b692e44e2ed8d1b3d4a02cc51596c997c98"
+      }
+    },
+    {
+      "id": "review-rule-02027",
+      "family": "fixed-blank-run-in",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -width 8n\n.It Xo\n.No \"\\0\"\n.br\n.ft I\n.br\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "f9efb59eaff1258455d5799d3251eb96a7d133ca08e998714d0091cbd0ae7f95",
+      "oracle_class": "diagnosed",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "      ",
+        "     AFTER BodyWord"
+      ],
+      "authored_fixed_blank": {
+        "line": 10,
+        "column": 5,
+        "owner": "It HEAD",
+        "no_fill": false
+      },
+      "projection": {
+        "id": "review-rule-02027",
+        "source_sha256": "f9efb59eaff1258455d5799d3251eb96a7d133ca08e998714d0091cbd0ae7f95",
+        "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+        "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+        "native_utf8_sha256": "ba630b930c35318d83517381a681bb5469a2645134c80aac083732adfc63f4e1",
+        "native_tree_sha256": "92f07ac5aa78a7fe06b364d59f18c592e528cc1eaaedf821fa9292c0f5670ba4",
+        "indent": "responsive",
+        "padding": "responsive",
+        "tab": "device-expansion",
+        "native_replacements": [
+          {
+            "row": 1,
+            "column": 10,
+            "from": " ",
+            "to": " "
+          }
+        ],
+        "native_row_joins": [],
+        "product_table_seams": [],
+        "rules": [
+          "mdoc_term.c:764 LIST_inset/diag generated BODY only; separate authored \\0 preserved"
+        ],
+        "original_region_status": "asserted",
+        "type": "device-projection",
+        "contract": "docs/manuals/mant-roff.md: mdoc definition generated cells; responsive layout",
+        "scope": "exact source/id and observed native row/scalar cells; no authored-space or hard-row edit"
+      },
+      "profile_sha256": {
+        "ascii": "5094e977eb0bd3c56ca66e7850e8ce2675fb5ce06f06a5e7c803fa458ac58a61",
+        "utf8": "ba630b930c35318d83517381a681bb5469a2645134c80aac083732adfc63f4e1",
+        "html": "9e852c35ed0592343e7724b90fc9b528c8d779f14c14fe6fff7e095a4f6a7a73",
+        "tree": "92f07ac5aa78a7fe06b364d59f18c592e528cc1eaaedf821fa9292c0f5670ba4",
+        "lint": "2118dfab12244ac01f2671dfa35d2e54c2ddf77bc27c52826740a34ff824f7d9"
+      }
+    },
+    {
+      "id": "review-rule-02028",
+      "family": "fixed-blank-run-in",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset -width 8n\n.It Xo\n.No \"\\0\"\n.sp 1\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "859eca35397912fed2035c6d1f53a64c55758f67861e074e023d561a90bac089",
+      "oracle_class": "diagnosed",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It HEAD",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "      ",
+        "",
+        "     AFTER BodyWord"
+      ],
+      "authored_fixed_blank": {
+        "line": 10,
+        "column": 5,
+        "owner": "It HEAD",
+        "no_fill": false
+      },
+      "projection": {
+        "id": "review-rule-02028",
+        "source_sha256": "859eca35397912fed2035c6d1f53a64c55758f67861e074e023d561a90bac089",
+        "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+        "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+        "native_utf8_sha256": "5029933077771ec0135e8ad489360e7302248e9aeb155071fa3bef56554b2379",
+        "native_tree_sha256": "a0d2519bc5b2467d3ac7e1fcef6bccda51417a2aff7a4317324b62db3d0f4c15",
+        "indent": "responsive",
+        "padding": "responsive",
+        "tab": "device-expansion",
+        "native_replacements": [
+          {
+            "row": 2,
+            "column": 10,
+            "from": " ",
+            "to": " "
+          }
+        ],
+        "native_row_joins": [],
+        "product_table_seams": [],
+        "rules": [
+          "mdoc_term.c:764 LIST_inset/diag generated BODY only; separate authored \\0 preserved"
+        ],
+        "original_region_status": "asserted",
+        "type": "device-projection",
+        "contract": "docs/manuals/mant-roff.md: mdoc definition generated cells; responsive layout",
+        "scope": "exact source/id and observed native row/scalar cells; no authored-space or hard-row edit"
+      },
+      "profile_sha256": {
+        "ascii": "f2d987b6ed047719c5f08736337bd6d1f5e2b0abac7ba10fc901907dceda9f80",
+        "utf8": "5029933077771ec0135e8ad489360e7302248e9aeb155071fa3bef56554b2379",
+        "html": "1bf27078c8cc6e887a5b87cd9243dd20ae295d060c58209df972c8cc6e058797",
+        "tree": "a0d2519bc5b2467d3ac7e1fcef6bccda51417a2aff7a4317324b62db3d0f4c15",
+        "lint": "21d380f0417ed3b0e76bdf454b961b692e44e2ed8d1b3d4a02cc51596c997c98"
+      }
+    },
+    {
+      "id": "review-rule-02205",
+      "family": "fixed-blank-run-in",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -diag -width 8n\n.It Xo\n.No \"\\0\"\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "3e869d6e3cd61abb353d29eee6726dedfef89b6e0ed946f4111a4c17ac90e482",
+      "oracle_class": "recovery",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 11,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     Xo    AFTER BodyWord"
+      ],
+      "authored_fixed_blank": {
+        "line": 10,
+        "column": 5,
+        "owner": "It BODY",
+        "no_fill": false
+      },
+      "projection": {
+        "id": "review-rule-02205",
+        "source_sha256": "3e869d6e3cd61abb353d29eee6726dedfef89b6e0ed946f4111a4c17ac90e482",
+        "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+        "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+        "native_utf8_sha256": "c901795adec691ecdbcf9eda8f4b454c709848831a880a34270bb5f457008181",
+        "native_tree_sha256": "d775d7387f70375e10ad6d44a4a097120b55ac549e80e9202a28174e6d855565",
+        "indent": "responsive",
+        "padding": "responsive",
+        "tab": "device-expansion",
+        "native_replacements": [
+          {
+            "row": 0,
+            "column": 7,
+            "from": " ",
+            "to": " "
+          },
+          {
+            "row": 0,
+            "column": 8,
+            "from": " ",
+            "to": " "
+          }
+        ],
+        "native_row_joins": [],
+        "product_table_seams": [],
+        "rules": [
+          "mdoc_term.c:764 LIST_inset/diag generated BODY only; separate authored \\0 preserved"
+        ],
+        "original_region_status": "asserted",
+        "type": "device-projection",
+        "contract": "docs/manuals/mant-roff.md: mdoc definition generated cells; responsive layout",
+        "scope": "exact source/id and observed native row/scalar cells; no authored-space or hard-row edit"
+      },
+      "profile_sha256": {
+        "ascii": "7350fa02aa0c0699875309bfa213d50d323bfd96291dacccbf29f47e84a9f22d",
+        "utf8": "c901795adec691ecdbcf9eda8f4b454c709848831a880a34270bb5f457008181",
+        "html": "39794c258afbd9efb5decda1b78d400771a2266c48c62639fba420b9ab4d70e5",
+        "tree": "d775d7387f70375e10ad6d44a4a097120b55ac549e80e9202a28174e6d855565",
+        "lint": "6ca04ee65418bb75483b99afdc2a03735dd4421c96972b44a222cec4d0cc0c2f"
+      }
+    },
+    {
+      "id": "review-rule-02206",
+      "family": "fixed-blank-run-in",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -diag -width 8n\n.It Xo\n.No \"\\0\"\n.nf\n.fi\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "d9e778a27db0367e852d17775181b9ae706f5c6bde95edcf138270a98e1de0f7",
+      "oracle_class": "recovery",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 13,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     Xo   ",
+        "     AFTER BodyWord"
+      ],
+      "authored_fixed_blank": {
+        "line": 10,
+        "column": 5,
+        "owner": "It BODY",
+        "no_fill": false
+      },
+      "projection": {
+        "id": "review-rule-02206",
+        "source_sha256": "d9e778a27db0367e852d17775181b9ae706f5c6bde95edcf138270a98e1de0f7",
+        "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+        "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+        "native_utf8_sha256": "bf4f49ea82842a2ea7fc577755f9f77e1866b2d93b2dd86b50327ac383a022e5",
+        "native_tree_sha256": "fee1814d97e633cb3153aaf7f03542d306183dcb91599362bd24d32a4b0abbd0",
+        "indent": "responsive",
+        "padding": "responsive",
+        "tab": "device-expansion",
+        "native_replacements": [
+          {
+            "row": 0,
+            "column": 7,
+            "from": " ",
+            "to": " "
+          },
+          {
+            "row": 0,
+            "column": 8,
+            "from": " ",
+            "to": " "
+          }
+        ],
+        "native_row_joins": [],
+        "product_table_seams": [],
+        "rules": [
+          "mdoc_term.c:764 LIST_inset/diag generated BODY only; separate authored \\0 preserved"
+        ],
+        "original_region_status": "asserted",
+        "type": "device-projection",
+        "contract": "docs/manuals/mant-roff.md: mdoc definition generated cells; responsive layout",
+        "scope": "exact source/id and observed native row/scalar cells; no authored-space or hard-row edit"
+      },
+      "profile_sha256": {
+        "ascii": "21dcb3b955cf335445f564687d431c4b5dfdd6861ff66a1366722b160ba09101",
+        "utf8": "bf4f49ea82842a2ea7fc577755f9f77e1866b2d93b2dd86b50327ac383a022e5",
+        "html": "bdc9c1ed90a8c4eef71c8f87f8c114388912a2dbcb567ac3542bf72212db9fef",
+        "tree": "fee1814d97e633cb3153aaf7f03542d306183dcb91599362bd24d32a4b0abbd0",
+        "lint": "15c68f4cb098cdf9f4e50de98e87b1345e3f5ed729669b7f08f59c3c0586fd80"
+      }
+    },
+    {
+      "id": "review-rule-02207",
+      "family": "fixed-blank-run-in",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -diag -width 8n\n.It Xo\n.No \"\\0\"\n.nf\n.br\n.fi\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "000aa1dec634e49b1b3a5702fd4f3e482e7f931a925d8e9b425441dc0570627d",
+      "oracle_class": "recovery",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     Xo   ",
+        "     AFTER BodyWord"
+      ],
+      "authored_fixed_blank": {
+        "line": 10,
+        "column": 5,
+        "owner": "It BODY",
+        "no_fill": false
+      },
+      "projection": {
+        "id": "review-rule-02207",
+        "source_sha256": "000aa1dec634e49b1b3a5702fd4f3e482e7f931a925d8e9b425441dc0570627d",
+        "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+        "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+        "native_utf8_sha256": "bf4f49ea82842a2ea7fc577755f9f77e1866b2d93b2dd86b50327ac383a022e5",
+        "native_tree_sha256": "dc33a627c18d47aa7a62d395f2a5810d624944bab0d08e21b1670b0ef19f847f",
+        "indent": "responsive",
+        "padding": "responsive",
+        "tab": "device-expansion",
+        "native_replacements": [
+          {
+            "row": 0,
+            "column": 7,
+            "from": " ",
+            "to": " "
+          },
+          {
+            "row": 0,
+            "column": 8,
+            "from": " ",
+            "to": " "
+          }
+        ],
+        "native_row_joins": [],
+        "product_table_seams": [],
+        "rules": [
+          "mdoc_term.c:764 LIST_inset/diag generated BODY only; separate authored \\0 preserved"
+        ],
+        "original_region_status": "asserted",
+        "type": "device-projection",
+        "contract": "docs/manuals/mant-roff.md: mdoc definition generated cells; responsive layout",
+        "scope": "exact source/id and observed native row/scalar cells; no authored-space or hard-row edit"
+      },
+      "profile_sha256": {
+        "ascii": "21dcb3b955cf335445f564687d431c4b5dfdd6861ff66a1366722b160ba09101",
+        "utf8": "bf4f49ea82842a2ea7fc577755f9f77e1866b2d93b2dd86b50327ac383a022e5",
+        "html": "1dc5f7aeffa6b30b2b0dab11c5be243d33a1db4ca09c1695b2d285a704102f3d",
+        "tree": "dc33a627c18d47aa7a62d395f2a5810d624944bab0d08e21b1670b0ef19f847f",
+        "lint": "6f14be3fbd812d6ee4a7d4cf3c203cf763bd17583cb1a19aa541f5108bcab6d4"
+      }
+    },
+    {
+      "id": "review-rule-02208",
+      "family": "fixed-blank-run-in",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -diag -width 8n\n.It Xo\n.No \"\\0\"\n.br\n.nf\n.fi\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "2df770e6b991e6cda223deaf688d34c581155f71310f3218a59f49ab16fad91c",
+      "oracle_class": "recovery",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     Xo   ",
+        "     AFTER BodyWord"
+      ],
+      "authored_fixed_blank": {
+        "line": 10,
+        "column": 5,
+        "owner": "It BODY",
+        "no_fill": false
+      },
+      "projection": {
+        "id": "review-rule-02208",
+        "source_sha256": "2df770e6b991e6cda223deaf688d34c581155f71310f3218a59f49ab16fad91c",
+        "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+        "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+        "native_utf8_sha256": "bf4f49ea82842a2ea7fc577755f9f77e1866b2d93b2dd86b50327ac383a022e5",
+        "native_tree_sha256": "60c0d33ecc671ffc3126d7e43d25f7efc0f67e6a4fc55aab06f94ec3de1b22c8",
+        "indent": "responsive",
+        "padding": "responsive",
+        "tab": "device-expansion",
+        "native_replacements": [
+          {
+            "row": 0,
+            "column": 7,
+            "from": " ",
+            "to": " "
+          },
+          {
+            "row": 0,
+            "column": 8,
+            "from": " ",
+            "to": " "
+          }
+        ],
+        "native_row_joins": [],
+        "product_table_seams": [],
+        "rules": [
+          "mdoc_term.c:764 LIST_inset/diag generated BODY only; separate authored \\0 preserved"
+        ],
+        "original_region_status": "asserted",
+        "type": "device-projection",
+        "contract": "docs/manuals/mant-roff.md: mdoc definition generated cells; responsive layout",
+        "scope": "exact source/id and observed native row/scalar cells; no authored-space or hard-row edit"
+      },
+      "profile_sha256": {
+        "ascii": "21dcb3b955cf335445f564687d431c4b5dfdd6861ff66a1366722b160ba09101",
+        "utf8": "bf4f49ea82842a2ea7fc577755f9f77e1866b2d93b2dd86b50327ac383a022e5",
+        "html": "506a417417e9e9725a8c0a0fcf6fe62983e9a25705f858e6692af4cfd9dc1f7b",
+        "tree": "60c0d33ecc671ffc3126d7e43d25f7efc0f67e6a4fc55aab06f94ec3de1b22c8",
+        "lint": "6f14be3fbd812d6ee4a7d4cf3c203cf763bd17583cb1a19aa541f5108bcab6d4"
+      }
+    },
+    {
+      "id": "review-rule-02209",
+      "family": "fixed-blank-run-in",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -diag -width 8n\n.It Xo\n.No \"\\0\"\n.nf\n.fi\n.br\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "72ed9756ebf15c63b82189b95d6b6dca3943ef3b53c4870c1f88d7bd4ff67dbd",
+      "oracle_class": "recovery",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     Xo   ",
+        "     AFTER BodyWord"
+      ],
+      "authored_fixed_blank": {
+        "line": 10,
+        "column": 5,
+        "owner": "It BODY",
+        "no_fill": false
+      },
+      "projection": {
+        "id": "review-rule-02209",
+        "source_sha256": "72ed9756ebf15c63b82189b95d6b6dca3943ef3b53c4870c1f88d7bd4ff67dbd",
+        "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+        "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+        "native_utf8_sha256": "bf4f49ea82842a2ea7fc577755f9f77e1866b2d93b2dd86b50327ac383a022e5",
+        "native_tree_sha256": "7ea911d6932666067465ddcf8f1fd3d24128bbadc4ac97bb779aef567e79f7e4",
+        "indent": "responsive",
+        "padding": "responsive",
+        "tab": "device-expansion",
+        "native_replacements": [
+          {
+            "row": 0,
+            "column": 7,
+            "from": " ",
+            "to": " "
+          },
+          {
+            "row": 0,
+            "column": 8,
+            "from": " ",
+            "to": " "
+          }
+        ],
+        "native_row_joins": [],
+        "product_table_seams": [],
+        "rules": [
+          "mdoc_term.c:764 LIST_inset/diag generated BODY only; separate authored \\0 preserved"
+        ],
+        "original_region_status": "asserted",
+        "type": "device-projection",
+        "contract": "docs/manuals/mant-roff.md: mdoc definition generated cells; responsive layout",
+        "scope": "exact source/id and observed native row/scalar cells; no authored-space or hard-row edit"
+      },
+      "profile_sha256": {
+        "ascii": "21dcb3b955cf335445f564687d431c4b5dfdd6861ff66a1366722b160ba09101",
+        "utf8": "bf4f49ea82842a2ea7fc577755f9f77e1866b2d93b2dd86b50327ac383a022e5",
+        "html": "11d4fa484e0b80765896753baf12747a5b668a199aaad8649d924bfd0e51d919",
+        "tree": "7ea911d6932666067465ddcf8f1fd3d24128bbadc4ac97bb779aef567e79f7e4",
+        "lint": "6f14be3fbd812d6ee4a7d4cf3c203cf763bd17583cb1a19aa541f5108bcab6d4"
+      }
+    },
+    {
+      "id": "review-rule-02210",
+      "family": "fixed-blank-run-in",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -diag -width 8n\n.It Xo\n.No \"\\0\"\n.nf\n.ft B\n.fi\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "d07045b2dd31f75987e481be10b8baa9550c673275e04941b74fd6f8eb357054",
+      "oracle_class": "recovery",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     Xo   ",
+        "     AFTER BodyWord"
+      ],
+      "authored_fixed_blank": {
+        "line": 10,
+        "column": 5,
+        "owner": "It BODY",
+        "no_fill": false
+      },
+      "projection": {
+        "id": "review-rule-02210",
+        "source_sha256": "d07045b2dd31f75987e481be10b8baa9550c673275e04941b74fd6f8eb357054",
+        "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+        "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+        "native_utf8_sha256": "bf4f49ea82842a2ea7fc577755f9f77e1866b2d93b2dd86b50327ac383a022e5",
+        "native_tree_sha256": "54ee383e1240329732a9adb7b89c012ab50359150115778133ff9c10ce7a4eca",
+        "indent": "responsive",
+        "padding": "responsive",
+        "tab": "device-expansion",
+        "native_replacements": [
+          {
+            "row": 0,
+            "column": 7,
+            "from": " ",
+            "to": " "
+          },
+          {
+            "row": 0,
+            "column": 8,
+            "from": " ",
+            "to": " "
+          }
+        ],
+        "native_row_joins": [],
+        "product_table_seams": [],
+        "rules": [
+          "mdoc_term.c:764 LIST_inset/diag generated BODY only; separate authored \\0 preserved"
+        ],
+        "original_region_status": "asserted",
+        "type": "device-projection",
+        "contract": "docs/manuals/mant-roff.md: mdoc definition generated cells; responsive layout",
+        "scope": "exact source/id and observed native row/scalar cells; no authored-space or hard-row edit"
+      },
+      "profile_sha256": {
+        "ascii": "21dcb3b955cf335445f564687d431c4b5dfdd6861ff66a1366722b160ba09101",
+        "utf8": "bf4f49ea82842a2ea7fc577755f9f77e1866b2d93b2dd86b50327ac383a022e5",
+        "html": "c8a64e7d9d4eb55251cb45ef0f3c5490d0721b10a13adc7d9399d747d5f5faf9",
+        "tree": "54ee383e1240329732a9adb7b89c012ab50359150115778133ff9c10ce7a4eca",
+        "lint": "6f14be3fbd812d6ee4a7d4cf3c203cf763bd17583cb1a19aa541f5108bcab6d4"
+      }
+    },
+    {
+      "id": "review-rule-02211",
+      "family": "fixed-blank-run-in",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -diag -width 8n\n.It Xo\n.No \"\\0\"\n.nf\n.No MID\n.fi\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "8e3648e4e558688acecbf2f8b570415cd610bba2e71100863cf8a83f160e3db3",
+      "oracle_class": "recovery",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     Xo   ",
+        "     MID",
+        "     AFTER BodyWord"
+      ],
+      "authored_fixed_blank": {
+        "line": 10,
+        "column": 5,
+        "owner": "It BODY",
+        "no_fill": false
+      },
+      "projection": {
+        "id": "review-rule-02211",
+        "source_sha256": "8e3648e4e558688acecbf2f8b570415cd610bba2e71100863cf8a83f160e3db3",
+        "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+        "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+        "native_utf8_sha256": "0bf3bf93e0b97b4d314644461148f1a7a8c90fbed7135bd1474ecc18d2c999a2",
+        "native_tree_sha256": "96a248b1b8ea9889136d58b0af7c95d2275e0e8f7da9057812f94fac4b83717f",
+        "indent": "responsive",
+        "padding": "responsive",
+        "tab": "device-expansion",
+        "native_replacements": [
+          {
+            "row": 0,
+            "column": 7,
+            "from": " ",
+            "to": " "
+          },
+          {
+            "row": 0,
+            "column": 8,
+            "from": " ",
+            "to": " "
+          }
+        ],
+        "native_row_joins": [],
+        "product_table_seams": [],
+        "rules": [
+          "mdoc_term.c:764 LIST_inset/diag generated BODY only; separate authored \\0 preserved"
+        ],
+        "original_region_status": "asserted",
+        "type": "device-projection",
+        "contract": "docs/manuals/mant-roff.md: mdoc definition generated cells; responsive layout",
+        "scope": "exact source/id and observed native row/scalar cells; no authored-space or hard-row edit"
+      },
+      "profile_sha256": {
+        "ascii": "9661784d80124f3d2c7387b1fa7b26048db4d5d3e7b6f29e876acfcae93fce95",
+        "utf8": "0bf3bf93e0b97b4d314644461148f1a7a8c90fbed7135bd1474ecc18d2c999a2",
+        "html": "414b0740c66d8112a8eea4f3746f28057c44b03599a7715e61cec3c1517a5ec6",
+        "tree": "96a248b1b8ea9889136d58b0af7c95d2275e0e8f7da9057812f94fac4b83717f",
+        "lint": "6f14be3fbd812d6ee4a7d4cf3c203cf763bd17583cb1a19aa541f5108bcab6d4"
+      }
+    },
+    {
+      "id": "review-rule-02212",
+      "family": "fixed-blank-run-in",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -diag -width 8n\n.It Xo\n.No \"\\0\"\n.nf\n.No \"\\&\"\n.fi\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "9b078900be0eae2c4a92f9d9ef910c0e6f1af4cd7ae783479ca5c58515c854bf",
+      "oracle_class": "recovery",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     Xo   ",
+        "",
+        "     AFTER BodyWord"
+      ],
+      "authored_fixed_blank": {
+        "line": 10,
+        "column": 5,
+        "owner": "It BODY",
+        "no_fill": false
+      },
+      "projection": {
+        "id": "review-rule-02212",
+        "source_sha256": "9b078900be0eae2c4a92f9d9ef910c0e6f1af4cd7ae783479ca5c58515c854bf",
+        "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+        "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+        "native_utf8_sha256": "89b51e2b8800dea8918d23dd3e71f23fe68c4160369b231cd7e7b5d447e7a58f",
+        "native_tree_sha256": "6763c591c6d77eb7c4274a3373cf7d16b78855fa401ab1b4f35d5a4912d2e45a",
+        "indent": "responsive",
+        "padding": "responsive",
+        "tab": "device-expansion",
+        "native_replacements": [
+          {
+            "row": 0,
+            "column": 7,
+            "from": " ",
+            "to": " "
+          },
+          {
+            "row": 0,
+            "column": 8,
+            "from": " ",
+            "to": " "
+          }
+        ],
+        "native_row_joins": [],
+        "product_table_seams": [],
+        "rules": [
+          "mdoc_term.c:764 LIST_inset/diag generated BODY only; separate authored \\0 preserved"
+        ],
+        "original_region_status": "asserted",
+        "type": "device-projection",
+        "contract": "docs/manuals/mant-roff.md: mdoc definition generated cells; responsive layout",
+        "scope": "exact source/id and observed native row/scalar cells; no authored-space or hard-row edit"
+      },
+      "profile_sha256": {
+        "ascii": "b0d7bf05ecd8a30b142b991ab0ab6ea5d15a6dc3333dee55c987ae025a5c1d38",
+        "utf8": "89b51e2b8800dea8918d23dd3e71f23fe68c4160369b231cd7e7b5d447e7a58f",
+        "html": "37749b1d2bdf652fb04eb146f61a37edf31b53e393e237beaa75bff46c69b904",
+        "tree": "6763c591c6d77eb7c4274a3373cf7d16b78855fa401ab1b4f35d5a4912d2e45a",
+        "lint": "6f14be3fbd812d6ee4a7d4cf3c203cf763bd17583cb1a19aa541f5108bcab6d4"
+      }
+    },
+    {
+      "id": "review-rule-02213",
+      "family": "fixed-blank-run-in",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -diag -width 8n\n.It Xo\n.No \"\\0\"\n.nf\n.sp 1\n.fi\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "2f929cc5f7feffa09a61d5f3bb17941e3f20025ba702ad52dea59860e71e3e89",
+      "oracle_class": "recovery",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     Xo   ",
+        "",
+        "     AFTER BodyWord"
+      ],
+      "authored_fixed_blank": {
+        "line": 10,
+        "column": 5,
+        "owner": "It BODY",
+        "no_fill": false
+      },
+      "projection": {
+        "id": "review-rule-02213",
+        "source_sha256": "2f929cc5f7feffa09a61d5f3bb17941e3f20025ba702ad52dea59860e71e3e89",
+        "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+        "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+        "native_utf8_sha256": "89b51e2b8800dea8918d23dd3e71f23fe68c4160369b231cd7e7b5d447e7a58f",
+        "native_tree_sha256": "7862620338cb65f4dd1416f7a79bb284b39fc91e51a94a2253831c593a8ef008",
+        "indent": "responsive",
+        "padding": "responsive",
+        "tab": "device-expansion",
+        "native_replacements": [
+          {
+            "row": 0,
+            "column": 7,
+            "from": " ",
+            "to": " "
+          },
+          {
+            "row": 0,
+            "column": 8,
+            "from": " ",
+            "to": " "
+          }
+        ],
+        "native_row_joins": [],
+        "product_table_seams": [],
+        "rules": [
+          "mdoc_term.c:764 LIST_inset/diag generated BODY only; separate authored \\0 preserved"
+        ],
+        "original_region_status": "asserted",
+        "type": "device-projection",
+        "contract": "docs/manuals/mant-roff.md: mdoc definition generated cells; responsive layout",
+        "scope": "exact source/id and observed native row/scalar cells; no authored-space or hard-row edit"
+      },
+      "profile_sha256": {
+        "ascii": "b0d7bf05ecd8a30b142b991ab0ab6ea5d15a6dc3333dee55c987ae025a5c1d38",
+        "utf8": "89b51e2b8800dea8918d23dd3e71f23fe68c4160369b231cd7e7b5d447e7a58f",
+        "html": "87cd3686ef6dbea07a7c994a87c00ee46903e8a1f210ca97c4d8ccafced5e1dd",
+        "tree": "7862620338cb65f4dd1416f7a79bb284b39fc91e51a94a2253831c593a8ef008",
+        "lint": "6f14be3fbd812d6ee4a7d4cf3c203cf763bd17583cb1a19aa541f5108bcab6d4"
+      }
+    },
+    {
+      "id": "review-rule-02214",
+      "family": "fixed-blank-run-in",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -diag -width 8n\n.It Xo\n.No \"\\0\"\n.nf\n.sp -1\n.fi\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "0ad84cd95de0d40ce56e96e202179b17b3901b7da45e8d317f56858f2dc5da14",
+      "oracle_class": "recovery",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     Xo   ",
+        "     AFTER BodyWord"
+      ],
+      "authored_fixed_blank": {
+        "line": 10,
+        "column": 5,
+        "owner": "It BODY",
+        "no_fill": false
+      },
+      "projection": {
+        "id": "review-rule-02214",
+        "source_sha256": "0ad84cd95de0d40ce56e96e202179b17b3901b7da45e8d317f56858f2dc5da14",
+        "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+        "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+        "native_utf8_sha256": "bf4f49ea82842a2ea7fc577755f9f77e1866b2d93b2dd86b50327ac383a022e5",
+        "native_tree_sha256": "8f8c48ce310f58bfd4e9db021e2bdee85dd7151d903329ff9530676c1f4ec55f",
+        "indent": "responsive",
+        "padding": "responsive",
+        "tab": "device-expansion",
+        "native_replacements": [
+          {
+            "row": 0,
+            "column": 7,
+            "from": " ",
+            "to": " "
+          },
+          {
+            "row": 0,
+            "column": 8,
+            "from": " ",
+            "to": " "
+          }
+        ],
+        "native_row_joins": [],
+        "product_table_seams": [],
+        "rules": [
+          "mdoc_term.c:764 LIST_inset/diag generated BODY only; separate authored \\0 preserved"
+        ],
+        "original_region_status": "asserted",
+        "type": "device-projection",
+        "contract": "docs/manuals/mant-roff.md: mdoc definition generated cells; responsive layout",
+        "scope": "exact source/id and observed native row/scalar cells; no authored-space or hard-row edit"
+      },
+      "profile_sha256": {
+        "ascii": "21dcb3b955cf335445f564687d431c4b5dfdd6861ff66a1366722b160ba09101",
+        "utf8": "bf4f49ea82842a2ea7fc577755f9f77e1866b2d93b2dd86b50327ac383a022e5",
+        "html": "87cd3686ef6dbea07a7c994a87c00ee46903e8a1f210ca97c4d8ccafced5e1dd",
+        "tree": "8f8c48ce310f58bfd4e9db021e2bdee85dd7151d903329ff9530676c1f4ec55f",
+        "lint": "6f14be3fbd812d6ee4a7d4cf3c203cf763bd17583cb1a19aa541f5108bcab6d4"
+      }
+    },
+    {
+      "id": "review-rule-02215",
+      "family": "fixed-blank-run-in",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -diag -width 8n\n.It Xo\n.No \"\\0\"\n.nf\n.fi\n.nf\n.fi\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "67ae219c097a299f908582c1092cb1a39c7b5cb8010868ca8781763b5296141a",
+      "oracle_class": "recovery",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 15,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     Xo   ",
+        "     AFTER BodyWord"
+      ],
+      "authored_fixed_blank": {
+        "line": 10,
+        "column": 5,
+        "owner": "It BODY",
+        "no_fill": false
+      },
+      "projection": {
+        "id": "review-rule-02215",
+        "source_sha256": "67ae219c097a299f908582c1092cb1a39c7b5cb8010868ca8781763b5296141a",
+        "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+        "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+        "native_utf8_sha256": "bf4f49ea82842a2ea7fc577755f9f77e1866b2d93b2dd86b50327ac383a022e5",
+        "native_tree_sha256": "c59f4f7810d24b46e01303f3e7733007e0c0e6a865572c85a9122b73a9b1e33c",
+        "indent": "responsive",
+        "padding": "responsive",
+        "tab": "device-expansion",
+        "native_replacements": [
+          {
+            "row": 0,
+            "column": 7,
+            "from": " ",
+            "to": " "
+          },
+          {
+            "row": 0,
+            "column": 8,
+            "from": " ",
+            "to": " "
+          }
+        ],
+        "native_row_joins": [],
+        "product_table_seams": [],
+        "rules": [
+          "mdoc_term.c:764 LIST_inset/diag generated BODY only; separate authored \\0 preserved"
+        ],
+        "original_region_status": "asserted",
+        "type": "device-projection",
+        "contract": "docs/manuals/mant-roff.md: mdoc definition generated cells; responsive layout",
+        "scope": "exact source/id and observed native row/scalar cells; no authored-space or hard-row edit"
+      },
+      "profile_sha256": {
+        "ascii": "21dcb3b955cf335445f564687d431c4b5dfdd6861ff66a1366722b160ba09101",
+        "utf8": "bf4f49ea82842a2ea7fc577755f9f77e1866b2d93b2dd86b50327ac383a022e5",
+        "html": "ef69e15b79eab5ec429b46491f9031e9cab9f5887fee562c77d8a64dec432346",
+        "tree": "c59f4f7810d24b46e01303f3e7733007e0c0e6a865572c85a9122b73a9b1e33c",
+        "lint": "79a707772eee2423a5ca38364133905ad6ed83dc9494bdd4c67b3a0c8af685f1"
+      }
+    },
+    {
+      "id": "review-rule-02216",
+      "family": "fixed-blank-run-in",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -diag -width 8n\n.It Xo\n.No \"\\0\"\n.mc |\n.nf\n.fi\n.mc\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "6521f54be7ab30bf2e91ae73039326dd7409c9bf5a30467d5ab8d77d2d5a0f01",
+      "oracle_class": "recovery",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 15,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     Xo   ",
+        "     AFTER BodyWord"
+      ],
+      "authored_fixed_blank": {
+        "line": 10,
+        "column": 5,
+        "owner": "It BODY",
+        "no_fill": false
+      },
+      "projection": {
+        "id": "review-rule-02216",
+        "source_sha256": "6521f54be7ab30bf2e91ae73039326dd7409c9bf5a30467d5ab8d77d2d5a0f01",
+        "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+        "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+        "native_utf8_sha256": "e1847dace97fa8769f57884f143709cc3a9de66c6fa22ed12d6044ed6c7c80bf",
+        "native_tree_sha256": "e60bebd866187dd5054769edd8b4b0471e1e9bee7a00416e25986d35696f512a",
+        "indent": "responsive",
+        "padding": "responsive",
+        "tab": "device-expansion",
+        "native_replacements": [
+          {
+            "row": 0,
+            "column": 7,
+            "from": " ",
+            "to": " "
+          },
+          {
+            "row": 0,
+            "column": 8,
+            "from": " ",
+            "to": " "
+          }
+        ],
+        "native_row_joins": [],
+        "product_table_seams": [],
+        "rules": [
+          "term.c:450-465 installed mc endline cell only",
+          "mdoc_term.c:764 LIST_inset/diag generated BODY only; separate authored \\0 preserved"
+        ],
+        "margin_policy": {
+          "native_utf8_sha256": "e1847dace97fa8769f57884f143709cc3a9de66c6fa22ed12d6044ed6c7c80bf",
+          "native_tree_sha256": "e60bebd866187dd5054769edd8b4b0471e1e9bee7a00416e25986d35696f512a",
+          "tail_cells": [
+            {
+              "row": 6,
+              "column": 79,
+              "glyph": "|"
+            }
+          ]
+        },
+        "original_region_status": "uncovered",
+        "type": "device-projection",
+        "contract": "docs/manuals/mant-roff.md: mdoc definition generated cells; responsive layout",
+        "scope": "exact source/id and observed native row/scalar cells; no authored-space or hard-row edit"
+      },
+      "profile_sha256": {
+        "ascii": "3e80486324d6621631786fcee3485a08dc51bd4bd16a672967c734dce1b85de1",
+        "utf8": "e1847dace97fa8769f57884f143709cc3a9de66c6fa22ed12d6044ed6c7c80bf",
+        "html": "bdc9c1ed90a8c4eef71c8f87f8c114388912a2dbcb567ac3542bf72212db9fef",
+        "tree": "e60bebd866187dd5054769edd8b4b0471e1e9bee7a00416e25986d35696f512a",
+        "lint": "79a707772eee2423a5ca38364133905ad6ed83dc9494bdd4c67b3a0c8af685f1"
+      }
+    },
+    {
+      "id": "review-rule-02217",
+      "family": "fixed-blank-run-in",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -diag -width 8n\n.It Xo\n.No \"\\0\"\n.nf\n.mc |\n.fi\n.mc\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "f61ab112fb0572dd6657fcb0295fe61d0eacdcdb2ac519fa60226cd24227a7fd",
+      "oracle_class": "recovery",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 15,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     Xo   ",
+        "     AFTER BodyWord"
+      ],
+      "authored_fixed_blank": {
+        "line": 10,
+        "column": 5,
+        "owner": "It BODY",
+        "no_fill": false
+      },
+      "projection": {
+        "id": "review-rule-02217",
+        "source_sha256": "f61ab112fb0572dd6657fcb0295fe61d0eacdcdb2ac519fa60226cd24227a7fd",
+        "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+        "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+        "native_utf8_sha256": "a774e6ec141846bbb0d9abc0f6ccfb2c172d0b8f30a1285d3029713a683f2378",
+        "native_tree_sha256": "0aedc7779c106be62a526f04267aec812e292fe41172144b5ce8d35a4bf1359c",
+        "indent": "responsive",
+        "padding": "responsive",
+        "tab": "device-expansion",
+        "native_replacements": [
+          {
+            "row": 0,
+            "column": 7,
+            "from": " ",
+            "to": " "
+          },
+          {
+            "row": 0,
+            "column": 8,
+            "from": " ",
+            "to": " "
+          }
+        ],
+        "native_row_joins": [],
+        "product_table_seams": [],
+        "rules": [
+          "term.c:450-465 installed mc endline cell only",
+          "mdoc_term.c:764 LIST_inset/diag generated BODY only; separate authored \\0 preserved"
+        ],
+        "margin_policy": {
+          "native_utf8_sha256": "a774e6ec141846bbb0d9abc0f6ccfb2c172d0b8f30a1285d3029713a683f2378",
+          "native_tree_sha256": "0aedc7779c106be62a526f04267aec812e292fe41172144b5ce8d35a4bf1359c",
+          "tail_cells": [
+            {
+              "row": 7,
+              "column": 79,
+              "glyph": "|"
+            }
+          ]
+        },
+        "original_region_status": "uncovered",
+        "type": "device-projection",
+        "contract": "docs/manuals/mant-roff.md: mdoc definition generated cells; responsive layout",
+        "scope": "exact source/id and observed native row/scalar cells; no authored-space or hard-row edit"
+      },
+      "profile_sha256": {
+        "ascii": "3026960dc963e7649748db98a6ac824737645cbac9bba68e3634451609dcba90",
+        "utf8": "a774e6ec141846bbb0d9abc0f6ccfb2c172d0b8f30a1285d3029713a683f2378",
+        "html": "bdc9c1ed90a8c4eef71c8f87f8c114388912a2dbcb567ac3542bf72212db9fef",
+        "tree": "0aedc7779c106be62a526f04267aec812e292fe41172144b5ce8d35a4bf1359c",
+        "lint": "79a707772eee2423a5ca38364133905ad6ed83dc9494bdd4c67b3a0c8af685f1"
+      }
+    },
+    {
+      "id": "review-rule-02218",
+      "family": "fixed-blank-run-in",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -diag -width 8n\n.It Xo\n.No \"\\0\"\n.ti 2n\n.nf\n.fi\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "d6ea51b7d94a821efb9f82c4f4ff04401fefa1362f194b4a1940f56047bd96e9",
+      "oracle_class": "recovery",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     Xo   ",
+        "  AFTER BodyWord"
+      ],
+      "authored_fixed_blank": {
+        "line": 10,
+        "column": 5,
+        "owner": "It BODY",
+        "no_fill": false
+      },
+      "projection": {
+        "id": "review-rule-02218",
+        "source_sha256": "d6ea51b7d94a821efb9f82c4f4ff04401fefa1362f194b4a1940f56047bd96e9",
+        "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+        "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+        "native_utf8_sha256": "bd682f9d0a9b7cbaea2eebf073f80bebc937195308a3d93d3d0c93c27a358255",
+        "native_tree_sha256": "902d0661493cead483fcb9b9121440b1b7b3baeb8d341c71fe1cd5bb84d08cce",
+        "indent": "responsive",
+        "padding": "responsive",
+        "tab": "device-expansion",
+        "native_replacements": [
+          {
+            "row": 0,
+            "column": 7,
+            "from": " ",
+            "to": " "
+          },
+          {
+            "row": 0,
+            "column": 8,
+            "from": " ",
+            "to": " "
+          }
+        ],
+        "native_row_joins": [],
+        "product_table_seams": [],
+        "rules": [
+          "mdoc_term.c:764 LIST_inset/diag generated BODY only; separate authored \\0 preserved"
+        ],
+        "original_region_status": "asserted",
+        "type": "device-projection",
+        "contract": "docs/manuals/mant-roff.md: mdoc definition generated cells; responsive layout",
+        "scope": "exact source/id and observed native row/scalar cells; no authored-space or hard-row edit"
+      },
+      "profile_sha256": {
+        "ascii": "8109ebee42153d5d207132e77949da0dd482a79c72194d02d68ffa96de60f8ca",
+        "utf8": "bd682f9d0a9b7cbaea2eebf073f80bebc937195308a3d93d3d0c93c27a358255",
+        "html": "bdc9c1ed90a8c4eef71c8f87f8c114388912a2dbcb567ac3542bf72212db9fef",
+        "tree": "902d0661493cead483fcb9b9121440b1b7b3baeb8d341c71fe1cd5bb84d08cce",
+        "lint": "6f14be3fbd812d6ee4a7d4cf3c203cf763bd17583cb1a19aa541f5108bcab6d4"
+      }
+    },
+    {
+      "id": "review-rule-02219",
+      "family": "fixed-blank-run-in",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -diag -width 8n\n.It Xo\n.No \"\\0\"\n.br\n.ft I\n.br\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "0048ed42499a88b8f833c35c62b33a853242c61910352719c89b546e74626745",
+      "oracle_class": "recovery",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     Xo   ",
+        "     AFTER BodyWord"
+      ],
+      "authored_fixed_blank": {
+        "line": 10,
+        "column": 5,
+        "owner": "It BODY",
+        "no_fill": false
+      },
+      "projection": {
+        "id": "review-rule-02219",
+        "source_sha256": "0048ed42499a88b8f833c35c62b33a853242c61910352719c89b546e74626745",
+        "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+        "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+        "native_utf8_sha256": "bf4f49ea82842a2ea7fc577755f9f77e1866b2d93b2dd86b50327ac383a022e5",
+        "native_tree_sha256": "e0c3903c6cacfe5afed0a5335dcb32826548ed3d6c2ebc75a674a435a0ddadf4",
+        "indent": "responsive",
+        "padding": "responsive",
+        "tab": "device-expansion",
+        "native_replacements": [
+          {
+            "row": 0,
+            "column": 7,
+            "from": " ",
+            "to": " "
+          },
+          {
+            "row": 0,
+            "column": 8,
+            "from": " ",
+            "to": " "
+          }
+        ],
+        "native_row_joins": [],
+        "product_table_seams": [],
+        "rules": [
+          "mdoc_term.c:764 LIST_inset/diag generated BODY only; separate authored \\0 preserved"
+        ],
+        "original_region_status": "asserted",
+        "type": "device-projection",
+        "contract": "docs/manuals/mant-roff.md: mdoc definition generated cells; responsive layout",
+        "scope": "exact source/id and observed native row/scalar cells; no authored-space or hard-row edit"
+      },
+      "profile_sha256": {
+        "ascii": "21dcb3b955cf335445f564687d431c4b5dfdd6861ff66a1366722b160ba09101",
+        "utf8": "bf4f49ea82842a2ea7fc577755f9f77e1866b2d93b2dd86b50327ac383a022e5",
+        "html": "ff4bd3892d66ddb3f77ee98b51d6f1d978432111fe5c4cddc862bf76cb7c3c03",
+        "tree": "e0c3903c6cacfe5afed0a5335dcb32826548ed3d6c2ebc75a674a435a0ddadf4",
+        "lint": "6cd14aae418564e35208e3691a6d84436716cbd1e1a062ca4854bf4f8f461245"
+      }
+    },
+    {
+      "id": "review-rule-02220",
+      "family": "fixed-blank-run-in",
+      "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -diag -width 8n\n.It Xo\n.No \"\\0\"\n.sp 1\n.sp -1\n.sp 1\n.No AFTER\n.Xc\n.No BodyWord\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "8b1719356f283ddd0e997303308cd40eb435ea62da8f2893283f68ceb7a26c0a",
+      "oracle_class": "recovery",
+      "native_owner": {
+        "reachable": true,
+        "after_owners": [
+          {
+            "line": 14,
+            "column": 5,
+            "owner": "It BODY",
+            "no_fill": false
+          }
+        ],
+        "branch_nodes": [],
+        "empty_texts": 0,
+        "literal_tabs": [],
+        "no_text_operand": false
+      },
+      "expected_rows": [
+        "     Xo   ",
+        "",
+        "     AFTER BodyWord"
+      ],
+      "authored_fixed_blank": {
+        "line": 10,
+        "column": 5,
+        "owner": "It BODY",
+        "no_fill": false
+      },
+      "projection": {
+        "id": "review-rule-02220",
+        "source_sha256": "8b1719356f283ddd0e997303308cd40eb435ea62da8f2893283f68ceb7a26c0a",
+        "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+        "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+        "native_utf8_sha256": "89b51e2b8800dea8918d23dd3e71f23fe68c4160369b231cd7e7b5d447e7a58f",
+        "native_tree_sha256": "6048ffd7da0e27b58333a1dac530f872921bad6b3124fc2d2f0d71f0542d1cff",
+        "indent": "responsive",
+        "padding": "responsive",
+        "tab": "device-expansion",
+        "native_replacements": [
+          {
+            "row": 0,
+            "column": 7,
+            "from": " ",
+            "to": " "
+          },
+          {
+            "row": 0,
+            "column": 8,
+            "from": " ",
+            "to": " "
+          }
+        ],
+        "native_row_joins": [],
+        "product_table_seams": [],
+        "rules": [
+          "mdoc_term.c:764 LIST_inset/diag generated BODY only; separate authored \\0 preserved"
+        ],
+        "original_region_status": "asserted",
+        "type": "device-projection",
+        "contract": "docs/manuals/mant-roff.md: mdoc definition generated cells; responsive layout",
+        "scope": "exact source/id and observed native row/scalar cells; no authored-space or hard-row edit"
+      },
+      "profile_sha256": {
+        "ascii": "b0d7bf05ecd8a30b142b991ab0ab6ea5d15a6dc3333dee55c987ae025a5c1d38",
+        "utf8": "89b51e2b8800dea8918d23dd3e71f23fe68c4160369b231cd7e7b5d447e7a58f",
+        "html": "f8c030de0d5792f5ab34651705512b8b342f281191484f39fbb8e7173752ae29",
+        "tree": "6048ffd7da0e27b58333a1dac530f872921bad6b3124fc2d2f0d71f0542d1cff",
+        "lint": "6f14be3fbd812d6ee4a7d4cf3c203cf763bd17583cb1a19aa541f5108bcab6d4"
+      }
+    }
+  ]
+}

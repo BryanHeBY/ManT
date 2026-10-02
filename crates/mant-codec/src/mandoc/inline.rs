@@ -17,9 +17,9 @@ mod source_fragment;
 pub(in crate::mandoc) use flow::{
     AuthorBreakEffect, CompletedRowOrigin, DefinitionGeometryCheckpoint, FieldFlag, FieldFlags,
     InlineExecutionState, NoFillInlineState, PreservedInlineState, consume_one_row_ending,
-    ends_with_executed_line_break, lower_no_fill_fragment_with_formatter, native_row_origin,
-    prepare_inline_output, retain_inline_identities, strip_native_projection_markers,
-    trailing_completed_row_origins,
+    ends_with_executed_line_break, has_rendered_formatter_glyph,
+    lower_no_fill_fragment_with_formatter, native_row_origin, prepare_inline_output,
+    retain_inline_identities, strip_native_projection_markers, trailing_completed_row_origins,
 };
 pub(super) use flow::{FilledBoundary, FontScope, FontState, InlineBuilder};
 mod source;
@@ -29,8 +29,7 @@ use font::lower_man_font_scope;
 use font::parse_roff_text_with_font;
 pub(super) use font::{
     FormatterWordPart, TextExecutionContext, TextExecutionPolicy, ZeroAdvanceState,
-    parse_formatter_word_parts_with_zero_advance, parse_roff_text_with_state,
-    parse_roff_text_with_zero_advance,
+    parse_formatter_word_parts_with_zero_advance, parse_roff_text_with_zero_advance,
 };
 pub(super) use font::{lower_inline_nodes_with_font_state, parse_roff_text};
 pub(in crate::mandoc) use source_fragment::lower_source_fragment_with_formatter_state;
@@ -392,7 +391,9 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
         | RoffInlineEvent::FallbackGlyph(value) => value
             .chars()
             .any(|character| !is_formatter_word_blank(character) && character != '\n'),
-        RoffInlineEvent::DeviceName | RoffInlineEvent::Overstrike { .. } => true,
+        RoffInlineEvent::BreakableHyphen
+        | RoffInlineEvent::DeviceName
+        | RoffInlineEvent::Overstrike { .. } => true,
         _ => false,
     });
     builder.begin_word_projection_with_break(
@@ -428,6 +429,7 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
         },
     );
     builder.ensure_definition_field_session();
+    builder.escape_coverage.record(execution.escape_scan);
     builder.native_word_writes = Some(execution.native_writes);
     // mdoc_term gives an empty text node a vertical row only when the text
     // itself begins an input line. An empty No/Em argument does not, whereas
@@ -492,6 +494,7 @@ fn starts_with_break_marker_blank(events: &[RoffInlineEvent]) -> bool {
                 }
             }
             RoffInlineEvent::Glyph(_)
+            | RoffInlineEvent::BreakableHyphen
             | RoffInlineEvent::DeviceName
             | RoffInlineEvent::Overstrike { .. } => return false,
             // These use bufferc(ASCII_NBRZW), not encode1(), so they do

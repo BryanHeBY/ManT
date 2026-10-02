@@ -12,26 +12,30 @@
 //! consuming the remainder is conservative because no later delimiter can be
 //! proven to belong to the outer request.
 use super::ASCII_HYPH;
+use super::grammar::{ArgumentShape, EscapeKind, syntax};
 
 const MAX_NESTED_ESCAPE_SCAN_DEPTH: usize = 256;
 
-/// Escape triggers recognized by the fixed CVS name switch.  Any other
-/// trigger is `ESCAPE_UNDEF`: the backslash is dropped and the trigger
-/// character itself becomes a literal delimiter.
-const NAMED_TRIGGERS: &[char] = &[
-    '!', '?', 'r', //
-    '%', '&', ')', ',', '/', '^', 'a', 'd', 't', 'u', '{', '|', '}', //
-    ' ', '\'', '-', '0', ':', '_', '`', 'e', '~', //
-    'p', 'c', 'z', //
-    '(', '[', 'f', 's', //
-    'C', 'N', 'h', 'l', 'o', 'D', 'H', 'L', 'R', 'S', 'X', 'Z', 'b', 'v', 'x',
-];
+#[cfg(test)]
+thread_local! {
+    static SCAN_WORK: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) };
+}
 
-/// Escape triggers the roff parser expands away before a text node exists
-/// (`\*`, `\n`, `\A`, `\B`, `\w`, ...).  CVS returns such an inner escape to
-/// the parser for re-parsing (`ESCAPE_EXPAND`); fully parsed text nodes no
-/// longer contain them, so the scanner merely gives them a bounded extent.
-const EXPAND_TRIGGERS: &[char] = &['$', '*', 'A', 'B', 'V', 'g', 'n', 'w'];
+#[cfg(test)]
+pub(super) fn take_scan_work() -> (usize, usize) {
+    SCAN_WORK.with(|work| work.replace((0, 0)))
+}
+
+#[cfg(test)]
+fn record_scan_work(before: usize, after: usize, task_depth: usize) {
+    SCAN_WORK.with(|work| {
+        let (units, depth) = work.get();
+        work.set((
+            units.saturating_add(before.abs_diff(after) + 1),
+            depth.max(task_depth),
+        ));
+    });
+}
 
 /// CVS `roff_escape.c:292` rejects these quoted families when the delimiter is
 /// written as one of the non-printing escape names.
@@ -139,7 +143,7 @@ pub(super) enum QuotedOutcome {
     },
     /// CVS rejects the delimiter itself (`ESCAPE_DELIM)`: the family renders
     /// nothing and the argument ends right after the rejected delimiter.
-    Rejected,
+    Rejected { kind: EscapeKind },
     /// No delimiter was present at all.
     Missing,
 }
@@ -165,31 +169,188 @@ struct EscapeScan<'a> {
     argument_complete: bool,
 }
 
-/// Return the end of one complete nested escape without recursive descent.
-pub(super) fn scan_nested_escape_end(characters: &[char], start: usize) -> usize {
-    let mut scan = EscapeScan {
-        characters,
-        index: start,
-        tasks: vec![EscapeScanTask::Escape],
-        reported_scan: None,
-        argument_complete: true,
-    };
-    scan.run_extent();
-    scan.index
+/// Completion is independent of extent: an incomplete operand can consume
+/// the remainder, while an empty complete operand consumes its terminator.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum ArgumentCompletion {
+    Complete,
+    Incomplete,
+    Missing,
+    Rejected,
+    BudgetExceeded,
 }
 
-/// End of a counted argument of `count` units, consuming nested escapes
-/// whole without counting them (CVS `maxl` counting).
-pub(super) fn scan_counted_end(characters: &[char], start: usize, count: usize) -> usize {
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(super) struct ScannedArgument {
+    pub(super) kind: EscapeKind,
+    pub(super) payload: Option<std::ops::Range<usize>>,
+    pub(super) prefix: std::ops::Range<usize>,
+    pub(super) end: usize,
+    pub(super) completion: ArgumentCompletion,
+}
+
+struct ArgumentPlan {
+    payload: usize,
+    prefix: std::ops::Range<usize>,
+    task: Option<EscapeScanTask>,
+    rejected: bool,
+    /// Initial CVS iend: standard shape openers are not yet consumed.
+    empty_end: usize,
+}
+
+/// Shared CVS argument shape switch: sizes use a fixed literal quote;
+/// standard names have only one-unit, two-unit, and bracketed forms.
+fn argument_plan(characters: &[char], start: usize, shape: ArgumentShape) -> ArgumentPlan {
+    let mut index = start;
+    let size = shape == ArgumentShape::Size;
+    let signed = size && matches!(characters.get(index), Some('+' | '-' | &ASCII_HYPH));
+    if signed {
+        index += 1;
+    }
+    let prefix = start..index;
+    let mut rejected = false;
+    let task = match shape {
+        ArgumentShape::None | ArgumentShape::Quoted => None,
+        ArgumentShape::Counted(count) => Some(EscapeScanTask::Counted(count)),
+        ArgumentShape::Bracketed => {
+            if characters.get(index) == Some(&' ') {
+                rejected = true;
+                index += 1;
+                None
+            } else {
+                Some(EscapeScanTask::Until(']'))
+            }
+        }
+        ArgumentShape::Standard | ArgumentShape::Size => match characters.get(index) {
+            Some('[') => {
+                index += 1;
+                if !size && characters.get(index) == Some(&' ') {
+                    rejected = true;
+                    index += 1;
+                    None
+                } else {
+                    Some(EscapeScanTask::Until(']'))
+                }
+            }
+            Some('(') => {
+                index += 1;
+                Some(EscapeScanTask::Counted(2))
+            }
+            Some('\'') if size => {
+                index += 1;
+                Some(EscapeScanTask::Until('\''))
+            }
+            Some('1' | '2' | '3')
+                if size
+                    && !signed
+                    && characters.get(index + 1).is_some_and(char::is_ascii_digit) =>
+            {
+                Some(EscapeScanTask::Counted(2))
+            }
+            _ => Some(EscapeScanTask::Counted(1)),
+        },
+    };
+    ArgumentPlan {
+        payload: index,
+        prefix,
+        task,
+        rejected,
+        empty_end: if shape == ArgumentShape::Standard {
+            start
+        } else {
+            index
+        },
+    }
+}
+
+/// Decode a non-quoted operand with exactly the nested scanner's shape and
+/// counting rules. Payload bounds use scalar indices into the supplied slice.
+pub(super) fn scan_argument(characters: &[char], start: usize, trigger: char) -> ScannedArgument {
+    // A digit immediately after N is a rejected literal delimiter. Its
+    // known recovery extent is exactly one unit (roff_escape.c ESC_DELIM),
+    // not an ordinary quoted payload or a standard O operand.
+    let numbered_digit = trigger == 'N' && characters.get(start).is_some_and(char::is_ascii_digit);
+    let shape = if numbered_digit {
+        ArgumentShape::Counted(1)
+    } else {
+        syntax(trigger).argument
+    };
+    let plan = argument_plan(characters, start, shape);
     let mut scan = EscapeScan {
         characters,
-        index: start,
-        tasks: vec![EscapeScanTask::Counted(count)],
+        index: plan.payload,
+        tasks: plan.task.into_iter().collect(),
         reported_scan: None,
         argument_complete: true,
     };
-    scan.run_extent();
-    scan.index
+    let budget_exhausted = scan.run_extent();
+    let completion = if budget_exhausted {
+        ArgumentCompletion::BudgetExceeded
+    } else if plan.payload == characters.len() && shape != ArgumentShape::Standard {
+        ArgumentCompletion::Missing
+    } else if plan.rejected {
+        ArgumentCompletion::Rejected
+    } else if scan.argument_complete {
+        ArgumentCompletion::Complete
+    } else {
+        ArgumentCompletion::Incomplete
+    };
+    // roff_escape.c's mandatory-argument check runs before scanning sizes,
+    // but standard shape selection runs afterwards. An empty standard name
+    // therefore leaves its opening bracket/parenthesis unconsumed.
+    if plan.payload == characters.len() {
+        scan.index = plan.empty_end;
+    }
+    let terminator = matches!(plan.task, Some(EscapeScanTask::Until(_)))
+        && completion == ArgumentCompletion::Complete;
+    let payload_end = scan
+        .index
+        .saturating_sub(usize::from(terminator))
+        .max(plan.payload);
+    // CVS post-processes O only after the complete standard operand was
+    // consumed. Invalid operands remain known escapes, but produce ERROR,
+    // not an IGNORE row cell. O0 and bracketed O5 are UNSUPP (no cell).
+    let base_kind = completion_kind(syntax(trigger).kind, completion);
+    let invalid_font = trigger == 'f'
+        && !super::grammar::valid_font_operand(&characters[plan.payload..payload_end]);
+    let kind = if base_kind == EscapeKind::Error || plan.rejected || numbered_digit || invalid_font
+    {
+        EscapeKind::Error
+    } else if trigger == 'O' {
+        match characters.get(plan.payload) {
+            Some('0') => EscapeKind::Unsupported,
+            Some('1' | '2' | '3' | '4') if payload_end == plan.payload + 1 => EscapeKind::Ignore,
+            Some('5') if characters.get(plan.payload.saturating_sub(1)) == Some(&'[') => {
+                EscapeKind::Unsupported
+            }
+            _ => EscapeKind::Error,
+        }
+    } else {
+        base_kind
+    };
+    ScannedArgument {
+        kind,
+        payload: (!plan.rejected && completion != ArgumentCompletion::Missing)
+            .then_some(plan.payload..payload_end),
+        prefix: plan.prefix,
+        end: scan.index,
+        completion,
+    }
+}
+
+/// Upstream mandatory EOF keeps its initialized class except SPECIAL;
+/// failure after payload scanning keeps only EXPAND/OVERSTRIKE.
+pub(super) fn completion_kind(kind: EscapeKind, completion: ArgumentCompletion) -> EscapeKind {
+    match completion {
+        ArgumentCompletion::Complete => kind,
+        ArgumentCompletion::Missing if kind != EscapeKind::Special => kind,
+        ArgumentCompletion::Incomplete
+            if matches!(kind, EscapeKind::Expand | EscapeKind::Overstrike) =>
+        {
+            kind
+        }
+        _ => EscapeKind::Error,
+    }
 }
 
 /// Scan the quoted argument of `outer` starting at its delimiter position.
@@ -198,7 +359,7 @@ pub(super) fn scan_quoted_argument(
     characters: &[char],
     start: usize,
     outer: char,
-) -> (QuotedOutcome, usize) {
+) -> (QuotedOutcome, usize, bool) {
     let mut scan = EscapeScan {
         characters,
         index: start,
@@ -216,15 +377,24 @@ pub(super) fn scan_quoted_argument(
             let payload = scan.reported_scan.and_then(|(outer, payload_start)| {
                 keep_unclosed_payload(outer).then_some(payload_start..characters.len())
             });
-            return (QuotedOutcome::Unclosed { payload }, characters.len());
+            return (QuotedOutcome::Unclosed { payload }, characters.len(), true);
         }
         let Some(task) = scan.tasks.pop() else {
             // Every reported frame reports its own end before its task is
             // dropped, so an empty stack here is unreachable.
-            return (QuotedOutcome::Unclosed { payload: None }, characters.len());
+            return (
+                QuotedOutcome::Unclosed { payload: None },
+                characters.len(),
+                false,
+            );
         };
-        if let ScanStep::Reported(outcome) = scan.step(task) {
-            return (outcome, scan.index);
+        #[cfg(test)]
+        let before = scan.index;
+        let result = scan.step(task);
+        #[cfg(test)]
+        record_scan_work(before, scan.index, scan.tasks.len());
+        if let ScanStep::Reported(outcome) = result {
+            return (outcome, scan.index, false);
         }
     }
 }
@@ -235,14 +405,19 @@ fn keep_unclosed_payload(outer: char) -> bool {
 
 impl EscapeScan<'_> {
     /// Run every task; on budget exhaustion consume the remainder.
-    fn run_extent(&mut self) {
+    fn run_extent(&mut self) -> bool {
         while self.tasks.len() <= MAX_NESTED_ESCAPE_SCAN_DEPTH {
             let Some(task) = self.tasks.pop() else {
-                return;
+                return false;
             };
+            #[cfg(test)]
+            let before = self.index;
             let _ = self.step(task);
+            #[cfg(test)]
+            record_scan_work(before, self.index, self.tasks.len());
         }
         self.index = self.characters.len();
+        true
     }
 
     fn step(&mut self, task: EscapeScanTask) -> ScanStep {
@@ -297,14 +472,6 @@ impl EscapeScan<'_> {
         // to `[` merely because it lacks the closing bracket.
         if matches!(trigger, '(' | '[') && self.index == self.characters.len() {
             self.index = trigger_index;
-            self.argument_complete = false;
-            return ScanStep::Going;
-        }
-        if trigger == '[' && self.characters.get(self.index) == Some(&' ') {
-            // The standard-argument shape switch rejects a bracketed name
-            // beginning with blank immediately (CVS ESC_ARG). Its `send`
-            // includes that blank, but none of the later name-like text.
-            self.index += 1;
             self.argument_complete = false;
             return ScanStep::Going;
         }
@@ -364,93 +531,50 @@ impl EscapeScan<'_> {
     }
 
     fn step_opaque(&mut self) -> ScanStep {
-        match self.characters.get(self.index).copied() {
-            // CVS maxl counting skips the nested escape and still expects
-            // the undecided single-unit shape's own unit afterwards.
-            Some('\\') => {
-                self.tasks.push(EscapeScanTask::Counted(1));
-                self.tasks.push(EscapeScanTask::Escape);
-            }
-            Some('[') => {
-                self.index += 1;
-                self.tasks.push(EscapeScanTask::Until(']'));
-            }
-            Some('(') => {
-                self.index += 1;
-                self.tasks.push(EscapeScanTask::Counted(2));
-            }
-            Some(_) => self.index += 1,
-            None => {}
-        }
-        ScanStep::Going
+        self.schedule_shape(ArgumentShape::Standard)
     }
 
     fn step_size(&mut self) -> ScanStep {
-        let has_sign = matches!(
-            self.characters.get(self.index),
-            Some('+' | '-' | &ASCII_HYPH)
-        );
-        if has_sign {
-            self.index += 1;
-        }
-        match self.characters.get(self.index).copied() {
-            // Only the undecided single-unit shape can reach a backslash;
-            // resume by counting, not by re-deciding the size shape.
-            Some('\\') => {
-                self.tasks.push(EscapeScanTask::Counted(1));
-                self.tasks.push(EscapeScanTask::Escape);
-            }
-            Some('[') => {
-                self.index += 1;
-                self.tasks.push(EscapeScanTask::Until(']'));
-            }
-            Some('(') => {
-                self.index += 1;
-                self.tasks.push(EscapeScanTask::Counted(2));
-            }
-            // `\s'...'` is a fixed literal quote upstream: no escaped
-            // delimiter syntax exists for sizes.
-            Some('\'') => self.tasks.push(EscapeScanTask::Until('\'')),
-            Some('1' | '2' | '3')
-                if !has_sign
-                    && self
-                        .characters
-                        .get(self.index + 1)
-                        .is_some_and(char::is_ascii_digit) =>
-            {
-                self.index = (self.index + 2).min(self.characters.len());
-            }
-            Some(_) => self.index += 1,
-            None => {}
+        self.schedule_shape(ArgumentShape::Size)
+    }
+
+    fn schedule_shape(&mut self, shape: ArgumentShape) -> ScanStep {
+        let plan = argument_plan(self.characters, self.index, shape);
+        self.argument_complete = !plan.rejected;
+        if plan.payload == self.characters.len() {
+            self.index = plan.empty_end;
+            self.argument_complete = false;
+        } else {
+            self.index = plan.payload;
+            self.tasks.extend(plan.task);
         }
         ScanStep::Going
     }
 
     fn schedule_escape_argument(&mut self, trigger: char) {
-        match trigger {
-            '(' => self.tasks.push(EscapeScanTask::Counted(2)),
-            '[' => self.tasks.push(EscapeScanTask::Until(']')),
-            '$' | '*' | 'F' | 'M' | 'O' | 'V' | 'Y' | 'f' | 'g' | 'k' | 'm' | 'n' => {
-                self.tasks.push(EscapeScanTask::Opaque);
+        match syntax(trigger).argument {
+            ArgumentShape::None => {}
+            ArgumentShape::Counted(count) => self.tasks.push(EscapeScanTask::Counted(count)),
+            ArgumentShape::Bracketed => {
+                let _ = self.schedule_shape(ArgumentShape::Bracketed);
             }
-            's' => self.tasks.push(EscapeScanTask::Size),
-            'N' if self
-                .characters
-                .get(self.index)
-                .is_some_and(char::is_ascii_digit) =>
+            ArgumentShape::Standard => self.tasks.push(EscapeScanTask::Opaque),
+            ArgumentShape::Size => self.tasks.push(EscapeScanTask::Size),
+            ArgumentShape::Quoted
+                if trigger == 'N'
+                    && self
+                        .characters
+                        .get(self.index)
+                        .is_some_and(char::is_ascii_digit) =>
             {
-                // The digit form ends at the first non-digit; CVS rejects a
-                // digit delimiter right here, consuming exactly one unit.
-                self.index = (self.index + 1).min(self.characters.len());
+                self.index += 1;
             }
-            'A' | 'B' | 'C' | 'D' | 'H' | 'L' | 'N' | 'R' | 'S' | 'X' | 'Z' | 'b' | 'h' | 'l'
-            | 'o' | 'v' | 'w' | 'x' => {
+            ArgumentShape::Quoted => {
                 self.tasks.push(EscapeScanTask::Delimited {
                     outer: trigger,
                     report: false,
                 });
             }
-            _ => {}
         }
     }
 
@@ -477,7 +601,12 @@ impl EscapeScan<'_> {
             && REJECTED_DELIMITER_LITERALS.contains(&character)
         {
             self.index += 1;
-            return Self::reported(report, QuotedOutcome::Rejected);
+            return Self::reported(
+                report,
+                QuotedOutcome::Rejected {
+                    kind: EscapeKind::Error,
+                },
+            );
         }
         // Consume the delimiter character; the payload starts after it.  CVS
         // only counts the delimiter as consumed once payload followed
@@ -506,8 +635,7 @@ impl EscapeScan<'_> {
                 report,
             );
         };
-        let named = NAMED_TRIGGERS.contains(&trigger) || EXPAND_TRIGGERS.contains(&trigger);
-        if !named {
+        if syntax(trigger).kind == EscapeKind::Undefined {
             // ESCAPE_UNDEF: the backslash is dropped and the trigger
             // character itself becomes the literal delimiter — and, like a
             // literal delimiter, is still subject to the ESCAPE_DELIM
@@ -517,7 +645,12 @@ impl EscapeScan<'_> {
             if REJECT_LITERAL_DELIMITER_OUTERS.contains(&outer)
                 && REJECTED_DELIMITER_LITERALS.contains(&trigger)
             {
-                return Self::reported(report, QuotedOutcome::Rejected);
+                return Self::reported(
+                    report,
+                    QuotedOutcome::Rejected {
+                        kind: EscapeKind::Error,
+                    },
+                );
             }
             // As with a literal delimiter, nothing is proven consumed past
             // the backslash until payload follows.
@@ -533,7 +666,12 @@ impl EscapeScan<'_> {
             && REJECTED_DELIMITER_NAMES.contains(&trigger)
         {
             // `index` already sits at the rejected opening escape's end.
-            return Self::reported(report, QuotedOutcome::Rejected);
+            return Self::reported(
+                report,
+                QuotedOutcome::Rejected {
+                    kind: syntax(outer).kind,
+                },
+            );
         }
         // The payload begins past the complete opening escape; only a nested
         // escape with the same trigger can close it.  The opening escape is

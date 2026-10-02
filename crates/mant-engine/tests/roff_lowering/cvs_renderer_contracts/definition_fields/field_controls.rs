@@ -32,7 +32,7 @@ const HEAD_CONTROL_CASES: [HeadControlCase; 16] = [
         "6n",
         ".ti 2n",
         "LONGTEXT\nA\nBob\nBODY",
-        "LONGTEXT\nA\nBob\n        BODY",
+        "LONGTEXT\n        A\nBob\n        BODY",
     ),
     (
         "tag temporary indent fit",
@@ -40,7 +40,7 @@ const HEAD_CONTROL_CASES: [HeadControlCase; 16] = [
         "12n",
         ".ti 2n",
         "LONGTEXT  A\nBob\nBODY",
-        "LONGTEXT  A\nBob\n              BODY",
+        "LONGTEXT      A\nBob\n              BODY",
     ),
     (
         "tag vertical space",
@@ -112,7 +112,7 @@ const HEAD_CONTROL_CASES: [HeadControlCase; 16] = [
         "12n",
         ".ti 2n",
         "LONGTEXT ABob BODY",
-        "LONGTEXT ABob BODY",
+        "LONGTEXT      ABobBODY",
     ),
     (
         "hang vertical space fit",
@@ -146,6 +146,9 @@ fn definition_head_controls_settle_the_same_native_field() {
     // `roff_term_pre_br/sp/ti()`, and `term_flushln()`.  NOBREAK, BRIND,
     // HANG, trailspace, and the body origin form one formatter field; none of
     // these requests may be lowered as an unrelated paragraph break.
+    // Every exact source was rechecked with registered pristine CVS. ti's
+    // numeric temporary origin stays native-only; lowering deliberately
+    // executes its pre_br boundary identically to .br (roff_term.c:233-280).
 
     for (label, style, width, request, native_expected, lowered_expected) in HEAD_CONTROL_CASES {
         let source = format!(
@@ -157,6 +160,13 @@ fn definition_head_controls_settle_the_same_native_field() {
             "{label} native output: {native:?}"
         );
         let lowered = lowered_terminal(&source);
+        if request.starts_with(".ti") {
+            assert_eq!(
+                lowered,
+                lowered_terminal(&source.replace(request, ".br")),
+                "{label}: numeric temporary geometry changed the shared pre_br result"
+            );
+        }
         assert!(
             lowered.contains(lowered_expected),
             "{label} lowered output: {lowered:?}"

@@ -104,6 +104,7 @@ impl Clone for FormatterState {
         // live walk as closed through ScopePostState's shared record.
         let mut execution = self.execution.clone();
         execution.scope_posts = crate::mandoc::containers::ScopePostState::default();
+        execution.escape_coverage = self.execution.escape_coverage.fork();
         Self {
             execution,
             spare_execution: Some(InlineExecutionState::default()),
@@ -333,24 +334,17 @@ impl FormatterState {
         mut builder: InlineBuilder,
         preserve_rows: bool,
     ) -> FinishedInlineLine {
-        if builder.discarded_exited_definition_buffer() {
-            // mdoc_term.c::termp_it_post() calls term_newln() for the HEAD.
-            // A buffered but unprinted TAG word can complete an empty row
-            // after an earlier .sp closed the tag row.
-            builder.hard_break();
-        }
-        // A detached HEAD ends at mdoc_term.c::termp_it_post(), even without
-        // an explicit .br. Do not export IR from a HANG field for which
-        // term_fill() never produced a printable device slice.
-        builder.discard_unprinted_definition_field_output();
-        builder.settle_provisional_definition_break();
-        let definition_field_exited = builder.definition_field_exited();
+        // mdoc_term.c::termp_it_post() consumes the old field once. Capture
+        // before rejection can move its output start; the outcome below and
+        // final drain must retain the same accepted-prefix/device receipt.
+        let boundary = builder.prepare_formatter_line();
+        let definition_field_exited = builder.definition_field_exited(boundary.native());
         let definition_author_restarted = builder.definition_author_restarted();
         // An armed request NOSPACE (`roff_term.c:78`) already owns the
         // word join; the filled-field rule would misclassify its row.
         if !definition_field_exited
             && !builder.concat_word_armed()
-            && builder.cleared_field_filled_capacity()
+            && builder.cleared_field_filled_capacity(boundary.native())
         {
             // term.c:250-253 with 205-207: the HANG head ended at or past
             // the field's own right margin with NOBREAK cleared, so the
@@ -358,10 +352,11 @@ impl FormatterState {
             // body word (the reference prints `afterwardstail text`).
             builder.note_flushed_at_body_column();
         }
-        let definition_body_gap_consumed = builder.definition_body_gap_consumed();
+        let definition_body_gap_consumed = builder.definition_body_gap_consumed(boundary.native());
         let completed_empty_rows = builder.completed_empty_rows();
         let definition_term_breaks = builder.take_definition_term_breaks();
-        let (output, mut execution, occupied) = builder.finish_formatter_line(preserve_rows);
+        let (output, mut execution, occupied) =
+            builder.finish_captured_formatter_line(preserve_rows, boundary);
         self.definition_head_rows = DefinitionHeadRows {
             occupied,
             completed_empty_rows,

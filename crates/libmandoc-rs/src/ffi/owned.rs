@@ -142,6 +142,8 @@ pub(super) fn copy_document(pointer: *mut CDocument) -> Result<RawDocument, Stri
             .unwrap_or_default(),
         node_truncated,
         equation_truncated: equation_budget.truncated,
+        escape_truncated: unsafe { raw::mant_mandoc_document_escape_depth_truncated(document) }
+            != 0,
     })
 }
 

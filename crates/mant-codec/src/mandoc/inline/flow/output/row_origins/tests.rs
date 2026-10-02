@@ -38,7 +38,7 @@ fn only_words_with_receipt_positions_build_cursor_history_and_text() {
             });
         }
         reset_work();
-        project_native_positions(&mut nodes, &[(selected, 0, 0)], &[], 0, false);
+        project_native_positions(&mut nodes, &[(selected, 0, 0, false)], &[], 0, false);
         assert_eq!(OWNER_HISTORY_STORES.with(std::cell::Cell::get), 1);
         assert_eq!(OWNER_TEXT_REBUILDS.with(std::cell::Cell::get), 1);
         assert_eq!(OWNER_CHARS_PROJECTED.with(std::cell::Cell::get), 2);
@@ -94,8 +94,8 @@ fn selected_words_resume_scalar_positions_across_unselected_styles_and_links() {
     reset_work();
     project_native_positions(
         &mut nodes,
-        &[(selected.clone(), 1, 6)],
-        &[(selected, 2, 2)],
+        &[(selected.clone(), 1, 6, false)],
+        &[(selected, 2, 2, false)],
         0,
         false,
     );
@@ -133,7 +133,7 @@ fn a_field_prefix_position_never_creates_a_content_word_cursor() {
     reset_work();
     project_native_positions(
         &mut nodes,
-        &[(format!("{INTERNAL_FIELD_PREFIX}source"), 0, 6)],
+        &[(format!("{INTERNAL_FIELD_PREFIX}source"), 0, 6, false)],
         &[],
         0,
         false,
@@ -143,4 +143,28 @@ fn a_field_prefix_position_never_creates_a_content_word_cursor() {
     assert_eq!(OWNER_HISTORY_STORES.with(std::cell::Cell::get), 0);
     assert_eq!(OWNER_TEXT_REBUILDS.with(std::cell::Cell::get), 0);
     assert_eq!(OWNER_CHARS_PROJECTED.with(std::cell::Cell::get), 0);
+}
+
+#[test]
+fn overstruck_native_graph_keeps_its_padding_before_the_replacement_owner() {
+    // Every TAG/HANG Lk \zX source ran pristine first. encode1() writes X
+    // before BACKBEFORE covers it with Lk's ':' (term.c:901-927;
+    // mdoc_term.c::termp_lk_pre()). term_field() printed the earlier word's
+    // padding even though the accepted X has no surviving IR scalar.
+    let hidden = owner("hidden");
+    let replacement = owner("replacement");
+    let mut nodes = vec![
+        Inline::Text {
+            value: "X".to_owned(),
+        },
+        Inline::Emphasis {
+            children: vec![Inline::anchor(hidden.clone())],
+        },
+        Inline::anchor(replacement),
+        Inline::Text {
+            value: ":".to_owned(),
+        },
+    ];
+    project_native_positions(&mut nodes, &[], &[(hidden, 0, 1, true)], 0, false);
+    assert_eq!(plain_text(&nodes), "X :");
 }

@@ -86,9 +86,11 @@ fn every_quoted_family_supports_escaped_delimiters() {
     // delimiter.
     assert_eq!(
         decode(r"\X\(aqtty: link https://example.test\(aq"),
-        vec![super::RoffInlineEvent::Link(Some(
-            "https://example.test".to_owned()
-        ))]
+        vec![
+            super::RoffInlineEvent::Link(Some("https://example.test".to_owned())),
+            // Successful IGNORE contributes one native NBRZW cell.
+            super::RoffInlineEvent::ZeroWidthGlyph,
+        ]
     );
     // `\h` keeps its positive-advance word boundary.
     assert_eq!(visible_text(r"A\h\(aq5n\(aqB"), "A B");

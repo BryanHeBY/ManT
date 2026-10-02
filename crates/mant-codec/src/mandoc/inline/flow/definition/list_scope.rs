@@ -314,7 +314,7 @@ impl InlineBuilder {
                 .execution
                 .definition
                 .as_ref()
-                .is_some_and(|state| state.hang_row.viscol > 0);
+                .is_some_and(|state| state.hang_row.native_row_occupied());
             self.flush_definition_field_at(
                 start,
                 gap,

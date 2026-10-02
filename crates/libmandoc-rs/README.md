@@ -188,11 +188,16 @@ levels. Pathological input beyond either
 defensive cap still returns a successful, finite report and omits deeper
 descendants, while appending an explicit warning to `ParseReport::diagnostics`;
 ordinary manuals remain far below both limits. These wrapper-generated
-warnings return `DiagnosticCode::SyntaxTreeDepthLimit` or
-`DiagnosticCode::EquationTreeDepthLimit` from `Diagnostic::code()`; native
-libmandoc findings retain their severity and message but do not invent a
-machine code. The additive method keeps the existing public diagnostic fields
-and optional Serde shape unchanged for compatible patch upgrades.
+warnings carry `DiagnosticCode::SyntaxTreeDepthLimit` or
+`DiagnosticCode::EquationTreeDepthLimit` in the optional `Diagnostic::code`
+field. Nested escape parsing retains its 256-level bound and reports
+`DiagnosticCode::EscapeDepthLimit` when it actually consumes a rejected
+suffix. The private native receipt belongs to that parser/render session;
+subsequent calls and concurrent sessions cannot inherit it. These codes are
+preserved by the optional Serde feature and by `Diagnostic::code()`, independently
+of the human-readable message. Ordinary native libmandoc findings retain their
+severity and message with no machine code. This updates the unpublished v0.12
+diagnostic contract without changing the version.
 
 A separate native construction guard stops input dispatch after a syntax
 node exceeds 512 parent levels, before end-of-document validation. Such input
@@ -376,7 +381,7 @@ or changing the patch stack.
 ### Local vendor patches
 
 The checked-in vendor tree differs from the pinned CVS source subset only by
-the 28 ordered patches in `patches/series`. The following group contains
+the 29 ordered patches in `patches/series`. The following group contains
 independently reviewable correctness, compatibility, and portability changes;
 they are candidates for separate upstream evaluation, not claims of submission
 or acceptance:
@@ -424,6 +429,9 @@ or acceptance:
 - `0028-retain-eqn-ldots-token-eligibility.patch` records whether an eqn text
   box came from a complete unquoted `ldots` token after macro substitution
   and before font splitting, so compatibility normalization preserves literals.
+- `0029-report-escape-depth-truncation.patch` records actual escape-suffix
+  omission in the private embedding session without changing the guard,
+  exposing mandoc error numbers, or inferring loss from diagnostic text.
 
 The remaining patches implement the synchronous embedding boundary:
 

@@ -17,8 +17,9 @@ fn serde_feature_round_trips_the_public_parse_report() {
 
 #[cfg(feature = "serde")]
 #[test]
-fn serde_diagnostics_keep_the_patch_compatible_field_shape() {
+fn serde_diagnostics_preserve_the_structured_coverage_reason() {
     let diagnostic = Diagnostic {
+        code: Some(DiagnosticCode::SyntaxTreeDepthLimit),
         level: DiagnosticLevel::Warning,
         message: crate::diagnostics::SYNTAX_TREE_DEPTH_MESSAGE.to_owned(),
         location: None,
@@ -29,7 +30,7 @@ fn serde_diagnostics_keep_the_patch_compatible_field_shape() {
         diagnostic.code(),
         Some(DiagnosticCode::SyntaxTreeDepthLimit)
     );
-    assert!(encoded.get("code").is_none());
+    assert_eq!(encoded["code"], "SyntaxTreeDepthLimit");
     assert_eq!(
         serde_json::from_value::<Diagnostic>(encoded).expect("deserialize diagnostic"),
         diagnostic

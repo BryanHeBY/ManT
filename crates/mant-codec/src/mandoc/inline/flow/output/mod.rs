@@ -37,11 +37,12 @@ mod words;
 
 pub(in crate::mandoc) use projection::consume_one_row_ending;
 pub(in crate::mandoc) use projection::ends_with_executed_line_break;
+pub(in crate::mandoc) use projection::has_rendered_formatter_glyph;
+use projection::line_break_count;
 pub(in crate::mandoc) use projection::retain_inline_identities;
 pub(in crate::mandoc::inline) use projection::trailing_ascii_spaces;
 pub(in crate::mandoc) use projection::trailing_completed_row_origins;
 pub(in crate::mandoc) use projection::trim_trailing_breakable_spaces;
-use projection::{has_non_whitespace_glyph, line_break_count};
 pub(in crate::mandoc) use projection::{
     native_row_origin, prepare_inline_output, strip_native_projection_markers,
 };
@@ -167,22 +168,44 @@ impl InlineBuilder {
     /// Preserve a formatter-requested line boundary without creating empty
     /// leading, repeated, or trailing rows around the paragraph.
     pub(in crate::mandoc) fn hard_break(&mut self) {
+        self.hard_break_using_field(None, false);
+    }
+
+    /// The field's real flush already applied acceptance. Project its tail
+    /// without re-querying the old buffer or rejecting it a second time.
+    pub(in crate::mandoc::inline::flow) fn hard_break_after_field_projection(
+        &mut self,
+        native: Option<&super::definition::NativeFieldDevice>,
+    ) {
+        self.hard_break_using_field(native, true);
+    }
+
+    fn hard_break_using_field(
+        &mut self,
+        captured: Option<&super::definition::NativeFieldDevice>,
+        projected: bool,
+    ) {
         let had_native_buffer = self.definition.as_ref().is_some_and(|state| {
             state.field_buffer.resume_offset() < state.field_buffer.cells().len()
         }) || (self.execution.definition.is_none()
             && self.execution.flush_unit.resume_offset() < self.execution.flush_unit.cells().len());
-        let unprinted_field_tail = had_native_buffer && self.native_field_closes_unprinted_row();
+        let unprinted_field_tail = had_native_buffer
+            && if projected {
+                captured.is_some_and(super::definition::NativeFieldDevice::closes_unprinted_row)
+            } else {
+                self.native_field_closes_unprinted_row()
+            };
         let exited_discarded_buffer = self.discarded_exited_definition_buffer();
         let exited_definition_row = self
             .execution
             .detached_device_row
-            .is_some_and(|row| row.viscol > 0)
+            .is_some_and(|row| row.page_origin_printed || row.viscol > 0)
             || self
                 .execution
                 .definition
                 .as_ref()
                 .is_some_and(|definition| {
-                    definition.hang_row.viscol > 0
+                    definition.hang_row.native_row_occupied()
                         && self
                             .execution
                             .author_execution
@@ -193,7 +216,12 @@ impl InlineBuilder {
                 });
         // term_newln() flushes the plain flush unit through the same
         // term_flushln(): a definitive rejection ends its own row here.
-        let plain_flush_rejection = if self.in_definition_field() {
+        let plain_flush_rejection = if projected {
+            self.execution
+                .definition
+                .as_ref()
+                .is_some_and(|state| state.hang_row.field_discarded)
+        } else if self.in_definition_field() {
             // term_newln() flushes the same tcol->buf after a TAG request
             // cleared NOBREAK. A definition session still owns that input;
             // consume its receipt before the row reset retires the cells.
@@ -251,7 +279,7 @@ impl InlineBuilder {
                     .iter()
                     .rev()
                     .take_while(|node| !matches!(node, Inline::LineBreak { .. }))
-                    .any(|node| has_non_whitespace_glyph(std::slice::from_ref(node)))
+                    .any(|node| has_rendered_formatter_glyph(std::slice::from_ref(node)))
         {
             // term_newln() commits a whitespace-only formatter row even
             // though term_fill() prints no glyphs. When a later empty TEXT

@@ -3,7 +3,7 @@ use super::super::{
     first_visible_character, has_printable_character, last_visible_character, needs_boundary_space,
     push_text,
 };
-use super::has_non_whitespace_glyph;
+use super::has_rendered_formatter_glyph;
 use super::line_break_count;
 use super::trim_trailing_breakable_spaces;
 
@@ -86,7 +86,7 @@ impl InlineBuilder {
         let incoming_first = first_visible_character(incoming);
         let incoming_last = last_visible_character(incoming);
         let incoming_has_printable = has_printable_character(incoming);
-        let incoming_has_glyph = has_non_whitespace_glyph(incoming);
+        let incoming_has_glyph = has_rendered_formatter_glyph(incoming);
         let incoming_has_line_break = line_break_count(incoming) > 0;
         if incoming_has_printable || word {
             self.execution.execution_epoch = self.execution.execution_epoch.wrapping_add(1);
@@ -275,6 +275,24 @@ impl InlineBuilder {
         let accepted_row_break = projection.closes_before;
         let leading_cells = projection.leading_cells;
         let native_separator = projection.native_separator;
+        // Plain MC's one projected next-word blank is an advance reservation,
+        // unlike a definition field's minbl. Once an empty word actually
+        // buffers that blank, transfer ownership to the word cells. The
+        // following word then obeys its own NOSPACE/NONOSPACE registers
+        // (roff_term.c:147-150; term.c:573-589), including .Sm off.
+        let transferred_automatic = empty_word
+            && native_separator
+            && self.execution.pending_field_gap_origin
+                == super::super::definition::PendingFieldGapOrigin::AutomaticWord
+            && self.execution.pending_field_spaces > 0;
+        if transferred_automatic {
+            self.execution.pending_breakable_spaces = self
+                .execution
+                .pending_breakable_spaces
+                .saturating_add(std::mem::take(&mut self.execution.pending_field_spaces));
+            self.execution.pending_field_gap_origin =
+                super::super::definition::PendingFieldGapOrigin::Other;
+        }
         // Plain words anchor into the same native flush unit the field
         // path uses; the marker routes by session exactly like the cell
         // recording in `record_native_word`.
@@ -288,7 +306,9 @@ impl InlineBuilder {
         }
         .map(|anchor| anchor.owner.clone());
         if word
-            && (self.execution.pending_field_spaces == 0 || accepted_row_break > 0)
+            && (self.execution.pending_field_spaces == 0
+                || accepted_row_break > 0
+                || !projection.prints_padding)
             && let Some(marker) = native_anchor_marker.as_ref()
         {
             // An accepted marker pass consumes incoming blank positioning
@@ -315,7 +335,9 @@ impl InlineBuilder {
             // already have consumed the blank. Filled responsive words keep
             // their projected zero-advance joins, but authored leading blanks
             // do not replace term_word()'s separate automatic separator.
-            let (spacing_boundary, add_space) = if word
+            let (spacing_boundary, add_space) = if transferred_automatic {
+                (boundary, false)
+            } else if word
                 && self.execution.no_fill_word_active
                 && boundary == PendingBoundary::CommittedField
             {
@@ -334,6 +356,18 @@ impl InlineBuilder {
                     },
                     native_separator,
                 )
+            } else if empty_word && self.execution.pending_field_spaces > 0 && native_separator {
+                // A graphless word cannot print deferred vbl, but its
+                // term_word() automatic blank is a distinct native cell
+                // (term.c:573-589,389-427). Preserve it until a later graph
+                // prints the field; pending positioning cannot consume it.
+                (PendingBoundary::Preserved, true)
+            } else if word && self.execution.pending_breakable_spaces > 0 && native_separator {
+                // Earlier empty words already wrote native cells on this
+                // row. A following word writes its own automatic blank
+                // even when no visible character represents those cells
+                // yet (term.c:573-589).
+                (PendingBoundary::Preserved, true)
             } else if word
                 && !self.in_definition_field()
                 && incoming_first.is_some_and(super::super::super::is_formatter_word_blank)
@@ -344,14 +378,19 @@ impl InlineBuilder {
             } else {
                 (boundary, add_space)
             };
-            let field_padding = self.execution.pending_field_spaces > 0;
+            // term.c::term_field() skips NBRZW, markers and tab/blank
+            // positioning before it writes vbl at an actual Graph. An
+            // invisible accepted word must not print and then retire the
+            // same minbl again at the next pre_br (term.c:389-427).
+            let field_padding =
+                self.execution.pending_field_spaces > 0 && projection.prints_padding;
             if word
                 && field_padding
                 && let Some(marker) = native_anchor_marker.as_ref()
             {
                 self.mark_native_field_prefix(marker);
             }
-            self.append_boundary_spacing(spacing_boundary, add_space, word, empty_word);
+            self.append_boundary_spacing(spacing_boundary, add_space, empty_word, field_padding);
             if word
                 && field_padding
                 && let Some(marker) = native_anchor_marker
@@ -388,11 +427,9 @@ impl InlineBuilder {
         &mut self,
         boundary: PendingBoundary,
         add_space: bool,
-        formatter_word: bool,
         empty_word: bool,
+        materialized_field_separator: bool,
     ) {
-        let materialized_field_separator =
-            formatter_word && self.execution.pending_field_spaces > 0;
         if !empty_word && self.execution.pending_breakable_spaces > 0 {
             let spaces = " ".repeat(self.execution.pending_breakable_spaces);
             self.push_field_owned_breakable_space(spaces);

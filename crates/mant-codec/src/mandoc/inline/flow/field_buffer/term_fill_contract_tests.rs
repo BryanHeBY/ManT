@@ -342,3 +342,156 @@ fn configuration_restart_keeps_projected_pass_identity_at_earlier_offsets() {
     buffer.clear_consumed_field();
     assert!(!buffer.has_projected_rows());
 }
+
+#[test]
+fn native_hyphen_lookahead_is_normalized_before_the_next_pass() {
+    // term.c:316 mutates ASCII_HYPH before deciding whether this pass can
+    // accept it. Exercise that buffer primitive, including a suffix that
+    // was scanned but not printed; ordinary adjacent source '-' operands
+    // do not create this internal cell topology (roff.c:1876-1905).
+    let mut buffer = FieldBuffer::default();
+    buffer.apply_writes(&[
+        super::FieldWrite::Cell(FieldCell::Graph {
+            text: 'a',
+            width: 1,
+        }),
+        super::FieldWrite::Cell(FieldCell::Hyphen),
+        super::FieldWrite::Cell(FieldCell::Hyphen),
+        super::FieldWrite::Cell(FieldCell::Graph {
+            text: 'b',
+            width: 1,
+        }),
+        super::FieldWrite::Cell(FieldCell::Graph {
+            text: 'c',
+            width: 1,
+        }),
+    ]);
+    let first = buffer.fill_pass(2).unwrap();
+    assert_eq!((first.end, first.width), (2, 2));
+    assert!(matches!(
+        buffer.cells()[2],
+        FieldCell::Graph {
+            text: '-',
+            width: 1
+        }
+    ));
+    buffer.advance_past(first.end);
+    let second = buffer.fill_pass(2).unwrap();
+    assert_eq!((second.end, second.width), (5, 3));
+    assert_eq!(second.boundary, super::FillBoundary::BufferEnd);
+}
+
+#[test]
+fn provisional_hyphen_scans_do_not_change_the_native_input() {
+    // Width predictions are not term_fill() execution; a changed .ta or
+    // restored scope can still select the real flush target. Only a
+    // committed marker pass or the owned flush receipt normalizes cells.
+    let mut buffer = FieldBuffer::default();
+    buffer.apply_writes(&[
+        super::FieldWrite::Cell(FieldCell::Graph {
+            text: 'a',
+            width: 1,
+        }),
+        super::FieldWrite::Cell(FieldCell::Hyphen),
+        super::FieldWrite::Cell(FieldCell::Hyphen),
+        super::FieldWrite::Cell(FieldCell::Graph {
+            text: 'b',
+            width: 1,
+        }),
+        super::FieldWrite::Cell(FieldCell::Graph {
+            text: 'c',
+            width: 1,
+        }),
+    ]);
+    let first = buffer.fill_pass_units(2 * 24).unwrap();
+    assert!(matches!(buffer.cells()[2], FieldCell::Hyphen));
+    buffer.commit_pass(first, 2 * 24);
+    assert!(matches!(
+        buffer.cells()[2],
+        FieldCell::Graph {
+            text: '-',
+            width: 1
+        }
+    ));
+    let second = buffer.fill_pass_units(2 * 24).unwrap();
+    assert_eq!((second.end, second.width), (5, 3));
+}
+
+#[test]
+fn kept_blank_lookahead_normalizes_before_resume_and_tail_sweep() {
+    // term.c:340 writes ordinary SP before the overflow guard. Like a
+    // scanned hyphen, this byte may lie beyond nbr and still changes the
+    // next pass's consumed blanks (term.c:205-207). Bk source probes ran the
+    // pristine oracle before this internal buffer-primitive assertion.
+    let mut buffer = FieldBuffer::default();
+    buffer.apply_writes(&[
+        super::FieldWrite::Cell(FieldCell::Graph {
+            text: 'a',
+            width: 1,
+        }),
+        super::FieldWrite::Cell(FieldCell::BreakableBlank),
+        super::FieldWrite::Cell(FieldCell::NonBreakingBlank),
+        super::FieldWrite::Cell(FieldCell::Graph {
+            text: 'b',
+            width: 1,
+        }),
+        super::FieldWrite::Cell(FieldCell::Graph {
+            text: 'c',
+            width: 1,
+        }),
+    ]);
+    let first = buffer.fill_pass(3).unwrap();
+    assert_eq!((first.end, first.width), (1, 1));
+    assert_eq!(buffer.cells()[2], FieldCell::BreakableBlank);
+    buffer.advance_past(first.end);
+    buffer.consume_break_blanks();
+    assert_eq!(buffer.resume_offset(), 3);
+    let second = buffer.fill_pass(3).unwrap();
+    assert_eq!((second.end, second.width), (5, 2));
+
+    let mut tail = FieldBuffer::default();
+    tail.push_non_breaking_blank();
+    let pass = tail.fill_pass(3).unwrap();
+    assert_eq!((pass.end, pass.width), (1, 1));
+    assert!(tail.only_ignorable_remainder(false));
+    assert!(!tail.only_ignorable_remainder(true));
+    assert_eq!(tail.brtrsp_tail_sweep(tail.cells(), 0, 0, true), 24);
+}
+
+#[test]
+fn native_receipt_owns_normalized_keep_cells_without_mutating_source_writes() {
+    let mut buffer = FieldBuffer::default();
+    buffer.apply_writes(&[
+        super::FieldWrite::Cell(FieldCell::Graph {
+            text: 'a',
+            width: 1,
+        }),
+        super::FieldWrite::Cell(FieldCell::BreakableBlank),
+        super::FieldWrite::Cell(FieldCell::NonBreakingBlank),
+        super::FieldWrite::Cell(FieldCell::Graph {
+            text: 'b',
+            width: 1,
+        }),
+        super::FieldWrite::Cell(FieldCell::Graph {
+            text: 'c',
+            width: 1,
+        }),
+    ]);
+    let receipt = buffer.flush_receipt(
+        super::FillTargets {
+            first: 3 * 24,
+            rest: 3 * 24,
+            unbounded: false,
+        },
+        false,
+    );
+    let super::FlushReceipt::Accepted { passes, .. } = &receipt else {
+        panic!("all native passes accept");
+    };
+    assert_eq!(
+        passes.iter().map(|p| (p.end, p.width)).collect::<Vec<_>>(),
+        [(1, 1), (5, 2)]
+    );
+    assert_eq!(receipt.native_cells()[2], FieldCell::BreakableBlank);
+    assert_eq!(buffer.cells()[2], FieldCell::NonBreakingBlank);
+}

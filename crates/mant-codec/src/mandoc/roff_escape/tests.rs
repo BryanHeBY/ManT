@@ -9,10 +9,13 @@ fn emits_text_font_and_renderer_link_events() {
         decode(r"\X'tty: link https://example.test'\fB\-h\fR\X'tty: link' FILE"),
         vec![
             RoffInlineEvent::Link(Some("https://example.test".to_owned())),
+            // term.c ESCAPE_IGNORE writes NBRZW even for tty annotations.
+            RoffInlineEvent::ZeroWidthGlyph,
             RoffInlineEvent::Font(RoffFont::Strong),
             RoffInlineEvent::Text("-h".to_owned()),
             RoffInlineEvent::Font(RoffFont::Regular),
             RoffInlineEvent::Link(None),
+            RoffInlineEvent::ZeroWidthGlyph,
             RoffInlineEvent::Text(" FILE".to_owned()),
         ]
     );
@@ -82,6 +85,7 @@ fn signed_legacy_size_consumes_one_digit_before_visible_text() {
                 kind: PresentationKind::PointSize,
                 argument: Some("-2".to_owned()),
             },
+            RoffInlineEvent::ZeroWidthGlyph,
             RoffInlineEvent::Text("0000".to_owned()),
         ]
     );

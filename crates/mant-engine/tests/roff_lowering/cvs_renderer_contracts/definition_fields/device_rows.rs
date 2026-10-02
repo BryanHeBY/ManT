@@ -18,7 +18,9 @@ fn no_break_field_retains_brind_and_hang_for_following_controls() {
             "tag",
             ".ti 4n",
             "LONGTEXT\nA\nBob\nBODY",
-            "LONGTEXT\nA\nBob\n              BODY",
+            // ti shares pre_br; its numerical temporary device origin is
+            // intentionally omitted, so A keeps the declared BODY origin.
+            "LONGTEXT\n              A\nBob\n              BODY",
         ),
         (
             "tag/sp",
@@ -48,7 +50,9 @@ fn no_break_field_retains_brind_and_hang_for_following_controls() {
             "hang",
             ".ti 4n",
             "LONGTEXT ABob BODY",
-            "LONGTEXT ABob BODY",
+            // Native temporary positioning differs here. Reading executes
+            // the same pre_br as .br without a second width-based exit.
+            "LONGTEXT      ABobBODY",
         ),
         (
             "hang/sp",

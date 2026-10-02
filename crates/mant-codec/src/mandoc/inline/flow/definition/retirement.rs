@@ -50,10 +50,10 @@ impl InlineBuilder {
         let inherited_printed_row = execution
             .definition
             .as_ref()
-            .is_some_and(|state| state.hang_row.viscol > 0)
+            .is_some_and(|state| state.hang_row.native_row_occupied())
             || execution
                 .detached_device_row
-                .is_some_and(|row| row.viscol > 0);
+                .is_some_and(|row| row.page_origin_printed || row.viscol > 0);
         if execution.definition.is_some() && !authorless_definition {
             return false;
         }
@@ -86,7 +86,7 @@ impl InlineBuilder {
         };
         let receipt = buffer.flush_receipt(targets, false);
         let passes = match &receipt {
-            FlushReceipt::Accepted { passes } | FlushReceipt::Rejected { passes, .. } => passes,
+            FlushReceipt::Accepted { passes, .. } | FlushReceipt::Rejected { passes, .. } => passes,
         };
         let empty_rows = completed_empty_plain_passes(
             &buffer,
@@ -117,6 +117,7 @@ impl InlineBuilder {
             passes,
             rejected_from,
             definitive,
+            ..
         } = receipt
         else {
             retain_accepted_unit_output(nodes, &buffer, &anchors, passes, output_start);
@@ -536,7 +537,7 @@ mod tests {
         ] {
             let mut buffer = FieldBuffer::default();
             buffer.apply_writes(&writes);
-            let FlushReceipt::Accepted { passes } = buffer.flush_receipt(
+            let FlushReceipt::Accepted { passes, .. } = buffer.flush_receipt(
                 FillTargets {
                     first: usize::MAX / 2,
                     rest: usize::MAX / 2,

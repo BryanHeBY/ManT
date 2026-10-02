@@ -235,11 +235,11 @@ fn rejected_lk_suffix_preserves_accepted_label_identity_and_row_origin() {
     // the colon/URI; term_fill() accepts X and Y, rejects the remaining
     // current field, and cannot retract those accepted rows or the identity.
     let body = ".Bl -hang -width 4n\n.It Xo\n.Lk https://example.org \"X\\p Y\" \"\\p Z\"\n.Xc\n.No BodyWord\n.El\n";
-    // G-IND keeps responsive HANG placement: term_flushln's BRIND device
-    // origin for the internal Y pass is not a column-equivalence promise.
-    // Preserve both authored hard rows exactly; the BODY's six-column
-    // origin remains a separate selected IR layout contract.
-    assert_eq!(description_rows(body), ["X", "Y", "      BodyWord"]);
+    // Re-frozen exact pristine profiles confirm BRIND's six-cell origin
+    // for accepted Y. The single captured HEAD receipt now preserves that
+    // positioning through Link wrapping along with its hard row; the
+    // later rejected suffix cannot retract it (term.c:217,225-228).
+    assert_eq!(description_rows(body), ["X", "      Y", "      BodyWord"]);
     let query = mant_loader::load_roff_bytes(source(body).as_bytes()).unwrap();
     let mut links = Links::default();
     links.visit_document(query.document.as_ref().unwrap());

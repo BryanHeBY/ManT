@@ -10,6 +10,7 @@ use super::{
 enum BlockControl {
     ParagraphDistance,
     LiteralBoundary,
+    PreBreak,
     Spacing,
 }
 
@@ -17,6 +18,8 @@ fn classify_control(node: &Node, dialect: libmandoc_rs::MacroSet) -> Option<Bloc
     match node.macro_name.as_deref()? {
         "PD" => Some(BlockControl::ParagraphDistance),
         "nf" | "fi" => Some(BlockControl::LiteralBoundary),
+        // ti executes pre_br but does not select another output container.
+        "ti" => Some(BlockControl::PreBreak),
         "EX" | "EE" if dialect == libmandoc_rs::MacroSet::Man => {
             Some(BlockControl::LiteralBoundary)
         }
@@ -155,6 +158,7 @@ fn execute_block_control(
             // body origin, including when no text preceded the request.
             state.literal_mode_boundary();
         }
+        BlockControl::PreBreak => state.pre_break_request(),
         BlockControl::Spacing => {
             let setting = plain_text(&lower_inline_nodes(&node.children, context.default_name));
             state.set_spacing(setting.trim());

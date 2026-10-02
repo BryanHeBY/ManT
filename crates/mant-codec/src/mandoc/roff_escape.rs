@@ -6,13 +6,14 @@
 //! visible document text.
 
 mod glyphs;
+mod grammar;
 mod projection;
 mod scanner;
 use glyphs::{
     dedicated_special_character, documented_groff_composite_character, unicode_special_characters,
 };
 pub(super) use projection::visible_text;
-use scanner::{QuotedOutcome, scan_counted_end, scan_nested_escape_end, scan_quoted_argument};
+use scanner::{ArgumentCompletion, QuotedOutcome, scan_argument, scan_quoted_argument};
 
 use crate::text_safety::push_terminal_safe;
 use libmandoc_rs::SpecialCharacter;
@@ -57,6 +58,9 @@ pub(super) enum PresentationKind {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) enum RoffInlineEvent {
     Text(String),
+    /// The parser's `ASCII_HYPH` cell. It displays '-' but remains a native
+    /// `term_fill` break candidate, unlike an authored nonbreaking \- escape.
+    BreakableHyphen,
     /// One source-level glyph whose printable fallback spans several
     /// characters, for example an unknown `\\[name]` escape.
     Glyph(String),
@@ -231,7 +235,9 @@ pub(super) fn inline_event_effect(event: &RoffInlineEvent) -> InlineEventEffect 
                 InlineEventEffect::Visible
             }
         }
-        RoffInlineEvent::DeviceName => InlineEventEffect::Visible,
+        RoffInlineEvent::DeviceName | RoffInlineEvent::BreakableHyphen => {
+            InlineEventEffect::Visible
+        }
         RoffInlineEvent::Overstrike { terminal, .. } => {
             if terminal.is_some() {
                 InlineEventEffect::Visible
@@ -254,7 +260,17 @@ pub(super) fn inline_event_effect(event: &RoffInlineEvent) -> InlineEventEffect 
 
 /// Decode one libmandoc text node into typed, renderer-independent events.
 pub(super) fn decode(source: &str) -> Vec<RoffInlineEvent> {
-    Decoder::new(source).decode()
+    decode_with_status(source).events
+}
+
+pub(super) struct DecodedText {
+    pub(super) events: Vec<RoffInlineEvent>,
+    pub(super) budget_exhausted: bool,
+}
+
+/// Parsing evidence accompanies events; safety loss is not a displayed glyph.
+pub(super) fn decode_with_status(source: &str) -> DecodedText {
+    Decoder::new(source).decode_with_status()
 }
 
 /// Device measurement of an unevaluated width sample. This follows
@@ -283,6 +299,13 @@ pub(in crate::mandoc) fn width_sample(source: &str) -> usize {
                     skip = false;
                 } else {
                     width = width.saturating_add(mant_ir::geometry::text_width(&text));
+                }
+            }
+            RoffInlineEvent::BreakableHyphen => {
+                if skip {
+                    skip = false;
+                } else {
+                    width = width.saturating_add(1);
                 }
             }
             RoffInlineEvent::DeviceName => {
@@ -378,6 +401,9 @@ enum DelimitedArgument {
 
 struct Decoder {
     measurement: bool,
+    budget_exhausted: bool,
+    argument_completion: ArgumentCompletion,
+    argument_kind: grammar::EscapeKind,
     characters: Vec<char>,
     index: usize,
     events: Vec<RoffInlineEvent>,
@@ -388,6 +414,9 @@ impl Decoder {
     fn new(source: &str) -> Self {
         Self {
             measurement: false,
+            budget_exhausted: false,
+            argument_completion: ArgumentCompletion::Complete,
+            argument_kind: grammar::EscapeKind::Undefined,
             characters: source.chars().collect(),
             index: 0,
             events: Vec::new(),
@@ -395,7 +424,11 @@ impl Decoder {
         }
     }
 
-    fn decode(mut self) -> Vec<RoffInlineEvent> {
+    fn decode(self) -> Vec<RoffInlineEvent> {
+        self.decode_with_status().events
+    }
+
+    fn decode_with_status(mut self) -> DecodedText {
         'input: while self.index < self.characters.len() {
             let character = self.characters[self.index];
             if character != '\\' {
@@ -424,42 +457,33 @@ impl Decoder {
             self.decode_escape(trigger);
         }
         self.flush_text();
-        self.events
+        DecodedText {
+            events: self.events,
+            budget_exhausted: self.budget_exhausted,
+        }
     }
 
     fn decode_escape(&mut self, trigger: char) {
+        self.argument_completion = ArgumentCompletion::Complete;
+        self.argument_kind = grammar::syntax(trigger).kind;
         match trigger {
-            'f' => {
-                let operand = self.take_opaque_argument().unwrap_or_default();
-                self.emit(if operand == "P" || operand.is_empty() {
-                    RoffInlineEvent::PreviousFont
-                } else {
-                    RoffInlineEvent::Font(font(&operand))
-                });
-            }
+            'f' => self.decode_font(),
             'm' | 'M' => {
-                let argument = self.take_opaque_argument();
+                let argument = self.take_argument(trigger);
                 self.emit(RoffInlineEvent::Presentation {
                     kind: PresentationKind::Color,
                     argument,
                 });
             }
             's' => {
-                let argument = self.take_size_argument();
+                let argument = self.take_argument('s');
                 self.emit(RoffInlineEvent::Presentation {
                     kind: PresentationKind::PointSize,
                     argument,
                 });
             }
             'X' => self.decode_postprocessor_escape(),
-            '(' => {
-                let name = self.take_counted(2);
-                self.push_special_character(&name, NamedCharacterSyntax::TwoCharacter);
-            }
-            '[' => {
-                let name = self.take_until(']');
-                self.push_special_character(&name, NamedCharacterSyntax::Bracketed);
-            }
+            '(' | '[' => self.decode_named_character(trigger),
             'C' => self.decode_character_descriptor(),
             // CVS `roff_escape()` classifies these historical one-character
             // forms as named special characters, not undefined literals.
@@ -480,14 +504,14 @@ impl Decoder {
             // operands must be consumed even though ManT does not render the
             // corresponding device state.
             'F' | 'g' | 'k' | 'n' | 'O' | 'V' | 'Y' => {
-                let argument = self.take_opaque_argument();
+                let argument = self.take_argument(trigger);
                 self.emit(RoffInlineEvent::Presentation {
                     kind: PresentationKind::FormatterState,
                     argument,
                 });
             }
             '*' => {
-                let argument = self.take_opaque_argument();
+                let argument = self.take_argument(trigger);
                 if argument.as_deref() == Some(".T") {
                     // CVS roff_escape.c retains the special `\\*[.T]`
                     // device escape in text.  Its UTF-8 terminal renderer
@@ -561,6 +585,48 @@ impl Decoder {
             // while all known control families are handled above.
             other => push_terminal_safe(&mut self.text, other),
         }
+        // term.c::term_word() writes ASCII_NBRZW for a successfully parsed
+        // IGNORE escape, including opaque controls. It is a real zero-width
+        // buffer cell: .br can close its line and retire an armed \z.
+        let syntax = grammar::syntax(trigger);
+        if self.argument_kind == grammar::EscapeKind::Ignore
+            && syntax.argument != grammar::ArgumentShape::None
+        {
+            self.emit(RoffInlineEvent::ZeroWidthGlyph);
+        }
+    }
+
+    fn decode_font(&mut self) {
+        let operand = self.take_argument('f').unwrap_or_default();
+        // Only mandoc_font's complete valid results execute term_fontrepl/
+        // last. Missing/incomplete/unknown operands are ERROR, not Roman or
+        // Previous; the shared scanner still delivers their exact extent.
+        if self.argument_kind == grammar::EscapeKind::Font {
+            self.emit(if operand == "P" || operand.is_empty() {
+                RoffInlineEvent::PreviousFont
+            } else {
+                RoffInlineEvent::Font(font(&operand))
+            });
+        }
+    }
+
+    fn decode_named_character(&mut self, trigger: char) {
+        let start = self.index;
+        let name = self.take_argument(trigger).unwrap_or_default();
+        if trigger == '[' && self.argument_completion == ArgumentCompletion::Rejected {
+            // Retain the established SPECIAL source fallback, but only for
+            // bytes actually consumed by ESC_ARG. Its suffix is ordinary
+            // text and is not part of the fallback glyph.
+            let spelling = format!("\\[{}", self.range_string(start..self.index));
+            self.emit(RoffInlineEvent::FallbackGlyph(spelling));
+        } else {
+            let syntax = if trigger == '[' {
+                NamedCharacterSyntax::Bracketed
+            } else {
+                NamedCharacterSyntax::TwoCharacter
+            };
+            self.push_special_character(&name, syntax);
+        }
     }
 
     fn decode_postprocessor_escape(&mut self) {
@@ -605,7 +671,7 @@ impl Decoder {
             // The digit form has no delimiter and CVS rejects it outright;
             // ManT instead retains the spelling visibly, like every other
             // unaccepted numbered form below.
-            (Some(self.take_counted(1)), false)
+            (self.take_argument('N'), false)
         } else {
             match self.take_delimited_argument('N') {
                 DelimitedArgument::Closed(argument) => (Some(argument), true),
@@ -724,7 +790,7 @@ impl Decoder {
     fn push_source_character(&mut self, character: char) {
         match character {
             ASCII_TABREF | ASCII_BREAK | ASCII_NBRZW => {}
-            ASCII_HYPH => self.text.push('-'),
+            ASCII_HYPH => self.emit(RoffInlineEvent::BreakableHyphen),
             ASCII_NBRSP => self.emit(RoffInlineEvent::Glyph("\u{a0}".to_owned())),
             other => push_terminal_safe(&mut self.text, other),
         }
@@ -748,69 +814,41 @@ impl Decoder {
         Some(character)
     }
 
-    fn take_opaque_argument(&mut self) -> Option<String> {
-        match self.characters.get(self.index).copied()? {
-            '[' => {
-                self.index += 1;
-                Some(self.take_until(']'))
-            }
-            '(' => {
-                self.index += 1;
-                Some(self.take_counted(2))
-            }
-            _ => Some(self.take_counted(1)),
-        }
-    }
-
-    fn take_size_argument(&mut self) -> Option<String> {
-        let mut value = String::new();
-        let mut has_sign = false;
-        if matches!(
-            self.characters.get(self.index),
-            Some('+' | '-' | &ASCII_HYPH)
-        ) {
-            has_sign = true;
-            value.push(self.take_character()?);
-        }
-
-        let first = self.characters.get(self.index).copied()?;
-        match first {
-            '[' => {
-                self.index += 1;
-                value.push_str(&self.take_until(']'));
-            }
-            '(' => {
-                self.index += 1;
-                value.push_str(&self.take_counted(2));
-            }
-            // `\s'...'` is a fixed literal quote upstream: no escaped
-            // delimiter syntax exists for sizes.
-            '\'' => {
-                self.index += 1;
-                value.push_str(&self.take_until('\''));
-            }
-            '1' | '2' | '3'
-                if !has_sign
-                    && self
-                        .characters
-                        .get(self.index + 1)
-                        .is_some_and(char::is_ascii_digit) =>
-            {
-                value.push_str(&self.take_counted(2));
-            }
-            // CVS maxl counting: one unit, with any nested escape consumed
-            // whole without counting.
-            _ => value.push_str(&self.take_counted(1)),
-        }
-        Some(value)
+    fn take_argument(&mut self, trigger: char) -> Option<String> {
+        let argument = scan_argument(&self.characters, self.index, trigger);
+        self.index = argument.end;
+        self.argument_completion = argument.completion;
+        self.argument_kind = argument.kind;
+        self.budget_exhausted |= argument.completion == ArgumentCompletion::BudgetExceeded;
+        argument.payload.map(|range| {
+            let mut value = self.range_string(argument.prefix);
+            value.push_str(&self.range_string(range));
+            value
+        })
     }
 
     /// Take the quoted argument of `outer` with the shared bounded scanner,
     /// applying the fixed CVS delimiter rules: escaped delimiters, literal
     /// closers, `\N`'s digit rule, and rejected delimiters.
     fn take_delimited_argument(&mut self, outer: char) -> DelimitedArgument {
-        let (outcome, end) = scan_quoted_argument(&self.characters, self.index, outer);
+        let (outcome, end, budget_exhausted) =
+            scan_quoted_argument(&self.characters, self.index, outer);
         self.index = end;
+        self.budget_exhausted |= budget_exhausted;
+        self.argument_completion = if budget_exhausted {
+            ArgumentCompletion::BudgetExceeded
+        } else {
+            match &outcome {
+                QuotedOutcome::Closed { .. } => ArgumentCompletion::Complete,
+                QuotedOutcome::Rejected { .. } => ArgumentCompletion::Rejected,
+                QuotedOutcome::Missing => ArgumentCompletion::Missing,
+                QuotedOutcome::Unclosed { .. } => ArgumentCompletion::Incomplete,
+            }
+        };
+        self.argument_kind = match &outcome {
+            QuotedOutcome::Rejected { kind } if !budget_exhausted => *kind,
+            _ => scanner::completion_kind(grammar::syntax(outer).kind, self.argument_completion),
+        };
         match outcome {
             QuotedOutcome::Closed { payload } => {
                 DelimitedArgument::Closed(self.range_string(payload))
@@ -818,7 +856,7 @@ impl Decoder {
             QuotedOutcome::Unclosed { payload } => {
                 DelimitedArgument::Unclosed(payload.map(|range| self.range_string(range)))
             }
-            QuotedOutcome::Rejected => DelimitedArgument::Rejected,
+            QuotedOutcome::Rejected { .. } => DelimitedArgument::Rejected,
             QuotedOutcome::Missing => DelimitedArgument::Missing,
         }
     }
@@ -838,35 +876,6 @@ impl Decoder {
 
     fn range_string(&self, range: std::ops::Range<usize>) -> String {
         self.characters[range].iter().collect()
-    }
-
-    fn take_until(&mut self, delimiter: char) -> String {
-        let start = self.index;
-        while self.index < self.characters.len() && self.characters[self.index] != delimiter {
-            if self.characters[self.index] == '\\' {
-                self.index = scan_nested_escape_end(&self.characters, self.index);
-            } else {
-                self.index += 1;
-            }
-        }
-        let value = self.characters[start..self.index].iter().collect();
-        self.index += usize::from(self.index < self.characters.len());
-        value
-    }
-
-    fn take_counted(&mut self, count: usize) -> String {
-        // CVS maxl counting consumes nested escapes whole without counting
-        // them against the expected length.  Backslash-free operands are
-        // the common case and stay on the pure index path.
-        let plain_end = (self.index + count).min(self.characters.len());
-        let end = if self.characters[self.index..plain_end].contains(&'\\') {
-            scan_counted_end(&self.characters, self.index, count)
-        } else {
-            plain_end
-        };
-        let value = self.characters[self.index..end].iter().collect();
-        self.index = end;
-        value
     }
 }
 
@@ -935,5 +944,7 @@ enum NamedCharacterSyntax {
 
 #[cfg(test)]
 mod delimiter_scanning;
+#[cfg(test)]
+mod rule_matrix;
 #[cfg(test)]
 mod tests;

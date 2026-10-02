@@ -1,0 +1,28 @@
+Subject: report controlled escape suffix omission
+Upstream-Status: Inappropriate [private synchronous embedding result]
+
+Retain the 256-level guard and its exact consumption/diagnostic behavior.
+Record the actual guard event in the active private shim result so owned
+parsing and native rendering can report content coverage independently of
+CVS error numbers and human-readable diagnostic text.
+
+--- a/roff_escape.c
++++ b/roff_escape.c
+@@ -32,6 +32,9 @@
+ 
+ #define ROFF_ESCAPE_DEPTH_LIMIT 256
+ 
++/* Private embedding hook: record actual omission without exporting mandocerr. */
++void mant_mandoc_note_escape_depth_limit(void);
++
+ static enum mandoc_esc roff_escape_impl(const char *, int, int,
+ 		int *, int *, int *, int *, int *, unsigned int, int *);
+ 
+@@ -107,6 +110,7 @@
+ 	 * repeatedly re-enter the same rejected nesting suffix.
+ 	 */
+ 	if (depth >= ROFF_ESCAPE_DEPTH_LIMIT) {
++		mant_mandoc_note_escape_depth_limit();
+ 		inam = aesc;
+ 		do {
+ 			inam++;

@@ -143,13 +143,17 @@ impl BlockRenderer<'_> {
             };
             let mut output = definition_term_rows(terms, origin);
             let mut joined = last;
-            joined.push_plain(
-                &" ".repeat(
-                    padding(first_origin)
-                        .saturating_sub(padding(term_origin).saturating_add(last_width))
-                        .max(usize::from(item.layout.min_term_gap_columns)),
-                ),
-            );
+            // Native row coordinates are layout hints. A consumed HEAD
+            // receipt can already prove that BODY has no separator; an
+            // unexpanded literal tab or responsive width must not add one.
+            let gap = if item.layout.head_body_relation.joins_without_separator() {
+                0
+            } else {
+                padding(first_origin)
+                    .saturating_sub(padding(term_origin).saturating_add(last_width))
+                    .max(usize::from(item.layout.min_term_gap_columns))
+            };
+            joined.push_plain(&" ".repeat(gap));
             joined.append(&first_line.0);
             output.push(joined);
             output.extend(lines.map(|(line, row_indent)| {

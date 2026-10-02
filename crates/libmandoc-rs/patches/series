@@ -26,3 +26,4 @@
 0026-track-tbl-cell-execution-provenance.patch
 0027-bound-escape-parser-depth.patch
 0028-retain-eqn-ldots-token-eligibility.patch
+0029-report-escape-depth-truncation.patch

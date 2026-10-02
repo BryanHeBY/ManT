@@ -181,5 +181,7 @@ fn copy_render(pointer: *mut CDocument) -> Result<RawRender, NativeRenderError> 
         diagnostics: unsafe {
             optional_string(raw::mant_mandoc_document_diagnostics(document)).unwrap_or_default()
         },
+        escape_truncated: unsafe { raw::mant_mandoc_document_escape_depth_truncated(document) }
+            != 0,
     })
 }

@@ -92,6 +92,7 @@ impl PlainTextProjection {
                 }
             }
             RoffInlineEvent::DeviceName => self.append_text("utf8"),
+            RoffInlineEvent::BreakableHyphen => self.append_glyph("-".to_owned()),
             RoffInlineEvent::ZeroAdvance => self.zero_advance.arm(),
             RoffInlineEvent::EmptyDestination => {
                 self.suppress_break_whitespace = false;

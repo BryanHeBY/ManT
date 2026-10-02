@@ -467,6 +467,13 @@ fn link_identity_text(source: &str) -> String {
                     identity.push_str(&value);
                 }
             }
+            RoffInlineEvent::BreakableHyphen => {
+                if skip_next_glyph {
+                    skip_next_glyph = false;
+                } else {
+                    identity.push('-');
+                }
+            }
             RoffInlineEvent::FallbackGlyph(_) => {
                 // Unknown and out-of-range glyphs have no HTML codepoint.
                 // They remain readable in terminal prose but are omitted by

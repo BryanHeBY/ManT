@@ -197,13 +197,16 @@ impl DocumentBuilder<'_> {
                         term_width.saturating_add(usize::from(item.layout.min_term_gap_columns)),
                     ),
                 ));
-            term_spans.push(Span::raw(
-                " ".repeat(
-                    padding(description_indent)
-                        .saturating_sub(padding(term_origin).saturating_add(term_width))
-                        .max(usize::from(item.layout.min_term_gap_columns)),
-                ),
-            ));
+            // Word adjacency is an executed formatter fact. The responsive
+            // glyph width (including an unexpanded tab) cannot overrule it.
+            let gap = if item.layout.head_body_relation.joins_without_separator() {
+                0
+            } else {
+                padding(description_indent)
+                    .saturating_sub(padding(term_origin).saturating_add(term_width))
+                    .max(usize::from(item.layout.min_term_gap_columns))
+            };
+            term_spans.push(Span::raw(" ".repeat(gap)));
             // A run-in literal keeps its authored spacing: the shared row and
             // its continuations wrap as characters, never as words.
             let literal_inline =

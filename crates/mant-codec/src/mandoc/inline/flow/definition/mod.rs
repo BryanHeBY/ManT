@@ -5,6 +5,8 @@
 //! the row invariants themselves stay private to this module.
 
 mod consumption;
+#[cfg(test)]
+mod control_trace;
 mod controls;
 mod device;
 mod fill_mode;

@@ -6,6 +6,7 @@ mod containers;
 mod controls;
 mod declaration_groups;
 mod diagnostics;
+mod escape_coverage;
 mod formatter;
 pub(crate) mod inline;
 mod layout;

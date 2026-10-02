@@ -49,13 +49,7 @@ impl InlineBuilder {
         if mode.is_some()
             && !self.has_formatter_cell()
             && self.execution.pending_field_spaces > 0
-            && !self
-                .execution
-                .definition
-                .as_ref()
-                .is_some_and(|definition| {
-                    definition.pending_gap_origin == PendingFieldGapOrigin::CommittedFlush
-                })
+            && self.execution.pending_field_gap_origin != PendingFieldGapOrigin::CommittedFlush
         {
             // A mode-only An emits no word. A preceding term_newln()
             // (NODE_LINE or a macro post) committed native trailspace for
@@ -79,7 +73,7 @@ impl InlineBuilder {
             // a later author must not inherit abandoned geometry or its
             // consumed body gap.
         }
-        let Some((break_effect, field_output_start)) = self
+        let Some(break_effect) = self
             .execution
             .author_execution
             .as_mut()
@@ -87,7 +81,7 @@ impl InlineBuilder {
                 execution
                     .flow
                     .execute(mode, execution.authors_section)
-                    .then_some((execution.break_effect, execution.field_output_start))
+                    .then_some(execution.break_effect)
             })
         else {
             return;
@@ -96,13 +90,7 @@ impl InlineBuilder {
             // termp_an_pre() calls term_newln(), including the current
             // field's accepted device positions before node geometry returns.
             AuthorBreakEffect::Line => self.execute_native_newline(),
-            AuthorBreakEffect::Field {
-                gap_cells,
-                body_width_columns,
-                field_width_columns,
-                flags,
-                ..
-            } => {
+            AuthorBreakEffect::Field { flags, .. } => {
                 if flags.contains(super::native_field::FieldFlag::Hang)
                     && let Some(definition) = &mut self.execution.definition
                     && definition.vertical_started_row
@@ -114,19 +102,14 @@ impl InlineBuilder {
                     // and clear a bare BACKAFTER that wrote no native cell.
                     definition.vertical_started_row = false;
                 }
-                self.flush_definition_field(
-                    field_output_start,
-                    gap_cells,
-                    body_width_columns,
-                    field_width_columns,
-                    flags,
-                    false,
-                );
-                self.end_author_split_row_by_tail_rule(
-                    flags,
-                    field_width_columns,
-                    field_output_start,
-                );
+                // termp_an_pre() invokes the same term_newln() as a source
+                // event. Its captured receipt already decides the tail;
+                // projected text width cannot end this row a second time.
+                if self.execute_native_newline_with_tail()
+                    && let Some(definition) = &mut self.execution.definition
+                {
+                    definition.outcome.mark_field_restarted();
+                }
                 if !flags.wraps()
                     && let Some(definition) = &mut self.execution.definition
                 {
@@ -139,58 +122,6 @@ impl InlineBuilder {
         }
         if let Some(execution) = &mut self.execution.author_execution {
             execution.field_output_start = self.nodes.len();
-        }
-    }
-
-    /// mdoc_term.c:1084-1085 with term.c:474-480, 250-253: the split
-    /// marker's `term_newln()` flushed the field; whether the row ends is
-    /// the tail rule alone - `HANG` keeps it, a `NoBreak` field keeps it only
-    /// within its vfield (a -diag head never shortens rmargin,
-    /// `mdoc_term.c:872`, so its `vfield` is 0 against any content; a tag
-    /// field that fits keeps the next author word on the row).
-    fn end_author_split_row_by_tail_rule(
-        &mut self,
-        flags: super::native_field::FieldFlags,
-        field_width_columns: u16,
-        field_output_start: usize,
-    ) {
-        let field_showed_content = self
-            .nodes
-            .get(field_output_start..)
-            .is_some_and(mant_ir::has_printable_character);
-        // vbr counts printed width only: the field's trailspace is the
-        // predicate's own addend (row_continues adds flags.trailspace()),
-        // so strip any already-materialized trailing blanks.
-        let field_width = self
-            .nodes
-            .get(field_output_start..)
-            .map(|field| {
-                mant_ir::geometry::text_width(crate::mandoc::inline::plain_text(field).trim_end())
-            })
-            .unwrap_or_default();
-        // A -diag field carries u16::MAX as its width because
-        // mdoc_term.c:872 never shortens rmargin for it; its real vfield
-        // is the ambient margin at the field's column, effectively zero
-        // against any printed content.
-        let vfield = if field_width_columns == u16::MAX {
-            0
-        } else {
-            usize::from(field_width_columns)
-        };
-        let continues = super::native_field::row_continues(flags, field_width, vfield);
-        // The field's own overrun path may have ended this row already;
-        // the tail rule fires once, and either way the field restarts
-        // (mdoc_term.c:1084-1085 keeps NOBREAK and BRIND until the item
-        // post).
-        let row_ended_by_tail_rule = field_showed_content && !continues;
-        if row_ended_by_tail_rule {
-            let already_broken = matches!(self.nodes.last(), Some(Inline::LineBreak { .. }));
-            if !already_broken {
-                self.force_output_line_break();
-            }
-            if let Some(definition) = &mut self.execution.definition {
-                definition.outcome.mark_field_restarted();
-            }
         }
     }
 
