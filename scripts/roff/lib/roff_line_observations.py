@@ -45,16 +45,24 @@ def _rendered(lines, limits):
 
 def _matches(words, rendered, limits, work):
     tokens, _, index = rendered
-    positions = index.get(words[0], ())
+    # A frequent first word is not evidence of a frequent complete phrase.
+    # Choose the narrowest indexed token, then verify the full ordered phrase
+    # at its original position. This changes candidate enumeration only.
+    work[0] += len(words)
+    if work[0] > limits.alignment_work:
+        raise _Limit('alignment-work-budget')
+    offset = min(range(len(words)), key=lambda i: len(index.get(words[i], ())))
+    positions = index.get(words[offset], ())
     if len(positions) > limits.occurrences_per_row:
         return None
     matches = []
-    for start in positions:
+    for anchor in positions:
+        start = anchor - offset
         work[0] += len(words)
         if work[0] > limits.alignment_work:
             raise _Limit('alignment-work-budget')
         end = start + len(words)
-        if end <= len(tokens) and all(tokens[start + i] == word for i, word in enumerate(words)):
+        if start >= 0 and end <= len(tokens) and all(tokens[start + i] == word for i, word in enumerate(words)):
             matches.append((start, end))
     return matches
 

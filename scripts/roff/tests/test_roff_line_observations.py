@@ -6,6 +6,7 @@ import unittest
 
 from scripts.roff.audit.audit_roff_fidelity import layout_comparison, layout_lines, no_fill_source_layout
 from scripts.roff.lib.roff_line_observations import LineLimits, SourceRow, observe_hard_lines
+from scripts.roff.lib import roff_line_observations
 
 _FIXTURE = Path(__file__).with_name('fixtures') / 'line_observations.json'
 
@@ -144,6 +145,39 @@ class LineObservationTests(unittest.TestCase):
         self.assertEqual(report['uncoveredCount'], 50)
         self.assertEqual(len(report['uncovered']), 2)
         self.assertLess(report['alignmentWork'], 50_000)
+
+    def test_frequent_first_tokens_do_not_hide_a_unique_literal_boundary(self):
+        # Exact source ran all five pristine profiles before these assertions.
+        # print_man_node NODE_LINE and empty TEXT -> term_vspace preserve the
+        # two physical rows and their blank gap. Anchor choice cannot waive it.
+        case = self.cases['common-first-token']
+        original = self.observation(case, case['reference']).hard_line_observation
+        self.assertEqual((original['status'], original['comparedPairs']), ('covered', 1))
+        self.assertLess(original['alignmentWork'], LineLimits().alignment_work)
+        self.assertGreater(case['reference'].casefold().split().count('if'), 512)
+        missing_gap = case['reference'].replace('If UniqueProbe row\n\n', 'If UniqueProbe row\n')
+        gap = self.observation(case, missing_gap).hard_line_observation
+        self.assertEqual((gap['gapDifferenceCount'], gap['uncoveredCount']), (1, 0))
+        missing_boundary = case['reference'].replace('If UniqueProbe row\n\n', 'If UniqueProbe row ')
+        merged = self.observation(case, missing_boundary).hard_line_observation
+        self.assertEqual((merged['mergedCount'], merged['uncoveredCount']), (1, 0))
+
+    def test_anchor_selection_preserves_exact_phrase_matches_in_the_old_covered_domain(self):
+        limits = LineLimits()
+        for case in self.cases.values():
+            lines = layout_lines(case['reference'])[0]
+            rendered = roff_line_observations._rendered(lines, limits)
+            rows = no_fill_source_layout(case['source']).ordered_rows
+            _, phrases, _ = roff_line_observations._groups(rows, limits)
+            tokens, _, index = rendered
+            for words in phrases:
+                if len(index.get(words[0], ())) > limits.occurrences_per_row:
+                    continue
+                # The previous first-token candidate enumeration, limited to
+                # its covered domain, is a separate exact match oracle.
+                expected = [(start, start + len(words)) for start in index.get(words[0], ())
+                            if tuple(tokens[start:start + len(words)]) == words]
+                self.assertEqual(roff_line_observations._matches(words, rendered, limits, [0]), expected)
 
     def test_unmodeled_request_is_not_an_adjacency_proof(self):
         rows = no_fill_source_layout('.nf\nfirst row\n.Unknown visible\nsecond row\n.fi\n').ordered_rows
