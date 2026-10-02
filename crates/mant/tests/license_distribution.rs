@@ -231,8 +231,38 @@ fn rust_dependency_notice_is_generated_from_the_locked_product_graph() {
             "generated dependency notice must name {package} {version}"
         );
     }
-    assert!(licenses.contains("ratatui 0.30.2"));
-    assert!(licenses.contains("rustls 0.23.43"));
+}
+
+#[test]
+fn dependency_notice_tracks_locked_runtime_and_build_versions() {
+    let lock: toml::Value =
+        toml::from_str(include_str!("../../../Cargo.lock")).expect("workspace lockfile");
+    let packages = lock["package"].as_array().expect("locked packages");
+    let licenses = include_str!("../../../THIRD_PARTY_LICENSES.html");
+    for name in [
+        "ratatui",
+        "rustls",
+        "rmcp",
+        "rmcp-macros",
+        "cc",
+        "find-msvc-tools",
+    ] {
+        let mut versions = packages
+            .iter()
+            .filter(|package| package["name"].as_str() == Some(name))
+            .map(|package| package["version"].as_str().expect("locked version"))
+            .peekable();
+        assert!(
+            versions.peek().is_some(),
+            "missing locked dependency {name}"
+        );
+        for version in versions {
+            assert!(
+                licenses.contains(&format!(">{name} {version}</a>")),
+                "dependency notice is stale for {name} {version}; run scripts/release/generate-rust-licenses.sh"
+            );
+        }
+    }
 }
 
 #[test]

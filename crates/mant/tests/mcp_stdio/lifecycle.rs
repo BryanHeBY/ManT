@@ -253,8 +253,9 @@ fn supported_legacy_versions_keep_stdio_usable_after_cancellation() {
 
 #[test]
 fn initialize_with_modern_version_still_negotiates_legacy_lifecycle() {
-    // rmcp 3.2.0 / upstream #1228: initialize always selects legacy semantics,
-    // even when the requested date is a known discovery-era version.
+    // rmcp's protocol negotiation selects an initialization-era revision
+    // for initialize, even when the requested date is a known discovery-era
+    // version. The SDK's LATEST revision no longer uses that handshake.
     let mut session = Session::start("modern-initialize");
     session.initialize(
         &ProtocolVersion::V_2026_07_28,
