@@ -20,12 +20,10 @@ fn plain_receipt_text(body: &str) -> String {
             text.push_str(&projected);
         }
     }
-    // Device left padding is the frozen responsive geometry difference;
-    // retain every physical row and every interior word separator.
-    text.split('\n')
-        .map(|row| row.trim_start_matches(' '))
-        .collect::<Vec<_>>()
-        .join("\n")
+    // This inspects inline acceptance; completed VerticalSpace layout rows
+    // are asserted by the engine consumer matrices. Native buffered blanks
+    // stay observable here, including an initial automatic separator.
+    text
 }
 
 #[test]
@@ -75,13 +73,13 @@ fn spacing_transitions_use_the_incoming_native_word_boundary() {
             ".No \\p\\&\n.Sm off\n.Bk -words\n.No Y\n.Ek\n.Sm on\n.No AFTER\n",
             "\nY AFTER",
         ),
-        (".No \\&\n.Sm off\n.No Y\n.Sm on\n.No AFTER\n", "Y AFTER"),
+        (".No \\&\n.Sm off\n.No Y\n.Sm on\n.No AFTER\n", " Y AFTER"),
         (
             ".No \\zX\\p\n.Sm off\n.No Y\n.Sm on\n.No AFTER\n",
             "XY\nAFTER",
         ),
-        (".No \"\"\n.Sm off\n.No Y\n.Sm on\n.No AFTER\n", "Y AFTER"),
-        (".No \\z\n.Sm off\n.No Y\n.Sm on\n.No AFTER\n", "YAFTER"),
+        (".No \"\"\n.Sm off\n.No Y\n.Sm on\n.No AFTER\n", " Y AFTER"),
+        (".No \\z\n.Sm off\n.No Y\n.Sm on\n.No AFTER\n", " YAFTER"),
         (
             ".No X\n.br\n.Sm off\n.No Y Z\n.Sm on\n.No AFTER\n",
             "X\nYZ AFTER",
@@ -146,10 +144,11 @@ fn no_fill_words_project_only_their_surviving_native_separator() {
             .collect();
         assert_eq!(actual, expected, "{source}\n{document:#?}");
     }
-    // Filled initial padding remains the frozen responsive G-IND difference.
-    // The pristine inputs also ran first; keep all interior word boundaries.
-    assert_eq!(plain_receipt_text(".No \\& No B\n"), "B");
-    assert_eq!(plain_receipt_text(".No \"\" No B\n"), "B");
+    // All 23 exact plain-helper sources ran the five pristine profiles
+    // before tightening these checks. The automatic blank belongs to the
+    // source buffer, independently of the common page origin.
+    assert_eq!(plain_receipt_text(".No \\& No B\n"), " B");
+    assert_eq!(plain_receipt_text(".No \"\" No B\n"), " B");
     assert_eq!(plain_receipt_text(".No \\zX No B\n"), "XB");
 }
 

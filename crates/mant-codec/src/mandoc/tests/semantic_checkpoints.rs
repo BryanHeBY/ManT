@@ -291,9 +291,9 @@ fn wrapper_separator_and_control_operands_execute_once() {
         ),
         (
             ".No \"\\z\"\n.Lk https://ex.org LABEL\n.No AFTER\n",
-            "ABEL: https://ex.org AFTER",
+            " ABEL: https://ex.org AFTER",
         ),
-        (".No \"\\&\"\n.In stdio.h\n.No AFTER\n", "<stdio.h> AFTER"),
+        (".No \"\\&\"\n.In stdio.h\n.No AFTER\n", " <stdio.h> AFTER"),
     ] {
         let output = description_inlines(&format!("{MDOC}{source_suffix}"));
         assert_eq!(

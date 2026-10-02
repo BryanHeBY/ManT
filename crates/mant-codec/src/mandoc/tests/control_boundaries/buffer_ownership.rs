@@ -439,9 +439,9 @@ fn section_labels_own_authored_blanks_but_not_formatter_prefixes() {
             "BEFORE DETAILS AFTER",
         ),
         ("\\zX\n.Sx DETAILS\nAFTER\n", "DETAILS", "XDETAILS AFTER"),
-        // The retained filled G-IND difference omits this device's one
-        // initial automatic separator, not authored or between-word space.
-        ("\\z\n.Sx DETAILS\nAFTER\n", "ETAILS", "ETAILS AFTER"),
+        // term_word() writes this automatic separator into the native
+        // buffer; only the shared manual margin is omitted in reading.
+        ("\\z\n.Sx DETAILS\nAFTER\n", "ETAILS", " ETAILS AFTER"),
     ] {
         let heading = if expected_label == "White Space Splitting" {
             "\"White Space Splitting (Field Splitting)\""

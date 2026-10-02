@@ -85,3 +85,46 @@ fn actual_head_post_uses_one_device_view_for_visible_invisible_and_pending_cells
         );
     }
 }
+
+#[test]
+fn a_real_newline_selects_nospace_even_after_a_graphless_word() {
+    // Exact filled/no-fill START/sp-1/No""/br/No\&/BODY sources ran
+    // pristine before these checks. term_newln()475-481 updates NOSPACE
+    // before its conditional flush; term_flushln()233-253 never clears it.
+    // The first post-break NBRZW writes no separator, while BODY writes
+    // precisely its own one automatic blank (term_word()573-589).
+    let source = format!("{MDOC_HEADER}.No START\n.sp -1\n.No \"\"\n.br\n.No \\&\n.No BODY\n");
+    let parsed = libmandoc_rs::Parser::default()
+        .parse_bytes("graphless-word-newline.1", source.as_bytes())
+        .unwrap();
+    for starts_occupied in [false, true] {
+        let mut builder = InlineBuilder::new();
+        builder.tighten_next_boundary();
+        if starts_occupied {
+            builder.append_text("START");
+        } else {
+            crate::mandoc::inline::append_text_node(
+                &mut builder,
+                text_operand(&parsed.document.root, "").unwrap(),
+            );
+        }
+        assert_eq!(builder.execution.boundary, PendingBoundary::Ordinary);
+        builder.hard_break();
+        assert_eq!(builder.execution.boundary, PendingBoundary::Tight);
+        crate::mandoc::inline::append_text_node(
+            &mut builder,
+            text_operand(&parsed.document.root, "\\&").unwrap(),
+        );
+        assert_eq!(builder.execution.pending_breakable_spaces, 0);
+        builder.append_text("BODY");
+        let text = crate::mandoc::inline::plain_text(&builder.finish_preserving_rows());
+        assert_eq!(
+            text,
+            if starts_occupied {
+                "START\n BODY"
+            } else {
+                " BODY"
+            }
+        );
+    }
+}

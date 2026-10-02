@@ -104,8 +104,8 @@ fn source_continuation_and_bare_backtracking_do_not_invent_rows() {
 fn whitespace_content_and_empty_word_calls_keep_distinct_rows() {
     // Exact native runs distinguish empty TEXT (term_vspace) from an
     // empty term_word(), and fixed Unicode spaces from deferred blanks.
-    // Plain ASCII source whitespace may remain in source-neutral literal
-    // IR; only its exact physical-row count is asserted in that counter.
+    // Ordinary ASCII blanks occupy a native buffer but term_fill()
+    // accepts no printed interval; its single physical row survives.
     for header in [MAN_HEADER, MDOC_HEADER] {
         for (middle, expected) in [
             ("\n", "ALPHA\n\nBETA"),
@@ -123,7 +123,7 @@ fn whitespace_content_and_empty_word_calls_keep_distinct_rows() {
         let rows: Vec<_> = spaces.split('\n').collect();
         assert_eq!(rows.len(), 3, "{header:?}: {spaces:?}");
         assert_eq!(rows[0], "ALPHA");
-        assert!(rows[1].chars().all(|character| character == ' '));
+        assert_eq!(rows[1], "");
         assert_eq!(rows[2], "BETA");
     }
     for (header, middle, expected) in [
@@ -290,19 +290,7 @@ fn literal_row_sources_keep_all_entered_and_retired_boundary_positions() {
                     panic!("{header:?}/{body:?}: {:#?}", section.blocks);
                 };
                 let actual = mant_ir::inline_plain_text(children);
-                if middle == "        \n" {
-                    // Keep the existing source-neutral ASCII padding facet.
-                    // The device prints no trailing cells; every hard row
-                    // and every non-padding scalar is compared separately.
-                    let rows: Vec<_> = actual.split('\n').collect();
-                    let native: Vec<_> = expected[index].split('\n').collect();
-                    assert_eq!(rows.len(), native.len(), "{header:?}/{body:?}");
-                    for (row, native) in rows.into_iter().zip(native) {
-                        assert_eq!(row.trim_end_matches(' '), native, "{header:?}/{body:?}");
-                    }
-                } else {
-                    assert_eq!(actual, expected[index], "{header:?}/{body:?}");
-                }
+                assert_eq!(actual, expected[index], "{header:?}/{body:?}");
                 let next = document.sections.last().unwrap();
                 let expected_heading = if middle == "\\z\n" && index == 2 {
                     "EXT"

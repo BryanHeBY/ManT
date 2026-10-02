@@ -129,7 +129,7 @@ fn verify(case: &Case) {
     );
     if case.scope == "hard-rows" {
         // Both headers have five common device columns. The fixture also
-        // records the separately frozen G-IND initial/temporary origin
+        // records the separately frozen G-IND temporary device origin
         // exceptions, derived from source and oracle pairs, never product.
         // No rule removes empty physical rows or authored word separators.
         let expected = case.reading_utf8_rows.as_ref().unwrap();

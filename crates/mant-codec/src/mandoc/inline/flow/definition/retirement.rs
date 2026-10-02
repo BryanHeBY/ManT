@@ -18,6 +18,14 @@
 use super::super::{Inline, InlineBuilder};
 use super::flush::retain_unprinted_field_targets;
 
+/// The one live buffer and its provisional output owners, moved together
+/// into retirement. Its accepted prefix cannot reach earlier output units.
+struct PlainFlushUnit {
+    buffer: super::super::field_buffer::FieldBuffer,
+    anchors: Vec<super::super::NativeWordAnchor>,
+    output_start: usize,
+}
+
 impl InlineBuilder {
     /// The plain-flow analogue of `project_definition_field_receipt()`
     /// (`term_flushln` over the shared `tcol->buf`, term.c:233-237 reached
@@ -57,26 +65,14 @@ impl InlineBuilder {
         if execution.definition.is_some() && !authorless_definition {
             return false;
         }
-        let buffer;
-        let anchors;
-        let output_start;
-        if authorless_definition {
-            let definition = execution.definition.as_mut().expect("session");
-            buffer = std::mem::take(&mut definition.field_buffer);
-            anchors = std::mem::take(&mut definition.field_word_anchors);
-            output_start = execution.flush_unit_output_start.min(nodes.len());
-            if buffer.is_empty() {
-                Self::clear_authorless_definition_at(execution, nodes);
-                return false;
-            }
-        } else {
-            if execution.flush_unit.is_empty() {
-                return false;
-            }
-            buffer = std::mem::take(&mut execution.flush_unit);
-            anchors = std::mem::take(&mut execution.flush_unit_anchors);
-            output_start = execution.flush_unit_output_start.min(nodes.len());
-        }
+        let Some(PlainFlushUnit {
+            buffer,
+            anchors,
+            output_start,
+        }) = Self::take_plain_flush_unit(execution, nodes, authorless_definition)
+        else {
+            return false;
+        };
         // BRNEVER-shaped (term.c:134,143-144): responsive reflow owns the
         // device width, so a plain pass only ever ends at authored markers.
         let targets = FillTargets {
@@ -126,8 +122,17 @@ impl InlineBuilder {
             return false;
         };
         if !definitive {
-            // term_flushln() still reset the buffer (term.c:235-237); a
-            // non-definitive stop leaves no unprinted suffix to trim.
+            retain_blank_only_unit_output(
+                nodes,
+                &buffer,
+                &anchors,
+                &passes,
+                output_start,
+                row_origin,
+            );
+            // The buffer was nonempty, so term_flushln() retires BACKAFTER
+            // along with it even though no term_field() ran (235-237).
+            execution.zero_advance.discard_at_row_end();
             Self::restore_retired_buffer(execution, nodes, authorless_definition, buffer, anchors);
             return false;
         }
@@ -158,6 +163,38 @@ impl InlineBuilder {
             Self::clear_plain_flush_unit_at(execution, nodes);
         }
         true
+    }
+
+    /// Move the selected native buffer and its owner interval as one unit;
+    /// an output Vec or helper return cannot retire either independently.
+    fn take_plain_flush_unit(
+        execution: &mut super::super::InlineExecutionState,
+        nodes: &[Inline],
+        authorless_definition: bool,
+    ) -> Option<PlainFlushUnit> {
+        let (buffer, anchors) = if authorless_definition {
+            let definition = execution.definition.as_mut().expect("session");
+            let buffer = std::mem::take(&mut definition.field_buffer);
+            let anchors = std::mem::take(&mut definition.field_word_anchors);
+            if buffer.is_empty() {
+                Self::clear_authorless_definition_at(execution, nodes);
+                return None;
+            }
+            (buffer, anchors)
+        } else {
+            if execution.flush_unit.is_empty() {
+                return None;
+            }
+            (
+                std::mem::take(&mut execution.flush_unit),
+                std::mem::take(&mut execution.flush_unit_anchors),
+            )
+        };
+        Some(PlainFlushUnit {
+            buffer,
+            anchors,
+            output_start: execution.flush_unit_output_start.min(nodes.len()),
+        })
     }
 
     /// Output ownership of the current physical row, including a native
@@ -210,6 +247,28 @@ impl InlineBuilder {
         execution.flush_unit.clear();
         execution.flush_unit_anchors.clear();
         execution.flush_unit_output_start = nodes.len();
+    }
+}
+
+/// A blank-only buffer reaches nbr=0 without a rejecting marker
+/// (`term_fill()`, term.c:289-312,360-365). Its ordinary blanks were never
+/// printed. Filter its precise owner interval while retaining the one
+/// occupied-but-empty literal row independently of provisional blank text.
+fn retain_blank_only_unit_output(
+    nodes: &mut Vec<Inline>,
+    buffer: &super::super::field_buffer::FieldBuffer,
+    anchors: &[super::super::NativeWordAnchor],
+    passes: &[super::super::field_buffer::FillPass],
+    output_start: usize,
+    row_origin: super::super::output::CompletedRowOrigin,
+) {
+    retain_unit_owner_ranges(nodes, buffer, anchors, passes, output_start);
+    if row_origin == super::super::output::CompletedRowOrigin::LiteralText
+        && !InlineBuilder::has_literal_tail_row(&nodes[output_start.min(nodes.len())..])
+    {
+        nodes.push(Inline::Text {
+            value: String::new(),
+        });
     }
 }
 

@@ -130,8 +130,9 @@ fn append_scope_children(builder: &mut InlineBuilder, node: &Node, name: Option<
         }
         Some("Nd") => {
             // mdoc_term.c::termp_nd_pre() prints `\(en` (U+2013), not an em
-            // dash; the trailing blank is TERMP_SENTENCE spacing upstream.
-            builder.append_text(&format!("{} ", super::catalog_glyph("en")));
+            // dash. Its next term_word() supplies the separate automatic
+            // separator; there is no authored blank in this generated word.
+            builder.append_text(&super::catalog_glyph("en").to_string());
             append_inline_nodes(builder, children, name);
         }
         // mdoc_html.c::mdoc__x_pre() enriches these fields with typed

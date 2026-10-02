@@ -567,7 +567,9 @@ pub(super) fn append_include(builder: &mut InlineBuilder, node: &Node, default_n
     let original = builder.zero_advance.pending_projection();
     builder.zero_advance.begin_output_owner();
     if node.flags.synopsis_pretty && node.flags.line_start {
-        builder.append_text("#include ");
+        // termp_in_pre()1552-1558 writes two separate words, "#include"
+        // and "<". The latter's automatic separator is its own native cell.
+        builder.append_text("#include");
     }
     builder.append_text("<");
     builder.tighten_next_boundary();

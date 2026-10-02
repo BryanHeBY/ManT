@@ -168,7 +168,12 @@ impl InlineBuilder {
     /// Preserve a formatter-requested line boundary without creating empty
     /// leading, repeated, or trailing rows around the paragraph.
     pub(in crate::mandoc) fn hard_break(&mut self) {
+        // term_newln() selects NOSPACE before even testing lastcol/viscol
+        // (term.c:475-481). An empty word may have cleared it without
+        // buffering a cell, so a no-output return still owns this update.
+        self.execution.boundary = PendingBoundary::Tight;
         self.hard_break_using_field(None, false);
+        self.execution.boundary = PendingBoundary::Tight;
     }
 
     /// The field's real flush already applied acceptance. Project its tail

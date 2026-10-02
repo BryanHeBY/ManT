@@ -132,14 +132,7 @@ impl InlineBuilder {
         } else {
             super::record::WordPassProjection::default()
         };
-        self.append_recorded_word_boundary(
-            boundary,
-            word,
-            empty_word,
-            add_space,
-            incoming_first,
-            &projection,
-        );
+        self.append_recorded_word_boundary(boundary, word, empty_word, add_space, &projection);
         // The native word boundary belongs to its surrounding flow. Only
         // the operand itself belongs to an optional semantic annotation;
         // authored leading blanks therefore stay inside that owner.
@@ -269,7 +262,6 @@ impl InlineBuilder {
         word: bool,
         empty_word: bool,
         add_space: bool,
-        incoming_first: Option<char>,
         projection: &super::record::WordPassProjection,
     ) {
         let accepted_row_break = projection.closes_before;
@@ -362,19 +354,13 @@ impl InlineBuilder {
                 // (term.c:573-589,389-427). Preserve it until a later graph
                 // prints the field; pending positioning cannot consume it.
                 (PendingBoundary::Preserved, true)
-            } else if word && self.execution.pending_breakable_spaces > 0 && native_separator {
-                // Earlier empty words already wrote native cells on this
-                // row. A following word writes its own automatic blank
-                // even when no visible character represents those cells
-                // yet (term.c:573-589).
+            } else if word && native_separator && !boundary.is_tight() {
+                // term_word()573-589 buffers this separator independently
+                // of projected glyphs and authored leading/trailing blanks.
+                // Its write receipt, rather than the last visible IR scalar,
+                // proves the cell survived BACKBEFORE. Projection-only tight
+                // joins already represent that boundary's zero-advance effect.
                 (PendingBoundary::Preserved, true)
-            } else if word
-                && !self.in_definition_field()
-                && incoming_first.is_some_and(super::super::super::is_formatter_word_blank)
-                && native_separator
-                && !boundary.is_tight()
-            {
-                (boundary, true)
             } else {
                 (boundary, add_space)
             };

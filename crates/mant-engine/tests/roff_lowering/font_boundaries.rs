@@ -467,7 +467,7 @@ fn invisible_synopsis_formatter_cells_still_execute_native_newlines() {
             matches!(
                 section.blocks.as_slice(),
                 [Block::VerticalSpace { lines: 1, .. }, Block::Paragraph { children, .. }]
-                    if inline_text(children) == "BODY"
+                    if inline_text(children) == " BODY"
             ),
             "{second}: {:?}",
             section.blocks

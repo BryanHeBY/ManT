@@ -122,11 +122,12 @@ absence and require ANSI decoration to preserve the complete plain layout.
 
 `hard-rows` compares complete native physical rows after the fixed five-column
 manual margin and one known separator belonging to the following section.
-The recorded reading rows additionally apply two existing G-IND differences:
-the automatic initial separator after a bare control-only filled word, and
-the temporary `.ti` device origin. The latter has a separately recorded pristine
-`.ti 0n` pair; row count and all non-padding output must agree before recording
-it. These rules retain empty rows and authored word or trailing separators.
+The recorded reading rows omit the temporary `.ti` device origin under the
+existing G-IND geometry rule. Each affected source has a separately recorded
+pristine `.ti 0n` pair; row count and all non-padding output must agree before
+recording it. Automatic separators written into the native word buffer are
+retained, including after an initial empty or control-only formatter word.
+These rules also retain empty rows and authored word or trailing separators.
 
 `accepted-content` checks exact non-whitespace accepted scalar order and each
 authored destination occurrence in the typed query.

@@ -26,6 +26,8 @@ mod consumer_boundaries;
 mod cvs_renderer_contracts;
 #[path = "roff_lowering/driver.rs"]
 mod driver;
+#[path = "roff_lowering/empty_word_columns.rs"]
+mod empty_word_columns;
 #[path = "roff_lowering/entry_forms.rs"]
 mod entry_forms;
 #[path = "roff_lowering/equation_json_depth.rs"]

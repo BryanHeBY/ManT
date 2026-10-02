@@ -145,12 +145,9 @@ def reading_rows(case, utf8_rows, end_heading):
             "source": source, "stdout": completed.stdout.decode("utf-8"),
             "stderr": completed.stderr.decode("utf-8"), "code": completed.returncode,
             "stdout_sha256": digest(completed.stdout)}
-    if (case["family"] == "word-boundaries" and case["context"] == "filled"
-            and case.get("prefix") == r"\z\c" and rows and rows[0].startswith(" ")):
-        # G-IND admits exactly this automatic initial separator after a
-        # control-only filled word. Never trim an authored blank or a row.
-        rows[0] = rows[0][1:]
-        return rows, "frozen filled initial automatic separator omission", None
+    # term_word()573-589 buffers automatic blanks even after graphless
+    # operands. These cells belong to the accepted native buffer rather
+    # than device origin, and remain after omitting the common page margin.
     return rows, "only the five-column common manual margin is omitted", None
 
 

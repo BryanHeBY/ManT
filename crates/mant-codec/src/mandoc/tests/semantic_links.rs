@@ -598,17 +598,16 @@ fn mail_identity_decoding_cannot_erase_native_control_only_operands() {
     // Mt uses termp_under_pre() and visits each authored child. encode1()
     // writes X before BACKBEFORE consumes the following word separator
     // (term.c:901-908); pure href encoding must not erase the native glyph.
-    // G-IND: pristine starts the automatic separator cell one column past
-    // the section's five-cell origin for these empty leading operands. Filled
-    // reading keeps its word/hard-row effects but omits device-only first-row
-    // padding; these exact IR strings deliberately contain no leading blank.
+    // term_word() writes an automatic separator after an empty leading
+    // operand (term.c:573-589). This source-buffer cell survives reading;
+    // only the section's common five-cell device margin is omitted.
     for (operand, expected) in [
         (r"\zX", "Xa@example.org AFTER"),
-        (r"\z", "@example.org AFTER"),
-        (r"\z\c", "a@example.org AFTER"),
-        (r"\fB", "a@example.org AFTER"),
-        (r"\&", "a@example.org AFTER"),
-        (r#""""#, "a@example.org AFTER"),
+        (r"\z", " @example.org AFTER"),
+        (r"\z\c", " a@example.org AFTER"),
+        (r"\fB", " a@example.org AFTER"),
+        (r"\&", " a@example.org AFTER"),
+        (r#""""#, " a@example.org AFTER"),
         (r"\zX\p", "Xa@example.org\nAFTER"),
         (r"\zX\c", "a@example.org AFTER"),
     ] {
@@ -745,8 +744,8 @@ fn recovered_inline_man_link_annotation_cannot_skip_native_post_words() {
     // An empty href cannot skip p/c/z consumption or erase safe native text.
     // Unknown specials follow ManT's documented recovery spelling; their
     // HTML identity is still empty, just like the pristine href.
-    // G-IND: only the device-only leading padding for a first \\& BODY word
-    // is omitted; the exact strings keep interior spaces and hard rows.
+    // A first \\& BODY word writes the following automatic separator
+    // into the native buffer; it survives the source-to-reading projection.
     for (start, end) in [("UR", "UE"), ("MT", "ME")] {
         for (operand, target_word, has_target) in [
             (r"\zX", "", false),
@@ -778,7 +777,7 @@ fn recovered_inline_man_link_annotation_cannot_skip_native_post_words() {
                     "LINKLABEL".to_owned(),
                 ),
                 ("\\zX\n", format!("X{suffix} after"), "X".to_owned()),
-                ("\\&\n", format!("{suffix} after"), String::new()),
+                ("\\&\n", format!(" {suffix} after"), String::new()),
                 (".ft B\n", format!("{suffix} after"), String::new()),
             ] {
                 let source = format!(
