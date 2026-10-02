@@ -365,6 +365,42 @@ for strict row, accepted-content, recovery and portable-consumer scopes. Raw
 profile evidence and temporary review records stay under `target`; durable
 execution contracts belong in the manuals and contributor documentation.
 
+Finite rule matrices supplement those historical suites without changing
+their source identities or whitespace policies:
+
+| Rule family | Permanent inputs | Consumer assertions |
+| --- | --- | --- |
+| Escape grammar | `mant-codec/src/mandoc/roff_escape/fixtures` | Kind, argument extent, recovery, font state, bounded work and public JSON |
+| Field requests | `mant-engine/tests/roff_lowering/control_request_matrix` | Actual AST owner, accepted source intervals, native rows, word boundaries and JSON; supplementary fixed-blank, KEEP and pending-prefix scopes |
+| Markdown hard rows | `mant-engine/tests/roff_lowering/markdown_hard_rows` | Both projections, real Markdown loading, source byte/scalar ranges and actual TUI buffers, resize, copy and activation |
+| Controlled omission | `mant-engine/tests/escape_coverage` and `libmandoc-rs/tests/escape_coverage.rs` | Typed native/Rust receipts, all completeness summaries, real JSON, search pagination/ranges and independent feature/concurrency controls |
+
+The common registry retains the original review source order. Replay keeps
+raw native differences, source admission, qualified failures and uncovered
+axes separate. `Review` means an applicable consumer dimension is still
+unasserted; it is not a passing result. A native warning is evidence about
+the input, not permission to skip its applicable content or row assertions.
+AST coordinates provide provenance, while ancestry and node flags prove
+which execution branch was reached. Native tree records end at LF;
+`ASCII_HYPH` inside a TEXT payload does not start another record.
+
+```sh
+python3 -m scripts.roff.fixtures.replay_rule_boundaries --check-generation
+python3 -m scripts.roff.fixtures.replay_rule_boundaries --collect --replay \
+  --product target/debug/mant --evidence target/audits/rule-boundaries
+```
+
+Before replay, authenticate the active pristine reference identity and actual
+bytes for ASCII, UTF-8, HTML, tree and lint. Exact presentation cards in
+`tests/fixtures/roff/rule_boundaries` bind the complete source, native tree,
+raw output and explicit generated-cell coordinates. Author fixed blanks,
+hard-row edges, Unicode and adjacent text remain outside those allowances.
+Source recovery cards use the locked pristine escape parser and separately
+rendered witness inputs, never candidate output as gold. Fixture recorders
+offer `--check`; they do not grant permission to rewrite failing expectations.
+The normal verification script exercises stale bindings, invalid transport,
+cache corruption, owner changes and consumer mutations as negative controls.
+
 Dependency policy is declared in `deny.toml`. CI runs cargo-deny across all
 features and every supported target family to reject known vulnerabilities,
 yanked packages, unapproved licenses, wildcard requirements, and dependencies

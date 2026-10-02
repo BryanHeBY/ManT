@@ -24,7 +24,10 @@ def digest(text):
 def tree_owners(tree):
     """Observe It HEAD/BODY ancestry and exact TEXT/control positions."""
     stack, result = [], []
-    for raw in tree.splitlines():
+    # tree.c::print_mdoc/print_man emit LF records, but TEXT can contain native
+    # ASCII_HYPH (0x1c). Python splitlines() treats that cell as a record end
+    # and would lose its real It HEAD/BODY ancestry.
+    for raw in tree.split('\n'):
         match = re.match(r'^( *)(.*?) \((block|head|body|elem|text|tbl)\).*?(\*?)(\d+):(\d+)(?: |$)', raw)
         if not match:
             continue
@@ -166,7 +169,7 @@ def build_policy(case, oracle, binding):
     # termp_it_pre() generates one escaped U+00A0 for inset/diag BODY.
     # No author spelling of any nonbreaking space is allowed by this card.
     run_in = any(re.search(r'^\s*Bl \(block\) -(?:inset|diag)(?: |$)', row)
-                 for row in tree.splitlines())
+                 for row in tree.split('\n'))
     author_nbsp = any(token in source for token in ('\\~', '\\0', '\\ ', '\u00a0', '\\[u00A0]', '\\[u00a0]'))
     if run_in and not author_nbsp:
         card['native_replacements'] = [{'row': row_index, 'column': column,
