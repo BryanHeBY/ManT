@@ -26,7 +26,7 @@ def cards(evidence):
     _, _, cache = replay.validated_cache(evidence, binding, cases)
     result = []
     for case in cases:
-        oracle = cache[case['source_sha256']]
+        oracle = replay.transport.oracle_record(cache, case)
         card, region = fields.build_policy(case, oracle, binding)
         add_mixed_blank_cells(case, oracle, card, region)
         if card['rules']:
@@ -86,7 +86,7 @@ def integrity_cards(evidence):
             rule = 'closed-table-inline-recovery'
         else:
             continue
-        oracle = cache[case['source_sha256']]
+        oracle = replay.transport.oracle_record(cache, case)
         result.append(dict(id=case['id'], policy_id='integrity-reading-' + case['id'],
             source_sha256=case['source_sha256'], oracle_identity=binding['identity'],
             oracle_sha256=binding['reference_sha256'],

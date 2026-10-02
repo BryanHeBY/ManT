@@ -62,3 +62,17 @@ The escape, field, Markdown and integrity recorders under `roff/fixtures/`
 maintain their source-bound permanent fixtures. Projection cards permit only
 documented edits at witnessed generated cells or exact source-recovery inputs;
 they cannot waive a family or erase authored Unicode and hard rows.
+
+Oracle caches distinguish source bytes from invocation recipes. The default
+replay recipe and the compatibility recorder's explicit `-Ios` recipe remain
+separate; permanent source-bound receipts select a recipe before execution.
+The cache binds `(source SHA, recipe SHA)`, the active pristine binary, actual
+profile arguments, environment, stdin and raw streams. Each cached profile's
+executable path must match the producer's original absolute invocation path;
+moving evidence does not rewrite argv, and the active binary SHA remains bound.
+Collectors reject a changed invocation path before appending or rewriting any
+cache metadata; use a fresh directory for the new producer. Source-only or
+undeclared-recipe caches must also be recollected in a fresh evidence directory.
+Keep their historical raw bytes; neither footer rewriting nor candidate output
+can authenticate a replacement recipe. Product executions still deduplicate
+only by source because these oracle options do not configure the product.

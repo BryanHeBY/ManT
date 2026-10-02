@@ -61,6 +61,8 @@ run "test roff acceptance axes and structural edges" \
   python3 -m unittest scripts.roff.tests.test_acceptance_replay
 run "test finite rule registry and mutation boundaries" \
   python3 -m unittest scripts.roff.tests.test_rule_boundary_replay
+run "test pristine profile recipes and cache provenance" \
+  python3 -m unittest scripts.roff.tests.test_reference_recipes
 run "test escape grammar fixture bindings" \
   python3 -m unittest scripts.roff.tests.test_escape_rule_fixtures
 run "test field rule source and owner bindings" \

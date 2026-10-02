@@ -16,8 +16,12 @@ from scripts.roff.fixtures.field_projection_policies import (
 )
 from scripts.roff.fixtures.roff_fixture_reference import verified_reference
 from scripts.roff.fixtures.rule_closure_fields import cases
+from scripts.roff.fixtures import replay_rule_boundaries as replay
 
 ROOT = Path(__file__).resolve().parents[3]
+# Preserve the existing compressed gold's profile order independently of the
+# cache collector's execution order and additional invocation metadata.
+FROZEN_PROFILES = ('ascii', 'utf8', 'html', 'lint', 'tree')
 
 
 def main():
@@ -27,27 +31,24 @@ def main():
     args = parser.parse_args()
     reference = ROOT / 'target/mandoc-migration/reference/mandoc'
     registration = verified_reference(ROOT, reference)
-    binding = json.loads((args.cache / 'manifest.json').read_text())
     actual_sha = hashlib.sha256(reference.read_bytes()).hexdigest()
-    if (binding['identity'] != registration['identity']
-            or binding['reference_sha256'] != actual_sha
-            or binding.get('expectations_from_product') is not False):
-        raise SystemExit('field oracle cache is not the active pristine identity')
-    cache = {row['source_sha256']: row for row in
-             map(json.loads, (args.cache / 'cache.jsonl').read_text().splitlines())}
+    selected = list(cases())
+    observers = [dict(case, cohort='field', source_sha256=hashlib.sha256(case['source'].encode()).hexdigest())
+                 for case in selected]
+    directory, _, cache = replay.validated_cache(
+        args.cache.parent, dict(identity=registration['identity'], reference_sha256=actual_sha), observers)
+    if directory.resolve() != args.cache.resolve():
+        raise SystemExit('field cache directory does not match the active pristine identity')
+    binding = json.loads((directory / 'manifest.json').read_text())
     rows = []
-    for case in cases():
+    for case, observer in zip(selected, observers):
         source_hash = hashlib.sha256(case['source'].encode()).hexdigest()
-        oracle = cache[source_hash]
-        for profile in ('ascii', 'utf8', 'html', 'tree', 'lint'):
-            for stream in ('stdout', 'stderr'):
-                if hashlib.sha256(oracle[profile][stream].encode()).hexdigest() != oracle[profile][stream + '_sha256']:
-                    raise SystemExit('field oracle profile hash changed: ' + case['id'])
+        oracle = replay.transport.oracle_record(cache, observer)
         card, region = build_policy(case, oracle, binding)
         qualified, _ = project_regions(region, region, dict(card, product_table_seams=[]))
         witness = owner_witness(case, oracle['tree']['stdout'])
         lint = oracle['lint']['code']
-        source_class = ('invalid-generator' if any(oracle[key]['code'] > 2 for key in ('utf8', 'tree'))
+        source_class = ('invalid-generator' if replay.admission(oracle) == 'generator-invalid'
                         else 'legal' if lint == 0 else 'diagnosed' if lint <= 2 else 'recovery')
         if not witness['reachable']:
             source_class = 'unreachable'
@@ -55,10 +56,9 @@ def main():
                          oracle_class=source_class, native_owner=witness,
                          native_region=region, expected_rows=qualified.get('rows'),
                          projection=card,
-                         profiles={name: {key: value for key, value in profile.items()
-                                          if key not in ('stdout', 'stderr')}
-                                   for name, profile in oracle.items()
-                                   if name != 'source_sha256'}))
+                         profiles={name: {key: oracle[name][key] for key in
+                                          ('code', 'stdout_sha256', 'stderr_sha256')}
+                                   for name in FROZEN_PROFILES}))
     header = {'format_version': 1, 'oracle_identity': binding['identity'],
               'oracle_sha256': binding['reference_sha256'], 'expectations_from_product': False,
               'count': len(rows), 'unique_sources': len({row['source_sha256'] for row in rows}),

@@ -14,6 +14,7 @@ import hashlib
 import json
 from pathlib import Path
 from scripts.roff.fixtures import roff_fixture_reference
+from scripts.roff.fixtures import reference_recipes
 from scripts.roff.fixtures import roff_compatibility_cases
 ROOT = Path(__file__).resolve().parents[3]
 REFERENCE = ROOT / "target/mandoc-migration/reference/mandoc"
@@ -120,10 +121,9 @@ def record_profiles(family, name, source, selected=("ascii", "utf8", "html", "tr
     profiles = {}
     for profile in selected:
         completed = roff_fixture_reference.run_reference(
-            REFERENCE, ["-T" + profile, f"-Owidth={width}",
-             "-Ios=Historical Oracle Footer"],
+            REFERENCE, reference_recipes.arguments(profile, reference_recipes.RECORDER, width),
             input_bytes=source.encode(), timeout=15,
-            env={"PATH": "/usr/bin:/bin", "LC_ALL": "C.UTF-8", "TZ": "UTC"},
+            env=reference_recipes.environment(),
             check=False,
         )
         known_html_signal = (profile == "html" and completed.returncode == -11

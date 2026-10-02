@@ -13,6 +13,7 @@ from unittest.mock import patch
 from scripts.roff.fixtures import acceptance_comparison as comparison
 from scripts.roff.fixtures import replay_roff_acceptance as transport
 from scripts.roff.fixtures import replay_rule_boundaries as replay
+from scripts.roff.fixtures import reference_recipes
 
 
 def asserted(rows):
@@ -103,9 +104,18 @@ class RuleBoundaryMutationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary) / "oracle-cache-pinned"
             directory.mkdir()
-            (directory / "cache.jsonl").write_text(json.dumps(oracle) + "\n")
+            recipe = reference_recipes.for_case(one)
+            cached = dict(oracle, recipe=recipe, recipeSha256=reference_recipes.recipe_hash(recipe))
+            for name in reference_recipes.PROFILES:
+                args = reference_recipes.arguments(name, recipe)
+                cached[name] = dict(oracle[name], arguments=args, argv=["/reference/mandoc", *args],
+                                    environment=reference_recipes.environment(),
+                                    stdinSha256=one["source_sha256"],
+                                    timeoutSeconds=reference_recipes.descriptor(recipe)["timeoutSeconds"])
+            (directory / "cache.jsonl").write_text(json.dumps(cached) + "\n")
             binding = {"identity": "pinned", "reference_sha256": "a" * 64}
-            manifest = dict(binding, expectations_from_product=False)
+            manifest = dict(binding, reference_path="/reference/mandoc", expectations_from_product=False,
+                            **reference_recipes.cache_binding())
             (directory / "manifest.json").write_text(json.dumps(manifest))
             replay.validated_cache(Path(temporary), binding, [one])
             manifest["reference_sha256"] = "b" * 64

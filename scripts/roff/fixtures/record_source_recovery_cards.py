@@ -111,7 +111,7 @@ def reproduce(evidence, library, destination):
         if any(card['proof']['probe_sha256'] != probe_hash for card in selected):
             raise ValueError('pristine probe build identity changed')
         for card, case in zip(selected, cases, strict=True):
-            oracle = cache[case['source_sha256']]
+            oracle = replay.transport.oracle_record(cache, case)
             replay.validate_oracle_record(case, oracle)
             expected_binding = dict(source_sha256=case['source_sha256'],
                                     oracle_identity=binding['identity'],

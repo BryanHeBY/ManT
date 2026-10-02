@@ -24,7 +24,7 @@ def record(evidence):
     _, _, cache = replay.validated_cache(evidence, binding, cases)
     result = []
     for case in cases:
-        oracle = cache[case['source_sha256']]
+        oracle = replay.transport.oracle_record(cache, case)
         result.append({
             'id': case['id'], 'source': case['source'], 'source_sha256': case['source_sha256'],
             'metadata': case['metadata'], 'oracle_identity': binding['identity'],

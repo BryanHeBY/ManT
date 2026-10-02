@@ -49,6 +49,7 @@ import sys
 from scripts.roff.fixtures import roff_acceptance_cases
 from scripts.roff.fixtures import roff_execution_cases
 from scripts.roff.fixtures import roff_fixture_reference
+from scripts.roff.fixtures import reference_recipes
 from scripts.roff.fixtures import acceptance_comparison
 from scripts.roff.fixtures import acceptance_regions
 from scripts.roff.lib.roff_content_compare import visible_text
@@ -135,8 +136,7 @@ def run(binary, arguments, source, timeout=20):
     try:
         completed = subprocess.run(
             [str(binary), *arguments], input=source.encode(), capture_output=True,
-            timeout=timeout, env={"PATH": "/usr/bin:/bin", "LC_ALL": "C.UTF-8",
-                                  "TZ": "UTC"}, check=False)
+            timeout=timeout, env=reference_recipes.environment(), check=False)
         code, stdout, stderr = completed.returncode, completed.stdout, completed.stderr
         timed_out = False
     except subprocess.TimeoutExpired as error:
@@ -254,69 +254,85 @@ def lint_classes(lint):
     return dict(sorted(counts.items()))
 
 
-def load_cache(evidence, identity):
+def load_cache(evidence, identity, reference_sha256=None, *, collection_reference=None):
     cache_dir = evidence / f"oracle-cache-{re.sub(r'[^A-Za-z0-9_.-]', '_', identity)}"
     cache = {}
     path = cache_dir / "cache.jsonl"
     if path.exists():
+        manifest = json.loads((cache_dir / "manifest.json").read_bytes())
+        reference_recipes.validate_manifest(
+            manifest, identity, reference_sha256)
+        if (collection_reference is not None
+                and manifest["reference_path"] != str(Path(collection_reference).resolve())):
+            raise ValueError("oracle collector reference invocation path changed; use a fresh directory")
         for line in path.read_text().splitlines():
             record = json.loads(line)
-            cache[record["source_sha256"]] = record
+            key = reference_recipes.validate_record(record, manifest["reference_path"])
+            if key in cache and cache[key] != record:
+                raise ValueError("conflicting oracle records for source and recipe")
+            cache[key] = record
     return cache_dir, path, cache
 
 
+def oracle_record(cache, one):
+    """Loaded caches use composite keys; plain maps support fixture observers.
+
+    Persisted source-only maps cannot enter here: load_cache rejects their
+    missing recipe manifest and invocation metadata before reading records.
+    """
+    return cache.get(reference_recipes.key(one), cache.get(one["source_sha256"]))
+
+
+def record_oracle(reference, one):
+    reference = Path(reference).resolve()
+    recipe = reference_recipes.for_case(one)
+    definition = reference_recipes.descriptor(recipe)
+    result = {"source_sha256": one["source_sha256"], "recipe": recipe,
+              "recipeSha256": reference_recipes.recipe_hash(recipe)}
+    for profile in reference_recipes.PROFILES:
+        arguments = reference_recipes.arguments(profile, recipe)
+        raw = run(reference, arguments, one["source"], timeout=definition["timeoutSeconds"])
+        for channel in ("stdout", "stderr"):
+            original = (bytes.fromhex(raw[channel + "_bytes_hex"])
+                        if channel + "_bytes_hex" in raw else raw[channel].encode())
+            raw[channel + "_sha256"] = digest(original)
+        raw.update(arguments=arguments, argv=[str(reference), *arguments],
+                   environment=reference_recipes.environment(),
+                   stdinSha256=one["source_sha256"],
+                   timeoutSeconds=definition["timeoutSeconds"])
+        result[profile] = raw
+    return result
+
+
 def collect_oracle(reference, registration, cases, evidence, workers):
-    """Ensure one cached oracle record per unique source (utf8/lint/tree)."""
+    """Collect all five profiles once per distinct source/recipe pair."""
     identity = registration["identity"]
-    cache_dir, cache_path, cache = load_cache(evidence, identity)
-    unique = sorted({one["source_sha256"]: one for one in cases}.values(),
-                    key=lambda one: one["source_sha256"])
-    missing = [one for one in unique if one["source_sha256"] not in cache
-               or not all(profile in cache[one["source_sha256"]]
+    cache_dir, cache_path, cache = load_cache(
+        evidence, identity, digest(Path(reference).read_bytes()), collection_reference=reference)
+    unique = sorted({reference_recipes.key(one): one for one in cases}.values(),
+                    key=reference_recipes.key)
+    missing = [one for one in unique if reference_recipes.key(one) not in cache
+               or not all(profile in cache[reference_recipes.key(one)]
                           for profile in ("ascii", "utf8", "html", "tree", "lint"))]
     print(f"oracle cache: {len(cache)} cached, {len(missing)} to collect "
           f"(identity {identity})", flush=True)
     cache_dir.mkdir(parents=True, exist_ok=True)
 
-    def record(one):
-        source = one["source"]
-        profiles = {}
-        for profile, arguments in (("ascii", ["-Tascii", "-Owidth=78"]),
-                                   ("utf8", ["-Tutf8", "-Owidth=78"]),
-                                   ("html", ["-Thtml"]),
-                                   ("lint", ["-Tlint"]),
-                                   ("tree", ["-Ttree"])):
-            completed = roff_fixture_reference.run_reference(
-                reference, arguments, input_bytes=source.encode(), timeout=30,
-                env={"PATH": "/usr/bin:/bin", "LC_ALL": "C.UTF-8", "TZ": "UTC"},
-                check=False)
-            if profile != "lint" and completed.returncode > 2:
-                # Render/AST failure is a generator-level defect candidate;
-                # keep the record and let admission flag it (no abort).
-                pass
-            profiles[profile] = {
-                "code": completed.returncode,
-                "stdout": completed.stdout.decode("utf-8"),
-                "stderr": completed.stderr.decode("utf-8"),
-                "stdout_sha256": digest(completed.stdout),
-                "stderr_sha256": digest(completed.stderr),
-            }
-        return {"source_sha256": one["source_sha256"], **profiles}
-
     added = 0
     if missing:
         with cache_path.open("a", encoding="utf-8") as output:
             with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
-                for i, entry in enumerate(pool.map(record, missing), 1):
+                for i, entry in enumerate(pool.map(lambda one: record_oracle(reference, one), missing), 1):
                     output.write(json.dumps(entry, ensure_ascii=False) + "\n")
                     added += 1
                     if i % 500 == 0:
                         print(f"collected {i}/{len(missing)}", flush=True)
     manifest = {"identity": identity,
                 "reference_sha256": digest(Path(reference).read_bytes()),
+                "reference_path": str(Path(reference).resolve()),
                 "policy_version": POLICY_VERSION,
-                "records": len(set(cache) | {one["source_sha256"] for one in missing}),
-                "expectations_from_product": False}
+                "records": len(set(cache) | {reference_recipes.key(one) for one in missing}),
+                "expectations_from_product": False, **reference_recipes.cache_binding()}
     (cache_dir / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     print(f"oracle collection complete: {added} new, {len(cache)} cache hits",
           flush=True)
@@ -324,24 +340,8 @@ def collect_oracle(reference, registration, cases, evidence, workers):
 
 
 def full_oracle_profiles(reference, source):
-    """Five-profile oracle record used only for frozen selections."""
-    profiles = {}
-    for profile in ("ascii", "utf8", "html", "tree", "lint"):
-        arguments = ["-T" + profile]
-        if profile in ("ascii", "utf8"):
-            arguments.append("-Owidth=78")
-        completed = roff_fixture_reference.run_reference(
-            reference, arguments, input_bytes=source.encode(), timeout=30,
-            env={"PATH": "/usr/bin:/bin", "LC_ALL": "C.UTF-8", "TZ": "UTC"},
-            check=False)
-        profiles[profile] = {
-            "code": completed.returncode,
-            "stdout": completed.stdout.decode("utf-8"),
-            "stderr": completed.stderr.decode("utf-8"),
-            "stdout_sha256": digest(completed.stdout),
-            "stderr_sha256": digest(completed.stderr),
-        }
-    return profiles
+    """Retain the original default recipe for frozen selections."""
+    return record_oracle(reference, {"source": source, "source_sha256": digest(source.encode())})
 
 
 # ---------------------------------------------------------------------------
@@ -349,12 +349,18 @@ def full_oracle_profiles(reference, source):
 # ---------------------------------------------------------------------------
 
 def admit(one, cache):
-    record = cache.get(one["source_sha256"])
+    record = oracle_record(cache, one)
     if record is None:
         return {"admission": "not-collected",
                 "reason": "no cached oracle record; run --collect first"}
     lint = record["lint"]
-    render_failed = any(record[p]["code"] > 2 for p in ("utf8", "tree"))
+    # Persisted records are authenticated with all five profiles. Old immutable
+    # unit observers contain just their render/AST witnesses; qualify every
+    # available profile without inventing missing receipt bytes. In production,
+    # a partial HTML target observation cannot be admitted as a legal source.
+    render_failed = (any(not reference_recipes.completed(record[p], 2)
+                         for p in ("ascii", "utf8", "html", "tree") if p in record)
+                     or not reference_recipes.completed(lint))
     admission, reason = None, None
     if render_failed:
         admission = "generator-defect"
@@ -533,7 +539,7 @@ def build_ledger(cases, cache, product_results, product_binding, frozen,
     policies = acceptance_comparison.load_policies()
     oracle_binding = oracle_binding or {}
     for one in cases:
-        record = cache.get(one["source_sha256"], {})
+        record = oracle_record(cache, one) or {}
         admission_info = admit(one, cache)
         eof = one.get("tail") == "eof"
         native_rows = body_rows(record.get("utf8", {}).get("stdout", ""),
@@ -561,6 +567,8 @@ def build_ledger(cases, cache, product_results, product_binding, frozen,
                 expected_targets == product_result["external_targets"])
         else:
             report["identity:external-occurrences"] = "uncovered"
+        observations = report
+        report = acceptance_comparison.qualified_axes(admission_info["admission"], report)
         missing_axes = uncovered_axes(one, report)
         if policy_error:
             missing_axes.append("policy-binding")
@@ -589,6 +597,8 @@ def build_ledger(cases, cache, product_results, product_binding, frozen,
             row["consumer_covered"].append("cli-json-screening")
         if "markdown_code" in product_result:
             row["consumer_covered"].append("cli-markdown-screening")
+        if admission_info["admission"] in acceptance_comparison.UNQUALIFIED_ADMISSIONS:
+            row["unqualified_axis_observations"] = observations
         case_rows[one["id"]] = row
 
     for one in cases:
@@ -751,12 +761,10 @@ def check_frozen(reference):
             failures.append(f"{path.stem}: source bytes differ from recorded hash")
             continue
         for profile in ("ascii", "utf8", "html", "tree", "lint"):
-            arguments = ["-T" + profile]
-            if profile in ("ascii", "utf8"):
-                arguments.append("-Owidth=78")
+            arguments = reference_recipes.arguments(profile)
             completed = roff_fixture_reference.run_reference(
                 reference, arguments, input_bytes=source, timeout=30,
-                env={"PATH": "/usr/bin:/bin", "LC_ALL": "C.UTF-8", "TZ": "UTC"},
+                env=reference_recipes.environment(),
                 check=False)
             if digest(completed.stdout) != record["oracle"][profile]["stdout_sha256"]:
                 failures.append(f"{path.stem}/{profile}: oracle output differs")
@@ -842,11 +850,11 @@ def main():
     registration = roff_fixture_reference.verified_reference(ROOT, reference)
     print(f"oracle preflight passed: {registration['identity']}", file=sys.stderr)
 
-    cache_dir, cache_path, cache = load_cache(evidence, registration["identity"])
+    cache_dir, cache_path, cache = load_cache(evidence, registration["identity"], digest(reference.read_bytes()))
     if args.collect:
         collect_oracle(reference, registration, cases, evidence, args.workers)
-        cache_dir, cache_path, cache = load_cache(evidence, registration["identity"])
-    missing = [one["id"] for one in cases if one["source_sha256"] not in cache]
+        cache_dir, cache_path, cache = load_cache(evidence, registration["identity"], digest(reference.read_bytes()))
+    missing = [one["id"] for one in cases if reference_recipes.key(one) not in cache]
     if args.replay and missing:
         raise SystemExit(f"{len(missing)} sources lack oracle records; "
                          f"run --collect first (example {missing[0]})")

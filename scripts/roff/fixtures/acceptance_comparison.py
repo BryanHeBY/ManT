@@ -205,8 +205,21 @@ def compare_axes(native, product, policy=None):
     return report
 
 
+UNQUALIFIED_ADMISSIONS = frozenset((
+    "not-collected", "generator-defect", "generator-scope-gap", "generator-invalid",
+))
+
+
+def qualified_axes(admission, report):
+    """Keep partial oracle observations separate from usable product gold."""
+    return ({axis: "uncovered" for axis in report}
+            if admission in UNQUALIFIED_ADMISSIONS else report)
+
+
 def verdict(admission, report, execution, uncovered):
     """Diagnostics classify input; independent assertion failures decide fate."""
+    if admission in UNQUALIFIED_ADMISSIONS:
+        return "review", []
     failing = [axis for axis, value in report.items() if value is False]
     if execution.get("product_error"):
         failing.append("product-error")
@@ -216,8 +229,6 @@ def verdict(admission, report, execution, uncovered):
         failing.append("marker-leak")
     if failing:
         return "fail", failing
-    if admission in ("not-collected", "generator-defect", "generator-scope-gap"):
-        return "review", []
     if uncovered or any(value == "uncovered" for value in report.values()):
         return "review", []
     return "pass", []

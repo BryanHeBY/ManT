@@ -25,6 +25,7 @@ from scripts.roff.fixtures import markdown_rule_cases
 from scripts.roff.fixtures.markdown_reader_observer import markdown_reader_axes
 from scripts.roff.fixtures import replay_roff_acceptance as transport
 from scripts.roff.fixtures import roff_fixture_reference
+from scripts.roff.fixtures import reference_recipes
 from scripts.roff.fixtures import rule_boundary_cases
 from scripts.roff.fixtures import rule_closure_fields
 
@@ -102,13 +103,11 @@ def generation_plan(cases):
 
 def admission(oracle):
     """Diagnostics do not authorize content loss or skipped assertions."""
-    if any(oracle[profile]["code"] not in (0, 1, 2)
-           or oracle[profile].get("timeout") or not oracle[profile].get("utf8_valid", True)
+    if any(not reference_recipes.completed(oracle[profile], 2)
            for profile in ("ascii", "utf8", "html", "tree")):
         return "generator-invalid"
     code = oracle["lint"]["code"]
-    if (not isinstance(code, int) or code < 0 or oracle["lint"].get("timeout")
-            or not oracle["lint"].get("utf8_valid", True)):
+    if not reference_recipes.completed(oracle["lint"]):
         return "generator-invalid"
     if code == 0:
         return "valid"
@@ -116,58 +115,16 @@ def admission(oracle):
 
 
 def validate_oracle_record(one, oracle):
-    """Check actual transport bytes, not a cache's claimed hash strings."""
-    if oracle.get("source_sha256") != one["source_sha256"]:
-        raise ValueError("oracle source binding changed: " + one["id"])
-    for name in PROFILES:
-        profile = oracle.get(name)
-        if not isinstance(profile, dict):
-            raise ValueError("missing oracle profile: " + name)
-        utf8_valid = True
-        for stream in ("stdout", "stderr"):
-            text = profile.get(stream)
-            if not isinstance(text, str):
-                raise ValueError("missing oracle stream: " + name + "." + stream)
-            try:
-                raw = (bytes.fromhex(profile[stream + "_bytes_hex"])
-                       if stream + "_bytes_hex" in profile else text.encode())
-            except (ValueError, TypeError) as error:
-                raise ValueError("invalid oracle raw bytes: " + name) from error
-            if sha(raw) != profile.get(stream + "_sha256"):
-                raise ValueError("oracle raw hash changed: " + name + "." + stream)
-            if raw.decode("utf-8", errors="replace") != text:
-                raise ValueError("oracle text and raw bytes disagree: " + name)
-            try:
-                raw.decode("utf-8")
-            except UnicodeDecodeError:
-                utf8_valid = False
-        if profile.get("utf8_valid", True) != utf8_valid:
-            raise ValueError("oracle UTF-8 validity flag changed: " + name)
-        if "code" not in profile:
-            raise ValueError("missing oracle process status: " + name)
-    return oracle
+    reference_recipes.validate_streams(one["source_sha256"], oracle)
 
 
-def validated_cache(evidence, binding, cases, *, allow_missing=False):
-    directory, path, cache = transport.load_cache(evidence, binding["identity"])
-    if path.exists():
-        manifest = json.loads((directory / "manifest.json").read_text())
-        if (manifest.get("identity") != binding["identity"]
-                or manifest.get("reference_sha256") != binding["reference_sha256"]
-                or manifest.get("expectations_from_product") is not False):
-            raise ValueError("oracle cache does not bind the active pristine reference")
-        # The transport loader is intentionally general; this finite ledger
-        # also rejects an overwritten source record rather than trusting last.
-        seen = {}
-        for line in path.read_text().splitlines():
-            record = json.loads(line)
-            digest = record["source_sha256"]
-            if digest in seen and seen[digest] != record:
-                raise ValueError("conflicting oracle records for source: " + digest)
-            seen[digest] = record
+def validated_cache(evidence, binding, cases, *, allow_missing=False, collection_reference=None):
+    directory, path, cache = transport.load_cache(
+        evidence, binding["identity"], binding["reference_sha256"],
+        collection_reference=collection_reference)
     for one in cases:
-        if one["source_sha256"] in cache:
-            validate_oracle_record(one, cache[one["source_sha256"]])
+        if reference_recipes.key(one) in cache:
+            validate_oracle_record(one, cache[reference_recipes.key(one)])
         elif not allow_missing:
             raise ValueError("missing pristine record: " + one["id"])
     return directory, path, cache
@@ -176,37 +133,27 @@ def validated_cache(evidence, binding, cases, *, allow_missing=False):
 def collect_reference(reference, registration, cases, evidence, workers):
     """Keep rejected, timed-out and invalid-UTF8 profiles in the ledger."""
     binding = {"identity": registration["identity"], "reference_sha256": sha(reference.read_bytes())}
-    directory, path, cache = validated_cache(evidence, binding, cases, allow_missing=True)
+    directory, path, cache = validated_cache(
+        evidence, binding, cases, allow_missing=True, collection_reference=reference)
     profiles = PROFILES
-    unique = {one["source_sha256"]: one for one in cases}
+    unique = {reference_recipes.key(one): one for one in cases}
     missing = [one for digest, one in unique.items()
                if digest not in cache or not all(name in cache[digest] for name in profiles)]
     directory.mkdir(parents=True, exist_ok=True)
     print(f"oracle cache: {len(cache)} cached, {len(missing)} to collect", flush=True)
 
-    def record(one):
-        result = {"source_sha256": one["source_sha256"]}
-        for profile in profiles:
-            arguments = ["-T" + profile]
-            if profile in ("ascii", "utf8"):
-                arguments.append("-Owidth=78")
-            raw = transport.run(reference, arguments, one["source"], timeout=30)
-            for channel in ("stdout", "stderr"):
-                original = (bytes.fromhex(raw[channel + "_bytes_hex"])
-                            if channel + "_bytes_hex" in raw else raw[channel].encode())
-                raw[channel + "_sha256"] = sha(original)
-            result[profile] = raw
-        return result
-
     with path.open("a") as output:
         with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
-            for index, result in enumerate(pool.map(record, missing), 1):
+            for index, result in enumerate(pool.map(
+                    lambda one: transport.record_oracle(reference, one), missing), 1):
                 output.write(json.dumps(result, ensure_ascii=False) + "\n")
                 if index % 500 == 0:
                     print(f"collected {index}/{len(missing)}", flush=True)
     (directory / "manifest.json").write_text(json.dumps({
         "identity": registration["identity"], "reference_sha256": sha(reference.read_bytes()),
+        "reference_path": str(reference.resolve()),
         "records": len(set(cache) | set(unique)), "expectations_from_product": False,
+        **reference_recipes.cache_binding(),
     }, indent=2) + "\n")
 
 
@@ -353,7 +300,7 @@ def evaluate(one, oracle, product, binding, policies):
     if source_class == "generator-invalid":
         # Partial/crashed oracle output supplies no product gold. Keep raw
         # comparisons and process evidence while withholding that conclusion.
-        report = {axis: "uncovered" for axis in report}
+        report = comparison.qualified_axes(source_class, report)
     required = set(one.get("axes", []))
     required.update(one["metadata"].get("required_axes", []))
     required.update(one["metadata"].get("expected_axes", []))
@@ -369,8 +316,6 @@ def evaluate(one, oracle, product, binding, policies):
     missing = [axis for axis, value in report.items() if value == "uncovered"]
     execution = product if source_class != "generator-invalid" else {}
     verdict, failures = comparison.verdict(source_class, report, execution, missing)
-    if source_class == "generator-invalid":
-        verdict, failures = "review", []
     return {
         "id": one["id"], "cohort": one["cohort"], "family": one["family"],
         "rule_id": one.get("rule_id"), "source_sha256": one["source_sha256"],
@@ -449,7 +394,7 @@ def main():
     _, cache_path, cache = validated_cache(oracle_evidence, oracle_binding, cases, allow_missing=not args.replay)
     if not args.replay:
         return 0
-    missing = [one["id"] for one in cases if one["source_sha256"] not in cache]
+    missing = [one["id"] for one in cases if reference_recipes.key(one) not in cache]
     if missing:
         raise SystemExit(f"missing pristine records: {len(missing)}; collect before replay")
     policies = escape_projection_policies.load_policies()
@@ -478,7 +423,7 @@ def main():
                 output.write(json.dumps({"source_sha256": one["source_sha256"], "profiles": raw}, ensure_ascii=False) + "\n")
                 if index % 500 == 0:
                     print(f"replayed {index}/{len(unique)}", flush=True)
-    records = [evaluate(one, cache[one["source_sha256"]], outputs[one["source_sha256"]],
+    records = [evaluate(one, cache[reference_recipes.key(one)], outputs[one["source_sha256"]],
                         oracle_binding, policies) for one in cases]
     if sha(args.product.read_bytes()) != product_binding["sha256"]:
         raise SystemExit("candidate binary changed during replay")
