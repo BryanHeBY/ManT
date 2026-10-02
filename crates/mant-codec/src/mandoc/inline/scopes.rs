@@ -81,15 +81,23 @@ fn append_scope_children(builder: &mut InlineBuilder, node: &Node, name: Option<
         Some("Nm") => {
             builder.with_font_scope(Font::Strong, |builder| append_name(builder, children, name));
         }
-        Some("Fl") => builder.append_scope(
+        Some("Fl") => builder.with_native_operand_role(
+            crate::definitions::NativeOperandRole::ExplicitOption,
             |builder| {
-                builder.with_font_scope(Font::Strong, |builder| {
-                    builder.append_text("-");
-                    builder
-                        .with_prefix_join(|builder| append_inline_nodes(builder, children, name));
-                });
+                // `termp_fl_pre()` emits the dash and then visits children;
+                // this exact scope proves each accepted option spelling.
+                builder.append_scope(
+                    |builder| {
+                        builder.with_font_scope(Font::Strong, |builder| {
+                            builder.append_text("-");
+                            builder.with_prefix_join(|builder| {
+                                append_inline_nodes(builder, children, name);
+                            });
+                        });
+                    },
+                    coalesce_font_runs,
+                );
             },
-            coalesce_font_runs,
         ),
         // mdoc_term.c routes Cd and Fd through termp_fd_pre = termp_bold_pre
         // (dispatch lines 142/149): unconditional Strong in every section.
@@ -98,10 +106,22 @@ fn append_scope_children(builder: &mut InlineBuilder, node: &Node, name: Option<
                 append_inline_nodes(builder, children, name);
             });
         }
-        Some("Ar" | "Pa" | "Em" | "Va" | "Vt" | "Ft" | "Fa" | "Ad" | "Fr") => builder
-            .with_font_scope(Font::Emphasis, |builder| {
+        Some("Ar") => builder.with_native_operand_role(
+            crate::definitions::NativeOperandRole::Argument,
+            |builder| {
+                // `Ar` dispatches through termp_under_pre, then its actual
+                // children. A child's font escape does not rename the
+                // argument macro as another literal declaration.
+                builder.with_font_scope(Font::Emphasis, |builder| {
+                    append_inline_nodes(builder, children, name);
+                });
+            },
+        ),
+        Some("Pa" | "Em" | "Va" | "Vt" | "Ft" | "Fa" | "Ad" | "Fr") => {
+            builder.with_font_scope(Font::Emphasis, |builder| {
                 append_inline_nodes(builder, children, name);
-            }),
+            });
+        }
         Some("No" | "Dv") => builder.with_font_scope(Font::Regular, |builder| {
             append_inline_nodes(builder, children, name);
         }),

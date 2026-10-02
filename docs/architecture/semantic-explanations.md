@@ -304,13 +304,33 @@ role, while `Ic`/`Cm` only prove literal naming evidence. The latter remain
 context-dependent and may produce a named Term. A proved role is not erased
 merely because its template or argument syntax has no supported name binding.
 
-Witness lookup uses the complete source coordinate and exact styled head,
-including argument ancestry and link structure; line/column is only a bucket
-index. Zero-width navigation anchors are ignored because target allocation
-changes them without changing the head. Owner moves and body nesting preserve
-this evidence, while changed/split heads and conflicting witnesses invalidate
-it. No temporary role, synthetic semantic ID or separate evidence index enters
-the public IR. Body macros are not registered as definition witnesses.
+Actual native owners index private witnesses directly by their operation-local
+owner identity, with complete source and exact styled head equality checked at
+lookup. Source coordinates remain provenance, not an execution identity or a
+bucket scanned for each native owner. Constructed role controls without a native
+identity use coordinate buckets and reject conflicting witnesses. Zero-width
+navigation anchors are ignored because allocation changes no glyph. Owner moves
+preserve evidence; changed or split heads invalidate it. No temporary role,
+synthetic semantic ID or separate evidence index enters public IR. Body macros
+are not registered as definition witnesses.
+
+Native alternating operands register their role when their actual word owner
+is created, before text parsing and output retirement. Accepted-output receipts
+then retain only final HEAD byte ranges; a font escape inside the same TEXT
+cannot manufacture a new operand. An unmatched or split receipt supplies no
+native restart proof. Ordinary HEADs without such roles do not copy text into
+this sidecar.
+
+Each actual `Fl` also records its generated dash and child words as explicit
+option bytes. This narrow receipt can distinguish a declared `Fl NUM` from an
+uppercase `-NUM` argument after another option. The leading owner role alone
+does not authorize later ordinary or `Ar` text as another name. The actual
+explicit option role survives a local italic font escape; italic appearance
+alone remains weaker than verified operand identity. Detached and
+run-in heads use the same accepted-byte and full-source/style validation.
+The real `Ar` scope similarly supplies an Argument receipt: a local bold font
+escape does not promote its parameter text to a declaration. Other emphasized
+presentation macros continue to rely on their effective style.
 
 Preparation normalizes each container before reading its heads, derives child
 context from that same recognition result, and retains one private plan per
@@ -345,6 +365,26 @@ Environment groups may contain literal/placeholder templates such as
 and form but produce no prefix name or invented expansion; rejected prose still
 invalidates the group. Path, assignment and colon-delimited metavariables do not
 license general prose suffixes as heads.
+
+Option recognition consumes one ordered accepted-head view. The bounded explicit
+name group, quote/bracket state and argument state produce exact visible byte
+ranges used by the binding mapper. Font-run boundaries cannot substitute for
+native operand identity: private man HEAD receipts follow actual `term_word()`
+owners through clipping and delayed glyph retirement, and their complete
+accepted text/style/source must still match before reuse. An in-word font change
+therefore cannot independently restart a parameter as another declaration.
+Effective bold plus italic is a literal name style; parameter position remains
+an independent constraint. These witnesses never enter public IR or query data.
+
+Layout-inferred commands require invocation syntax or a typed manual reference
+with the actual visible command label. Matching that label still requires
+validation of the rest of the complete head; the destination cannot justify an
+unrelated label or prose suffix. Existing parameter-style rules also apply to
+weak candidates, so a label wrapped as a parameter may remain unclassified.
+Its original text and link are retained. A command section plus a bold
+paragraph is insufficient evidence; an explicit definition tag can still own
+a bare command. Selection and layout do not manufacture aliases or scan
+description text for candidate names.
 
 Separate fidelity normalization from semantic inference before removing
 heuristics. Existing target, continuation, indentation, table and line-flow

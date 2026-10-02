@@ -24,6 +24,8 @@ mod acceptance_axes;
 mod consumer_boundaries;
 #[path = "roff_lowering/cvs_renderer_contracts.rs"]
 mod cvs_renderer_contracts;
+#[path = "roff_lowering/declaration_names.rs"]
+mod declaration_names;
 #[path = "roff_lowering/definition_consumers.rs"]
 mod definition_consumers;
 #[path = "roff_lowering/definition_relations.rs"]
@@ -42,6 +44,8 @@ mod flow_controls;
 mod font_boundaries;
 #[path = "roff_lowering/glyphs.rs"]
 mod glyphs;
+#[path = "roff_lowering/hanging_owners.rs"]
+mod hanging_owners;
 #[path = "roff_lowering/inline_boundaries.rs"]
 mod inline_boundaries;
 #[path = "roff_lowering/link_seams.rs"]

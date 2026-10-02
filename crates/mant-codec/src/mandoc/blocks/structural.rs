@@ -48,7 +48,12 @@ impl StructuralLowerer<'_, '_, '_> {
         );
     }
 
-    pub(super) fn push(&mut self, node: &Node, table_embedding: Option<&TableEmbedding>) {
+    pub(super) fn push(
+        &mut self,
+        node: &Node,
+        next: Option<&Node>,
+        table_embedding: Option<&TableEmbedding>,
+    ) {
         let scoped_body = if matches!(node.macro_name.as_deref(), Some("Bl" | "Rs"))
             || (node.macro_name.as_deref() == Some("Bd")
                 && node.display_kind == Some(DisplayKind::Filled))
@@ -64,7 +69,7 @@ impl StructuralLowerer<'_, '_, '_> {
                 .scope_posts
                 .enter_body(body.id, self.formatter.font.checkpoint());
         }
-        self.push_scoped(node, table_embedding);
+        self.push_scoped(node, next, table_embedding);
         if let Some(body) = scoped_body
             && let Some(saved) = self.context.scope_posts.exit_body(body.id)
         {
@@ -72,13 +77,18 @@ impl StructuralLowerer<'_, '_, '_> {
         }
     }
 
-    fn push_scoped(&mut self, node: &Node, table_embedding: Option<&TableEmbedding>) {
+    fn push_scoped(
+        &mut self,
+        node: &Node,
+        next: Option<&Node>,
+        table_embedding: Option<&TableEmbedding>,
+    ) {
         let continues_ip_item =
             node.macro_name.as_deref() == Some("RS") && self.man_list_state.is_active();
         if !matches!(node.macro_name.as_deref(), Some("IP" | "TP")) && !continues_ip_item {
             self.man_list_state.reset();
         }
-        if self.lower_transparent_container(node) {
+        if self.lower_transparent_container(node, next) {
             return;
         }
         match node.macro_name.as_deref() {
@@ -175,7 +185,8 @@ impl StructuralLowerer<'_, '_, '_> {
         }
     }
 
-    fn lower_man_hanging_paragraph(&mut self, node: &Node) {
+    fn lower_man_hanging_paragraph(&mut self, node: &Node, next: Option<&Node>) {
+        let output_start = self.output.len();
         let children = first_part_children(node, NodeKind::Body);
         if !children.is_empty()
             && let Some(argument) = crate::mandoc::layout::first_part_argument(node)
@@ -216,11 +227,27 @@ impl StructuralLowerer<'_, '_, '_> {
         self.formatter.font.man_text_boundary(); // BODY post
         self.formatter.font.man_text_boundary(); // BLOCK post
         extend_blocks_with_spacing(self.output, nested, spacing, node);
+        // man_term.c::pre_HP/post_HP and pre_IP render separate native
+        // owners. The real driver's adjacent empty IP can complete a semantic
+        // pair later; it must not alter either owner's formatter geometry.
+        if let Some(next) = next.filter(|next| {
+            next.kind == NodeKind::Block
+                && next.macro_name.as_deref() == Some("IP")
+                && first_part_children(next, NodeKind::Head).is_empty()
+                && native_exit_epoch(node) == next.flow_epoch
+        }) && self.output.len() == output_start + 1
+        {
+            self.context.native_heads.borrow_mut().hanging.head(
+                &mut self.output[output_start],
+                std::ptr::from_ref(node) as usize,
+                std::ptr::from_ref(next) as usize,
+            );
+        }
     }
 
-    fn lower_transparent_container(&mut self, node: &Node) -> bool {
+    fn lower_transparent_container(&mut self, node: &Node, next: Option<&Node>) -> bool {
         match node.macro_name.as_deref() {
-            Some("HP") => self.lower_man_hanging_paragraph(node),
+            Some("HP") => self.lower_man_hanging_paragraph(node, next),
             Some("Bd") if node.display_kind == Some(DisplayKind::Filled) => {
                 let has_predecessor = self.has_paragraph_predecessor();
                 let spacing_before = u16::from(has_predecessor && !node.compact);
@@ -294,6 +321,16 @@ impl StructuralLowerer<'_, '_, '_> {
         }
         true
     }
+}
+
+/// Empty paragraph validation can erase an intervening PP/P/LP. The executed
+/// boundary stamp survives that erasure; inspect only the last descendant,
+/// not source line numbers or a speculative traversal of the IP body.
+fn native_exit_epoch(mut node: &Node) -> usize {
+    while let Some(last) = node.children.last() {
+        node = last;
+    }
+    node.flow_epoch
 }
 
 fn lower_structural_fallback(

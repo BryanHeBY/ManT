@@ -15,7 +15,9 @@ use std::sync::Arc;
 use tab_stops::TabStops;
 mod no_fill;
 pub(in crate::mandoc) use native_field::{FieldFlag, FieldFlags};
+mod operand_capture;
 mod output;
+pub(in crate::mandoc) use operand_capture::HeadOperandCapture;
 pub(in crate::mandoc::inline) use output::{INTERNAL_FIELD_WORD, INTERNAL_LINK_SPLIT};
 
 pub(in crate::mandoc) use no_fill::{NoFillInlineState, lower_no_fill_fragment_with_formatter};
@@ -43,6 +45,8 @@ pub(in crate::mandoc::inline) struct NativeWordAnchor {
 
 pub(in crate::mandoc) struct InlineBuilder {
     nodes: Vec<Inline>,
+    pub(in crate::mandoc) head_operand_capture:
+        Option<std::rc::Rc<std::cell::RefCell<HeadOperandCapture>>>,
     // Macro handlers such as pre_alternate() call term_word() directly on
     // operands instead of visiting those TEXT nodes through print_man_node().
     direct_word_operands: bool,
@@ -427,6 +431,7 @@ impl InlineBuilder {
     pub(in crate::mandoc) fn with_spacing(spacing_enabled: bool) -> Self {
         Self {
             nodes: Vec::new(),
+            head_operand_capture: None,
             direct_word_operands: false,
             asserted_vertical_row: false,
             produced_formatter_cell: CellProduction::None,
@@ -443,6 +448,7 @@ impl InlineBuilder {
     ) -> Self {
         Self {
             nodes,
+            head_operand_capture: None,
             direct_word_operands: false,
             asserted_vertical_row: false,
             produced_formatter_cell: CellProduction::None,

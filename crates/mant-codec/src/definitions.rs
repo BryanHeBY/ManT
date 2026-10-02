@@ -7,6 +7,7 @@ mod context;
 mod diagnostics;
 mod evidence;
 mod groups;
+mod hanging_owner;
 mod identity;
 mod normalize;
 #[cfg(feature = "roff")]
@@ -18,7 +19,9 @@ mod syntax;
 use context::DefinitionContext;
 #[cfg(feature = "roff")]
 pub(crate) use diagnostics::manual_discovery_diagnostics;
-pub(crate) use evidence::{NativeHeadEvidence, NativeHeadRole};
+#[cfg(feature = "roff")]
+pub(crate) use evidence::CapturedHeadOperands;
+pub(crate) use evidence::{NativeHeadEvidence, NativeHeadRole, NativeOperand, NativeOperandRole};
 #[cfg(feature = "roff")]
 pub(crate) use groups::mark_native_definition_owner;
 pub(crate) use groups::{
@@ -45,13 +48,19 @@ pub(crate) fn identify_definitions(
     reserved_targets: &HashSet<String>,
     document_name: Option<&str>,
 ) -> HashSet<String> {
-    identify_definitions_with_evidence(
+    let DefinitionIdentification { targets, .. } = identify_definitions_with_evidence(
         blocks,
         sections,
         reserved_targets,
         document_name,
         &NativeHeadEvidence::default(),
-    )
+    );
+    targets
+}
+
+pub(crate) struct DefinitionIdentification {
+    pub(crate) targets: HashSet<String>,
+    pub(crate) diagnostics: Vec<mant_ir::Diagnostic>,
 }
 
 pub(crate) fn identify_definitions_with_evidence(
@@ -60,7 +69,7 @@ pub(crate) fn identify_definitions_with_evidence(
     reserved_targets: &HashSet<String>,
     document_name: Option<&str>,
     evidence: &NativeHeadEvidence,
-) -> HashSet<String> {
+) -> DefinitionIdentification {
     let root_context = document_name.map_or(DefinitionContext::Generic, |name| {
         let name = name.to_ascii_lowercase();
         if name.ends_with("_config") || name.ends_with("-config") {
@@ -88,7 +97,10 @@ pub(crate) fn identify_definitions_with_evidence(
     // Native owner identities are parse-local lowering evidence. They must
     // never become addressable anchors, serialized fields, or rendered text.
     remove_native_definition_owner_markers(blocks, sections);
-    discovery.retained
+    DefinitionIdentification {
+        targets: discovery.retained,
+        diagnostics: prepared.diagnostics,
+    }
 }
 
 struct DefinitionDiscovery<'a> {

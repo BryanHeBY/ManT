@@ -1,0 +1,366 @@
+{
+  "header": {
+    "count": 24,
+    "oracleIdentity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+    "oracleSha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+    "profiles": [
+      "ascii",
+      "utf8",
+      "html",
+      "tree",
+      "lint",
+      "utf8-24"
+    ],
+    "nativeCommonMarginColumns": 5,
+    "semanticContract": "Complete declaration + executed same-container direct HP/headless-IP sibling owner; native profiles establish geometry, not entry roles."
+  },
+  "cases": [
+    {
+      "id": "sed-hp",
+      "source": ".TH T 1 \"October 3, 2026\"\n.SH OPTIONS\n.HP\n\\fB\\-n\\fR, \\fB\\-\\-quiet\\fR, \\fB\\-\\-silent\\fR\n.IP\nBodyWord explains the options.\n.SH NEXT\nAFTER_BOUNDARY\n",
+      "sourceSha256": "6b799352d3f535ab9af2c2fb5589e070f03b5e482b4ed94b54bb1f247313079d",
+      "ownerNames": [
+        [
+          "-n",
+          "--quiet",
+          "--silent"
+        ]
+      ],
+      "nativeRows": [
+        "-n, --quiet, --silent",
+        "",
+        "       BodyWord explains the options."
+      ]
+    },
+    {
+      "id": "pd-zero",
+      "source": ".TH T 1 \"October 3, 2026\"\n.SH OPTIONS\n.PD 0\n.HP\n\\fB\\-n\\fR, \\fB\\-\\-quiet\\fR, \\fB\\-\\-silent\\fR\n.IP\nBodyWord explains the options.\n.SH NEXT\nAFTER_BOUNDARY\n",
+      "sourceSha256": "a8a607e60228855a7ac4e0e87c237db6be824d387b07f782d7e631b5dc23278d",
+      "ownerNames": [
+        [
+          "-n",
+          "--quiet",
+          "--silent"
+        ]
+      ],
+      "nativeRows": [
+        "-n, --quiet, --silent",
+        "       BodyWord explains the options."
+      ]
+    },
+    {
+      "id": "hp-width",
+      "source": ".TH T 1 \"October 3, 2026\"\n.SH OPTIONS\n.HP 4\n\\fB\\-n\\fR, \\fB\\-\\-quiet\\fR, \\fB\\-\\-silent\\fR\n.IP\nBodyWord explains the options.\n.SH NEXT\nAFTER_BOUNDARY\n",
+      "sourceSha256": "eb215a86191af32275f4162655d9de0cb5090bffb6de6039883db02d72b45353",
+      "ownerNames": [
+        [
+          "-n",
+          "--quiet",
+          "--silent"
+        ]
+      ],
+      "nativeRows": [
+        "-n, --quiet, --silent",
+        "",
+        "    BodyWord explains the options."
+      ]
+    },
+    {
+      "id": "relative-pair",
+      "source": ".TH T 1 \"October 3, 2026\"\n.SH OPTIONS\n.RS 3\n.HP\n\\fB\\-n\\fR, \\fB\\-\\-quiet\\fR, \\fB\\-\\-silent\\fR\n.IP\nBodyWord explains the options.\n.RE\n.SH NEXT\nAFTER_BOUNDARY\n",
+      "sourceSha256": "7c82dba225f6fcd79fa15e42b7b4d386a71c5495b67695d0240dacb7440af365",
+      "ownerNames": [
+        [
+          "-n",
+          "--quiet",
+          "--silent"
+        ]
+      ],
+      "nativeRows": [
+        "   -n, --quiet, --silent",
+        "",
+        "          BodyWord explains the options."
+      ]
+    },
+    {
+      "id": "long-head",
+      "source": ".TH T 1 \"October 3, 2026\"\n.SH OPTIONS\n.HP\n.B \"--first-very-long-option-name, --second-very-long-option-name\"\n.IP\nBodyWord explains the options.\n.SH NEXT\nAFTER_BOUNDARY\n",
+      "sourceSha256": "1e4dfb382b691a48cb1dc1441f0ec071df4aeb3990fde7492c73e54a11dac74a",
+      "ownerNames": [
+        [
+          "--first-very-long-option-name",
+          "--second-very-long-option-name"
+        ]
+      ],
+      "nativeRows": [
+        "--first-very-long-option-name, --second-very-long-option-name",
+        "",
+        "       BodyWord explains the options."
+      ]
+    },
+    {
+      "id": "body-spacing",
+      "source": ".TH T 1 \"October 3, 2026\"\n.SH OPTIONS\n.HP\n\\fB\\-n\\fR, \\fB\\-\\-quiet\\fR, \\fB\\-\\-silent\\fR\n.IP\n.sp 2\nBodyWord explains the options.\n.SH NEXT\nAFTER_BOUNDARY\n",
+      "sourceSha256": "a6a85e651c0eec5024c3106f1f6b6dcfa35596cb9d416d0712f3d26c74a7fccb",
+      "ownerNames": [
+        [
+          "-n",
+          "--quiet",
+          "--silent"
+        ]
+      ],
+      "nativeRows": [
+        "-n, --quiet, --silent",
+        "",
+        "",
+        "",
+        "       BodyWord explains the options."
+      ]
+    },
+    {
+      "id": "following-tag",
+      "source": ".TH T 1 \"October 3, 2026\"\n.SH OPTIONS\n.HP\n\\fB\\-n\\fR, \\fB\\-\\-quiet\\fR, \\fB\\-\\-silent\\fR\n.IP\nBodyWord explains the options.\n.IP --other 4\nOTHER_BODY\n.SH NEXT\nAFTER_BOUNDARY\n",
+      "sourceSha256": "8158fe72ad4c282bdca2216148a812c03e5ba8783a32c7555a539fe54aacda33",
+      "ownerNames": [
+        [
+          "-n",
+          "--quiet",
+          "--silent"
+        ]
+      ],
+      "nativeRows": [
+        "-n, --quiet, --silent",
+        "",
+        "       BodyWord explains the options.",
+        "",
+        "--other",
+        "    OTHER_BODY"
+      ]
+    },
+    {
+      "id": "repeated-pairs",
+      "source": ".TH T 1 \"October 3, 2026\"\n.SH OPTIONS\n.HP\n\\fB\\-n\\fR, \\fB\\-\\-quiet\\fR, \\fB\\-\\-silent\\fR\n.IP\nBodyWord explains the options.\n.HP\n.B --next\n.IP\nSECOND_BODY\n.SH NEXT\nAFTER_BOUNDARY\n",
+      "sourceSha256": "e48b32fe12fdcb05093398b630eb3b9483e59d53e2516d59899e0039c7824cac",
+      "ownerNames": [
+        [
+          "-n",
+          "--quiet",
+          "--silent"
+        ],
+        [
+          "--next"
+        ]
+      ],
+      "nativeRows": [
+        "-n, --quiet, --silent",
+        "",
+        "       BodyWord explains the options.",
+        "",
+        "--next",
+        "",
+        "       SECOND_BODY"
+      ]
+    },
+    {
+      "id": "macro-pairs",
+      "source": ".TH T 1 \"October 3, 2026\"\n.SH OPTIONS\n.de XX\n.HP\n.B --macro\n.IP\nMACRO_BODY\n..\n.XX\n.XX\n.SH NEXT\nAFTER_BOUNDARY\n",
+      "sourceSha256": "2f9b66ad6a36a41c1929c7d3522e0293355fb1c0ba9e20c64ced1db9d9d9bfe9",
+      "ownerNames": [
+        [
+          "--macro"
+        ],
+        [
+          "--macro"
+        ]
+      ],
+      "nativeRows": [
+        "--macro",
+        "",
+        "       MACRO_BODY",
+        "",
+        "--macro",
+        "",
+        "       MACRO_BODY"
+      ]
+    },
+    {
+      "id": "fixed-cells",
+      "source": ".TH T 1 \"October 3, 2026\"\n.SH OPTIONS\n.HP\n.B \"--one,\\~--two\"\n.IP\nBodyWord explains the options.\n.SH NEXT\nAFTER_BOUNDARY\n",
+      "sourceSha256": "4e9c04ad56f0c75c6810e041d2dc9682cc031d8a02460be1ded5bc015a9f91ec",
+      "ownerNames": [
+        [
+          "--one",
+          "--two"
+        ]
+      ],
+      "nativeRows": [
+        "--one, --two",
+        "",
+        "       BodyWord explains the options."
+      ]
+    },
+    {
+      "id": "ordinary-hp",
+      "source": ".TH T 1 \"October 3, 2026\"\n.SH OPTIONS\n.HP\nOrdinary prose with several words.\n.IP\nBodyWord explains the paragraph.\n.SH NEXT\nAFTER_BOUNDARY\n",
+      "sourceSha256": "32a1f4d64552127f589d0033a57fa5acda1fce4d8c30de76c8732dda7e7fd7c8",
+      "ownerNames": [],
+      "nativeRows": [
+        "Ordinary prose with several words.",
+        "",
+        "       BodyWord explains the paragraph."
+      ]
+    },
+    {
+      "id": "labeled-ip",
+      "source": ".TH T 1 \"October 3, 2026\"\n.SH OPTIONS\n.HP\n\\fB\\-n\\fR, \\fB\\-\\-quiet\\fR, \\fB\\-\\-silent\\fR\n.IP --own 4\nBodyWord explains its own label.\n.SH NEXT\nAFTER_BOUNDARY\n",
+      "sourceSha256": "5dee39b11c663fa0bfde8642d399f604c169f576d5d648d9c10defb66198b011",
+      "ownerNames": [],
+      "nativeRows": [
+        "-n, --quiet, --silent",
+        "",
+        "--own",
+        "    BodyWord explains its own label."
+      ]
+    },
+    {
+      "id": "table-between",
+      "source": ".TH T 1 \"October 3, 2026\"\n.SH OPTIONS\n.HP\n\\fB\\-n\\fR, \\fB\\-\\-quiet\\fR, \\fB\\-\\-silent\\fR\n.TS\nl.\nTABLE_WORD\n.TE\n.IP\nBodyWord explains a table.\n.SH NEXT\nAFTER_BOUNDARY\n",
+      "sourceSha256": "639c112a209c5755fa7650d32501c2243c218be03309e682e695cf87c4cd53c0",
+      "ownerNames": [],
+      "nativeRows": [
+        "-n, --quiet, --silent",
+        "TABLE_WORD",
+        "",
+        "       BodyWord explains a table."
+      ]
+    },
+    {
+      "id": "section-between",
+      "source": ".TH T 1 \"October 3, 2026\"\n.SH OPTIONS\n.HP\n\\fB\\-n\\fR, \\fB\\-\\-quiet\\fR, \\fB\\-\\-silent\\fR\n.SH SECOND\n.IP\nBodyWord is outside the original section.\n.SH NEXT\nAFTER_BOUNDARY\n",
+      "sourceSha256": "1e7fe704380c54c2cba470c2bfdff357e474da726e2916e6b6049e7a75ae8104",
+      "ownerNames": [],
+      "nativeRows": [
+        "-n, --quiet, --silent",
+        "",
+        "SECOND",
+        "       BodyWord is outside the original section."
+      ]
+    },
+    {
+      "id": "container-between",
+      "source": ".TH T 1 \"October 3, 2026\"\n.SH OPTIONS\n.HP\n\\fB\\-n\\fR, \\fB\\-\\-quiet\\fR, \\fB\\-\\-silent\\fR\n.RS 4\n.IP\nBodyWord is in another container.\n.RE\n.SH NEXT\nAFTER_BOUNDARY\n",
+      "sourceSha256": "a6cd8104bd0310f8d815b6f5f8b5bdb612328c06f8f9fce9b5ed1f769853ca40",
+      "ownerNames": [],
+      "nativeRows": [
+        "-n, --quiet, --silent",
+        "",
+        "           BodyWord is in another container."
+      ]
+    },
+    {
+      "id": "empty-ip",
+      "source": ".TH T 1 \"October 3, 2026\"\n.SH OPTIONS\n.HP\n\\fB\\-n\\fR, \\fB\\-\\-quiet\\fR, \\fB\\-\\-silent\\fR\n.IP\n.SH NEXT\nAFTER_BOUNDARY\n",
+      "sourceSha256": "e931e3f6dae92dd2beb8e6a82494f8fb2d58c82833582fa83fa63f4cbb38dbf8",
+      "ownerNames": [],
+      "nativeRows": [
+        "-n, --quiet, --silent"
+      ]
+    },
+    {
+      "id": "format-only-ip",
+      "source": ".TH T 1 \"October 3, 2026\"\n.SH OPTIONS\n.HP\n\\fB\\-n\\fR, \\fB\\-\\-quiet\\fR, \\fB\\-\\-silent\\fR\n.IP\n.ft B\n.SH NEXT\nAFTER_BOUNDARY\n",
+      "sourceSha256": "a530b58acafd8aedc12f31240c0ce622ba79d84872623f6bf18814482ee2aa44",
+      "ownerNames": [],
+      "nativeRows": [
+        "-n, --quiet, --silent"
+      ]
+    },
+    {
+      "id": "incomplete-declaration",
+      "source": ".TH T 1 \"October 3, 2026\"\n.SH OPTIONS\n.HP\n.B \"--option ordinary unrelated prose\"\n.IP\nBodyWord explains the paragraph.\n.SH NEXT\nAFTER_BOUNDARY\n",
+      "sourceSha256": "b3a745f5ea8179d01cbd949cd0cdc676a21ff5f56755caf75718de211928056a",
+      "ownerNames": [],
+      "nativeRows": [
+        "--option ordinary unrelated prose",
+        "",
+        "       BodyWord explains the paragraph."
+      ]
+    },
+    {
+      "id": "paragraph-head",
+      "source": ".TH T 1 \"October 3, 2026\"\n.SH OPTIONS\n.PP\n\\fB\\-n\\fR, \\fB\\-\\-quiet\\fR, \\fB\\-\\-silent\\fR\n.IP\nBodyWord follows a plain paragraph.\n.SH NEXT\nAFTER_BOUNDARY\n",
+      "sourceSha256": "3fbf946824a70e43e818139bc405a910a6350ab8af4f84c4bafb18a8d3f37477",
+      "ownerNames": [],
+      "nativeRows": [
+        "-n, --quiet, --silent",
+        "",
+        "       BodyWord follows a plain paragraph."
+      ]
+    },
+    {
+      "id": "table-only-body",
+      "source": ".TH T 1 \"October 3, 2026\"\n.SH OPTIONS\n.HP\n\\fB\\-n\\fR, \\fB\\-\\-quiet\\fR, \\fB\\-\\-silent\\fR\n.IP\n.TS\nl.\nTABLE_WORD\n.TE\n.SH NEXT\nAFTER_BOUNDARY\n",
+      "sourceSha256": "54c085a9e857d607ed52b59f238cf0a4f9a91930dfa06e714ebf096379e14f7f",
+      "ownerNames": [],
+      "nativeRows": [
+        "-n, --quiet, --silent",
+        "",
+        "       TABLE_WORD"
+      ]
+    },
+    {
+      "id": "removed-empty-paragraph",
+      "source": ".TH T 1 \"October 3, 2026\"\n.SH OPTIONS\n.HP\n\\fB\\-n\\fR, \\fB\\-\\-quiet\\fR, \\fB\\-\\-silent\\fR\n.PP\n.IP\nBodyWord follows a separate paragraph.\n.SH NEXT\nAFTER_BOUNDARY\n",
+      "sourceSha256": "61f7c94e6fab16d33defe3d9ff1fa07fc809c9c79226d78b3dcd87656119d249",
+      "ownerNames": [],
+      "nativeRows": [
+        "-n, --quiet, --silent",
+        "",
+        "       BodyWord follows a separate paragraph."
+      ]
+    },
+    {
+      "id": "no-description",
+      "source": ".TH T 1 \"October 3, 2026\"\n.SH OPTIONS\n.HP\n\\fB\\-n\\fR, \\fB\\-\\-quiet\\fR, \\fB\\-\\-silent\\fR\n.SH NEXT\nAFTER_BOUNDARY\n",
+      "sourceSha256": "623108768a7b90a08baa30fb96708ce7b77ca8e5808114896f371f8f82401d64",
+      "ownerNames": [],
+      "nativeRows": [
+        "-n, --quiet, --silent"
+      ]
+    },
+    {
+      "id": "no-fill-head",
+      "source": ".TH T 1 \"October 3, 2026\"\n.SH OPTIONS\n.nf\n.HP\n.B --one\n.IP\nBodyWord\n.fi\n.SH NEXT\nAFTER_BOUNDARY\n",
+      "sourceSha256": "caf729254fd114ad64e1745093c4c62e914023f1f7afd965c1a3882f8ab57040",
+      "ownerNames": [
+        [
+          "--one"
+        ]
+      ],
+      "nativeRows": [
+        "--one",
+        "",
+        "       BodyWord"
+      ]
+    },
+    {
+      "id": "description-continuation",
+      "source": ".TH T 1 \"October 3, 2026\"\n.SH OPTIONS\n.HP\n\\fB\\-n\\fR, \\fB\\-\\-quiet\\fR, \\fB\\-\\-silent\\fR\n.IP\nBodyWord explains the options.\n.IP\nMORE_BODY\n.SH NEXT\nAFTER_BOUNDARY\n",
+      "sourceSha256": "445fe2f4a809e28caf5c04b46523f9f2ad1572ac33b281ab09219a155122e38c",
+      "ownerNames": [
+        [
+          "-n",
+          "--quiet",
+          "--silent"
+        ]
+      ],
+      "nativeRows": [
+        "-n, --quiet, --silent",
+        "",
+        "       BodyWord explains the options.",
+        "",
+        "       MORE_BODY"
+      ]
+    }
+  ]
+}

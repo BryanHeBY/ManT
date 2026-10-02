@@ -8,11 +8,8 @@ use ratatui::{
 use serde_json::Value;
 
 fn cases() -> Vec<Value> {
-    let matrix: Value = serde_json::from_str(include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../mant-engine/tests/roff_lowering/empty_word_columns/cases.json"
-    )))
-    .unwrap();
+    let matrix: Value =
+        serde_json::from_str(include_str!("empty_word_columns/cases.json")).unwrap();
     assert_eq!(matrix["header"]["count"], 472);
     assert_eq!(matrix["header"]["asserted_row_count"], 460);
     matrix["cases"].as_array().unwrap().clone()

@@ -14,10 +14,23 @@ pub(in crate::definitions) fn is_inferred_head(
     inlines: &[Inline],
     context: DefinitionContext,
 ) -> bool {
+    let options = super::scan::option_head(inlines, &[]);
+    inferred_head_with_options(inlines, context, &options)
+}
+
+fn inferred_head_with_options(
+    inlines: &[Inline],
+    context: DefinitionContext,
+    options: &super::scan::OptionHead,
+) -> bool {
+    if options.inferred_complete {
+        return true;
+    }
     // Candidate syntax precedes final role: a complete flag declaration does
     // not stop being a candidate under a configuration/value heading.
     let groups = forms::declaration_groups(inlines);
-    if !groups.is_empty()
+    if options.names.is_empty()
+        && !groups.is_empty()
         && groups.iter().enumerate().all(|(index, group)| {
             is_option_head(group)
                 || (index > 0 && index + 1 == groups.len() && plain_text(group).trim() == "...")
@@ -55,8 +68,64 @@ pub(in crate::definitions) fn is_inferred_head(
     }
 }
 
+/// Recognize an inferred owner without cloning its original inline tree.
+/// This stronger admission is shared with native HP/headless-IP recovery;
+/// explicit definition tags continue to use their own author-owned boundary.
+pub(in crate::definitions) fn recognize_inferred_head(
+    inlines: &[Inline],
+    context: DefinitionContext,
+) -> Option<super::InferredIdentity> {
+    let options = super::scan::option_head(inlines, &[]);
+    if !inferred_head_with_options(inlines, context, &options) {
+        return None;
+    }
+    let text = plain_text(inlines);
+    let (kind, case) = if options.inferred_complete {
+        (
+            mant_ir::EntryKind::Parameter {
+                parameter_kind: mant_ir::ParameterKind::Option,
+            },
+            mant_ir::NameCase::Sensitive,
+        )
+    } else {
+        super::decision::select_kind(text.trim(), context, None)
+    };
+    let occurrences = match kind {
+        mant_ir::EntryKind::Parameter {
+            parameter_kind: mant_ir::ParameterKind::Option,
+        } => options.names,
+        mant_ir::EntryKind::EnvironmentVariable => named::environment_occurrences(&text)?,
+        mant_ir::EntryKind::ConfigurationKey => {
+            named::named_occurrences(&text, named::is_configuration_key)?
+        }
+        mant_ir::EntryKind::Variable => named::named_occurrences(&text, named::is_variable_term)?,
+        mant_ir::EntryKind::Command => {
+            let name = commands::inferred_command_name(inlines)
+                .or_else(|| commands::command_name_from_authored_form(&text).map(str::to_owned))?;
+            let start = text.find(&name)?;
+            vec![crate::definitions::RecognizedName::contiguous(&name, start)]
+        }
+        _ => return None,
+    };
+    let mut names = Vec::new();
+    for found in &occurrences {
+        if !names.contains(&found.name) {
+            names.push(found.name.clone());
+        }
+    }
+    (!names.is_empty()).then_some(super::InferredIdentity {
+        kind,
+        case,
+        names,
+        occurrences: vec![occurrences],
+        limit: None,
+    })
+}
+
 fn is_command_head(inlines: &[Inline]) -> bool {
-    let Some(name) = commands::leading_styled_command_name(inlines) else {
+    let manual_name = commands::manual_name(inlines);
+    let matched_manual = manual_name.is_some();
+    let Some(name) = manual_name.or_else(|| commands::leading_styled_command_name(inlines)) else {
         return false;
     };
     let mut literal = String::new();
@@ -64,17 +133,21 @@ fn is_command_head(inlines: &[Inline]) -> bool {
     let Some(tail) = literal.trim_start().strip_prefix(&name) else {
         return false;
     };
-    arguments(tail.split_whitespace())
+    // Bold alone does not establish a command owner in an ordinary paragraph.
+    // A real syntax tail or a typed manual reference supplies independent
+    // evidence; explicit It/IP/TP tags need no such inferred-owner proof.
+    (!tail.trim().is_empty() || matched_manual)
+        && arguments(tail.split_whitespace().filter(|token| {
+            // A command's literal invocation may contain an actual option
+            // token. Option-declaration arguments use the stricter grammar
+            // below: a dash-shaped parameter there is never another alias.
+            options::option_prefix(token) != Some(*token)
+        }))
 }
 
 fn is_option_head(inlines: &[Inline]) -> bool {
     let mut literal = String::new();
     append_syntax(inlines, &mut literal);
-    if let Some([_, (name, start)]) = forms::paired_option_tokens(inlines) {
-        return literal
-            .get(start + name.len()..)
-            .is_some_and(|tail| arguments(tail.split_whitespace()));
-    }
     let mut tokens = literal.split_whitespace();
     let Some(first) = tokens.next() else {
         return false;
@@ -205,5 +278,132 @@ fn append_syntax(inlines: &[Inline], output: &mut String) {
             Inline::LineBreak { .. } => output.push('\n'),
             Inline::Anchor { .. } => {}
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn manual(children: Vec<Inline>) -> Inline {
+        Inline::Link {
+            children,
+            target: mant_ir::LinkTarget::Manual {
+                name: "tool".into(),
+                manual_section: Some("1".into()),
+            },
+            title: None,
+        }
+    }
+
+    #[test]
+    fn literal_command_invocations_need_syntax_but_bare_prose_does_not() {
+        // Exact .B "launch -p [FILE]" / .RS ran pristine before this
+        // assertion. pre_B selects a font; it does not define a command.
+        // The complete source-neutral invocation supplies the extra proof.
+        for (value, expected) in [
+            ("launch -p [FILE]", true),
+            ("launch --verbose FILE", true),
+            ("launch -p [FILE", false),
+            ("Note", false),
+            ("Note ordinary prose sentence", false),
+        ] {
+            let nodes = [Inline::Strong {
+                children: vec![Inline::Text {
+                    value: value.into(),
+                }],
+            }];
+            assert_eq!(
+                is_inferred_head(&nodes, DefinitionContext::Commands),
+                expected,
+                "{value}"
+            );
+            assert_eq!(
+                recognize_inferred_head(&nodes, DefinitionContext::Commands).is_some(),
+                expected,
+                "{value}"
+            );
+        }
+    }
+
+    #[test]
+    fn weak_manual_labels_need_matching_name_or_independent_invocation_syntax() {
+        // Authored IR labels are independent of their destinations. A typed
+        // target cannot turn an arbitrary styled label into a bare command.
+        // This is a source-neutral naming rule, not native formatter geometry.
+        for value in ["Note", "tool(2)", "tool(1)"] {
+            for label in [
+                Inline::Code {
+                    value: value.into(),
+                },
+                Inline::Strong {
+                    children: vec![Inline::Text {
+                        value: value.into(),
+                    }],
+                },
+            ] {
+                let nodes = [manual(vec![label])];
+                let expected = value == "tool(1)";
+                assert_eq!(
+                    is_inferred_head(&nodes, DefinitionContext::Commands),
+                    expected,
+                    "{value}"
+                );
+                assert_eq!(
+                    recognize_inferred_head(&nodes, DefinitionContext::Commands).is_some(),
+                    expected,
+                    "{value}"
+                );
+            }
+        }
+        for name in [
+            Inline::Code {
+                value: "launch".into(),
+            },
+            Inline::Strong {
+                children: vec![Inline::Text {
+                    value: "launch".into(),
+                }],
+            },
+        ] {
+            let nodes = [manual(vec![
+                name,
+                Inline::Text { value: " ".into() },
+                Inline::Emphasis {
+                    children: vec![Inline::Text {
+                        value: "FILE".into(),
+                    }],
+                },
+            ])];
+            assert!(is_inferred_head(&nodes, DefinitionContext::Commands));
+            assert!(recognize_inferred_head(&nodes, DefinitionContext::Commands).is_some());
+        }
+        let matching = manual(vec![Inline::Text {
+            value: "tool(1)".into(),
+        }]);
+        let prose = [
+            matching.clone(),
+            Inline::Text {
+                value: " ordinary prose sentence".into(),
+            },
+        ];
+        assert!(!is_inferred_head(&prose, DefinitionContext::Commands));
+        assert!(recognize_inferred_head(&prose, DefinitionContext::Commands).is_none());
+        let invocation = [
+            matching,
+            Inline::Text { value: " ".into() },
+            Inline::Emphasis {
+                children: vec![Inline::Text {
+                    value: "FILE".into(),
+                }],
+            },
+        ];
+        assert!(is_inferred_head(&invocation, DefinitionContext::Commands));
+        assert!(is_inferred_head(
+            &[manual(vec![Inline::Text {
+                value: "tool(1)".into()
+            }])],
+            DefinitionContext::Commands
+        ));
     }
 }

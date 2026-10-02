@@ -241,6 +241,10 @@ fn record_definition_item(
         .borrow_mut()
         .groups
         .record(item, std::ptr::from_ref(node) as usize);
+    context
+        .native_heads
+        .borrow_mut()
+        .record_operands(item, head.as_ptr() as usize);
     if context.macro_set == libmandoc_rs::MacroSet::Mdoc
         && let Some(role) = super::evidence::leading_role(head)
     {

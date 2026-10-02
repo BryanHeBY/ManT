@@ -12,7 +12,9 @@ mod forms;
 mod head;
 mod named;
 mod options;
+mod scan;
 pub(super) use head::is_inferred_head;
+pub(super) use head::recognize_inferred_head;
 pub(crate) use named::{environment_variable_alias, environment_variable_body};
 use named::{is_configuration_key, is_variable_term};
 pub(super) use named::{is_ordinal_marker, is_value_name};
@@ -21,18 +23,21 @@ pub(super) use options::option_names;
 pub(crate) use options::{
     option_names_from_terms, option_occurrences_from_terms, option_prefix, slash_option_forms,
 };
+pub(super) use scan::DeclarationLimit;
 
 pub(super) struct InferredIdentity {
     pub(super) kind: EntryKind,
     pub(super) case: NameCase,
     pub(super) names: Vec<String>,
     pub(super) occurrences: Vec<Vec<RecognizedName>>,
+    pub(super) limit: Option<DeclarationLimit>,
 }
 
 pub(super) fn infer_identity(
     item: &DefinitionItem,
     context: DefinitionContext,
     hint: Option<super::NativeHeadRole>,
+    operands: Option<&[Vec<super::NativeOperand>]>,
 ) -> InferredIdentity {
     let first = item
         .terms
@@ -40,6 +45,7 @@ pub(super) fn infer_identity(
         .map_or_else(String::new, |term| plain_text(term));
     let trimmed = first.trim();
     let (mut kind, mut case) = decision::select_kind(trimmed, context, hint);
+    let mut limit = None;
     let mut occurrences = if hint == Some(super::NativeHeadRole::LiteralTerm) {
         item.terms
             .iter()
@@ -52,7 +58,19 @@ pub(super) fn infer_identity(
             })
             .collect()
     } else if hint == Some(super::NativeHeadRole::Option) {
-        options::native_option_occurrences(&item.terms)
+        let found = options::native_option_occurrences(&item.terms, operands);
+        // Only a complete accepted native Fl receipt establishes known
+        // selector loss. A weak candidate or constructed owner role alone
+        // cannot turn an unsupported grammar into a coverage finding.
+        if operands.is_some_and(|terms| {
+            terms
+                .iter()
+                .flatten()
+                .any(|operand| operand.role == super::NativeOperandRole::ExplicitOption)
+        }) {
+            limit = found.limit;
+        }
+        found.occurrences
     } else if hint == Some(super::NativeHeadRole::Environment) {
         item.terms
             .iter()
@@ -63,7 +81,7 @@ pub(super) fn infer_identity(
             })
             .collect()
     } else {
-        name_occurrences(item, kind)
+        name_occurrences_with_operands(item, kind, operands)
     };
     if hint == Some(super::NativeHeadRole::Literal) && occurrences.iter().all(Vec::is_empty) {
         occurrences = name_occurrences(item, EntryKind::Command);
@@ -98,6 +116,26 @@ pub(super) fn infer_identity(
         kind = EntryKind::Term;
         case = NameCase::Sensitive;
     }
+    let names = ordered_names(&occurrences, kind);
+    let (kind, case) = if names.is_empty()
+        && !matches!(
+            hint,
+            Some(super::NativeHeadRole::Option | super::NativeHeadRole::Environment)
+        ) {
+        (EntryKind::Term, NameCase::Sensitive)
+    } else {
+        (kind, case)
+    };
+    InferredIdentity {
+        kind,
+        case,
+        names,
+        occurrences,
+        limit,
+    }
+}
+
+fn ordered_names(occurrences: &[Vec<RecognizedName>], kind: EntryKind) -> Vec<String> {
     let mut names = Vec::new();
     let all = || occurrences.iter().flatten();
     // Preserve the established native order: ordinary dash options first,
@@ -114,21 +152,7 @@ pub(super) fn infer_identity(
             names.push(found.name.clone());
         }
     }
-    let (kind, case) = if names.is_empty()
-        && !matches!(
-            hint,
-            Some(super::NativeHeadRole::Option | super::NativeHeadRole::Environment)
-        ) {
-        (EntryKind::Term, NameCase::Sensitive)
-    } else {
-        (kind, case)
-    };
-    InferredIdentity {
-        kind,
-        case,
-        names,
-        occurrences,
-    }
+    names
 }
 
 /// The same role-specific grammars produce both names and their lexical
@@ -138,9 +162,17 @@ pub(super) fn name_occurrences(
     item: &DefinitionItem,
     kind: EntryKind,
 ) -> Vec<Vec<super::RecognizedName>> {
+    name_occurrences_with_operands(item, kind, None)
+}
+
+fn name_occurrences_with_operands(
+    item: &DefinitionItem,
+    kind: EntryKind,
+    operands: Option<&[Vec<super::NativeOperand>]>,
+) -> Vec<Vec<super::RecognizedName>> {
     if let EntryKind::Parameter { parameter_kind } = kind {
         if parameter_kind == ParameterKind::Option {
-            return options::parameter_occurrences(&item.terms);
+            return options::parameter_occurrences(&item.terms, operands);
         }
         // Marker/operand inference requires an exact complete first term,
         // not a prefix of a longer invocation. Repeated matching terms may
@@ -200,11 +232,9 @@ pub(super) fn name_occurrences(
                             let text = plain_text(&group);
                             let start = offset;
                             offset += text.len() + 1;
-                            let name =
-                                commands::leading_styled_command_name(&group).or_else(|| {
-                                    commands::command_name_from_authored_form(&text)
-                                        .map(str::to_owned)
-                                })?;
+                            let name = commands::inferred_command_name(&group).or_else(|| {
+                                commands::command_name_from_authored_form(&text).map(str::to_owned)
+                            })?;
                             let start =
                                 start + text.find(&name).expect("grammar returns the command head");
                             Some(super::RecognizedName::contiguous(&name, start))

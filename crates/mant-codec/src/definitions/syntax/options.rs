@@ -22,26 +22,54 @@ pub(crate) fn option_names_from_terms(terms: &[Vec<Inline>]) -> Vec<String> {
 }
 
 pub(crate) fn option_occurrences_from_terms(terms: &[Vec<Inline>]) -> Vec<Vec<RecognizedName>> {
-    terms
-        .iter()
-        .map(|term| {
-            forms::AuthoredForm::new(term)
-                .option_candidates()
-                .filter_map(|candidate| {
-                    let (token, start) = candidate.invocation_token()?;
-                    Some(RecognizedName::contiguous(option_prefix(&token)?, start))
-                })
-                .collect()
-        })
-        .collect()
+    option_occurrences_with_operands(terms, None)
+}
+
+fn option_occurrences_with_operands(
+    terms: &[Vec<Inline>],
+    operands: Option<&[Vec<crate::definitions::NativeOperand>]>,
+) -> Vec<Vec<RecognizedName>> {
+    scan_option_occurrences(terms, operands).occurrences
+}
+
+pub(super) struct OptionOccurrences {
+    pub(super) occurrences: Vec<Vec<RecognizedName>>,
+    pub(super) limit: Option<super::DeclarationLimit>,
+}
+
+fn scan_option_occurrences(
+    terms: &[Vec<Inline>],
+    operands: Option<&[Vec<crate::definitions::NativeOperand>]>,
+) -> OptionOccurrences {
+    let mut result = OptionOccurrences {
+        occurrences: Vec::with_capacity(terms.len()),
+        limit: None,
+    };
+    for (index, term) in terms.iter().enumerate() {
+        let scanned = super::scan::option_head(
+            term,
+            operands
+                .and_then(|terms| terms.get(index))
+                .map_or(&[], Vec::as_slice),
+        );
+        result.limit = result.limit.or(scanned.limit);
+        result.occurrences.push(scanned.names);
+    }
+    result
 }
 
 /// A validated native Fl head proves punctuation is invocation spelling.
 /// Read it before generic separator grouping can treat the comma in `-,` as
 /// alias punctuation; styled arguments still stop the literal prefix.
-pub(super) fn native_option_occurrences(terms: &[Vec<Inline>]) -> Vec<Vec<RecognizedName>> {
-    let mut result = option_occurrences_from_terms(terms);
-    for (term, names) in terms.iter().zip(&mut result) {
+pub(super) fn native_option_occurrences(
+    terms: &[Vec<Inline>],
+    operands: Option<&[Vec<crate::definitions::NativeOperand>]>,
+) -> OptionOccurrences {
+    let mut result = scan_option_occurrences(terms, operands);
+    if result.limit.is_some() {
+        return result;
+    }
+    for (term, names) in terms.iter().zip(&mut result.occurrences) {
         let prefix = forms::literal_prefix(term);
         let Some(token) = prefix.split_whitespace().next() else {
             continue;
@@ -65,8 +93,9 @@ pub(super) fn native_option_occurrences(terms: &[Vec<Inline>]) -> Vec<Vec<Recogn
 
 pub(in crate::definitions) fn parameter_occurrences(
     terms: &[Vec<Inline>],
+    operands: Option<&[Vec<crate::definitions::NativeOperand>]>,
 ) -> Vec<Vec<RecognizedName>> {
-    let mut found = option_occurrences_from_terms(terms);
+    let mut found = option_occurrences_with_operands(terms, operands);
     for (term, names) in terms.iter().zip(&mut found) {
         let text = plain_text(term);
         let Some(token) = text.split_whitespace().next() else {

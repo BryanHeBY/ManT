@@ -413,11 +413,37 @@ An mdoc definition headed by `Fl` or `Ev` retains that option or environment-var
 
 Complete named heads can retain bounded trailing parenthesized annotations or angle-bracket placeholders without adding those suffixes to names: `AUTO_CD (-J) <D>`, `NAME <TLS backend>`, and `update (-u)` preserve their full forms. Nested parenthesized defaults and literal key bindings such as `C-[` remain intact. A single assignment binds its left-hand name, not its value; assignment spelling alone does not prove an Option or ConfigurationKey role (`if=FILE` can remain a named Term). Configuration contexts support exact dotted keys. Templates such as `[url-protocol]_PROXY`, malformed groups and prose suffixes are not expanded into guessed names, and neither case variants nor annotations create alias relationships.
 
-Complete command, configuration-key and variable heads can use the same paragraph-plus-indented-description shape as options. Command/variable recovery requires a literal-styled head in a matching context; configuration/variable contexts also accept complete unstyled dotted keys. A mixed-case assignment label such as `WorkingDirectory=` can establish a configuration head under a topical section, including when styled in italics. Spacing-only runs between a validated head and its deeper body are preserved, not treated as new owners. Recovery stops at outer content, another same-level head, a table boundary or the end of the container. A complete local dash declaration takes precedence over inherited value/configuration hints without changing its place in the document tree.
+Complete command, configuration-key and variable heads can use the same paragraph-plus-indented-description shape as options. Command/variable recovery requires a complete head in a matching context; an inferred command paragraph additionally needs explicit invocation syntax or a typed manual reference whose visible label names the command. Bold prose alone does not establish a command owner. Explicit definition labels can still name a bare command. Variable recovery requires literal styling; configuration/variable contexts also accept complete unstyled dotted keys. A mixed-case assignment label such as `WorkingDirectory=` can establish a configuration head under a topical section, including when styled in italics. Spacing-only runs between a validated head and its deeper body are preserved, not treated as new owners. Recovery stops at outer content, another same-level head, a table boundary or the end of the container. A complete local dash declaration takes precedence over inherited value/configuration hints without changing its place in the document tree.
 
 Adjacent literal native runs may form one multiword command name, such as `Nm zfs Cm get`; the first argument ends that name. Native literal heads with explicit option-group syntax can establish a command under a topical heading; other ambiguous `Ic`/`Cm` heads remain named Terms. Parameter alternations and later argument fragments never create extra names, and multiple names do not imply aliases.
 
-A complete short/long pair such as `-a --ascii` or `-a or --ascii` exposes both names without implying an alias relationship. This is a bounded declaration convention, not general argv parsing: an arbitrary third literal token or later dash-prefixed argument does not restart name recognition, and parameter paths/alternatives remain part of their original form.
+A complete option group can expose up to 256 explicitly spelled names, including
+`-c --stdout --to-stdout`, `-a or --ascii`, and an authored numeric enumeration
+such as `(-0, -1, -9)`. Repeated spellings retain their original occurrences;
+multiple names do not imply aliases. A pattern such as `-#` never expands into
+invented digit options. Exhausted or uncertain groups keep their readable form
+without inventing selector names.
+When a complete native `Fl` receipt proves that this limit omitted declared
+selectors, `manual.semantic-entry.name-limit` records semantic coverage loss:
+`semanticsComplete` is false, while the retained original form and description
+keep `contentComplete` true. Unsupported weak prose or opaque parameter syntax
+alone does not establish that known loss.
+
+Recognition follows quote, bracket and parameter state across styles and links.
+A negative-number argument, a following uppercase metavariable such as `-NUM`,
+a quoted value, bracketed value or unstyled parameter cannot promote its internal `--word` fragments into names. A separately executed `Fl NUM` retains its
+explicit `-NUM` spelling: both its generated dash and child word must have
+matching accepted-byte evidence. A leading `Fl n` alone cannot authorize later
+`No -NUM` or `Ar -NUM` as another declaration. A local italic font escape
+inside that actual `Fl` does not change its proved option identity. Effective combined
+bold and italic styling remains eligible at a literal name; pure italic
+parameters do not. Entering a parameter remains meaningful through an in-word
+font change. Native man alternating macros additionally retain the actual
+`term_word()` operand identity through accepted output receipts, so a comma at
+the end of one argument can introduce a new independently authored literal
+operand without admitting a temporary bold span inside that argument. This
+proof is private and operation-local; public IR contains only accepted text,
+styles and exact name bindings.
 
 Inherited section/parent categories are defaults, not accepted-value guarantees. Local option spellings and proved `Fl`/`Ev` roles take precedence. A setting assignment inside an option description can be a ConfigurationKey (`color=[yes|no]`); a mixed-case setting such as `Environment=` is not automatically an environment variable because its heading contains “Environment”. Uppercase underscore names nested under an option remain named Terms without separate environment evidence. Negative numbers and regex forms are not promoted by the local flag rule. These are bounded, best-effort category rules, not runtime validation or exhaustive value-domain declarations.
 
@@ -433,7 +459,7 @@ The required mdoc prologue and structural macros are normalized as follows:
 | `Sx` | Resolved same-document section link, including one unique parenthetical heading qualifier, or visible text when unresolved |
 | `Xr` | Typed link to a manual name and section |
 | `Lk`, `Mt` | External URI or email link; an unlabeled target remains visible and any trailing sentence punctuation stays outside the link |
-| `Bx` | Native reading retains the authored lifecycle operand plus `BSD`; portable Markdown expands lifecycle forms such as `-alpha`, `-beta`, and `-devel` to descriptive text. Version forms retain canonical `versionBSD` names with an optional `-release` suffix |
+| `Bx` | Accepted native children retain the authored lifecycle operand plus `BSD`; version forms retain canonical `versionBSD` names with an optional `-release` suffix |
 
 Validated libmandoc tags on man and mdoc definitions are retained for page-local navigation. Every target receives a normalized internal `NodeId`, allocated uniquely against section IDs and earlier targets before IR validation. Explicit mdoc `Tg` destinations additionally retain their exact source spelling as a fragment alias at the same location, so values such as `Mixed.Target` and `--option` remain valid external deep links without violating the internal ID grammar. An argument-less `Tg` derives its destination from the following source macro; it never inherits an earlier parser tag. Automatic wrapper fallbacks likewise use source tokens rather than rendered text, so spacing and decoration cannot change an identity. When libmandoc moves a target onto a paragraph, display, list, item, function block, or section wrapper, ManT attaches it to the corresponding addressable lowered descendant (or to the section itself) without adding visible text. Target-only and empty mdoc list items retain zero-width anchors for bullet, dash, ordered, plain, column, and definition layouts rather than assigning them to a neighbouring item. Root content and section content pass through the same local-link and traditional-manual-reference resolution.
 
@@ -441,7 +467,7 @@ Authored target recovery applies only when native validation left no surviving o
 
 A table row containing one unspanned text cell of anchor-only paragraphs is a navigation carrier. It adds no physical row in text, Markdown or TUI output. TUI navigation waits for the next physical output; Markdown preserves its anchor markers outside table fences. Empty text, hard breaks, literal rows and completed vertical rows retain their separate output facts. Multi-cell and spanning rows preserve their physical topology even when they contain no visible glyphs.
 
-After source lowering, ManT assigns semantic identities only inside a reliable structural context. Definition lists under environment sections recognize a complete term in bare `NAME`, shell `$NAME`, PowerShell `$Env:NAME` and `${Env:NAME}`, Windows `%NAME%`, or one assignment `NAME=value` form through the same grammar used by explicit Markdown declarations. The assignment value is not part of the selector. Named variables and similar entries may also carry one explicitly delimited trailing parenthetical annotation, such as Readline's `(On)` default notation; that annotation remains in the authored form but not the selector. A generic technical term may retain complete `::` qualification such as `Class::ISA`, strip a bounded optional suffix such as `istrip[=<bool>]`, or keep a lower-case callable head before all-uppercase placeholders such as `getservbyname NAME,PROTO`. A single colon, URI-like spelling, array subscript, mixed-case prose, or arbitrary trailing words remain unclassified. ManT never takes only the first word of a term, and a composite heading such as `ENVIRONMENT OPTIONS` selects the more specific option grammar. Hanging paragraph plus relative-indent layouts are reconstructed as definitions only in that environment context. Ordinary prose and unrelated uppercase terms are never scanned or promoted. A definition-shaped term that fails the selected grammar remains visible as an unclassified term and emits `manual.semantic-entry.unclassified-definition`; the outline then reports `semanticsComplete: false` rather than claiming a complete semantic inventory.
+After source lowering, ManT assigns semantic identities only inside a reliable structural context. Definition lists under environment sections recognize a complete term in bare `NAME`, shell `$NAME`, PowerShell `$Env:NAME` and `${Env:NAME}`, Windows `%NAME%`, or one assignment `NAME=value` form through the same grammar used by explicit Markdown declarations. The assignment value is not part of the selector. Named variables and similar entries may also carry one explicitly delimited trailing parenthetical annotation, such as Readline's `(On)` default notation; that annotation remains in the authored form but not the selector. A generic technical term may retain complete `::` qualification such as `Class::ISA`, strip a bounded optional suffix such as `istrip[=<bool>]`, or keep a lower-case callable head before all-uppercase placeholders such as `getservbyname NAME,PROTO`. A single colon, URI-like spelling, array subscript, mixed-case prose, or arbitrary trailing words remain unclassified. ManT never takes only the first word of a term, and a composite heading such as `ENVIRONMENT OPTIONS` selects the more specific option grammar. Generic paragraph-plus-relative-indent recovery uses a complete declaration check in its matching semantic context. Ordinary prose and unrelated uppercase terms are never scanned or promoted. A definition-shaped term that fails the selected grammar remains visible as an unclassified term and emits `manual.semantic-entry.unclassified-definition`; the outline then reports `semanticsComplete: false` rather than claiming a complete semantic inventory.
 
 Command contexts accept `COMMAND`/`COMMANDS`, `SUBCOMMAND`/`SUBCOMMANDS`, and
 the explicit `BUILTIN COMMAND`/`BUILTIN COMMANDS` phrase as complete normalized
@@ -457,6 +483,21 @@ reset, font changes nor suppressed line breaks prove shared ownership. An
 explicit `TQ` adds a tag only to the immediately preceding empty definition;
 several such tags retain their source order under one owner. Multiple names or
 forms do not imply an explicit alias relationship.
+
+An executed man `HP` can provide a semantic head for its directly following
+headless `IP` when the complete declaration passes inferred-head admission and
+both actual node boundaries share the same execution generation. The private
+witness binds real node identities, complete source/styled content and original
+layout. Equal indentation or an empty `IP` label alone does not prove ownership;
+ordinary prose, a labeled successor, an intervening paragraph/request/structure
+or absent direct description declines recovery. The existing plain-list owner
+keeps the original `HP` block as `Block0`, with exact name byte ranges, and the
+proved `IP` carrier as the description. Fonts, paragraph distance, hanging
+continuation and body origins stay on their original blocks. Further unproved
+headless items remain readable without extending this semantic proof.
+Portable Markdown uses the existing plain-list `- ` export; its readback
+preserves readable content, without promising native HP geometry or serialized
+entry facts.
 
 Declaration adjacency uses executed native flow generations, retained before
 validation removes empty paragraphs. Active conditionals and invoked macros

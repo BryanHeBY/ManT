@@ -50,13 +50,20 @@ pub(super) fn lower_man_font_scope(
             if index > 0 {
                 output.tighten_next_boundary();
             }
-            output.with_direct_word_operands(|output| {
-                super::append_inline_node_with_next(
-                    output,
-                    child,
-                    node.children.get(index + 1),
-                    default_name,
-                );
+            let role = if (if index % 2 == 0 { first } else { second }) == Font::Emphasis {
+                crate::definitions::NativeOperandRole::Argument
+            } else {
+                crate::definitions::NativeOperandRole::Literal
+            };
+            output.with_native_operand_role(role, |output| {
+                output.with_direct_word_operands(|output| {
+                    super::append_inline_node_with_next(
+                        output,
+                        child,
+                        node.children.get(index + 1),
+                        default_name,
+                    );
+                });
             });
         }
         output.font.select(Font::Regular);

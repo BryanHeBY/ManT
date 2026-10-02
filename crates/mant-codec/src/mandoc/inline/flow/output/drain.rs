@@ -400,7 +400,13 @@ impl InlineBuilder {
         }
         let mut nodes = std::mem::take(&mut self.nodes);
 
-        finalize_inline_output(&mut nodes);
+        if let Some(capture) = &self.head_operand_capture {
+            super::projection::prepare_inline_output(&mut nodes);
+            capture.borrow_mut().observe_accepted_output(&nodes);
+            super::projection::strip_native_projection_markers(&mut nodes);
+        } else {
+            finalize_inline_output(&mut nodes);
+        }
         nodes
     }
 }

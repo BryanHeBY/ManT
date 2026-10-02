@@ -458,6 +458,7 @@ mod definition_relations;
 mod empty_word_columns;
 mod entries;
 mod grapheme_geometry;
+mod hanging_owners;
 mod headings;
 mod item_spacing;
 mod layout;

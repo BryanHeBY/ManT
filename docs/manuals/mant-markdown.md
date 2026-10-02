@@ -201,6 +201,14 @@ This exposes documented names `-o` and `--output`, and two forms:
 evidence for the same content owner; commas do not declare alias equivalence.
 Use explicit alias metadata for that relationship, and a returned path or ID
 for strict content selection.
+Option selectors use the same bounded declaration grammar as native heads.
+Complete literal name groups retain each explicit spelling; arguments containing
+negative numbers, following uppercase metavariables such as `-NUM`, quoted
+strings or bracketed values keep their internal
+option-shaped fragments inside the form. For example, `` `--number -10,--fake,20` ``
+selects only `--number`, and `` `--pattern "one, --fake,two"` `` selects only
+`--pattern`. Styled wrappers and links preserve these lexical boundaries.
+
 The pipe must be outside code spans and links, with a term on both sides;
 empty forms reject that item's annotation without changing its content or valid siblings. A pipe inside a
 code span remains part of that authored form and follows its role's name grammar.

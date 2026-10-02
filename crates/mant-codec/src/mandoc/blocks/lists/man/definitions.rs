@@ -42,6 +42,15 @@ pub(in crate::mandoc::blocks) fn lower_man_definition(
         spacing_enabled,
         formatter,
     );
+    if node.macro_name.as_deref() == Some("IP")
+        && first_part_children(node, NodeKind::Head).is_empty()
+    {
+        context
+            .native_heads
+            .borrow_mut()
+            .hanging
+            .body(&mut item, std::ptr::from_ref(node) as usize);
+    }
     // print_man_node() finishes the BLOCK after HEAD/BODY execution and
     // post_IP/post_TP; its Roman replacement updates fontlast as well.
     formatter.font.man_text_boundary();

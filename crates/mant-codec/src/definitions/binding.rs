@@ -16,9 +16,25 @@ pub(super) fn native_name_bindings(
     names: &[String],
     recognized: &[Vec<super::RecognizedName>],
 ) -> Vec<EntryNameBinding> {
-    let terms = item
-        .terms
-        .iter()
+    name_bindings(item.terms.iter().map(Vec::as_slice), names, recognized)
+}
+
+/// Map an already recognized paragraph head without copying it into a
+/// temporary definition. The owner adapter translates Term(0) to Block(0).
+pub(super) fn native_name_bindings_for_head(
+    inlines: &[Inline],
+    names: &[String],
+    recognized: &[Vec<super::RecognizedName>],
+) -> Vec<EntryNameBinding> {
+    name_bindings(std::iter::once(inlines), names, recognized)
+}
+
+fn name_bindings<'a>(
+    terms: impl Iterator<Item = &'a [Inline]>,
+    names: &[String],
+    recognized: &[Vec<super::RecognizedName>],
+) -> Vec<EntryNameBinding> {
+    let terms = terms
         .map(|term| {
             let mut text = String::new();
             let mut leaves = Vec::new();

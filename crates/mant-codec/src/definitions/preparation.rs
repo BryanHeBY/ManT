@@ -16,6 +16,7 @@ use super::{
 pub(super) struct PreparedDefinitions {
     pub(super) preferred_counts: HashMap<String, usize>,
     pub(super) plans: Vec<PreparedDefinition>,
+    pub(super) diagnostics: Vec<mant_ir::Diagnostic>,
 }
 
 /// Only declaration heads are retained for validation, not descriptions or a
@@ -28,7 +29,7 @@ pub(super) struct PreparedDefinition {
 
 impl PreparedDefinition {
     fn matches(&self, item: &DefinitionItem) -> bool {
-        self.source == item.source && self.head == head_content(&item.terms)
+        self.source == item.source && super::evidence::head_matches(&item.terms, &self.head)
     }
 
     pub(super) fn for_item(self, item: &DefinitionItem) -> IdentityPlan {
@@ -53,6 +54,7 @@ pub(super) fn prepare(
     let mut prepared = PreparedDefinitions {
         preferred_counts: HashMap::new(),
         plans: Vec::new(),
+        diagnostics: Vec::new(),
     };
     prepared.blocks(blocks, context, evidence, &mut group_matches);
     prepared.sections(sections, context, evidence, &mut group_matches);
@@ -105,16 +107,25 @@ impl PreparedDefinitions {
                     // markers before calculating public content-slice paths:
                     // anchors at the front of a term would otherwise shift
                     // every retained name-binding index.
-                    let heads = items
+                    let identities = items
                         .iter()
                         .map(|item| {
-                            identity_plan(item, item_context, evidence.role(item)).group_head
+                            identity_plan(
+                                item,
+                                item_context,
+                                evidence.role(item),
+                                evidence.operands(item),
+                            )
                         })
+                        .collect::<Vec<_>>();
+                    let heads = identities
+                        .iter()
+                        .map(|identity| identity.group_head)
                         .collect::<Vec<_>>();
                     *declaration_groups = evidence.groups.resolve(items, &heads, group_matches);
                     crate::definitions::remove_native_definition_owner_markers_from_items(items);
-                    for item in items.iter_mut() {
-                        let identity = identity_plan(item, item_context, evidence.role(item));
+                    for (item, identity) in items.iter_mut().zip(identities) {
+                        self.record_limit(identity.limit, item.source);
                         if has_semantic_spelling(item, &identity) {
                             *self
                                 .preferred_counts
@@ -151,6 +162,22 @@ impl PreparedDefinitions {
             }
         }
     }
+
+    fn record_limit(
+        &mut self,
+        limit: Option<super::syntax::DeclarationLimit>,
+        source: Option<SourceSpan>,
+    ) {
+        if limit == Some(super::syntax::DeclarationLimit::Names) {
+            self.diagnostics.push(mant_ir::Diagnostic {
+                impact: mant_ir::DiagnosticImpact::SemanticCoverage,
+                level: mant_ir::DiagnosticLevel::Warning,
+                code: Some("manual.semantic-entry.name-limit".to_owned()),
+                message: "explicit option declaration exceeded the 256-name recognition limit; complete readable forms are retained".to_owned(),
+                source,
+            });
+        }
+    }
 }
 
 fn normalize_sections(
@@ -170,6 +197,7 @@ fn normalize_blocks(
     context: DefinitionContext,
     evidence: &NativeHeadEvidence,
 ) {
+    super::normalize::normalize_native_hanging_owners(blocks, context, &evidence.hanging);
     normalize_definition_nesting_with_boundaries(blocks, &evidence.continuations);
     normalize_hanging_definitions(blocks, context);
     for block in blocks {
@@ -179,13 +207,27 @@ fn normalize_blocks(
                     let child_context = item.entry.as_ref().map_or(context, |facts| {
                         child_definition_context(facts.kind, context)
                     });
-                    normalize_blocks(&mut item.blocks, child_context, evidence);
+                    if has_owned_first_block(item) {
+                        // An explicit Block0 form already owns this original
+                        // head. Do not run layout inference over it again;
+                        // descriptions and nested owners still normalize.
+                        let mut tail = item.blocks.split_off(1);
+                        normalize_blocks(&mut tail, child_context, evidence);
+                        item.blocks.append(&mut tail);
+                    } else {
+                        normalize_blocks(&mut item.blocks, child_context, evidence);
+                    }
                 }
             }
             Block::DefinitionList { items, .. } => {
                 let item_context = definition_group_context(items, context);
                 for item in items {
-                    let identity = identity_plan(item, item_context, evidence.role(item));
+                    let identity = identity_plan(
+                        item,
+                        item_context,
+                        evidence.role(item),
+                        evidence.operands(item),
+                    );
                     let child_context = child_definition_context(identity.kind, item_context);
                     normalize_blocks(&mut item.description, child_context, evidence);
                 }
@@ -205,6 +247,19 @@ fn normalize_blocks(
             | Block::Unsupported { .. } => {}
         }
     }
+}
+
+fn has_owned_first_block(item: &mant_ir::ListItem) -> bool {
+    item.entry.as_ref().is_some_and(|entry| {
+        entry.forms.iter().any(|form| {
+            matches!(form.parts.as_slice(), [part]
+                if part.root == (mant_ir::EntryInlineRoot::Block { index: 0 })
+                    && part.path.is_empty() && part.bytes.is_none())
+        })
+    }) && matches!(
+        item.blocks.first(),
+        Some(Block::Paragraph { .. } | Block::Preformatted { .. })
+    )
 }
 
 #[cfg(test)]

@@ -16,8 +16,8 @@ mod scopes;
 mod source_fragment;
 pub(in crate::mandoc) use flow::{
     AuthorBreakEffect, CompletedRowOrigin, DefinitionGeometryCheckpoint, FieldFlag, FieldFlags,
-    InlineExecutionState, NoFillInlineState, PreservedInlineState, consume_one_row_ending,
-    ends_with_executed_line_break, has_rendered_formatter_glyph,
+    HeadOperandCapture, InlineExecutionState, NoFillInlineState, PreservedInlineState,
+    consume_one_row_ending, ends_with_executed_line_break, has_rendered_formatter_glyph,
     lower_no_fill_fragment_with_formatter, native_row_origin, prepare_inline_output,
     retain_inline_identities, strip_native_projection_markers, trailing_completed_row_origins,
 };
@@ -406,6 +406,13 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
     // independent cell scope.
     let field_authoritative = true;
     builder.begin_native_word_owner();
+    // pre_alternate selects an operand role before this actual term_word;
+    // internal font escapes remain within this same word identity.
+    builder.record_current_native_operand(
+        events
+            .iter()
+            .any(|event| matches!(event, RoffInlineEvent::Font(_))),
+    );
     let execution = font::parse_roff_text_with_zero_advance(
         source,
         font::TextExecutionContext {

@@ -15,6 +15,100 @@ FIXTURE_ROOT = FIXTURE.parent.parent
 
 
 class ConsumerFixtureContractTests(unittest.TestCase):
+    def test_declaration_name_limits_bind_actual_head_operands_not_native_stack_limits(self):
+        fixture = json.loads((FIXTURE_ROOT / "declaration_names/limits.json").read_text())
+        self.assertEqual(fixture["header"]["count"], 3)
+        self.assertEqual(fixture["header"]["limit"], 256)
+        self.assertFalse(fixture["header"]["expectationsFromProduct"])
+        self.assertEqual(fixture["header"]["oracleSha256"],
+                         "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6")
+        self.assertEqual(len(fixture["cases"]), 3)
+        self.assertEqual({case["declaredCount"] for case in fixture["cases"]}, {255, 256, 257})
+        self.assertEqual(len({case["id"] for case in fixture["cases"]}), 3)
+        for case in fixture["cases"]:
+            with self.subTest(case=case["id"]):
+                count = case["declaredCount"]
+                self.assertEqual(hashlib.sha256(case["source"].encode()).hexdigest(),
+                                 case["sourceSha256"])
+                self.assertIn("\n.It Xo\n", case["source"])
+                self.assertIn("\n.Xc\nBodyWord\n", case["source"])
+                words = [line.removeprefix(".Fl ") for line in case["source"].splitlines()
+                         if line.startswith(".Fl ")]
+                self.assertEqual(words, [f"flag{index}" for index in range(count)])
+                self.assertEqual(case["nativeHead"], " ".join("-" + word for word in words))
+                self.assertEqual(case["observedAst"]["typedFlCount"], count)
+                self.assertEqual(case["observedAst"]["typedFlagsInOrder"], words)
+                self.assertTrue(case["observedAst"]["headViaExplicitXo"])
+                self.assertEqual(case["expectedNames"],
+                                 ["-" + word for word in words] if count <= 256 else [])
+                self.assertEqual(case["nameLimit"], count > 256)
+                self.assertEqual(set(case["profiles"]), {"ascii", "utf8", "html", "tree", "lint"})
+                for profile in case["profiles"].values():
+                    self.assertIs(type(profile["code"]), int)
+                    self.assertEqual(profile["code"], 0)
+                    self.assertRegex(profile["stdoutSha256"], r"^[0-9a-f]{64}$")
+                    self.assertRegex(profile["stderrSha256"], r"^[0-9a-f]{64}$")
+
+    def test_declaration_names_keep_exact_sources_and_native_profile_bindings(self):
+        fixture = json.loads((FIXTURE_ROOT / "declaration_names/cases.json").read_text())
+        self.assertEqual(fixture["header"]["count"], 62)
+        self.assertFalse(fixture["header"]["expectationsFromProduct"])
+        self.assertEqual(fixture["header"]["oracleSha256"],
+                         "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6")
+        cases = fixture["cases"]
+        self.assertEqual(len(cases), 62)
+        self.assertEqual(len({case["id"] for case in cases}), 62)
+        self.assertEqual(len({case["source"] for case in cases}), 62)
+        self.assertEqual(sum(case["profiles"]["lint"]["code"] == 0 for case in cases), 53)
+        self.assertEqual(sum(case["ownerProof"]["kind"] == "native-definition" for case in cases), 54)
+        self.assertEqual(sum(case["ownerProof"]["kind"] == "literal-relative-body" for case in cases), 2)
+        self.assertEqual(sum(case["ownerProof"]["kind"] == "no-owner" for case in cases), 6)
+        for case in cases:
+            with self.subTest(case=case["id"]):
+                self.assertEqual(hashlib.sha256(case["source"].encode()).hexdigest(),
+                                 case["sourceSha256"])
+                self.assertEqual(set(case["profiles"]), {"ascii", "utf8", "html", "tree", "lint"})
+                for name, profile in case["profiles"].items():
+                    self.assertIs(type(profile["code"]), int)
+                    self.assertIn(profile["code"], {0, 2} if name == "lint" else {0})
+                    self.assertRegex(profile["stdoutSha256"], r"^[0-9a-f]{64}$")
+                    self.assertRegex(profile["stderrSha256"], r"^[0-9a-f]{64}$")
+                self.assertEqual(len(case["names"]), len(set(case["names"])))
+                self.assertFalse(set(case["names"]) & set(case["excluded"]))
+                proof = case["ownerProof"]
+                if proof["kind"] == "native-definition":
+                    self.assertIn(proof["headMacro"], {"TP", "IP", "It"})
+                    self.assertRegex(case["source"], r"(?m)^\." + proof["headMacro"] + r"(?:$|\s)")
+                elif proof["kind"] == "literal-relative-body":
+                    self.assertIn(proof["headMacro"], {"B", "MR"})
+                    self.assertIn("." + proof["headMacro"] + " ", case["source"])
+                    self.assertIn("\n.RS\n", case["source"])
+                else:
+                    self.assertEqual(proof, {"kind": "no-owner", "headMacro": None})
+                    self.assertEqual(case["kind"], "none")
+
+    def test_hanging_owner_published_fixture_mirrors_exact_engine_resource(self):
+        # The two published members need package-local resources. This mirror
+        # is byte-identical, not a separately editable product-derived gold.
+        engine = FIXTURE_ROOT / "hanging_owners/cases.json"
+        repository = FIXTURE.parents[5]
+        ui = repository / "crates/mant-ui/src/document/tests/hanging_owners/cases.json"
+        self.assertEqual(ui.read_bytes(), engine.read_bytes())
+        fixture = json.loads(engine.read_text())
+        self.assertEqual(fixture["header"]["count"], 24)
+        self.assertEqual(len(fixture["cases"]), 24)
+        self.assertEqual(len({case["id"] for case in fixture["cases"]}), 24)
+        for case in fixture["cases"]:
+            self.assertEqual(hashlib.sha256(case["source"].encode()).hexdigest(),
+                             case["sourceSha256"])
+
+    def test_empty_word_published_fixture_mirrors_exact_engine_resource(self):
+        # Each published crate owns its compile-time input. The mirror retains
+        # the exact independently recorded 472-source matrix, without new gold.
+        engine = FIXTURE_ROOT / "empty_word_columns/cases.json"
+        ui = FIXTURE.parents[5] / "crates/mant-ui/src/document/tests/empty_word_columns/cases.json"
+        self.assertEqual(ui.read_bytes(), engine.read_bytes())
+
     def test_empty_word_core_contains_every_declared_tuple(self):
         fixture = json.loads((FIXTURE_ROOT / "empty_word_columns/cases.json").read_text())
         atoms = {"zero-graph", "empty", "combining", "font-only",

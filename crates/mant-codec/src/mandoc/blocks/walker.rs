@@ -188,7 +188,7 @@ impl BlockLowerer<'_, '_> {
                 spacing_enabled,
                 formatter: &mut self.state.formatter,
             }
-            .push(node, table_embedding);
+            .push(node, next, table_embedding);
             if restores_macro_indent(node) {
                 self.state
                     .set_source_indent(self.indent_columns.macro_origin());

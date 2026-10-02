@@ -15,7 +15,24 @@ pub(crate) fn mark_native_definition_owner(item: &mut DefinitionItem, key: usize
     let Some(term) = item.terms.first_mut() else {
         return;
     };
-    term.insert(0, Inline::anchor(format!("{OWNER_MARKER_PREFIX}{key:x}")));
+    mark_native_inline_owner(term, key);
+}
+
+#[cfg(feature = "roff")]
+pub(crate) fn mark_native_inline_owner(inlines: &mut Vec<Inline>, key: usize) {
+    inlines.insert(0, Inline::anchor(format!("{OWNER_MARKER_PREFIX}{key:x}")));
+}
+
+pub(crate) fn native_inline_owner(inlines: &[Inline]) -> Option<usize> {
+    inlines.iter().find_map(|inline| {
+        let Inline::Anchor { id, .. } = inline else {
+            return None;
+        };
+        id.as_str()
+            .strip_prefix(OWNER_MARKER_PREFIX)
+            .filter(|value| !value.is_empty() && value.bytes().all(|byte| byte.is_ascii_hexdigit()))
+            .and_then(|value| usize::from_str_radix(value, 16).ok())
+    })
 }
 
 pub(crate) fn is_internal_definition_owner_marker(id: &str) -> bool {
@@ -25,20 +42,7 @@ pub(crate) fn is_internal_definition_owner_marker(id: &str) -> bool {
 }
 
 fn owner_marker(item: &DefinitionItem) -> Option<usize> {
-    item.terms
-        .iter()
-        .flat_map(|term| term.iter())
-        .find_map(|inline| {
-            let Inline::Anchor { id, .. } = inline else {
-                return None;
-            };
-            id.as_str()
-                .strip_prefix(OWNER_MARKER_PREFIX)
-                .filter(|value| {
-                    !value.is_empty() && value.bytes().all(|byte| byte.is_ascii_hexdigit())
-                })
-                .and_then(|value| usize::from_str_radix(value, 16).ok())
-        })
+    item.terms.iter().find_map(|term| native_inline_owner(term))
 }
 
 fn remove_inlines(inlines: &mut Vec<Inline>) {

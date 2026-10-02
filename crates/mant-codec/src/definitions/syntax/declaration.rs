@@ -22,7 +22,6 @@ pub(super) struct DeclarationState {
     uncertain: bool,
     literal_starts: HashSet<usize>,
     argument_starts: HashSet<usize>,
-    validated_token: bool,
 }
 
 impl DeclarationState {
@@ -52,13 +51,7 @@ impl DeclarationState {
             uncertain: false,
             literal_starts,
             argument_starts,
-            validated_token: false,
         }
-    }
-
-    pub(super) fn within_validated_token(mut self) -> Self {
-        self.validated_token = true;
-        self
     }
 
     pub(super) fn separator(&mut self, character: char, eligible: bool) -> bool {
@@ -85,10 +78,9 @@ impl DeclarationState {
                 .split_whitespace()
                 .next()
                 .is_some_and(super::commands::is_command_name);
-        let split = self.validated_token
-            || !self.uncertain
-                && self.closers.is_empty()
-                && (self.phase == Phase::Name || fresh_option || fresh_literal);
+        let split = !self.uncertain
+            && self.closers.is_empty()
+            && (self.phase == Phase::Name || fresh_option || fresh_literal);
         if split {
             self.phase = Phase::Name;
         } else {

@@ -199,6 +199,8 @@ impl<'a> LoweringContext<'a> {
             self.active_mdoc_section() == MdocSectionContext::Authors,
             author_break_effect,
         );
+        let operand_capture = std::rc::Rc::new(RefCell::new(inline::HeadOperandCapture::default()));
+        builder.head_operand_capture = Some(operand_capture.clone());
         if preserve_rows {
             builder.begin_definition_head_consumption();
             if let Some(units) = native_head_field_units {
@@ -213,6 +215,9 @@ impl<'a> LoweringContext<'a> {
         inline::append_inline_nodes(&mut builder, nodes, self.default_name);
         builder.observe_no_fill_source_lines(false);
         let finished = formatter.finish_inline_line_with_rows(builder, preserve_rows);
+        self.native_heads
+            .borrow_mut()
+            .capture_operands(nodes.as_ptr() as usize, operand_capture.borrow_mut().take());
         if preserve_rows && self.macro_set == MacroSet::Mdoc {
             // This path is the actual detached It HEAD post, whose native
             // flush above precedes clearing NOBREAK/BRTRSP/BRIND/HANG and
@@ -255,6 +260,9 @@ impl<'a> LoweringContext<'a> {
             self.active_mdoc_section() == MdocSectionContext::Authors,
             author_break_effect,
         );
+        let operand_capture = std::rc::Rc::new(RefCell::new(inline::HeadOperandCapture::default()));
+        builder.head_operand_capture = Some(operand_capture.clone());
+        let mut operand_key = None;
         builder.begin_definition_head_consumption();
         builder.scope_posts = self.scope_posts.clone();
         builder.observe_no_fill_source_lines(true);
@@ -264,6 +272,9 @@ impl<'a> LoweringContext<'a> {
                 .push_scope(super::roff_escape::RoffFont::Strong)
         });
         for nodes in groups {
+            if !nodes.is_empty() {
+                operand_key.get_or_insert(nodes.as_ptr() as usize);
+            }
             inline::append_inline_nodes(&mut builder, nodes, self.default_name);
         }
         builder.observe_no_fill_source_lines(false);
@@ -284,6 +295,11 @@ impl<'a> LoweringContext<'a> {
         }
         let breaks = builder.take_definition_term_breaks();
         let (output, execution) = formatter.finish_inline_scope(builder);
+        if let Some(key) = operand_key {
+            self.native_heads
+                .borrow_mut()
+                .capture_operands(key, operand_capture.borrow_mut().take());
+        }
         (
             output,
             execution,

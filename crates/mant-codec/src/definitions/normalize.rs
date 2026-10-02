@@ -4,6 +4,127 @@ use mant_ir::geometry::{block_layout, block_layout_mut};
 use mant_ir::{Block, DefinitionItem, HeadBodyRelation, LayoutHint};
 use std::{collections::VecDeque, mem};
 
+/// Recover only executed HP → headless IP pairs. Their two original blocks
+/// remain authoritative: a marker-free plain item supplies semantic ownership
+/// without losing the HP's hanging continuation or moving the IP's body origin.
+pub(super) fn normalize_native_hanging_owners(
+    blocks: &mut Vec<Block>,
+    context: DefinitionContext,
+    evidence: &super::hanging_owner::HangingOwnerEvidence,
+) {
+    let mut pending: VecDeque<Block> = mem::take(blocks).into();
+    let mut normalized = Vec::with_capacity(pending.len());
+    while let Some(mut head) = pending.pop_front() {
+        let entry = pending.front().and_then(|next| {
+            let Block::DefinitionList { items, .. } = next else {
+                return None;
+            };
+            let body = items.first()?;
+            evidence.matches(&head, body).then_some(())?;
+            let (Block::Paragraph { children, .. } | Block::Preformatted { children, .. }) = &head
+            else {
+                return None;
+            };
+            super::syntax::recognize_inferred_head(children, context)
+        });
+        let Some(entry) = entry else {
+            normalized.push(head);
+            continue;
+        };
+        let Block::DefinitionList {
+            declaration_groups,
+            mut items,
+            compact,
+            layout,
+            source,
+        } = pending.pop_front().expect("matched following block")
+        else {
+            unreachable!("the witness only accepts a definition body");
+        };
+        let mut body = items.remove(0);
+        super::hanging_owner::HangingOwnerEvidence::consume(&mut head, &mut body);
+        let facts = hanging_owner_facts(&head, entry);
+        let owner_source = mant_ir::geometry::block_source(&head);
+        normalized.push(Block::List {
+            kind: mant_ir::ListKind::Plain,
+            compact: true,
+            layout: LayoutHint::default(),
+            source: owner_source,
+            items: vec![mant_ir::ListItem {
+                layout: mant_ir::ListItemLayout {
+                    spacing_before_lines: Some(0),
+                },
+                source: owner_source,
+                entry: Some(facts),
+                blocks: vec![
+                    head,
+                    Block::DefinitionList {
+                        declaration_groups: Vec::new(),
+                        items: vec![body],
+                        compact,
+                        layout,
+                        source,
+                    },
+                ],
+            }],
+        });
+        if !items.is_empty() {
+            // The original list's leading gap belongs to its first IP. Later
+            // items retain their own explicit gaps; the split adds none.
+            normalized.push(Block::DefinitionList {
+                declaration_groups,
+                items,
+                compact,
+                layout: LayoutHint {
+                    spacing_before_lines: 0,
+                    ..layout
+                },
+                source,
+            });
+        }
+    }
+    *blocks = normalized;
+}
+
+fn hanging_owner_facts(
+    head: &Block,
+    identity: super::syntax::InferredIdentity,
+) -> mant_ir::EntryFacts {
+    let (Block::Paragraph { children, .. } | Block::Preformatted { children, .. }) = head else {
+        unreachable!("a recovered hanging head is an inline block");
+    };
+    let mut bindings = super::binding::native_name_bindings_for_head(
+        children,
+        &identity.names,
+        &identity.occurrences,
+    );
+    for part in bindings
+        .iter_mut()
+        .flat_map(|binding| &mut binding.occurrences)
+        .flat_map(|form| &mut form.parts)
+    {
+        part.root = mant_ir::EntryInlineRoot::Block { index: 0 };
+    }
+    mant_ir::EntryFacts {
+        // Allocation uses the same collision policy as existing list owners.
+        id: "pending-native-owner".into(),
+        kind: identity.kind,
+        case: identity.case,
+        names: identity.names,
+        forms: vec![mant_ir::EntryForm {
+            parts: vec![mant_ir::EntryContentSlice {
+                root: mant_ir::EntryInlineRoot::Block { index: 0 },
+                path: Vec::new(),
+                bytes: None,
+            }],
+        }],
+        name_bindings: bindings,
+        alias_groups: Vec::new(),
+        alias_of: None,
+        value_domain: None,
+    }
+}
+
 /// Reattach source-neutral indented continuations to their owning definition.
 ///
 /// libmandoc can retain man(7) `.RS` continuations as later sibling blocks

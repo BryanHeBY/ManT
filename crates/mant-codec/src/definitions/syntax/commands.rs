@@ -2,6 +2,40 @@
 use mant_ir::Inline;
 use mant_ir::inline_plain_text as plain_text;
 
+/// A typed manual label can establish a directory command without font
+/// styling. Its visible spelling must contain that exact command name;
+/// destinations or arbitrary alternative labels are never lexical evidence.
+pub(super) fn inferred_command_name(term: &[Inline]) -> Option<String> {
+    manual_name(term).or_else(|| leading_styled_command_name(term))
+}
+
+pub(super) fn manual_name(nodes: &[Inline]) -> Option<String> {
+    for node in nodes {
+        match node {
+            Inline::Anchor { .. } => {}
+            Inline::Text { value } if value.trim().is_empty() => {}
+            Inline::Strong { children } | Inline::Emphasis { children } => {
+                return manual_name(children);
+            }
+            Inline::Link {
+                children,
+                target:
+                    mant_ir::LinkTarget::Manual {
+                        name,
+                        manual_section,
+                    },
+                ..
+            } => {
+                let label = plain_text(children);
+                let expected = format!("{name}({})", manual_section.as_deref().unwrap_or_default());
+                return (label.trim() == expected && is_command_name(name)).then(|| name.clone());
+            }
+            _ => return None,
+        }
+    }
+    None
+}
+
 /// Extract the command token from an unstyled authored form.
 pub(in crate::definitions) fn command_name_from_authored_form(value: &str) -> Option<&str> {
     let value = value.trim();

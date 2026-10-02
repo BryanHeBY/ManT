@@ -48,23 +48,26 @@ pub(super) struct IdentityPlan {
     occurrences: Vec<Vec<super::RecognizedName>>,
     pub(super) value_domain: Option<ValueDomain>,
     pub(super) preferred: String,
+    pub(super) limit: Option<super::syntax::DeclarationLimit>,
 }
 
 pub(super) fn identity_plan(
     item: &DefinitionItem,
     context: DefinitionContext,
     hint: Option<super::NativeHeadRole>,
+    operands: Option<&[Vec<super::NativeOperand>]>,
 ) -> IdentityPlan {
     let inferred = item.entry.is_none();
-    let (kind, case, names, occurrences, value_domain) = item.entry.as_ref().map_or_else(
+    let (kind, case, names, occurrences, value_domain, limit) = item.entry.as_ref().map_or_else(
         || {
-            let inferred = infer_identity(item, context, hint);
+            let inferred = infer_identity(item, context, hint, operands);
             (
                 inferred.kind,
                 inferred.case,
                 inferred.names,
                 inferred.occurrences,
                 None,
+                inferred.limit,
             )
         },
         |identity| {
@@ -74,6 +77,7 @@ pub(super) fn identity_plan(
                 identity.names.clone(),
                 super::syntax::name_occurrences(item, identity.kind),
                 identity.value_domain.clone(),
+                None,
             )
         },
     );
@@ -117,7 +121,8 @@ pub(super) fn identity_plan(
     // have an extractable selector name.
     let groupable_role = !matches!(kind, EntryKind::Term | EntryKind::Value)
         || head_context != DefinitionContext::Generic;
-    let group_head = semantic
+    let group_head = limit.is_none()
+        && semantic
         && groupable_role
         && (!names.is_empty()
             || !item.terms.is_empty()
@@ -134,6 +139,7 @@ pub(super) fn identity_plan(
         occurrences,
         value_domain,
         preferred,
+        limit,
     }
 }
 
@@ -197,6 +203,7 @@ pub(super) fn identify_item(
         occurrences,
         value_domain,
         mut preferred,
+        limit: _,
     } = plan;
 
     let mut anchors = Vec::new();
