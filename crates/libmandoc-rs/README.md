@@ -196,7 +196,13 @@ suffix. The private native receipt belongs to that parser/render session;
 subsequent calls and concurrent sessions cannot inherit it. These codes are
 preserved by the optional Serde feature and by `Diagnostic::code()`, independently
 of the human-readable message. Ordinary native libmandoc findings retain their
-severity and message with no machine code. This updates the unpublished v0.12
+severity and message with no machine code, except for the pinned native
+input-budget error. Its complete Error finding receives
+`DiagnosticCode::InputProcessingLimit`: macro recursion, expansion or replay
+stopped, even when the safe partial AST retains the rejected syntax as literal
+words. The code does not raise the native limits or replace fatal parse errors.
+It is available to both parser and optional renderer reports, including Serde.
+This updates the unpublished v0.12
 diagnostic contract without changing the version.
 
 A separate native construction guard stops input dispatch after a syntax

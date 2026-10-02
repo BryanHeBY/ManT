@@ -1,0 +1,75 @@
+{
+  "header": {
+    "referenceIdentity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+    "referenceSha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+    "count": 2
+  },
+  "cases": [
+    {
+      "id": "callable-inline-budget",
+      "source": ".Dd October 3, 2026\n.Dt BUDGET 1\n.Os\n.Sh NAME\n.Nm budget\n.Nd explicit option bound probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It Fl flag0 Fl flag1 Fl flag2 Fl flag3 Fl flag4 Fl flag5 Fl flag6 Fl flag7 Fl flag8 Fl flag9 Fl flag10 Fl flag11 Fl flag12 Fl flag13 Fl flag14 Fl flag15 Fl flag16 Fl flag17 Fl flag18 Fl flag19 Fl flag20 Fl flag21 Fl flag22 Fl flag23 Fl flag24 Fl flag25 Fl flag26 Fl flag27 Fl flag28 Fl flag29 Fl flag30 Fl flag31 Fl flag32 Fl flag33 Fl flag34 Fl flag35 Fl flag36 Fl flag37 Fl flag38 Fl flag39 Fl flag40 Fl flag41 Fl flag42 Fl flag43 Fl flag44 Fl flag45 Fl flag46 Fl flag47 Fl flag48 Fl flag49 Fl flag50 Fl flag51 Fl flag52 Fl flag53 Fl flag54 Fl flag55 Fl flag56 Fl flag57 Fl flag58 Fl flag59 Fl flag60 Fl flag61 Fl flag62 Fl flag63 Fl flag64 Fl flag65 Fl flag66 Fl flag67 Fl flag68 Fl flag69 Fl flag70 Fl flag71 Fl flag72 Fl flag73 Fl flag74 Fl flag75 Fl flag76 Fl flag77 Fl flag78 Fl flag79 Fl flag80 Fl flag81 Fl flag82 Fl flag83 Fl flag84 Fl flag85 Fl flag86 Fl flag87 Fl flag88 Fl flag89 Fl flag90 Fl flag91 Fl flag92 Fl flag93 Fl flag94 Fl flag95 Fl flag96 Fl flag97 Fl flag98 Fl flag99 Fl flag100 Fl flag101 Fl flag102 Fl flag103 Fl flag104 Fl flag105 Fl flag106 Fl flag107 Fl flag108 Fl flag109 Fl flag110 Fl flag111 Fl flag112 Fl flag113 Fl flag114 Fl flag115 Fl flag116 Fl flag117 Fl flag118 Fl flag119 Fl flag120 Fl flag121 Fl flag122 Fl flag123 Fl flag124 Fl flag125 Fl flag126 Fl flag127 Fl flag128 Fl flag129 Fl flag130 Fl flag131 Fl flag132 Fl flag133 Fl flag134 Fl flag135 Fl flag136 Fl flag137 Fl flag138 Fl flag139 Fl flag140 Fl flag141 Fl flag142 Fl flag143 Fl flag144 Fl flag145 Fl flag146 Fl flag147 Fl flag148 Fl flag149 Fl flag150 Fl flag151 Fl flag152 Fl flag153 Fl flag154 Fl flag155 Fl flag156 Fl flag157 Fl flag158 Fl flag159 Fl flag160 Fl flag161 Fl flag162 Fl flag163 Fl flag164 Fl flag165 Fl flag166 Fl flag167 Fl flag168 Fl flag169 Fl flag170 Fl flag171 Fl flag172 Fl flag173 Fl flag174 Fl flag175 Fl flag176 Fl flag177 Fl flag178 Fl flag179 Fl flag180 Fl flag181 Fl flag182 Fl flag183 Fl flag184 Fl flag185 Fl flag186 Fl flag187 Fl flag188 Fl flag189 Fl flag190 Fl flag191 Fl flag192 Fl flag193 Fl flag194 Fl flag195 Fl flag196 Fl flag197 Fl flag198 Fl flag199 Fl flag200 Fl flag201 Fl flag202 Fl flag203 Fl flag204 Fl flag205 Fl flag206 Fl flag207 Fl flag208 Fl flag209 Fl flag210 Fl flag211 Fl flag212 Fl flag213 Fl flag214 Fl flag215 Fl flag216 Fl flag217 Fl flag218 Fl flag219 Fl flag220 Fl flag221 Fl flag222 Fl flag223 Fl flag224 Fl flag225 Fl flag226 Fl flag227 Fl flag228 Fl flag229 Fl flag230 Fl flag231 Fl flag232 Fl flag233 Fl flag234 Fl flag235 Fl flag236 Fl flag237 Fl flag238 Fl flag239 Fl flag240 Fl flag241 Fl flag242 Fl flag243 Fl flag244 Fl flag245 Fl flag246 Fl flag247 Fl flag248 Fl flag249 Fl flag250 Fl flag251 Fl flag252 Fl flag253 Fl flag254\nBodyWord\n.El\n",
+      "sourceSha256": "7ab38c8d7ae29c616e2f59cb56ad5ea48ad5179a0d12cd80006c4b3c4a9cd93e",
+      "limited": true,
+      "profiles": {
+        "ascii": {
+          "status": 0,
+          "stdoutSha256": "69deb9894f6630b61354e8373a6198d91d92f145dade7f156b8e1987094a4848",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutSha256": "a74d35197561012006fe9de59a4e8345d433e1421673a624b266450063f13570",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutSha256": "e92e2ea8d2957fe63b9634b97a9508ab50bac9c832f8c999b0f1ec8879278aa7",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutSha256": "581d1bf1064243ff17f1af037f1d16f13ea52d6ac13b9b0d07cd0b4ca947bcd7",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "next-complete-session",
+      "source": ".TH COMPLETE 1 \"October 3, 2026\"\n.SH DESCRIPTION\nBodyWord\n",
+      "sourceSha256": "e61bcf5e9598e99d65849af2742333b8a5b17b0060ef5c3ead7ac76cf3405c12",
+      "limited": false,
+      "profiles": {
+        "ascii": {
+          "status": 0,
+          "stdoutSha256": "8d40ca1cbdec37104b3298011714a7c320e83be8a9e22db538a4b15aba0c741a",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutSha256": "8d40ca1cbdec37104b3298011714a7c320e83be8a9e22db538a4b15aba0c741a",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutSha256": "1ad11f542f09e1e7b5490934eeffbe0d28aad5fb644e822648a8aa061c0bf3dd",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutSha256": "1fcc5974f44cd3bc0fb9576ab55bc9a9af867a2f15e6099c57ce25bcbad84d28",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    }
+  ]
+}

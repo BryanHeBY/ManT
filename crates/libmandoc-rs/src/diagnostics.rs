@@ -14,10 +14,10 @@ pub enum DiagnosticLevel {
     Style,
 }
 
-/// Stable machine-readable classification for wrapper-generated findings.
+/// Stable machine-readable classification for known safety findings.
 ///
-/// Native libmandoc findings do not expose a stable code, so
-/// [`Diagnostic::code`] returns `None` for them.
+/// Ordinary native findings have no stable code. The pinned native input
+/// budget finding is classified without exposing upstream numeric values.
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DiagnosticCode {
@@ -27,7 +27,16 @@ pub enum DiagnosticCode {
     EquationTreeDepthLimit,
     /// A nested escape suffix was omitted by the native parser depth guard.
     EscapeDepthLimit,
+    /// Native input execution reached a macro, expansion or replay budget.
+    /// Safe partial content can include rejected syntax as literal words.
+    InputProcessingLimit,
 }
+
+// Pinned mandoc_msg.c's MANDOCERR_ROFFLOOP. read.c, roff.c, eqn.c and
+// mdoc_macro.c stop execution, omit a suffix or retain unexecuted literal
+// syntax at this limit. Match the complete Error finding, never its severity
+// or an arbitrary mention of an infinite loop.
+const INPUT_PROCESSING_LIMIT_MESSAGE: &str = "input stack limit exceeded, infinite loop?";
 
 pub(crate) const SYNTAX_TREE_DEPTH_MESSAGE: &str =
     "owned syntax tree exceeded the 256-level copy limit; deeper descendants were omitted";
@@ -67,8 +76,8 @@ pub struct Diagnostic {
 impl Diagnostic {
     /// Return the stable classification for a wrapper-generated finding.
     ///
-    /// Native libmandoc messages have no stable upstream identifier and
-    /// therefore return `None`.
+    /// Ordinary native messages return `None`; the pinned input-processing
+    /// budget finding has a wrapper classification.
     #[must_use]
     pub fn code(&self) -> Option<DiagnosticCode> {
         self.code
@@ -110,7 +119,8 @@ fn parse_diagnostic(line: &str) -> Option<Diagnostic> {
     .unwrap_or((DiagnosticLevel::Warning, ": "));
     let (prefix, message) = line.split_once(marker).unwrap_or(("", line));
     Some(Diagnostic {
-        code: None,
+        code: (level == DiagnosticLevel::Error && message == INPUT_PROCESSING_LIMIT_MESSAGE)
+            .then_some(DiagnosticCode::InputProcessingLimit),
         level,
         message: message.to_owned(),
         location: source_location(prefix),
@@ -126,7 +136,33 @@ fn source_location(prefix: &str) -> Option<SourceLocation> {
 
 #[cfg(test)]
 mod tests {
-    use super::{DiagnosticLevel, SourceLocation, parse_diagnostics};
+    use super::{DiagnosticCode, DiagnosticLevel, SourceLocation, parse_diagnostics};
+
+    #[test]
+    fn only_the_complete_native_error_identifies_an_input_processing_limit() {
+        let diagnostics = parse_diagnostics(
+            "mant: page.1:9:625: ERROR: input stack limit exceeded, infinite loop?\n\
+             mant: page.1:10:1: WARNING: input stack limit exceeded, infinite loop?\n\
+             mant: page.1:11:1: ERROR: input stack limit exceeded, infinite loop? extra\n\
+             mant: page.1:12:1: ERROR: another error\n",
+        );
+        assert_eq!(
+            diagnostics[0].code(),
+            Some(DiagnosticCode::InputProcessingLimit)
+        );
+        assert_eq!(
+            diagnostics[0].location,
+            Some(SourceLocation {
+                line: 9,
+                column: 625
+            })
+        );
+        assert!(
+            diagnostics[1..]
+                .iter()
+                .all(|finding| finding.code().is_none())
+        );
+    }
 
     #[test]
     fn preserves_each_finding_and_classifies_known_levels() {

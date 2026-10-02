@@ -976,6 +976,15 @@ can instead reject an unsafe parse rather than return a misleading partial tree.
 
 libmandoc style, warning, error, and unsupported findings become structured document diagnostics with source locations when available. A nonfatal finding does not discard an otherwise useful manual.
 
+Reaching a native input-processing budget emits
+`manual.input-processing-limit` with `content-coverage` impact. A safe partial
+document can retain rejected callable macros as literal syntax; this is not
+complete execution of their generated text or semantic roles. Expansion and
+replay limits can also omit an unexecuted suffix. The retained diagnostics
+therefore make content and semantic completeness false in derived queries;
+ordinary warnings retain their own impact. The classification does not raise
+limits or convert a fatal native parse failure into a successful document.
+
 Unknown source macros can be expanded by an earlier `.de` definition. If no visible semantic subtree results, ManT does not invent content. Formatter arguments such as widths, font names, register values, and macro-control tokens are never emitted merely to avoid dropping syntax.
 
 Terminal-unsafe control bytes are masked before native parsing. Roff comments and nodes marked non-printing by libmandoc remain invisible.

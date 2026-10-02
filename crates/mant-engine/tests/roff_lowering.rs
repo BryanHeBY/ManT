@@ -58,6 +58,8 @@ mod native_execution;
 mod native_field_lifecycle;
 #[path = "roff_lowering/native_fractional_margin.rs"]
 mod native_fractional_margin;
+#[path = "roff_lowering/native_input_limits.rs"]
+mod native_input_limits;
 #[path = "roff_lowering/native_nested_list_tabs.rs"]
 mod native_nested_list_tabs;
 #[path = "roff_lowering/tab_display_lifecycle.rs"]

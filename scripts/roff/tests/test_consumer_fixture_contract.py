@@ -102,6 +102,22 @@ class ConsumerFixtureContractTests(unittest.TestCase):
             self.assertEqual(hashlib.sha256(case["source"].encode()).hexdigest(),
                              case["sourceSha256"])
 
+    def test_native_input_guard_keeps_exact_pristine_sources_and_profiles(self):
+        fixture = json.loads((FIXTURE_ROOT / "native_input_limits/cases.json").read_text())
+        self.assertEqual(fixture["header"]["count"], 2)
+        self.assertEqual(fixture["header"]["referenceSha256"],
+                         "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6")
+        self.assertEqual(len(fixture["cases"]), 2)
+        self.assertEqual([case["limited"] for case in fixture["cases"]], [True, False])
+        for case in fixture["cases"]:
+            self.assertEqual(hashlib.sha256(case["source"].encode()).hexdigest(),
+                             case["sourceSha256"])
+            self.assertEqual(set(case["profiles"]), {"ascii", "utf8", "html", "tree", "lint"})
+            for profile in case["profiles"].values():
+                self.assertEqual(profile["status"], 0)
+                self.assertRegex(profile["stdoutSha256"], r"^[0-9a-f]{64}$")
+                self.assertRegex(profile["stderrSha256"], r"^[0-9a-f]{64}$")
+
     def test_empty_word_published_fixture_mirrors_exact_engine_resource(self):
         # Each published crate owns its compile-time input. The mirror retains
         # the exact independently recorded 472-source matrix, without new gold.

@@ -470,7 +470,16 @@ native construction beyond 512 parent levels instead fails before finalization
 or validation. Reference renderers preflight both syntax and equation depth
 at 256 levels, and native cleanup is iterative. For truncated successful reports,
 the codec lowers those findings as `manual.syntax-depth-truncated` and
-`manual.equation-depth-truncated`. A
+`manual.equation-depth-truncated`. The pinned native input-budget error also
+receives a stable `InputProcessingLimit` code, lowered as
+`manual.input-processing-limit` with `ContentCoverage`. Its safe partial tree
+can retain a rejected callable macro and its operands as literal words;
+those words do not prove that the original macro executed. Expansion, replay
+and input-stack guards can instead omit an unexecuted suffix. Query summaries
+retain incomplete content and semantic coverage information through their
+existing flags and diagnostics; ordinary warnings
+keep their separate impact. This classification does not change native
+limits or turn fatal parse failures into successful documents. A
 mixed Rust/C ThreadSanitizer runner guards this boundary locally because
 instrumenting only Rust would miss races inside the vendored parser and
 optional formatters.

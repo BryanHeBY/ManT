@@ -15,7 +15,8 @@ pub(super) fn lower_diagnostics(input: &[MandocDiagnostic]) -> Vec<Diagnostic> {
                 Some(
                     MandocDiagnosticCode::SyntaxTreeDepthLimit
                     | MandocDiagnosticCode::EquationTreeDepthLimit
-                    | MandocDiagnosticCode::EscapeDepthLimit,
+                    | MandocDiagnosticCode::EscapeDepthLimit
+                    | MandocDiagnosticCode::InputProcessingLimit,
                 ) => mant_ir::DiagnosticImpact::ContentCoverage,
                 None => mant_ir::DiagnosticImpact::None,
             },
@@ -32,6 +33,7 @@ pub(super) fn lower_diagnostics(input: &[MandocDiagnostic]) -> Vec<Diagnostic> {
                         "manual.equation-depth-truncated"
                     }
                     MandocDiagnosticCode::EscapeDepthLimit => "manual.escape-depth-truncated",
+                    MandocDiagnosticCode::InputProcessingLimit => "manual.input-processing-limit",
                 }
                 .to_owned()
             }),
