@@ -490,7 +490,7 @@ libmandoc but unavailable through a public C API:
   pinned parser otherwise retains as an unexpanded identifier;
 - tbl multiline-cell and vertical-continuation flags, including both tbl(7)
   spellings of vertical continuation;
-- effective cell and row rule kinds plus first-data-row table boundaries,
+- effective cell and row rule kinds plus first-span table boundaries,
   retaining native layout precedence, empty data rows, and the distinction
   between `T&` and a new table;
 - the pinned native roff-request lookup used by consumers that need to retain

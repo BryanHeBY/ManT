@@ -357,8 +357,8 @@ pub struct NodeFlags {
     /// Some semantic punctuation is generated only in this context, notably
     /// the terminating semicolon of mdoc `Fn` and `Fo` declarations.
     pub synopsis_pretty: bool,
-    /// First data row of a distinct native tbl table, even after leading
-    /// rule-only rows. A `T&` layout change does not begin another table.
+    /// First executed span of a distinct native tbl table, including a leading
+    /// rule or empty row. A `T&` layout change does not begin another table.
     pub table_start: bool,
 }
 
