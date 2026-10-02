@@ -17,6 +17,7 @@ include = [
   "/tests/markdown_pipeline.rs", "/tests/markdown_pipeline/**",
   "/tests/definition_normalization_layout.rs",
   "/tests/definition_content_contracts.rs",
+  "/tests/native_payload_consumers.rs", "/tests/native_payload_consumers/**",
   "/tests/query_report_boundary.rs",
   "/tests/support/semantic_read.rs",
   "/tests/report_composition.rs", "/tests/report_composition/**",

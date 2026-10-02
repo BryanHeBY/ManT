@@ -1,0 +1,923 @@
+{
+  "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+  "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+  "count": 9,
+  "cases": [
+    {
+      "id": "table_fonts",
+      "kind": "tbl",
+      "source": ".TH PAYLOAD 1 \"October 3, 2026\" \"ManT\"\n.SH NAME\npayload \\- consumer probe\n.SH DESCRIPTION\n.TP\n.B --payload\n.TS\nlb li.\nA\\fRB\\fPC\tSTYLEITALIC\n.TE\nTailWord\n.SH NEXT\nEND\n",
+      "source_sha256": "48ec3f3a4d7b5bd00c71392c35ec006937242468845a403a083e508a04d6c187",
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "input_mode": "stdin",
+          "code": 0,
+          "timeout": false,
+          "stdout_sha256": "b405e9fdd23803dd3c9fe0284ab70c13583e63a8e389c11491742dd83058968e",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "utf8_valid": true
+        },
+        "utf8": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "input_mode": "stdin",
+          "code": 0,
+          "timeout": false,
+          "stdout_sha256": "b405e9fdd23803dd3c9fe0284ab70c13583e63a8e389c11491742dd83058968e",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "utf8_valid": true
+        },
+        "html": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Thtml"
+          ],
+          "input_mode": "stdin",
+          "code": 0,
+          "timeout": false,
+          "stdout_sha256": "71ce7a8b86e8daea76f8a20bb360d425e7076c4e3b7fcf18910d54f945c7bccd",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "utf8_valid": true
+        },
+        "tree": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Ttree"
+          ],
+          "input_mode": "stdin",
+          "code": 0,
+          "timeout": false,
+          "stdout_sha256": "800f1bbd9269696890be55adb3389731e1988817d2e2e27fa79dd02adf974c5b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "utf8_valid": true
+        },
+        "lint": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tlint"
+          ],
+          "input_mode": "stdin",
+          "code": 0,
+          "timeout": false,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "utf8_valid": true
+        }
+      },
+      "owner_name": "--payload",
+      "owner_macro": "TP",
+      "owner_line": 5,
+      "native_payload_lines": [
+        9
+      ],
+      "native_cells": [
+        [
+          "A\\fRB\\fPC",
+          "STYLEITALIC"
+        ]
+      ],
+      "cells": [
+        [
+          "ABC",
+          "STYLEITALIC"
+        ]
+      ],
+      "spans": [
+        [
+          1,
+          1
+        ]
+      ],
+      "reader_payload": "ABC | STYLEITALIC",
+      "words": [
+        "ABC",
+        "STYLEITALIC",
+        "TailWord"
+      ],
+      "lookup": "ABC",
+      "lookup_start": 0,
+      "lookup_cell": [
+        0,
+        0
+      ],
+      "summarized": false,
+      "policy": "responsive-native-table-topology"
+    },
+    {
+      "id": "table_recovered_links",
+      "kind": "tbl",
+      "source": ".Dd October 3, 2026\n.Dt PAYLOAD 1\n.Os\n.Sh NAME\n.Nm payload\n.Nd consumer probe\n.Sh DESCRIPTION\n.Bl -tag -width Ds\n.It Fl payload\n.TS\nl.\nT{\n.Lk https://example.org CELLONE\nT}\nT{\n.Lk https://example.org CELLTWO\nT}\nT{\n.Xr printf 3\nT}\n.TE\n.No TailWord\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "f3ebfef3fcdf0cef250403c29c0ae7012d835dfc659ea404b0871c025cda0383",
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "input_mode": "stdin",
+          "code": 0,
+          "timeout": false,
+          "stdout_sha256": "f1febea25ae857f0d6d32ac00845157bead2092d2c2d0a88086d713619416096",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "utf8_valid": true
+        },
+        "utf8": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "input_mode": "stdin",
+          "code": 0,
+          "timeout": false,
+          "stdout_sha256": "84c72c7abee0c575517eb343c24ff33259be3113455ec6b7fe7699447ce1a081",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "utf8_valid": true
+        },
+        "html": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Thtml"
+          ],
+          "input_mode": "stdin",
+          "code": 0,
+          "timeout": false,
+          "stdout_sha256": "d83dc6e2eb26433a821eb480dfeaf294c5538d95b54197abed5ca8bb19f40865",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "utf8_valid": true
+        },
+        "tree": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Ttree"
+          ],
+          "input_mode": "stdin",
+          "code": 0,
+          "timeout": false,
+          "stdout_sha256": "63b36ec77463eeeb4262ac316a71cb1ace7f6c741513ed0c806cc873fbab99d5",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "utf8_valid": true
+        },
+        "lint": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tlint"
+          ],
+          "input_mode": "stdin",
+          "code": 4,
+          "timeout": false,
+          "stdout_sha256": "534602e86007f5de54c83bd69e28497ebe93ea3558b25c1f28bc1bdc1764e14c",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "utf8_valid": true
+        }
+      },
+      "owner_name": "-payload",
+      "owner_macro": "It",
+      "owner_line": 9,
+      "native_payload_lines": [
+        12,
+        15,
+        18
+      ],
+      "native_cells": [
+        [
+          "https://example.org CELLONE"
+        ],
+        [
+          "https://example.org CELLTWO"
+        ],
+        [
+          "printf 3"
+        ]
+      ],
+      "cells": [
+        [
+          "CELLONE: https://example.org"
+        ],
+        [
+          "CELLTWO: https://example.org"
+        ],
+        [
+          "printf(3)"
+        ]
+      ],
+      "spans": [
+        [
+          1
+        ],
+        [
+          1
+        ],
+        [
+          1
+        ]
+      ],
+      "reader_payload": "CELLONE: https://example.org\nCELLTWO: https://example.org\nprintf(3)",
+      "words": [
+        "CELLONE",
+        "CELLTWO",
+        "printf(3)",
+        "TailWord"
+      ],
+      "lookup": "CELLTWO",
+      "lookup_start": 0,
+      "lookup_cell": [
+        1,
+        0
+      ],
+      "summarized": false,
+      "policy": "bounded-inline-tbl-source-recovery"
+    },
+    {
+      "id": "table_spans",
+      "kind": "tbl",
+      "source": ".TH PAYLOAD 1 \"October 3, 2026\" \"ManT\"\n.SH NAME\npayload \\- consumer probe\n.SH DESCRIPTION\n.TP\n.B --payload\n.TS\nl s l\nl l l.\nTOPSPAN\tRIGHT\nLEFT\tMIDDLE\tENDCELL\n.TE\nTailWord\n.SH NEXT\nEND\n",
+      "source_sha256": "a761e7a8ab36d19ebbd0c0e089f70dc438a8a6471b318d6a33ebd9f065360d0e",
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "input_mode": "stdin",
+          "code": 0,
+          "timeout": false,
+          "stdout_sha256": "60c9ef483c2b2ecee2b17db731967fc03a46be570038cf99266b79cdc1ca97c6",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "utf8_valid": true
+        },
+        "utf8": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "input_mode": "stdin",
+          "code": 0,
+          "timeout": false,
+          "stdout_sha256": "60c9ef483c2b2ecee2b17db731967fc03a46be570038cf99266b79cdc1ca97c6",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "utf8_valid": true
+        },
+        "html": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Thtml"
+          ],
+          "input_mode": "stdin",
+          "code": 0,
+          "timeout": false,
+          "stdout_sha256": "b21f6fc17b8b9b329c6a01dc0398ffa58cf9f6ef4dd51f65890e0d3ac85ac81e",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "utf8_valid": true
+        },
+        "tree": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Ttree"
+          ],
+          "input_mode": "stdin",
+          "code": 0,
+          "timeout": false,
+          "stdout_sha256": "18e8fd067a04ca6c868ed47f1a1517bbfae95b4950a88f7ab56a232b2315c71c",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "utf8_valid": true
+        },
+        "lint": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tlint"
+          ],
+          "input_mode": "stdin",
+          "code": 0,
+          "timeout": false,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "utf8_valid": true
+        }
+      },
+      "owner_name": "--payload",
+      "owner_macro": "TP",
+      "owner_line": 5,
+      "native_payload_lines": [
+        10,
+        11
+      ],
+      "native_cells": [
+        [
+          "TOPSPAN",
+          "RIGHT"
+        ],
+        [
+          "LEFT",
+          "MIDDLE",
+          "ENDCELL"
+        ]
+      ],
+      "cells": [
+        [
+          "TOPSPAN",
+          "RIGHT"
+        ],
+        [
+          "LEFT",
+          "MIDDLE",
+          "ENDCELL"
+        ]
+      ],
+      "spans": [
+        [
+          2,
+          1
+        ],
+        [
+          1,
+          1,
+          1
+        ]
+      ],
+      "reader_payload": "TOPSPAN |  | RIGHT\nLEFT | MIDDLE | ENDCELL",
+      "words": [
+        "TOPSPAN",
+        "RIGHT",
+        "LEFT",
+        "MIDDLE",
+        "ENDCELL",
+        "TailWord"
+      ],
+      "lookup": "TOPSPAN",
+      "lookup_start": 0,
+      "lookup_cell": [
+        0,
+        0
+      ],
+      "summarized": false,
+      "policy": "responsive-native-table-topology"
+    },
+    {
+      "id": "table_restart",
+      "kind": "tbl",
+      "source": ".TH PAYLOAD 1 \"October 3, 2026\" \"ManT\"\n.SH NAME\npayload \\- consumer probe\n.SH DESCRIPTION\n.TP\n.B --payload\n.TS\nl.\nFIRSTCELL\n.T&\nr.\nSECONDCELL\n.TE\nTailWord\n.SH NEXT\nEND\n",
+      "source_sha256": "a8c90ea87053ec314dfca9a737c303f97992a184a0d011594486f72fc58e42a4",
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "input_mode": "stdin",
+          "code": 0,
+          "timeout": false,
+          "stdout_sha256": "5b86a0b5638a72ff9cbf7cd6447df8ce0b8a3af9bea39c0a34862896efe0773f",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "utf8_valid": true
+        },
+        "utf8": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "input_mode": "stdin",
+          "code": 0,
+          "timeout": false,
+          "stdout_sha256": "5b86a0b5638a72ff9cbf7cd6447df8ce0b8a3af9bea39c0a34862896efe0773f",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "utf8_valid": true
+        },
+        "html": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Thtml"
+          ],
+          "input_mode": "stdin",
+          "code": 0,
+          "timeout": false,
+          "stdout_sha256": "be866287deb6413729a5d49b2d529e066adbc6ff07552e73ec6d5b1bb1bf196c",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "utf8_valid": true
+        },
+        "tree": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Ttree"
+          ],
+          "input_mode": "stdin",
+          "code": 0,
+          "timeout": false,
+          "stdout_sha256": "018d714be28ca47238e30942c4cbc1ce1889837ed57a392ae077312aed6ace60",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "utf8_valid": true
+        },
+        "lint": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tlint"
+          ],
+          "input_mode": "stdin",
+          "code": 0,
+          "timeout": false,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "utf8_valid": true
+        }
+      },
+      "owner_name": "--payload",
+      "owner_macro": "TP",
+      "owner_line": 5,
+      "native_payload_lines": [
+        9,
+        12
+      ],
+      "native_cells": [
+        [
+          "FIRSTCELL"
+        ],
+        [
+          "SECONDCELL"
+        ]
+      ],
+      "cells": [
+        [
+          "FIRSTCELL"
+        ],
+        [
+          "SECONDCELL"
+        ]
+      ],
+      "spans": [
+        [
+          1
+        ],
+        [
+          1
+        ]
+      ],
+      "reader_payload": "FIRSTCELL\nSECONDCELL",
+      "words": [
+        "FIRSTCELL",
+        "SECONDCELL",
+        "TailWord"
+      ],
+      "lookup": "SECONDCELL",
+      "lookup_start": 0,
+      "lookup_cell": [
+        1,
+        0
+      ],
+      "summarized": false,
+      "policy": "responsive-native-table-topology"
+    },
+    {
+      "id": "equation_group",
+      "kind": "eqn",
+      "source": ".Dd October 3, 2026\n.Dt PAYLOAD 1\n.Os\n.Sh NAME\n.Nm payload\n.Nd consumer probe\n.Sh DESCRIPTION\n.Bl -tag -width Ds\n.It Fl payload\n.EQ\n{ Alpha over Beta } over Gamma\n.EN\n.No TailWord\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "638b702666270a35aa0a4957d9cae9516cad96df6d0458dee771d7b00083b33e",
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "input_mode": "stdin",
+          "code": 0,
+          "timeout": false,
+          "stdout_sha256": "1f31bc07ee94533afd7e6e619a02202c7955aeeee8e26bba49a0a815f5fca372",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "utf8_valid": true
+        },
+        "utf8": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "input_mode": "stdin",
+          "code": 0,
+          "timeout": false,
+          "stdout_sha256": "79e18189761e9645bdd39a02a45049925555f035a406d67a4f935af9e19d19e5",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "utf8_valid": true
+        },
+        "html": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Thtml"
+          ],
+          "input_mode": "stdin",
+          "code": 0,
+          "timeout": false,
+          "stdout_sha256": "def35e498e15c251a792e5e9c5b09b79d4a5133aa93e1a6e72a2fb9c249e7c0e",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "utf8_valid": true
+        },
+        "tree": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Ttree"
+          ],
+          "input_mode": "stdin",
+          "code": 0,
+          "timeout": false,
+          "stdout_sha256": "318e1df6b645c7dfaf9188ee7d9b7585f61cc23d3edb64f3a91cf13ae945209f",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "utf8_valid": true
+        },
+        "lint": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tlint"
+          ],
+          "input_mode": "stdin",
+          "code": 0,
+          "timeout": false,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "utf8_valid": true
+        }
+      },
+      "equation": "(Alpha / Beta) / Gamma",
+      "words": [
+        "Alpha",
+        "Beta",
+        "Gamma",
+        "TailWord"
+      ],
+      "lookup": "Alpha",
+      "lookup_start": 1,
+      "summarized": false,
+      "owner_name": "-payload",
+      "owner_macro": "It",
+      "owner_line": 9,
+      "native_payload_lines": [
+        10
+      ],
+      "reader_payload": "(Alpha / Beta) / Gamma",
+      "policy": "responsive-readable-equation"
+    },
+    {
+      "id": "equation_fence_unicode",
+      "kind": "eqn",
+      "source": ".Dd October 3, 2026\n.Dt PAYLOAD 1\n.Os\n.Sh NAME\n.Nm payload\n.Nd consumer probe\n.Sh DESCRIPTION\n.Bl -tag -width Ds\n.It Fl payload\n.EQ\nleft [ \\[u03B1] , \\[u03B2] right )\n.EN\n.No TailWord\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "3adb6758f1656c3f6932084bc9f2847d64b12b4b0d78d7481f17c03f1588f044",
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "input_mode": "stdin",
+          "code": 0,
+          "timeout": false,
+          "stdout_sha256": "5a52fa50316ff7a5300b4f688b0825076d7ddf68d2ec130c38e457439be8dcc7",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "utf8_valid": true
+        },
+        "utf8": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "input_mode": "stdin",
+          "code": 0,
+          "timeout": false,
+          "stdout_sha256": "57deac50992a10a85d5869c495c006d64a5c8fd2041fc70bb92d10fa0afd2941",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "utf8_valid": true
+        },
+        "html": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Thtml"
+          ],
+          "input_mode": "stdin",
+          "code": 0,
+          "timeout": false,
+          "stdout_sha256": "04bfe492b63e5bacc9daa49a572621c7c757f31fa27bf1a8c00ba9c117142daa",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "utf8_valid": true
+        },
+        "tree": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Ttree"
+          ],
+          "input_mode": "stdin",
+          "code": 0,
+          "timeout": false,
+          "stdout_sha256": "e568cd48b17cd376754842a25f162b725dd62e083587fd1506e5e88612f5f545",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "utf8_valid": true
+        },
+        "lint": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tlint"
+          ],
+          "input_mode": "stdin",
+          "code": 0,
+          "timeout": false,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "utf8_valid": true
+        }
+      },
+      "equation": "[α , β)",
+      "words": [
+        "α",
+        "β",
+        "TailWord"
+      ],
+      "lookup": "β",
+      "lookup_start": 5,
+      "summarized": false,
+      "owner_name": "-payload",
+      "owner_macro": "It",
+      "owner_line": 9,
+      "native_payload_lines": [
+        10
+      ],
+      "reader_payload": "[α , β)",
+      "policy": "responsive-readable-equation"
+    },
+    {
+      "id": "equation_inline_unicode",
+      "kind": "inline-eqn",
+      "source": ".Dd October 3, 2026\n.Dt PAYLOAD 1\n.Os\n.Sh NAME\n.Nm payload\n.Nd consumer probe\n.Sh DESCRIPTION\n.Bl -tag -width Ds\n.It Fl payload\n.EQ\ndelim $$\n.EN\n.No BEFORE $left [ \\[u03B1] , \\[u03B2] right )$ AFTER\n.No TailWord\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "15bc63f861365288f1c3f08d02ed7c297ecbaf12fc88b7e3b18bcbff3e49f551",
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "input_mode": "stdin",
+          "code": 0,
+          "timeout": false,
+          "stdout_sha256": "f5ce4e5f1d280a41f37da26e66685ac1d7a8f11b640a4e3328a1083ce87c66fd",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "utf8_valid": true
+        },
+        "utf8": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "input_mode": "stdin",
+          "code": 0,
+          "timeout": false,
+          "stdout_sha256": "2e535cd4e077c8981ed6fc803df5a9211f1b4df024d19d24a2165ca556645dfa",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "utf8_valid": true
+        },
+        "html": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Thtml"
+          ],
+          "input_mode": "stdin",
+          "code": 0,
+          "timeout": false,
+          "stdout_sha256": "9aaf66a7701d9cc62b17a1a4bdf89b0f1412cdc125bdca741ef30506c0c9f74d",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "utf8_valid": true
+        },
+        "tree": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Ttree"
+          ],
+          "input_mode": "stdin",
+          "code": 0,
+          "timeout": false,
+          "stdout_sha256": "379ce90e6237e48dc0d52c0256635234f5fdf35fc96c46ce5e5aba2e5df79ed7",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "utf8_valid": true
+        },
+        "lint": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tlint"
+          ],
+          "input_mode": "stdin",
+          "code": 0,
+          "timeout": false,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "utf8_valid": true
+        }
+      },
+      "equation": "[α , β)",
+      "words": [
+        "BEFORE",
+        "α",
+        "β",
+        "AFTER",
+        "TailWord"
+      ],
+      "lookup": "β",
+      "lookup_start": 12,
+      "summarized": false,
+      "owner_name": "-payload",
+      "owner_macro": "It",
+      "owner_line": 9,
+      "native_payload_lines": [
+        13
+      ],
+      "reader_payload": "[α , β)",
+      "policy": "responsive-readable-equation"
+    },
+    {
+      "id": "equation_depth",
+      "kind": "eqn",
+      "source": ".Dd October 3, 2026\n.Dt PAYLOAD 1\n.Os\n.Sh NAME\n.Nm payload\n.Nd consumer probe\n.Sh DESCRIPTION\n.Bl -tag -width Ds\n.It Fl payload\n.EQ\nsqrt { sqrt { sqrt { sqrt { sqrt { sqrt { sqrt { sqrt { sqrt { sqrt { sqrt { sqrt { sqrt { sqrt { sqrt { sqrt { sqrt { sqrt { sqrt { sqrt { sqrt { sqrt { sqrt { sqrt { sqrt { sqrt { sqrt { sqrt { sqrt { sqrt { sqrt { sqrt { DepthOperand } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } }\n.EN\n.No TailWord\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "9e5b7171f3fcd1040d181d6388836ae1a09cbdeb987dd04c146ed98b13c501be",
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "input_mode": "stdin",
+          "code": 0,
+          "timeout": false,
+          "stdout_sha256": "c075778f9f7b54f817333c5c210dcd88fb2756bcdd9faa72cee4487016238548",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "utf8_valid": true
+        },
+        "utf8": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "input_mode": "stdin",
+          "code": 0,
+          "timeout": false,
+          "stdout_sha256": "906736046918f087a135362301ea4298c4eb9493d34cca6f0a27aa2168fa46c0",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "utf8_valid": true
+        },
+        "html": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Thtml"
+          ],
+          "input_mode": "stdin",
+          "code": 0,
+          "timeout": false,
+          "stdout_sha256": "a3b72153c33752e5f79fd14b52e9bf37b7d03e43116b908e83f4f846f8caf9b3",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "utf8_valid": true
+        },
+        "tree": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Ttree"
+          ],
+          "input_mode": "stdin",
+          "code": 0,
+          "timeout": false,
+          "stdout_sha256": "17f72f404967ee38b2939439f808fa1c4dddb56f0318e5cd7a823fd53d9e2fc0",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "utf8_valid": true
+        },
+        "lint": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tlint"
+          ],
+          "input_mode": "stdin",
+          "code": 0,
+          "timeout": false,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "utf8_valid": true
+        }
+      },
+      "equation": "sqrt(sqrt(sqrt(sqrt(sqrt(sqrt(sqrt(sqrt(sqrt(sqrt(sqrt(sqrt(sqrt(sqrt(sqrt(sqrt(sqrt(sqrt(sqrt(sqrt(sqrt(sqrt(sqrt(sqrt(sqrt(sqrt(sqrt(sqrt(sqrt(sqrt(sqrt(sqrt(DepthOperand))))))))))))))))))))))))))))))))",
+      "words": [
+        "DepthOperand",
+        "TailWord"
+      ],
+      "lookup": "DepthOperand",
+      "lookup_start": 160,
+      "summarized": true,
+      "owner_name": "-payload",
+      "owner_macro": "It",
+      "owner_line": 9,
+      "native_payload_lines": [
+        10
+      ],
+      "reader_payload": "sqrt(sqrt(sqrt(sqrt(sqrt(sqrt(sqrt(sqrt(sqrt(sqrt(sqrt(sqrt(sqrt(sqrt(sqrt(sqrt(sqrt(sqrt(sqrt(sqrt(sqrt(sqrt(sqrt(sqrt(sqrt(sqrt(sqrt(sqrt(sqrt(sqrt(sqrt(sqrt(DepthOperand))))))))))))))))))))))))))))))))",
+      "policy": "responsive-readable-equation"
+    },
+    {
+      "id": "equation_matrix",
+      "kind": "eqn",
+      "source": ".Dd October 3, 2026\n.Dt PAYLOAD 1\n.Os\n.Sh NAME\n.Nm payload\n.Nd consumer probe\n.Sh DESCRIPTION\n.Bl -tag -width Ds\n.It Fl payload\n.EQ\nmatrix { ccol { Alpha above Beta } ccol { Gamma } }\n.EN\n.No TailWord\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "6ac0808334ee6e8b8588d07c4c1d44ac0e5accc2f5049acaa9fc65b1bca9191b",
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "input_mode": "stdin",
+          "code": 0,
+          "timeout": false,
+          "stdout_sha256": "a5881c070a4d2a21aea7f1119789b64cf801db8f4cee606c4b64d000aa0077a8",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "utf8_valid": true
+        },
+        "utf8": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "input_mode": "stdin",
+          "code": 0,
+          "timeout": false,
+          "stdout_sha256": "78ab3191b2e3dea0554c86e52bd923851feaeaed19e3f9f7bb221d442a60c363",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "utf8_valid": true
+        },
+        "html": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Thtml"
+          ],
+          "input_mode": "stdin",
+          "code": 0,
+          "timeout": false,
+          "stdout_sha256": "c36591d0e0a10d410385cca5882ac0b80d1bd4396b674762888d79dbeb8e1c8a",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "utf8_valid": true
+        },
+        "tree": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Ttree"
+          ],
+          "input_mode": "stdin",
+          "code": 0,
+          "timeout": false,
+          "stdout_sha256": "eca88298af3c7e110e3b7cdeb30a133c3091cf9215743f3b5e98652039eb51cd",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "utf8_valid": true
+        },
+        "lint": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tlint"
+          ],
+          "input_mode": "stdin",
+          "code": 0,
+          "timeout": false,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "utf8_valid": true
+        }
+      },
+      "equation": "matrix(Alpha, Gamma; Beta, )",
+      "words": [
+        "Alpha",
+        "Gamma",
+        "Beta",
+        "TailWord"
+      ],
+      "lookup": "Alpha",
+      "lookup_start": 7,
+      "summarized": false,
+      "owner_name": "-payload",
+      "owner_macro": "It",
+      "owner_line": 9,
+      "native_payload_lines": [
+        10
+      ],
+      "reader_payload": "matrix(Alpha, Gamma; Beta, )",
+      "policy": "responsive-readable-equation"
+    }
+  ],
+  "expectations_from_product": false,
+  "expected_contract": "Pristine source/AST plus documented roff readable, table recovery and Markdown literal contracts; no native device frame or soft-wrap equality."
+}
