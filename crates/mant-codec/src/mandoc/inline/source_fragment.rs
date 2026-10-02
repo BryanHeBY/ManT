@@ -12,6 +12,9 @@ use libmandoc_rs::{
     Compression, IncludePolicy, InputFormat, MacroSet, NodeKind, ParseOptions, Parser,
 };
 use mant_ir::Inline;
+use std::cell::RefCell;
+
+use crate::mandoc::table_recovery_budget::{MAX_FRAGMENT_BYTES, TableRecoveryBudget};
 
 use super::{InlineBuilder, append_inline_node_with_next, append_man_link};
 
@@ -20,6 +23,8 @@ pub(in crate::mandoc) struct RecoveredFragment {
     pub(in crate::mandoc) inlines: Vec<Inline>,
     pub(in crate::mandoc) complete: bool,
     pub(in crate::mandoc) formatter: crate::mandoc::formatter::FormatterState,
+    /// Output traversal receipt; zero when optional work was not budgeted.
+    pub(in crate::mandoc) output_text_bytes: usize,
 }
 
 /// Recover a cell only when every request belongs to the closed inline
@@ -31,7 +36,11 @@ pub(in crate::mandoc) fn lower_source_fragment_with_formatter_state(
     default_name: Option<&str>,
     synopsis: bool,
     formatter: crate::mandoc::formatter::FormatterState,
+    budget: Option<&RefCell<TableRecoveryBudget>>,
 ) -> Option<RecoveredFragment> {
+    if !charge_fragment_input(budget, source.len()) {
+        return None;
+    }
     let mut requests = 0usize;
     for line in source.lines() {
         let Some(request) = line.trim_start().strip_prefix(['.', '\'']) else {
@@ -57,19 +66,32 @@ pub(in crate::mandoc) fn lower_source_fragment_with_formatter_state(
         return None;
     }
 
-    let fallback = || incomplete_fragment(source, &formatter);
+    let fallback = || {
+        let mut recovered = incomplete_fragment(source, &formatter);
+        recovered.output_text_bytes = admit_fragment_output(&recovered.inlines, budget)?;
+        Some(recovered)
+    };
     // A separate parser invocation is intentionally small and finite.  More
     // importantly, strings, registers and macro arguments would otherwise be
     // evaluated against the synthetic document rather than the real session.
     if requests > 64 || requires_native_evaluation(source, initial_escape) {
-        return Some(fallback());
+        return fallback();
     }
 
     // A tbl row always records an executed escape state. Do not invent `.eo`
     // for a synthetic or incomplete caller that lacks this fact.
     let Some(escape) = initial_escape else {
-        return Some(fallback());
+        return fallback();
     };
+    let escape_bytes = match escape {
+        b'\\' => 0,
+        0 => 4,
+        escape if escape.is_ascii_graphic() => 6,
+        _ => return fallback(),
+    };
+    if !charge_fragment_input(budget, escape_bytes) {
+        return None;
+    }
     let escape_prefix = match escape {
         b'\\' => String::new(),
         0 => ".eo\n".to_owned(),
@@ -78,48 +100,32 @@ pub(in crate::mandoc) fn lower_source_fragment_with_formatter_state(
         }
         // libmandoc stores `.ec` as one byte. A non-ASCII byte cannot be
         // faithfully reconstructed as a Rust source character here.
-        _ => return Some(fallback()),
+        _ => return fallback(),
     };
 
-    let section = if synopsis { "SYNOPSIS" } else { "DESCRIPTION" };
-    let (prefix, format) = match dialect {
-        MacroSet::Mdoc => {
-            let name = default_name
-                .unwrap_or("table-fragment")
-                .replace('\\', "\\e")
-                .replace('"', "\\(dq")
-                .replace(['\n', '\r'], " ");
-            (
-                format!(
-                    ".Dd January 1, 2000\n.Dt MANT-TABLE 1\n.Os\n.Sh NAME\n.Nm \"{name}\"\n.Nd table fragment\n.Sh {section}\n"
-                ),
-                InputFormat::Mdoc,
-            )
-        }
-        MacroSet::Man => (
-            format!(".TH MANT-TABLE 1\n.SH {section}\n"),
-            InputFormat::Man,
-        ),
-        MacroSet::None => return None,
-    };
+    let (input, format) = fragment_input(
+        source,
+        &escape_prefix,
+        dialect,
+        default_name,
+        synopsis,
+        budget,
+    )?;
     let report = Parser::new(ParseOptions {
         includes: IncludePolicy::Deny,
         compression: Compression::Plain,
     })
     .with_input_format(format)
-    .parse_bytes(
-        "mant-table-fragment.1",
-        format!("{prefix}{escape_prefix}{source}\n").as_bytes(),
-    );
+    .parse_bytes("mant-table-fragment.1", input.as_bytes());
     let Ok(mut report) = report else {
-        return Some(fallback());
+        return fallback();
     };
     if report
         .diagnostics
         .iter()
         .any(|diagnostic| diagnostic.code().is_some())
     {
-        return Some(fallback());
+        return fallback();
     }
     clear_synthetic_targets(&mut report.document.root);
     let section = report.document.root.children.iter().rev().find(|node| {
@@ -131,10 +137,106 @@ pub(in crate::mandoc) fn lower_source_fragment_with_formatter_state(
         .find(|node| node.kind == NodeKind::Body)?;
     let mut formatter = formatter;
     let inlines = lower_body(&body.children, default_name, &mut formatter);
+    let output_text_bytes = admit_fragment_output(&inlines, budget)?;
     Some(RecoveredFragment {
         inlines,
         complete: true,
         formatter,
+        output_text_bytes,
+    })
+}
+
+fn admit_fragment_output(
+    inlines: &[Inline],
+    budget: Option<&RefCell<TableRecoveryBudget>>,
+) -> Option<usize> {
+    budget.map_or(Some(0), |budget| {
+        budget.borrow_mut().charge_output_with_text_bytes(inlines)
+    })
+}
+
+fn fragment_input(
+    source: &str,
+    escape_prefix: &str,
+    dialect: MacroSet,
+    default_name: Option<&str>,
+    synopsis: bool,
+    budget: Option<&RefCell<TableRecoveryBudget>>,
+) -> Option<(String, InputFormat)> {
+    let section = if synopsis { "SYNOPSIS" } else { "DESCRIPTION" };
+    let (prefix, format) = match dialect {
+        MacroSet::Mdoc => {
+            let name = default_name.unwrap_or("table-fragment");
+            let before = ".Dd January 1, 2000\n.Dt MANT-TABLE 1\n.Os\n.Sh NAME\n.Nm \"";
+            let after = "\"\n.Nd table fragment\n.Sh ";
+            let minimum_bytes = before
+                .len()
+                .saturating_add(name.len())
+                .saturating_add(after.len())
+                .saturating_add(section.len())
+                .saturating_add(1);
+            // Metadata can be much larger than a cell. Establish the byte
+            // bound before walking its scalars or escaping/copying its name.
+            if !charge_fragment_input(budget, minimum_bytes) {
+                return None;
+            }
+            let escaped_bytes = name.chars().fold(0usize, |bytes, character| {
+                bytes.saturating_add(match character {
+                    '\\' => 2,
+                    '"' => 4,
+                    '\n' | '\r' => 1,
+                    character => character.len_utf8(),
+                })
+            });
+            let bytes = before
+                .len()
+                .saturating_add(escaped_bytes)
+                .saturating_add(after.len())
+                .saturating_add(section.len())
+                .saturating_add(1);
+            if !charge_fragment_input(budget, bytes) {
+                return None;
+            }
+            let name = name
+                .replace('\\', "\\e")
+                .replace('"', "\\(dq")
+                .replace(['\n', '\r'], " ");
+            (
+                format!("{before}{name}{after}{section}\n"),
+                InputFormat::Mdoc,
+            )
+        }
+        MacroSet::Man => {
+            let before = ".TH MANT-TABLE 1\n.SH ";
+            if !charge_fragment_input(
+                budget,
+                before.len().saturating_add(section.len()).saturating_add(1),
+            ) {
+                return None;
+            }
+            (format!("{before}{section}\n"), InputFormat::Man)
+        }
+        MacroSet::None => return None,
+    };
+    let input_bytes = prefix
+        .len()
+        .saturating_add(escape_prefix.len())
+        .saturating_add(source.len())
+        .saturating_add(1);
+    if !charge_fragment_input(budget, input_bytes) {
+        return None;
+    }
+    Some((format!("{prefix}{escape_prefix}{source}\n"), format))
+}
+
+fn charge_fragment_input(budget: Option<&RefCell<TableRecoveryBudget>>, bytes: usize) -> bool {
+    budget.is_none_or(|budget| {
+        let mut budget = budget.borrow_mut();
+        if bytes > MAX_FRAGMENT_BYTES {
+            budget.reject_fragment();
+            return false;
+        }
+        budget.charge_input(bytes)
     })
 }
 
@@ -153,6 +255,7 @@ fn incomplete_fragment(
         inlines,
         complete: false,
         formatter: candidate,
+        output_text_bytes: 0,
     }
 }
 
@@ -328,6 +431,7 @@ mod tests {
                 None,
                 false,
                 crate::mandoc::formatter::FormatterState::default(),
+                None,
             )
             .expect("recognized bounded source");
             assert!(!recovered.complete, "{source}");
@@ -341,6 +445,7 @@ mod tests {
                     None,
                     false,
                     crate::mandoc::formatter::FormatterState::default(),
+                    None,
                 )
                 .is_none()
             );
@@ -356,6 +461,7 @@ mod tests {
             None,
             false,
             crate::mandoc::formatter::FormatterState::default(),
+            None,
         )
         .expect("admitted fragment");
         assert!(recovered.complete);
@@ -371,6 +477,7 @@ mod tests {
             None,
             false,
             crate::mandoc::formatter::FormatterState::default(),
+            None,
         )
         .expect("admitted custom-escape fragment");
         assert!(recovered.complete);

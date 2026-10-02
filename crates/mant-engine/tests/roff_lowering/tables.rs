@@ -154,7 +154,7 @@ fn keeps_inline_equations_in_macro_arguments_and_filled_prose() {
 }
 
 #[test]
-fn normalizes_inline_equations_retained_as_tbl_cell_text() {
+fn retains_opaque_equation_spelling_in_tbl_cells() {
     let document = parse_manual_bytes(
         std::path::Path::new("table-inline-equation.3"),
         b".TH TABLE-EQN 3\n.SH DESCRIPTION\n.EQ\ndelim %%\n.EN\n.TS\nl l.\n%0%\tfor values in % [ 0 , ~pi over 2 ]%\n.TE\n",
@@ -178,12 +178,14 @@ fn normalizes_inline_equations_retained_as_tbl_cell_text() {
     else {
         panic!("expected right paragraph");
     };
-    assert!(matches!(left.as_slice(), [Inline::Code { value }] if value == "0"));
-    assert_eq!(inline_text(right), "for values in [ 0 , π / 2 ]");
+    // CVS roff.c::roff_parseln only runs roff_eqndelim outside tbl.
+    // This exact source ran pristine ASCII/UTF8/HTML/tree/lint first.
+    assert_eq!(inline_text(left), "%0%");
+    assert_eq!(inline_text(right), "for values in % [ 0 , ~pi over 2 ]%");
     assert!(
         right
             .iter()
-            .any(|child| matches!(child, Inline::Code { .. }))
+            .all(|child| !matches!(child, Inline::Code { .. }))
     );
 }
 
@@ -242,12 +244,12 @@ fn tbl_text_blocks_do_not_promote_physical_source_rows_to_hard_lines() {
 }
 
 #[test]
-fn tbl_equation_delimiters_keep_one_formatter_word_execution_stream() {
+fn opaque_tbl_equation_spelling_keeps_one_formatter_word_execution_stream() {
     for (label, cell, expected) in [
-        ("plain-zero-advance", r"A\zX$y$B", "AyB"),
-        ("named-zero-advance", r"A\z\[u0058]$y$B", "AyB"),
-        ("font-state", r"\fBA$y$\fP B", "Ay B"),
-        ("word-end", r"A\pB$y z$C", "ABy\nzC"),
+        ("plain-zero-advance", r"A\zX$y$B", "A$y$B"),
+        ("named-zero-advance", r"A\z\[u0058]$y$B", "A$y$B"),
+        ("font-state", r"\fBA$y$\fP B", "A$y$ B"),
+        ("word-end", r"A\pB$y z$C", "AB$y\nz$C"),
     ] {
         let source =
             format!(".TH PROBE 1\n.SH DESCRIPTION\n.EQ\ndelim $$\n.EN\n.TS\nl.\n{cell}\n.TE\n");
@@ -266,13 +268,13 @@ fn tbl_equation_delimiters_keep_one_formatter_word_execution_stream() {
         assert!(
             children
                 .iter()
-                .any(|inline| matches!(inline, Inline::Code { .. })),
+                .all(|inline| !matches!(inline, Inline::Code { .. })),
             "{label}: {children:?}"
         );
         if label == "font-state" {
             assert!(
                 children.iter().any(
-                    |inline| matches!(inline, Inline::Strong { children } if inline_text(children) == "A")
+                    |inline| matches!(inline, Inline::Strong { children } if inline_text(children) == "A$y$")
                 ),
                 "{label}: {children:?}"
             );
@@ -296,7 +298,7 @@ fn tbl_equation_delimiters_keep_one_formatter_word_execution_stream() {
     let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
         panic!("expected cell paragraph: {:?}", rows[0].cells[0]);
     };
-    assert_eq!(inline_text(children), " y", "{children:?}");
+    assert_eq!(inline_text(children), " $y$", "{children:?}");
     assert!(
         children
             .iter()
@@ -306,13 +308,13 @@ fn tbl_equation_delimiters_keep_one_formatter_word_execution_stream() {
     assert!(
         children
             .iter()
-            .any(|inline| matches!(inline, Inline::Code { value } if value == "y")),
+            .all(|inline| !matches!(inline, Inline::Code { .. })),
         "{children:?}"
     );
 }
 
 #[test]
-fn tbl_equation_code_style_does_not_mutate_roff_font_registers() {
+fn opaque_tbl_equation_payload_preserves_roff_font_registers() {
     let source = b".TH PROBE 1\n.SH DESCRIPTION\n.EQ\ndelim $$\n.EN\n.TS\nl l.\n\\fBA$y$\t\\fP B\n.TE\n\\fP AFTER\n";
     let document = parse_manual_bytes(
         std::path::Path::new("table-equation-font-registers.1"),
@@ -333,7 +335,7 @@ fn tbl_equation_code_style_does_not_mutate_roff_font_registers() {
             assert!(
                 children
                     .iter()
-                    .any(|inline| matches!(inline, Inline::Code { value } if value == "y"))
+                    .any(|inline| matches!(inline, Inline::Strong { children } if inline_text(children) == "A$y$"))
             );
         } else {
             assert!(

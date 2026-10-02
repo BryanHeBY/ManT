@@ -1,7 +1,6 @@
 //! Source facts and operation-local services; no hidden formatter registers.
 use super::{
-    BTreeMap, Diagnostic, EquationDelimiterChange, HashMap, HashSet, MacroSet, Node, RefCell,
-    SourceLineIndex, equation_delimiter_changes, formatter, inline,
+    Diagnostic, HashMap, HashSet, MacroSet, Node, RefCell, SourceLineIndex, formatter, inline,
 };
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -12,22 +11,6 @@ pub(super) enum MdocSectionContext {
     Authors,
 }
 
-#[derive(Default)]
-pub(super) struct EquationNormalizationBudget {
-    pub(super) attempts: usize,
-    pub(super) source_bytes: usize,
-}
-
-impl EquationNormalizationBudget {
-    pub(super) fn charge(&mut self, source_bytes: usize) -> bool {
-        self.attempts = self.attempts.saturating_add(1);
-        self.source_bytes = self.source_bytes.saturating_add(source_bytes);
-        self.attempts <= super::MAX_INLINE_EQUATION_NORMALIZATIONS
-            && source_bytes <= super::MAX_INLINE_EQUATION_FRAGMENT_BYTES
-            && self.source_bytes <= super::MAX_INLINE_EQUATION_TOTAL_BYTES
-    }
-}
-
 pub(super) struct LoweringContext<'a> {
     pub(super) macro_set: MacroSet,
     pub(super) native_heads: RefCell<crate::definitions::NativeHeadEvidence>,
@@ -35,10 +18,10 @@ pub(super) struct LoweringContext<'a> {
     // the RefCells below are memoization and diagnostic collection only.
     pub(super) default_name: Option<&'a str>,
     pub(super) source_lines: Option<SourceLineIndex<'a>>,
-    pub(super) equation_delimiters: Vec<EquationDelimiterChange>,
-    pub(super) normalized_equations: RefCell<BTreeMap<String, String>>,
-    pub(super) equation_normalization_budget: RefCell<EquationNormalizationBudget>,
     native_table_requests: RefCell<HashMap<String, bool>>,
+    /// Optional T{} enhancement work is cumulative across this document,
+    /// independent of speculative formatter/diagnostic transactions.
+    pub(super) table_recovery_budget: RefCell<super::table_recovery_budget::TableRecoveryBudget>,
     pub(super) section_ids: HashMap<String, usize>,
     pub(super) assigned_section_ids: HashSet<String>,
     pub(super) authored_section_targets: HashMap<String, Option<String>>,
@@ -133,10 +116,8 @@ impl<'a> LoweringContext<'a> {
             native_heads: RefCell::default(),
             default_name,
             source_lines: source.map(SourceLineIndex::new),
-            equation_delimiters: source.map_or_else(Vec::new, equation_delimiter_changes),
-            normalized_equations: RefCell::new(BTreeMap::new()),
-            equation_normalization_budget: RefCell::default(),
             native_table_requests: RefCell::new(HashMap::new()),
+            table_recovery_budget: RefCell::default(),
             section_ids: HashMap::new(),
             assigned_section_ids: HashSet::new(),
             authored_section_targets: HashMap::new(),
@@ -391,43 +372,6 @@ impl<'a> LoweringContext<'a> {
         output
     }
 
-    /// Execute interleaved native source and generated equation glyphs as one
-    /// tbl formatter word. Generated Code styling is presentation metadata;
-    /// it must not mutate roff's current/previous font registers.
-    pub(super) fn lower_formatter_word_parts(
-        &self,
-        parts: &[inline::FormatterWordPart<'_>],
-        formatter: &mut formatter::FormatterState,
-    ) -> Vec<mant_ir::Inline> {
-        let mut zero_advance = inline::ZeroAdvanceState::new();
-        zero_advance.inherit_armed(formatter.take_zero_advance_armed());
-        let execution = inline::parse_formatter_word_parts_with_zero_advance(
-            parts,
-            inline::TextExecutionContext {
-                font: &mut formatter.font,
-                zero_advance: &mut zero_advance,
-                pending_word_end_break: false,
-                policy: inline::TextExecutionPolicy {
-                    recognize_generated_references: self.macro_set == MacroSet::Mdoc,
-                    record_native_cells: false,
-                    field_authoritative: false,
-                },
-            },
-        );
-        formatter
-            .execution
-            .escape_coverage
-            .record(execution.escape_scan);
-        let mut output = execution.output;
-        if execution.pending_word_end_break {
-            output.push(mant_ir::Inline::line_break());
-        }
-        formatter.execute_word();
-        formatter.inherit_zero_advance_armed(zero_advance.take_armed());
-        zero_advance.finish_into(&mut output);
-        output
-    }
-
     pub(super) fn table_execution_source(source: &str, escape: Option<u8>) -> String {
         table_execution_source(source, escape)
     }
@@ -451,21 +395,34 @@ impl<'a> LoweringContext<'a> {
     pub(super) fn table_text_blocks(
         &self,
         line: u32,
-        maximum: usize,
+        eligible_cells: impl Iterator<Item = bool>,
         escape: Option<u8>,
-    ) -> Vec<TableTextBlock> {
+    ) -> Vec<Option<TableTextBlock>> {
+        let mut eligible_cells = eligible_cells.peekable();
         // Ordinary tbl rows must not scan forward for `T{` markers.  Besides
         // wasting work, that used to let a commented-out multiline-cell
         // marker claim later real rows as its embedded semantic children.
-        if maximum == 0 {
+        if eligible_cells.peek().is_none() {
             return Vec::new();
         }
         let Some(source_lines) = self.source_lines.as_ref() else {
             return Vec::new();
         };
         let mut blocks = Vec::new();
-        let mut current = None::<String>;
+        // Outer None means no active T{}; inner None preserves the ordinal
+        // of an unsafe or locally oversized cell without copying its source.
+        let mut current = None::<Option<String>>;
         for (_, line) in source_lines.lines_from(line) {
+            // Charge even an empty physical row before lexical scanning.
+            // Only complete blocks survive an allowance refusal; native
+            // finalized cells never depend on this optional source scan.
+            if !self
+                .table_recovery_budget
+                .borrow_mut()
+                .charge_scan(line.len().saturating_add(1))
+            {
+                break;
+            }
             // Interpret tbl's `T{` / `T}` sentinels after roff has removed
             // inline comments.  A comment can follow a real sentinel, while
             // a comment-only request can mention a disabled sentinel without
@@ -474,28 +431,46 @@ impl<'a> LoweringContext<'a> {
             let trimmed = visible_line.trim_start();
             if let Some(content) = current.as_mut() {
                 if let Some(remainder) = trimmed.strip_prefix("T}") {
-                    blocks.push(TableTextBlock {
-                        source: std::mem::take(content),
-                        escape,
-                    });
+                    blocks.push(
+                        content
+                            .take()
+                            .map(|source| TableTextBlock { source, escape }),
+                    );
                     current = None;
-                    if blocks.len() == maximum {
+                    if eligible_cells.peek().is_none() {
                         break;
                     }
                     // tbl serializes adjacent multiline cells as `T}\tT{`.
                     // Closing the first cell must not hide the next opening
                     // marker carried by the same physical source line.
                     if remainder.trim_end().ends_with("T{") {
-                        current = Some(String::new());
+                        current = eligible_cells
+                            .next()
+                            .map(|eligible| eligible.then(String::new));
                     }
-                } else {
-                    if !content.is_empty() {
-                        content.push('\n');
+                } else if let Some(source) = content {
+                    let copied = line.len().saturating_add(usize::from(!source.is_empty()));
+                    if source.len().saturating_add(copied)
+                        > super::table_recovery_budget::MAX_FRAGMENT_BYTES
+                    {
+                        self.table_recovery_budget.borrow_mut().reject_fragment();
+                        *content = None;
+                        continue;
                     }
-                    content.push_str(line);
+                    if !self.table_recovery_budget.borrow_mut().charge_input(copied) {
+                        break;
+                    }
+                    if !source.is_empty() {
+                        source.push('\n');
+                    }
+                    source.push_str(line);
                 }
             } else if trimmed.trim_end().ends_with("T{") {
-                current = Some(String::new());
+                // Preserve the native text-block ordinal for unsafe cells,
+                // but never copy their source into an enhancement candidate.
+                current = eligible_cells
+                    .next()
+                    .map(|eligible| eligible.then(String::new));
             }
         }
         blocks

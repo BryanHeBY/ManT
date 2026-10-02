@@ -17,17 +17,17 @@ mod roff_escape;
 pub use redirect::{RedirectSyntaxError, redirect_target};
 mod source_context;
 mod source_lines;
+mod table_recovery_budget;
 use source_context::{LoweringContext, TableTextBlock};
+mod ast;
 mod equation_wire;
 mod equations;
-use equations::{EquationDelimiterChange, equation_delimiter_changes};
-mod ast;
 use ast::{first_part_children, part_child_groups, source_span};
 mod targets;
 
 use std::{
     cell::RefCell,
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{HashMap, HashSet},
     path::Path,
 };
 
@@ -42,10 +42,6 @@ use mant_ir::{
 
 use self::{roff_escape::visible_text, source_lines::SourceLineIndex};
 use crate::text_safety::mask_terminal_control_bytes;
-
-const MAX_INLINE_EQUATION_NORMALIZATIONS: usize = 256;
-const MAX_INLINE_EQUATION_FRAGMENT_BYTES: usize = 8 * 1024;
-const MAX_INLINE_EQUATION_TOTAL_BYTES: usize = 1024 * 1024;
 
 /// Parse already prepared bytes; `path` is a source label, never opened.
 /// Includes are disabled and compression must already have been decoded.

@@ -5,7 +5,7 @@ use crate::mandoc::{
         FilledBoundary, InlineBuilder, lower_source_fragment_with_formatter_state, plain_text,
     },
 };
-use libmandoc_rs::{Node, NodeKind};
+use libmandoc_rs::{Node, NodeKind, TableCellKind};
 use mant_ir::Inline;
 
 #[cfg(test)]
@@ -35,6 +35,7 @@ mod escape_coverage_tests {
             inlines,
             formatter: accepted,
             diagnostics: Vec::new(),
+            output_text_bytes: 0,
         };
         let _ = candidate.commit(&context, &mut live);
         assert!(live.execution.escape_coverage.truncated());
@@ -52,7 +53,7 @@ mod escape_coverage_tests {
 }
 
 pub(in crate::mandoc::blocks) struct TableEmbedding {
-    pub(super) blocks: Vec<TableTextBlock>,
+    pub(super) blocks: Vec<Option<TableTextBlock>>,
 }
 
 fn table_embeddings(nodes: &[Node], context: &LoweringContext<'_>) -> TableEmbeddingPlan {
@@ -61,12 +62,26 @@ fn table_embeddings(nodes: &[Node], context: &LoweringContext<'_>) -> TableEmbed
         if node.kind != NodeKind::Table {
             continue;
         }
+        // Whole-cell execution proof precedes optional source copying.
+        // The row-wide summary cannot disable a proven safe sibling.
+        if !node.table_cells.iter().any(|cell| {
+            cell.text_block
+                && cell.source_recovery_safe
+                && cell.kind == TableCellKind::Text
+                && !cell.vertical_continuation
+        }) {
+            continue;
+        }
         let blocks = context.table_text_blocks(
             node.line,
             node.table_cells
                 .iter()
                 .filter(|cell| cell.text_block)
-                .count(),
+                .map(|cell| {
+                    cell.source_recovery_safe
+                        && cell.kind == TableCellKind::Text
+                        && !cell.vertical_continuation
+                }),
             node.table_escape,
         );
         if blocks.is_empty() {
@@ -107,6 +122,7 @@ struct CellCandidate {
     inlines: Vec<Inline>,
     formatter: crate::mandoc::formatter::FormatterState,
     diagnostics: Vec<mant_ir::Diagnostic>,
+    output_text_bytes: usize,
 }
 
 impl CellCandidate {
@@ -119,6 +135,7 @@ impl CellCandidate {
         position: CellPosition<'_>,
         source_operands: &str,
         source_recovery_safe: bool,
+        context: &LoweringContext<'_>,
     ) -> bool {
         // A complete synthetic parse has no authority on its own.  The
         // parser records this row as safe only when tbl received the original
@@ -130,7 +147,6 @@ impl CellCandidate {
         if self.inlines.is_empty() {
             return native.is_none();
         }
-        let text = plain_text(&self.inlines);
         // CVS mandoc invokes roff_expand() before tbl_read(). Strings,
         // registers, and macro arguments therefore need the original
         // session's tbl payload. Source recovery may fill an empty native
@@ -143,15 +159,28 @@ impl CellCandidate {
             // (`.Fl Fl help` -> `--help`, `.MR printf 3` -> a typed
             // reference), so its display text is not evidence. The original
             // direct operand stream must match native text exactly.
-            return table_text_agrees(source_operands, native);
+            return ownership_text_agrees(context, source_operands, native) == Some(true);
         }
-        !position.row.iter().enumerate().any(|(index, candidate)| {
-            index != position.index
-                && candidate
-                    .text
-                    .as_deref()
-                    .is_some_and(|native| table_text_agrees(&text, native))
-        })
+        if !context
+            .table_recovery_budget
+            .borrow_mut()
+            .charge_input(self.output_text_bytes)
+        {
+            return false;
+        }
+        let text = plain_text(&self.inlines);
+        for (index, candidate) in position.row.iter().enumerate() {
+            if index == position.index {
+                continue;
+            }
+            if let Some(native) = candidate.text.as_deref() {
+                match ownership_text_agrees(context, &text, native) {
+                    Some(false) => {}
+                    Some(true) | None => return false,
+                }
+            }
+        }
+        true
     }
 
     fn commit(
@@ -184,14 +213,24 @@ pub(super) fn lower_table_cell(
     text_block: Option<&TableTextBlock>,
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> Option<Vec<Inline>> {
-    if let Some(text_block) = text_block {
+    if let Some(text_block) = text_block.filter(|_| cell.source_recovery_safe)
+        && context
+            .table_recovery_budget
+            .borrow_mut()
+            .begin_candidate(text_block.source.len())
+    {
         // Recovery tries independent candidates; the owned formatter state
         // is cloned only for these deliberately speculative transactions.
         let initial_state = formatter.clone();
         let diagnostic_start = context.diagnostics.borrow().len();
         let source = LoweringContext::table_execution_source(&text_block.source, text_block.escape);
-        let source_operands = table_source_operands(context, &source);
-        let source_recovery_allowed = !contains_native_table_request(context, &source);
+        let source_operands = context
+            .table_recovery_budget
+            .borrow_mut()
+            .charge_input(source.len())
+            .then(|| table_source_operands(context, &source));
+        let source_recovery_allowed =
+            source_operands.is_some() && !contains_native_table_request(context, &source);
         // CVS mandoc passes high-level macro operands into tbl, while GNU
         // tbl expands the same inline macro language. A `T{}` source block
         // may enrich its already-associated native cell, but an isolated
@@ -202,6 +241,7 @@ pub(super) fn lower_table_cell(
         // disabling recovery without allowing a synthetic parser to replace
         // what the native execution actually produced.
         if source_recovery_allowed
+            && let Some(source_operands) = source_operands.as_deref()
             && let Some(recovered) = lower_source_fragment_with_formatter_state(
                 &source,
                 text_block.escape,
@@ -209,6 +249,7 @@ pub(super) fn lower_table_cell(
                 context.default_name,
                 node.flags.synopsis_pretty,
                 initial_state.clone(),
+                Some(&context.table_recovery_budget),
             )
             && recovered.complete
         {
@@ -216,8 +257,15 @@ pub(super) fn lower_table_cell(
                 inlines: recovered.inlines,
                 formatter: recovered.formatter,
                 diagnostics: Vec::new(),
+                output_text_bytes: recovered.output_text_bytes,
             };
-            if candidate.belongs_to(cell, position, &source_operands, cell.source_recovery_safe) {
+            if candidate.belongs_to(
+                cell,
+                position,
+                source_operands,
+                cell.source_recovery_safe,
+                context,
+            ) {
                 return Some(candidate.commit(context, formatter));
             }
         }
@@ -228,7 +276,13 @@ pub(super) fn lower_table_cell(
         // a native request such as `.br` made the isolated semantic parse
         // ineligible, and prevents an unavailable native payload from turning
         // into silent content loss.
-        if cell.text.as_deref().is_none_or(str::is_empty) {
+        if cell.text.as_deref().is_none_or(str::is_empty)
+            && let Some(source_operands) = source_operands.as_deref()
+            && context
+                .table_recovery_budget
+                .borrow_mut()
+                .begin_candidate(source.len())
+        {
             let mut candidate_state = initial_state.clone();
             let recovered = lower_raw_table_text_block(&source, context, &mut candidate_state);
             // Recovery remains transactional: it can replace native text only
@@ -237,13 +291,30 @@ pub(super) fn lower_table_cell(
             // with a partial subset of its source.
             let candidate_diagnostics =
                 context.diagnostics.borrow_mut().split_off(diagnostic_start);
-            let candidate = CellCandidate {
-                inlines: recovered,
-                formatter: candidate_state,
-                diagnostics: candidate_diagnostics,
-            };
-            if candidate.belongs_to(cell, position, &source_operands, cell.source_recovery_safe) {
-                return Some(candidate.commit(context, formatter));
+            let output_text_bytes = recovered.as_deref().and_then(|inlines| {
+                context
+                    .table_recovery_budget
+                    .borrow_mut()
+                    .charge_output_with_text_bytes(inlines)
+            });
+            if let Some(inlines) = recovered
+                && let Some(output_text_bytes) = output_text_bytes
+            {
+                let candidate = CellCandidate {
+                    inlines,
+                    formatter: candidate_state,
+                    diagnostics: candidate_diagnostics,
+                    output_text_bytes,
+                };
+                if candidate.belongs_to(
+                    cell,
+                    position,
+                    source_operands,
+                    cell.source_recovery_safe,
+                    context,
+                ) {
+                    return Some(candidate.commit(context, formatter));
+                }
             }
         }
         // Rejected candidates ran only on copies; the live formatter and its
@@ -252,7 +323,6 @@ pub(super) fn lower_table_cell(
     if cell.text.as_deref().is_some_and(|text| !text.is_empty()) {
         return Some(lower_table_cell_text(
             cell.decoder_text().unwrap_or_default(),
-            node.line,
             context,
             formatter,
         ));
@@ -261,16 +331,25 @@ pub(super) fn lower_table_cell(
 }
 
 fn table_text_agrees(reconstructed: &str, parsed: &str) -> bool {
-    fn normalize(value: &str) -> String {
-        // tbl's native macro branch may retain structural padding from a
-        // no-operand wrapper (`.Oo`/`.Oc`) even though the corresponding
-        // source operand stream has no physical blanks at that point. Keep
-        // word boundaries as execution evidence, but normalize the width of
-        // those formatter-owned runs. In particular, `A B` never equals
-        // `AB`: recovery must not turn an executed space into concatenation.
-        value.split_whitespace().collect::<Vec<_>>().join(" ")
-    }
-    normalize(reconstructed) == normalize(parsed)
+    // Match the previous whitespace normalization without copying either
+    // native payload. Keep boundaries: `A B` still never agrees with `AB`.
+    reconstructed
+        .split_whitespace()
+        .eq(parsed.split_whitespace())
+}
+
+fn ownership_text_agrees(
+    context: &LoweringContext<'_>,
+    reconstructed: &str,
+    parsed: &str,
+) -> Option<bool> {
+    // Both sides are visited for each comparison. Repeated empty foreign
+    // siblings must not make a long whitespace prefix free to rescan.
+    context
+        .table_recovery_budget
+        .borrow_mut()
+        .charge_input(reconstructed.len().saturating_add(parsed.len()))
+        .then(|| table_text_agrees(reconstructed, parsed))
 }
 
 /// Build the exact high-level operand stream that CVS `roff_parsetext()`
@@ -289,7 +368,6 @@ fn table_source_operands(context: &LoweringContext<'_>, source: &str) -> String 
 
 fn lower_table_cell_text(
     source: &str,
-    line: u32,
     context: &LoweringContext<'_>,
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> Vec<Inline> {
@@ -299,59 +377,57 @@ fn lower_table_cell_text(
     // such.  Decode that native stream exactly once: the row's `tbl_escape`
     // records only the state while that AST row was allocated and cannot
     // describe a later transition inside the same `T{ ... T}` cell.
-    let Some((opening, closing)) = context.equation_delimiters_at(line) else {
-        return context.lower_text(source, formatter);
-    };
-    // Equation delimiters annotate part of one native `term_word()`; they do
-    // not split formatter execution.  Re-encode the normalized expression as
-    // a literal code-font run, then decode the complete cell once so `\z`,
-    // `\p`, fonts, and word boundaries remain ordered across the delimiter.
-    let mut parts = Vec::new();
-    let mut remainder = source;
-    while let Some(opening_index) = remainder.find(opening) {
-        let after_opening = &remainder[opening_index + opening.len_utf8()..];
-        let Some(closing_index) = after_opening.find(closing) else {
-            break;
-        };
-        parts.push(crate::mandoc::inline::FormatterWordPart::Source(
-            &remainder[..opening_index],
-        ));
-        let expression = &after_opening[..closing_index];
-        if !expression.trim().is_empty() {
-            parts.push(crate::mandoc::inline::FormatterWordPart::Code(
-                context.normalize_equation(expression, line),
-            ));
-        }
-        remainder = &after_opening[closing_index + closing.len_utf8()..];
-    }
-    parts.push(crate::mandoc::inline::FormatterWordPart::Source(remainder));
-    context.lower_formatter_word_parts(&parts, formatter)
+    // CVS roff.c skips page eqn-delimiter parsing while tbl is active. The
+    // cell's string owns no page eqn tree or define history; decode the whole
+    // native formatter word without a context-free expression reparse.
+    context.lower_text(source, formatter)
 }
 
 fn lower_raw_table_text_block(
     source: &str,
     context: &LoweringContext<'_>,
     formatter: &mut crate::mandoc::formatter::FormatterState,
-) -> Vec<Inline> {
+) -> Option<Vec<Inline>> {
     // `tbl_cdata()` appends every admitted physical input line to one cell
     // string, separated by exactly one ASCII blank. Native requests are
     // consumed before that point and contribute no cell word. Replaying the
     // admitted lines independently would invent formatter-word boundaries:
     // in particular, `\c` and deferred `\p` must observe tbl's inserted
     // blank inside this one word.
-    let operands = source
+    let mut operands = Vec::new();
+    for line in source
         .lines()
         .filter_map(|line| table_cell_content_line(context, line))
-        .map(|line| {
-            let line = line.trim();
-            if line.starts_with(['.', '\'']) {
-                format!("\\&{line}")
-            } else {
-                line.to_owned()
-            }
-        })
-        .filter(|line| !line.is_empty())
-        .collect::<Vec<_>>();
+    {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let quoted = line.starts_with(['.', '\'']);
+        if !context
+            .table_recovery_budget
+            .borrow_mut()
+            .charge_input(line.len().saturating_add(2 * usize::from(quoted)))
+        {
+            return None;
+        }
+        operands.push(if quoted {
+            format!("\\&{line}")
+        } else {
+            line.to_owned()
+        });
+    }
+    let joined_bytes = operands
+        .iter()
+        .fold(0usize, |bytes, operand| bytes.saturating_add(operand.len()))
+        .saturating_add(operands.len().saturating_sub(1));
+    if !context
+        .table_recovery_budget
+        .borrow_mut()
+        .charge_input(joined_bytes)
+    {
+        return None;
+    }
     let operand_source = operands.join(" ");
     // A malformed raw operand must remain visible even if the richer bounded
     // fragment parser declines it. This final path decodes complete escape
@@ -365,7 +441,7 @@ fn lower_raw_table_text_block(
     }
     formatter.set_spacing_enabled(builder.spacing_enabled());
     formatter.vertical_space_debt = builder.vertical_space_debt();
-    builder.finish()
+    Some(builder.finish())
 }
 
 /// Native roff requests execute before tbl sees a high-level macro operand.
@@ -402,6 +478,9 @@ fn table_cell_content_line<'a>(context: &LoweringContext<'_>, line: &'a str) -> 
     let operands = request[request_end..].trim_start_matches(' ');
     (!context.is_native_table_request(name)).then_some(operands)
 }
+
+#[cfg(test)]
+mod budget_tests;
 
 #[cfg(test)]
 mod tests {

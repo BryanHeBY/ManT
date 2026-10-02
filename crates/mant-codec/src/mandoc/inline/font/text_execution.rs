@@ -95,19 +95,6 @@ pub(in crate::mandoc) struct TextExecution {
     pub(in crate::mandoc) word_zero_graph: bool,
 }
 
-/// One presentation segment inside a single native formatter word.
-/// Source segments execute roff controls; Code segments contribute already
-/// normalized glyphs without mutating the source font registers.
-pub(in crate::mandoc) enum FormatterWordPart<'a> {
-    Source(&'a str),
-    Code(String),
-}
-
-enum FormatterWordEvent {
-    Source(RoffInlineEvent),
-    Code(String),
-}
-
 // Native graph, break, blank and rejection flags can coexist during one word.
 #[allow(clippy::struct_excessive_bools)]
 struct TextEventState {
@@ -286,38 +273,8 @@ pub(in crate::mandoc) fn parse_roff_text_with_zero_advance(
     context: TextExecutionContext<'_>,
 ) -> TextExecution {
     let decoded = crate::mandoc::roff_escape::decode_with_status(source);
-    let events = decoded
-        .events
-        .into_iter()
-        .map(FormatterWordEvent::Source)
-        .collect::<Vec<_>>();
-    let mut execution = execute_formatter_word_events(&events, context);
+    let mut execution = execute_formatter_word_events(&decoded.events, context);
     execution.escape_scan = decoded.budget_exhausted.into();
-    execution
-}
-
-pub(in crate::mandoc) fn parse_formatter_word_parts_with_zero_advance(
-    parts: &[FormatterWordPart<'_>],
-    context: TextExecutionContext<'_>,
-) -> TextExecution {
-    let mut budget_exhausted = false;
-    let events = parts
-        .iter()
-        .flat_map(|part| match part {
-            FormatterWordPart::Source(source) => {
-                let decoded = crate::mandoc::roff_escape::decode_with_status(source);
-                budget_exhausted |= decoded.budget_exhausted;
-                decoded
-                    .events
-                    .into_iter()
-                    .map(FormatterWordEvent::Source)
-                    .collect::<Vec<_>>()
-            }
-            FormatterWordPart::Code(value) => vec![FormatterWordEvent::Code(value.clone())],
-        })
-        .collect::<Vec<_>>();
-    let mut execution = execute_formatter_word_events(&events, context);
-    execution.escape_scan = budget_exhausted.into();
     execution
 }
 
@@ -343,28 +300,6 @@ impl WordExecution {
             source_continuation: None,
             text_state: TextEventState::new(context.pending_word_end_break),
             native_writes: Vec::new(),
-        }
-    }
-
-    fn append_event(
-        &mut self,
-        event: &FormatterWordEvent,
-        context: &mut TextExecutionContext<'_>,
-        is_last: bool,
-    ) {
-        match event {
-            FormatterWordEvent::Code(value) => append_code_event(
-                value,
-                WordOutput {
-                    output: &mut self.output,
-                    buffer: &mut self.buffer,
-                    font: self.font,
-                    link: self.link.as_deref(),
-                    zero_advance: context.zero_advance,
-                },
-                &mut self.text_state,
-            ),
-            FormatterWordEvent::Source(event) => self.append_source_event(event, context, is_last),
         }
     }
 
@@ -515,7 +450,7 @@ impl WordExecution {
 // Record each decoded native write before its presentation action, in the
 // same term_word() order. Final flush precedes taking the joining receipt.
 fn execute_formatter_word_events(
-    events: &[FormatterWordEvent],
+    events: &[RoffInlineEvent],
     mut context: TextExecutionContext<'_>,
 ) -> TextExecution {
     let mut word = WordExecution::new(&context);
@@ -532,7 +467,7 @@ fn execute_formatter_word_events(
                     .then_some(&word.text_state),
             );
         }
-        word.append_event(event, &mut context, index + 1 == events.len());
+        word.append_source_event(event, &mut context, index + 1 == events.len());
     }
     word.flush_segment();
     context.zero_advance.clear_marker_blank_separator();
@@ -543,16 +478,14 @@ fn execute_formatter_word_events(
 /// `term_field()` projects printable output. Record these facts independently
 /// of the semantic IR and the zero-advance presentation machine.
 fn record_native_event(
-    event: &FormatterWordEvent,
+    event: &RoffInlineEvent,
     writes: &mut Vec<super::super::flow::field_buffer::FieldWrite>,
     fallback_projected: bool,
     authoritative_state: Option<&TextEventState>,
 ) {
     use super::super::flow::field_buffer::{FieldCell, FieldWrite};
     match event {
-        FormatterWordEvent::Source(RoffInlineEvent::Text(value))
-            if authoritative_state.is_some() =>
-        {
+        RoffInlineEvent::Text(value) if authoritative_state.is_some() => {
             let state = authoritative_state.expect("authoritative text state");
             let mut pending = state.pending_word_end_break;
             let mut suppress = state.suppress_break_whitespace;
@@ -567,16 +500,14 @@ fn record_native_event(
                 }
             }
         }
-        FormatterWordEvent::Code(value)
-        | FormatterWordEvent::Source(
-            RoffInlineEvent::Text(value)
-            | RoffInlineEvent::Glyph(value)
-            | RoffInlineEvent::Overstrike {
-                terminal: Some(value),
-                ..
-            },
-        ) => FieldWrite::append_literal(writes, value),
-        FormatterWordEvent::Source(RoffInlineEvent::FallbackGlyph(value)) => {
+
+        RoffInlineEvent::Text(value)
+        | RoffInlineEvent::Glyph(value)
+        | RoffInlineEvent::Overstrike {
+            terminal: Some(value),
+            ..
+        } => FieldWrite::append_literal(writes, value),
+        RoffInlineEvent::FallbackGlyph(value) => {
             writes.push(FieldWrite::RecoveryGlyph {
                 projected_scalars: if fallback_projected {
                     value.chars().count()
@@ -585,28 +516,28 @@ fn record_native_event(
                 },
             });
         }
-        FormatterWordEvent::Source(RoffInlineEvent::DeviceName) => {
+        RoffInlineEvent::DeviceName => {
             FieldWrite::append_literal(writes, "utf8");
         }
-        FormatterWordEvent::Source(RoffInlineEvent::BreakableHyphen) => {
+        RoffInlineEvent::BreakableHyphen => {
             writes.push(FieldWrite::Cell(FieldCell::Hyphen));
         }
-        FormatterWordEvent::Source(RoffInlineEvent::ZeroAdvance) => {
+        RoffInlineEvent::ZeroAdvance => {
             writes.push(FieldWrite::ArmBackafter);
         }
-        FormatterWordEvent::Source(RoffInlineEvent::NoSpace) => {
+        RoffInlineEvent::NoSpace => {
             writes.push(FieldWrite::CancelBackafter);
         }
-        FormatterWordEvent::Source(RoffInlineEvent::LineBreak) => {
+        RoffInlineEvent::LineBreak => {
             writes.push(FieldWrite::Cell(FieldCell::BreakMarker));
         }
-        FormatterWordEvent::Source(RoffInlineEvent::ZeroWidthGlyph) => {
+        RoffInlineEvent::ZeroWidthGlyph => {
             writes.push(FieldWrite::Cell(FieldCell::ZeroWidthGraph));
         }
-        FormatterWordEvent::Source(RoffInlineEvent::EmptyDestination) => {
+        RoffInlineEvent::EmptyDestination => {
             FieldWrite::append_literal(writes, "<>");
         }
-        FormatterWordEvent::Source(_) => {}
+        _ => {}
     }
 }
 
@@ -627,7 +558,7 @@ fn append_empty_destination(
 }
 
 fn finish_text_execution(
-    events: &[FormatterWordEvent],
+    events: &[RoffInlineEvent],
     zero_advance: &mut ZeroAdvanceState,
     word: WordExecution,
 ) -> TextExecution {
@@ -670,11 +601,11 @@ fn finish_text_execution(
 /// Count only ordinary source blanks eligible for CVS `term_field()` trim.
 /// Glyph events spelling a space originate from `\~`, `\0`, or mandoc's
 /// internal `ASCII_NBRSP` and remain formatter graph rather than word padding.
-fn trailing_breakable_spaces(events: &[FormatterWordEvent]) -> usize {
+fn trailing_breakable_spaces(events: &[RoffInlineEvent]) -> usize {
     let mut count = 0;
     for event in events.iter().rev() {
         match event {
-            FormatterWordEvent::Source(RoffInlineEvent::Text(value)) => {
+            RoffInlineEvent::Text(value) => {
                 if value.is_empty() {
                     continue;
                 }
@@ -684,68 +615,25 @@ fn trailing_breakable_spaces(events: &[FormatterWordEvent]) -> usize {
                     return count;
                 }
             }
-            FormatterWordEvent::Source(
-                RoffInlineEvent::Font(_)
-                | RoffInlineEvent::PreviousFont
-                | RoffInlineEvent::ZeroAdvance
-                | RoffInlineEvent::NoSpace
-                | RoffInlineEvent::Presentation { .. }
-                | RoffInlineEvent::ZeroWidthGlyph
-                | RoffInlineEvent::LineBreak,
-            ) => {}
-            FormatterWordEvent::Code(_)
-            | FormatterWordEvent::Source(
-                RoffInlineEvent::Glyph(_)
-                | RoffInlineEvent::BreakableHyphen
-                | RoffInlineEvent::FallbackGlyph(_)
-                | RoffInlineEvent::DeviceName
-                | RoffInlineEvent::Overstrike { .. }
-                | RoffInlineEvent::Link(_)
-                | RoffInlineEvent::EmptyDestination,
-            ) => return count,
+
+            RoffInlineEvent::Font(_)
+            | RoffInlineEvent::PreviousFont
+            | RoffInlineEvent::ZeroAdvance
+            | RoffInlineEvent::NoSpace
+            | RoffInlineEvent::Presentation { .. }
+            | RoffInlineEvent::ZeroWidthGlyph
+            | RoffInlineEvent::LineBreak => {}
+
+            RoffInlineEvent::Glyph(_)
+            | RoffInlineEvent::BreakableHyphen
+            | RoffInlineEvent::FallbackGlyph(_)
+            | RoffInlineEvent::DeviceName
+            | RoffInlineEvent::Overstrike { .. }
+            | RoffInlineEvent::Link(_)
+            | RoffInlineEvent::EmptyDestination => return count,
         }
     }
     count
-}
-
-fn append_code_event(
-    value: &str,
-    mut destination: WordOutput<'_>,
-    text_state: &mut TextEventState,
-) {
-    flush_segment(
-        destination.output,
-        destination.buffer,
-        destination.font,
-        destination.link,
-    );
-    let WordOutput {
-        output,
-        buffer,
-        link,
-        zero_advance,
-        ..
-    } = &mut destination;
-    // Code contributes generated glyphs, without changing source registers or
-    // delegating its presentation break decision to a definition field.
-    append_text_event(
-        value,
-        WordOutput {
-            output,
-            buffer,
-            font: Font::Code,
-            link: *link,
-            zero_advance,
-        },
-        text_state,
-        false,
-    );
-    flush_segment(
-        destination.output,
-        destination.buffer,
-        Font::Code,
-        destination.link,
-    );
 }
 
 fn promote_sphinx_manual_reference(

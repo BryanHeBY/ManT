@@ -47,10 +47,7 @@ pub(super) fn lower_diagnostics(input: &[MandocDiagnostic]) -> Vec<Diagnostic> {
         .collect()
 }
 
-use super::{
-    LoweringContext, MAX_INLINE_EQUATION_FRAGMENT_BYTES, MAX_INLINE_EQUATION_NORMALIZATIONS,
-    MAX_INLINE_EQUATION_TOTAL_BYTES, Node, SourceSpan, source_span,
-};
+use super::{LoweringContext, Node, source_span};
 
 impl LoweringContext<'_> {
     pub(super) fn warn_unhandled_structural_parts(&self, node: &Node) {
@@ -66,33 +63,23 @@ impl LoweringContext<'_> {
         });
     }
 
-    pub(super) fn warn_inline_equation_budget(&self, line: u32) {
-        let mut diagnostics = self.diagnostics.borrow_mut();
-        if diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.code.as_deref() == Some("manual.inline-equation-budget"))
-        {
-            return;
-        }
-        diagnostics.push(Diagnostic {
-            impact: mant_ir::DiagnosticImpact::None,
-            level: DiagnosticLevel::Unsupported,
-            code: Some("manual.inline-equation-budget".to_owned()),
-            message: format!(
-                "inline table equation normalization reached its allowance ({MAX_INLINE_EQUATION_NORMALIZATIONS} attempts, {MAX_INLINE_EQUATION_FRAGMENT_BYTES} bytes per fragment, {MAX_INLINE_EQUATION_TOTAL_BYTES} bytes total); later source spellings were retained without normalization"
-            ),
-            source: Some(SourceSpan {
-                byte_range: None,
-                line,
-                column: 1,
-                end_line: None,
-                end_column: None,
-            }),
-        });
-    }
-
     pub(super) fn take_diagnostics(&self) -> Vec<Diagnostic> {
         let mut diagnostics = self.diagnostics.take();
+        let table_budget = self.table_recovery_budget.borrow();
+        if table_budget.exhaustion().is_some() || table_budget.refused_fragments() > 0 {
+            diagnostics.push(Diagnostic {
+                impact: mant_ir::DiagnosticImpact::None,
+                level: DiagnosticLevel::Warning,
+                code: Some("manual.table-recovery-budget".to_owned()),
+                message: format!(
+                    "optional table enrichment reached a bounded allowance (page limit: {:?}; oversized fragments: {}; attempts: {}); finalized native cell payloads were retained",
+                    table_budget.exhaustion(),
+                    table_budget.refused_fragments(),
+                    table_budget.attempts(),
+                ),
+                source: None,
+            });
+        }
         if self.escape_coverage.truncated() {
             diagnostics.push(Diagnostic {
                 impact: mant_ir::DiagnosticImpact::ContentCoverage,
@@ -144,5 +131,35 @@ mod tests {
             diagnostics[2].code.as_deref(),
             Some("manual.syntax-depth-truncated")
         );
+    }
+
+    #[test]
+    fn optional_table_refusal_reports_once_without_reclassifying_existing_loss() {
+        let context = crate::mandoc::LoweringContext::new(None, None);
+        context.diagnostics.borrow_mut().push(mant_ir::Diagnostic {
+            impact: mant_ir::DiagnosticImpact::ContentCoverage,
+            level: DiagnosticLevel::Unsupported,
+            code: Some("existing-loss".to_owned()),
+            message: "already incomplete".to_owned(),
+            source: None,
+        });
+        let mut budget = context.table_recovery_budget.borrow_mut();
+        budget.reject_fragment();
+        budget.reject_fragment();
+        assert!(!budget.charge_scan(usize::MAX));
+        drop(budget);
+        let diagnostics = context.take_diagnostics();
+        assert_eq!(diagnostics.len(), 2);
+        assert_eq!(
+            diagnostics[0].impact,
+            mant_ir::DiagnosticImpact::ContentCoverage
+        );
+        assert_eq!(
+            diagnostics[1].code.as_deref(),
+            Some("manual.table-recovery-budget")
+        );
+        assert_eq!(diagnostics[1].impact, mant_ir::DiagnosticImpact::None);
+        assert!(diagnostics[1].source.is_none());
+        assert!(diagnostics[1].message.contains("oversized fragments: 2"));
     }
 }

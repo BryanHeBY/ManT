@@ -49,8 +49,9 @@ pub(super) fn append_table_row(
                 let cell = &node.table_cells[index];
                 let vertical_continuation = cell.vertical_continuation;
                 let text_block = if cell.text_block {
-                    let block =
-                        embedding.and_then(|embedding| embedding.blocks.get(text_block_index));
+                    let block = embedding
+                        .and_then(|embedding| embedding.blocks.get(text_block_index))
+                        .and_then(Option::as_ref);
                     text_block_index += 1;
                     block
                 } else {

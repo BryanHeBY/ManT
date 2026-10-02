@@ -12,13 +12,9 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet},
-    fs,
-    io::Read,
-    path::{Path, PathBuf},
-    process::Command,
+    path::PathBuf,
 };
 
-use flate2::read::GzDecoder;
 use libmandoc_rs::{
     Compression, DisplayKind, IncludePolicy, Node, NodeKind, NormalizedListKind, ParseOptions,
     Parser, SpecialCharacter, special_character,
@@ -222,26 +218,10 @@ fn profile_request(line: &str) -> Result<Value, String> {
     })
     .parse_file(&path)
     .map_err(|error| error.to_string())?;
-    let (mut expected, mut expected_topology) = ast_profile(&report.document.root);
-    let source = read_source(&path)?;
-    for (line, expression) in source_table_equations(&String::from_utf8_lossy(&source)) {
-        let value = normalize_equation_fragment(&expression)?;
-        if value.is_empty()
-            || expected_topology.equations.iter().any(|equation| {
-                equation.source_line == line
-                    && equation.context == EquationContext::TableCell
-                    && equation.value == value
-            })
-        {
-            continue;
-        }
-        expected.table_equations += 1;
-        expected_topology.equations.push(AstEquationTopology {
-            source_line: line,
-            context: EquationContext::TableCell,
-            value,
-        });
-    }
+    let (expected, mut expected_topology) = ast_profile(&report.document.root);
+    // Only actual owned Equation nodes establish an obligation. CVS
+    // roff_parseln bypasses equation delimiters while tbl consumes a cell;
+    // a root-source scan cannot invent an executed eqn environment here.
     expected_topology.equations.sort_by_key(|equation| {
         (
             equation.source_line,
@@ -1061,7 +1041,7 @@ fn collect_inlines(
                 collect_inlines(children, source_line, inside_table, profile, topology);
             }
             Inline::LineBreak { .. } => profile.hard_breaks += 1,
-            Inline::Code { value } | Inline::Equation { value, .. } => {
+            Inline::Equation { value, .. } => {
                 if inside_table {
                     profile.table_equation_candidates += 1;
                 } else {
@@ -1077,7 +1057,7 @@ fn collect_inlines(
                     value: value.clone(),
                 });
             }
-            Inline::Text { .. } | Inline::Anchor { .. } => {}
+            Inline::Text { .. } | Inline::Code { .. } | Inline::Anchor { .. } => {}
         }
     }
 }
@@ -1303,172 +1283,6 @@ fn strip_equation_font_escapes(source: &str) -> String {
     output
 }
 
-fn read_source(path: &Path) -> Result<Vec<u8>, String> {
-    let extension = path.extension().and_then(|extension| extension.to_str());
-    if extension.is_some_and(|extension| extension.eq_ignore_ascii_case("gz")) {
-        let source = fs::File::open(path).map_err(|error| error.to_string())?;
-        let mut decoder = GzDecoder::new(source);
-        let mut output = Vec::new();
-        decoder
-            .read_to_end(&mut output)
-            .map_err(|error| error.to_string())?;
-        return Ok(output);
-    }
-    if extension.is_some_and(|extension| extension.eq_ignore_ascii_case("zst")) {
-        let source = fs::File::open(path).map_err(|error| error.to_string())?;
-        let mut decoder =
-            zstd::stream::read::Decoder::new(source).map_err(|error| error.to_string())?;
-        let mut output = Vec::new();
-        decoder
-            .read_to_end(&mut output)
-            .map_err(|error| error.to_string())?;
-        return Ok(output);
-    }
-    if extension.is_some_and(|extension| {
-        extension.eq_ignore_ascii_case("xz") || extension.eq_ignore_ascii_case("bz2")
-    }) {
-        let program = if extension.is_some_and(|extension| extension.eq_ignore_ascii_case("xz")) {
-            "xz"
-        } else {
-            "bzip2"
-        };
-        let output = Command::new(program).args(["-dc", "--"]).arg(path).output();
-        return decoded_command_source(program, output);
-    }
-    fs::read(path).map_err(|error| error.to_string())
-}
-
-fn decoded_command_source(
-    program: &str,
-    result: std::io::Result<std::process::Output>,
-) -> Result<Vec<u8>, String> {
-    let output = result.map_err(|error| format!("source decoder {program}: {error}"))?;
-    if !output.status.success() {
-        return Err(format!(
-            "source decoder {program} failed ({}): {}",
-            output.status,
-            String::from_utf8_lossy(&output.stderr)
-                .chars()
-                .take(512)
-                .collect::<String>()
-        ));
-    }
-    Ok(output.stdout)
-}
-
-#[derive(Clone, Copy)]
-enum EquationDelimiters {
-    Enabled(char, char),
-    Disabled,
-}
-
-fn source_table_equations(source: &str) -> Vec<(u32, String)> {
-    let mut output = Vec::new();
-    let mut inside_equation = false;
-    let mut pending = None;
-    let mut active = None;
-    let mut inside_table = false;
-
-    for (index, line) in source.lines().enumerate() {
-        let line_number = u32::try_from(index + 1).unwrap_or(u32::MAX);
-        let trimmed = line.trim_start();
-        if let Some(rest) = trimmed.strip_prefix(".EQ")
-            && rest.chars().next().is_none_or(char::is_whitespace)
-        {
-            inside_equation = true;
-            pending = parse_equation_delimiters(rest.trim());
-            continue;
-        }
-        if inside_equation {
-            if trimmed == ".EN" || trimmed.starts_with(".EN ") {
-                if let Some(change) = pending.take() {
-                    active = match change {
-                        EquationDelimiters::Enabled(opening, closing) => Some((opening, closing)),
-                        EquationDelimiters::Disabled => None,
-                    };
-                }
-                inside_equation = false;
-            } else if let Some(change) = parse_equation_delimiters(trimmed) {
-                pending = Some(change);
-            }
-            continue;
-        }
-        if trimmed == ".TS" || trimmed.starts_with(".TS ") {
-            inside_table = true;
-            continue;
-        }
-        if trimmed == ".TE" || trimmed.starts_with(".TE ") {
-            inside_table = false;
-            continue;
-        }
-        if !inside_table || trimmed.starts_with('.') {
-            continue;
-        }
-        if let Some((opening, closing)) = active {
-            output.extend(
-                delimited_expressions(line, opening, closing)
-                    .into_iter()
-                    .map(|expression| (line_number, expression)),
-            );
-        }
-    }
-    output
-}
-
-fn parse_equation_delimiters(value: &str) -> Option<EquationDelimiters> {
-    let value = value.strip_prefix("delim")?.trim_start();
-    if value == "off" {
-        return Some(EquationDelimiters::Disabled);
-    }
-    let mut delimiters = value.chars();
-    let opening = delimiters.next()?;
-    let closing = delimiters.next()?;
-    Some(EquationDelimiters::Enabled(opening, closing))
-}
-
-fn delimited_expressions(source: &str, opening: char, closing: char) -> Vec<String> {
-    let mut output = Vec::new();
-    let mut remainder = source;
-    while let Some(opening_index) = remainder.find(opening) {
-        let after_opening = &remainder[opening_index + opening.len_utf8()..];
-        let Some(closing_index) = after_opening.find(closing) else {
-            break;
-        };
-        let expression = after_opening[..closing_index].trim();
-        if !expression.is_empty() {
-            output.push(expression.to_owned());
-        }
-        remainder = &after_opening[closing_index + closing.len_utf8()..];
-    }
-    output
-}
-
-fn normalize_equation_fragment(source: &str) -> Result<String, String> {
-    let synthetic = format!(".TH AUDIT 7\n.EQ\n{source}\n.EN\n");
-    let report = Parser::new(ParseOptions {
-        includes: IncludePolicy::Deny,
-        compression: Compression::Plain,
-    })
-    .parse_bytes("audit-equation.7", synthetic.as_bytes())
-    .map_err(|error| error.to_string())?;
-    find_equation(&report.document.root)
-        .map(|value| equation_visible_text(&value))
-        .ok_or_else(|| format!("could not normalize table equation {source:?}"))
-}
-
-fn find_equation(node: &Node) -> Option<String> {
-    if node.kind == NodeKind::Equation
-        && let Some(value) = node
-            .equation
-            .as_ref()
-            .map(libmandoc_rs::EquationBox::readable_text)
-        && !value.trim().is_empty()
-    {
-        return Some(value.trim().to_owned());
-    }
-    node.children.iter().find_map(find_equation)
-}
-
 fn exact(violations: &mut Vec<String>, label: &str, expected: usize, observed: usize) {
     if expected != observed {
         violations.push(format!("{label}: expected {expected}, observed {observed}"));
@@ -1589,6 +1403,25 @@ mod tests {
     }
 
     #[test]
+    fn opaque_table_words_and_code_styles_are_not_equation_obligations() {
+        // The exact source ran pristine ASCII/UTF8/HTML/tree/lint first.
+        // roff_parseln excludes tbl from roff_eqndelim; code font is style.
+        let (expected, expected_topology, document) = parsed_structure(
+            ".TH AUDIT 1\n.SH BODY\n.EQ\ndelim $$\n.EN\n.TS\nl fCR.\n$x over 2$\n.TE\n\\f[CR]ordinary code\\fP\n",
+        );
+        let (observed, topology) = super::ir_profile(&document);
+        assert_eq!(expected.table_equations, 0);
+        assert_eq!(observed.table_equation_candidates, 0);
+        assert_eq!(observed.inline_equation_candidates, 0);
+        assert!(expected_topology.equations.is_empty());
+        assert!(topology.equations.is_empty());
+        assert!(
+            super::compare_structure(&expected, &observed, &expected_topology, &topology)
+                .is_empty()
+        );
+    }
+
+    #[test]
     fn section_heading_links_are_counted_and_loss_is_detected() {
         let (expected, expected_topology, mut document) = parsed_structure(concat!(
             ".Dd September 11, 2026\n.Dt AUDIT 1\n.Os\n",
@@ -1687,36 +1520,6 @@ mod tests {
         assert!(
             super::compare_structure(&expected, &observed, &topology, &observed_topology)
                 .is_empty()
-        );
-    }
-
-    #[test]
-    fn unavailable_source_decoder_is_not_absent_equation_evidence() {
-        let error = super::decoded_command_source(
-            "xz",
-            Err(std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                "missing decoder",
-            )),
-        )
-        .unwrap_err();
-        assert!(error.contains("xz"));
-        assert!(error.contains("missing decoder"));
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn failed_source_decoder_is_not_successful_empty_input() {
-        use std::os::unix::process::ExitStatusExt;
-        let output = |code| std::process::Output {
-            status: std::process::ExitStatus::from_raw(code << 8),
-            stdout: Vec::new(),
-            stderr: b"invalid compressed data".to_vec(),
-        };
-        assert!(super::decoded_command_source("bzip2", Ok(output(1))).is_err());
-        assert_eq!(
-            super::decoded_command_source("bzip2", Ok(output(0))).unwrap(),
-            Vec::<u8>::new()
         );
     }
 

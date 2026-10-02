@@ -875,15 +875,38 @@ Rule cells retain their column positions but no printable body. Both layout rule
 
 Cell text passes through the same roff escape decoder as ordinary prose. CVS `mandoc` sends operands of high-level controls to `tbl`, while GNU `tbl` expands its inline man/mdoc language before formatting. ManT makes that divergence explicit: a source-backed `T{`/`T}` block containing only a bounded, self-contained inline macro sequence is parsed as one isolated inline fragment. It therefore preserves source meanings such as `.Fl Fl help` → `--help`, `.Ns` joins, `.Sm` spacing, mdoc enclosures, man font alternation, and typed `Mt`/`UR` links. The fragment never creates document structure, targets, includes, or semantic entries.
 
-This compatibility recovery is deliberately closed. Lexical `\"` and `\#` comments apply first. A native roff request, an unknown or structural macro, an interpolation requiring the original string/register/macro-argument session, a parser diagnostic, or a bounded-work limit declines the isolated parse. In that case native table text is authoritative; if it is unavailable, ManT retains the complete raw tbl operand flow rather than a partial semantic subset. Native requests are still executed or suppressed before that fallback, so `.ll 50n`, `.po 0n`, and `.br` never leak control operands as visible text.
+This compatibility recovery is deliberately closed. Lexical `\"` and `\#` comments apply first. A native roff request, an unknown or structural macro, an interpolation requiring the original string/register/macro-argument session, a typed parser safety-limit diagnostic, or a bounded-work limit declines the isolated parse. Ordinary recoverable parser warnings do not by themselves reject an otherwise complete inline fragment. In that case native table text is authoritative; if it is unavailable, ManT retains the complete raw tbl operand flow rather than a partial semantic subset. Native requests are still executed or suppressed before that fallback, so `.ll 50n`, `.po 0n`, and `.br` never leak control operands as visible text.
 
-Recovery is transactional at the cell boundary. A complete admitted source fragment commits its formatter state only to that exact parser-marked text-block cell. A raw candidate may replace nonempty native text only when normalized visible text agrees, preventing a nearby text block or unevaluated expansion from changing a cell. This preserves source-level inline intent where it is provable without turning table recovery into a second document parser.
+Recovery is transactional at the cell boundary. A complete admitted source fragment commits its formatter state only to that exact parser-marked text-block cell. Its original operand stream must agree with any nonempty native payload; matching presentation alone cannot prove macro execution. The raw fallback applies only to an empty native payload with the same cell-level execution proof. Rejected candidates do not publish their private formatter state or diagnostics. This preserves source-level inline intent where it is provable without turning table recovery into a second document parser.
 
-Some formatter-specific strings disappear before libmandoc exposes a cell. For ordinary tab-separated rows, ManT compares the validated cells with the bounded source row and retains an otherwise missing cell in its original escaped spelling. It emits one `manual.unexpanded-table-cell` diagnostic for the document rather than presenting an empty table or pretending that the formatter-specific value was evaluated.
+Optional enrichment shares a page allowance: 4 MiB of scanned source, 4 MiB
+of prepared and compared input, 256 candidate attempts, 65,536 output nodes,
+and 4 MiB of output strings. Each source fragment is at most 64 KiB; an
+oversized fragment declines only that cell, allowing smaller safe neighbors
+to use the remaining page allowance. Attempts and copied work remain charged
+after a candidate fails or is rejected. Reaching these limits retains complete
+finalized native cell payloads and adds one `manual.table-recovery-budget`
+warning with no coverage impact. It does not erase an existing content-loss
+diagnostic or claim that every temporary native allocation is covered by this
+optional allowance.
+
+Finalized native rows, cells and spans remain the table's structural authority.
+Ordinary source rows never create extra cells or revive rule and span payloads.
+Without source text or a cell-level execution witness, lowering uses only the
+owned native payload; a root file's matching line number is not source identity.
 
 ## Equations
 
-Display [mandoc eqn(7)](https://mandoc.bsd.lv/man/eqn.7.html) input becomes an `equation` block with libmandoc's parsed box structure and a checked readable text projection. Delimiter-selected equations inside filled prose remain inline equation nodes between the surrounding words. The same active delimiters are applied to ordinary `tbl(7)` cells, whose opaque cell strings are normalized through a separate bounded invocation of the pinned eqn parser. This isolated recovery cannot inherit the page's complete `delim`/`define` history; a declined or failed recovery retains the raw cell payload. Configuration-only `EQ`/`EN` blocks emit no empty equation. The common complete, unquoted GNU `ldots` macro is projected as `...`; quoted `"ldots"` remains literal text.
+Display [mandoc eqn(7)](https://mandoc.bsd.lv/man/eqn.7.html) input becomes an `equation` block with libmandoc's parsed box structure and a checked readable text projection. Delimiter-selected equations inside prose remain inline equation nodes between the surrounding words. Configuration-only `EQ`/`EN` blocks emit no empty equation. The common complete, unquoted GNU `ldots` macro is projected as `...`; quoted `"ldots"` remains literal text.
+
+Native `tbl(7)` keeps delimiter-like cell text opaque. ManT decodes that native
+word with the ordinary roff escape and font state, preserving its delimiters
+and operands. It does not reparse the cell as an isolated equation: the owned
+table has no executed `define` or delimiter environment, and source scanning
+cannot distinguish ignored or uncalled configuration from executed state.
+This preserves the reliable base payload without claiming recovered equation
+structure or reporting a content loss. Native equations outside the table
+continue to use the page's actual parsed environment.
 
 An authored display is an independent IR block. The terminal reference can
 write its equation words into the preceding text buffer; that device behavior
@@ -891,7 +914,7 @@ does not determine the display's IR boundary. Regression checks retain the
 accepted preceding prose and the owned display separately. Inline equations
 continue to occupy their original place among prose words.
 
-ManT preserves the owned structure and its shared readable projection for text, Markdown, JSON, search, and TUI consumers; it does not typeset mathematical layout or execute an external `eqn` preprocessor. At most 256 distinct opaque table expressions are reparsed per document, with 8 KiB per fragment and 1 MiB cumulative attempted input. Failed attempts also spend the allowance. Later expressions remain visible in their source spelling and produce `manual.inline-equation-budget`, preventing adversarial tables from turning semantic recovery into unbounded parser work.
+ManT preserves the owned structure and its shared readable projection for text, Markdown, JSON, search, and TUI consumers; it does not typeset mathematical layout or execute an external `eqn` preprocessor. Opaque table cells do not allocate a second equation parser, delimiter history or normalization cache.
 
 Deeply nested equations and document trees are bounded before recursive Rust lowering. The owned native tree stops descending after 256 levels and returns the finite prefix. A separate native construction guard stops input dispatch after a syntax node exceeds 512 parent levels, before finalization and validation; that larger violation returns a whole-document parse error. Native reference renderers reject syntax or equation nesting beyond 256 levels independently of output size. Native tree cleanup is iterative.
 Nested native escape arguments are likewise limited to 256 levels; a deeper

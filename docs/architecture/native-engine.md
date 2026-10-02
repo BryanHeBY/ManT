@@ -249,8 +249,14 @@ UTF-8. Syntax and equation copies have cumulative node and byte budgets as
 well as depth limits; known truncation enters the IR as a content-coverage
 diagnostic. Native equation boxes remain structured through IR. Their checked
 readable projection serves existing text consumers, and inline equations retain
-their location among surrounding prose. Source-cell equation recovery has its
-own bounded work budget and keeps raw cell content on failure.
+their location among surrounding prose. Opaque tbl cells retain the native
+operand stream: cell provenance alone does not prove the executed equation
+delimiter or definition environment, so lowering does not infer equation
+structure from root-source spelling. Optional source-backed T{} inline
+enrichment has one cumulative page allowance for scan, input, attempts and
+candidate output. Refusal retains finalized cell payloads; rejected candidates
+cannot publish formatter state or diagnostics, and already spent work is not
+refunded.
 
 One block driver retains routing and execution order. Container scopes, control
 requests, filled flow, no-fill flow and synopsis declarations own their respective

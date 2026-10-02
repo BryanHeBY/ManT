@@ -6,7 +6,7 @@ use mant_ir::{
 };
 
 use super::parse_plain_manual as parse_manual_bytes;
-use super::{LoweringContext, MAX_INLINE_EQUATION_NORMALIZATIONS, Parser, lower_mandoc_document};
+use super::{LoweringContext, Parser, lower_mandoc_document};
 
 // Lowering tests acquire their own plain-text fixtures, then exercise only the
 // byte codec. Product IO, compression and redirect policy tests live under
@@ -121,6 +121,8 @@ mod entries;
 
 mod column_post_rows;
 mod navigation;
+mod table_equation_payloads;
+mod table_source_payloads;
 mod tables;
 
 mod basic_inline;

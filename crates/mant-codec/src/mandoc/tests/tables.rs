@@ -464,10 +464,10 @@ fn native_equation_depth_loss_marks_both_document_coverage_flags() {
 }
 
 #[test]
-fn bounds_distinct_tbl_equation_normalization_work() {
+fn repeated_opaque_tbl_equations_never_start_isolated_parses() {
     let mut source =
         String::from(".TH TABLE-EQN-BUDGET 3\n.SH DESCRIPTION\n.EQ\ndelim %%\n.EN\n.TS\nl.\n");
-    for index in 0..=MAX_INLINE_EQUATION_NORMALIZATIONS {
+    for index in 0..257 {
         writeln!(source, "%x{index}%").expect("write fixture row");
     }
     source.push_str(".TE\n");
@@ -478,27 +478,27 @@ fn bounds_distinct_tbl_equation_normalization_work() {
     )
     .expect("lower a bounded number of table equations");
 
-    assert!(
-        document.diagnostics.iter().any(|diagnostic| {
-            diagnostic.code.as_deref() == Some("manual.inline-equation-budget")
-        })
-    );
     let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
         panic!("expected equation table");
     };
-    assert_eq!(rows.len(), MAX_INLINE_EQUATION_NORMALIZATIONS + 1);
-    // The pinned tbl tree still owns all 257 cells. Stopping the optional
-    // reparse leaves the native payload readable, so this is no content loss.
+    assert_eq!(rows.len(), 257);
+    // The pinned tbl tree still owns all 257 opaque cells. No guessed eqn
+    // context can change them; their native payload stays complete.
     assert!(mant_ir::content_complete(&document.diagnostics));
     assert!(mant_ir::semantics_complete(&document.diagnostics));
-    assert_eq!(
-        document
-            .diagnostics
-            .iter()
-            .find(|diagnostic| diagnostic.code.as_deref() == Some("manual.inline-equation-budget"))
-            .unwrap()
-            .impact,
-        mant_ir::DiagnosticImpact::None
+    // CVS roff_parseln() bypasses inline eqn delimiters during tbl. The
+    // exact 257-cell source ran ASCII/UTF8/HTML/tree/lint before this change.
+    // Native payload stays complete; there is no speculative parse allowance.
+    for (index, row) in rows.iter().enumerate() {
+        let [Block::Paragraph { children, .. }] = row.cells[0].blocks.as_slice() else {
+            panic!("native cell paragraph");
+        };
+        assert_eq!(inline_text(children), format!("%x{index}%"));
+    }
+    assert!(
+        !document.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code.as_deref() == Some("manual.inline-equation-budget")
+        })
     );
 }
 

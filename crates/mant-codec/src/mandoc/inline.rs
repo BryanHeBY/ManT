@@ -28,8 +28,7 @@ use font::lower_man_font_scope;
 #[cfg(test)]
 use font::parse_roff_text_with_font;
 pub(super) use font::{
-    FormatterWordPart, TextExecutionContext, TextExecutionPolicy, ZeroAdvanceState,
-    parse_formatter_word_parts_with_zero_advance, parse_roff_text_with_zero_advance,
+    TextExecutionContext, TextExecutionPolicy, ZeroAdvanceState, parse_roff_text_with_zero_advance,
 };
 pub(super) use font::{lower_inline_nodes_with_font_state, parse_roff_text};
 pub(in crate::mandoc) use source_fragment::lower_source_fragment_with_formatter_state;
