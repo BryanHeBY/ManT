@@ -14,10 +14,7 @@ use std::ops::Range;
 pub fn markdown_source_events(
     markdown: &str,
 ) -> impl Iterator<Item = (pulldown_cmark::Event<'_>, Range<usize>)> {
-    crate::markdown::canonical_br::decode_events(
-        pulldown_cmark::Parser::new(markdown).into_offset_iter(),
-        pulldown_cmark::Options::empty(),
-    )
+    crate::markdown::canonical_br::parse_events(markdown, pulldown_cmark::Options::empty())
 }
 
 /// Markdown event kind whose visible characters need source coordinates.

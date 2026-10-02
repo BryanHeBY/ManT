@@ -401,7 +401,10 @@ export/import contract: a block whose first line is exactly `<br />` can
 represent a paragraph's leading hard row. Its remaining content must parse as
 one paragraph of Markdown phrasing, and any HTML in that paragraph must be
 an attribute-free `br` tag. Repeated breaks, emphasis, strong text, code spans
-and typed Markdown links then retain their normal inline meaning. A bare
+and typed Markdown links then retain their normal inline meaning. Full,
+collapsed and shortcut reference links use the entire document's definitions,
+whether those definitions occur before or after the block. Label matching and
+duplicate definitions follow the ordinary CommonMark parser rules. A bare
 `<br>` block, attributed `br`, script, other HTML, or a mixed HTML block keeps
 its original source; this rule does not enable HTML rendering or activation.
 

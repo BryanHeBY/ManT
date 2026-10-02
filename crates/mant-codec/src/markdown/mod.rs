@@ -31,8 +31,6 @@ use mant_ir::{
     Diagnostic, DiagnosticLevel, Document, DocumentMeta, DocumentSource, ParserInfo, Section,
     SourceFormat, TldrDocument, TldrOrigin, validate_document,
 };
-#[cfg(test)]
-use pulldown_cmark::Parser;
 
 use self::{
     container::split_markdown,
@@ -180,9 +178,7 @@ fn parse_document(source_text: &str, source_path: Option<String>) -> Document {
         PreparedMarkdown {
             source: source_text,
             display_source: source_text.to_owned(),
-            events: Parser::new_ext(source_text, markdown_options())
-                .into_offset_iter()
-                .collect(),
+            events: source::parser_events(source_text),
             declarations: directives::SemanticDeclarations::default(),
         },
         source_path,

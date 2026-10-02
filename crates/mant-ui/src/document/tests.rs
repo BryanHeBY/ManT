@@ -463,6 +463,7 @@ mod layout;
 mod markdown_hard_rows;
 mod mdoc_execution_spacing;
 mod navigation;
+mod reference_rows;
 mod references;
 mod row_origins;
 mod search;

@@ -24,29 +24,9 @@ pub(super) fn physical_lines(mut text: &str) -> impl Iterator<Item = &str> {
     })
 }
 
-/// Feed the parser equivalent single-byte line endings without changing any
-/// source offsets. Its HTML block scanner does not consistently end comments
-/// at a bare CR even though CR is a `CommonMark` line ending.
+/// Collect the shared source-preserving event stream for document lowering.
 pub(super) fn parser_events(source: &str) -> Vec<super::SpannedEvent<'_>> {
-    use pulldown_cmark::Parser;
-    let events: Vec<super::SpannedEvent<'_>> =
-        if physical_lines(source).any(|line| line.ends_with('\r')) {
-            let normalized = physical_lines(source)
-                .map(|line| {
-                    line.strip_suffix('\r')
-                        .map_or_else(|| line.to_owned(), |body| format!("{body}\n"))
-                })
-                .collect::<String>();
-            Parser::new_ext(&normalized, super::markdown_options())
-                .into_offset_iter()
-                .map(|(event, range)| (event.into_static(), range))
-                .collect()
-        } else {
-            Parser::new_ext(source, super::markdown_options())
-                .into_offset_iter()
-                .collect()
-        };
-    super::canonical_br::decode_events(events.into_iter(), super::markdown_options()).collect()
+    super::canonical_br::parse_events(source, super::markdown_options()).collect()
 }
 
 /// Original Markdown together with a compact byte-to-line index.

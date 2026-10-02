@@ -11,6 +11,9 @@ mod command_surface;
 #[path = "process/display_output.rs"]
 mod display_output;
 
+#[path = "process/markdown_links.rs"]
+mod markdown_links;
+
 #[path = "process/requests.rs"]
 mod requests;
 
