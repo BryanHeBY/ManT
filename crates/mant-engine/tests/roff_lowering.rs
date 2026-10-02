@@ -53,6 +53,8 @@ mod tab_display_lifecycle;
 
 #[path = "roff_lowering/macro_consumer_matrix/mod.rs"]
 mod macro_consumer_matrix;
+#[path = "roff_lowering/markdown_hard_rows.rs"]
+mod markdown_hard_rows;
 #[path = "roff_lowering/shared_execution_matrix.rs"]
 mod shared_execution_matrix;
 #[path = "roff_lowering/upstream_inline.rs"]

@@ -236,13 +236,13 @@ fn assert_markdown_projection(
     }
     if let Some(hard_rows) = &card.gold.hard_rows {
         if name == "column_tail_hard_row" {
-            // mdoc_html.c::mdoc_it_pre preserves a logical TR with
-            // two TDs. The registered portable table fallback keeps
-            // their source order as D | RightWord, not native device
-            // row placement. Native text/JSON/TUI assert the distinct
-            // authored rows separately; no other hard axis is waived.
-            assert_eq!(projected_rows, ["D | RightWord"]);
-            return markdown_row_failures;
+            // The exact source was rerun with pristine CVS first:
+            // term.c::term_word buffers ESCAPE_BREAK, and term_fill
+            // accepts D before the rejected suffix. The column fence
+            // preserves that executed trailing row; its generated pipe
+            // does not justify trimming the cell's LF. Native snapshots
+            // retain the original two rows independently of this spelling.
+            assert_eq!(projected_rows, ["D", "| RightWord"]);
         }
         for boundary in &hard_rows.expect {
             let left = super::axis_model::row_containing(&projected_rows, boundary.left)

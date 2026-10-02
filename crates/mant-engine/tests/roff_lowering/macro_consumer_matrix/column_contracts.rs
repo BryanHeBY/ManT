@@ -47,6 +47,24 @@ fn paragraph(block: &Block) -> String {
     inline_text(children)
 }
 
+fn assert_reparsed_column_cell(query: &ResolvedContent, expected: &str) {
+    let markdown = mant_codec::encode::render_markdown(query);
+    let reader = mant_loader::load_markdown_text(&markdown, None).unwrap();
+    let blocks = &reader
+        .document
+        .as_ref()
+        .unwrap()
+        .sections
+        .iter()
+        .find(|section| section.heading.plain_text() == "DESCRIPTION")
+        .unwrap()
+        .blocks;
+    let Block::Preformatted { children, .. } = &blocks[0] else {
+        panic!("column fence changed container: {blocks:?}");
+    };
+    assert_eq!(inline_text(children), expected);
+}
+
 #[test]
 fn nested_definition_cells_keep_content_order_and_entry_identity() {
     // Native termp_it_pre/term_flushln reuse the device field for the nested
@@ -59,8 +77,11 @@ fn nested_definition_cells_keep_content_order_and_entry_identity() {
     let query = reading_roundtrip(
         "cw10_list",
         &["A", "x", "B", "", "C"],
-        "```\nA; x: B | C\n```",
+        "```\nA; x: B\n | C\n```",
     );
+    // The exact source ran pristine CVS first. termp_it_post closes B's
+    // row; the real Markdown reader retains that cell LF after flattening.
+    assert_reparsed_column_cell(&query, "A; x: B\n | C");
     let document = query.document.as_ref().unwrap();
     let [
         Block::Table {

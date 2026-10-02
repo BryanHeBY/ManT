@@ -238,6 +238,12 @@ fn render_definition_list(
                     // CommonMark and changes the block's meaning.
                     let prose = matches!(item.description.first(), Some(Block::Paragraph { .. }));
                     let sep = match (item.layout.inline_term(), prose) {
+                        (true, true)
+                            if options.native_text
+                                && item.layout.head_body_relation.joins_without_separator() =>
+                        {
+                            ""
+                        }
                         (true, true) => " ",
                         // A completed HEAD/BODY row boundary must survive
                         // CommonMark parsing. A plain newline is a soft break

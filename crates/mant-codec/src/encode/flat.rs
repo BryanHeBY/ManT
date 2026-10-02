@@ -72,7 +72,15 @@ fn plain_cell(cell: &TableCell, track: bool) -> MappedText {
 fn plain_block(block: &Block, track: bool) -> Option<MappedText> {
     match block {
         Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
-            MappedText::from(flatten_inline(children).trim().to_owned()).nonempty()
+            // A cell can begin/end with executed hard rows (term.c::
+            // ESCAPE_BREAK/term_fill; mdoc_term.c::termp_it_post). Flattening
+            // its portable geometry must not trim those authored boundaries.
+            MappedText::from(
+                flatten_inline(children)
+                    .trim_matches([' ', '\t'])
+                    .to_owned(),
+            )
+            .nonempty()
         }
         Block::List { items, .. } => MappedText::join(
             items.iter().filter_map(|item| {

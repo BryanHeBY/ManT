@@ -2,6 +2,24 @@
 
 use std::ops::Range;
 
+/// Read `CommonMark` events with original artifact byte ranges and the codec's
+/// narrow leading-hard-row contract.
+///
+/// Like `Parser::new`, this leaves optional Markdown extensions disabled.
+/// Only a canonical `<br />` first line followed by supported phrasing and
+/// attribute-free line-break HTML is interpreted as a paragraph. Other raw
+/// HTML remains HTML events. Ordinary events stream directly; the current
+/// HTML block is buffered while validating that complete contract. Returned
+/// ranges always refer to `markdown`, including through list prefixes.
+pub fn markdown_source_events(
+    markdown: &str,
+) -> impl Iterator<Item = (pulldown_cmark::Event<'_>, Range<usize>)> {
+    crate::markdown::canonical_br::decode_events(
+        pulldown_cmark::Parser::new(markdown).into_offset_iter(),
+        pulldown_cmark::Options::empty(),
+    )
+}
+
 /// Markdown event kind whose visible characters need source coordinates.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InlineMappingKind {
@@ -163,7 +181,72 @@ pub fn floor_char_boundary(text: &str, offset: usize) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use super::{InlineMappingKind, map_inline_characters};
+    use super::{InlineMappingKind, map_inline_characters, markdown_source_events};
+
+    #[test]
+    fn ordinary_events_keep_commonmark_options_and_exact_original_offsets() {
+        for source in [
+            "# TEXT\n\n**word** [link](https://example.org) `code`\n",
+            "| a | b |\n| - | - |\n| c | d |\n",
+            "$literal$ ~~plain~~\n",
+            "<br>\nAFTER\n",
+            "<br class=x>\nAFTER\n",
+            "<div>literal</div>\n",
+            "<br />\n<script>alert(1)</script>\n",
+            "- item\n\n  ```\n  <br />\n  ```\n",
+        ] {
+            let raw = pulldown_cmark::Parser::new(source)
+                .into_offset_iter()
+                .collect::<Vec<_>>();
+            assert_eq!(
+                markdown_source_events(source).collect::<Vec<_>>(),
+                raw,
+                "{source}"
+            );
+        }
+    }
+
+    #[test]
+    fn canonical_phrasing_ranges_address_unicode_in_the_original_nested_source() {
+        let source = "- <br />\n  **中文e\u{301}🦀**<br>\n  [END](https://example.org)\n";
+        let mut observed = vec![];
+        for (event, range) in markdown_source_events(source) {
+            assert!(source.is_char_boundary(range.start) && source.is_char_boundary(range.end));
+            if let pulldown_cmark::Event::Text(value) = event {
+                let mapped = map_inline_characters(source, &value, range, InlineMappingKind::Text);
+                for character in mapped {
+                    assert_eq!(
+                        &source[character.source.clone()],
+                        character.value.to_string()
+                    );
+                    observed.push(character.value);
+                }
+            }
+        }
+        assert_eq!(
+            observed.into_iter().collect::<String>(),
+            "中文e\u{301}🦀END"
+        );
+    }
+
+    #[test]
+    fn canonical_break_tags_are_shared_hard_events_without_source_newline_doubling() {
+        let source = "<br />\nAlpha<br>Beta<br>\nGamma\n";
+        let events = markdown_source_events(source).collect::<Vec<_>>();
+        let breaks = events
+            .iter()
+            .filter_map(|(event, range)| {
+                matches!(event, pulldown_cmark::Event::HardBreak).then_some(&source[range.clone()])
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(breaks, ["<br />", "<br>", "<br>"]);
+        assert!(events.iter().all(|(event, _)| !matches!(
+            event,
+            pulldown_cmark::Event::InlineHtml(_)
+                | pulldown_cmark::Event::Html(_)
+                | pulldown_cmark::Event::SoftBreak
+        )));
+    }
 
     #[test]
     fn code_span_mapping_skips_delimiters_and_commonmark_padding() {

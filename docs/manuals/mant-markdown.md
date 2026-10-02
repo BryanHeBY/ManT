@@ -126,6 +126,10 @@ native label was rejected: JSON and reference inventories retain each
 occurrence, while a code fence neither recreates the rejected address text
 nor supplies an activation range.
 
+Export gives a closing fence its own framing newline. The reader removes that
+one syntax newline, preserving literal content's leading, repeated and final
+hard rows, including blocks made entirely of row breaks.
+
 ## Semantic Entry Lists
 
 ### Content and annotation boundary
@@ -374,7 +378,7 @@ The parser recognizes several CommonMark or GFM extensions that ManT does not as
 | Construct | Preservation behavior |
 | --- | --- |
 | Block quote | Complete source block |
-| Raw HTML block or span | Exact source, except standard inline `br` line breaks |
+| Raw HTML block or span | Exact source, except standard inline `br` and the canonical leading hard-row form below |
 | Image | Exact Markdown source, not fetched |
 | Task list | Complete list source |
 | Footnote definition or reference | Exact source |
@@ -392,7 +396,37 @@ case-insensitive; ordinary HTML whitespace before `>` or `/>` is accepted.
 This includes the `<br>` spelling used when exporting consecutive hard breaks
 and edge breaks inside an inline container. Its following source newline does not add
 another space or row. Other HTML, including attributed tags and complete HTML
-blocks, retains the source-preservation behavior above.
+blocks, retains the source-preservation behavior above, with one narrow
+export/import contract: a block whose first line is exactly `<br />` can
+represent a paragraph's leading hard row. Its remaining content must parse as
+one paragraph of Markdown phrasing, and any HTML in that paragraph must be
+an attribute-free `br` tag. Repeated breaks, emphasis, strong text, code spans
+and typed Markdown links then retain their normal inline meaning. A bare
+`<br>` block, attributed `br`, script, other HTML, or a mixed HTML block keeps
+its original source; this rule does not enable HTML rendering or activation.
+
+Export uses the canonical first-line spelling only when its paragraph begins
+with an empty hard row. Other edge or consecutive breaks keep the standard
+inline spelling. No visible or zero-width sentinel is inserted. Code content
+with hard rows is emitted as separate code spans around those row boundaries,
+because CommonMark normalizes line endings inside one code span to spaces.
+Boundary whitespace and hard rows can lie outside a style delimiter while the
+surviving glyphs retain their style.
+
+The leading-row spelling applies to paragraph phrasing, including list items
+and definition text. Headings keep their separate grammar: deeper ATX
+headings fold hard breaks into a single displayed label, while level-one/two
+headings use their existing Setext form for supported interior breaks. An
+empty first heading row is outside the Markdown heading round-trip subset;
+IR JSON retains its complete inline structure. Block quotes remain preserved
+unsupported source rather than becoming ordinary paragraphs.
+
+The reader and visible-search projection share this canonical event grammar.
+Event ranges continue to address the original Markdown bytes, including
+through list continuation prefixes. Search ranges refer to the artifact
+actually returned by the same query; changing the hard-row spelling changes
+later byte positions. Literal text such as `<br />` is escaped on export and
+does not opt into the canonical rule.
 
 ## Input Safety
 

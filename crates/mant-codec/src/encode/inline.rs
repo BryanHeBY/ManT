@@ -40,7 +40,14 @@ fn render_inline_content(
         } else {
             // CommonMark's two-space form cannot represent a leading, trailing,
             // or consecutive hard break once empty source lines are retained.
-            output.push_str("<br>\n");
+            // At a block's first line the tag is an HTML block, not phrasing.
+            // Reserve one exact spelling for the reader's narrow hard-row
+            // block contract; ordinary raw HTML keeps its source policy.
+            output.push_str(if index == 0 && line.is_none() && !manual_links {
+                "<br />\n"
+            } else {
+                "<br>\n"
+            });
         }
     }
     output
@@ -142,8 +149,10 @@ pub(super) fn fenced_code(value: &str, language: Option<&str>) -> String {
         })
         .filter(|language| !language.is_empty())
         .unwrap_or_default();
-    let boundary = if value.ends_with('\n') { "" } else { "\n" };
-    format!("{fence}{language}\n{value}{boundary}{fence}")
+    // The reader removes exactly the framing newline before the closing
+    // fence (markdown/layout.rs::trim_code_framing_newline). Give that
+    // syntax its own byte; an authored final hard row belongs to the value.
+    format!("{fence}{language}\n{value}\n{fence}")
 }
 
 pub(crate) fn code_span(value: &str) -> String {
@@ -180,7 +189,7 @@ impl InlinePiece {
     }
 
     fn styled(rendered: String, primary: &'static str, alternate: &'static str) -> Self {
-        let styled = !rendered.trim_matches([' ', '\t']).is_empty();
+        let styled = !rendered.trim_matches([' ', '\t', '\n']).is_empty();
         Self {
             rendered,
             markers: Some(StyleMarkers { primary, alternate }),
@@ -189,7 +198,7 @@ impl InlinePiece {
     }
 
     fn first_output_character(&self) -> Option<char> {
-        if self.styled && !self.rendered.starts_with([' ', '\t']) {
+        if self.styled && !self.rendered.starts_with([' ', '\t', '\n']) {
             Some('*')
         } else {
             self.rendered.chars().next()
@@ -197,7 +206,7 @@ impl InlinePiece {
     }
 
     fn last_output_character(&self) -> Option<char> {
-        if self.styled && !self.rendered.ends_with([' ', '\t']) {
+        if self.styled && !self.rendered.ends_with([' ', '\t', '\n']) {
             Some('*')
         } else {
             self.rendered.chars().next_back()
@@ -268,7 +277,10 @@ fn inline_pieces(
                 continue;
             }
             Inline::Code { value } | Inline::Equation { value, .. } => {
-                pieces.push(InlinePiece::plain(code_span(value)));
+                // CommonMark replaces line endings inside one code span by
+                // spaces. Preserve an executed hard row as a boundary between
+                // code spans; empty rows contribute only the boundary.
+                pieces.push(InlinePiece::plain(code_rows(value)));
             }
             Inline::Link {
                 target,
@@ -302,6 +314,22 @@ fn inline_pieces(
         index += 1;
     }
     pieces
+}
+
+fn code_rows(value: &str) -> String {
+    if !value.contains('\n') {
+        return code_span(value);
+    }
+    let mut output = String::new();
+    for (index, row) in value.split('\n').enumerate() {
+        if index > 0 {
+            output.push('\n');
+        }
+        if !row.is_empty() {
+            output.push_str(&code_span(row));
+        }
+    }
+    output
 }
 
 fn render_inline_pieces(pieces: &mut [InlinePiece]) -> String {
@@ -371,15 +399,15 @@ fn style_is_valid(
     following: &[Option<usize>],
 ) -> bool {
     let piece = &pieces[index];
-    let core = piece.rendered.trim_matches([' ', '\t']);
+    let core = piece.rendered.trim_matches([' ', '\t', '\n']);
     let before = piece
         .rendered
-        .starts_with([' ', '\t'])
+        .starts_with([' ', '\t', '\n'])
         .then_some(' ')
         .or_else(|| preceding[index].and_then(|index| pieces[index].last_output_character()));
     let after = piece
         .rendered
-        .ends_with([' ', '\t'])
+        .ends_with([' ', '\t', '\n'])
         .then_some(' ')
         .or_else(|| following[index].and_then(|index| pieces[index].first_output_character()));
     let markers = piece.markers.expect("styled pieces carry markers");
@@ -409,12 +437,12 @@ fn render_styled(
     preceding: &str,
     following: Option<char>,
 ) -> String {
-    let core = rendered.trim_matches([' ', '\t']);
+    let core = rendered.trim_matches([' ', '\t', '\n']);
     if core.is_empty() {
         return rendered.to_owned();
     }
-    let leading_width = rendered.len() - rendered.trim_start_matches([' ', '\t']).len();
-    let trailing_width = rendered.len() - rendered.trim_end_matches([' ', '\t']).len();
+    let leading_width = rendered.len() - rendered.trim_start_matches([' ', '\t', '\n']).len();
+    let trailing_width = rendered.len() - rendered.trim_end_matches([' ', '\t', '\n']).len();
     let leading = &rendered[..leading_width];
     let trailing = &rendered[rendered.len() - trailing_width..];
     let prefer_alternate = preceding.ends_with('*') || core.contains(primary_marker);

@@ -148,7 +148,7 @@ fn parse_inline_sequence(
     (output, end_offset)
 }
 
-fn is_html_line_break(raw: &str) -> bool {
+pub(super) fn is_html_line_break(raw: &str) -> bool {
     let Some(body) = raw.strip_prefix('<').and_then(|raw| raw.strip_suffix('>')) else {
         return false;
     };

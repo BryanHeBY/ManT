@@ -458,6 +458,7 @@ mod grapheme_geometry;
 mod headings;
 mod item_spacing;
 mod layout;
+mod markdown_hard_rows;
 mod mdoc_execution_spacing;
 mod navigation;
 mod references;

@@ -266,7 +266,12 @@ fn wrap_word_row(
     let row_end = trim_trailing_whitespace(cells, split);
     let emitted_row = row_end != 0;
     let mut removed_separator = if row_end == 0 {
-        cells.drain(..fit.max(1));
+        // A fitted prefix can contain both indentation and the next word.
+        // Dropping an empty whitespace row consumes only its separator, not
+        // the visible cells following it (term.c::term_fill keeps graph cells
+        // after a break opportunity for the next accepted segment).
+        let consumed = if split < fit { split + 1 } else { fit };
+        cells.drain(..consumed.max(1));
         true
     } else {
         result.push(wrapped_cells_to_line(

@@ -77,9 +77,16 @@ fn preserves_leading_consecutive_and_trailing_hard_breaks() {
 
     let markdown = render_markdown(&query);
     assert!(
-        markdown.contains("<br>\nbefore<br>\n<br>\nafter<br>"),
+        markdown.contains("<br />\nbefore<br>\n<br>\nafter<br>"),
         "{markdown}"
     );
+    let decoded = parse_content(&markdown, None).unwrap();
+    let Block::Paragraph { children, .. } =
+        &decoded.document.as_ref().unwrap().sections[0].blocks[0]
+    else {
+        panic!("exported hard rows must read back as a paragraph")
+    };
+    assert_eq!(mant_ir::inline_plain_text(children), "\nbefore\n\nafter\n");
 }
 
 #[test]

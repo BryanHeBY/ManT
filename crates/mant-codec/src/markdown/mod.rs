@@ -5,6 +5,7 @@
 
 mod bindings;
 mod blocks;
+pub(crate) mod canonical_br;
 mod container;
 mod directives;
 mod entries;

@@ -1,7 +1,7 @@
 //! Map canonical Markdown bytes to visible text and presentation coordinates.
 use mant_codec::markdown_mapping::{InlineMappingKind, map_inline_characters};
 use mant_protocol::SearchScope;
-use pulldown_cmark::{Event, Parser, TagEnd};
+use pulldown_cmark::{Event, TagEnd};
 use std::ops::Range;
 
 #[cfg(test)]
@@ -161,7 +161,7 @@ impl SearchableText {
         }
 
         let mut visible = VisibleBuilder::new(markdown);
-        for (event, source) in Parser::new(markdown).into_offset_iter() {
+        for (event, source) in mant_codec::markdown_mapping::markdown_source_events(markdown) {
             match event {
                 Event::Text(value) | Event::InlineMath(value) | Event::DisplayMath(value) => {
                     visible.push_mapped(&value, source, InlineMappingKind::Text);

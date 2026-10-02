@@ -364,6 +364,14 @@ impl DefinitionLayout {
 }
 
 impl HeadBodyRelation {
+    /// Whether the executed BODY word follows the final HEAD glyph without
+    /// a separating cell. Responsive origins cannot insert a word boundary
+    /// after this fact was established by the formatter's final receipt.
+    #[must_use]
+    pub const fn joins_without_separator(self) -> bool {
+        matches!(self, Self::JoinedNoSpace | Self::FlushAtBody)
+    }
+
     /// Whether the relation carries the generic default.
     #[must_use]
     pub const fn is_default(&self) -> bool {
