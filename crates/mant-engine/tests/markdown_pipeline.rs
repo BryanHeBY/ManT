@@ -17,6 +17,8 @@ use mant_render::{render_outline_text, render_query_text};
 mod entries;
 #[path = "markdown_pipeline/entry_forms.rs"]
 mod entry_forms;
+#[path = "markdown_pipeline/link_seams.rs"]
+mod link_seams;
 #[path = "markdown_pipeline/navigation.rs"]
 mod navigation;
 #[path = "support/semantic_read.rs"]

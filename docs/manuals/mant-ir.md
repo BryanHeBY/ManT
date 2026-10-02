@@ -100,8 +100,16 @@ are rejected. Canonical output omits empty layout but retains
 `"layout":{"spacingBeforeLines":0}`. Semantic annotation never changes layout.
 
 Canonical Markdown preserves joined paragraph words instead of adding a
-readability separator. A literal description remains a separate fenced code
-block in the corresponding list item, preserving its payload and type. The
+readability separator. Joined HEAD and BODY phrasing uses one Markdown inline
+encoding context, so adjacent styles and code delimiters do not become visible
+text on readback. Their IR roots, name bindings and link ranges remain separate.
+The first effective BODY block carries its resolved leading boundary across
+empty and destination-only roots. A separate prose row becomes a hard break;
+positive leading `VerticalSpace` or block `spacingBeforeLines` becomes a
+paragraph boundary. Markdown may simplify a positive vertical distance to one
+blank line, but never joins that prose back onto the HEAD row. A literal
+description remains a separate fenced code block in the corresponding list
+item, preserving its payload and type. The
 fence's formatting lines are export syntax, not extra hard rows in the IR;
 Markdown semantic readback does not promise native DefinitionItem identities.
 

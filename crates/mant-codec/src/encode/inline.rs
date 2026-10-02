@@ -10,7 +10,23 @@ use mant_ir::{Inline, LinkTarget};
 use super::MarkdownOptions;
 
 pub(crate) fn render_inline(children: &[Inline], options: MarkdownOptions) -> String {
-    render_inline_content(children, options, false)
+    render_inline_segments(&[children], options)
+}
+
+/// Encode source-owned fragments with one delimiter and escaping context.
+/// A Joined seam belongs to the same inline stream even when its IR roots
+/// remain separate for semantic ownership or report decoration.
+pub(super) fn render_inline_segments(segments: &[&[Inline]], options: MarkdownOptions) -> String {
+    render_inline_content_segments(segments, options, false)
+}
+
+/// Encode borrowed node selections without changing their source roots or
+/// splitting the delimiter context at invisible metadata fragments.
+pub(super) fn render_inline_node_refs(nodes: &[&Inline], options: MarkdownOptions) -> String {
+    render_inline_rows(
+        &render_inline_raw_nodes(nodes.iter().copied(), options, false),
+        false,
+    )
 }
 
 pub(super) fn render_heading_inline(children: &[Inline], options: MarkdownOptions) -> String {
@@ -22,7 +38,22 @@ fn render_inline_content(
     options: MarkdownOptions,
     manual_links: bool,
 ) -> String {
-    let lines = render_inline_raw(children, options, manual_links)
+    render_inline_content_segments(&[children], options, manual_links)
+}
+
+fn render_inline_content_segments(
+    segments: &[&[Inline]],
+    options: MarkdownOptions,
+    manual_links: bool,
+) -> String {
+    render_inline_rows(
+        &render_inline_raw_segments(segments, options, manual_links),
+        manual_links,
+    )
+}
+
+fn render_inline_rows(raw: &str, manual_links: bool) -> String {
+    let lines = raw
         .split('\n')
         .map(|line| line.trim_matches([' ', '\t']))
         .map(|line| (!line.is_empty()).then(|| protect_block_prefix(line)))
@@ -171,18 +202,20 @@ struct StyleMarkers {
     alternate: &'static str,
 }
 
-struct InlinePiece {
+struct InlinePiece<'source> {
     rendered: String,
     markers: Option<StyleMarkers>,
     styled: bool,
+    code: Option<Cow<'source, str>>,
 }
 
-impl InlinePiece {
+impl<'source> InlinePiece<'source> {
     fn plain(rendered: String) -> Self {
         Self {
             rendered,
             markers: None,
             styled: false,
+            code: None,
         }
     }
 
@@ -192,6 +225,16 @@ impl InlinePiece {
             rendered,
             markers: Some(StyleMarkers { primary, alternate }),
             styled,
+            code: None,
+        }
+    }
+
+    fn code(value: &'source str) -> Self {
+        Self {
+            rendered: String::new(),
+            markers: None,
+            styled: false,
+            code: Some(Cow::Borrowed(value)),
         }
     }
 
@@ -213,81 +256,148 @@ impl InlinePiece {
 }
 
 fn render_inline_raw(nodes: &[Inline], options: MarkdownOptions, manual_links: bool) -> String {
-    render_inline_pieces(&mut inline_pieces(nodes, options, manual_links))
+    render_inline_raw_segments(&[nodes], options, manual_links)
 }
 
-fn inline_pieces(
-    nodes: &[Inline],
+fn render_inline_raw_segments(
+    segments: &[&[Inline]],
     options: MarkdownOptions,
     manual_links: bool,
-) -> Vec<InlinePiece> {
-    let mut pieces = Vec::with_capacity(nodes.len());
-    let mut index = 0;
-    while let Some(child) = nodes.get(index) {
+) -> String {
+    render_inline_raw_nodes(
+        segments.iter().flat_map(|nodes| nodes.iter()),
+        options,
+        manual_links,
+    )
+}
+
+fn render_inline_raw_nodes<'source>(
+    nodes: impl Iterator<Item = &'source Inline>,
+    options: MarkdownOptions,
+    manual_links: bool,
+) -> String {
+    render_inline_pieces(&mut coalesce_code_pieces(inline_pieces(
+        nodes,
+        options,
+        manual_links,
+    )))
+}
+
+enum PhrasingNode<'source> {
+    Node(&'source Inline),
+    Link {
+        destination: Cow<'source, str>,
+        title: Option<&'source str>,
+        children: &'source [Inline],
+    },
+}
+
+/// A link whose target policy emits no wrapper is transparent phrasing.
+/// Borrow its children into the current stream before any delimiter is
+/// chosen, preserving source order and visible link boundaries.
+fn phrasing_nodes<'source>(
+    mut roots: impl Iterator<Item = &'source Inline>,
+    options: MarkdownOptions,
+    manual_links: bool,
+) -> impl Iterator<Item = PhrasingNode<'source>> {
+    let mut labels: Vec<std::slice::Iter<'source, Inline>> = Vec::new();
+    std::iter::from_fn(move || {
+        loop {
+            let node = if let Some(label) = labels.last_mut() {
+                let Some(node) = label.next() else {
+                    labels.pop();
+                    continue;
+                };
+                node
+            } else {
+                roots.next()?
+            };
+            if let Inline::Link {
+                target,
+                title,
+                children,
+            } = node
+            {
+                if let Some(destination) = link_destination(target, options, manual_links) {
+                    return Some(PhrasingNode::Link {
+                        destination,
+                        title: title.as_deref(),
+                        children,
+                    });
+                }
+                labels.push(children.iter());
+            } else {
+                return Some(PhrasingNode::Node(node));
+            }
+        }
+    })
+}
+
+fn inline_pieces<'source>(
+    nodes: impl Iterator<Item = &'source Inline>,
+    options: MarkdownOptions,
+    manual_links: bool,
+) -> Vec<InlinePiece<'source>> {
+    let mut nodes = phrasing_nodes(nodes, options, manual_links).peekable();
+    let mut pieces = Vec::new();
+    while let Some(child) = nodes.next() {
         match child {
-            Inline::Text { value } => {
+            PhrasingNode::Node(Inline::Text { value }) => {
                 // AST text segmentation must not change delimiter decisions.
                 // Merge only transparent text siblings: crossing a style or
                 // link would ignore real emitted Markdown punctuation.
                 let mut text = Cow::Borrowed(value.as_str());
-                index += 1;
-                while let Some(Inline::Text { value }) = nodes.get(index) {
+                while let Some(PhrasingNode::Node(Inline::Text { value })) = nodes.peek() {
                     text.to_mut().push_str(value);
-                    index += 1;
+                    nodes.next();
                 }
                 pieces.push(InlinePiece::plain(escape_text(&text)));
-                continue;
             }
-            Inline::Strong {
+            PhrasingNode::Node(Inline::Strong {
                 children: styled_children,
-            } => {
-                let mut rendered = render_inline_raw(styled_children, options, manual_links);
-                index += 1;
-                while let Some(Inline::Strong { children }) = nodes.get(index) {
-                    rendered.push_str(&render_inline_raw(children, options, manual_links));
-                    index += 1;
+            }) => {
+                let mut segments = vec![styled_children.as_slice()];
+                while let Some(PhrasingNode::Node(Inline::Strong { children })) = nodes.peek() {
+                    segments.push(children.as_slice());
+                    nodes.next();
                 }
+                let rendered = render_inline_raw_segments(&segments, options, manual_links);
                 pieces.push(InlinePiece::styled(rendered, "**", "__"));
-                continue;
             }
-            Inline::Emphasis {
+            PhrasingNode::Node(Inline::Emphasis {
                 children: styled_children,
-            } => {
-                let mut rendered = render_inline_raw(styled_children, options, manual_links);
-                index += 1;
-                while let Some(Inline::Emphasis { children }) = nodes.get(index) {
-                    rendered.push_str(&render_inline_raw(children, options, manual_links));
-                    index += 1;
+            }) => {
+                let mut segments = vec![styled_children.as_slice()];
+                while let Some(PhrasingNode::Node(Inline::Emphasis { children })) = nodes.peek() {
+                    segments.push(children.as_slice());
+                    nodes.next();
                 }
+                let rendered = render_inline_raw_segments(&segments, options, manual_links);
                 pieces.push(InlinePiece::styled(rendered, "*", "_"));
-                continue;
             }
-            Inline::Code { value } | Inline::Equation { value, .. } => {
-                // CommonMark replaces line endings inside one code span by
-                // spaces. Preserve an executed hard row as a boundary between
-                // code spans; empty rows contribute only the boundary.
-                pieces.push(InlinePiece::plain(code_rows(value)));
+            PhrasingNode::Node(Inline::Code { value } | Inline::Equation { value, .. }) => {
+                pieces.push(InlinePiece::code(value));
             }
-            Inline::Link {
-                target,
+            PhrasingNode::Link {
+                destination,
                 title,
                 children,
-            } => pieces.push(InlinePiece::plain(render_typed_link(
-                target,
-                title.as_deref(),
+            } => pieces.push(InlinePiece::plain(render_link(
+                &destination,
+                title,
                 children,
                 options,
                 manual_links,
             ))),
-            Inline::Anchor {
+            PhrasingNode::Node(Inline::Anchor {
                 id,
                 fragment_aliases,
                 ..
-            } if options.preserve_anchors => {
+            }) if options.preserve_anchors => {
                 pieces.push(InlinePiece::plain(html_anchors(id, fragment_aliases)));
             }
-            Inline::Anchor { .. } => {}
-            Inline::LineBreak { indent_columns } => {
+            PhrasingNode::Node(Inline::Anchor { .. }) => {}
+            PhrasingNode::Node(Inline::LineBreak { indent_columns }) => {
                 // CommonMark collapses ordinary leading spaces or treats
                 // them as a code block. These cells are resolved row layout,
                 // not authored source text, so use non-breaking entities.
@@ -296,13 +406,44 @@ fn inline_pieces(
                     "&#160;".repeat(mant_ir::geometry::padding(i32::from(*indent_columns)))
                 )));
             }
+            PhrasingNode::Node(Inline::Link { .. }) => {
+                unreachable!("phrasing traversal resolves every link wrapper")
+            }
         }
-        index += 1;
     }
     pieces
 }
 
+fn coalesce_code_pieces(pieces: Vec<InlinePiece<'_>>) -> Vec<InlinePiece<'_>> {
+    let mut output: Vec<InlinePiece<'_>> = Vec::with_capacity(pieces.len());
+    for piece in pieces {
+        // Invisible anchors, empty styles and empty text roots cannot split
+        // an emitted backtick run. Preserve every nonempty syntax/content piece.
+        if piece.rendered.is_empty() && piece.code.as_deref().is_none_or(str::is_empty) {
+            continue;
+        }
+        if let Some(value) = piece.code.as_deref()
+            && let Some(previous) = output.last_mut().and_then(|piece| piece.code.as_mut())
+        {
+            previous.to_mut().push_str(value);
+        } else {
+            output.push(piece);
+        }
+    }
+    for piece in &mut output {
+        if let Some(value) = piece.code.take() {
+            // Select delimiters once for the complete accepted code run.
+            // Hard rows split code spans; no source separator is inserted.
+            piece.rendered = code_rows(&value);
+        }
+    }
+    output
+}
+
 fn code_rows(value: &str) -> String {
+    if value.is_empty() {
+        return String::new();
+    }
     if !value.contains('\n') {
         return code_span(value);
     }
@@ -318,7 +459,7 @@ fn code_rows(value: &str) -> String {
     output
 }
 
-fn render_inline_pieces(pieces: &mut [InlinePiece]) -> String {
+fn render_inline_pieces(pieces: &mut [InlinePiece<'_>]) -> String {
     let (preceding, following) = nonempty_neighbors(pieces);
     let mut pending = pieces
         .iter()
@@ -358,7 +499,7 @@ fn render_inline_pieces(pieces: &mut [InlinePiece]) -> String {
     output
 }
 
-fn nonempty_neighbors(pieces: &[InlinePiece]) -> (Vec<Option<usize>>, Vec<Option<usize>>) {
+fn nonempty_neighbors(pieces: &[InlinePiece<'_>]) -> (Vec<Option<usize>>, Vec<Option<usize>>) {
     let mut preceding = vec![None; pieces.len()];
     let mut current = None;
     for (index, piece) in pieces.iter().enumerate() {
@@ -379,7 +520,7 @@ fn nonempty_neighbors(pieces: &[InlinePiece]) -> (Vec<Option<usize>>, Vec<Option
 }
 
 fn style_is_valid(
-    pieces: &[InlinePiece],
+    pieces: &[InlinePiece<'_>],
     index: usize,
     preceding: &[Option<usize>],
     following: &[Option<usize>],
@@ -399,10 +540,13 @@ fn style_is_valid(
     let markers = piece.markers.expect("styled pieces carry markers");
     [markers.primary, markers.alternate]
         .into_iter()
-        .any(|marker| !core.contains(marker) && can_delimit_style(core, marker, before, after))
+        .any(|marker| {
+            style_marker_is_available(core, marker)
+                && can_delimit_style(core, marker, before, after)
+        })
 }
 
-fn following_characters(pieces: &[InlinePiece]) -> Vec<Option<char>> {
+fn following_characters(pieces: &[InlinePiece<'_>]) -> Vec<Option<char>> {
     let mut following = vec![None; pieces.len()];
     let mut current = None;
     for (index, piece) in pieces.iter().enumerate().rev() {
@@ -439,7 +583,8 @@ fn render_styled(
     };
     let preceding = preceding.chars().next_back();
     let marker = markers.into_iter().find(|marker| {
-        !core.contains(marker) && can_delimit_style(core, marker, preceding, following)
+        style_marker_is_available(core, marker)
+            && can_delimit_style(core, marker, preceding, following)
     });
     marker.map_or_else(
         || rendered.to_owned(),
@@ -473,27 +618,21 @@ fn render_link(
     )
 }
 
-/// Share target serialization while keeping portable body and loss-preserving
-/// heading policy explicit. No target is recovered from visible label text.
-fn render_typed_link(
+/// Decide wrapper policy once while preserving the typed destination.
+/// No target is recovered from visible label text.
+pub(super) fn link_destination(
     target: &LinkTarget,
-    title: Option<&str>,
-    children: &[Inline],
     options: MarkdownOptions,
     manual_links: bool,
-) -> String {
-    let destination = match target {
+) -> Option<Cow<'_, str>> {
+    match target {
         // Keep existing external-source representation policy; invalid source
         // references remain visible and diagnosed rather than silently erased.
-        LinkTarget::External { uri } => Some(uri.clone()),
+        LinkTarget::External { uri } => Some(Cow::Borrowed(uri.as_str())),
         LinkTarget::Manual { .. } if !manual_links => None,
         LinkTarget::Section { .. } if !options.preserve_anchors => None,
-        _ => target.to_uri(),
-    };
-    destination.map_or_else(
-        || render_inline_raw(children, options, manual_links),
-        |destination| render_link(&destination, title, children, options, manual_links),
-    )
+        _ => target.to_uri().map(Cow::Owned),
+    }
 }
 
 fn can_delimit_style(
@@ -502,14 +641,34 @@ fn can_delimit_style(
     preceding: Option<char>,
     following: Option<char>,
 ) -> bool {
-    let Some(first) = core.chars().next() else {
+    // CommonMark classifies an entire delimiter run using the characters
+    // outside that run. A generated inner style with the same marker joins
+    // the outer run; its marker is not the next content character.
+    let marker_character = char::from(marker.as_bytes()[0]);
+    let Some(first) = core.trim_start_matches(marker_character).chars().next() else {
         return false;
     };
-    let Some(last) = core.chars().next_back() else {
+    let Some(last) = core.trim_end_matches(marker_character).chars().next_back() else {
         return false;
     };
     can_open_delimiter(marker, preceding, Some(first))
         && can_close_delimiter(marker, Some(last), following)
+}
+
+fn style_marker_is_available(core: &str, marker: &str) -> bool {
+    if !core.contains(marker) {
+        return true;
+    }
+    // A single emphasis marker can enclose generated strong runs. Keep odd
+    // inner runs on the alternate marker: two nested single runs would be
+    // parsed as strong instead of preserving emphasis.
+    if marker.len() != 1 {
+        return false;
+    }
+    let marker_character = char::from(marker.as_bytes()[0]);
+    core.split(|character| character != marker_character)
+        .filter(|run| !run.is_empty())
+        .all(|run| run.len().is_multiple_of(2))
 }
 
 fn can_open_delimiter(marker: &str, preceding: Option<char>, following: Option<char>) -> bool {

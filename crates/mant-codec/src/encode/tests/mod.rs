@@ -17,7 +17,9 @@ use mant_ir::ResolvedContent;
 
 mod addressable_maps;
 mod block_structure;
+mod definition_rows;
 mod hard_rows;
+mod inline_contexts;
 mod inline_escaping;
 mod inline_styles;
 mod links;

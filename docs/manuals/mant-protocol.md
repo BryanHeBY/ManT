@@ -1038,6 +1038,11 @@ A first literal fragment shares a row only when the producer records that
 relation, and explicit leading spacing prevents sharing. Markdown preserves
 literal payload in a separate fenced block within the same list item; fence
 syntax line breaks do not become source hard rows.
+Joined paragraph phrasing shares Markdown delimiter context while preserving
+the original HEAD/BODY roots and name/link ownership. Separate prose retains a
+hard row; positive resolved leading space retains a paragraph boundary even
+when empty or destination-only roots precede the first effective BODY block.
+Markdown may simplify the numeric vertical distance to one blank line.
 Missing/empty layout uses the default; null layout is
 rejected. `layout.spacingBeforeLines` missing/null inherits list compactness;
 explicit zero is retained. The item-level hints are distinct from block-level

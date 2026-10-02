@@ -92,6 +92,19 @@ Decoded fragments match exact authored aliases or normalized IDs. Resolution doe
 
 Wiki links are not part of the supported link contract.
 
+When export omits a manual or local-section link wrapper, its visible label
+shares the surrounding inline encoding context. Representable adjacent code,
+strong or emphasis spans keep their text and styles without exposing Markdown
+delimiters as text. This export policy does not remove the original IR link
+identity or its navigation and query ranges.
+
+Portable export preserves words when CommonMark cannot express an emphasis
+boundary inside a joined word. For example, bold or italic `HEADX(1)` followed
+immediately by plain `BODY` becomes plain `HEADX(1)BODY`: its closing punctuation
+cannot delimit emphasis before the next letter. Native IR and JSON retain the
+original styles. This existing fallback adds no spacing or characters and
+does not apply to adjacent code spans or otherwise representable styles.
+
 Native manual links use the same syntax in ordinary body content, headings,
 and valid linked-code semantic terms:
 
@@ -442,9 +455,13 @@ the output of a later parse/render cycle. Use structured IR for semantic
 inspection and retain the original generated Markdown to reuse its offsets.
 
 A native definition whose label has completed its row uses a CommonMark hard
-break before a prose description. A label sharing the active row remains
-inline. A code block, table or nested list uses its ordinary block boundary.
-The native and portable text projections retain the same row decision.
+break before a prose description. Resolved positive leading space keeps a
+paragraph boundary, with numeric distance simplified to one blank line. A
+label sharing the active row remains inline; joined words use one inline
+encoding context across the original HEAD/BODY roots. These prose boundaries
+retain the accepted word and hard-row decisions. A literal, table or nested
+list uses its ordinary independent CommonMark block boundary; fenced payload
+keeps its source rows, while fence framing is export syntax.
 
 A leading UTF-8 byte-order mark is masked so it cannot hide the embedded tldr marker or demote the first heading. Terminal-unsafe control characters are replaced with spaces. Both cases produce diagnostics while preserving source offsets.
 

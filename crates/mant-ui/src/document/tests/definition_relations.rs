@@ -148,6 +148,86 @@ fn logical_line<'view>(view: &'view DocumentView, word: &str) -> &'view LogicalL
 }
 
 #[test]
+fn native_capacity_and_styled_markdown_seams_keep_cells_copy_and_resize() {
+    // These 48 exact sources are a subset of the 75 pristine five-profile
+    // capacity fixture in engine's definition_consumers. term_flushln's final
+    // minbl/viscol, including equality, controls words independently of style.
+    const HEADER: &str =
+        ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n";
+    for capacity in [3, 4, 5] {
+        let head_word = "X".repeat(capacity);
+        for head in ["No", "Sy", "Em", "Li"] {
+            for body in ["No", "Sy", "Em", "Li"] {
+                let source = format!(
+                    "{HEADER}.Bl -hang -width 2n\n.It Xo\n.sp\n.{head} {head_word}\n.Xc\n.{body} BODY\n.El\n.Sh NEXT\n.No END\n"
+                );
+                let native = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+                let wire =
+                    serde_json::to_string(&mant_protocol::QueryBundle::from(&native)).unwrap();
+                let restored: ResolvedContent =
+                    serde_json::from_str::<mant_protocol::QueryBundle>(&wire)
+                        .unwrap()
+                        .into();
+                assert_eq!(native, restored);
+                let markdown = mant_codec::encode::render_markdown(&restored);
+                let imported = mant_loader::load_markdown_text(&markdown, None).unwrap();
+                let expected = if capacity < 4 {
+                    format!("{head_word} BODY")
+                } else {
+                    format!("{head_word}BODY")
+                };
+                for content in [&native, &restored, &imported] {
+                    let view = DocumentView::new(content);
+                    let first = view.render(20).text;
+                    for width in [20, 40, 78, 120, 20] {
+                        let rendered = view.render(width);
+                        assert_word_cells(&rendered, &head_word, width, None);
+                        assert_word_cells(&rendered, "BODY", width, None);
+                        let seams = rendered.search(&expected);
+                        let [seam] = seams.as_slice() else {
+                            panic!("one intact seam: {head}/{body}: {expected}");
+                        };
+                        let copied = rendered.selected_text(RenderedSelection {
+                            anchor: TextPosition {
+                                row: seam.row,
+                                column: seam.start_column,
+                            },
+                            focus: TextPosition {
+                                row: seam.row,
+                                column: seam.end_column - 1,
+                            },
+                        });
+                        assert_eq!(copied, expected);
+                        let area = Rect::new(0, 0, width, rendered.row_count.try_into().unwrap());
+                        let mut buffer = Buffer::empty(area);
+                        Paragraph::new(rendered.text.clone()).render(area, &mut buffer);
+                        for (word, carrier) in [(&head_word[..], head), ("BODY", body)] {
+                            let hit = &rendered.search(word)[0];
+                            let modifiers = buffer[(
+                                hit.start_column.try_into().unwrap(),
+                                hit.row.try_into().unwrap(),
+                            )]
+                                .modifier;
+                            assert_eq!(
+                                modifiers.contains(Modifier::BOLD),
+                                carrier == "Sy",
+                                "{head}/{body}/{carrier}"
+                            );
+                            assert_eq!(
+                                modifiers.contains(Modifier::ITALIC),
+                                carrier == "Em",
+                                "{head}/{body}/{carrier}"
+                            );
+                        }
+                    }
+                    assert_eq!(view.render(20).text, first);
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn all_shared_policies_keep_native_words_origins_links_and_copy_after_resize() {
     // Constructed public IR proves four independent Shared combinations.
     // It does not claim the retired JoinedNoSpace variant was reachable
