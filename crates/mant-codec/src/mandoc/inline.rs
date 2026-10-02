@@ -366,14 +366,6 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
     }
     let source = node.decoder_text().unwrap_or_default();
     let events = decode(source);
-    if source.contains('\u{1c}') {
-        // CVS roff.c and mdoc_validate.c::post_hyph() mark source hyphens with
-        // ASCII_HYPH; term_fill() can break at them. The marker loses its
-        // distinct identity in readable IR text, so it must reach the HANG
-        // gap proof before that projection. (`\:` is no longer breakable:
-        // on this UTF-8 device it buffers ASCII_NBRZW, chars.c:53.)
-        builder.note_discretionary_hang_field_break();
-    }
     if source.is_empty() && builder.visits_empty_text_as_space(node) {
         // man_term.c visits every empty TEXT through term_vspace(); mdoc_term.c
         // does so only for NODE_LINE. Neither path calls term_word(), so a

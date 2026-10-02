@@ -344,12 +344,11 @@ impl FormatterState {
         // word join; the filled-field rule would misclassify its row.
         if !definition_field_exited
             && !builder.concat_word_armed()
-            && builder.cleared_field_filled_capacity(boundary.native())
+            && builder.cleared_field_reaches_body_without_gap(boundary.native())
         {
-            // term.c:250-253 with 205-207: the HANG head ended at or past
-            // the field's own right margin with NOBREAK cleared, so the
-            // trailspace roff_term_pre_br() zeroed never separated the
-            // body word (the reference prints `afterwardstail text`).
+            // HEAD post kept a printed row open at BODY's origin or later,
+            // with no minbl left for the next field (term.c:113-116,233-253).
+            // Equality joins even when a single fill pass accepted the word.
             builder.note_flushed_at_body_column();
         }
         let definition_body_gap_consumed = builder.definition_body_gap_consumed(boundary.native());

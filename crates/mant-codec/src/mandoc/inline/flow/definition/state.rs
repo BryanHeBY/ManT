@@ -112,7 +112,6 @@ pub(in crate::mandoc::inline::flow) struct HangNativeRow {
     // A field with a breakable boundary can be redistributed by term_fill().
     // The cumulative width is then not proof of its final device column.
     pub(in crate::mandoc::inline::flow) field_breakable: bool,
-    pub(in crate::mandoc::inline::flow) field_discretionary_break: bool,
     pub(in crate::mandoc::inline::flow) field_unproven_break: bool,
     pub(in crate::mandoc::inline::flow) field_pending_word_end_break: bool,
     pub(in crate::mandoc::inline::flow) accepted_prefix_before_rejection: bool,
@@ -212,7 +211,6 @@ impl HangNativeRow {
         self.trailing_breakable = 0;
         self.field_printable = false;
         self.field_breakable = false;
-        self.field_discretionary_break = false;
         self.field_unproven_break = false;
         self.field_pending_word_end_break = false;
         self.accepted_prefix_before_rejection = false;
@@ -232,7 +230,6 @@ impl HangNativeRow {
         self.trailing_breakable = 0;
         self.field_printable = false;
         self.field_breakable = false;
-        self.field_discretionary_break = false;
         self.field_unproven_break = false;
         self.field_pending_word_end_break = false;
         self.accepted_prefix_before_rejection = false;

@@ -18,8 +18,9 @@ pub(in crate::mandoc) struct DefinitionGeometry {
     pub(in crate::mandoc) gap: u16,
     /// The head field's content capacity: the resolved list width distance
     /// before it is composed with the list offset (mdoc_term.c:846-856:
-    /// `rmargin = offset + width`). Zero means the style sets no field
-    /// width (inset/diagnostic/overhang keep the page right margin).
+    /// `rmargin = offset + width`). Zero may be a measured empty capacity;
+    /// `native_head_field_units` distinguishes it from an unmeasured style
+    /// (inset/diagnostic/overhang keep the page right margin).
     pub(in crate::mandoc) head_field_columns: u16,
     /// Exact native HEAD capacity before character-column rounding. The
     /// character device keeps `a2width() + term_len(p, 2)` in basic units

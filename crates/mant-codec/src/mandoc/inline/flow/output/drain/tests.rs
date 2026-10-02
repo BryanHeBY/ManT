@@ -87,6 +87,60 @@ fn actual_head_post_uses_one_device_view_for_visible_invisible_and_pending_cells
 }
 
 #[test]
+fn capacity_seam_observation_borrows_one_real_head_post_receipt() {
+    // These exact full sources ran the five pristine profiles first.
+    // pre_br clears BRIND/NOBREAK/trailspace, followed by the source word;
+    // It HEAD post then consumes that buffer exactly once (roff_term.c:
+    // 69-78; mdoc_term.c:930-964). Reading equality or overrun from the
+    // captured device tail must not perform another term_flushln sweep.
+    fn item_head(node: &libmandoc_rs::Node) -> Option<&libmandoc_rs::Node> {
+        if node.kind == libmandoc_rs::NodeKind::Head && node.macro_name.as_deref() == Some("It") {
+            Some(node)
+        } else {
+            node.children.iter().find_map(item_head)
+        }
+    }
+    let header =
+        ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n";
+    for length in [3, 4, 5] {
+        let word = "X".repeat(length);
+        let source =
+            format!("{header}.Bl -hang -width 2n\n.It Xo\n.br\n.No {word}\n.Xc\n.No BODY\n.El\n");
+        let parsed = libmandoc_rs::Parser::default()
+            .parse_bytes("capacity-head-post.1", source.as_bytes())
+            .unwrap();
+        let mut formatter = FormatterState::default();
+        formatter.execution.macro_set = parsed.document.macro_set;
+        let mut builder = formatter.begin_inline_session(
+            true,
+            false,
+            AuthorBreakEffect::Field {
+                gap_cells: 1,
+                body_width_columns: 4,
+                field_width_columns: 4,
+                flags: FieldFlags::hang(),
+            },
+        );
+        builder.begin_definition_head_consumption();
+        builder.set_definition_native_margin(4 * 24);
+        // Execute the real Xo subtree, including its geometry restoration
+        // before It HEAD post (print_mdoc_node():437-439). A direct text
+        // append after pre_br would leave the child-only BODY offset live.
+        crate::mandoc::inline::append_inline_nodes(
+            &mut builder,
+            &item_head(&parsed.document.root).unwrap().children,
+            None,
+        );
+        InlineBuilder::reset_native_field_device_views();
+        let finished = formatter.finish_inline_line_with_rows(builder, true);
+        assert_eq!(InlineBuilder::native_field_device_views(), 1, "{source}");
+        assert_eq!(formatter.execution.concat_flush_source, length >= 4);
+        assert!(formatter.definition_head_row_occupied(), "{source}");
+        assert_eq!(crate::mandoc::inline::plain_text(&finished.output), word);
+    }
+}
+
+#[test]
 fn a_real_newline_selects_nospace_even_after_a_graphless_word() {
     // Exact filled/no-fill START/sp-1/No""/br/No\&/BODY sources ran
     // pristine before these checks. term_newln()475-481 updates NOSPACE

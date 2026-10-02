@@ -42,32 +42,36 @@ impl InlineBuilder {
             .then(|| mant_ir::geometry::text_width(&text))
     }
 
-    /// A HANG head that filled its capacity while a request had cleared
-    /// `TERMP_NOBREAK` reaches the body column with no trailspace
-    /// (term.c:250-253 with 205-207): the body's first word concatenates.
-    pub(in crate::mandoc) fn cleared_field_filled_capacity(
+    /// A cleared field's actual open row can reach BODY without a separator.
+    /// `term_flushln()` retains viscol and assigns minbl from trailspace;
+    /// `term_field()` prepends max(offset - viscol, minbl), not a gap derived
+    /// from the number of fill passes (term.c:113-116,233-253,389-427).
+    pub(in crate::mandoc) fn cleared_field_reaches_body_without_gap(
         &self,
         native: Option<&NativeFieldDevice>,
     ) -> bool {
         let Some(state) = &self.execution.definition else {
             return false;
         };
-        if !state.no_break_cleared
-            || state.cleared_field_capacity_columns == 0
-            || state.hang_row.field_discretionary_break
-        {
+        if !state.no_break_cleared {
             return false;
         }
         // HEAD post prints using the current stops, offset and margin.
         // term_fill()'s old capacity or cumulative width cannot prove the
         // BODY origin after a .ta or an internal wrap (term.c:113-253).
+        // An explicitly measured Some(0) origin is valid (width=-2n plus
+        // termp_it_pre's two cells), not a missing-field sentinel.
         let body_origin = state.native_margin_units.unwrap_or_else(|| {
             usize::from(state.cleared_field_capacity_columns).saturating_mul(24)
         });
         native.is_some_and(|field| {
             let column = field.viscol.saturating_mul(24);
-            !field.ends_row
-                && (column > body_origin || column == body_origin && field.final_pass_continued)
+            // ascii_advance() prints a cell only beyond half an EN from
+            // the current device column (term_ascii.c:299-304). A positive
+            // basic-unit remainder can therefore still mean no word gap.
+            field.has_occupied_row()
+                && field.next_field_gap_cells == 0
+                && column.saturating_add(12) >= body_origin
         })
     }
 

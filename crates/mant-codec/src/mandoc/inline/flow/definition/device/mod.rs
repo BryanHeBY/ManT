@@ -89,7 +89,6 @@ struct NativeFieldPrint {
 struct NativeFieldTail {
     ends_row: bool,
     overruns: bool,
-    final_pass_continued: bool,
     trailspace_cells: usize,
 }
 
@@ -119,7 +118,6 @@ impl NativeFieldSweep {
             viscol: if tail.ends_row { 0 } else { self.viscol },
             ends_row: tail.ends_row,
             overruns: tail.overruns,
-            final_pass_continued: tail.final_pass_continued,
             next_field_gap_cells: if tail.ends_row {
                 0
             } else {
@@ -155,7 +153,6 @@ pub(in crate::mandoc) struct NativeFieldDevice {
     pub(super) viscol: usize,
     pub(super) ends_row: bool,
     pub(super) overruns: bool,
-    pub(super) final_pass_continued: bool,
     /// `term_flushln()` restores minbl for any consumed buffer, including a
     /// graphless or empty field (term.c:233-253). Backend endline clears it.
     pub(super) next_field_gap_cells: usize,
@@ -325,7 +322,6 @@ impl InlineBuilder {
             &NativeFieldTail {
                 ends_row,
                 overruns,
-                final_pass_continued: passes.len() > 1 && !rejected,
                 trailspace_cells: trailspace,
             },
             state.no_break.or(resumed),

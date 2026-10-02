@@ -334,18 +334,12 @@ impl InlineBuilder {
             || self.execution.zero_advance.has_pending_glyph()
     }
 
-    /// Arm the next word's concatenation for a filled cleared field
-    /// (term.c:250-253 with 205-207): same no-separator word, but the
-    /// body starts at the description column rather than against the
+    /// Arm the next word from the captured open row and zero minbl.
+    /// BODY prefers its description origin, while the receipt proves that
+    /// reaching that origin adds no cell (term.c:113-116,233-253).
     pub(in crate::mandoc) fn note_flushed_at_body_column(&mut self) {
         self.execution.concat_next_word = true;
         self.execution.concat_flush_source = true;
-    }
-
-    pub(in crate::mandoc) fn note_discretionary_hang_field_break(&mut self) {
-        if let Some(definition) = &mut self.execution.definition {
-            definition.hang_row.field_discretionary_break = true;
-        }
     }
 
     /// The It HEAD post executed (mdoc_term.c:961-962): the field's
