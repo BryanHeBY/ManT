@@ -14,6 +14,10 @@ fn failed_resolution_is_cached_by_policy_and_qualified_selector_only_for_one_req
         (LoadPolicy::Combined, base.clone()),
         (LoadPolicy::Combined, base.clone()),
         (LoadPolicy::ManualOnly, base.clone()),
+        (LoadPolicy::ManualWithTldr, base.clone()),
+        (LoadPolicy::ManualWithTldr, base.clone()),
+        (LoadPolicy::TldrOnly, base.clone()),
+        (LoadPolicy::TldrOnly, base.clone()),
         (
             LoadPolicy::Combined,
             DocumentSelector {
@@ -35,7 +39,7 @@ fn failed_resolution_is_cached_by_policy_and_qualified_selector_only_for_one_req
         });
         assert!(result.is_err());
     }
-    assert_eq!(calls, 4);
+    assert_eq!(calls, 6);
     assert!(
         ResolutionFailures::default()
             .resolve(&base, LoadPolicy::Combined, || Ok::<_, String>(()))

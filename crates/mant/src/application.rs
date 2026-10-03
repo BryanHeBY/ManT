@@ -51,7 +51,7 @@ pub(crate) fn read_full(
 pub(crate) fn request_for_address(address: &DocumentAddress) -> (QueryRequest, LoadPolicy) {
     let policy = match address {
         DocumentAddress::Markdown { .. } => LoadPolicy::Combined,
-        DocumentAddress::Manual { .. } => LoadPolicy::ManualOnly,
+        DocumentAddress::Manual { .. } => LoadPolicy::ManualWithTldr,
     };
     (
         QueryRequest {
@@ -88,7 +88,7 @@ pub(crate) fn request_for_navigation(
                 },
                 view: QueryView::Full {},
             },
-            LoadPolicy::ManualOnly,
+            LoadPolicy::ManualWithTldr,
         ),
     }
 }

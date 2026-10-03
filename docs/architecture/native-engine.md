@@ -534,8 +534,10 @@ boundary. This keeps source ranking in `mant-sources` and content policy in
 Named lookup plans the full-document source and quick-reference policy as
 orthogonal decisions. An explicit manual section fixes the full document to one
 native category but still permits a section `1` or `8` quick reference under
-the combined policy. Manual-only excludes it, and tldr-only omits the full
-document. The CLI recognizes only explicit section forms; dotted logical names
+the combined policy. `ManualWithTldr` also permits that attachment while always
+requiring a native document, including for section-less interactive links.
+Manual-only excludes it, and tldr-only omits the full document.
+The CLI recognizes only explicit section forms; dotted logical names
 are never reinterpreted after a failed lookup.
 
 Cache locations, platform/language selection, reads and readonly executable

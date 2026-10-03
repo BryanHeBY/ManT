@@ -48,6 +48,9 @@ pub enum LoadPolicy {
     Combined,
     /// Bypass registered Markdown and tldr content.
     ManualOnly,
+    /// Require a native manual and attach a compatible cached quick reference.
+    /// Registered Markdown and tldr-only fallback do not satisfy this policy.
+    ManualWithTldr,
     /// Resolve only embedded or cached tldr content through source precedence.
     TldrOnly,
 }
@@ -86,6 +89,10 @@ impl LoadPolicy {
             Self::ManualOnly => NamedResolutionPlan {
                 document: FullDocumentMode::NativeManual,
                 quick_reference: QuickReferenceMode::Exclude,
+            },
+            Self::ManualWithTldr => NamedResolutionPlan {
+                document: FullDocumentMode::NativeManual,
+                quick_reference: QuickReferenceMode::AttachToCommandManual,
             },
             Self::TldrOnly => NamedResolutionPlan {
                 document: FullDocumentMode::None,
@@ -202,7 +209,11 @@ pub fn validate_load_spec(spec: LoadSpec<'_>, policy: LoadPolicy) -> Result<(), 
                     section: section.trim().to_owned(),
                 });
             }
-            if source.is_some() && (manual_section.is_some() || policy == LoadPolicy::ManualOnly) {
+            if source.is_some()
+                && (manual_section.is_some()
+                    || policy.named_resolution_plan(false).document
+                        == FullDocumentMode::NativeManual)
+            {
                 return Err(LoadError::ConflictingSourceSelectors);
             }
         }

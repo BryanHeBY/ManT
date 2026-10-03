@@ -75,6 +75,14 @@ that crate was not published for that change.
 
 ### mant-ir, mant-protocol, mant-codec, mant-loader, mant-query, mant-render, mant-engine and mant 0.12.0
 
+- Open TUI manual links and manual catalog entries with their native target plus
+  an available cached command quick reference. Add `LoadPolicy::ManualWithTldr`
+  independently of source selection: explicit and resolver-selected section `1`
+  and `8` families may attach tldr; API and other non-command pages do not.
+  Keep registered Markdown, tldr-only fallback and cache updates outside this
+  policy. History reopens follow it; explicit CLI `--manual` still excludes tldr.
+  Update exhaustive `LoadPolicy` matches; serialized v0.12 contracts are unchanged.
+
 - Extend the still-unreleased `v0.12` document wire with parsed equation
   structure and reject a conflicting readable text projection. Outline,
   excerpt, explanation, search, and scope results expose known content loss

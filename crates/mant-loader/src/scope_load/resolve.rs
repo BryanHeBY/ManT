@@ -99,6 +99,7 @@ impl ResolutionFailures {
                 LoadPolicy::Combined => 0,
                 LoadPolicy::ManualOnly => 1,
                 LoadPolicy::TldrOnly => 2,
+                LoadPolicy::ManualWithTldr => 3,
             },
             selector: selector.selector.clone(),
             source: selector.source.clone(),

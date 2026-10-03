@@ -15,6 +15,7 @@ use std::{
     path::{Path, PathBuf},
     sync::Mutex,
 };
+mod manual_policy;
 struct TestRequest {
     input: TestInput,
 }

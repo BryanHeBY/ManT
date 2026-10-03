@@ -151,6 +151,15 @@ On a reference row, Shift+Y copies the target. Resolved catalog addresses are
 opened exactly, without falling back to another source or a suffix match.
 Back/forward and resize use content positions, never screen-row identities.
 
+The interactive host opens manual links and manual catalog addresses with the
+loader's `ManualWithTldr` policy. It requires the native target, bypasses registered
+Markdown, and attaches an available cached quick reference only when the resolved
+manual belongs to command family `1` or `8`. Section-less links retain resolver
+selection, including non-command categories. History reopens use the same policy.
+A missing cache leaves the manual readable; a missing or invalid manual remains
+an open failure even when cached tldr exists. Navigation neither updates caches
+nor fetches content. Explicit CLI `--manual` continues excluding quick references.
+
 MCP remains read-only: it returns references, local resolution information and
 subsequent read parameters, never launches browsers, shells or URI handlers.
 Only an explicit user action in the interactive host reaches the safe opener.

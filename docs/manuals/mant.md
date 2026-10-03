@@ -258,6 +258,13 @@ manual category. Those categories represent user and administration commands;
 other native categories do not inherit a same-named command quick reference.
 Explicit `--tldr` accepts only those command-family qualifiers.
 
+Opening a manual link or manual catalog entry in the TUI follows the same
+quick-reference rule. A link such as `git(1)` keeps its native target and can
+include cached tldr; an API reference such as `printf(3)` does not inherit a
+command quick reference.
+A missing cache leaves the manual available. Navigation does not download or
+update tldr content.
+
 ### Local Roff Trees
 
 Use `MANT_MANPATH` or `MANPATH` to make project-local man or mdoc sources

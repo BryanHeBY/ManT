@@ -30,6 +30,9 @@ use crate::{
 use mant_loader::LoadPolicy;
 use mant_protocol::{CatalogQuery, DocumentAddress, DocumentCatalog};
 
+#[cfg(feature = "tui")]
+mod navigation;
+
 #[test]
 fn invalid_complete_views_are_rejected_before_the_cli_host_is_called() {
     let host = FakeHost::new();
@@ -125,7 +128,7 @@ fn catalog_addresses_reopen_the_exact_source_or_manual_section() {
             manual_section: None,
         }
     );
-    assert_eq!(policy, LoadPolicy::ManualOnly);
+    assert_eq!(policy, LoadPolicy::ManualWithTldr);
 
     let (request, policy) = request_for_address(&DocumentAddress::Markdown {
         path: "en/tool".into(),
@@ -149,7 +152,7 @@ fn unqualified_manual_navigation_preserves_native_resolution_without_a_default_s
             name: "printf".into(),
             manual_section: None,
         });
-    assert_eq!(policy, LoadPolicy::ManualOnly);
+    assert_eq!(policy, LoadPolicy::ManualWithTldr);
     assert_eq!(
         request.input,
         QueryInput::Document {

@@ -136,7 +136,9 @@ fn query_catalog_address(
                 }
             })
         }
-        DocumentAddress::Markdown { .. } if policy == LoadPolicy::ManualOnly => {
+        DocumentAddress::Markdown { .. }
+            if policy.named_resolution_plan(false).document == FullDocumentMode::NativeManual =>
+        {
             Err(LoadError::ConflictingSourceSelectors)
         }
         DocumentAddress::Markdown { .. } => {
