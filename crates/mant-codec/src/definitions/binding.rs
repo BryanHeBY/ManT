@@ -36,10 +36,10 @@ fn name_bindings<'a>(
 ) -> Vec<EntryNameBinding> {
     let terms = terms
         .map(|term| {
-            let mut text = String::new();
+            let mut offset = 0;
             let mut leaves = Vec::new();
-            collect(term, &mut Vec::new(), &mut text, &mut leaves);
-            (text, leaves)
+            collect(term, &mut Vec::new(), &mut offset, &mut leaves);
+            leaves
         })
         .collect::<Vec<_>>();
     names
@@ -48,7 +48,7 @@ fn name_bindings<'a>(
         .map(|(name, spelling)| {
             let mut occurrences = Vec::new();
             if !spelling.is_empty() {
-                for (index, ((_, leaves), candidates)) in terms.iter().zip(recognized).enumerate() {
+                for (index, (leaves, candidates)) in terms.iter().zip(recognized).enumerate() {
                     for candidate in candidates
                         .iter()
                         .filter(|candidate| candidate.name == *spelling)
@@ -88,24 +88,28 @@ fn slices(
     })
 }
 
-fn collect(nodes: &[Inline], path: &mut Vec<usize>, text: &mut String, leaves: &mut Vec<Leaf>) {
+fn collect(nodes: &[Inline], path: &mut Vec<usize>, offset: &mut usize, leaves: &mut Vec<Leaf>) {
     for (index, node) in nodes.iter().enumerate() {
         path.push(index);
         match node {
             Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. } => {
-                let start = text.len();
-                text.push_str(value);
+                let start = *offset;
+                *offset += value.len();
                 leaves.push(Leaf {
                     path: path.clone(),
-                    range: start..text.len(),
+                    range: start..*offset,
                 });
             }
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::Link { children, .. } => collect(children, path, text, leaves),
+            | Inline::Link { children, .. } => collect(children, path, offset, leaves),
             Inline::Anchor { .. } => {}
-            Inline::LineBreak { .. } => text.push('\n'),
+            Inline::LineBreak { .. } => *offset += 1,
         }
         path.pop();
     }
 }
+
+#[cfg(test)]
+#[path = "binding/ranges_tests.rs"]
+mod ranges_tests;

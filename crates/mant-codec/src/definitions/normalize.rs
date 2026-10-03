@@ -214,32 +214,15 @@ pub(super) fn normalize_hanging_definitions(blocks: &mut Vec<Block>, context: De
     let mut normalized = Vec::with_capacity(pending.len());
 
     while let Some(block) = pending.pop_front() {
-        let Some(term_indent) = hanging_term_indent(&block, context) else {
+        let Some((term_indent, first_length)) = hanging_definition_start(&block, &pending, context)
+        else {
             normalized.push(block);
             continue;
         };
 
-        let mut description = Vec::new();
-        while let Some(next) = pending.front() {
-            if hanging_term_indent(next, context) == Some(term_indent) {
-                break;
-            }
-            if pending
-                .iter()
-                .find(|block| !matches!(block, Block::VerticalSpace { .. }))
-                .is_some_and(|block| matches!(block, Block::Table { .. }))
-            {
-                break;
-            }
-            let Some(length) = indented_continuation_len(&pending, term_indent) else {
-                break;
-            };
+        let mut description = pending.drain(..first_length).collect::<Vec<_>>();
+        while let Some(length) = hanging_description_len(&pending, term_indent) {
             description.extend(pending.drain(..length));
-        }
-
-        if description.is_empty() {
-            normalized.push(block);
-            continue;
         }
 
         let Block::Paragraph {
@@ -248,7 +231,7 @@ pub(super) fn normalize_hanging_definitions(blocks: &mut Vec<Block>, context: De
             source,
         } = block
         else {
-            unreachable!("option_term_indent only accepts paragraphs");
+            unreachable!("hanging_definition_start only accepts paragraphs");
         };
         let description_origin = description
             .iter()
@@ -291,15 +274,37 @@ pub(super) fn normalize_hanging_definitions(blocks: &mut Vec<Block>, context: De
     *blocks = normalized;
 }
 
-fn hanging_term_indent(block: &Block, context: DefinitionContext) -> Option<i32> {
+fn hanging_definition_start(
+    block: &Block,
+    pending: &VecDeque<Block>,
+    context: DefinitionContext,
+) -> Option<(i32, usize)> {
     let Block::Paragraph {
         children, layout, ..
     } = block
     else {
         return None;
     };
-    let recognized = is_inferred_head(children, context);
-    recognized.then_some(layout.indent_columns)
+    // A semantic head can be transferred only when there is a deeper layout
+    // successor. Check this necessary condition before running the complete
+    // head grammar; ordinary prose with no description needs no syntax scan.
+    let length = hanging_description_len(pending, layout.indent_columns)?;
+    #[cfg(test)]
+    eligibility_tests::record_recognition();
+    is_inferred_head(children, context).then_some((layout.indent_columns, length))
+}
+
+fn hanging_description_len(pending: &VecDeque<Block>, base_indent: i32) -> Option<usize> {
+    let (index, block) = pending
+        .iter()
+        .enumerate()
+        .find(|(_, block)| !matches!(block, Block::VerticalSpace { .. }))?;
+    // Tables are an explicit ownership boundary even when indented. A
+    // same-level paragraph also fails the geometry check, independently of
+    // whether its text could be recognized as another declaration head.
+    (!matches!(block, Block::Table { .. })
+        && block_layout(block).is_some_and(|layout| layout.indent_columns > base_indent))
+    .then_some(index + 1)
 }
 
 fn shift_block_indent(block: &mut Block, origin: i32) {
@@ -307,6 +312,10 @@ fn shift_block_indent(block: &mut Block, origin: i32) {
         layout.indent_columns = mant_ir::geometry::rebase_origin(layout.indent_columns, 0, origin);
     }
 }
+
+#[cfg(test)]
+#[path = "normalize/eligibility_tests.rs"]
+mod eligibility_tests;
 
 #[cfg(test)]
 mod tests {
