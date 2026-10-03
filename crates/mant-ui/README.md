@@ -85,6 +85,32 @@ color only at validated name bindings; identical prose and list markers do not
 inherit it. Source bold/italic/code styling and link underlines compose with
 that color. Code-token accents do not overwrite semantic name roles.
 
+Preformatted blocks use dependency-free, language-neutral lexical accents.
+Manual displays can mix commands, source code, configuration and synopsis
+notation, so no language is guessed or forced. The shared rules highlight
+common keywords/builtins, strings, comments, numbers, option names and shell
+variables/expansion openers. A leading shell `$` prompt is subdued; escaped
+dollars and dollars inside single quotes stay literal. URLs, paths and
+compound names are not keyword/comment evidence. Command heads with prompt,
+builtin or unquoted option/placeholder evidence use the same peach as tldr
+commands; unclassified identifiers stay neutral. Option names use the same
+green as semantic parameter entries, independently of teal headings.
+Git-style `[]`, choice separators and synopsis `<values>` delimiters use
+bright gray, distinct from subdued comments. Angle placeholders require
+command/option context, rather than treating C++ template brackets as synopsis.
+Like tldr presentation,
+`{{values}}` and `<values>` retain neutral text, but every marker and option
+alternative remains unchanged; the tldr parser's rewriting is not reused.
+These are best-effort visual cues, not a full shell or programming grammar.
+Language tags are metadata, not grammar selectors or highlighter opt-outs;
+`text` synopses use the same cues. Ordinary inline code and the separate tldr
+view are unchanged.
+Quotes and block comments span original inline pieces and hard rows. Accents
+map to private theme roles beneath authored emphasis, links and validated
+names; code fonts inside displays supply the neutral base, not a final color
+override. Blocks exceeding 64 KiB fall back as a whole without changing text.
+Accents are prepared during document construction, never during resize/search.
+
 Outline and body adapters request semantic styles from the private `theme`
 module. `StyleRole` distinguishes text, source markup, entry kinds, outline
 groups, notices and surfaces; `InteractionRole` supplies selection and search

@@ -201,15 +201,44 @@ fn append_inline(
     code: bool,
     lines: &mut Vec<StyledInlineLine>,
 ) {
+    let mut code = if code {
+        let mut value = String::new();
+        let mut bounded = true;
+        mant_render::visit_inline_text(nodes, &[], |_, _, text| {
+            if bounded && text.len() <= crate::code::MAX_BLOCK_BYTES - value.len() {
+                value.push_str(text);
+            } else {
+                bounded = false;
+            }
+        });
+        Some(if bounded {
+            crate::code::CodeHighlights::new(&value)
+        } else {
+            crate::code::CodeHighlights::default()
+        })
+    } else {
+        None
+    };
     mant_render::visit_inline_text(nodes, names, |source, target, text| {
         let first_line = lines.len() - 1;
         let first_scalar = spans_scalars(&lines[first_line].spans);
-        if code {
-            // Lexical code accents are weaker than authored markup and names.
-            for span in crate::code::highlight(vec![Span::styled(text.to_owned(), style)]) {
+        if let Some(code) = &mut code {
+            // Code fonts inside displays supply the neutral base, not a final
+            // foreground that erases lexical accents. Source emphasis, links
+            // and validated names still compose above those accents.
+            let base = if source.code {
+                style.patch(theme::style(theme::StyleRole::InlineCode))
+            } else {
+                style
+            };
+            let authored = mant_render::InlinePresentation {
+                code: false,
+                ..source
+            };
+            for span in code.spans(text, base) {
                 append_text(
                     &span.content,
-                    theme::inline_style(span.style, source),
+                    theme::inline_style(span.style, authored),
                     lines,
                 );
             }

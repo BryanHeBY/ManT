@@ -401,6 +401,37 @@ fn self_hosted_markdown_manuals_use_the_same_terminal_pipeline() {
                 !rendered.search("Synopsis").is_empty(),
                 "{relative} lost its manual body at width {width}"
             );
+            // The shipped synopsis is deliberately tagged `text`, not shell.
+            // Tags must not disable language-neutral command/synopsis accents.
+            let hit = &rendered.search("mant <SELECTOR> [OPTIONS]")[0];
+            let row = &rendered.text.lines[hit.row];
+            let delimiter = row
+                .spans
+                .iter()
+                .find(|span| span.content == "<")
+                .expect("visible placeholder delimiter");
+            let value = row
+                .spans
+                .iter()
+                .find(|span| span.content == "SELECTOR")
+                .expect("visible placeholder value");
+            assert_ne!(
+                delimiter.style.fg, value.style.fg,
+                "{relative}: width {width}"
+            );
+            let hit = &rendered.search("mant --document <SELECTOR>...")[0];
+            let row = &rendered.text.lines[hit.row];
+            let option = row
+                .spans
+                .iter()
+                .find(|span| span.content.contains("--document"))
+                .expect("visible synopsis option");
+            let name = row
+                .spans
+                .iter()
+                .find(|span| span.content == "mant")
+                .expect("visible command name");
+            assert_ne!(option.style.fg, name.style.fg, "{relative}: width {width}");
             for item in view.navigation() {
                 assert!(
                     rendered.anchor_row(&item.target_id).is_some(),

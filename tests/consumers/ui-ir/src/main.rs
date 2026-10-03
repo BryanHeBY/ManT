@@ -32,13 +32,23 @@ fn content() -> ResolvedContent {
                 spacing_before_lines: 0,
                 children: vec![],
                 source: None,
-                blocks: vec![Block::Paragraph {
-                    children: vec![Inline::Text {
-                        value: "Embedded Cafe\u{301} 👩‍💻".into(),
-                    }],
-                    layout: LayoutHint::default(),
-                    source: None,
-                }],
+                blocks: vec![
+                    Block::Paragraph {
+                        children: vec![Inline::Text {
+                            value: "Embedded Cafe\u{301} 👩‍💻".into(),
+                        }],
+                        layout: LayoutHint::default(),
+                        source: None,
+                    },
+                    Block::Preformatted {
+                        children: vec![Inline::Text {
+                            value: "echo \"$HOME\" # note".into(),
+                        }],
+                        language: Some("sh".into()),
+                        layout: LayoutHint::default(),
+                        source: None,
+                    },
+                ],
             }],
         }),
     }
@@ -53,6 +63,21 @@ fn check_reader() -> Result<(), Box<dyn std::error::Error>> {
     let cells = terminal.backend().buffer().content();
     assert!(cells.iter().any(|cell| cell.symbol() == "e\u{301}"));
     assert!(cells.iter().any(|cell| cell.symbol() == "👩‍💻"));
+    // The standalone reader prepares lexical accents without consulting the
+    // deliberately nonexistent provenance path or any host loading service.
+    let foreground = |word: &str| {
+        cells
+            .windows(word.len())
+            .find(|slice| {
+                slice
+                    .iter()
+                    .zip(word.chars())
+                    .all(|(cell, character)| cell.symbol() == character.to_string())
+            })
+            .expect("visible code token")[0]
+            .fg
+    };
+    assert_ne!(foreground("HOME"), foreground("note"));
 
     let mut services = ReaderServices::default();
     assert!(!app.service_pending(&mut services));

@@ -277,6 +277,19 @@ that crate was not published for that change.
 
 ### mant-ui 0.12.0
 
+- Scan complete preformatted blocks with dependency-free, language-neutral
+  lexical rules for mixed command, source-code and configuration examples.
+  Extend common keywords, keep URLs and parameter values out of comment/option
+  accents, distinguish shell prompts from variable/expansion markers, and
+  retain Git-style brackets and tldr-style placeholders without rewriting text.
+  Preserve multiline quote/comment state across authored spans and hard rows;
+  cache accents before wrapping and keep emphasis/name/link styles stronger.
+  Let native code fonts supply the neutral base without erasing token colors.
+  Apply the same cues to every language tag, including self-manual `text`
+  synopses; blocks exceeding 64 KiB use neutral text. Align option names with
+  green parameter entries and conservative command heads with peach tldr
+  commands, leaving teal to headings. Brighten Git-style brackets and choice
+  markers; restrict angle placeholders to command/option contexts.
 - Shorten synthetic outline labels to `Entries` and `Doc Refs`. Distinguish
   coral entry groups, lavender reference groups, cyan underlined references and
   yellow inventory notices;

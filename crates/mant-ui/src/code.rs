@@ -1,146 +1,80 @@
-//! Lightweight, language-neutral highlighting for manual-page displays.
+//! Best-effort code accents, independent of authored styles and layout.
 //!
-//! Most roff displays do not carry a language name, so a full syntax grammar
-//! cannot be selected reliably. This tokenizer mirrors the established TUI's
-//! useful visual cues while preserving every source character and inline
-//! modifier. Language-aware highlighting can be layered on top later.
+//! Scan one complete block, not individual inline spans or wrapped rows.
+//! Manual displays mix source code, commands, configuration and placeholders;
+//! no language selection, syntax dependency or filesystem lookup is needed.
+
+use std::ops::Range;
 
 use ratatui::{style::Style, text::Span};
 
-use crate::theme;
+use crate::theme::{self, StyleRole};
 
-const KEYWORDS: &[&str] = &[
-    "break", "case", "char", "const", "continue", "do", "double", "else", "enum", "extern",
-    "false", "float", "for", "if", "inline", "int", "long", "null", "NULL", "restrict", "return",
-    "short", "signed", "sizeof", "static", "struct", "switch", "true", "typedef", "union",
-    "unsigned", "void", "volatile", "while",
-];
+mod command;
+mod keywords;
+mod scan;
 
-/// Highlight display spans without changing their text or existing emphasis.
-pub fn highlight(spans: Vec<Span<'static>>) -> Vec<Span<'static>> {
-    spans
-        .into_iter()
-        .flat_map(|span| highlight_text(span.content.as_ref(), span.style))
-        .collect()
+pub(crate) const MAX_BLOCK_BYTES: usize = 64 * 1024;
+
+struct Accent {
+    bytes: Range<usize>,
+    role: StyleRole,
 }
 
-fn highlight_text(value: &str, base: Style) -> Vec<Span<'static>> {
-    let mut result = Vec::new();
-    let mut offset = 0;
-    while offset < value.len() {
-        let rest = &value[offset..];
-        let (length, style) = next_token(rest, base);
-        result.push(Span::styled(rest[..length].to_owned(), style));
-        offset += length;
-    }
-    result
+/// Cached byte ranges consumed in original inline visitation order. Colors
+/// remain weaker than authored markup, links and validated name bindings.
+#[derive(Default)]
+pub(crate) struct CodeHighlights {
+    accents: Vec<Accent>,
+    cursor: usize,
+    offset: usize,
 }
 
-fn next_token(value: &str, base: Style) -> (usize, Style) {
-    if value.starts_with("//") || value.starts_with("/*") {
-        return (
-            value.len(),
-            base.patch(theme::style(theme::StyleRole::CodeComment)),
-        );
-    }
-    let first = value
-        .chars()
-        .next()
-        .expect("called only for non-empty text");
-    if first.is_whitespace() {
-        return (take_while(value, char::is_whitespace), base);
-    }
-    if matches!(first, '"' | '\'') {
-        return (
-            quoted_length(value, first),
-            base.patch(theme::style(theme::StyleRole::CodeString)),
-        );
-    }
-    if first == '-'
-        && value
-            .chars()
-            .nth(1)
-            .is_some_and(|character| character.is_alphabetic() || character == '-')
-    {
-        return (
-            take_while(value, |character| !character.is_whitespace()),
-            base.patch(theme::style(theme::StyleRole::CodeOption)),
-        );
-    }
-    if first.is_ascii_digit() {
-        return (
-            take_while(value, |character| {
-                character.is_ascii_digit() || character == '.'
-            }),
-            base.patch(theme::style(theme::StyleRole::CodeNumber)),
-        );
-    }
-    if first.is_alphabetic() || first == '_' {
-        let length = take_while(value, |character| {
-            character.is_alphanumeric() || character == '_'
-        });
-        let token = &value[..length];
-        let style = if KEYWORDS.contains(&token) {
-            base.patch(theme::style(theme::StyleRole::CodeKeyword))
-        } else {
-            base
-        };
-        return (length, style);
-    }
-    (first.len_utf8(), base)
-}
-
-fn take_while(value: &str, predicate: impl Fn(char) -> bool) -> usize {
-    value
-        .char_indices()
-        .find_map(|(index, character)| (!predicate(character)).then_some(index))
-        .unwrap_or(value.len())
-}
-
-fn quoted_length(value: &str, quote: char) -> usize {
-    let mut escaped = false;
-    for (index, character) in value.char_indices().skip(1) {
-        if character == quote && !escaped {
-            return index + character.len_utf8();
+impl CodeHighlights {
+    pub(crate) fn new(value: &str) -> Self {
+        // Reject the whole block before scanning: a partial scan would lose
+        // quote/comment state and miscolor subsequent inline pieces.
+        if value.len() > MAX_BLOCK_BYTES {
+            return Self::default();
         }
-        escaped = character == '\\' && !escaped;
-        if character != '\\' {
-            escaped = false;
+        Self {
+            accents: scan::accents(value),
+            ..Self::default()
         }
     }
-    value.len()
+
+    /// `text` must be the next unchanged piece of the original block.
+    pub(crate) fn spans(&mut self, text: &str, base: Style) -> Vec<Span<'static>> {
+        let end = self.offset + text.len();
+        let mut spans = Vec::new();
+        while self.offset < end {
+            while self
+                .accents
+                .get(self.cursor)
+                .is_some_and(|accent| accent.bytes.end <= self.offset)
+            {
+                self.cursor += 1;
+            }
+            let (stop, style) = self.accents.get(self.cursor).map_or((end, base), |accent| {
+                if accent.bytes.start > self.offset {
+                    (end.min(accent.bytes.start), base)
+                } else {
+                    (
+                        end.min(accent.bytes.end),
+                        base.patch(theme::style(accent.role)),
+                    )
+                }
+            });
+            let start = text.len() - (end - self.offset);
+            spans.push(Span::styled(
+                text[start..start + stop - self.offset].to_owned(),
+                style,
+            ));
+            self.offset = stop;
+        }
+        spans
+    }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn highlights_common_manual_display_tokens_without_changing_text() {
-        let source = "gcc --output file.c && return 12; // done";
-        let spans = highlight(vec![Span::raw(source.to_owned())]);
-
-        assert_eq!(
-            spans
-                .iter()
-                .map(|span| span.content.as_ref())
-                .collect::<String>(),
-            source
-        );
-        assert!(
-            spans.iter().any(|span| {
-                span.content == "--output" && span.style.fg == Some(theme::HEADING)
-            })
-        );
-        assert!(
-            spans
-                .iter()
-                .any(|span| { span.content == "return" && span.style.fg == Some(theme::MAUVE) })
-        );
-        assert!(
-            spans
-                .iter()
-                .any(|span| { span.content == "12" && span.style.fg == Some(theme::YELLOW) })
-        );
-    }
-}
+mod tests;

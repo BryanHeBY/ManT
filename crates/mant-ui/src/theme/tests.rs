@@ -58,6 +58,35 @@ fn entry_families_keep_their_semantic_colors() {
 }
 
 #[test]
+fn code_commands_options_and_synopsis_markers_follow_semantic_roles() {
+    assert_eq!(
+        style(StyleRole::CodeOption).fg,
+        style(StyleRole::Parameter).fg
+    );
+    assert_ne!(
+        style(StyleRole::CodeOption).fg,
+        style(StyleRole::Heading).fg
+    );
+    assert_eq!(
+        style(StyleRole::CodeCommand).fg,
+        style(StyleRole::Command).fg
+    );
+    assert_eq!(
+        style(StyleRole::CodeCommand).fg,
+        style(StyleRole::TldrCommand).fg
+    );
+    assert_eq!(style(StyleRole::CodeDelimiter).fg, Some(SUBTEXT_BRIGHT));
+    assert_ne!(
+        style(StyleRole::CodeDelimiter).fg,
+        style(StyleRole::CodeComment).fg
+    );
+    assert_eq!(
+        style(StyleRole::CodePlaceholder).fg,
+        style(StyleRole::Text).fg
+    );
+}
+
+#[test]
 fn outline_section_style_can_change_independently_of_body_heading_style() {
     let mut theme = DEFAULT_THEME.clone();
     let section = Style::new().fg(Color::Green).add_modifier(Modifier::ITALIC);

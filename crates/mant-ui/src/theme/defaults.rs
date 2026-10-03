@@ -94,7 +94,12 @@ const fn code(theme: &mut Theme) {
         Style::new().fg(SUBTEXT).add_modifier(Modifier::ITALIC),
     );
     theme.set_style(Role::CodeString, Style::new().fg(BLUE));
-    theme.set_style(Role::CodeOption, Style::new().fg(HEADING));
+    theme.set_style(Role::CodeCommand, Style::new().fg(PEACH));
+    theme.set_style(Role::CodeOption, Style::new().fg(GREEN));
+    theme.set_style(Role::CodeVariable, Style::new().fg(PINK));
+    theme.set_style(Role::CodePrompt, Style::new().fg(SUBTEXT));
+    theme.set_style(Role::CodePlaceholder, Style::new().fg(TEXT));
+    theme.set_style(Role::CodeDelimiter, Style::new().fg(SUBTEXT_BRIGHT));
     theme.set_style(Role::CodeNumber, Style::new().fg(YELLOW));
     theme.set_style(
         Role::CodeKeyword,
