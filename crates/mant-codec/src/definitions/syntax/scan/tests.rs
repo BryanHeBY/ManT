@@ -760,3 +760,87 @@ fn inherited_wrapper_fonts_require_explicit_inner_options() {
         assert_names(&nodes, &operands, &[]);
     }
 }
+
+#[test]
+fn bare_parameter_completion_requires_a_top_level_gap_and_independent_name() {
+    for parameter in ["script", "script-file", "参数"] {
+        for separator in [", ", ",   ", " | "] {
+            let nodes = [
+                strong(vec![text("-e")]),
+                text(&format!(" {parameter}{separator}")),
+                strong(vec![text("--expression=")]),
+                emphasis(vec![text("script")]),
+            ];
+            assert_names(&nodes, &[], &["-e", "--expression"]);
+            assert!(option_head(&nodes, &[]).inferred_complete);
+            // Transparent inline fragmentation cannot change the grammar or bytes.
+            let fragmented: Vec<_> = nodes
+                .iter()
+                .flat_map(|node| match node {
+                    Inline::Strong { children } => mant_ir::inline_plain_text(children)
+                        .chars()
+                        .map(|c| strong(vec![text(&c.to_string())]))
+                        .collect(),
+                    _ => vec![node.clone()],
+                })
+                .collect();
+            assert_names(&fragmented, &[], &["-e", "--expression"]);
+        }
+    }
+    for argument in [
+        "first,--fake,last",
+        "first, --fake,last",
+        "-10,--fake,20",
+        "first second, --fake",
+        "script,, --fake",
+        "script --fake",
+        "[first, --fake]",
+        "\"first, --fake\"",
+        "script, otherwise continue",
+    ] {
+        let nodes = [
+            strong(vec![text("-e")]),
+            text(" "),
+            strong(vec![text(argument)]),
+        ];
+        assert_names(&nodes, &[], &["-e"]);
+    }
+    let nodes = [
+        strong(vec![text("-e ")]),
+        emphasis(vec![text("first, --fake")]),
+    ];
+    let operand = NativeOperand {
+        bytes: 3..16,
+        role: NativeOperandRole::Argument,
+    };
+    assert_names(&nodes, &[operand], &["-e"]);
+}
+
+#[test]
+fn bare_parameter_heads_keep_monotone_whitespace_and_existing_limits() {
+    for size in [128, 1024, 8192] {
+        for parameter in ["a".repeat(size), format!("script{}", " ".repeat(size))] {
+            let nodes = [
+                strong(vec![text("-e")]),
+                text(&format!(" {parameter}, ")),
+                strong(vec![text("--expression=script")]),
+            ];
+            assert_names(&nodes, &[], &["-e", "--expression"]);
+            assert!(option_head(&nodes, &[]).inferred_complete);
+        }
+        let nodes = (0..size)
+            .flat_map(|index| {
+                [
+                    strong(vec![text(&format!("--flag{index}"))]),
+                    text(" arg, "),
+                ]
+            })
+            .collect::<Vec<_>>();
+        let result = option_head(&nodes, &[]);
+        assert_eq!(
+            result.limit,
+            (size > MAX_NAMES).then_some(DeclarationLimit::Names)
+        );
+        assert_eq!(result.names.len(), if size > MAX_NAMES { 0 } else { size });
+    }
+}

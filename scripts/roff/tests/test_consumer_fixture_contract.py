@@ -90,6 +90,27 @@ class ConsumerFixtureContractTests(unittest.TestCase):
                     self.assertEqual(proof, {"kind": "no-owner", "headMacro": None})
                     self.assertEqual(case["kind"], "none")
 
+    def test_parameter_declarations_bind_exact_sources_and_ui_mirror(self):
+        source = FIXTURE_ROOT / "declaration_names/parameter_cases.json"
+        fixture = json.loads(source.read_text())
+        ui = FIXTURE.parents[5] / "crates/mant-ui/src/document/tests/hanging_owners/parameter_cases.json"
+        self.assertEqual(source.read_bytes(), ui.read_bytes())
+        self.assertEqual(fixture["header"]["count"], 78)
+        self.assertFalse(fixture["header"]["expectationsFromProduct"])
+        self.assertEqual(fixture["header"]["oracleSha256"],
+                         "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6")
+        cases = fixture["cases"] + [fixture["multipleOwners"]]
+        self.assertEqual(len({case["id"] for case in cases}), 79)
+        for case in cases:
+            self.assertEqual(hashlib.sha256(case["source"].encode()).hexdigest(), case["sourceSha256"])
+            self.assertEqual(set(case["profiles"]), {"ascii", "utf8", "html", "tree", "lint"})
+            for name, profile in case["profiles"].items():
+                self.assertIn(profile["code"], {0, 1, 2} if name == "lint" else {0})
+                self.assertRegex(profile["stdoutSha256"], r"^[0-9a-f]{64}$")
+                self.assertRegex(profile["stderrSha256"], r"^[0-9a-f]{64}$")
+        self.assertEqual(fixture["multipleOwners"]["ownerNames"],
+                         [["-e", "--expression"], ["-f", "--file"]])
+
     def test_hanging_owner_published_fixture_mirrors_exact_engine_resource(self):
         # The two published members need package-local resources. This mirror
         # is byte-identical, not a separately editable product-derived gold.

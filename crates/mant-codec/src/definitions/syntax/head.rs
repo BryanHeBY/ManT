@@ -71,11 +71,20 @@ fn inferred_head_with_options(
 /// Recognize an inferred owner without cloning its original inline tree.
 /// This stronger admission is shared with native HP/headless-IP recovery;
 /// explicit definition tags continue to use their own author-owned boundary.
-pub(in crate::definitions) fn recognize_inferred_head(
+#[cfg(test)]
+fn recognize_inferred_head(
     inlines: &[Inline],
     context: DefinitionContext,
 ) -> Option<super::InferredIdentity> {
-    let options = super::scan::option_head(inlines, &[]);
+    recognize_inferred_head_with_operands(inlines, context, &[])
+}
+
+pub(in crate::definitions) fn recognize_inferred_head_with_operands(
+    inlines: &[Inline],
+    context: DefinitionContext,
+    operands: &[crate::definitions::NativeOperand],
+) -> Option<super::InferredIdentity> {
+    let options = super::scan::option_head(inlines, operands);
     if !inferred_head_with_options(inlines, context, &options) {
         return None;
     }

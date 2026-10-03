@@ -25,7 +25,11 @@ pub(super) fn normalize_native_hanging_owners(
             else {
                 return None;
             };
-            super::syntax::recognize_inferred_head(children, context)
+            super::syntax::recognize_inferred_head_with_operands(
+                children,
+                context,
+                evidence.operands(&head),
+            )
         });
         let Some(entry) = entry else {
             normalized.push(head);

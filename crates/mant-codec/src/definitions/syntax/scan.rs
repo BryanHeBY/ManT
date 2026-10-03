@@ -46,6 +46,8 @@ enum Placeholder {
     Uppercase,
     Styled,
     StyledGap,
+    Bare,
+    BareGap,
     Invalid,
 }
 
@@ -62,6 +64,11 @@ impl Placeholder {
                 Self::Styled
             }
             (Self::Styled | Self::StyledGap, c) if c.is_whitespace() => Self::StyledGap,
+            (Self::Start | Self::Assigned, c) if !parameter && c.is_alphanumeric() => Self::Bare,
+            (Self::Bare, c) if !parameter && (c.is_alphanumeric() || matches!(c, '_' | '-')) => {
+                Self::Bare
+            }
+            (Self::Bare | Self::BareGap, c) if c.is_whitespace() => Self::BareGap,
             _ => Self::Invalid,
         }
     }
@@ -528,7 +535,8 @@ impl<'a> Scanner<'a> {
             // declaration syntax, without claiming that the font change was
             // a new native word. Punctuation still inside a parameter cannot
             // supply this proof, nor can a multiword styled prose suffix.
-            let complete_parameter = self.complete_parameter_token(parameter);
+            let complete_parameter = self.complete_parameter_token(parameter)
+                || matches!(character, ',' | '|') && self.complete_bare_parameter(following);
             let boundary = matches!(character, ',' | '|')
                 && (self.styled_argument || self.structured_argument || complete_parameter)
                 || (self.view.literal_operand_starts(self.cursor)
@@ -543,19 +551,29 @@ impl<'a> Scanner<'a> {
                 };
             if boundary
                 && self.view.text[restart..].starts_with('-')
+                && (!self.view.is_parameter(restart)
+                    || self.argument_start.as_ref().is_some_and(|argument| {
+                        argument.attached_to_name
+                            && !self.view.text[argument.bytes.start..].starts_with('=')
+                            && self.view.style(restart).strong
+                    }))
+                && self.styled_argument
+                && !self.structured_argument
+                && !complete_parameter
+                && !self.view.literal_operand_starts(restart)
+            {
+                // A literal receipt prevents a false name inside one word;
+                // it cannot make that unfinished parameter prove an owner.
+                self.admission = OwnerAdmission::UnprovedStyleRestart;
+            }
+            if boundary
+                && self.view.text[restart..].starts_with('-')
                 && !self.view.is_parameter(restart)
                 && (role.is_none()
                     || self.structured_argument
                     || complete_parameter
                     || self.view.literal_operand_starts(restart))
             {
-                if role.is_none()
-                    && self.styled_argument
-                    && !self.structured_argument
-                    && !complete_parameter
-                {
-                    self.admission = OwnerAdmission::UnprovedStyleRestart;
-                }
                 self.finish_argument();
                 self.cursor = restart;
                 return;
@@ -580,6 +598,46 @@ impl<'a> Scanner<'a> {
         }
         self.placeholder = self.placeholder.observe(character, parameter);
         self.cursor = next_offset;
+    }
+
+    fn complete_bare_parameter(&self, following: usize) -> bool {
+        if !matches!(self.placeholder, Placeholder::Bare | Placeholder::BareGap)
+            || self.styled_argument
+            || self.argument_start.as_ref().is_none_or(|argument| {
+                argument.attached_to_name
+                    && !self.view.text[argument.bytes.start..].starts_with('=')
+            })
+            || self.view.is_parameter(following)
+            || !(self.view.style(following).strong
+                || self.view.explicit_option(following)
+                || self.view.literal_operand_starts(following))
+        {
+            return false;
+        }
+        // A single bare parameter is accepted by valid_arguments, but a
+        // comma alone does not separate declarations: first,--fake,last and
+        // temporary fonts remain one parameter. Require an independently
+        // styled/owned, complete option on its right, with its own ending.
+        let suffix = &self.view.text[following..];
+        let Some(name) = super::options::option_prefix(suffix) else {
+            return false;
+        };
+        let end = following + name.len();
+        if (following..end)
+            .any(|offset| self.view.text.is_char_boundary(offset) && self.view.is_parameter(offset))
+        {
+            return false;
+        }
+        suffix[name.len()..].chars().next().is_none_or(|next| {
+            next.is_whitespace()
+                || next == '='
+                || matches!(next, ',' | '|')
+                    && suffix[name.len() + next.len_utf8()..].starts_with(char::is_whitespace)
+                || self
+                    .wrappers
+                    .last()
+                    .is_some_and(|wrapper| wrapper.closer() == next)
+        })
     }
 }
 

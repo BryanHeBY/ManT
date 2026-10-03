@@ -14,7 +14,7 @@ mod named;
 mod options;
 mod scan;
 pub(super) use head::is_inferred_head;
-pub(super) use head::recognize_inferred_head;
+pub(super) use head::recognize_inferred_head_with_operands;
 pub(crate) use named::{environment_variable_alias, environment_variable_body};
 use named::{is_configuration_key, is_variable_term};
 pub(super) use named::{is_ordinal_marker, is_value_name};

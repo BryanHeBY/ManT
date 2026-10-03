@@ -16,6 +16,7 @@ struct HeadWitness {
     source: Option<SourceSpan>,
     children: Vec<Inline>,
     layout: LayoutHint,
+    operands: Vec<super::NativeOperand>,
 }
 
 struct PairWitness {
@@ -36,7 +37,13 @@ impl HangingOwnerEvidence {
     /// Called after HP actually produced one paragraph, with the driver's
     /// immediate next sibling. A predicted IP alone is not a completed pair.
     #[cfg(feature = "roff")]
-    pub(crate) fn head(&mut self, block: &mut Block, key: usize, next_key: usize) {
+    pub(crate) fn head(
+        &mut self,
+        block: &mut Block,
+        key: usize,
+        next_key: usize,
+        captured: super::CapturedHeadOperands,
+    ) {
         let literal = matches!(block, Block::Preformatted { .. });
         let (Block::Paragraph {
             children,
@@ -62,9 +69,25 @@ impl HangingOwnerEvidence {
                     .pop()
                     .unwrap_or_default(),
                 layout: *layout,
+                operands: if captured.text == mant_ir::inline_plain_text(children) {
+                    captured.operands
+                } else {
+                    Vec::new()
+                },
             },
         );
         super::groups::mark_native_inline_owner(children, key);
+    }
+
+    /// Used only after `matches()` has proved this exact head/body pair.
+    pub(super) fn operands(&self, head: &Block) -> &[super::NativeOperand] {
+        let (Block::Paragraph { children, .. } | Block::Preformatted { children, .. }) = head
+        else {
+            return &[];
+        };
+        native_inline_owner(children)
+            .and_then(|key| self.pairs.get(&key))
+            .map_or(&[], |witness| witness.head.operands.as_slice())
     }
 
     /// Called after the proven IP really executed. Keep its entire description
@@ -220,8 +243,18 @@ mod tests {
         let mut left_body = body();
         let mut right = head();
         let mut right_body = body();
-        proof.head(&mut left, 10, 11);
-        proof.head(&mut right, 20, 21);
+        proof.head(
+            &mut left,
+            10,
+            11,
+            super::super::CapturedHeadOperands::default(),
+        );
+        proof.head(
+            &mut right,
+            20,
+            21,
+            super::super::CapturedHeadOperands::default(),
+        );
         assert!(
             !proof.matches(&left, &left_body),
             "future IP has not executed"
@@ -246,7 +279,12 @@ mod tests {
         let mut proof = HangingOwnerEvidence::default();
         let mut head = head();
         let mut body = body();
-        proof.head(&mut head, 10, 11);
+        proof.head(
+            &mut head,
+            10,
+            11,
+            super::super::CapturedHeadOperands::default(),
+        );
         proof.body(&mut body, 11);
         let carrier = body_carrier_mut(&mut body.description).unwrap();
         super::super::groups::mark_native_inline_owner(carrier, 99);

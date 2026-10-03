@@ -271,7 +271,10 @@ fn assert_queries(content: &ResolvedContent, item: &ListItem) {
     }
 }
 
-fn descendant_has_source(node: &libmandoc_rs::Node, source: mant_ir::SourceSpan) -> bool {
+pub(super) fn descendant_has_source(
+    node: &libmandoc_rs::Node,
+    source: mant_ir::SourceSpan,
+) -> bool {
     (node.line, node.column) == (source.line, source.column)
         || node
             .children
@@ -279,7 +282,7 @@ fn descendant_has_source(node: &libmandoc_rs::Node, source: mant_ir::SourceSpan)
             .any(|child| descendant_has_source(child, source))
 }
 
-fn ast_pairs<'a>(
+pub(super) fn ast_pairs<'a>(
     node: &'a libmandoc_rs::Node,
     pairs: &mut Vec<(u32, u32, &'a libmandoc_rs::Node)>,
 ) {

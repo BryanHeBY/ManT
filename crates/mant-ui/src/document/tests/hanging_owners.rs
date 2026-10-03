@@ -7,6 +7,9 @@ use ratatui::{
 };
 use serde_json::Value;
 
+#[path = "hanging_owners/parameters.rs"]
+mod parameters;
+
 fn cases() -> Vec<Value> {
     // This published member has its own mirrored test resource. The pure
     // consumer fixture gate verifies byte equality with the engine's source.

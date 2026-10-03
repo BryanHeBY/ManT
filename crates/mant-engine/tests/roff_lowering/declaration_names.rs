@@ -12,6 +12,8 @@ use serde::Deserialize;
 
 #[path = "declaration_names/limits.rs"]
 mod limits;
+#[path = "declaration_names/parameters.rs"]
+mod parameters;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -292,6 +294,86 @@ fn names_from_explain(content: &ResolvedContent, name: &str) -> Vec<String> {
     .collect()
 }
 
+fn assert_name_positions(content: &ResolvedContent, owner: EntryOwner<'_>, name: &str) {
+    for content_bytes in [1024 * 1024, 4 * 1024 * 1024, 1] {
+        let response = mant_query::explain_query(
+            content,
+            &ExplanationQuery {
+                entry: name.into(),
+                options: ExplanationOptions {
+                    content_bytes,
+                    ..Default::default()
+                },
+            },
+        )
+        .unwrap();
+        let evidence = response
+            .evidence
+            .iter()
+            .filter(|evidence| {
+                evidence
+                    .bases
+                    .iter()
+                    .any(|basis| matches!(basis, EvidenceBasis::Name { .. }))
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(evidence.len(), 1);
+        let evidence = evidence[0];
+        assert_eq!(
+            evidence.outline.node.id(),
+            owner.facts().unwrap().id.as_str()
+        );
+        if content_bytes == 1 {
+            assert!(evidence.has_omitted_content());
+            continue;
+        }
+        for basis in &evidence.bases {
+            let EvidenceBasis::Name { matches } = basis else {
+                continue;
+            };
+            assert_eq!(matches.len(), 1);
+            let record = &matches[0];
+            assert_eq!(record.name, name);
+            assert_ne!(record.occurrences.len(), 0);
+            for occurrence in &record.occurrences {
+                assert_ne!(occurrence.forms.len(), 0);
+                assert_ne!(occurrence.content.len(), 0);
+                let forms = &evidence.entry.as_ref().unwrap().forms;
+                let form_text: String = occurrence
+                    .forms
+                    .iter()
+                    .map(|range| {
+                        mant_ir::inline_plain_text(range.resolve(forms).unwrap())
+                            .chars()
+                            .skip(range.start_char as usize)
+                            .take((range.end_char - range.start_char) as usize)
+                            .collect::<String>()
+                    })
+                    .collect();
+                let content_text: String = occurrence
+                    .content
+                    .iter()
+                    .map(|range| {
+                        evidence
+                            .content
+                            .as_ref()
+                            .unwrap()
+                            .resolve_range(&response.supports, range)
+                            .unwrap()
+                            .safe_text()
+                            .chars()
+                            .skip(range.char_range().start)
+                            .take(range.char_range().len())
+                            .collect::<String>()
+                    })
+                    .collect();
+                assert_eq!(form_text, name);
+                assert_eq!(content_text, name);
+            }
+        }
+    }
+}
+
 fn search(content: &ResolvedContent, name: &str) -> mant_protocol::QuerySearch {
     mant_query::search_query(
         content,
@@ -312,68 +394,71 @@ fn search(content: &ResolvedContent, name: &str) -> mant_protocol::QuerySearch {
 #[test]
 fn native_name_queries_and_markdown_ranges_select_only_the_authoritative_owner() {
     for case in cases() {
-        let content = roundtrip(&case);
-        let entries = owners(content.document.as_ref().unwrap());
-        let artifact =
-            render_addressable_markdown_with_options(&content, MarkdownOptions::ADDRESSABLE);
-        for owner in &entries {
-            let facts = owner.facts().unwrap();
-            let mapped = artifact.nodes().iter().filter(|mapped| matches!(mapped.node(),
-                MarkdownNode::DocumentEntry { owner: candidate, .. } if candidate.facts().is_some_and(|entry| entry.id == facts.id)))
-                .collect::<Vec<_>>();
-            assert_eq!(mapped.len(), 1, "{}: one mapped owner", case.id);
-            assert!(artifact.text()[mapped[0].range()].contains(&case.body_word));
-            for name in &case.names {
-                assert_eq!(
-                    names_from_explain(&content, name),
-                    [facts.id.to_string()],
-                    "{}: exact name evidence",
-                    case.id
-                );
-                let excerpt =
-                    crate::semantic_test_read::semantic_excerpt(&content, &[name]).unwrap();
-                assert!(mant_render::render_excerpt_text(&excerpt).contains(&case.body_word));
-                let found = search(&content, name);
-                let hits = found
-                    .matches
-                    .iter()
-                    .filter(|hit| hit.outline.node.id() == facts.id.as_str())
-                    .collect::<Vec<_>>();
-                assert_ne!(hits.len(), 0, "{}: actual owner search", case.id);
-                let occurrences = hits
-                    .iter()
-                    .flat_map(|hit| &hit.occurrences)
-                    .collect::<Vec<_>>();
-                assert_ne!(occurrences.len(), 0);
-                for occurrence in occurrences {
-                    assert_eq!(&occurrence.matched_text, name);
-                    let start = usize::try_from(occurrence.markdown.start_byte).unwrap();
-                    let end = usize::try_from(occurrence.markdown.end_byte).unwrap();
-                    assert_eq!(visible_range(artifact.text(), start..end), *name);
-                    let start_position = position(artifact.text(), start);
-                    let end_position = position(artifact.text(), end);
-                    assert_eq!(
-                        start_position,
-                        (
-                            occurrence.markdown.start_line,
-                            occurrence.markdown.start_column
-                        )
-                    );
-                    assert_eq!(
-                        end_position,
-                        (occurrence.markdown.end_line, occurrence.markdown.end_column)
-                    );
-                }
-            }
-        }
-        for excluded in &case.excluded {
+        assert_case_queries(&case);
+    }
+}
+
+fn assert_case_queries(case: &Case) {
+    let content = roundtrip(case);
+    let entries = owners(content.document.as_ref().unwrap());
+    let artifact = render_addressable_markdown_with_options(&content, MarkdownOptions::ADDRESSABLE);
+    for owner in &entries {
+        let facts = owner.facts().unwrap();
+        let mapped = artifact.nodes().iter().filter(|mapped| matches!(mapped.node(),
+            MarkdownNode::DocumentEntry { owner: candidate, .. } if candidate.facts().is_some_and(|entry| entry.id == facts.id)))
+            .collect::<Vec<_>>();
+        assert_eq!(mapped.len(), 1, "{}: one mapped owner", case.id);
+        assert!(artifact.text()[mapped[0].range()].contains(&case.body_word));
+        for name in &case.names {
+            assert_name_positions(&content, *owner, name);
             assert_eq!(
-                names_from_explain(&content, excluded).len(),
-                0,
-                "{}: argument is no selector",
+                names_from_explain(&content, name),
+                [facts.id.to_string()],
+                "{}: exact name evidence",
                 case.id
             );
+            let excerpt = crate::semantic_test_read::semantic_excerpt(&content, &[name]).unwrap();
+            assert!(mant_render::render_excerpt_text(&excerpt).contains(&case.body_word));
+            let found = search(&content, name);
+            let hits = found
+                .matches
+                .iter()
+                .filter(|hit| hit.outline.node.id() == facts.id.as_str())
+                .collect::<Vec<_>>();
+            assert_ne!(hits.len(), 0, "{}: actual owner search", case.id);
+            let occurrences = hits
+                .iter()
+                .flat_map(|hit| &hit.occurrences)
+                .collect::<Vec<_>>();
+            assert_ne!(occurrences.len(), 0);
+            for occurrence in occurrences {
+                assert_eq!(&occurrence.matched_text, name);
+                let start = usize::try_from(occurrence.markdown.start_byte).unwrap();
+                let end = usize::try_from(occurrence.markdown.end_byte).unwrap();
+                assert_eq!(visible_range(artifact.text(), start..end), *name);
+                let start_position = position(artifact.text(), start);
+                let end_position = position(artifact.text(), end);
+                assert_eq!(
+                    start_position,
+                    (
+                        occurrence.markdown.start_line,
+                        occurrence.markdown.start_column
+                    )
+                );
+                assert_eq!(
+                    end_position,
+                    (occurrence.markdown.end_line, occurrence.markdown.end_column)
+                );
+            }
         }
+    }
+    for excluded in &case.excluded {
+        assert_eq!(
+            names_from_explain(&content, excluded).len(),
+            0,
+            "{}: argument is no selector",
+            case.id
+        );
     }
 }
 

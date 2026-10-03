@@ -220,27 +220,44 @@ impl StructuralLowerer<'_, '_, '_> {
                 *self.definition_hanging_width,
             ));
         }
+        let next_owner = next.filter(|next| {
+            next.kind == NodeKind::Block
+                && next.macro_name.as_deref() == Some("IP")
+                && first_part_children(next, NodeKind::Head).is_empty()
+                && native_exit_epoch(node) == next.flow_epoch
+        });
+        let operand_capture = next_owner.map(|_| {
+            std::rc::Rc::new(std::cell::RefCell::new(
+                crate::mandoc::inline::HeadOperandCapture::default(),
+            ))
+        });
+        let inbound_capture = std::mem::replace(
+            &mut lowerer.state.formatter.head_operand_capture,
+            operand_capture.clone(),
+        );
         lowerer.push_nodes(children);
         // man_term.c::post_HP() closes its BODY row. PP/P/LP have no post
         // handler and execute in the caller's live BlockState instead.
         let nested = lowerer.finish_into(self.formatter, super::FormatterRowBoundary::Settle);
+        self.formatter.head_operand_capture = inbound_capture;
         self.formatter.font.man_text_boundary(); // BODY post
         self.formatter.font.man_text_boundary(); // BLOCK post
         extend_blocks_with_spacing(self.output, nested, spacing, node);
         // man_term.c::pre_HP/post_HP and pre_IP render separate native
         // owners. The real driver's adjacent empty IP can complete a semantic
         // pair later; it must not alter either owner's formatter geometry.
-        if let Some(next) = next.filter(|next| {
-            next.kind == NodeKind::Block
-                && next.macro_name.as_deref() == Some("IP")
-                && first_part_children(next, NodeKind::Head).is_empty()
-                && native_exit_epoch(node) == next.flow_epoch
-        }) && self.output.len() == output_start + 1
+        if let Some(next) = next_owner
+            && self.output.len() == output_start + 1
         {
             self.context.native_heads.borrow_mut().hanging.head(
                 &mut self.output[output_start],
                 std::ptr::from_ref(node) as usize,
                 std::ptr::from_ref(next) as usize,
+                operand_capture
+                    .as_ref()
+                    .expect("matched IP capture")
+                    .borrow_mut()
+                    .take(),
             );
         }
     }

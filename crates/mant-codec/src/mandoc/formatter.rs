@@ -58,6 +58,10 @@ pub(super) struct FormatterState {
     definition_bodies: Vec<DefinitionBodyObservation>,
     /// Last HEAD post's physical row, independent of its rendered term.
     definition_head_rows: DefinitionHeadRows,
+    /// Accepted operand observations for one proven semantic head. This
+    /// sidecar follows all output borrows; it never changes execution state.
+    pub(super) head_operand_capture:
+        Option<std::rc::Rc<std::cell::RefCell<super::inline::HeadOperandCapture>>>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -113,6 +117,7 @@ impl Clone for FormatterState {
             row_handoff: self.row_handoff,
             definition_bodies: self.definition_bodies.clone(),
             definition_head_rows: self.definition_head_rows,
+            head_operand_capture: None,
         }
     }
 }
@@ -127,6 +132,7 @@ impl Default for FormatterState {
             row_handoff: RowHandoff::None,
             definition_bodies: Vec::new(),
             definition_head_rows: DefinitionHeadRows::default(),
+            head_operand_capture: None,
         }
     }
 }
@@ -277,6 +283,9 @@ impl FormatterState {
             .expect("only one builder can borrow formatter execution");
         std::mem::swap(&mut active, &mut self.execution);
         let mut builder = InlineBuilder::from_parts(std::mem::take(nodes), active);
+        builder
+            .head_operand_capture
+            .clone_from(&self.head_operand_capture);
         builder.inherit_external_head_row(self.definition_head_row_pending());
         let result = operation(&mut builder);
         let (output, mut returned) = builder.into_parts();
@@ -320,6 +329,9 @@ impl FormatterState {
             .expect("only one builder can borrow formatter execution");
         std::mem::swap(&mut active, &mut self.execution);
         let mut builder = InlineBuilder::from_parts(Vec::new(), active);
+        builder
+            .head_operand_capture
+            .clone_from(&self.head_operand_capture);
         builder.inherit_author_execution_with_effect(flow, authors_section, author_break_effect);
         builder
     }
