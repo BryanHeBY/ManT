@@ -26,6 +26,8 @@ struct Case {
     native_head: Option<String>,
     body_word: String,
     owner_proof: OwnerProof,
+    #[serde(default)]
+    native_rows: Option<Vec<String>>,
 }
 
 #[derive(Deserialize)]

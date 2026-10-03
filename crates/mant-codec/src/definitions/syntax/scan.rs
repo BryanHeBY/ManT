@@ -18,6 +18,8 @@ mod lexical;
 use lexical::LexicalState;
 mod arguments;
 use arguments::valid_arguments;
+mod parameter_token;
+use parameter_token::ParameterToken;
 
 #[derive(Clone, Copy)]
 enum Wrapper {
@@ -39,38 +41,50 @@ enum OwnerAdmission {
     UnprovedStyleRestart,
 }
 
-#[derive(Clone, Copy)]
-enum Placeholder {
-    Start,
-    Assigned,
-    Uppercase,
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+enum ParameterStyle {
+    #[default]
+    Empty,
+    Literal,
     Styled,
-    StyledGap,
-    Bare,
-    BareGap,
-    Invalid,
+    Mixed,
+}
+
+#[derive(Clone, Copy, Default)]
+struct Placeholder {
+    token: ParameterToken,
+    style: ParameterStyle,
+    assigned: bool,
 }
 
 impl Placeholder {
-    fn observe(self, character: char, parameter: bool) -> Self {
-        match (self, character) {
-            (Self::Start, '=') => Self::Assigned,
-            (Self::Start | Self::Assigned, 'A'..='Z')
-            | (Self::Uppercase, 'A'..='Z' | '0'..='9' | '_' | '-') => Self::Uppercase,
-            (Self::Uppercase, c) if c.is_whitespace() => Self::Uppercase,
-            (Self::Start | Self::Assigned | Self::Styled, c)
-                if parameter && (c.is_alphanumeric() || matches!(c, '_' | '-')) =>
-            {
-                Self::Styled
-            }
-            (Self::Styled | Self::StyledGap, c) if c.is_whitespace() => Self::StyledGap,
-            (Self::Start | Self::Assigned, c) if !parameter && c.is_alphanumeric() => Self::Bare,
-            (Self::Bare, c) if !parameter && (c.is_alphanumeric() || matches!(c, '_' | '-')) => {
-                Self::Bare
-            }
-            (Self::Bare | Self::BareGap, c) if c.is_whitespace() => Self::BareGap,
-            _ => Self::Invalid,
+    fn observe(mut self, character: char, parameter: bool) -> Self {
+        if character == '=' && self.token.is_empty() && !self.assigned {
+            self.assigned = true;
+            return self;
         }
+        if !character.is_whitespace() {
+            let style = if parameter {
+                ParameterStyle::Styled
+            } else {
+                ParameterStyle::Literal
+            };
+            self.style = match self.style {
+                ParameterStyle::Empty => style,
+                current if current == style => current,
+                _ => ParameterStyle::Mixed,
+            };
+        }
+        self.token = self.token.observe(character);
+        self
+    }
+
+    fn is_styled(self) -> bool {
+        self.style == ParameterStyle::Styled && self.token.is_word()
+    }
+
+    fn is_bare(self) -> bool {
+        self.style == ParameterStyle::Literal && self.token.is_bare()
     }
 }
 
@@ -143,7 +157,7 @@ impl<'a> Scanner<'a> {
             wrappers: Vec::new(),
             admission: OwnerAdmission::Proved,
             separator: None,
-            placeholder: Placeholder::Start,
+            placeholder: Placeholder::default(),
         }
     }
 
@@ -369,23 +383,20 @@ impl<'a> Scanner<'a> {
         self.styled_argument = false;
         self.structured_argument = false;
         self.separator = None;
-        self.placeholder = Placeholder::Start;
+        self.placeholder = Placeholder::default();
     }
 
     fn complete_parameter_token(&self, delimiter_is_parameter: bool) -> bool {
-        match self.placeholder {
-            Placeholder::Uppercase => true,
-            Placeholder::Styled | Placeholder::StyledGap if !delimiter_is_parameter => {
-                self.argument_start.as_ref().is_some_and(|argument| {
+        self.placeholder.token.is_uppercase_metavariable()
+            || self.placeholder.is_styled()
+                && !delimiter_is_parameter
+                && self.argument_start.as_ref().is_some_and(|argument| {
                     // A styled suffix adjoining the name is only part of a
                     // native word. Author whitespace or an explicit assignment
                     // supplies the left boundary of a complete parameter token.
                     !argument.attached_to_name
                         || self.view.text[argument.bytes.start..].starts_with('=')
                 })
-            }
-            _ => false,
-        }
     }
 
     fn consume_argument(&mut self, character: char) {
@@ -416,7 +427,7 @@ impl<'a> Scanner<'a> {
                 || (self.view.literal_operand_starts(self.cursor)
                     || self.view.literal_operand_starts(following))
                     && self.separator.is_some()
-                || character.is_whitespace() && matches!(self.placeholder, Placeholder::Uppercase);
+                || character.is_whitespace() && self.placeholder.token.is_uppercase_metavariable();
             let restart =
                 if following == next_offset && self.view.literal_operand_starts(self.cursor) {
                     self.cursor
@@ -475,7 +486,7 @@ impl<'a> Scanner<'a> {
     }
 
     fn complete_bare_parameter(&self, following: usize) -> bool {
-        if !matches!(self.placeholder, Placeholder::Bare | Placeholder::BareGap)
+        if !self.placeholder.is_bare()
             || self.styled_argument
             || self.argument_start.as_ref().is_none_or(|argument| {
                 argument.attached_to_name

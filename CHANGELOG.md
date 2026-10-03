@@ -238,9 +238,12 @@ that crate was not published for that change.
 - Recognize declaration names only from complete accepted source evidence.
   Font wrappers and native operand boundaries no longer split or invent names;
   comma-separated options with bare, delimited or uppercase parameters retain
-  their exact selectable spellings. Hanging `.HP`/`.IP` content receives entry
-  ownership only when its declaration is proved, without changing authored
-  prose or treating argument tokens as option names.
+  their exact selectable spellings. Share parameter token syntax between
+  declaration restarts and complete-head validation, retaining capitalized,
+  mixed case, underscore-prefixed and Unicode parameters while keeping quoted
+  values and parameter-internal dash spellings opaque. Hanging `.HP`/`.IP`
+  content receives entry ownership only when its declaration is proved, without
+  changing authored prose or treating argument tokens as option names.
 - Bound recognized option groups to 256 explicitly spelled names. When native
   `Fl` evidence proves omitted selectors, `manual.semantic-entry.name-limit`
   reports semantic coverage loss while retained prose stays content-complete.

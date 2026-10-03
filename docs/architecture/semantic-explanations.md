@@ -88,6 +88,21 @@ multiword styled prose and a temporary font change do not establish this boundar
 Original forms and name ranges remain attached to the same content owner,
 without inferring aliases.
 
+Token completion and complete-head validation share the parameter word grammar:
+Unicode alphanumeric characters, underscores and hyphens, with no leading hyphen
+for an ordinary bare argument. Capitalized and mixed case words such as `Script`
+or `sCript`, and leading underscores such as `_script`, remain valid. All-uppercase
+metavariables supply additional evidence rather than selecting an exclusive
+grammar. That restart evidence retains its initial ASCII uppercase requirement;
+valid words such as `1A` and `_SCRIPT` still need independent right-side evidence.
+A bare word without that evidence requires a top-level comma or pipe and an
+independently styled or operand-proven complete option on its right to restart
+declaration recognition. An ordinary bare argument can still end the head.
+Uniform parameter styling and the authored left boundary still matter for a
+styled word; a temporary font change inside a word supplies no new operand.
+Quoted and bracketed values remain opaque, including dash-shaped text inside
+them. A comma inside a value cannot by itself declare another option.
+
 Accepted native operand roles take precedence over font hints. An opening
 quotation owned by an actual `Ar` operand remains a parameter boundary. An
 inherited italic quotation can enclose a real `Fl` declaration; its accepted

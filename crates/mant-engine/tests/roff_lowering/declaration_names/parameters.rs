@@ -5,12 +5,20 @@ fn parameter_cases() -> Vec<Case> {
     let matrix: serde_json::Value =
         serde_json::from_str(include_str!("parameter_cases.json")).unwrap();
     assert_eq!(matrix["header"]["count"], 78);
-    serde_json::from_value(matrix["cases"].clone()).unwrap()
+    let mut cases: Vec<Case> = serde_json::from_value(matrix["cases"].clone()).unwrap();
+    let matrix: serde_json::Value = serde_json::from_str(include_str!("token_cases.json")).unwrap();
+    assert_eq!(matrix["header"]["count"], 302);
+    assert_eq!(matrix["header"]["positiveCount"], 234);
+    assert_eq!(matrix["header"]["negativeCount"], 68);
+    let additional: Vec<Case> = serde_json::from_value(matrix["cases"].clone()).unwrap();
+    assert_eq!(additional.len(), 302);
+    cases.extend(additional);
+    cases
 }
 
 #[test]
 fn complete_parameters_and_opaque_values_share_the_tp_and_hp_grammar() {
-    // The 78 exact sources ran pristine ASCII/UTF-8/HTML/tree/lint before
+    // All 380 exact sources ran pristine ASCII/UTF-8/HTML/tree/lint before
     // these assertions. pre_alternate supplies real operand boundaries;
     // pre_HP/post_HP and pre_IP/post_IP retain independent reading blocks.
     // Name classification is ManT's reading contract, not a mandoc output.
@@ -66,15 +74,7 @@ fn complete_parameters_and_opaque_values_share_the_tp_and_hp_grammar() {
                 assert_hanging_source(owner, &native.document.root);
             }
         }
-        let fixture: serde_json::Value =
-            serde_json::from_str(include_str!("parameter_cases.json")).unwrap();
-        let rows = fixture["cases"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .find(|row| row["id"] == case.id)
-            .unwrap();
-        let expected: Vec<String> = serde_json::from_value(rows["nativeRows"].clone()).unwrap();
+        let expected = case.native_rows.as_ref().expect("exact pristine rows");
         let text = mant_render::render_query_man(&content);
         assert_eq!(
             text.split_once("OPTIONS\n")
@@ -83,7 +83,7 @@ fn complete_parameters_and_opaque_values_share_the_tp_and_hp_grammar() {
                 .trim_matches('\n')
                 .split('\n')
                 .collect::<Vec<_>>(),
-            expected,
+            *expected,
             "{}: exact native rows",
             case.id
         );

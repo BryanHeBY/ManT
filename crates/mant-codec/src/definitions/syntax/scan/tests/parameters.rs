@@ -243,11 +243,33 @@ fn parameter_owned_openers_do_not_wrap_new_declarations() {
 
 #[test]
 fn bare_parameter_completion_requires_a_top_level_delimiter_and_independent_name() {
-    for parameter in ["script", "script-file", "参数"] {
-        for separator in [", ", ",   ", " | "] {
+    // Exact TP/HP sources for these spellings and fonts ran pristine first.
+    // term_word() retains each scalar through in-word font switches; fonts
+    // neither restrict parameter spelling nor create a new native operand.
+    for parameter in [
+        "script",
+        "Script",
+        "sCript",
+        "SCRIPT",
+        "ScriptFile",
+        "Script-file",
+        "_script",
+        "_Script",
+        "SCRIPT_FILE",
+        "脚本",
+        "s_cript",
+        "1A",
+        "_SCRIPT",
+    ] {
+        for (font, separator) in [text, strong_text, emphasis_text]
+            .into_iter()
+            .flat_map(|font| [", ", ",", " | "].map(|separator| (font, separator)))
+        {
             let nodes = [
                 strong(vec![text("-e")]),
-                text(&format!(" {parameter}{separator}")),
+                text(" "),
+                font(parameter),
+                text(separator),
                 strong(vec![text("--expression=")]),
                 emphasis(vec![text("script")]),
             ];
@@ -260,6 +282,10 @@ fn bare_parameter_completion_requires_a_top_level_delimiter_and_independent_name
                     Inline::Strong { children } => mant_ir::inline_plain_text(children)
                         .chars()
                         .map(|c| strong(vec![text(&c.to_string())]))
+                        .collect(),
+                    Inline::Emphasis { children } => mant_ir::inline_plain_text(children)
+                        .chars()
+                        .map(|c| emphasis(vec![text(&c.to_string())]))
                         .collect(),
                     _ => vec![node.clone()],
                 })
@@ -285,6 +311,16 @@ fn bare_parameter_completion_requires_a_top_level_delimiter_and_independent_name
         ];
         assert_names(&nodes, &[], &["-e"]);
     }
+    // These exact TP/HP inputs ran pristine in Roman and bold first. Word
+    // validity does not provide uppercase restart evidence without its initial
+    // ASCII uppercase qualifier; the comma remains inside an opaque value.
+    for argument in ["1A,--fake,last", "_SCRIPT,--fake,last"] {
+        for font in [text, strong_text] {
+            let nodes = [strong(vec![text("-e")]), text(" "), font(argument)];
+            assert_names(&nodes, &[], &["-e"]);
+            assert!(!option_head(&nodes, &[]).inferred_complete);
+        }
+    }
     let nodes = [
         strong(vec![text("-e ")]),
         emphasis(vec![text("first, --fake")]),
@@ -294,4 +330,12 @@ fn bare_parameter_completion_requires_a_top_level_delimiter_and_independent_name
         role: NativeOperandRole::Argument,
     };
     assert_names(&nodes, &[operand], &["-e"]);
+}
+
+fn strong_text(value: &str) -> Inline {
+    strong(vec![text(value)])
+}
+
+fn emphasis_text(value: &str) -> Inline {
+    emphasis(vec![text(value)])
 }

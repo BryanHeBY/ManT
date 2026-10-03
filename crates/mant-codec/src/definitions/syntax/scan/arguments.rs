@@ -1,5 +1,6 @@
 //! Validate the ordered parameter syntax without inventing word boundaries.
 
+use super::parameter_token::{ParameterToken, parameter_character};
 use super::{Argument, HeadView, LexicalState, closing, quote_closer};
 
 pub(super) fn valid_arguments(view: &HeadView<'_>, argument: &Argument) -> bool {
@@ -41,14 +42,11 @@ pub(super) fn valid_arguments(view: &HeadView<'_>, argument: &Argument) -> bool 
     }
     let mut bare = 0;
     for (index, token) in literal.split_whitespace().enumerate() {
-        if structured_token(token, index == 0 && argument.attached_to_name) {
+        let syntax = ParameterToken::from_text(token);
+        if structured_token(token, syntax, index == 0 && argument.attached_to_name) {
             continue;
         }
-        if !token.starts_with('-')
-            && token
-                .chars()
-                .all(|c| c.is_alphanumeric() || matches!(c, '_' | '-'))
-        {
+        if syntax.is_bare() {
             bare += 1;
         } else {
             return false;
@@ -57,7 +55,7 @@ pub(super) fn valid_arguments(view: &HeadView<'_>, argument: &Argument) -> bool 
     lexical.is_top_level() && bare <= 1
 }
 
-fn structured_token(token: &str, attached_to_name: bool) -> bool {
+fn structured_token(token: &str, syntax: ParameterToken, attached_to_name: bool) -> bool {
     if matches!(token, "\0" | "..." | "=")
         || token.starts_with('=')
         || token.starts_with('/')
@@ -65,10 +63,7 @@ fn structured_token(token: &str, attached_to_name: bool) -> bool {
             super::super::named::is_variable_term(name) && !value.is_empty()
         })
         || token.contains(':') && token.split(':').all(super::super::named::is_variable_term)
-        || token.chars().any(char::is_uppercase)
-            && token
-                .chars()
-                .all(|c| c.is_uppercase() || c.is_ascii_digit() || matches!(c, '_' | '-'))
+        || syntax.is_uppercase()
     {
         return true;
     }
@@ -93,9 +88,6 @@ fn structured_token(token: &str, attached_to_name: bool) -> bool {
     };
     token.contains('\0')
         && token.split([',', ':', '@', '|', '/', '=']).all(|part| {
-            !part.is_empty()
-                && part
-                    .chars()
-                    .all(|c| c == '\0' || c.is_alphanumeric() || matches!(c, '_' | '-'))
+            !part.is_empty() && part.chars().all(|c| c == '\0' || parameter_character(c))
         })
 }
