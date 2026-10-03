@@ -15,20 +15,21 @@ that crate was not published for that change.
 ### libmandoc-rs 0.12.0
 
 - Refresh the pinned mandoc CVS source again at 2026-09-27 13:09:54 UTC.
-  `LIBMANDOC_VERSION` is now `cvs-20260927T130954Z`. The 27 local patches
-  replay unchanged; upstream changed only `Makefile`, `NEWS`, and the table
-  width calculation in `out.c`. This source refresh does not change the crate
+  `LIBMANDOC_VERSION` is now `cvs-20260927T130954Z`. At that refresh, the
+  then-current 27 local patches replayed unchanged; upstream changed only
+  `Makefile`, `NEWS`, and the table width calculation in `out.c`. This source
+  refresh does not change the crate
   or document schema version.
 - The preceding CVS refresh pinned the tree at
   2026-09-20 12:21:15 UTC. At that point `LIBMANDOC_VERSION` was
   `cvs-20260920T122115Z`; the source inventory records every upstream revision
   and SHA-256. Builds remain offline.
-- Preserve the owned Rust AST shape, memory-only input, strict include roots,
+- Retain the owned Rust AST model, memory-only input, strict include roots,
   bounded parsing and per-thread session isolation. Native tokens and generated
   syntax now follow the pinned upstream, including distinct `P`/`LP` paragraphs,
   `soquiet`, and updated SYNOPSIS declarations. Consumers matching private
   upstream syntax should recheck their lowering rather than assume 1.14.6 trees.
-- The optional reference renderer follows the new upstream basic-unit layout:
+- The optional native renderer follows the new upstream basic-unit layout:
   its default body indent is five columns and its HTML structure has changed.
   Output capture, UTF-8 width, limits and concurrent isolation remain supported.
   Update native-renderer golden output deliberately; this is not a change to
@@ -46,6 +47,30 @@ that crate was not published for that change.
   downstream exhaustive `Node` destructuring and struct-literal consumers, so
   the crate advances with the rest of the unpublished contract family rather
   than silently mixing the new snapshot with older lowering.
+- Retain declared column widths in `Node::columns` and cross-scope closure
+  evidence in `NodeFlags::broken`. Add `NormalizedListKind::Dash` and
+  `DisplayKind::Unfilled`; the latter preserves source rows without replacing
+  tab stops. Update struct literals and exhaustive matches. `table_start` now
+  identifies the first executed table span, including a leading rule or empty
+  row, rather than only the first data row.
+- Add `EquationBox::gnu_ldots` as whole-token normalization evidence after
+  macro expansion and before font splitting. Quoted text and fragments of
+  tokens such as `ldots2` retain their literal spelling. Source-neutral IR
+  receives the normalized text rather than interpreting token names itself.
+- Add the optional public `Diagnostic::code` field and stable
+  `DiagnosticCode::EscapeDepthLimit` and `InputProcessingLimit` classifications.
+  Known safety omissions remain distinguishable from ordinary native warnings
+  without matching diagnostic prose. Update `Diagnostic` struct literals and
+  exhaustive code matches. Owned equation transfer and native cleanup avoid
+  recursive stack growth while retaining depth, node and byte limits.
+- Enable `compat-pandoc`, `compat-libbsd`, and `compat-gnu-eqn` by default,
+  preserving the existing font aliases, `.Lb libbsd` catalogue entry, and
+  qualified GNU `ldots` normalization. Each feature controls its corresponding
+  `MANT_MANDOC_COMPAT_*` C macro. Embedders can select them independently with
+  `default-features = false`; `render` and `serde` remain opt-in. Cargo feature
+  selection applies to the linked crate, not individual parser instances.
+  Core correctness and safety limits remain active without compatibility
+  features; this configuration is not a pristine upstream reference.
 
 ### mant-ir, mant-protocol, mant-codec, mant-loader, mant-query, mant-render, mant-engine and mant 0.12.0
 
@@ -59,6 +84,33 @@ that crate was not published for that change.
   `v0.11` golden contracts remain checked in and unchanged. All affected Rust
   crates use `0.12.0` and `^0.12.0` internal dependencies; `mant-sources`
   remains independently versioned at `0.9.3`.
+- Replace `DefinitionLayout.inline_term` / `layout.inlineTerm` with
+  `head_body_relation` / `headBodyRelation`. The closed relation defaults to
+  `{"type":"separate"}`; `shared` records independent `wordBoundary`
+  (`joined` or `separated`) and `bodyAlignment` (`after-term` or `indented`).
+  Joined words receive no synthetic separator, including at exact field
+  capacity; layout widths do not override the word boundary. Update Rust
+  constructors and wire consumers; `DefinitionLayout::inline_term()` remains
+  a convenience accessor. The former wire fields and intermediate string
+  relations are rejected within the still-unpublished v0.12 contract.
+- Change the Rust unit variant `Inline::LineBreak` to
+  `Inline::LineBreak { indent_columns }`. Its optional wire `indentColumns`
+  defaults to zero and records the following hard row's resolved origin
+  relative to its containing block. Use `Inline::line_break()` for the default
+  break and update exhaustive patterns. Layout consumers compose this origin
+  once without treating it as a source coordinate.
+- Use one accepted inline body for reading, Markdown, search and copy. Retire
+  the unpublished intermediate `Inline::PortableDisplay` variant,
+  `portable-display` / `display` wire shapes, and `MarkdownOptions.native_text`
+  option. Remove these from downstream constructors and consumers. Native
+  `.Bx` glyphs and accepted link URI text are no longer replaced or hidden by
+  a second spelling; owned AST `Node::native_text` and `TableCell::native_text`
+  remain execution evidence.
+- Add `Block::Table.column_widths` / `columnWidths` for measured mdoc
+  `.Bl -column` declarations, and `ListKind::Dash` for distinct dash markers.
+  Update table constructors and list-kind matches. Text and TUI share bounded
+  column geometry, retain actual cells when declaration counts differ, and
+  distinguish declared content widths from intercolumn gaps.
 - Add the closed `TableRow.kind` fact (`data`, `horizontal-rule`,
   `double-horizontal-rule`, or a per-column `layout-rule`) to `mant-ir` and the
   native protocol family. Add the closed `TableCell.kind` fact so partial tbl
@@ -67,6 +119,25 @@ that crate was not published for that change.
   initialize the new fields. Text and TUI renderers now preserve empty table
   rows and distinguish whole-row, per-column, single, double, connecting, and
   isolated rules instead of inferring them from cell contents.
+- Preserve equation operands, sequence and operator grouping, decoration
+  scope, and independently authored fences, including half-open intervals.
+  Unequal matrices use a compact column representation when rectangular
+  expansion would exceed the projection budget, retaining every actual operand
+  without quadratic separator growth.
+- Bound recursive structure by its final position in query-shaped JSON,
+  including surrounding lists and styled inlines. Deep equation or document
+  subtrees retain readable text with semantic-coverage diagnostics rather than
+  producing JSON that ordinary readers cannot deserialize. Equation text leaves
+  retain `summarizedOperandGroup` when their parent still needs grouping;
+  Rust `EquationExpression` constructors must initialize the corresponding
+  `summarized_operand_group` field.
+  Actual native truncation instead reports content-coverage loss; summarizing
+  structure alone does not make `contentComplete` false.
+- Reject inbound document, outline, excerpt, explanation, search, and scoped
+  responses whose completeness summaries contradict retained coverage findings
+  or known incomplete children. Omitted summaries still default to complete
+  only when consistent with retained evidence. A false summary remains valid
+  when bounded transport has omitted the detailed diagnostics.
 
 - Adopt `libmandoc-rs ^0.12.0` through the roff loading path. Paragraph font
   resets cover the newly preserved `P` and `LP` tokens. Standalone `soquiet`
@@ -75,6 +146,25 @@ that crate was not published for that change.
   fresh resolution cannot mix the CVS parser with pre-migration lowering.
   Published v0.11 protocol shapes and schema snapshots remain unchanged. No
   release tag is implied by these notes.
+- Select all three native compatibility features explicitly in `mant-codec`
+  and `mant-loader`, preserving ManT's reading policy independently of the
+  native crate's implicit defaults.
+- Execute visible link labels, SYNOPSIS names, definition heads, generated
+  punctuation and literal content in the same text state as ordinary prose.
+  Output ownership changes no longer terminate continuations or pending
+  zero-advance glyphs. Source-line flags, including repeated coordinates from
+  macro expansion, determine no-fill boundaries before handler dispatch.
+- Restore mdoc BODY scopes using actual font-stack checkpoints, retaining
+  updates to surviving slots and the independent previous-font register.
+  Cross-scope closes execute post once; display restoration occurs at the
+  executed close rather than overwriting later `.nf` state on helper return.
+  Man macro pre/post font selections remain observable through subsequent
+  `\fP`, even when a paragraph return preserves its active text tail.
+- Keep `.UR`/`.MT` bodies structural: paragraphs, list labels and nested links
+  retain their content and boundaries. Truly empty bodies use the address as
+  clickable text; control-only bodies remain distinct. Generated terminal
+  delimiters execute even for empty targets, so link eligibility cannot change
+  subsequent continuation, word-end break or zero-advance consumption.
 - Retain independent `.Pp` paragraph spacing in raw mdoc no-fill flow, including
   preceding `.sp` and continued lines. Execute `.fi`/`.nf` line boundaries in
   both macro packages even when the requested mode is unchanged, without
@@ -89,6 +179,16 @@ that crate was not published for that change.
 - Treat successfully decoded empty table cells as valid results: zero-width
   `\&` and font controls no longer reappear as visible source text. Escaped
   literal backslashes and diagnostic-bearing unknown content remain intact.
+- Apply table fonts before decoding each cell and restore its local font scope
+  afterward. In-cell `\fR`/`\fP` switches remain effective; CR/CB/CI code
+  presentation is separate from the execution register used by later text.
+  Optional source-backed cell enrichment has a cumulative page budget and
+  retains native payload on refusal. Delimiter-like equation text in native
+  table cells stays opaque rather than being reparsed with an invented eqn
+  environment.
+- Derive typed external targets for bibliography `%U` and canonical RFC `%R`
+  fields while preserving their authored labels. Native reading of a
+  label-replaced `.Lk` retains `label: uri` instead of hiding the address.
 - Preserve executed paragraph distance when a `PP`/`P`/`LP` body contains only
   formatter controls before a following relative scope. Empty lowered content
   no longer cancels the source's blank row; `PD=0` and section-initial behavior
@@ -110,11 +210,52 @@ that crate was not published for that change.
   and the first body word in one formatter execution stream. Zero-advance
   glyphs can therefore be overwritten at the native head/body boundary
   without turning an IR ownership split into a spurious line flush.
+- Consume definition fields from ordered native cell writes, including
+  zero-width cells, pending glyphs, automatic separators and explicit breaks.
+  Accepted prefixes cannot be revoked by a later rejected suffix, and rejection
+  retires with its own field rather than deleting a subsequent BODY paragraph.
+  Physical row ownership crosses HEAD/BODY independently of semantic names or
+  whether the projected label contains non-whitespace text. Responsive HANG
+  reading retains words lost solely to device margin overflow; explicit
+  word-end break rejection continues to follow the pinned CVS contract.
 - Preserve definition-field execution across repeated `.mc` requests. Each
   flush now recomputes the remaining row width, retains fixed-width blank
   glyphs, and distinguishes empty formatter words from visible cells. `.ti`
   keeps its preceding field boundary without rendering the device-specific
   temporary offset as document padding.
+- Resolve automatic paragraph distance and empty-TEXT vertical requests
+  through the same negative `.sp` cancellation state. `VerticalSpace` carries
+  completed blank rows, not requests for consumers to execute again. Completed
+  rows survive output drains and semantic wrappers once; empty formatter words,
+  `\&` cells and raw empty TEXT keep their distinct native behavior.
+- Recognize declaration names only from complete accepted source evidence.
+  Font wrappers and native operand boundaries no longer split or invent names;
+  comma-separated options with bare, delimited or uppercase parameters retain
+  their exact selectable spellings. Hanging `.HP`/`.IP` content receives entry
+  ownership only when its declaration is proved, without changing authored
+  prose or treating argument tokens as option names.
+- Bound recognized option groups to 256 explicitly spelled names. When native
+  `Fl` evidence proves omitted selectors, `manual.semantic-entry.name-limit`
+  reports semantic coverage loss while retained prose stays content-complete.
+  Uncertain prose alone does not prove known semantic loss.
+- Preserve leading and repeated Markdown hard rows with the shared canonical
+  `<br />` grammar for paragraph and list phrasing. Local phrasing parses reuse
+  the full document's reference definitions, so full, collapsed and shortcut
+  links retain targets and original input ranges before or after the hard-row
+  block; headings and ordinary HTML retain their separate parsing rules.
+- Encode joined definition text and omitted Manual/Section link wrappers in
+  one inline context. Representable adjacent strong, emphasis and code spans
+  read back without exposing delimiters as text. Where CommonMark cannot
+  express a joined-word emphasis boundary, export flattens that style while
+  retaining every glyph; native IR and JSON keep the original style. Original
+  IR identities and artifact ranges remain separate. Resolved BODY hard rows
+  and positive leading spacing remain hard or paragraph boundaries, while
+  Markdown may simplify numeric vertical distance and export literal
+  descriptions as separate fences.
+- Classify native input-execution and escape-budget omissions as known content
+  loss throughout document and query responses. Safe partial content remains
+  available with false completeness summaries; ordinary warnings do not imply
+  lost text, and fatal native errors remain errors.
 
 ### mant-ui 0.12.0
 
@@ -129,6 +270,11 @@ that crate was not published for that change.
   graphemes and expanding tabs. A link covering part of one glyph remains
   clickable; distinct targets sharing a glyph require explicit navigation
   rather than silently opening the first target.
+- Preserve hard rows in multiline `Unsupported` fallback rather than replacing
+  newlines with `�`. Apply resolved inline row origins, definition word seams,
+  shared literal first rows and declared table widths through reading, explain,
+  hit testing, selection and copy. Semantic link wrapping does not add or remove
+  physical rows, and fallback addresses retain clickable ranges.
 
 ## 0.11.0 - 2026-09-11
 
