@@ -118,7 +118,9 @@ fn map_code_content(markdown: &str, source: Range<usize>) -> Option<Vec<MappedCh
         let character_source = start..end;
         mapped.push(MappedCharacter {
             value,
-            linear: markdown.get(character_source.clone()) == Some(&value.to_string()),
+            // char_indices supplied the original scalar's exact bytes. Only
+            // CommonMark's line-ending normalization changes those bytes.
+            linear: !matches!(character, '\r' | '\n'),
             source: character_source,
         });
     }
@@ -130,6 +132,18 @@ fn try_map_aligned_text(
     value: &str,
     source: Range<usize>,
 ) -> Option<Vec<MappedCharacter>> {
+    if markdown.get(source.clone()) == Some(value) {
+        return Some(
+            value
+                .char_indices()
+                .map(|(offset, character)| MappedCharacter {
+                    value: character,
+                    source: source.start + offset..source.start + offset + character.len_utf8(),
+                    linear: true,
+                })
+                .collect(),
+        );
+    }
     let mut mapped = Vec::with_capacity(value.chars().count());
     let mut cursor = source.start;
     let source_end = source.end;
@@ -146,7 +160,9 @@ fn try_map_aligned_text(
         let character_source = search_start..character_end;
         mapped.push(MappedCharacter {
             value: character,
-            linear: markdown.get(character_source.clone()) == Some(&character.to_string()),
+            // find(char) proved the exact scalar bytes at found. Any preceding
+            // source syntax belongs to this span and makes it non-linear.
+            linear: found == search_start,
             source: character_source,
         });
         cursor = character_end;
@@ -178,7 +194,113 @@ pub fn floor_char_boundary(text: &str, offset: usize) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use super::{InlineMappingKind, map_inline_characters, markdown_source_events};
+    use super::{
+        InlineMappingKind, MappedCharacter, map_inline_characters, markdown_source_events,
+    };
+
+    #[test]
+    fn scalar_mapping_preserves_exact_and_transformed_source_spans() {
+        for (markdown, value, kind, expected) in [
+            (
+                "中🦀e\u{301}",
+                "中🦀e\u{301}",
+                InlineMappingKind::Text,
+                vec![
+                    ('中', 0..3, true),
+                    ('🦀', 3..7, true),
+                    ('e', 7..8, true),
+                    ('\u{301}', 8..10, true),
+                ],
+            ),
+            (
+                "\\*中",
+                "*中",
+                InlineMappingKind::Text,
+                vec![('*', 0..2, false), ('中', 2..5, true)],
+            ),
+            (
+                "&copy;",
+                "©",
+                InlineMappingKind::Text,
+                vec![('©', 0..6, false)],
+            ),
+            (
+                "`中\r\n🦀`",
+                "中 🦀",
+                InlineMappingKind::Code,
+                vec![('中', 1..4, true), (' ', 4..6, false), ('🦀', 6..10, true)],
+            ),
+            (
+                "`中\r🦀`",
+                "中 🦀",
+                InlineMappingKind::Code,
+                vec![('中', 1..4, true), (' ', 4..5, false), ('🦀', 5..9, true)],
+            ),
+            (
+                "`中\n🦀`",
+                "中 🦀",
+                InlineMappingKind::Code,
+                vec![('中', 1..4, true), (' ', 4..5, false), ('🦀', 5..9, true)],
+            ),
+            (
+                "` 中🦀 `",
+                "中🦀",
+                InlineMappingKind::Code,
+                vec![('中', 2..5, true), ('🦀', 5..9, true)],
+            ),
+            ("` `", " ", InlineMappingKind::Code, vec![(' ', 1..2, true)]),
+        ] {
+            let expected = expected
+                .into_iter()
+                .map(|(value, source, linear)| MappedCharacter {
+                    value,
+                    source,
+                    linear,
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(
+                map_inline_characters(markdown, value, 0..markdown.len(), kind),
+                expected,
+                "{markdown:?} / {kind:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn exact_text_does_not_bypass_code_delimiters_or_source_clamping() {
+        let markdown = "#中🦀";
+        assert_eq!(
+            map_inline_characters(markdown, "中", 2..7, InlineMappingKind::Text),
+            [MappedCharacter {
+                value: '中',
+                source: 1..4,
+                linear: true
+            }]
+        );
+        for source in [0..markdown.len(), 0..usize::MAX] {
+            let mapped = map_inline_characters(markdown, markdown, source, InlineMappingKind::Code);
+            assert!(
+                mapped
+                    .iter()
+                    .all(|character| !character.linear && character.source == (0..markdown.len()))
+            );
+            assert_eq!(
+                mapped
+                    .iter()
+                    .map(|character| character.value)
+                    .collect::<String>(),
+                markdown
+            );
+        }
+        assert_eq!(
+            map_inline_characters("``x`", "x", 0..4, InlineMappingKind::Code),
+            [MappedCharacter {
+                value: 'x',
+                source: 0..4,
+                linear: false
+            }]
+        );
+    }
 
     #[test]
     fn ordinary_events_keep_commonmark_options_and_exact_original_offsets() {

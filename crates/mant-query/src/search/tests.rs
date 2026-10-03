@@ -661,6 +661,78 @@ fn multibyte_match_ends_remain_valid_coordinate_boundaries() {
 }
 
 #[test]
+fn visible_search_preserves_unicode_ranges_across_inline_styles() {
+    let value = "中🦀e\u{301}";
+    for node in [
+        Inline::Text {
+            value: value.to_owned(),
+        },
+        Inline::Code {
+            value: value.to_owned(),
+        },
+        Inline::Strong {
+            children: vec![Inline::Text {
+                value: value.to_owned(),
+            }],
+        },
+        Inline::Emphasis {
+            children: vec![Inline::Text {
+                value: value.to_owned(),
+            }],
+        },
+        Inline::Link {
+            target: mant_ir::LinkTarget::External {
+                uri: "https://example.org".into(),
+            },
+            children: vec![Inline::Text {
+                value: value.to_owned(),
+            }],
+            title: None,
+        },
+    ] {
+        let mut content = query();
+        content.document.as_mut().expect("document").sections[0]
+            .blocks
+            .push(Block::Paragraph {
+                children: vec![
+                    Inline::Text {
+                        value: "前 * ".into(),
+                    },
+                    node,
+                    Inline::Text {
+                        value: " 後".into(),
+                    },
+                ],
+                layout: LayoutHint::default(),
+                source: None,
+            });
+        let wire = serde_json::to_string(content.document.as_ref().expect("document")).unwrap();
+        content.document = Some(serde_json::from_str(&wire).unwrap());
+        let markdown = render_addressable_markdown(&content).into_text();
+        let result = search_query(&content, &request(value)).expect("Unicode search");
+        assert_eq!(result.matches.len(), 1);
+        let hit = &result.matches[0];
+        assert_eq!(hit.occurrences.len(), 1);
+        let occurrence = &hit.occurrences[0];
+        assert_eq!(occurrence.matched_text, value);
+        let start = usize::try_from(occurrence.markdown.start_byte).unwrap();
+        let end = usize::try_from(occurrence.markdown.end_byte).unwrap();
+        assert_eq!(&markdown[start..end], value);
+        assert_eq!(
+            occurrence.markdown.end_column - occurrence.markdown.start_column,
+            4
+        );
+        assert_eq!(occurrence.line_ranges.len(), 1);
+        let line = &occurrence.line_ranges[0];
+        assert_eq!(
+            &hit.preview[usize::try_from(line.start_byte).unwrap()
+                ..usize::try_from(line.end_byte).unwrap()],
+            value
+        );
+    }
+}
+
+#[test]
 fn byte_mode_regexes_are_rejected_before_matching_unicode_text() {
     let mut request = request("(?-u:.)");
     request.syntax = SearchSyntax::Regex;

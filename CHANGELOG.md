@@ -164,6 +164,11 @@ that crate was not published for that change.
   control cells, zero-width glyphs and Unicode retain their ordered execution
   paths. Text, Markdown and JSON output remain unchanged; public APIs and the
   unpublished v0.12 wire contract are unchanged.
+- Reduce canonical Markdown source-mapping overhead by eliminating temporary
+  strings for each visible character and directly mapping unchanged text.
+  Visible search retains exact UTF-8 source spans, escaped prefixes, entity
+  fallback and code-span line-ending normalization. Public APIs and the
+  unpublished v0.12 wire contract are unchanged.
 - Execute visible link labels, SYNOPSIS names, definition heads, generated
   punctuation and literal content in the same text state as ordinary prose.
   Output ownership changes no longer terminate continuations or pending
