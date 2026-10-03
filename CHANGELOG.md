@@ -1,9 +1,10 @@
 # Crate compatibility changelog
 
-This changelog records public API, semantic-compatibility, and migration notes
-for ManT's independently versioned Rust crates. Internal refactors and tests
-are omitted unless they change an observable contract. Product-level features,
-installers, and native artifacts remain documented in the curated
+This changelog records public API, semantic-compatibility, migration notes,
+and notable performance improvements for ManT's independently versioned Rust
+crates. Routine internal refactors and tests are omitted unless they change an
+observable contract. Product-level features, installers, and native artifacts
+remain documented in the curated
 [GitHub Releases](https://github.com/BryanHeBY/ManT/releases).
 
 Version `0.9.0` was the final lockstep publication. Later entries name the
@@ -149,6 +150,12 @@ that crate was not published for that change.
 - Select all three native compatibility features explicitly in `mant-codec`
   and `mant-loader`, preserving ManT's reading policy independently of the
   native crate's implicit defaults.
+- Reduce native text recording overhead in `mant-codec`'s `roff` feature by
+  batching ordinary text runs and avoiding repeated UTF-8 conversions and
+  width scans for printable ASCII. Active word-end breaks, suppressed blanks,
+  control cells, zero-width glyphs and Unicode retain their ordered execution
+  paths. Text, Markdown and JSON output remain unchanged; public APIs and the
+  unpublished v0.12 wire contract are unchanged.
 - Execute visible link labels, SYNOPSIS names, definition heads, generated
   punctuation and literal content in the same text state as ordinary prose.
   Output ownership changes no longer terminate continuations or pending
