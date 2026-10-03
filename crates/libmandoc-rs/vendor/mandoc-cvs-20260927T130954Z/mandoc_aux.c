@@ -22,7 +22,12 @@
 #if HAVE_ERR
 #include <err.h>
 #endif
+#include <errno.h>
+#include <stdint.h>
 #include <stdarg.h>
+#ifdef MANDOC_APPEND_TEST
+#include "mant_thread_local.h"
+#endif
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -94,6 +99,83 @@ mandoc_recallocarray(void *ptr, size_t oldnum, size_t num, size_t size)
 	if (ptr == NULL)
 		err((int)MANDOCLEVEL_SYSERR, NULL);
 	return ptr;
+}
+
+#ifdef MANDOC_APPEND_TEST
+/* Explicit maintenance probes only: no production counters or output hook. */
+MANT_THREAD_LOCAL struct mandoc_append_metrics append_metrics;
+
+void
+mandoc_append_test_reset(void)
+{
+	memset(&append_metrics, 0, sizeof(append_metrics));
+}
+
+void
+mandoc_append_test_read(struct mandoc_append_metrics *out)
+{
+	*out = append_metrics;
+}
+
+void
+mandoc_append_test_seed(size_t bytes)
+{
+	append_metrics.seed_calls++;
+	append_metrics.seed_bytes += bytes;
+}
+
+void
+mandoc_append_test_retire(size_t bytes)
+{
+	append_metrics.retired_runs++;
+	append_metrics.retired_bytes += bytes;
+}
+#endif
+
+/*
+ * Grow geometrically, then copy only the new input.  Native tbl_cdata and
+ * roff_word_append insert one ASCII space, including between empty words.
+ * Capacity is private allocation state; strlen/AST/output facts do not change.
+ * Source must be non-NULL and must not alias the destination allocation.
+ */
+void
+mandoc_str_append(char **dest, size_t *used, size_t *capacity,
+    const char *source, size_t length, int separate)
+{
+	size_t need, grown, separator;
+
+	separator = separate != 0;
+	if (*used > SIZE_MAX - separator - 1 ||
+	    length > SIZE_MAX - *used - separator - 1) {
+		errno = ENOMEM;
+		err((int)MANDOCLEVEL_SYSERR, NULL);
+	}
+	need = *used + separator + length + 1;
+	if (need > *capacity) {
+		grown = *capacity < 64 ? 64 : *capacity;
+		while (grown < need) {
+			if (grown > SIZE_MAX / 2) {
+				grown = need;
+				break;
+			}
+			grown *= 2;
+		}
+#ifdef MANDOC_APPEND_TEST
+		append_metrics.reserve_calls++;
+		append_metrics.relocation_bytes += *used;
+#endif
+		*dest = mandoc_realloc(*dest, grown);
+		*capacity = grown;
+	}
+	if (separator)
+		(*dest)[(*used)++] = ' ';
+	memcpy(*dest + *used, source, length);
+	*used += length;
+	(*dest)[*used] = '\0';
+#ifdef MANDOC_APPEND_TEST
+	append_metrics.append_calls++;
+	append_metrics.append_bytes += length + separator;
+#endif
 }
 
 char *

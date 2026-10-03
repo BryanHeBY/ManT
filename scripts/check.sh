@@ -43,6 +43,10 @@ run "check CI native dependency script syntax" \
   bash -n scripts/ci/install-ci-native-dependencies.sh
 run "test locked vendor source replay" \
   python3 crates/libmandoc-rs/scripts/test_sync_vendor.py
+run "test native append fixture observer" \
+  python3 crates/libmandoc-rs/tests/native/test_append_growth.py
+run "check native append run bounds and retirement" \
+  python3 crates/libmandoc-rs/tests/native/run_append_growth.py
 run "test CVS snapshot freezing" \
   python3 crates/libmandoc-rs/scripts/test_freeze_cvs_snapshot.py
 run "test registered mandoc oracle identity" \

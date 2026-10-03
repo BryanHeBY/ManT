@@ -34,6 +34,7 @@ struct	tbl_node {
 	struct tbl_span	 *first_span;	/* First data row. */
 	struct tbl_span	 *current_span;	/* Data row being parsed. */
 	struct tbl_span	 *last_span;	/* Last data row. */
+	size_t cdata_used, cdata_capacity; /* Active T{ cell only. */
 	int		  line;		/* Line number in input file. */
 	int		  pos;		/* Column number in input file. */
 	int		  source_safe;	/* Current input avoids user macro expansion. */
@@ -45,3 +46,4 @@ void		 tbl_option(struct tbl_node *, int, const char *, int *);
 void		 tbl_layout(struct tbl_node *, int, const char *, int);
 void		 tbl_data(struct tbl_node *, int, const char *, int);
 void		 tbl_cdata(struct tbl_node *, int, const char *, int);
+void		 tbl_cdata_clear(struct tbl_node *);

@@ -27,3 +27,4 @@
 0027-bound-escape-parser-depth.patch
 0028-retain-eqn-ldots-token-eligibility.patch
 0029-report-escape-depth-truncation.patch
+0030-grow-native-text-append-runs.patch

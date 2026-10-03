@@ -45,6 +45,8 @@ int
 man_parseln(struct roff_man *man, int ln, char *buf, int offs)
 {
 
+	roff_word_append_clear(man);
+
 	if (man->last->type != ROFFT_EQN || ln > man->last->line)
 		man->flags |= MAN_NEWLINE;
 

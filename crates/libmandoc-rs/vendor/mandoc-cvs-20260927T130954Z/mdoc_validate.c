@@ -305,6 +305,9 @@ mdoc_validate(struct roff_man *mdoc)
 	struct roff_node *n, *np;
 	const v_post *p;
 
+	/* Validation may mutate or transfer TEXT storage. */
+	roff_word_append_clear(mdoc);
+
 	/*
 	 * Translate obsolete macros to modern macros first
 	 * such that later code does not need to look

@@ -38,6 +38,9 @@ struct	roff_man {
 	char	 	 *os_r;    /* Operating system name at run time. */
 	struct roff_node *last;    /* The last node parsed. */
 	struct roff_node *last_es; /* The most recent Es node. */
+	/* Valid only during a consecutive word-append run, never during validation. */
+	struct roff_node *append_node;
+	size_t append_used, append_capacity;
 	size_t		  flow_epoch; /* Per-document executed flow generation. */
 	int		  quick;   /* Abort parse early. */
 	int		  flags;   /* Parse flags. */
@@ -73,6 +76,7 @@ struct roff_node *roff_node_alloc(struct roff_man *, int, int,
 void		  roff_node_append(struct roff_man *, struct roff_node *);
 void		  roff_word_alloc(struct roff_man *, int, int, const char *);
 void		  roff_word_append(struct roff_man *, const char *);
+void		  roff_word_append_clear(struct roff_man *);
 void		  roff_elem_alloc(struct roff_man *, int, int, int);
 struct roff_node *roff_block_alloc(struct roff_man *, int, int, int);
 struct roff_node *roff_head_alloc(struct roff_man *, int, int, int);

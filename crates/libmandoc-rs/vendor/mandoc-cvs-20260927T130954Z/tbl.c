@@ -134,6 +134,7 @@ tbl_free(struct tbl_node *tbl)
 	struct tbl_dat	*dp;
 
 	while (tbl != NULL) {
+		tbl_cdata_clear(tbl);
 		while ((rp = tbl->first_row) != NULL) {
 			tbl->first_row = rp->next;
 			while (rp->first != NULL) {
@@ -164,6 +165,7 @@ tbl_restart(int line, int pos, struct tbl_node *tbl)
 {
 	if (tbl->part == TBL_PART_CDATA)
 		mandoc_msg(MANDOCERR_TBLDATA_BLK, line, pos, "T&");
+	tbl_cdata_clear(tbl);
 
 	tbl->part = TBL_PART_LAYOUT;
 	tbl->line = line;
@@ -187,6 +189,7 @@ tbl_end(struct tbl_node *tbl, int space_allowed, int still_open)
 {
 	struct tbl_span *sp;
 
+	tbl_cdata_clear(tbl);
 	if (space_allowed == 0)
 		tbl->opts.opts &= ~TBL_OPT_VSPACE;
 	if (still_open)

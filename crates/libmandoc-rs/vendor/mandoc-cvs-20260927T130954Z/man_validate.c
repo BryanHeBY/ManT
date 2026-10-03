@@ -113,6 +113,9 @@ man_validate(struct roff_man *man)
 	struct roff_node *n;
 	const v_check	 *cp;
 
+	/* Validation may mutate or transfer TEXT storage. */
+	roff_word_append_clear(man);
+
 	/*
 	 * Iterate over all children, recursing into each one
 	 * in turn, depth-first.

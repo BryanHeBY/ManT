@@ -840,6 +840,7 @@ roff_alloc(int options)
 static void
 roff_man_free1(struct roff_man *man)
 {
+	roff_word_append_clear(man);
 	if (man->meta.first != NULL)
 		roff_node_delete(man, man->meta.first);
 	free(man->meta.msec);
@@ -855,6 +856,7 @@ roff_man_free1(struct roff_man *man)
 void
 roff_state_reset(struct roff_man *man)
 {
+	roff_word_append_clear(man);
 	man->last = man->meta.first;
 	man->last_es = NULL;
 	man->flags = 0;
@@ -914,6 +916,7 @@ roff_node_alloc(struct roff_man *man, int line, int pos,
 {
 	struct roff_node	*n;
 
+	roff_word_append_clear(man);
 	n = mandoc_calloc(1, sizeof(*n));
 	n->line = line;
 	n->pos = pos;
@@ -1046,15 +1049,41 @@ void
 roff_word_append(struct roff_man *man, const char *word)
 {
 	struct roff_node	*n;
-	char			*addstr, *newstr;
+	char			*addstr;
 
 	n = man->last;
+	if (man->append_node != n) {
+		roff_word_append_clear(man);
+		man->append_used = strlen(n->string);
+		man->append_capacity = man->append_used + 1;
+		man->append_node = n;
+#ifdef MANDOC_APPEND_TEST
+		mandoc_append_test_seed(man->append_used);
+#endif
+	}
+	/* Preserve parse-time .tr conversion before adding the word separator. */
 	addstr = roff_strdup(man->roff, word);
-	mandoc_asprintf(&newstr, "%s %s", n->string, addstr);
+	mandoc_str_append(&n->string, &man->append_used,
+	    &man->append_capacity, addstr, strlen(addstr), 1);
 	free(addstr);
-	free(n->string);
-	n->string = newstr;
 	man->next = ROFF_NEXT_SIBLING;
+}
+
+/*
+ * Parser line, validation and node-lifetime boundaries retire this receipt
+ * before native strings can be shortened, replaced, transferred or freed.
+ * The allocation stays with the node and uses the ordinary free path.
+ */
+void
+roff_word_append_clear(struct roff_man *man)
+{
+	if (man->append_node == NULL)
+		return;
+#ifdef MANDOC_APPEND_TEST
+	mandoc_append_test_retire(man->append_used);
+#endif
+	man->append_node = NULL;
+	man->append_used = man->append_capacity = 0;
 }
 
 void
@@ -1150,6 +1179,9 @@ roff_endtbl(struct roff *r, int still_open)
 void
 roff_node_unlink(struct roff_man *man, struct roff_node *n)
 {
+
+	if (man != NULL)
+		roff_word_append_clear(man);
 
 	/* Adjust siblings. */
 

@@ -387,7 +387,7 @@ or changing the patch stack.
 ### Local vendor patches
 
 The checked-in vendor tree differs from the pinned CVS source subset only by
-the 29 ordered patches in `patches/series`. The following group contains
+the 30 ordered patches in `patches/series`. The following group contains
 independently reviewable correctness, compatibility, and portability changes;
 they are candidates for separate upstream evaluation, not claims of submission
 or acceptance:
@@ -438,6 +438,18 @@ or acceptance:
 - `0029-report-escape-depth-truncation.patch` records actual escape-suffix
   omission in the private embedding session without changing the guard,
   exposing mandoc error numbers, or inferring loss from diagnostic text.
+- `0030-grow-native-text-append-runs.patch` grows joined TEXT and active `T{`
+  cell storage geometrically while preserving immediate NUL termination,
+  empty-word separators, parse-time translations, and native owners. Private
+  append receipts retire before line, validation, mutation, and owner changes;
+  the bound applies to each consecutive append run, not the entire parser.
+  `.tr` conversion still uses the existing cumulative reallocations within
+  each translated word; this patch does not bound that separate path. Explicit
+  C maintenance probes under `MANDOC_APPEND_TEST` count only these two append
+  paths; normal builds contain no counters, output hooks, or added public FFI.
+  Run `python3 tests/native/run_append_growth.py` from this crate directory to
+  check actual parser growth, receipt retirement, and checked overflow in an
+  owned scratch build. The repository's `scripts/check.sh` runs the same gate.
 
 The remaining patches implement the synchronous embedding boundary:
 

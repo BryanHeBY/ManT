@@ -167,6 +167,7 @@ getdata(struct tbl_node *tbl, struct tbl_span *dp,
 
 	if (endpos - startpos == 2 &&
 	    p[startpos] == 'T' && p[startpos + 1] == '{') {
+		tbl_cdata_clear(tbl);
 		tbl->part = TBL_PART_CDATA;
 		return;
 	}
@@ -199,7 +200,7 @@ void
 tbl_cdata(struct tbl_node *tbl, int ln, const char *p, int pos)
 {
 	struct tbl_dat	*dat;
-	size_t		 sz;
+	size_t		 length;
 
 	dat = tbl->last_span->last;
 
@@ -209,12 +210,14 @@ tbl_cdata(struct tbl_node *tbl, int ln, const char *p, int pos)
 			while (p[pos] == ' ')
 				pos++;
 		if (p[pos] == tbl->opts.tab) {
+			tbl_cdata_clear(tbl);
 			tbl->part = TBL_PART_DATA;
 			pos++;
 			while (p[pos] != '\0')
 				getdata(tbl, tbl->last_span, ln, p, &pos);
 			return;
 		} else if (p[pos] == '\0') {
+			tbl_cdata_clear(tbl);
 			tbl->part = TBL_PART_DATA;
 			return;
 		}
@@ -226,13 +229,14 @@ tbl_cdata(struct tbl_node *tbl, int ln, const char *p, int pos)
 	dat->block = 1;
 	dat->source_safe &= tbl->source_safe;
 
-	if (dat->string != NULL) {
-		sz = strlen(p + pos) + strlen(dat->string) + 2;
-		dat->string = mandoc_realloc(dat->string, sz);
-		(void)strlcat(dat->string, " ", sz);
-		(void)strlcat(dat->string, p + pos, sz);
-	} else
-		dat->string = mandoc_strdup(p + pos);
+	length = strlen(p + pos);
+#ifdef MANDOC_APPEND_TEST
+	if (dat->string == NULL)
+		mandoc_append_test_seed(0);
+#endif
+	/* NULL and an allocated empty first line have different native meaning. */
+	mandoc_str_append(&dat->string, &tbl->cdata_used,
+	    &tbl->cdata_capacity, p + pos, length, dat->string != NULL);
 
 	if (dat->layout->pos == TBL_CELL_DOWN)
 		mandoc_msg(MANDOCERR_TBLDATA_SPAN,
@@ -334,4 +338,15 @@ tbl_data(struct tbl_node *tbl, int ln, const char *p, int pos)
 	sp->pos = TBL_SPAN_DATA;
 	while (p[pos] != '\0')
 		getdata(tbl, sp, ln, p, &pos);
+}
+
+/* Retire only allocation metadata; accepted cell text remains owned by dat. */
+void
+tbl_cdata_clear(struct tbl_node *tbl)
+{
+#ifdef MANDOC_APPEND_TEST
+	if (tbl->cdata_capacity != 0)
+		mandoc_append_test_retire(tbl->cdata_used);
+#endif
+	tbl->cdata_used = tbl->cdata_capacity = 0;
 }

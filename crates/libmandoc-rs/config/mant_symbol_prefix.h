@@ -37,6 +37,10 @@
 #define man_unscope mant_vendored_man_unscope
 #define man_validate mant_vendored_man_validate
 #define mandoc_a2msec mant_vendored_mandoc_a2msec
+#define mandoc_append_test_read mant_vendored_mandoc_append_test_read
+#define mandoc_append_test_reset mant_vendored_mandoc_append_test_reset
+#define mandoc_append_test_retire mant_vendored_mandoc_append_test_retire
+#define mandoc_append_test_seed mant_vendored_mandoc_append_test_seed
 #define mandoc_asprintf mant_vendored_mandoc_asprintf
 #define mandoc_calloc mant_vendored_mandoc_calloc
 #define mandoc_eos mant_vendored_mandoc_eos
@@ -57,6 +61,7 @@
 #define mandoc_realloc mant_vendored_mandoc_realloc
 #define mandoc_reallocarray mant_vendored_mandoc_reallocarray
 #define mandoc_recallocarray mant_vendored_mandoc_recallocarray
+#define mandoc_str_append mant_vendored_mandoc_str_append
 #define mandoc_strdup mant_vendored_mandoc_strdup
 #define mandoc_strndup mant_vendored_mandoc_strndup
 #define mandoc_strntoi mant_vendored_mandoc_strntoi
@@ -152,6 +157,7 @@
 #define roff_validate mant_vendored_roff_validate
 #define roff_word_alloc mant_vendored_roff_word_alloc
 #define roff_word_append mant_vendored_roff_word_append
+#define roff_word_append_clear mant_vendored_roff_word_append_clear
 #define roffhash_alloc mant_vendored_roffhash_alloc
 #define roffhash_find mant_vendored_roffhash_find
 #define roffhash_free mant_vendored_roffhash_free
@@ -162,6 +168,7 @@
 #define tag_put mant_vendored_tag_put
 #define tbl_alloc mant_vendored_tbl_alloc
 #define tbl_cdata mant_vendored_tbl_cdata
+#define tbl_cdata_clear mant_vendored_tbl_cdata_clear
 #define tbl_data mant_vendored_tbl_data
 #define tbl_end mant_vendored_tbl_end
 #define tbl_free mant_vendored_tbl_free

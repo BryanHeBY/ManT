@@ -14,6 +14,7 @@ use std::{
     sync::{Arc, Barrier},
 };
 
+mod append_growth;
 mod bundles;
 mod includes;
 mod input;

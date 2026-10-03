@@ -1,0 +1,389 @@
+Subject: grow native text append runs geometrically
+Upstream-Status: Local optimization (not submitted)
+
+Retain instantaneous NUL-terminated native text and existing AST owners.
+Private parser/table run receipts retire before validation, input-line and
+ownership changes; checked geometric growth avoids recopying each prefix.
+Maintenance-only counters are absent from the production build and FFI.
+
+--- a/mandoc_aux.c
++++ b/mandoc_aux.c
+@@ -22,7 +22,12 @@
+ #if HAVE_ERR
+ #include <err.h>
+ #endif
++#include <errno.h>
++#include <stdint.h>
+ #include <stdarg.h>
++#ifdef MANDOC_APPEND_TEST
++#include "mant_thread_local.h"
++#endif
+ #include <stdlib.h>
+ #include <stdio.h>
+ #include <string.h>
+@@ -96,6 +101,83 @@
+ 	return ptr;
+ }
+ 
++#ifdef MANDOC_APPEND_TEST
++/* Explicit maintenance probes only: no production counters or output hook. */
++MANT_THREAD_LOCAL struct mandoc_append_metrics append_metrics;
++
++void
++mandoc_append_test_reset(void)
++{
++	memset(&append_metrics, 0, sizeof(append_metrics));
++}
++
++void
++mandoc_append_test_read(struct mandoc_append_metrics *out)
++{
++	*out = append_metrics;
++}
++
++void
++mandoc_append_test_seed(size_t bytes)
++{
++	append_metrics.seed_calls++;
++	append_metrics.seed_bytes += bytes;
++}
++
++void
++mandoc_append_test_retire(size_t bytes)
++{
++	append_metrics.retired_runs++;
++	append_metrics.retired_bytes += bytes;
++}
++#endif
++
++/*
++ * Grow geometrically, then copy only the new input.  Native tbl_cdata and
++ * roff_word_append insert one ASCII space, including between empty words.
++ * Capacity is private allocation state; strlen/AST/output facts do not change.
++ * Source must be non-NULL and must not alias the destination allocation.
++ */
++void
++mandoc_str_append(char **dest, size_t *used, size_t *capacity,
++    const char *source, size_t length, int separate)
++{
++	size_t need, grown, separator;
++
++	separator = separate != 0;
++	if (*used > SIZE_MAX - separator - 1 ||
++	    length > SIZE_MAX - *used - separator - 1) {
++		errno = ENOMEM;
++		err((int)MANDOCLEVEL_SYSERR, NULL);
++	}
++	need = *used + separator + length + 1;
++	if (need > *capacity) {
++		grown = *capacity < 64 ? 64 : *capacity;
++		while (grown < need) {
++			if (grown > SIZE_MAX / 2) {
++				grown = need;
++				break;
++			}
++			grown *= 2;
++		}
++#ifdef MANDOC_APPEND_TEST
++		append_metrics.reserve_calls++;
++		append_metrics.relocation_bytes += *used;
++#endif
++		*dest = mandoc_realloc(*dest, grown);
++		*capacity = grown;
++	}
++	if (separator)
++		(*dest)[(*used)++] = ' ';
++	memcpy(*dest + *used, source, length);
++	*used += length;
++	(*dest)[*used] = '\0';
++#ifdef MANDOC_APPEND_TEST
++	append_metrics.append_calls++;
++	append_metrics.append_bytes += length + separator;
++#endif
++}
++
+ char *
+ mandoc_strdup(const char *ptr)
+ {
+--- a/mandoc_aux.h
++++ b/mandoc_aux.h
+@@ -23,6 +23,19 @@
+ void		 *mandoc_realloc(void *, size_t);
+ void		 *mandoc_reallocarray(void *, size_t, size_t);
+ void		 *mandoc_recallocarray(void *, size_t, size_t, size_t);
++/* Private parser append storage; output remains an ordinary C string. */
++void		  mandoc_str_append(char **, size_t *, size_t *,
++			const char *, size_t, int);
++#ifdef MANDOC_APPEND_TEST
++struct mandoc_append_metrics {
++	size_t seed_calls, seed_bytes, append_calls, append_bytes;
++	size_t reserve_calls, relocation_bytes, retired_runs, retired_bytes;
++};
++void mandoc_append_test_reset(void);
++void mandoc_append_test_read(struct mandoc_append_metrics *);
++void mandoc_append_test_seed(size_t);
++void mandoc_append_test_retire(size_t);
++#endif
+ char		 *mandoc_strdup(const char *);
+ char		 *mandoc_strndup(const char *, size_t);
+ 
+--- a/roff_int.h
++++ b/roff_int.h
+@@ -38,6 +38,9 @@
+ 	char	 	 *os_r;    /* Operating system name at run time. */
+ 	struct roff_node *last;    /* The last node parsed. */
+ 	struct roff_node *last_es; /* The most recent Es node. */
++	/* Valid only during a consecutive word-append run, never during validation. */
++	struct roff_node *append_node;
++	size_t append_used, append_capacity;
+ 	size_t		  flow_epoch; /* Per-document executed flow generation. */
+ 	int		  quick;   /* Abort parse early. */
+ 	int		  flags;   /* Parse flags. */
+@@ -73,6 +76,7 @@
+ void		  roff_node_append(struct roff_man *, struct roff_node *);
+ void		  roff_word_alloc(struct roff_man *, int, int, const char *);
+ void		  roff_word_append(struct roff_man *, const char *);
++void		  roff_word_append_clear(struct roff_man *);
+ void		  roff_elem_alloc(struct roff_man *, int, int, int);
+ struct roff_node *roff_block_alloc(struct roff_man *, int, int, int);
+ struct roff_node *roff_head_alloc(struct roff_man *, int, int, int);
+--- a/roff.c
++++ b/roff.c
+@@ -840,6 +840,7 @@
+ static void
+ roff_man_free1(struct roff_man *man)
+ {
++	roff_word_append_clear(man);
+ 	if (man->meta.first != NULL)
+ 		roff_node_delete(man, man->meta.first);
+ 	free(man->meta.msec);
+@@ -855,6 +856,7 @@
+ void
+ roff_state_reset(struct roff_man *man)
+ {
++	roff_word_append_clear(man);
+ 	man->last = man->meta.first;
+ 	man->last_es = NULL;
+ 	man->flags = 0;
+@@ -914,6 +916,7 @@
+ {
+ 	struct roff_node	*n;
+ 
++	roff_word_append_clear(man);
+ 	n = mandoc_calloc(1, sizeof(*n));
+ 	n->line = line;
+ 	n->pos = pos;
+@@ -1046,15 +1049,41 @@
+ roff_word_append(struct roff_man *man, const char *word)
+ {
+ 	struct roff_node	*n;
+-	char			*addstr, *newstr;
++	char			*addstr;
+ 
+ 	n = man->last;
++	if (man->append_node != n) {
++		roff_word_append_clear(man);
++		man->append_used = strlen(n->string);
++		man->append_capacity = man->append_used + 1;
++		man->append_node = n;
++#ifdef MANDOC_APPEND_TEST
++		mandoc_append_test_seed(man->append_used);
++#endif
++	}
++	/* Preserve parse-time .tr conversion before adding the word separator. */
+ 	addstr = roff_strdup(man->roff, word);
+-	mandoc_asprintf(&newstr, "%s %s", n->string, addstr);
++	mandoc_str_append(&n->string, &man->append_used,
++	    &man->append_capacity, addstr, strlen(addstr), 1);
+ 	free(addstr);
+-	free(n->string);
+-	n->string = newstr;
+ 	man->next = ROFF_NEXT_SIBLING;
++}
++
++/*
++ * Parser line, validation and node-lifetime boundaries retire this receipt
++ * before native strings can be shortened, replaced, transferred or freed.
++ * The allocation stays with the node and uses the ordinary free path.
++ */
++void
++roff_word_append_clear(struct roff_man *man)
++{
++	if (man->append_node == NULL)
++		return;
++#ifdef MANDOC_APPEND_TEST
++	mandoc_append_test_retire(man->append_used);
++#endif
++	man->append_node = NULL;
++	man->append_used = man->append_capacity = 0;
+ }
+ 
+ void
+@@ -1150,6 +1179,9 @@
+ void
+ roff_node_unlink(struct roff_man *man, struct roff_node *n)
+ {
++
++	if (man != NULL)
++		roff_word_append_clear(man);
+ 
+ 	/* Adjust siblings. */
+ 
+--- a/man.c
++++ b/man.c
+@@ -45,6 +45,8 @@
+ man_parseln(struct roff_man *man, int ln, char *buf, int offs)
+ {
+ 
++	roff_word_append_clear(man);
++
+ 	if (man->last->type != ROFFT_EQN || ln > man->last->line)
+ 		man->flags |= MAN_NEWLINE;
+ 
+--- a/mdoc.c
++++ b/mdoc.c
+@@ -61,6 +61,8 @@
+ int
+ mdoc_parseln(struct roff_man *mdoc, int ln, char *buf, int offs)
+ {
++
++	roff_word_append_clear(mdoc);
+ 
+ 	if (mdoc->last->type != ROFFT_EQN || ln > mdoc->last->line)
+ 		mdoc->flags |= MDOC_NEWLINE;
+--- a/man_validate.c
++++ b/man_validate.c
+@@ -112,6 +112,9 @@
+ {
+ 	struct roff_node *n;
+ 	const v_check	 *cp;
++
++	/* Validation may mutate or transfer TEXT storage. */
++	roff_word_append_clear(man);
+ 
+ 	/*
+ 	 * Iterate over all children, recursing into each one
+--- a/mdoc_validate.c
++++ b/mdoc_validate.c
+@@ -305,6 +305,9 @@
+ 	struct roff_node *n, *np;
+ 	const v_post *p;
+ 
++	/* Validation may mutate or transfer TEXT storage. */
++	roff_word_append_clear(mdoc);
++
+ 	/*
+ 	 * Translate obsolete macros to modern macros first
+ 	 * such that later code does not need to look
+--- a/tbl_int.h
++++ b/tbl_int.h
+@@ -34,6 +34,7 @@
+ 	struct tbl_span	 *first_span;	/* First data row. */
+ 	struct tbl_span	 *current_span;	/* Data row being parsed. */
+ 	struct tbl_span	 *last_span;	/* Last data row. */
++	size_t cdata_used, cdata_capacity; /* Active T{ cell only. */
+ 	int		  line;		/* Line number in input file. */
+ 	int		  pos;		/* Column number in input file. */
+ 	int		  source_safe;	/* Current input avoids user macro expansion. */
+@@ -45,3 +46,4 @@
+ void		 tbl_layout(struct tbl_node *, int, const char *, int);
+ void		 tbl_data(struct tbl_node *, int, const char *, int);
+ void		 tbl_cdata(struct tbl_node *, int, const char *, int);
++void		 tbl_cdata_clear(struct tbl_node *);
+--- a/tbl_data.c
++++ b/tbl_data.c
+@@ -167,6 +167,7 @@
+ 
+ 	if (endpos - startpos == 2 &&
+ 	    p[startpos] == 'T' && p[startpos + 1] == '{') {
++		tbl_cdata_clear(tbl);
+ 		tbl->part = TBL_PART_CDATA;
+ 		return;
+ 	}
+@@ -199,7 +200,7 @@
+ tbl_cdata(struct tbl_node *tbl, int ln, const char *p, int pos)
+ {
+ 	struct tbl_dat	*dat;
+-	size_t		 sz;
++	size_t		 length;
+ 
+ 	dat = tbl->last_span->last;
+ 
+@@ -209,12 +210,14 @@
+ 			while (p[pos] == ' ')
+ 				pos++;
+ 		if (p[pos] == tbl->opts.tab) {
++			tbl_cdata_clear(tbl);
+ 			tbl->part = TBL_PART_DATA;
+ 			pos++;
+ 			while (p[pos] != '\0')
+ 				getdata(tbl, tbl->last_span, ln, p, &pos);
+ 			return;
+ 		} else if (p[pos] == '\0') {
++			tbl_cdata_clear(tbl);
+ 			tbl->part = TBL_PART_DATA;
+ 			return;
+ 		}
+@@ -226,13 +229,14 @@
+ 	dat->block = 1;
+ 	dat->source_safe &= tbl->source_safe;
+ 
+-	if (dat->string != NULL) {
+-		sz = strlen(p + pos) + strlen(dat->string) + 2;
+-		dat->string = mandoc_realloc(dat->string, sz);
+-		(void)strlcat(dat->string, " ", sz);
+-		(void)strlcat(dat->string, p + pos, sz);
+-	} else
+-		dat->string = mandoc_strdup(p + pos);
++	length = strlen(p + pos);
++#ifdef MANDOC_APPEND_TEST
++	if (dat->string == NULL)
++		mandoc_append_test_seed(0);
++#endif
++	/* NULL and an allocated empty first line have different native meaning. */
++	mandoc_str_append(&dat->string, &tbl->cdata_used,
++	    &tbl->cdata_capacity, p + pos, length, dat->string != NULL);
+ 
+ 	if (dat->layout->pos == TBL_CELL_DOWN)
+ 		mandoc_msg(MANDOCERR_TBLDATA_SPAN,
+@@ -335,3 +339,14 @@
+ 	while (p[pos] != '\0')
+ 		getdata(tbl, sp, ln, p, &pos);
+ }
++
++/* Retire only allocation metadata; accepted cell text remains owned by dat. */
++void
++tbl_cdata_clear(struct tbl_node *tbl)
++{
++#ifdef MANDOC_APPEND_TEST
++	if (tbl->cdata_capacity != 0)
++		mandoc_append_test_retire(tbl->cdata_used);
++#endif
++	tbl->cdata_used = tbl->cdata_capacity = 0;
++}
+--- a/tbl.c
++++ b/tbl.c
+@@ -134,6 +134,7 @@
+ 	struct tbl_dat	*dp;
+ 
+ 	while (tbl != NULL) {
++		tbl_cdata_clear(tbl);
+ 		while ((rp = tbl->first_row) != NULL) {
+ 			tbl->first_row = rp->next;
+ 			while (rp->first != NULL) {
+@@ -164,6 +165,7 @@
+ {
+ 	if (tbl->part == TBL_PART_CDATA)
+ 		mandoc_msg(MANDOCERR_TBLDATA_BLK, line, pos, "T&");
++	tbl_cdata_clear(tbl);
+ 
+ 	tbl->part = TBL_PART_LAYOUT;
+ 	tbl->line = line;
+@@ -187,6 +189,7 @@
+ {
+ 	struct tbl_span *sp;
+ 
++	tbl_cdata_clear(tbl);
+ 	if (space_allowed == 0)
+ 		tbl->opts.opts &= ~TBL_OPT_VSPACE;
+ 	if (still_open)

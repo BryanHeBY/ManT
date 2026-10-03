@@ -62,6 +62,8 @@ int
 mdoc_parseln(struct roff_man *mdoc, int ln, char *buf, int offs)
 {
 
+	roff_word_append_clear(mdoc);
+
 	if (mdoc->last->type != ROFFT_EQN || ln > mdoc->last->line)
 		mdoc->flags |= MDOC_NEWLINE;
 
