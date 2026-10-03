@@ -25,8 +25,9 @@ conditionals or macro execution from raw source.
  {
  	struct roff_node	*n;
  	struct tbl_span		*span;
+-
 +	struct roff_man		*man;
- 
++
 +	man = r->man;
  	if (man->meta.macroset == MACROSET_MAN)
  		man_breakscope(man, ROFF_TS);

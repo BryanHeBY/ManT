@@ -1,6 +1,6 @@
 Subject: initialize renderer optional state
 Upstream-Status: Candidate (not submitted)
-Replaces: 0027 + 0028
+Historical-Replaces: 0027 + 0028
 
 Initialize optional HTML tag and terminal escape/subsequence state before conditional branches.
 

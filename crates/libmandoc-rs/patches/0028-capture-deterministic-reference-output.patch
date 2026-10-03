@@ -1,6 +1,6 @@
 Subject: capture deterministic reference output
 Upstream-Status: Local embedding (not submitted)
-Replaces: 0014 (sink) + 0015
+Historical-Replaces: 0014 (sink) + 0015
 
 Capture output through the bounded private sink and use deterministic UTF-8 width callbacks in the CVS basic-unit model.
 

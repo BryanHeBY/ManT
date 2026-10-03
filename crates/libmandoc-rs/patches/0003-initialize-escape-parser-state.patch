@@ -1,6 +1,6 @@
 Subject: initialize optional escape parser state
 Upstream-Status: Candidate (not submitted)
-Replaces: new CVS source portability
+Historical-Replaces: new CVS source portability
 
 Give the optional argument length and recursive escape coordinates explicit
 initial values for MSVC's path-sensitive C4701 check. Valid special escapes

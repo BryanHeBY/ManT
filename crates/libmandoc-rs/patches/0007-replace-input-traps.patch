@@ -1,6 +1,6 @@
 Subject: replace input traps
 Upstream-Status: Candidate (not submitted)
-Replaces: 0012 + consumed pointer cleanup
+Historical-Replaces: 0012 + consumed pointer cleanup
 
 Free replaced trap strings and clear consumed pointers; remains independent of thread-local session policy.
 

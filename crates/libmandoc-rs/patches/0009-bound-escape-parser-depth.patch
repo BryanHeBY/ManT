@@ -19,10 +19,11 @@ overflow the C stack or repeatedly re-enter the same nesting suffix.
  /*
   * Traditional escape sequence interpreter for general use
   * including in high-level formatters.  This function does not issue
-@@ -67,6 +72,18 @@
+@@ -66,6 +71,18 @@
+ enum mandoc_esc
  roff_escape(const char *buf, const int ln, const int aesc,
      int *resc, int *rnam, int *rarg, int *rendarg, int *rend)
- {
++{
 +	int depth_exhausted;
 +
 +	depth_exhausted = 0;
@@ -34,10 +35,9 @@ overflow the C stack or repeatedly re-enter the same nesting suffix.
 +roff_escape_impl(const char *buf, const int ln, const int aesc,
 +    int *resc, int *rnam, int *rarg, int *rendarg, int *rend,
 +    unsigned int depth, int *depth_exhausted)
-+{
+ {
  	int		 iesc;		/* index of leading escape char */
  	int		 inam;		/* index of escape name */
- 	int		 iarg;		/* index beginning the argument */
 @@ -84,6 +101,35 @@
  	char		 term;		/* byte terminating the argument */
  

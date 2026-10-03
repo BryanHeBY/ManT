@@ -1,12 +1,12 @@
 Subject: pandoc verbatim fonts
 Upstream-Status: Candidate (not submitted)
-Replaces: 0003
+Historical-Replaces: 0003
 
 Recognize Pandoc's fixed-pitch C/V/VB/VI font spellings at native font decoding.
 
 --- a/mandoc.c
 +++ b/mandoc.c
-@@ -52,6 +52,9 @@
+@@ -54,6 +54,9 @@
  		return ESCAPE_FONTPREV;
  	case 1:
  		switch (cp[0]) {
@@ -16,7 +16,7 @@ Recognize Pandoc's fixed-pitch C/V/VB/VI font spellings at native font decoding.
  		case 'B':
  		case '3':
  			return ESCAPE_FONTBOLD;
-@@ -70,6 +73,15 @@
+@@ -72,6 +75,15 @@
  		}
  	case 2:
  		switch (cp[0]) {

@@ -1,6 +1,6 @@
 Subject: preserve continued tp aliases
 Upstream-Status: Candidate (not submitted)
-Replaces: 0017
+Historical-Replaces: 0017
 
 Close a continued TP/TQ head before starting a separate tagged paragraph.
 

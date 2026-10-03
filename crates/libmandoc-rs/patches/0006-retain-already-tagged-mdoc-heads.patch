@@ -1,6 +1,6 @@
 Subject: retain already tagged mdoc heads
 Upstream-Status: Candidate (not submitted)
-Replaces: 0029 (post_tg half)
+Historical-Replaces: 0029 (post_tg half)
 
 Do not replace an already-tagged section/function head with another explicit Tg; preserve a separate target node.
 

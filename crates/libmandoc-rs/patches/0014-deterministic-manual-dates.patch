@@ -1,6 +1,6 @@
 Subject: deterministic manual dates
 Upstream-Status: Local embedding (not submitted)
-Replaces: 0007 + 0024
+Historical-Replaces: 0007 + 0024
 
 Convert calendar dates without locale/timezone drift while retaining thread-safe local current-date behavior.
 
@@ -17,7 +17,7 @@ Convert calendar dates without locale/timezone drift while retaining thread-safe
  
  
  enum mandoc_esc
-@@ -122,7 +124,12 @@
+@@ -110,7 +112,12 @@
  	pp = strptime(p, fmt, &tm);
  #endif
  	if (NULL != pp && '\0' == *pp) {
@@ -31,7 +31,7 @@ Convert calendar dates without locale/timezone drift while retaining thread-safe
  		return 1;
  	}
  
-@@ -130,17 +137,21 @@
+@@ -118,17 +125,21 @@
  }
  
  static char *
@@ -60,7 +60,7 @@ Convert calendar dates without locale/timezone drift while retaining thread-safe
  
  	/*
  	 * Reserve space:
-@@ -151,9 +162,12 @@
+@@ -139,9 +150,12 @@
  
  	p = buf = mandoc_malloc(10 + 4 + 4 + 1);
  
@@ -76,7 +76,7 @@ Convert calendar dates without locale/timezone drift while retaining thread-safe
  
  	/*
  	 * The output format is just "%d" here, not "%2d" or "%02d".
-@@ -169,13 +183,40 @@
+@@ -157,13 +171,40 @@
  		goto fail;
  	p += isz;
  
@@ -118,7 +118,7 @@ Convert calendar dates without locale/timezone drift while retaining thread-safe
  }
  
  char *
-@@ -200,14 +241,14 @@
+@@ -188,14 +229,14 @@
  		return mandoc_strdup("");
  	}
  	if (strcmp(nch->string, "$" "Mdocdate$") == 0)
@@ -136,7 +136,7 @@ Convert calendar dates without locale/timezone drift while retaining thread-safe
  			mandoc_msg(MANDOCERR_DATE_FUTURE, nch->line,
  			    nch->pos, "%s %s", roff_name[nbl->tok], cp);
  		else if (*nch->string != '$' &&
-@@ -222,7 +263,7 @@
+@@ -210,7 +251,7 @@
  	if (a2time(&t, "%Y-%m-%d", nch->string) == 0)
  		mandoc_msg(MANDOCERR_DATE_BAD, nch->line, nch->pos,
  		    "%s %s", roff_name[nbl->tok], nch->string);

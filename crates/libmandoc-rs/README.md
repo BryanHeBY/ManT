@@ -386,58 +386,127 @@ or changing the patch stack.
 
 ### Local vendor patches
 
-The checked-in vendor tree differs from the pinned CVS source subset only by
-the 30 ordered patches in `patches/series`. The following group contains
-independently reviewable correctness, compatibility, and portability changes;
-they are candidates for separate upstream evaluation, not claims of submission
-or acceptance:
+The checked-in vendor tree is the pinned pristine source subset plus the
+30 ordered patches in `patches/series`. The stack follows build prerequisites,
+parser safety, embedding, execution evidence, compatibility, rendering, and
+allocation performance. Patch numbers identify this stack, not Cargo features.
+See [`patches/README.md`](patches/README.md) for dependencies and the previous
+number mapping. `Historical-Replaces` headers refer to older superseded stacks;
+they never refer to a patch number in the current series.
 
-- `0001-bound-memory-input-utf8.patch` bounds truncated UTF-8 reads at the
-  caller-owned buffer end.
-- `0002-preserve-unknown-encoding.patch` recognizes common Latin-1 names and
-  retains automatic detection for unsupported encoding declarations.
-- `0003-preserve-continued-tp-aliases.patch` closes a populated continued
-  `.TP`/`.TQ` head before the next declaration, retaining independent terms.
-- `0004-retain-already-tagged-mdoc-heads.patch` keeps an explicit `.Tg` on its
-  own zero-width node when the following head already owns an automatic ID.
-- `0005-keep-ohash-size-unsigned.patch` retains the hash table's unsigned
+#### Build and platform configuration
+
+- `0001-keep-ohash-size-unsigned.patch` retains the hash table's unsigned
   size/index domain without lossy MSVC conversions.
-- `0006-replace-input-traps.patch` frees superseded `.it` macros and clears
-  consumed pointers.
-- `0007-free-native-trees-iteratively.patch` frees syntax and equation trees
-  without stack growth proportional to depth or sibling count.
-- `0008-size-renderer-scratch-buffers.patch` accommodates complete integer
-  representations in table-formatting buffers.
-- `0009-initialize-renderer-optional-state.patch` initializes guarded
-  HTML/terminal temporary state without changing valid output.
-- `0010-keep-rfc-url-bytes-unsigned.patch` checks RFC-number bytes without
-  signed-character ambiguity.
-- `0011-render-direct-layout-sentinels.patch` consumes internal layout
-  markers on direct terminal-character paths, including margin characters.
-- `0012-libbsd-library-name.patch` adds libbsd's library catalog entry.
-- `0013-pandoc-verbatim-fonts.patch` recognizes Pandoc's `\f[V]`,
-  `\f[VB]`, and `\f[VI]` fonts.
-- `0023-initialize-escape-parser-state.patch` gives optional recursive escape
+
+- `0002-apply-private-config-to-roff-escapes.patch` applies the private target
+  configuration, character policy, and symbol prefix to the new escape unit.
+
+- `0003-initialize-escape-parser-state.patch` gives optional recursive escape
   state explicit initial values for strict MSVC compilation, retaining the
   existing assignments and diagnostic behavior.
-- `0024-retain-executed-tbl-escape-state.patch` retains the actual escape
-  character that was active when each tbl row was read, allowing bounded
-  source recovery to apply native comment semantics without replaying roff.
-- `0025-retain-tbl-source-provenance.patch` records whether each table cell
-  came from native built-in request dispatch or an execution context that
-  cannot safely be reconstructed from source text alone.
-- `0026-track-tbl-cell-execution-provenance.patch` makes that provenance
-  cell-local and includes user-macro calls that execute without emitting a
-  table word, so one unsafe cell does not downgrade unrelated cells.
-- `0027-bound-escape-parser-depth.patch` bounds nested escape-argument parsing
+
+#### Parser correctness and resource safety
+
+- `0004-bound-memory-input-utf8.patch` bounds truncated UTF-8 reads at the
+  caller-owned buffer end.
+
+- `0005-preserve-continued-tp-aliases.patch` closes a populated continued
+  `.TP`/`.TQ` head before the next declaration, retaining independent terms.
+
+- `0006-retain-already-tagged-mdoc-heads.patch` keeps an explicit `.Tg` on its
+  own zero-width node when the following head already owns an automatic ID.
+
+- `0007-replace-input-traps.patch` frees superseded `.it` macros and clears
+  consumed pointers.
+
+- `0008-free-native-trees-iteratively.patch` frees syntax and equation trees
+  without stack growth proportional to depth or sibling count.
+
+- `0009-bound-escape-parser-depth.patch` bounds nested escape-argument parsing
   and consumes a rejected nesting suffix instead of allowing hostile input to
   grow the native C stack without limit.
-- `0028-retain-eqn-ldots-token-eligibility.patch` records whether an eqn text
-  box came from a complete unquoted `ldots` token after macro substitution
-  and before font splitting, so compatibility normalization preserves literals.
-- `0029-report-escape-depth-truncation.patch` records actual escape-suffix
+
+- `0010-report-escape-depth-truncation.patch` records actual escape-suffix
   omission in the private embedding session without changing the guard,
   exposing mandoc error numbers, or inferring loss from diagnostic text.
+
+#### Embedding and deterministic sessions
+
+- `0011-isolate-parser-session-state.patch` gives remaining mutable parser
+  globals thread-local storage and resets unfinished requests between sessions.
+
+- `0012-memory-sources-and-input-budgets.patch` adds memory input and virtual
+  source hooks, shares include depth across buffers/files, bounds individual
+  loops and aggregate replay to 10,000, and keeps denied or invalid includes
+  diagnostic-only.
+
+- `0013-bound-native-parser-depth.patch` bounds mdoc dispatch at 64 levels and
+  stops trees beyond 512 parent levels before finalization/validation. The
+  rejected mdoc call retains its remaining words as literal content.
+
+- `0014-deterministic-manual-dates.patch` uses timezone-independent calendar
+  dates, fixed English month names, and reentrant current-date conversion.
+
+#### Owned syntax execution evidence
+
+- `0015-retain-executed-flow-boundaries.patch` stamps actual allocated nodes
+  with a per-document flow generation before validation can remove empty
+  paragraphs. `Node::flow_epoch` retains that execution provenance after
+  parser release; physical source lines do not substitute for it.
+
+- `0016-retain-executed-tbl-escape-state.patch` retains the actual escape
+  character that was active when each tbl row was read, allowing bounded
+  source recovery to apply native comment semantics without replaying roff.
+
+- `0017-retain-tbl-source-provenance.patch` records whether each table cell
+  came from native built-in request dispatch or an execution context that
+  cannot safely be reconstructed from source text alone.
+
+- `0018-track-tbl-cell-execution-provenance.patch` makes that provenance
+  cell-local and includes user-macro calls that execute without emitting a
+  table word, so one unsafe cell does not downgrade unrelated cells.
+
+- `0019-retain-eqn-ldots-token-eligibility.patch` records whether an eqn text
+  box came from a complete unquoted `ldots` token after macro substitution
+  and before font splitting, so compatibility normalization preserves literals.
+
+#### Compatibility additions
+
+- `0020-preserve-unknown-encoding.patch` recognizes common Latin-1 names and
+  retains automatic detection for unsupported encoding declarations.
+
+- `0021-libbsd-library-name.patch` adds libbsd's library catalog entry.
+
+- `0022-pandoc-verbatim-fonts.patch` recognizes Pandoc's `\f[V]`,
+  `\f[VB]`, and `\f[VI]` fonts.
+
+#### Optional native renderers
+
+- `0023-size-renderer-scratch-buffers.patch` accommodates complete integer
+  representations in table-formatting buffers.
+
+- `0024-initialize-renderer-optional-state.patch` initializes guarded
+  HTML/terminal temporary state without changing valid output.
+
+- `0025-keep-rfc-url-bytes-unsigned.patch` checks RFC-number bytes without
+  signed-character ambiguity.
+
+- `0026-render-direct-layout-sentinels.patch` consumes internal layout
+  markers on direct terminal-character paths, including margin characters.
+
+- `0027-isolate-reference-renderer-state.patch` isolates HTML IDs, table/tab
+  state, centered offsets, and page-offset history per instance or thread.
+
+- `0028-capture-deterministic-reference-output.patch` captures bytes in a
+  bounded per-call sink and uses explicit UTF-8 encoding with Rust-provided
+  Unicode cell widths rather than process locale.
+
+- `0029-portable-memory-renderers.patch` guards unused POSIX/pager interfaces
+  in the Windows memory-only formatter build.
+
+#### Native allocation performance
+
 - `0030-grow-native-text-append-runs.patch` grows joined TEXT and active `T{`
   cell storage geometrically while preserving immediate NUL termination,
   empty-word separators, parse-time translations, and native owners. Private
@@ -450,33 +519,6 @@ or acceptance:
   Run `python3 tests/native/run_append_growth.py` from this crate directory to
   check actual parser growth, receipt retirement, and checked overflow in an
   owned scratch build. The repository's `scripts/check.sh` runs the same gate.
-
-The remaining patches implement the synchronous embedding boundary:
-
-- `0014-isolate-parser-session-state.patch` gives remaining mutable parser
-  globals thread-local storage and resets unfinished requests between sessions.
-- `0015-memory-sources-and-input-budgets.patch` adds memory input and virtual
-  source hooks, shares include depth across buffers/files, bounds individual
-  loops and aggregate replay to 10,000, and keeps denied or invalid includes
-  diagnostic-only.
-- `0016-bound-native-parser-depth.patch` bounds mdoc dispatch at 64 levels and
-  stops trees beyond 512 parent levels before finalization/validation. The
-  rejected mdoc call retains its remaining words as literal content.
-- `0017-retain-executed-flow-boundaries.patch` stamps actual allocated nodes
-  with a per-document flow generation before validation can remove empty
-  paragraphs. `Node::flow_epoch` retains that execution provenance after
-  parser release; physical source lines do not substitute for it.
-- `0018-deterministic-manual-dates.patch` uses timezone-independent calendar
-  dates, fixed English month names, and reentrant current-date conversion.
-- `0019-isolate-reference-renderer-state.patch` isolates HTML IDs, table/tab
-  state, centered offsets, and page-offset history per instance or thread.
-- `0020-capture-deterministic-reference-output.patch` captures bytes in a
-  bounded per-call sink and uses explicit UTF-8 encoding with Rust-provided
-  Unicode cell widths rather than process locale.
-- `0021-portable-memory-renderers.patch` guards unused POSIX/pager interfaces
-  in the Windows memory-only formatter build.
-- `0022-apply-private-config-to-roff-escapes.patch` applies the private target
-  configuration, character policy, and symbol prefix to the new escape unit.
 
 Upstream already provides `MR`, modern standard names, root-element scope
 cleanup, and the `tag_put` explicit-tag guard; these are not duplicate local

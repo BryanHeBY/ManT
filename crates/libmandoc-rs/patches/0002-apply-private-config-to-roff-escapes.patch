@@ -1,6 +1,6 @@
 Subject: apply private config to roff escapes
 Upstream-Status: Local embedding (not submitted)
-Replaces: new CVS source integration
+Historical-Replaces: new CVS source integration
 
 Include the embedding build configuration in the new roff_escape translation unit so symbol/portability definitions apply.
 

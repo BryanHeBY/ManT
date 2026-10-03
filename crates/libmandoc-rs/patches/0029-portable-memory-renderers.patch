@@ -1,6 +1,6 @@
 Subject: portable memory renderers
 Upstream-Status: Local embedding (not submitted)
-Replaces: 0016
+Historical-Replaces: 0016
 
 Exclude unavailable Unix headers and process pager/tag types from Windows memory-only builds.
 

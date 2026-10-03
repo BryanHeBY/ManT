@@ -1,6 +1,6 @@
 Subject: retain executed flow boundaries
 Upstream-Status: Local embedding (not submitted)
-Replaces: 0032
+Historical-Replaces: 0032
 
 Record source execution generation before normalization deletes empty flow boundaries; consumed by owned AST lowering.
 

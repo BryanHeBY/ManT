@@ -1,6 +1,6 @@
 Subject: free native trees iteratively
 Upstream-Status: Candidate (not submitted)
-Replaces: 0031 (cleanup half)
+Historical-Replaces: 0031 (cleanup half)
 
 Release roff and equation child/sibling forests without stack proportional to tree depth or width.
 

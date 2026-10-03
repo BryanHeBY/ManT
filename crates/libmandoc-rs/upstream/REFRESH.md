@@ -74,6 +74,9 @@ generated build evidence, not CVS source files.
 
 ## Patch disposition
 
+This section records the patch numbers at the time of this source refresh.
+For the active stack and the later renumbering, see `../patches/README.md`.
+
 All patches were replayed in `patches/series` order with `patch --fuzz=0`.
 There were no offsets or rejected hunks.
 

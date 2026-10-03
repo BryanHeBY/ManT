@@ -1,6 +1,6 @@
 Subject: keep ohash size unsigned
 Upstream-Status: Candidate (not submitted)
-Replaces: 0025
+Historical-Replaces: 0025
 
 Match the ohash size field width instead of relying on size_t narrowing.
 

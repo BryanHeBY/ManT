@@ -1,6 +1,6 @@
 Subject: bound native parser depth
 Upstream-Status: Local embedding (not submitted)
-Replaces: 0020 + 0031 (construction half)
+Historical-Replaces: 0020 + 0031 (construction half)
 
 Bound callable mdoc recursion and native tree construction, rejecting unsafe validation traversal before crossing the limit.
 

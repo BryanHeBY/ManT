@@ -10,7 +10,7 @@ per-cell fact rather than a row-wide aggregate.
 
 --- a/roff.c
 +++ b/roff.c
-@@ -2014,6 +2014,14 @@ roff_parseln(struct roff *r, int ln, struct buf *buf, int *offs, size_t len)
+@@ -2014,6 +2014,14 @@
  static int
  roff_req_or_macro(ROFF_ARGS) {
  
@@ -27,7 +27,7 @@ per-cell fact rather than a row-wide aggregate.
  	if (r->tbl != NULL && (tok == TOKEN_NONE || tok == ROFF_TS ||
 --- a/tbl.c
 +++ b/tbl.c
-@@ -109,6 +109,21 @@ tbl_set_source_safe(struct tbl_node *tbl, int source_safe)
+@@ -109,6 +109,21 @@
  	tbl->source_safe = source_safe;
  }
  
@@ -51,7 +51,7 @@ per-cell fact rather than a row-wide aggregate.
  {
 --- a/tbl_parse.h
 +++ b/tbl_parse.h
-@@ -27,5 +27,6 @@ int		 tbl_end(struct tbl_node *, int, int);
+@@ -27,5 +27,6 @@
  void		 tbl_free(struct tbl_node *);
  void		 tbl_read(struct tbl_node *, int, const char *, int);
  void		 tbl_restart(int, int, struct tbl_node *);

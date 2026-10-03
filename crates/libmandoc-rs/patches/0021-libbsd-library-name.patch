@@ -1,6 +1,6 @@
 Subject: libbsd library name
 Upstream-Status: Candidate (not submitted)
-Replaces: 0004
+Historical-Replaces: 0004
 
 Recognize the commonly installed libbsd library in the native library catalog.
 
@@ -14,4 +14,3 @@ Recognize the commonly installed libbsd library in the native library catalog.
  LINE("libbsdconf",	"Configuration File Library (libbsdconf, \\-lbsdconf)")
  LINE("libbsdxml",	"eXpat XML parser library (libbsdxml, \\-lbsdxml)")
  LINE("libbsm",		"Basic Security Module Library (libbsm, \\-lbsm)")
- LINE("libc",		"Standard C\\~Library (libc, \\-lc)")

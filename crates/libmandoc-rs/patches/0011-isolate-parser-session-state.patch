@@ -1,6 +1,6 @@
 Subject: isolate parser session state
 Upstream-Status: Local embedding (not submitted)
-Replaces: 0006 + 0010
+Historical-Replaces: 0006 + 0010
 
 Move remaining mutable parser globals to per-thread storage and reset session-owned trap/centering state on lifecycle boundaries.
 

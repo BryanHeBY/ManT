@@ -1,6 +1,6 @@
 Subject: render direct layout sentinels
 Upstream-Status: Candidate (not submitted)
-Replaces: new CVS renderer finding
+Historical-Replaces: new CVS renderer finding
 
 Give unbuffered direct-output paths the same sentinel semantics as the normal line buffer.
 

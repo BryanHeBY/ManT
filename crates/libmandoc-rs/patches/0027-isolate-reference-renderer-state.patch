@@ -1,6 +1,6 @@
 Subject: isolate reference renderer state
 Upstream-Status: Local embedding (not submitted)
-Replaces: 0014 (state) + 0021
+Historical-Replaces: 0014 (state) + 0021
 
 Own page offset and table border/offset state per renderer; isolate remaining HTML/tab globals by thread.
 

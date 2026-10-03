@@ -1,6 +1,6 @@
 Subject: keep rfc url bytes unsigned
 Upstream-Status: Candidate (not submitted)
-Replaces: new CVS warning fix
+Historical-Replaces: new CVS warning fix
 
 Use unsigned byte pointers explicitly while interpreting RFC link content.
 

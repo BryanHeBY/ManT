@@ -1,6 +1,6 @@
 Subject: memory sources and input budgets
 Upstream-Status: Local embedding (not submitted)
-Replaces: 0001 + 0008 + 0013 + 0018 + 0019 + 0022 + 0023
+Historical-Replaces: 0001 + 0008 + 0013 + 0018 + 0019 + 0022 + 0023
 
 Add memory input and resolver bridge with shared recursion/while budgets and diagnostic-only denied or invalid include policy. Shared parser fields/lifecycle make these one coherent input-policy unit.
 

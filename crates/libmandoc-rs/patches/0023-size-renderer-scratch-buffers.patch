@@ -1,6 +1,6 @@
 Subject: size renderer scratch buffers
 Upstream-Status: Candidate (not submitted)
-Replaces: 0014 (tbl buffers)
+Historical-Replaces: 0014 (tbl buffers)
 
 Provide enough scratch space for full rendered table border values.
 

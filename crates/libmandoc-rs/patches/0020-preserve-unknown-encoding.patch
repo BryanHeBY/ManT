@@ -1,6 +1,6 @@
 Subject: preserve unknown encoding
 Upstream-Status: Candidate (not submitted)
-Replaces: 0009
+Historical-Replaces: 0009
 
 Retain automatic detection for unsupported encoding cues and recognize common Latin-1 spellings.
 

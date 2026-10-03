@@ -1,6 +1,6 @@
 Subject: bound memory input utf8
 Upstream-Status: Candidate (not submitted)
-Replaces: 0011
+Historical-Replaces: 0011
 
 Bound UTF-8 lookahead by the actual input length; no mandatory trailing sentinel bytes.
 
