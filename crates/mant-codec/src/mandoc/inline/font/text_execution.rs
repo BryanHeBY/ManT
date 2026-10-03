@@ -485,7 +485,15 @@ fn record_native_event(
 ) {
     use super::super::flow::field_buffer::{FieldCell, FieldWrite};
     match event {
-        RoffInlineEvent::Text(value) if authoritative_state.is_some() => {
+        // term_word() -> encode() copies an ordinary text run without
+        // changing the marker state. Only an already pending break/suppressed
+        // blank needs the per-character ownership path below (term.c:294-305,
+        // 593-607). Otherwise append the run once, with Vec's size hint.
+        RoffInlineEvent::Text(value)
+            if authoritative_state.is_some_and(|state| {
+                state.pending_word_end_break || state.suppress_break_whitespace
+            }) =>
+        {
             let state = authoritative_state.expect("authoritative text state");
             let mut pending = state.pending_word_end_break;
             let mut suppress = state.suppress_break_whitespace;
@@ -496,7 +504,7 @@ fn record_native_event(
                     suppress = true;
                 } else {
                     suppress = false;
-                    FieldWrite::append_literal(writes, character.encode_utf8(&mut [0; 4]));
+                    FieldWrite::append_character(writes, character);
                 }
             }
         }

@@ -62,6 +62,8 @@ mod native_fractional_margin;
 mod native_input_limits;
 #[path = "roff_lowering/native_nested_list_tabs.rs"]
 mod native_nested_list_tabs;
+#[path = "roff_lowering/native_text_cells.rs"]
+mod native_text_cells;
 #[path = "roff_lowering/tab_display_lifecycle.rs"]
 mod tab_display_lifecycle;
 

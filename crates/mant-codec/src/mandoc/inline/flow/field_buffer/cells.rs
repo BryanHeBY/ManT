@@ -91,6 +91,10 @@ impl FieldWrite {
         writes.extend(value.chars().map(Self::literal_cell));
     }
 
+    pub(in crate::mandoc) fn append_character(writes: &mut Vec<Self>, character: char) {
+        writes.push(Self::literal_cell(character));
+    }
+
     fn literal_cell(character: char) -> Self {
         Self::Cell(match character {
             ' ' => FieldCell::BreakableBlank,
@@ -100,6 +104,13 @@ impl FieldWrite {
             // ESCAPE_SPECIAL -> encode1(U+00A0), not bufferc(ASCII_NBRSP).
             // KEEP's automatic separators remain direct buffered cells.
             '\u{8}' => FieldCell::Backline,
+            // Printable ASCII occupies exactly one cell on the frozen
+            // Unicode reader. Control sentinels and Unicode retain their
+            // separate paths; no text-width scan is needed for this scalar.
+            '!'..='~' => FieldCell::Graph {
+                text: character,
+                width: 1,
+            },
             _ => {
                 let mut utf8 = [0u8; 4];
                 FieldCell::Graph {

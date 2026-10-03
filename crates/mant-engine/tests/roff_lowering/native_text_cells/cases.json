@@ -1,0 +1,395 @@
+[
+  {
+    "id": "literal-no-ordinary",
+    "source": ".Dd September 28, 2026\n.Dt CELL-WRITES 1\n.Os\n.Sh NAME\n.Nm cell-writes\n.Nd native cell boundary\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No ALPHA BETA GAMMA\n.Ed\n.Sh ENDTEST\n.No FINISH\n",
+    "expected_rows": [
+      "ALPHA BETA GAMMA"
+    ]
+  },
+  {
+    "id": "literal-no-unicode",
+    "source": ".Dd September 28, 2026\n.Dt CELL-WRITES 1\n.Os\n.Sh NAME\n.Nm cell-writes\n.Nd native cell boundary\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No \"é中e\\[u0301]\"\n.Ed\n.Sh ENDTEST\n.No FINISH\n",
+    "expected_rows": [
+      "é中é"
+    ]
+  },
+  {
+    "id": "literal-no-font",
+    "source": ".Dd September 28, 2026\n.Dt CELL-WRITES 1\n.Os\n.Sh NAME\n.Nm cell-writes\n.Nd native cell boundary\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No \"ALPHA\\fBBETA\\fPGAMMA\"\n.Ed\n.Sh ENDTEST\n.No FINISH\n",
+    "expected_rows": [
+      "ALPHABETAGAMMA"
+    ]
+  },
+  {
+    "id": "literal-no-pending",
+    "source": ".Dd September 28, 2026\n.Dt CELL-WRITES 1\n.Os\n.Sh NAME\n.Nm cell-writes\n.Nd native cell boundary\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No ALPHA\\p\n.No \" BETA GAMMA\"\n.Ed\n.Sh ENDTEST\n.No FINISH\n",
+    "expected_rows": [
+      "ALPHA",
+      " BETA GAMMA"
+    ]
+  },
+  {
+    "id": "literal-no-internal",
+    "source": ".Dd September 28, 2026\n.Dt CELL-WRITES 1\n.Os\n.Sh NAME\n.Nm cell-writes\n.Nd native cell boundary\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No \"ALPHA\\p BETA\"\n.No GAMMA\n.Ed\n.Sh ENDTEST\n.No FINISH\n",
+    "expected_rows": [
+      "ALPHA",
+      "BETA",
+      "GAMMA"
+    ]
+  },
+  {
+    "id": "literal-no-zero-graph",
+    "source": ".Dd September 28, 2026\n.Dt CELL-WRITES 1\n.Os\n.Sh NAME\n.Nm cell-writes\n.Nd native cell boundary\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No ALPHA\\p\n.No \"\\p\\&\"\n.No GAMMA\n.Ed\n.Sh ENDTEST\n.No FINISH\n",
+    "expected_rows": [
+      "ALPHA",
+      "",
+      "GAMMA"
+    ]
+  },
+  {
+    "id": "literal-no-overstrike",
+    "source": ".Dd September 28, 2026\n.Dt CELL-WRITES 1\n.Os\n.Sh NAME\n.Nm cell-writes\n.Nd native cell boundary\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No \"\\zA\\zBC\"\n.No GAMMA\n.Ed\n.Sh ENDTEST\n.No FINISH\n",
+    "expected_rows": [
+      "C",
+      "GAMMA"
+    ]
+  },
+  {
+    "id": "literal-no-bare-zero",
+    "source": ".Dd September 28, 2026\n.Dt CELL-WRITES 1\n.Os\n.Sh NAME\n.Nm cell-writes\n.Nd native cell boundary\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No \\z\n.No X\n.No GAMMA\n.Ed\n.Sh ENDTEST\n.No FINISH\n",
+    "expected_rows": [
+      "X",
+      "GAMMA"
+    ]
+  },
+  {
+    "id": "literal-no-marker-reject",
+    "source": ".Dd September 28, 2026\n.Dt CELL-WRITES 1\n.Os\n.Sh NAME\n.Nm cell-writes\n.Nd native cell boundary\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No \\p\n.No \" BETA GAMMA\"\n.Ed\n.Sh ENDTEST\n.No FINISH\n",
+    "expected_rows": [
+      "",
+      " BETA GAMMA"
+    ]
+  },
+  {
+    "id": "literal-em-ordinary",
+    "source": ".Dd September 28, 2026\n.Dt CELL-WRITES 1\n.Os\n.Sh NAME\n.Nm cell-writes\n.Nd native cell boundary\n.Sh DESCRIPTION\n.Bd -literal -compact\n.Em ALPHA BETA GAMMA\n.Ed\n.Sh ENDTEST\n.No FINISH\n",
+    "expected_rows": [
+      "ALPHA BETA GAMMA"
+    ]
+  },
+  {
+    "id": "literal-em-unicode",
+    "source": ".Dd September 28, 2026\n.Dt CELL-WRITES 1\n.Os\n.Sh NAME\n.Nm cell-writes\n.Nd native cell boundary\n.Sh DESCRIPTION\n.Bd -literal -compact\n.Em \"é中e\\[u0301]\"\n.Ed\n.Sh ENDTEST\n.No FINISH\n",
+    "expected_rows": [
+      "é中é"
+    ]
+  },
+  {
+    "id": "literal-em-font",
+    "source": ".Dd September 28, 2026\n.Dt CELL-WRITES 1\n.Os\n.Sh NAME\n.Nm cell-writes\n.Nd native cell boundary\n.Sh DESCRIPTION\n.Bd -literal -compact\n.Em \"ALPHA\\fBBETA\\fPGAMMA\"\n.Ed\n.Sh ENDTEST\n.No FINISH\n",
+    "expected_rows": [
+      "ALPHABETAGAMMA"
+    ]
+  },
+  {
+    "id": "literal-em-pending",
+    "source": ".Dd September 28, 2026\n.Dt CELL-WRITES 1\n.Os\n.Sh NAME\n.Nm cell-writes\n.Nd native cell boundary\n.Sh DESCRIPTION\n.Bd -literal -compact\n.Em ALPHA\\p\n.Em \" BETA GAMMA\"\n.Ed\n.Sh ENDTEST\n.No FINISH\n",
+    "expected_rows": [
+      "ALPHA",
+      " BETA GAMMA"
+    ]
+  },
+  {
+    "id": "literal-em-internal",
+    "source": ".Dd September 28, 2026\n.Dt CELL-WRITES 1\n.Os\n.Sh NAME\n.Nm cell-writes\n.Nd native cell boundary\n.Sh DESCRIPTION\n.Bd -literal -compact\n.Em \"ALPHA\\p BETA\"\n.Em GAMMA\n.Ed\n.Sh ENDTEST\n.No FINISH\n",
+    "expected_rows": [
+      "ALPHA",
+      "BETA",
+      "GAMMA"
+    ]
+  },
+  {
+    "id": "literal-em-zero-graph",
+    "source": ".Dd September 28, 2026\n.Dt CELL-WRITES 1\n.Os\n.Sh NAME\n.Nm cell-writes\n.Nd native cell boundary\n.Sh DESCRIPTION\n.Bd -literal -compact\n.Em ALPHA\\p\n.Em \"\\p\\&\"\n.Em GAMMA\n.Ed\n.Sh ENDTEST\n.No FINISH\n",
+    "expected_rows": [
+      "ALPHA",
+      "",
+      "GAMMA"
+    ]
+  },
+  {
+    "id": "literal-em-overstrike",
+    "source": ".Dd September 28, 2026\n.Dt CELL-WRITES 1\n.Os\n.Sh NAME\n.Nm cell-writes\n.Nd native cell boundary\n.Sh DESCRIPTION\n.Bd -literal -compact\n.Em \"\\zA\\zBC\"\n.Em GAMMA\n.Ed\n.Sh ENDTEST\n.No FINISH\n",
+    "expected_rows": [
+      "C",
+      "GAMMA"
+    ]
+  },
+  {
+    "id": "literal-em-bare-zero",
+    "source": ".Dd September 28, 2026\n.Dt CELL-WRITES 1\n.Os\n.Sh NAME\n.Nm cell-writes\n.Nd native cell boundary\n.Sh DESCRIPTION\n.Bd -literal -compact\n.Em \\z\n.Em X\n.Em GAMMA\n.Ed\n.Sh ENDTEST\n.No FINISH\n",
+    "expected_rows": [
+      "X",
+      "GAMMA"
+    ]
+  },
+  {
+    "id": "literal-em-marker-reject",
+    "source": ".Dd September 28, 2026\n.Dt CELL-WRITES 1\n.Os\n.Sh NAME\n.Nm cell-writes\n.Nd native cell boundary\n.Sh DESCRIPTION\n.Bd -literal -compact\n.Em \\p\n.Em \" BETA GAMMA\"\n.Ed\n.Sh ENDTEST\n.No FINISH\n",
+    "expected_rows": [
+      "",
+      " BETA GAMMA"
+    ]
+  },
+  {
+    "id": "hang-no-ordinary",
+    "source": ".Dd September 28, 2026\n.Dt CELL-WRITES 1\n.Os\n.Sh NAME\n.Nm cell-writes\n.Nd native cell boundary\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It Xo\n.No ALPHA BETA GAMMA\n.Xc\n.No BODY\n.El\n.Sh ENDTEST\n.No FINISH\n",
+    "expected_rows": [
+      "ALPHA BETA GAMMA BODY"
+    ]
+  },
+  {
+    "id": "hang-no-unicode",
+    "source": ".Dd September 28, 2026\n.Dt CELL-WRITES 1\n.Os\n.Sh NAME\n.Nm cell-writes\n.Nd native cell boundary\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It Xo\n.No \"é中e\\[u0301]\"\n.Xc\n.No BODY\n.El\n.Sh ENDTEST\n.No FINISH\n",
+    "expected_rows": [
+      "é中é      BODY"
+    ]
+  },
+  {
+    "id": "hang-no-font",
+    "source": ".Dd September 28, 2026\n.Dt CELL-WRITES 1\n.Os\n.Sh NAME\n.Nm cell-writes\n.Nd native cell boundary\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It Xo\n.No \"ALPHA\\fBBETA\\fPGAMMA\"\n.Xc\n.No BODY\n.El\n.Sh ENDTEST\n.No FINISH\n",
+    "expected_rows": [
+      "ALPHABETAGAMMA BODY"
+    ]
+  },
+  {
+    "id": "hang-no-internal",
+    "source": ".Dd September 28, 2026\n.Dt CELL-WRITES 1\n.Os\n.Sh NAME\n.Nm cell-writes\n.Nd native cell boundary\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It Xo\n.No \"ALPHA\\p BETA\"\n.No GAMMA\n.Xc\n.No BODY\n.El\n.Sh ENDTEST\n.No FINISH\n",
+    "expected_rows": [
+      "ALPHA",
+      "          BETA GAMMA BODY"
+    ]
+  },
+  {
+    "id": "hang-no-zero-graph",
+    "source": ".Dd September 28, 2026\n.Dt CELL-WRITES 1\n.Os\n.Sh NAME\n.Nm cell-writes\n.Nd native cell boundary\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It Xo\n.No ALPHA\\p\n.No \"\\p\\&\"\n.No GAMMA\n.Xc\n.No BODY\n.El\n.Sh ENDTEST\n.No FINISH\n",
+    "expected_rows": [
+      "ALPHA",
+      "",
+      "          GAMMA BODY"
+    ]
+  },
+  {
+    "id": "hang-no-overstrike",
+    "source": ".Dd September 28, 2026\n.Dt CELL-WRITES 1\n.Os\n.Sh NAME\n.Nm cell-writes\n.Nd native cell boundary\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It Xo\n.No \"\\zA\\zBC\"\n.No GAMMA\n.Xc\n.No BODY\n.El\n.Sh ENDTEST\n.No FINISH\n",
+    "expected_rows": [
+      "C GAMMA   BODY"
+    ]
+  },
+  {
+    "id": "hang-no-bare-zero",
+    "source": ".Dd September 28, 2026\n.Dt CELL-WRITES 1\n.Os\n.Sh NAME\n.Nm cell-writes\n.Nd native cell boundary\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It Xo\n.No \\z\n.No X\n.No GAMMA\n.Xc\n.No BODY\n.El\n.Sh ENDTEST\n.No FINISH\n",
+    "expected_rows": [
+      " XGAMMA   BODY"
+    ]
+  },
+  {
+    "id": "hang-no-marker-reject",
+    "source": ".Dd September 28, 2026\n.Dt CELL-WRITES 1\n.Os\n.Sh NAME\n.Nm cell-writes\n.Nd native cell boundary\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It Xo\n.No \\p\n.No \" BETA GAMMA\"\n.Xc\n.No BODY\n.El\n.Sh ENDTEST\n.No FINISH\n",
+    "expected_rows": [
+      "          BODY"
+    ]
+  },
+  {
+    "id": "hang-em-ordinary",
+    "source": ".Dd September 28, 2026\n.Dt CELL-WRITES 1\n.Os\n.Sh NAME\n.Nm cell-writes\n.Nd native cell boundary\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It Xo\n.Em ALPHA BETA GAMMA\n.Xc\n.No BODY\n.El\n.Sh ENDTEST\n.No FINISH\n",
+    "expected_rows": [
+      "ALPHA BETA GAMMA BODY"
+    ]
+  },
+  {
+    "id": "hang-em-unicode",
+    "source": ".Dd September 28, 2026\n.Dt CELL-WRITES 1\n.Os\n.Sh NAME\n.Nm cell-writes\n.Nd native cell boundary\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It Xo\n.Em \"é中e\\[u0301]\"\n.Xc\n.No BODY\n.El\n.Sh ENDTEST\n.No FINISH\n",
+    "expected_rows": [
+      "é中é      BODY"
+    ]
+  },
+  {
+    "id": "hang-em-font",
+    "source": ".Dd September 28, 2026\n.Dt CELL-WRITES 1\n.Os\n.Sh NAME\n.Nm cell-writes\n.Nd native cell boundary\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It Xo\n.Em \"ALPHA\\fBBETA\\fPGAMMA\"\n.Xc\n.No BODY\n.El\n.Sh ENDTEST\n.No FINISH\n",
+    "expected_rows": [
+      "ALPHABETAGAMMA BODY"
+    ]
+  },
+  {
+    "id": "hang-em-internal",
+    "source": ".Dd September 28, 2026\n.Dt CELL-WRITES 1\n.Os\n.Sh NAME\n.Nm cell-writes\n.Nd native cell boundary\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It Xo\n.Em \"ALPHA\\p BETA\"\n.Em GAMMA\n.Xc\n.No BODY\n.El\n.Sh ENDTEST\n.No FINISH\n",
+    "expected_rows": [
+      "ALPHA",
+      "          BETA GAMMA BODY"
+    ]
+  },
+  {
+    "id": "hang-em-zero-graph",
+    "source": ".Dd September 28, 2026\n.Dt CELL-WRITES 1\n.Os\n.Sh NAME\n.Nm cell-writes\n.Nd native cell boundary\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It Xo\n.Em ALPHA\\p\n.Em \"\\p\\&\"\n.Em GAMMA\n.Xc\n.No BODY\n.El\n.Sh ENDTEST\n.No FINISH\n",
+    "expected_rows": [
+      "ALPHA",
+      "",
+      "          GAMMA BODY"
+    ]
+  },
+  {
+    "id": "hang-em-overstrike",
+    "source": ".Dd September 28, 2026\n.Dt CELL-WRITES 1\n.Os\n.Sh NAME\n.Nm cell-writes\n.Nd native cell boundary\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It Xo\n.Em \"\\zA\\zBC\"\n.Em GAMMA\n.Xc\n.No BODY\n.El\n.Sh ENDTEST\n.No FINISH\n",
+    "expected_rows": [
+      "C GAMMA   BODY"
+    ]
+  },
+  {
+    "id": "hang-em-bare-zero",
+    "source": ".Dd September 28, 2026\n.Dt CELL-WRITES 1\n.Os\n.Sh NAME\n.Nm cell-writes\n.Nd native cell boundary\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It Xo\n.Em \\z\n.Em X\n.Em GAMMA\n.Xc\n.No BODY\n.El\n.Sh ENDTEST\n.No FINISH\n",
+    "expected_rows": [
+      " XGAMMA   BODY"
+    ]
+  },
+  {
+    "id": "hang-em-marker-reject",
+    "source": ".Dd September 28, 2026\n.Dt CELL-WRITES 1\n.Os\n.Sh NAME\n.Nm cell-writes\n.Nd native cell boundary\n.Sh DESCRIPTION\n.Bl -hang -width 8n\n.It Xo\n.Em \\p\n.Em \" BETA GAMMA\"\n.Xc\n.No BODY\n.El\n.Sh ENDTEST\n.No FINISH\n",
+    "expected_rows": [
+      "          BODY"
+    ]
+  },
+  {
+    "id": "tag-no-ordinary",
+    "source": ".Dd September 28, 2026\n.Dt CELL-WRITES 1\n.Os\n.Sh NAME\n.Nm cell-writes\n.Nd native cell boundary\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It Xo\n.No ALPHA BETA GAMMA\n.Xc\n.No BODY\n.El\n.Sh ENDTEST\n.No FINISH\n",
+    "expected_rows": [
+      "ALPHA BETA GAMMA",
+      "          BODY"
+    ]
+  },
+  {
+    "id": "tag-no-unicode",
+    "source": ".Dd September 28, 2026\n.Dt CELL-WRITES 1\n.Os\n.Sh NAME\n.Nm cell-writes\n.Nd native cell boundary\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It Xo\n.No \"é中e\\[u0301]\"\n.Xc\n.No BODY\n.El\n.Sh ENDTEST\n.No FINISH\n",
+    "expected_rows": [
+      "é中é      BODY"
+    ]
+  },
+  {
+    "id": "tag-no-font",
+    "source": ".Dd September 28, 2026\n.Dt CELL-WRITES 1\n.Os\n.Sh NAME\n.Nm cell-writes\n.Nd native cell boundary\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It Xo\n.No \"ALPHA\\fBBETA\\fPGAMMA\"\n.Xc\n.No BODY\n.El\n.Sh ENDTEST\n.No FINISH\n",
+    "expected_rows": [
+      "ALPHABETAGAMMA",
+      "          BODY"
+    ]
+  },
+  {
+    "id": "tag-no-internal",
+    "source": ".Dd September 28, 2026\n.Dt CELL-WRITES 1\n.Os\n.Sh NAME\n.Nm cell-writes\n.Nd native cell boundary\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It Xo\n.No \"ALPHA\\p BETA\"\n.No GAMMA\n.Xc\n.No BODY\n.El\n.Sh ENDTEST\n.No FINISH\n",
+    "expected_rows": [
+      "ALPHA",
+      "          BETA GAMMA",
+      "          BODY"
+    ]
+  },
+  {
+    "id": "tag-no-zero-graph",
+    "source": ".Dd September 28, 2026\n.Dt CELL-WRITES 1\n.Os\n.Sh NAME\n.Nm cell-writes\n.Nd native cell boundary\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It Xo\n.No ALPHA\\p\n.No \"\\p\\&\"\n.No GAMMA\n.Xc\n.No BODY\n.El\n.Sh ENDTEST\n.No FINISH\n",
+    "expected_rows": [
+      "ALPHA",
+      "",
+      "          GAMMA",
+      "          BODY"
+    ]
+  },
+  {
+    "id": "tag-no-overstrike",
+    "source": ".Dd September 28, 2026\n.Dt CELL-WRITES 1\n.Os\n.Sh NAME\n.Nm cell-writes\n.Nd native cell boundary\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It Xo\n.No \"\\zA\\zBC\"\n.No GAMMA\n.Xc\n.No BODY\n.El\n.Sh ENDTEST\n.No FINISH\n",
+    "expected_rows": [
+      "C GAMMA   BODY"
+    ]
+  },
+  {
+    "id": "tag-no-bare-zero",
+    "source": ".Dd September 28, 2026\n.Dt CELL-WRITES 1\n.Os\n.Sh NAME\n.Nm cell-writes\n.Nd native cell boundary\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It Xo\n.No \\z\n.No X\n.No GAMMA\n.Xc\n.No BODY\n.El\n.Sh ENDTEST\n.No FINISH\n",
+    "expected_rows": [
+      " XGAMMA   BODY"
+    ]
+  },
+  {
+    "id": "tag-no-marker-reject",
+    "source": ".Dd September 28, 2026\n.Dt CELL-WRITES 1\n.Os\n.Sh NAME\n.Nm cell-writes\n.Nd native cell boundary\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It Xo\n.No \\p\n.No \" BETA GAMMA\"\n.Xc\n.No BODY\n.El\n.Sh ENDTEST\n.No FINISH\n",
+    "expected_rows": [
+      "          BODY"
+    ]
+  },
+  {
+    "id": "tag-em-ordinary",
+    "source": ".Dd September 28, 2026\n.Dt CELL-WRITES 1\n.Os\n.Sh NAME\n.Nm cell-writes\n.Nd native cell boundary\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It Xo\n.Em ALPHA BETA GAMMA\n.Xc\n.No BODY\n.El\n.Sh ENDTEST\n.No FINISH\n",
+    "expected_rows": [
+      "ALPHA BETA GAMMA",
+      "          BODY"
+    ]
+  },
+  {
+    "id": "tag-em-unicode",
+    "source": ".Dd September 28, 2026\n.Dt CELL-WRITES 1\n.Os\n.Sh NAME\n.Nm cell-writes\n.Nd native cell boundary\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It Xo\n.Em \"é中e\\[u0301]\"\n.Xc\n.No BODY\n.El\n.Sh ENDTEST\n.No FINISH\n",
+    "expected_rows": [
+      "é中é      BODY"
+    ]
+  },
+  {
+    "id": "tag-em-font",
+    "source": ".Dd September 28, 2026\n.Dt CELL-WRITES 1\n.Os\n.Sh NAME\n.Nm cell-writes\n.Nd native cell boundary\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It Xo\n.Em \"ALPHA\\fBBETA\\fPGAMMA\"\n.Xc\n.No BODY\n.El\n.Sh ENDTEST\n.No FINISH\n",
+    "expected_rows": [
+      "ALPHABETAGAMMA",
+      "          BODY"
+    ]
+  },
+  {
+    "id": "tag-em-internal",
+    "source": ".Dd September 28, 2026\n.Dt CELL-WRITES 1\n.Os\n.Sh NAME\n.Nm cell-writes\n.Nd native cell boundary\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It Xo\n.Em \"ALPHA\\p BETA\"\n.Em GAMMA\n.Xc\n.No BODY\n.El\n.Sh ENDTEST\n.No FINISH\n",
+    "expected_rows": [
+      "ALPHA",
+      "          BETA GAMMA",
+      "          BODY"
+    ]
+  },
+  {
+    "id": "tag-em-zero-graph",
+    "source": ".Dd September 28, 2026\n.Dt CELL-WRITES 1\n.Os\n.Sh NAME\n.Nm cell-writes\n.Nd native cell boundary\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It Xo\n.Em ALPHA\\p\n.Em \"\\p\\&\"\n.Em GAMMA\n.Xc\n.No BODY\n.El\n.Sh ENDTEST\n.No FINISH\n",
+    "expected_rows": [
+      "ALPHA",
+      "",
+      "          GAMMA",
+      "          BODY"
+    ]
+  },
+  {
+    "id": "tag-em-overstrike",
+    "source": ".Dd September 28, 2026\n.Dt CELL-WRITES 1\n.Os\n.Sh NAME\n.Nm cell-writes\n.Nd native cell boundary\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It Xo\n.Em \"\\zA\\zBC\"\n.Em GAMMA\n.Xc\n.No BODY\n.El\n.Sh ENDTEST\n.No FINISH\n",
+    "expected_rows": [
+      "C GAMMA   BODY"
+    ]
+  },
+  {
+    "id": "tag-em-bare-zero",
+    "source": ".Dd September 28, 2026\n.Dt CELL-WRITES 1\n.Os\n.Sh NAME\n.Nm cell-writes\n.Nd native cell boundary\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It Xo\n.Em \\z\n.Em X\n.Em GAMMA\n.Xc\n.No BODY\n.El\n.Sh ENDTEST\n.No FINISH\n",
+    "expected_rows": [
+      " XGAMMA   BODY"
+    ]
+  },
+  {
+    "id": "tag-em-marker-reject",
+    "source": ".Dd September 28, 2026\n.Dt CELL-WRITES 1\n.Os\n.Sh NAME\n.Nm cell-writes\n.Nd native cell boundary\n.Sh DESCRIPTION\n.Bl -tag -width 8n\n.It Xo\n.Em \\p\n.Em \" BETA GAMMA\"\n.Xc\n.No BODY\n.El\n.Sh ENDTEST\n.No FINISH\n",
+    "expected_rows": [
+      "          BODY"
+    ]
+  },
+  {
+    "id": "all-printable-ascii",
+    "source": ".Dd September 28, 2026\n.Dt CELL-WRITES 1\n.Os\n.Sh NAME\n.Nm cell-writes\n.Nd native cell boundary\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No \"!\\(dq#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\e]^_`abcdefghijklmnopqrstuvwxyz{|}~\"\n.Ed\n.Sh ENDTEST\n.No FINISH\n",
+    "expected_rows": [
+      "!\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~"
+    ]
+  }
+]
