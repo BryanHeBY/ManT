@@ -470,6 +470,7 @@ mod references;
 mod row_origins;
 mod search;
 mod source_geometry;
+mod styles;
 mod tables;
 mod unsupported_hard_lines;
 mod zero_width;

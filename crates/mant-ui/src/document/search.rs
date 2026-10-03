@@ -2,10 +2,7 @@
 
 use std::collections::{BTreeMap, HashMap};
 
-use ratatui::{
-    style::Modifier,
-    text::{Line, Span, Text},
-};
+use ratatui::text::{Line, Span, Text};
 
 use super::{RenderedDocument, RenderedSelection, WrappedLine};
 use crate::theme;
@@ -259,12 +256,10 @@ fn highlight_line(
                 .iter()
                 .find(|(_, range)| range.start_column < next_column && range.end_column > column);
             let style = match matched {
-                Some((index, _)) if Some(*index) == active => span
-                    .style
-                    .fg(theme::BASE)
-                    .bg(theme::SEARCH_ACTIVE)
-                    .add_modifier(Modifier::BOLD),
-                Some(_) => span.style.bg(theme::SEARCH_MATCH),
+                Some((index, _)) if Some(*index) == active => {
+                    theme::interact(span.style, theme::InteractionRole::SearchActive)
+                }
+                Some(_) => theme::interact(span.style, theme::InteractionRole::SearchMatch),
                 None => span.style,
             };
             if segment_style.is_some_and(|current| current != style) {

@@ -85,6 +85,22 @@ color only at validated name bindings; identical prose and list markers do not
 inherit it. Source bold/italic/code styling and link underlines compose with
 that color. Code-token accents do not overwrite semantic name roles.
 
+Outline and body adapters request semantic styles from the private `theme`
+module. `StyleRole` distinguishes text, source markup, entry kinds, outline
+groups, notices and surfaces; `InteractionRole` supplies selection and search
+overlays. `Theme` holds a complete Ratatui `Style` for each role, so foreground,
+background and modifiers can be changed independently of semantic routing.
+The current default is hardcoded in `theme/defaults.rs`; runtime theme selection
+and user configuration are not yet exposed. Shared entry roles reach both
+outline and body; generic Term titles use the stronger outline foreground while
+their body names remain primary text. Outline sections and body headings have
+separate roles.
+The default keeps outline sections blue, body headings teal, `Entries` groups
+coral and `Doc Refs` groups lavender, both bold, and references cyan and
+underlined. Inline code uses neutral text on a subtle background; limited-inventory notices use
+yellow and a visible `!`. Cached document styles are immutable; a future theme
+change must rebuild those styles before reflow rather than recolor IR facts.
+
 `DocumentView` prepares a borrowed binding map during construction and stores
 the resulting immutable styled lines. Resizing only reflows those lines;
 search and selection overlay their own state without rewriting the base styles,

@@ -11,15 +11,14 @@ use std::{
 };
 
 use ratatui::{
-    style::{Modifier, Style},
+    style::Style,
     text::{Line, Span},
 };
 use unicode_width::UnicodeWidthStr;
 
-use mant_ir::EntryKind;
 use mant_render::cells::{graphemes, prefix_columns, suffix_columns};
 
-use crate::{NavKind, NavNode, text::sanitize_terminal_text, theme};
+use crate::{NavNode, text::sanitize_terminal_text, theme};
 
 mod tree;
 pub(crate) use tree::TreePlan;
@@ -114,7 +113,7 @@ pub(crate) fn rows_with_references(
             let badge = sanitize_terminal_text(badge);
             let expanded_label = *index == selected || full_labels;
             let (title, badge) = reference_title_parts(&title, &badge, available, expanded_label);
-            let link_style = style.fg(theme::LINK);
+            let link_style = theme::navigation_reference_style(node.kind, *index == selected);
             let mut current = vec![prefix.clone()];
             let mut used = 0;
             lines.clear();
@@ -185,7 +184,10 @@ fn finish_reference_row(
     let used: usize = spans.iter().map(Span::width).sum();
     spans.push(Span::styled(
         " ".repeat(width.saturating_sub(used)),
-        Style::default().bg(style.bg.unwrap_or(theme::SIDEBAR)),
+        Style {
+            bg: style.bg,
+            ..Style::default()
+        },
     ));
     NavigationRow {
         node_index,
@@ -239,22 +241,7 @@ fn node_lines_with_prefixes(
     }
     let prefix = &prefixes.first;
     let continuation_prefix = &prefixes.continuation;
-    let foreground = node_foreground(node, selected);
-    let background = if selected {
-        if node.kind == NavKind::Tldr {
-            theme::TLDR_SELECTED
-        } else {
-            theme::SELECTED
-        }
-    } else if node.kind == NavKind::Tldr {
-        theme::TLDR_NAV
-    } else {
-        theme::SIDEBAR
-    };
-    let mut style = Style::default().fg(foreground).bg(background);
-    if selected {
-        style = style.add_modifier(Modifier::BOLD);
-    }
+    let style = theme::navigation_style(node.kind, selected);
 
     let title = sanitize_terminal_text(if selected || full_labels {
         node.full_title.as_deref().unwrap_or(&node.title)
@@ -288,26 +275,32 @@ fn node_lines_with_prefixes(
                 title
             };
             let used = line_prefix.width() + title.width();
-            let prefix_color = if selected {
+            let prefix_role = if selected {
                 if line_index == 0 {
-                    theme::PEACH
+                    theme::StyleRole::TreeFocus
                 } else {
-                    theme::PINK
+                    theme::StyleRole::TreeContinuationFocus
                 }
             } else {
-                theme::OVERLAY
+                theme::StyleRole::TreeGuide
             };
             NavigationRow {
                 node_index,
                 line: Line::from(vec![
                     Span::styled(
                         line_prefix,
-                        Style::default().fg(prefix_color).bg(background),
+                        Style {
+                            bg: style.bg,
+                            ..theme::style(prefix_role)
+                        },
                     ),
                     Span::styled(title, style),
                     Span::styled(
                         " ".repeat(width.saturating_sub(used)),
-                        Style::default().bg(background),
+                        Style {
+                            bg: style.bg,
+                            ..Style::default()
+                        },
                     ),
                 ]),
             }
@@ -319,25 +312,6 @@ fn bounded_tree_prefix(prefix: &str, width: usize) -> String {
     // Retain the nearest branch/owner marker when ancestor columns no longer
     // fit, always leaving one content cell for label or reference capability.
     suffix_columns(prefix, width.saturating_sub(1)).to_owned()
-}
-
-fn node_foreground(node: &NavNode, selected: bool) -> ratatui::style::Color {
-    if selected {
-        return if node.kind == NavKind::Tldr {
-            theme::MAUVE
-        } else {
-            theme::SELECTED_TEXT
-        };
-    }
-    match node.kind {
-        NavKind::Tldr => theme::MAUVE,
-        NavKind::Root | NavKind::Section if node.depth == 0 => theme::SUBTEXT_BRIGHT,
-        NavKind::Root | NavKind::Section | NavKind::ReferenceGroup => theme::BLUE,
-        NavKind::EntryGroup | NavKind::ReferenceNotice => theme::YELLOW,
-        NavKind::Entry(EntryKind::Term) => theme::STRONG,
-        NavKind::Entry(kind) => theme::entry_color(kind),
-        NavKind::Reference => theme::LINK,
-    }
 }
 
 pub(crate) fn truncate_middle(value: &str, width: usize) -> String {
@@ -408,6 +382,8 @@ fn wrap_to_width(value: &str, width: usize) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
+    mod styles;
+
     use std::collections::HashSet;
 
     use ratatui::{buffer::Buffer, layout::Rect, widgets::Widget};
@@ -554,12 +530,23 @@ mod tests {
                     .map(|row| row.line.to_string())
                     .collect::<String>();
                 assert!(text.contains('↗'), "{width}: {text}");
+                assert!(rows.iter().flat_map(|row| &row.line.spans).any(|span| {
+                    span.content.contains('↗')
+                        && span.style.fg
+                            == Some(if selected == 0 {
+                                theme::SELECTED_TEXT
+                            } else {
+                                theme::LINK
+                            })
+                }));
                 assert!(
                     rows.iter()
                         .flat_map(|row| &row.line.spans)
-                        .any(
-                            |span| span.content.contains('↗') && span.style.fg == Some(theme::LINK)
-                        )
+                        .filter(|span| span.content.contains('↗'))
+                        .all(|span| span
+                            .style
+                            .add_modifier
+                            .contains(ratatui::style::Modifier::UNDERLINED))
                 );
                 if selected == usize::MAX {
                     assert_eq!(rows.len(), 1);

@@ -165,10 +165,10 @@ fn overview_and_synthetic_roots_use_only_their_actual_siblings() {
                     let mut nodes = vec![
                         node("TLDR", None, 0, NavKind::Tldr, false),
                         node("OVERVIEW", None, 0, NavKind::Root, true),
-                        node("ENTRIES", Some("OVERVIEW"), 1, NavKind::EntryGroup, true),
+                        node("Entries", Some("OVERVIEW"), 1, NavKind::EntryGroup, true),
                         node(
                             "VALUE",
-                            Some("ENTRIES"),
+                            Some("Entries"),
                             2,
                             NavKind::Entry(mant_ir::EntryKind::Term),
                             false,

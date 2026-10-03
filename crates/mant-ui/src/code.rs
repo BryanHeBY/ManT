@@ -5,10 +5,7 @@
 //! useful visual cues while preserving every source character and inline
 //! modifier. Language-aware highlighting can be layered on top later.
 
-use ratatui::{
-    style::{Modifier, Style},
-    text::Span,
-};
+use ratatui::{style::Style, text::Span};
 
 use crate::theme;
 
@@ -43,7 +40,7 @@ fn next_token(value: &str, base: Style) -> (usize, Style) {
     if value.starts_with("//") || value.starts_with("/*") {
         return (
             value.len(),
-            base.fg(theme::SUBTEXT).add_modifier(Modifier::ITALIC),
+            base.patch(theme::style(theme::StyleRole::CodeComment)),
         );
     }
     let first = value
@@ -54,7 +51,10 @@ fn next_token(value: &str, base: Style) -> (usize, Style) {
         return (take_while(value, char::is_whitespace), base);
     }
     if matches!(first, '"' | '\'') {
-        return (quoted_length(value, first), base.fg(theme::BLUE));
+        return (
+            quoted_length(value, first),
+            base.patch(theme::style(theme::StyleRole::CodeString)),
+        );
     }
     if first == '-'
         && value
@@ -64,7 +64,7 @@ fn next_token(value: &str, base: Style) -> (usize, Style) {
     {
         return (
             take_while(value, |character| !character.is_whitespace()),
-            base.fg(theme::HEADING),
+            base.patch(theme::style(theme::StyleRole::CodeOption)),
         );
     }
     if first.is_ascii_digit() {
@@ -72,7 +72,7 @@ fn next_token(value: &str, base: Style) -> (usize, Style) {
             take_while(value, |character| {
                 character.is_ascii_digit() || character == '.'
             }),
-            base.fg(theme::YELLOW),
+            base.patch(theme::style(theme::StyleRole::CodeNumber)),
         );
     }
     if first.is_alphabetic() || first == '_' {
@@ -81,7 +81,7 @@ fn next_token(value: &str, base: Style) -> (usize, Style) {
         });
         let token = &value[..length];
         let style = if KEYWORDS.contains(&token) {
-            base.fg(theme::MAUVE).add_modifier(Modifier::BOLD)
+            base.patch(theme::style(theme::StyleRole::CodeKeyword))
         } else {
             base
         };

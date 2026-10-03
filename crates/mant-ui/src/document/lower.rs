@@ -2,9 +2,8 @@
 use super::inline::{styled_plain_text_lines, styled_reference_inline_lines};
 use super::{
     Arc, Block, DocumentAddress, ExternalUri, HashMap, Inline, LineSurface, LinkTarget,
-    LogicalLine, LogicalLinkRange, Modifier, NavKind, NavNode, Section, SemanticIndex, Span, Style,
-    TLDR_ID, TLDR_VERTICAL_PADDING_ROWS, TldrDocument, WrapMode, inline_anchor_rows, theme,
-    tldr_style,
+    LogicalLine, LogicalLinkRange, NavKind, NavNode, Section, SemanticIndex, Span, Style, TLDR_ID,
+    TLDR_VERTICAL_PADDING_ROWS, TldrDocument, WrapMode, inline_anchor_rows, theme, tldr_style,
 };
 use mant_ir::geometry::{compose_origin, coordinate, padding};
 
@@ -156,7 +155,7 @@ impl DocumentBuilder<'_> {
             self.push(LogicalLine::plain(
                 0,
                 source_label,
-                Style::default().fg(theme::SUBTEXT),
+                theme::style(theme::StyleRole::Metadata),
             ));
             self.spacing(document_gap);
         } else {
@@ -164,7 +163,7 @@ impl DocumentBuilder<'_> {
             self.push(LogicalLine::plain(
                 0,
                 "No local man page was found; showing the cached tldr quick reference.",
-                Style::default().fg(theme::YELLOW),
+                theme::style(theme::StyleRole::Notice),
             ));
         }
     }
@@ -236,9 +235,7 @@ impl DocumentBuilder<'_> {
         self.inline_lines(
             &heading.content,
             indent,
-            Style::default()
-                .fg(theme::HEADING)
-                .add_modifier(Modifier::BOLD),
+            theme::style(theme::StyleRole::Heading),
         );
     }
 
@@ -272,7 +269,7 @@ impl DocumentBuilder<'_> {
                     children,
                     origin,
                     compose_origin(origin, layout.continuation_indent_columns),
-                    Style::default().fg(theme::TEXT),
+                    theme::style(theme::StyleRole::Text),
                     LineSurface::Normal,
                     !(cell && index + 1 == blocks.len()),
                 );
@@ -293,7 +290,7 @@ impl DocumentBuilder<'_> {
                     children,
                     origin,
                     compose_origin(origin, layout.continuation_indent_columns),
-                    Style::default().fg(theme::TEXT),
+                    theme::style(theme::StyleRole::Text),
                     LineSurface::Normal,
                     true,
                 );
@@ -304,7 +301,7 @@ impl DocumentBuilder<'_> {
                 self.inline_lines_with_surface(
                     children,
                     compose_origin(base_indent, layout.indent_columns),
-                    Style::default().fg(theme::TEXT),
+                    theme::style(theme::StyleRole::Text),
                     LineSurface::Code,
                 );
             }
@@ -350,7 +347,7 @@ impl DocumentBuilder<'_> {
                 self.plain_block_lines(
                     value,
                     compose_origin(base_indent, layout.indent_columns),
-                    Style::default().fg(theme::YELLOW),
+                    theme::style(theme::StyleRole::Equation),
                     WrapMode::Character,
                 );
             }
@@ -362,7 +359,7 @@ impl DocumentBuilder<'_> {
                 self.plain_block_lines(
                     text,
                     compose_origin(base_indent, layout.indent_columns),
-                    Style::default().fg(theme::PEACH),
+                    theme::style(theme::StyleRole::Unsupported),
                     WrapMode::Word,
                 );
             }

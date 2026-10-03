@@ -88,7 +88,7 @@ fn all_entry_roles_color_only_bound_source_text_not_markers_or_body_mentions() {
             line.spans
                 .iter()
                 .filter(|span| span.content.contains('•'))
-                .all(|span| span.style.fg == Some(theme::HEADING))
+                .all(|span| span.style.fg == Some(theme::SUBTEXT_BRIGHT))
         );
         // No semantic-color mutation is written into the original IR or cached view.
         for width in [12, 40, 120, 12] {
@@ -217,8 +217,9 @@ fn inline_styles_preserve_the_renderer_neutral_ir_semantics() {
     assert_eq!(spans[0].style.fg, Some(theme::STRONG));
     assert!(spans[2].style.add_modifier.contains(Modifier::ITALIC));
     assert_eq!(spans[2].style.fg, Some(theme::TEXT));
-    assert_eq!(spans[4].style.fg, Some(theme::HEADING));
-    assert_eq!(spans[6].style.fg, Some(theme::BLUE));
+    assert_eq!(spans[4].style.fg, Some(theme::SUBTEXT_BRIGHT));
+    assert_eq!(spans[4].style.bg, Some(theme::SURFACE));
+    assert_eq!(spans[6].style.fg, Some(theme::LINK));
     assert!(spans[6].style.add_modifier.contains(Modifier::UNDERLINED));
     assert_eq!(
         lines[0].links[0].target,

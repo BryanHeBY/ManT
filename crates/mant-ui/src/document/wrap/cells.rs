@@ -132,8 +132,8 @@ fn cells_to_line(
 ) -> Line<'static> {
     let mut spans = Vec::new();
     let background = match line.surface {
-        LineSurface::Code => Some(theme::SURFACE),
-        LineSurface::Tldr => Some(theme::TLDR_SURFACE),
+        LineSurface::Code => theme::style(theme::StyleRole::CodeSurface).bg,
+        LineSurface::Tldr => theme::style(theme::StyleRole::TldrSurface).bg,
         LineSurface::Normal
         | LineSurface::TldrTop
         | LineSurface::TldrBottom
@@ -146,7 +146,8 @@ fn cells_to_line(
     if framed_tldr {
         spans.push(Span::styled(
             "│ ",
-            Style::default().fg(theme::MAUVE).bg(theme::TLDR_SURFACE),
+            theme::style(theme::StyleRole::TldrSurface)
+                .patch(theme::style(theme::StyleRole::TldrFrame)),
         ));
     }
     if indent > 0 {
@@ -154,7 +155,7 @@ fn cells_to_line(
         // code surface. TLDR remains a full-width panel and therefore keeps
         // its indentation on the panel background.
         let style = if line.surface == LineSurface::Tldr {
-            Style::default().bg(theme::TLDR_SURFACE)
+            theme::style(theme::StyleRole::TldrSurface)
         } else {
             Style::default()
         };
@@ -196,7 +197,8 @@ fn cells_to_line(
     if framed_tldr {
         spans.push(Span::styled(
             " │",
-            Style::default().fg(theme::MAUVE).bg(theme::TLDR_SURFACE),
+            theme::style(theme::StyleRole::TldrSurface)
+                .patch(theme::style(theme::StyleRole::TldrFrame)),
         ));
     }
     Line::from(spans)

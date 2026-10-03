@@ -184,7 +184,7 @@ fn selection_span(value: String, style: ratatui::style::Style, selected: bool) -
     Span::styled(
         value,
         if selected {
-            style.fg(theme::SELECTED_TEXT).bg(theme::SELECTED)
+            theme::interact(style, theme::InteractionRole::Selection)
         } else {
             style
         },

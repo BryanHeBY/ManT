@@ -1,7 +1,7 @@
 //! A frame's final outline width owns drawing, hit testing and scrollbar state.
 
 use super::*;
-use ratatui::{buffer::Buffer, style::Color};
+use ratatui::{buffer::Buffer, style::Modifier};
 use unicode_width::UnicodeWidthStr;
 
 // Each non-ASCII part is one deliberately chosen, complete display cluster.
@@ -96,18 +96,21 @@ fn mouse(kind: MouseEventKind, column: u16, row: u16) -> MouseEvent {
     }
 }
 
-fn expected_clusters() -> Vec<(String, Color)> {
+fn expected_clusters() -> Vec<(String, bool)> {
     let mut clusters = Vec::new();
-    for (parts, color) in [
-        (TITLE_PARTS, theme::SELECTED_TEXT),
-        (&[" ", "↗", " "][..], theme::LINK),
-        (TARGET_PARTS, theme::LINK),
+    for (parts, reference) in [
+        (TITLE_PARTS, false),
+        (&[" ", "↗", " "][..], true),
+        (TARGET_PARTS, true),
     ] {
         for part in parts {
             if part.is_ascii() {
-                clusters.extend(part.chars().map(|character| (character.to_string(), color)));
+                clusters.extend(
+                    part.chars()
+                        .map(|character| (character.to_string(), reference)),
+                );
             } else {
-                clusters.push(((*part).to_owned(), color));
+                clusters.push(((*part).to_owned(), reference));
             }
         }
     }
@@ -129,7 +132,7 @@ fn assert_owner_frame(app: &App, buffer: &Buffer, frame: &Buffer, scrollbar: boo
     let mut row = area.y;
     let mut badge_rows = HashSet::new();
     let mut hidden_cells = HashSet::new();
-    for (cluster, foreground) in expected_clusters() {
+    for (cluster, reference) in expected_clusters() {
         let width = u16::try_from(cluster.width()).expect("fixture cluster width");
         if column + width > right {
             row += 1;
@@ -143,7 +146,14 @@ fn assert_owner_frame(app: &App, buffer: &Buffer, frame: &Buffer, scrollbar: boo
         let cell = buffer.cell((column, row)).expect("label cell");
         assert_eq!(cell, frame.cell((column, row)).unwrap());
         assert_eq!(cell.symbol(), cluster, "cluster at ({column}, {row})");
-        assert_eq!(cell.fg, foreground, "role at ({column}, {row})");
+        // Selection overlays both title and badge; the reference role keeps
+        // its underline instead of being inferred from a palette color.
+        assert_eq!(
+            cell.fg,
+            theme::SELECTED_TEXT,
+            "selection at ({column}, {row})"
+        );
+        assert_eq!(cell.modifier.contains(Modifier::UNDERLINED), reference);
         assert_eq!(cell.bg, theme::SELECTED);
         // Paragraph first paints its whole area with SIDEBAR, then render_line
         // writes only each grapheme's head (unlike Buffer::set_stringn, which
@@ -158,7 +168,7 @@ fn assert_owner_frame(app: &App, buffer: &Buffer, frame: &Buffer, scrollbar: boo
             expected.set_bg(theme::SIDEBAR);
             assert_eq!(frame.cell(position).unwrap(), &expected);
         }
-        if foreground == theme::LINK {
+        if reference {
             badge_rows.insert(row);
         }
         column += width;

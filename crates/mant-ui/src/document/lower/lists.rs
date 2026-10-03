@@ -1,7 +1,7 @@
 //! List markers, definition heads, and their shared content/anchor ownership.
 use super::super::inline::{shifted_reference_marks, spans_scalars};
 use super::super::{
-    Block, ListKind, LogicalLine, Span, Style, StyledInlineLine, WrapMode, inline_anchor_rows,
+    Block, ListKind, LogicalLine, Span, StyledInlineLine, WrapMode, inline_anchor_rows,
     shifted_links, spans_width, theme,
 };
 use super::DocumentBuilder;
@@ -44,11 +44,14 @@ impl DocumentBuilder<'_> {
                 let continuation_indent =
                     compose_origin(content_indent, layout.continuation_indent_columns);
                 let mut inline_lines =
-                    self.styled_inlines(children, Style::default().fg(theme::TEXT));
+                    self.styled_inlines(children, theme::style(theme::StyleRole::Text));
                 let first = inline_lines
                     .first_mut()
                     .map_or_else(StyledInlineLine::default, std::mem::take);
-                let mut spans = vec![Span::styled(marker, Style::default().fg(theme::HEADING))];
+                let mut spans = vec![Span::styled(
+                    marker,
+                    theme::style(theme::StyleRole::ListMarker),
+                )];
                 spans.push(Span::raw(" ".repeat(gap)));
                 spans.extend(first.spans);
                 self.push(
@@ -77,7 +80,7 @@ impl DocumentBuilder<'_> {
                     self.push(LogicalLine::plain(
                         padding(indent),
                         marker,
-                        Style::default().fg(theme::HEADING),
+                        theme::style(theme::StyleRole::ListMarker),
                     ));
                 }
                 self.blocks(
@@ -111,7 +114,7 @@ impl DocumentBuilder<'_> {
                 self.inline_definition(item, indent);
             } else {
                 for term in &item.terms {
-                    self.inline_lines(term, indent, Style::default().fg(theme::TEXT));
+                    self.inline_lines(term, indent, theme::style(theme::StyleRole::Text));
                 }
                 self.blocks(
                     &item.description,
@@ -131,7 +134,7 @@ impl DocumentBuilder<'_> {
             for (id, row) in inline_anchor_rows(term) {
                 head_targets.push((id, head_lines.len() + row));
             }
-            let lines = self.styled_inlines(term, Style::default().fg(theme::TEXT));
+            let lines = self.styled_inlines(term, theme::style(theme::StyleRole::Text));
             if lines.len() != 1 || !lines[0].spans.is_empty() {
                 head_lines.extend(lines);
             } else {
@@ -183,7 +186,7 @@ impl DocumentBuilder<'_> {
                 self.anchors.entry(id).or_insert(self.lines.len() + row);
             }
             let mut description_lines =
-                self.styled_inlines(children, Style::default().fg(theme::TEXT));
+                self.styled_inlines(children, theme::style(theme::StyleRole::Text));
             let first_row_indent = description_lines
                 .first()
                 .map_or(0, |line| line.indent_columns);

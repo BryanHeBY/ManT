@@ -187,7 +187,7 @@ fn surface_row(line: &LogicalLine, width: usize) -> Option<WrappedLine> {
                 anchors: Vec::new(),
                 line: Line::from(Span::styled(
                     "─".repeat(width),
-                    Style::default().fg(theme::OVERLAY),
+                    theme::style(theme::StyleRole::Rule),
                 )),
                 links: Vec::new(),
                 search_cells: Vec::new(),
@@ -202,7 +202,7 @@ fn surface_row(line: &LogicalLine, width: usize) -> Option<WrappedLine> {
                     Span::raw(" ".repeat(indent)),
                     Span::styled(
                         "─".repeat(width.saturating_sub(indent)),
-                        Style::default().fg(theme::OVERLAY),
+                        theme::style(theme::StyleRole::Rule),
                     ),
                 ]),
                 links: Vec::new(),
@@ -218,7 +218,7 @@ fn surface_row(line: &LogicalLine, width: usize) -> Option<WrappedLine> {
                     Span::raw(" ".repeat(indent)),
                     Span::styled(
                         "═".repeat(width.saturating_sub(indent)),
-                        Style::default().fg(theme::OVERLAY),
+                        theme::style(theme::StyleRole::Rule),
                     ),
                 ]),
                 links: Vec::new(),
@@ -298,7 +298,8 @@ fn wrap_word_row(
 }
 
 fn panel_border(width: usize, left: char, right: char) -> Line<'static> {
-    let style = Style::default().fg(theme::MAUVE).bg(theme::TLDR_SURFACE);
+    let style = theme::style(theme::StyleRole::TldrSurface)
+        .patch(theme::style(theme::StyleRole::TldrFrame));
     if width == 1 {
         return Line::from(Span::styled(left.to_string(), style));
     }

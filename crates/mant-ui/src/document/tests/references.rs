@@ -646,6 +646,11 @@ fn references_group_full_targets_without_promoting_entries_or_rewriting_body() {
     let before = query.clone();
     let view = DocumentView::new(&query);
     assert_eq!(view.references.len(), 4);
+    assert!(
+        view.navigation()
+            .iter()
+            .any(|node| node.title == "Doc Refs · 4")
+    );
     assert_eq!(
         view.navigation()
             .iter()
@@ -679,7 +684,7 @@ fn references_group_full_targets_without_promoting_entries_or_rewriting_body() {
             );
         }
         assert!(!rendered.text.to_string().contains("unlabelled"));
-        assert!(!rendered.text.to_string().contains("DOCUMENT REFERENCES"));
+        assert!(!rendered.text.to_string().contains("Doc Refs"));
     }
     assert_eq!(query, before);
     let second = DocumentView::new(&query);
@@ -781,7 +786,10 @@ fn bounded_inventory_exposes_truncation_without_removing_body_links() {
     assert!(
         view.navigation()
             .iter()
-            .any(|node| node.kind == NavKind::ReferenceNotice)
+            .any(|node| node.kind == NavKind::ReferenceNotice
+                && node.title == "! Doc Refs limited"
+                && node.full_title.as_deref()
+                    == Some("! Doc Refs inventory limited by navigation budget"))
     );
     assert_eq!(view.render(80).text.to_string().matches('x').count(), 1002);
 }

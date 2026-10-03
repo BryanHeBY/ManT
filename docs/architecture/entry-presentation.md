@@ -58,6 +58,19 @@ and operand subtypes, survives the mapping even where colors are shared.
 Coordinates, connectors and statistics may use secondary colors independently
 of the title. CLI neutral foreground inherits the terminal palette.
 
+The TUI resolves semantic roles through its private `theme::Theme`. Role
+identity is independent of default hues: outline sections, body headings,
+synthetic `Entries` and `Doc Refs` groups, references and inventory notices
+are separate style slots. Entry roles are shared by outline and body, except
+generic Term titles use `OutlineTerm`'s stronger foreground while body names
+remain primary `Term` text. Each
+slot contains foreground, background and font modifiers; source styles compose
+before specific name styles, and interaction overlays apply last. Default
+values live in `theme/defaults.rs`, separate from role mapping and composition.
+There is currently one hardcoded theme, with no runtime configuration surface.
+Future theme selection must regenerate cached document styles without changing
+content, ranges, targets or semantic identities.
+
 ## Source-bound styles
 
 `EntryStyleMap` binds original inline containers to validated name ranges once

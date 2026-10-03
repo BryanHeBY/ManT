@@ -1,25 +1,22 @@
 //! Lowers semantic inline nodes into styled text, anchors, and link targets.
 
 use super::{
-    DocumentAddress, ExternalUri, Inline, LinkTarget, LogicalLinkRange, Modifier, Section, Span,
-    Style, StyledInlineLine, theme,
+    DocumentAddress, ExternalUri, Inline, LinkTarget, LogicalLinkRange, Section, Span, Style,
+    StyledInlineLine, theme,
 };
 
 pub(super) fn tldr_style(role: mant_render::TldrRole) -> Style {
     use mant_render::TldrRole;
+    use theme::StyleRole;
 
-    match role {
-        TldrRole::Title => Style::default()
-            .fg(theme::MAUVE)
-            .add_modifier(Modifier::BOLD),
-        TldrRole::Body | TldrRole::Placeholder => Style::default().fg(theme::TEXT),
-        TldrRole::Example => Style::default().fg(theme::GREEN),
-        TldrRole::Command => Style::default().fg(theme::PEACH),
-        TldrRole::Link => Style::default()
-            .fg(theme::BLUE)
-            .add_modifier(Modifier::UNDERLINED),
-        TldrRole::Attribution => Style::default().fg(theme::SUBTEXT),
-    }
+    theme::style(match role {
+        TldrRole::Title => StyleRole::TldrTitle,
+        TldrRole::Body | TldrRole::Placeholder => StyleRole::Text,
+        TldrRole::Example => StyleRole::TldrExample,
+        TldrRole::Command => StyleRole::TldrCommand,
+        TldrRole::Link => StyleRole::Link,
+        TldrRole::Attribution => StyleRole::Metadata,
+    })
 }
 
 /// Anchor ownership follows original hard lines, independently of styling or
@@ -212,12 +209,12 @@ fn append_inline(
             for span in crate::code::highlight(vec![Span::styled(text.to_owned(), style)]) {
                 append_text(
                     &span.content,
-                    source_style(span.style, source, target),
+                    theme::inline_style(span.style, source),
                     lines,
                 );
             }
         } else {
-            append_text(text, source_style(style, source, target), lines);
+            append_text(text, theme::inline_style(style, source), lines);
         }
         if let Some(indent) = source.line_break_indent {
             // An authored structural break carries the resolved origin of
@@ -228,37 +225,6 @@ fn append_inline(
             record_link(lines, first_line, first_scalar, &target);
         }
     });
-}
-
-/// Layer source markup, then the more specific validated semantic name color.
-/// No layer discards inherited modifiers. Link affordance survives Code.
-fn source_style(
-    mut style: Style,
-    source: mant_render::InlinePresentation,
-    target: Option<&mant_ir::LinkTarget>,
-) -> Style {
-    if source.strong {
-        style = style.fg(theme::STRONG).add_modifier(Modifier::BOLD);
-    }
-    if source.emphasis {
-        style = style.add_modifier(Modifier::ITALIC);
-    }
-    if source.code {
-        style = style.fg(theme::HEADING);
-    }
-    if source.link {
-        let color = match target {
-            Some(mant_ir::LinkTarget::External { .. } | mant_ir::LinkTarget::Email { .. }) => {
-                theme::BLUE
-            }
-            _ => theme::LINK,
-        };
-        style = style.fg(color).add_modifier(Modifier::UNDERLINED);
-    }
-    if let Some(kind) = source.entry_kind {
-        style = style.fg(theme::entry_color(kind));
-    }
-    style
 }
 
 pub(super) fn local_link_target(

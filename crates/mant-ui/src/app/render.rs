@@ -114,14 +114,14 @@ impl App {
             Block::default()
                 .borders(Borders::LEFT)
                 .border_style(Style::default().fg(theme::BORDER))
-                .style(Style::default().bg(theme::SIDEBAR)),
+                .style(theme::style(theme::StyleRole::OutlineSurface)),
             area,
         );
     }
 
     fn draw_navigation(&mut self, frame: &mut Frame<'_>, area: Rect) {
         frame.render_widget(
-            Block::default().style(Style::default().bg(theme::SIDEBAR)),
+            Block::default().style(theme::style(theme::StyleRole::OutlineSurface)),
             area,
         );
         let [header_area, outline_label_area, navigation_area] = Layout::vertical([
@@ -133,8 +133,10 @@ impl App {
 
         self.draw_navigation_header(frame, header_area);
         frame.render_widget(
-            Paragraph::new(" OUTLINE")
-                .style(Style::default().fg(theme::SUBTEXT).bg(theme::SIDEBAR)),
+            Paragraph::new(" OUTLINE").style(
+                theme::style(theme::StyleRole::OutlineSurface)
+                    .patch(theme::style(theme::StyleRole::Metadata)),
+            ),
             outline_label_area,
         );
 
@@ -200,7 +202,7 @@ impl App {
             .collect::<Vec<_>>();
 
         frame.render_widget(
-            Paragraph::new(Text::from(lines)).style(Style::default().bg(theme::SIDEBAR)),
+            Paragraph::new(Text::from(lines)).style(theme::style(theme::StyleRole::OutlineSurface)),
             navigation_area,
         );
         self.draw_navigation_scrollbar(frame, navigation_area, row_count, height);
@@ -229,7 +231,7 @@ impl App {
                     .borders(Borders::BOTTOM)
                     .border_style(Style::default().fg(theme::BORDER)),
             )
-            .style(Style::default().bg(theme::SIDEBAR)),
+            .style(theme::style(theme::StyleRole::OutlineSurface)),
             area,
         );
     }
@@ -252,7 +254,7 @@ impl App {
 
     fn draw_content(&mut self, frame: &mut Frame<'_>, area: Rect) {
         frame.render_widget(
-            Block::default().style(Style::default().bg(theme::CONTENT)),
+            Block::default().style(theme::style(theme::StyleRole::ContentSurface)),
             area,
         );
         let inner = area.inner(CONTENT_MARGIN);
@@ -331,7 +333,7 @@ impl App {
             self.pointer.selection(),
         );
         frame.render_widget(
-            Paragraph::new(text).style(Style::default().bg(theme::CONTENT)),
+            Paragraph::new(text).style(theme::style(theme::StyleRole::ContentSurface)),
             document_area,
         );
         self.geometry.content_scrollbar = VerticalScrollbar::new(

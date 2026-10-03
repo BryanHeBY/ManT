@@ -5,10 +5,10 @@ use mant_ir::{
 use mant_ui::{DocumentView, NavKind};
 
 fn assert_compact_and_complete_entry_labels(view: &DocumentView) {
-    assert_eq!(view.navigation()[1].title, "ENTRIES · 4");
+    assert_eq!(view.navigation()[1].title, "Entries · 4");
     assert_eq!(
         view.navigation()[1].full_title.as_deref(),
-        Some("ENTRIES (4 direct · 1 nested · 6 forms)")
+        Some("Entries (4 direct · 1 nested · 6 forms)")
     );
     assert_eq!(view.navigation()[2].title, "--help");
     assert_eq!(

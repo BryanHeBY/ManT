@@ -15,7 +15,7 @@ impl DocumentBuilder<'_> {
         let summary = mant_ir::EntrySummary::for_entries(entries);
         let group_id = format!("__mant-entries__{owner_id}");
         let full_title = format!(
-            "ENTRIES ({} direct · {} nested · {} {})",
+            "Entries ({} direct · {} nested · {} {})",
             summary.direct,
             summary.descendants,
             summary.forms,
@@ -24,7 +24,7 @@ impl DocumentBuilder<'_> {
         self.navigation(NavNode {
             id: group_id.clone(),
             target_id: target_id.to_owned(),
-            title: format!("ENTRIES · {}", summary.direct),
+            title: format!("Entries · {}", summary.direct),
             full_title: Some(full_title),
             depth,
             kind: NavKind::EntryGroup,

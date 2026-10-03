@@ -701,14 +701,14 @@ original document's namespace and location; copying does not resolve them
 to host paths or verify that the target exists. A target that cannot be
 represented without changing its meaning is not copied.
 
-Ordinary body references remain under collapsed **DOCUMENT REFERENCES** groups
+Ordinary body references remain under collapsed **Doc Refs** groups
 at their nearest visible entry, section or root. For example:
 
 ```text
 Main porcelain commands
-└─ ENTRIES
+└─ Entries
    └─ git-add  ↗ git-add(1)
-      └─ DOCUMENT REFERENCES
+      └─ Doc Refs
          └─ ↗ gittutorial(7)
 ```
 
@@ -725,6 +725,9 @@ document, selection and navigation history. Reference-target copy copies the
 target, not the surrounding node; selecting or copying never opens it.
 Bounded discovery shows a notice if it cannot cover all references. Badges and
 choosers then describe known targets, not a proved unique or exhaustive set.
+The yellow `! Doc Refs limited` row means the sidebar inventory reached its
+record, payload or traversal budget; it does not mean a retained link is blocked
+or unavailable. Selecting the notice reveals its complete label.
 After content scrolling settles, the outline follows the first visible
 document node.
 Underlined references can be followed directly. Markdown fragments and mdoc
@@ -1113,6 +1116,13 @@ document text apply type color only to validated name bindings, while preserving
 source bold, italic and link styling. A name mentioned in ordinary prose or at
 the start of a longer word does not acquire that type color. Search/explanation
 match emphasis and TUI selection are separate from semantic name colors.
+
+The TUI uses blue outline section labels and teal body headings. Synthetic
+`Entries` groups use bold coral and `Doc Refs` groups bold lavender; references
+use cyan with underlines, and inline code uses neutral text on a subtle background.
+Reference-inventory notices use yellow and a visible `!`. The theme is currently
+fixed in code; semantic roles and selection/search overlays are resolved
+separately in preparation for configurable colors and styles.
 
 ## Diagnostics
 

@@ -259,6 +259,13 @@ that crate was not published for that change.
 
 ### mant-ui 0.12.0
 
+- Shorten synthetic outline labels to `Entries` and `Doc Refs`. Distinguish
+  coral entry groups, lavender reference groups, cyan underlined references and
+  yellow inventory notices;
+  keep outline sections blue and body headings teal. Inline code now uses
+  neutral text with a subtle background. Resolve outline/body colors and font
+  modifiers through private semantic theme roles, with separate selection and
+  search overlays and a hardcoded default theme.
 - Keep complete Unicode graphemes together in document wrapping, including
   combining marks, flags and joined emoji across source styles. Search,
   selection, copy and link hit testing now use the same terminal-cell geometry

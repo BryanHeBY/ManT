@@ -23,9 +23,11 @@ use mant_ir::{
 #[cfg(test)]
 use mant_ir::{TldrCommandPart, TldrOrigin};
 #[cfg(test)]
+use ratatui::style::Modifier;
+#[cfg(test)]
 use ratatui::text::Line;
 use ratatui::{
-    style::{Modifier, Style},
+    style::Style,
     text::{Span, Text},
 };
 #[cfg(test)]

@@ -1,69 +1,140 @@
-//! Central color palette shared by the Ratatui widgets and document renderer.
+//! Role-based styles shared by outline and document rendering.
+//!
+//! The hardcoded default theme separates semantic roles, source composition
+//! and interaction overlays. Future configuration can replace style values
+//! without changing content traversal or navigation semantics.
 
-use ratatui::style::Color;
+use mant_ir::EntryKind;
+use ratatui::style::Style;
 
-// Catppuccin Mocha values shared through semantic roles so widgets keep one
-// visual language instead of accumulating one-off RGB literals.
-pub const CONTENT: Color = Color::Rgb(0, 0, 0);
-pub const BASE: Color = Color::Rgb(30, 30, 46);
-pub const MENU: Color = Color::Rgb(24, 24, 37);
-pub const SIDEBAR: Color = Color::Rgb(17, 17, 27);
-pub const SURFACE: Color = Color::Rgb(24, 24, 37);
-pub const TLDR_SURFACE: Color = Color::Rgb(40, 36, 58);
-pub const TLDR_NAV: Color = Color::Rgb(29, 26, 43);
-pub const BORDER: Color = Color::Rgb(49, 50, 68);
-pub const OVERLAY: Color = Color::Rgb(69, 71, 90);
-// The track must remain visible on BASE-backed overlays as well as the darker
-// document and navigation surfaces.
-pub const SCROLLBAR_TRACK: Color = BORDER;
-pub const SCROLLBAR_THUMB: Color = OVERLAY;
-pub const TEXT: Color = Color::Rgb(166, 173, 200);
-pub const SUBTEXT: Color = Color::Rgb(127, 132, 156);
-pub const SUBTEXT_BRIGHT: Color = Color::Rgb(186, 194, 222);
-pub const STRONG: Color = Color::Rgb(205, 214, 244);
-pub const SELECTED_TEXT: Color = Color::Rgb(245, 224, 220);
-pub const HEADING: Color = Color::Rgb(148, 226, 213);
-pub const LINK: Color = Color::Rgb(137, 220, 235);
-pub const BLUE: Color = Color::Rgb(137, 180, 250);
-pub const GREEN: Color = Color::Rgb(166, 227, 161);
-pub const YELLOW: Color = Color::Rgb(249, 226, 175);
-pub const PEACH: Color = Color::Rgb(250, 179, 135);
-pub const MAUVE: Color = Color::Rgb(203, 166, 247);
-pub const PINK: Color = Color::Rgb(245, 194, 231);
-pub const SELECTED: Color = BORDER;
-pub const TLDR_SELECTED: Color = Color::Rgb(73, 64, 95);
-pub const SEARCH_MATCH: Color = Color::Rgb(69, 71, 90);
-pub const SEARCH_ACTIVE: Color = YELLOW;
+use crate::NavKind;
 
-/// Entry names retain semantic families; generic terms are primary content.
-pub(crate) const fn entry_color(kind: mant_ir::EntryKind) -> Color {
-    match mant_render::entry_tone(kind) {
-        mant_render::EntryTone::Primary => TEXT,
-        mant_render::EntryTone::Parameter => GREEN,
-        mant_render::EntryTone::Command => PEACH,
-        mant_render::EntryTone::Environment => MAUVE,
-        mant_render::EntryTone::Configuration => YELLOW,
-        mant_render::EntryTone::Variable => PINK,
-        mant_render::EntryTone::Value => BLUE,
+mod defaults;
+mod palette;
+mod roles;
+pub(crate) use palette::*;
+pub(crate) use roles::{InteractionRole, StyleRole};
+
+#[cfg(test)]
+mod tests;
+
+/// Fixed role slots avoid allocation and map lookups in per-span rendering.
+#[derive(Clone, Debug)]
+pub(crate) struct Theme {
+    styles: [Style; StyleRole::COUNT],
+    interactions: [Style; InteractionRole::COUNT],
+}
+
+impl Theme {
+    const fn empty() -> Self {
+        Self {
+            styles: [Style::new(); StyleRole::COUNT],
+            interactions: [Style::new(); InteractionRole::COUNT],
+        }
+    }
+
+    pub(crate) const fn set_style(&mut self, role: StyleRole, style: Style) {
+        self.styles[role as usize] = style;
+    }
+
+    pub(crate) const fn set_interaction(&mut self, role: InteractionRole, style: Style) {
+        self.interactions[role as usize] = style;
+    }
+
+    pub(crate) const fn style(&self, role: StyleRole) -> Style {
+        self.styles[role as usize]
+    }
+
+    pub(crate) fn interact(&self, base: Style, role: InteractionRole) -> Style {
+        base.patch(self.interactions[role as usize])
+    }
+
+    /// Authored markup layers over the base; validated name roles come last.
+    pub(crate) fn inline_style(
+        &self,
+        mut base: Style,
+        source: mant_render::InlinePresentation,
+    ) -> Style {
+        for (enabled, role) in [
+            (source.strong, StyleRole::Strong),
+            (source.emphasis, StyleRole::Emphasis),
+            (source.code, StyleRole::InlineCode),
+            (source.link, StyleRole::Link),
+        ] {
+            if enabled {
+                base = base.patch(self.style(role));
+            }
+        }
+        if let Some(kind) = source.entry_kind {
+            base = base.patch(self.style(StyleRole::for_entry(kind)));
+        }
+        base
+    }
+
+    pub(crate) fn navigation_style(&self, kind: NavKind, selected: bool) -> Style {
+        let (role, surface) = match kind {
+            NavKind::Root => (StyleRole::OutlineRoot, StyleRole::OutlineSurface),
+            NavKind::Section => (StyleRole::OutlineSection, StyleRole::OutlineSurface),
+            NavKind::EntryGroup => (StyleRole::OutlineEntries, StyleRole::OutlineSurface),
+            NavKind::ReferenceGroup => (StyleRole::OutlineReferences, StyleRole::OutlineSurface),
+            NavKind::Reference => (StyleRole::OutlineReference, StyleRole::OutlineSurface),
+            NavKind::ReferenceNotice => (StyleRole::Notice, StyleRole::OutlineSurface),
+            NavKind::Entry(EntryKind::Term) => (StyleRole::OutlineTerm, StyleRole::OutlineSurface),
+            NavKind::Entry(kind) => (StyleRole::for_entry(kind), StyleRole::OutlineSurface),
+            NavKind::Tldr => (StyleRole::TldrTitle, StyleRole::TldrOutlineSurface),
+        };
+        let style = self.style(surface).patch(self.style(role));
+        self.navigation_overlay(style, kind, selected)
+    }
+
+    pub(crate) fn navigation_reference_style(&self, kind: NavKind, selected: bool) -> Style {
+        let style = self
+            .navigation_style(kind, false)
+            .patch(self.style(StyleRole::Link));
+        self.navigation_overlay(style, kind, selected)
+    }
+
+    fn navigation_overlay(&self, style: Style, kind: NavKind, selected: bool) -> Style {
+        if selected {
+            self.interact(
+                style,
+                if kind == NavKind::Tldr {
+                    InteractionRole::TldrOutlineSelection
+                } else {
+                    InteractionRole::OutlineSelection
+                },
+            )
+        } else {
+            style
+        }
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+pub(crate) static DEFAULT_THEME: Theme = defaults::dark();
 
-    #[test]
-    fn entry_families_do_not_downgrade_terms_or_values() {
-        assert_eq!(entry_color(mant_ir::EntryKind::Term), TEXT);
-        assert_eq!(entry_color(mant_ir::EntryKind::Value), BLUE);
-        assert_ne!(entry_color(mant_ir::EntryKind::Term), SUBTEXT);
-        assert_eq!(entry_color(mant_ir::EntryKind::ConfigurationKey), YELLOW);
-        assert_eq!(entry_color(mant_ir::EntryKind::EnvironmentVariable), MAUVE);
-        assert_eq!(entry_color(mant_ir::EntryKind::Variable), PINK);
-        assert_ne!(entry_color(mant_ir::EntryKind::EnvironmentVariable), LINK);
-        assert_ne!(
-            entry_color(mant_ir::EntryKind::EnvironmentVariable),
-            HEADING
-        );
-    }
+pub(crate) const fn style(role: StyleRole) -> Style {
+    DEFAULT_THEME.style(role)
+}
+
+pub(crate) fn interact(base: Style, role: InteractionRole) -> Style {
+    DEFAULT_THEME.interact(base, role)
+}
+
+pub(crate) fn inline_style(base: Style, source: mant_render::InlinePresentation) -> Style {
+    DEFAULT_THEME.inline_style(base, source)
+}
+
+pub(crate) fn navigation_style(kind: NavKind, selected: bool) -> Style {
+    DEFAULT_THEME.navigation_style(kind, selected)
+}
+
+pub(crate) fn navigation_reference_style(kind: NavKind, selected: bool) -> Style {
+    DEFAULT_THEME.navigation_reference_style(kind, selected)
+}
+
+#[cfg(test)]
+pub(crate) fn entry_color(kind: EntryKind) -> ratatui::style::Color {
+    style(StyleRole::for_entry(kind))
+        .fg
+        .expect("default entry color")
 }

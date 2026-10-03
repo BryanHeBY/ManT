@@ -253,7 +253,7 @@ impl ReferenceNavigation {
             nodes.push(NavNode {
                 id: group_id.into(),
                 target_id: orphaned[0].id.to_string(),
-                title: "DOCUMENT REFERENCES · unresolved owner".into(),
+                title: "Doc Refs · unresolved owner".into(),
                 full_title: None,
                 depth: 0,
                 kind: NavKind::ReferenceGroup,
@@ -274,8 +274,8 @@ impl ReferenceNavigation {
             nodes.push(NavNode {
                 id: "references-limited".into(),
                 target_id: String::new(),
-                title: "References limited by navigation budget".into(),
-                full_title: None,
+                title: "! Doc Refs limited".into(),
+                full_title: Some("! Doc Refs inventory limited by navigation budget".into()),
                 depth: 0,
                 kind: NavKind::ReferenceNotice,
                 has_children: false,
@@ -382,7 +382,7 @@ fn append_owner_navigation(
     output.push(NavNode {
         id: group_id.clone(),
         target_id: output[current].target_id.clone(),
-        title: format!("DOCUMENT REFERENCES · {}", records.len()),
+        title: format!("Doc Refs · {}", records.len()),
         full_title: None,
         depth: depth + 1,
         kind: NavKind::ReferenceGroup,
