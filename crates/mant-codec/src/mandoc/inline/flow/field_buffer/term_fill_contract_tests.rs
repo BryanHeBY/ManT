@@ -15,6 +15,99 @@
 
 use super::{FieldBuffer, FieldCell};
 
+/// The native tail sweep skips markers, tabs and NBRZW, while direct NBRSP
+/// remains significant until `term_fill()` rewrites it (term.c:177-198/340-347).
+/// Check the compact metadata against that full sweep after every mutation,
+/// including `encode1()`'s retreat over a normalized blank (term.c:901-908).
+#[test]
+fn tail_summary_agrees_with_native_cells_after_normalization_and_retreat() {
+    fn check(buffer: &FieldBuffer) {
+        for start in 0..=buffer.cells().len() {
+            for trailing_blanks in [false, true] {
+                let native_tail = buffer.cells()[start..].iter().any(|cell| match cell {
+                    FieldCell::BreakableBlank => trailing_blanks,
+                    FieldCell::BreakMarker
+                    | FieldCell::Tab
+                    | FieldCell::TabReference
+                    | FieldCell::ZeroWidthGraph
+                    | FieldCell::Breakpoint => false,
+                    FieldCell::Graph { .. }
+                    | FieldCell::Hyphen
+                    | FieldCell::NonBreakingBlank
+                    | FieldCell::Backline => true,
+                });
+                assert_eq!(
+                    buffer.has_non_ignorable_after(start, trailing_blanks),
+                    native_tail,
+                    "start={start} BRTRSP={trailing_blanks} cells={:?}",
+                    buffer.cells()
+                );
+            }
+        }
+    }
+
+    let cells = [
+        FieldCell::Graph {
+            text: '中',
+            width: 2,
+        },
+        FieldCell::Hyphen,
+        FieldCell::NonBreakingBlank,
+        FieldCell::BreakableBlank,
+        FieldCell::BreakMarker,
+        FieldCell::Tab,
+        FieldCell::ZeroWidthGraph,
+        FieldCell::Backline,
+    ];
+    for mut variant in 0..cells.len().pow(4) {
+        let mut buffer = FieldBuffer::default();
+        for _ in 0..4 {
+            buffer.apply_writes(&[super::FieldWrite::Cell(
+                cells[variant % cells.len()].clone(),
+            )]);
+            variant /= cells.len();
+            check(&buffer);
+        }
+        for through in 0..=buffer.cells().len() {
+            let mut normalized = buffer.clone();
+            normalized.normalize_scanned_cells(through);
+            check(&normalized);
+            normalized.arm_backbefore();
+            normalized.push_graph('Z', 1);
+            check(&normalized);
+            normalized.clear_consumed_field();
+            check(&normalized);
+            normalized.push_non_breaking_blank();
+            check(&normalized);
+            normalized.normalize_scanned_cells(1);
+            check(&normalized);
+        }
+    }
+}
+
+/// The tail query can inspect the last ordinary glyph without retaining an
+/// ordered-tree entry for each one. Long suffixes must also retain exact tail
+/// classification after appending and normalizing direct native KEEP blanks.
+#[test]
+fn long_graph_tail_survives_later_fixed_blank_normalization() {
+    let mut buffer = FieldBuffer::default();
+    for _ in 0..8192 {
+        buffer.push_graph('x', 1);
+    }
+    buffer.push_non_breaking_blank();
+    buffer.push_separator_blank();
+    assert!(buffer.has_non_ignorable_after(8192, false));
+    buffer.normalize_scanned_cells(buffer.cells().len());
+    assert!(buffer.has_non_ignorable_after(8191, false));
+    assert!(!buffer.has_non_ignorable_after(8192, false));
+    assert!(buffer.has_non_ignorable_after(8192, true));
+    buffer.arm_backbefore();
+    buffer.push_graph('Y', 1);
+    assert!(buffer.has_non_ignorable_after(8193, false));
+    buffer.clear();
+    assert!(!buffer.has_non_ignorable_after(0, true));
+}
+
 /// (a) of the fixed-CVS oracle pair: `\zX\p` + `\p Y` keeps Y. The
 /// retreat eats the blank before Y, so pass two resumes at the second
 /// marker and accepts Y itself (term.c:901-908 with 263-367; pass one

@@ -166,7 +166,7 @@ impl FieldBuffer {
             Self::normalize_scanned_cell(
                 &mut self.cells[index],
                 index,
-                &mut self.significant_positions,
+                &mut self.nonbreaking_positions,
                 &mut self.blank_positions,
             );
         }
@@ -176,7 +176,7 @@ impl FieldBuffer {
     pub(super) fn normalize_scanned_cell(
         cell: &mut FieldCell,
         index: usize,
-        significant: &mut BTreeSet<usize>,
+        nonbreaking: &mut BTreeSet<usize>,
         blanks: &mut BTreeSet<usize>,
     ) {
         // term.c:316/340 normalizes each sentinel before its own current
@@ -190,7 +190,7 @@ impl FieldBuffer {
             }
             FieldCell::NonBreakingBlank => {
                 *cell = FieldCell::BreakableBlank;
-                significant.remove(&index);
+                nonbreaking.remove(&index);
                 blanks.insert(index);
             }
             _ => {}
@@ -210,9 +210,12 @@ impl FieldBuffer {
         position: usize,
         brtrsp: bool,
     ) -> bool {
-        self.significant_positions
-            .last()
-            .is_some_and(|&index| index >= position)
+        self.last_graph_position
+            .is_some_and(|index| index >= position)
+            || self
+                .nonbreaking_positions
+                .last()
+                .is_some_and(|&index| index >= position)
             || (brtrsp
                 && self
                     .blank_positions

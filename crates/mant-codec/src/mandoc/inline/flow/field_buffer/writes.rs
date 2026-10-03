@@ -30,13 +30,16 @@ impl FieldBuffer {
             FieldCell::BreakableBlank => {
                 self.blank_positions.insert(self.cells.len());
             }
+            FieldCell::NonBreakingBlank => {
+                self.nonbreaking_positions.insert(self.cells.len());
+            }
             FieldCell::BreakMarker
             | FieldCell::Tab
             | FieldCell::TabReference
             | FieldCell::ZeroWidthGraph
             | FieldCell::Breakpoint => {}
             _ => {
-                self.significant_positions.insert(self.cells.len());
+                self.last_graph_position = Some(self.cells.len());
             }
         }
         let projection = usize::from(matches!(
@@ -195,7 +198,8 @@ impl FieldBuffer {
         self.word_space_ready = false;
         self.word_first_content = None;
         self.completed_empty_pass_end = None;
-        self.significant_positions.clear();
+        self.last_graph_position = None;
+        self.nonbreaking_positions.clear();
         self.blank_positions.clear();
         self.scan = None;
         self.pass_tab_offset = self.tab_offset;

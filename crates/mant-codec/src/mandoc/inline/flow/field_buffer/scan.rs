@@ -69,7 +69,7 @@ impl FieldBuffer {
                 Self::normalize_scanned_cell(
                     &mut self.cells[ic],
                     ic,
-                    &mut self.significant_positions,
+                    &mut self.nonbreaking_positions,
                     &mut self.blank_positions,
                 );
                 self.normalized_until = self.normalized_until.max(ic + 1);

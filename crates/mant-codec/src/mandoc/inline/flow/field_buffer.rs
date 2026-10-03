@@ -182,7 +182,15 @@ pub(in crate::mandoc::inline) struct FieldBuffer {
     /// width scanning, but cannot execute the same marker pass twice.
     projected_pass_ends: std::collections::BTreeSet<usize>,
     word_space_ready: bool,
-    significant_positions: BTreeSet<usize>,
+    /// Graphs, hyphens and backlines only append and survive until retirement:
+    /// `encode1()` can retreat over a trailing blank/tab, never over these cells.
+    /// The tail sweep needs only their last position (term.c:177-198), so do
+    /// not allocate an ordered-tree entry for every ordinary source glyph.
+    last_graph_position: Option<usize>,
+    /// Direct `ASCII_NBRSP` is significant until `term_fill()` normalizes it to
+    /// a breakable blank. Keep its independently removable positions; an
+    /// earlier normalization must not revoke a later printable graph.
+    nonbreaking_positions: BTreeSet<usize>,
     blank_positions: BTreeSet<usize>,
     scan: Option<FillScanner>,
     #[cfg(test)]
