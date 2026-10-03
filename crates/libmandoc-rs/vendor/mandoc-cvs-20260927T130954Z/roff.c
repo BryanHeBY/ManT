@@ -4369,8 +4369,8 @@ roff_getstrn(struct roff *r, const char *name, size_t len,
 
 	found = 0;
 	for (n = r->strtab; n != NULL; n = n->next) {
-		if (strncmp(name, n->key.p, len) != 0 ||
-		    n->key.p[len] != '\0' || n->val.p == NULL)
+		if (n->val.p == NULL || n->key.sz != len ||
+		    strncmp(name, n->key.p, len) != 0)
 			continue;
 		if (*deftype & ROFFDEF_USER) {
 			*deftype = ROFFDEF_USER;
@@ -4381,8 +4381,8 @@ roff_getstrn(struct roff *r, const char *name, size_t len,
 		}
 	}
 	for (n = r->rentab; n != NULL; n = n->next) {
-		if (strncmp(name, n->key.p, len) != 0 ||
-		    n->key.p[len] != '\0' || n->val.p == NULL)
+		if (n->val.p == NULL || n->key.sz != len ||
+		    strncmp(name, n->key.p, len) != 0)
 			continue;
 		if (*deftype & ROFFDEF_REN) {
 			*deftype = ROFFDEF_REN;

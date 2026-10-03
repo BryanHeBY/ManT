@@ -39,5 +39,6 @@
 0028-capture-deterministic-reference-output.patch
 0029-portable-memory-renderers.patch
 
-# Native allocation performance
+# Native execution performance
 0030-grow-native-text-append-runs.patch
+0031-skip-inactive-native-string-definitions.patch

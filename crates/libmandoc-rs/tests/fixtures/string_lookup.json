@@ -1,0 +1,671 @@
+{
+  "header": {
+    "count": 18,
+    "oracle": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
+    "oracleSha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6"
+  },
+  "cases": [
+    {
+      "id": "prefix-lengths",
+      "source": ".TH LOOKUP 7 \"October 3, 2026\"\n.SH DESCRIPTION\n.ds key A\n.ds keylong B\n.ds keylonger C\n\\*[key] \\*[keylong] \\*[keylonger]\n",
+      "sourceSha256": "3e69cf4648ea6727f3bd04cec1d4837ce829cdf1f8eaa6ab9e886d04c55e0458",
+      "oracle": {
+        "ascii": {
+          "status": 0,
+          "stdoutSha256": "0e7ac8d3fb09dc3df3fd54aba9ebac32d48ce30ca02dc244ebd8bc9308af4471",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutSha256": "0e7ac8d3fb09dc3df3fd54aba9ebac32d48ce30ca02dc244ebd8bc9308af4471",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutSha256": "67e28a1428c4abfdd7a97e0eb3911336f602f48c8d775ba6c4c18a5f1c828702",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutSha256": "bec7b444c0db941f0975df1cd71f93795e5c339f850af0a8e33673c1d1c43912",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expectedTexts": [
+        "DESCRIPTION",
+        "A B C"
+      ]
+    },
+    {
+      "id": "empty-and-cleared",
+      "source": ".TH LOOKUP 7 \"October 3, 2026\"\n.SH DESCRIPTION\n.ds key A\n.ds empty\n.ds keylong B\n.rm key\nLEFT\\*[key]MID\\*[empty]RIGHT \\*[keylong]\n",
+      "sourceSha256": "610184f9b324c102eee7b3662b8641245ee2bc097be122889319c190250ad885",
+      "oracle": {
+        "ascii": {
+          "status": 0,
+          "stdoutSha256": "3b4d73673d1a9a9b4403e6e28f54ae56e63272101602d55a9791e7d075c66f54",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutSha256": "3b4d73673d1a9a9b4403e6e28f54ae56e63272101602d55a9791e7d075c66f54",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutSha256": "ddbdb3561c9e31578599e480adc9f1c2ce3c7525ae909feed9c529e4adab3261",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutSha256": "66dd88d65018c08aac37f9a97f2b4cb33fccf6fad0e69bf0fa6016660986cef7",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 2,
+          "stdoutSha256": "46b82dd5b7b5c8290d2d4db6723a1a899aaf6695f98e4f3e3eccda3b16cce47a",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expectedTexts": [
+        "DESCRIPTION",
+        "LEFTMIDRIGHT B"
+      ]
+    },
+    {
+      "id": "redefine-and-append",
+      "source": ".TH LOOKUP 7 \"October 3, 2026\"\n.SH DESCRIPTION\n.ds key A\n.as key B\n.ds keylong D\n.ds key C\n\\*[key] \\*[keylong]\n",
+      "sourceSha256": "c0384b88467cffc27309022ebe6f24f33543d11098ec350d695eb52bd0dbddc4",
+      "oracle": {
+        "ascii": {
+          "status": 0,
+          "stdoutSha256": "62d669a3ea8d2debd2862b5a73794e56bedd06a6a9eb10fdc1e1324aea84d067",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutSha256": "62d669a3ea8d2debd2862b5a73794e56bedd06a6a9eb10fdc1e1324aea84d067",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutSha256": "9923b12e59049a87c8f0a9afd0bc73ef6485fe5909840748d4c3d6cd792bfbcb",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutSha256": "15a316c9f3b154ef369ed14a8cc2825b5a31aecdfc4aaaa8fc417bb4a401970d",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expectedTexts": [
+        "DESCRIPTION",
+        "C D"
+      ]
+    },
+    {
+      "id": "user-rename",
+      "source": ".TH LOOKUP 7 \"October 3, 2026\"\n.SH DESCRIPTION\n.ds key A\n.rn key renamed\nLEFT\\*[key]RIGHT \\*[renamed]\n",
+      "sourceSha256": "d1b64bafd480944b3b0863d3ae1ab1ef8036c32fe75daf45ea23d860599fb89c",
+      "oracle": {
+        "ascii": {
+          "status": 0,
+          "stdoutSha256": "26e5896f5a2cd934463f6f5d021ab00cb418e88227bccdc47472bd6dc1f8dfbd",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutSha256": "26e5896f5a2cd934463f6f5d021ab00cb418e88227bccdc47472bd6dc1f8dfbd",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutSha256": "fa28401b6b6fac4873da552c6ee428ac4059274ce61de32846e9014d3d688cfb",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutSha256": "b3c7e7824d5f92d52f61823ba7ae402ef611bd8ad70b79a3c560ab7a56a81e4b",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 2,
+          "stdoutSha256": "a03adc7556e074f646756afd6a5a4ad30bad2ffeb6882b02c563ccba71ebb98c",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expectedTexts": [
+        "DESCRIPTION",
+        "LEFTRIGHT A"
+      ]
+    },
+    {
+      "id": "standard-rename",
+      "source": ".TH LOOKUP 7 \"October 3, 2026\"\n.SH DESCRIPTION\n.rn B XB\n.XB BOLD\n.rn XB YB\n.YB MORE\n",
+      "sourceSha256": "35aae34b6ebc1dc69cd7c592739fe5fd3a69899fb03e79baa6bc46819489f228",
+      "oracle": {
+        "ascii": {
+          "status": 0,
+          "stdoutSha256": "fa70c0b82df2adecfbec01bbbe42dd599335d0cd29aebe0280f9de26da0e269f",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutSha256": "fa70c0b82df2adecfbec01bbbe42dd599335d0cd29aebe0280f9de26da0e269f",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutSha256": "5980965bfe1ac3f3c25a76614028fdcf1f0558101769b60511e2ab7d9a3786c5",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutSha256": "763905250eb4bbe72d75c3103d38def111a29ba7c0e8109223daa60b48e6ef9d",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expectedTexts": [
+        "DESCRIPTION",
+        "BOLD",
+        "MORE"
+      ]
+    },
+    {
+      "id": "rename-overridden",
+      "source": ".TH LOOKUP 7 \"October 3, 2026\"\n.SH DESCRIPTION\n.rn B XB\n.ds XB USER\n\\*[XB]\n",
+      "sourceSha256": "5ceeb33a98fb73565352606d7eefb55ed2c8c39613e4256d245b72bc126a604f",
+      "oracle": {
+        "ascii": {
+          "status": 0,
+          "stdoutSha256": "c7f4703a8588e5141e18c0103e4a83b3cc99eb048f4e3abbc230a3ccbaf3e6e8",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutSha256": "c7f4703a8588e5141e18c0103e4a83b3cc99eb048f4e3abbc230a3ccbaf3e6e8",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutSha256": "180ca7e81b01dada78c447e055345587752eec21866f5ed5dd52fe1b9249a6b0",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutSha256": "b185ef56affb298b7a376486c545653be40f9be4bfc7471051541998ec90c05a",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expectedTexts": [
+        "DESCRIPTION",
+        "USER"
+      ]
+    },
+    {
+      "id": "rename-cleared",
+      "source": ".TH LOOKUP 7 \"October 3, 2026\"\n.SH DESCRIPTION\n.rn B XB\n.rm XB\n.B BOLD\nLEFT\\*[XB]RIGHT\n",
+      "sourceSha256": "700c48280dd488bac3a5ef6f5dca9f32884fd385c3d3f0a83312ffccdbe4f830",
+      "oracle": {
+        "ascii": {
+          "status": 0,
+          "stdoutSha256": "f24286f2b0372b2506ba89759341e88fb8024aad44b126b68137fbc5c703fcfb",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutSha256": "f24286f2b0372b2506ba89759341e88fb8024aad44b126b68137fbc5c703fcfb",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutSha256": "143d24ddbf079e58877736e6556a670606b35898c2c2f4ea5f64bd25bde45831",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutSha256": "a2f5e7b0c8f4863a57418020703a2bca891a2c6ab3a230fa1dc26d042c2f2d55",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 2,
+          "stdoutSha256": "0f901772f6545cabf4a5e57a1beaf22b7e97c2c873c838931f52fdc187f30472",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expectedTexts": [
+        "DESCRIPTION",
+        "BOLD",
+        "LEFTRIGHT"
+      ]
+    },
+    {
+      "id": "user-overrides-standard",
+      "source": ".TH LOOKUP 7 \"October 3, 2026\"\n.SH DESCRIPTION\n.de B\nUSER\\\\$1\n..\n.B ONE\n.rm B\n.B TWO\n",
+      "sourceSha256": "48040278159443ade851e139f88ac865859be1a0b26b154da1591fd9b4956f59",
+      "oracle": {
+        "ascii": {
+          "status": 0,
+          "stdoutSha256": "df2a181d6e181fd4b70ab1f4c37e2028176f15acff18990f0f45305399fbf95a",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutSha256": "df2a181d6e181fd4b70ab1f4c37e2028176f15acff18990f0f45305399fbf95a",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutSha256": "95ee960455ff90fb5e7bd4349b62fa21eb522817aef58b7e21501b57aeeeaab2",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutSha256": "0fb34de1832ebb8f85b7ef4d57400380b732cd48962cc7d452600dfdbb0cd722",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expectedTexts": [
+        "DESCRIPTION",
+        "USERONE",
+        "TWO"
+      ]
+    },
+    {
+      "id": "standard-alias",
+      "source": ".TH LOOKUP 7 \"October 3, 2026\"\n.SH DESCRIPTION\n.als XB B\n.XB BOLD\n.rm XB\nLEFT\\*[XB]RIGHT\n",
+      "sourceSha256": "dd4dd728fd3c67ce125a88632a4e818a5738fdc82f0935a4ef82fa38add4b922",
+      "oracle": {
+        "ascii": {
+          "status": 0,
+          "stdoutSha256": "f24286f2b0372b2506ba89759341e88fb8024aad44b126b68137fbc5c703fcfb",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutSha256": "f24286f2b0372b2506ba89759341e88fb8024aad44b126b68137fbc5c703fcfb",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutSha256": "143d24ddbf079e58877736e6556a670606b35898c2c2f4ea5f64bd25bde45831",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutSha256": "2f7999f6fb34bc0791ca2c50cfe2ea6313181b38d07e9f760dc83a568b130edd",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 2,
+          "stdoutSha256": "507b665e9d0c6ccbf938d3c2bcc0a131810efd07ec889b400707616b52da6180",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expectedTexts": [
+        "DESCRIPTION",
+        "BOLD",
+        "LEFTRIGHT"
+      ]
+    },
+    {
+      "id": "user-alias",
+      "source": ".TH LOOKUP 7 \"October 3, 2026\"\n.SH DESCRIPTION\n.de XX\nUSER\\\\$1\n..\n.als XY XX\n.XY ONE\n.de XX\nNEW\\\\$1\n..\n.XY TWO\n",
+      "sourceSha256": "00c69db70d01a53d72301338c773d42f77203a4fd0a2bf5ef3f5135a8c2e95a1",
+      "oracle": {
+        "ascii": {
+          "status": 0,
+          "stdoutSha256": "816fae97e4e4285ee2171931cacf75c7cf0b1636d7fe7b5e2657b9af0d566d05",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutSha256": "816fae97e4e4285ee2171931cacf75c7cf0b1636d7fe7b5e2657b9af0d566d05",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutSha256": "6fa61dfbe786cdd411269edad67f944a77aaec004751327c6a1098c97145c1ca",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutSha256": "f130e132881e6edc3e641462a02b18f3e0d75fd7a782f5121b3e998bbc1aceb1",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expectedTexts": [
+        "DESCRIPTION",
+        "USERONE",
+        "NEWTWO"
+      ]
+    },
+    {
+      "id": "predefined",
+      "source": ".TH LOOKUP 7 \"October 3, 2026\"\n.SH DESCRIPTION\nLEFT\\*[Am]MID\\*[Lt]RIGHT\n",
+      "sourceSha256": "bef43d68d65b486ca8f3808cb4429571b6e1a9aa114f1f003732a08b9d89390c",
+      "oracle": {
+        "ascii": {
+          "status": 0,
+          "stdoutSha256": "85bce8d7608fd62cd9979e309aa8f2a62fb263cc450c8b16f25b026023f1177a",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutSha256": "85bce8d7608fd62cd9979e309aa8f2a62fb263cc450c8b16f25b026023f1177a",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutSha256": "7b4c59ad88a522b30a35f81a842a8417723329e80ba0db17a97ce475a1e168bd",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutSha256": "bce785e3cccfcb298917bbb42c1f4e1543a18c007f496d4ec564bfc666b0bc2a",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expectedTexts": [
+        "DESCRIPTION",
+        "LEFT&MID<RIGHT"
+      ]
+    },
+    {
+      "id": "predefined-override",
+      "source": ".TH LOOKUP 7 \"October 3, 2026\"\n.SH DESCRIPTION\n.ds Am USER\n\\*[Am]\n.rm Am\nLEFT\\*[Am]RIGHT\n",
+      "sourceSha256": "23706fe1b12f58fe97d542f3e79af7a97419bf1da89ba8e80be9fdbf26427885",
+      "oracle": {
+        "ascii": {
+          "status": 0,
+          "stdoutSha256": "9f464582acde4b1ae2d4f0c279ef1d5aacc9af5f2b72388b110f7cdf5dd03536",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutSha256": "9f464582acde4b1ae2d4f0c279ef1d5aacc9af5f2b72388b110f7cdf5dd03536",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutSha256": "8e036b44c9724882a5af303f690a2c390e8d2baae00e6786e9ac25cccd4b50f6",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutSha256": "5503bd7feadcfd145287805cedaf9675a8735deb3a331968bbef25d3d15c0ad5",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expectedTexts": [
+        "DESCRIPTION",
+        "USER",
+        "LEFT&RIGHT"
+      ]
+    },
+    {
+      "id": "predefined-rename",
+      "source": ".TH LOOKUP 7 \"October 3, 2026\"\n.SH DESCRIPTION\n.rn Am renamed\nLEFT\\*[renamed]MID\\*[Am]RIGHT\n",
+      "sourceSha256": "cd3794cab06da12e8270b08dcaaab0540856e56d9a0c56edf62a9abf21148325",
+      "oracle": {
+        "ascii": {
+          "status": 0,
+          "stdoutSha256": "71c64b8c10e9cd3803f8f138790ebcdb44b0534b13010de898e016bd0991b496",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutSha256": "71c64b8c10e9cd3803f8f138790ebcdb44b0534b13010de898e016bd0991b496",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutSha256": "4e4d22216948e1319ac44c2c9f985a65dc17749743190931f69b18c90b9cc6f7",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutSha256": "ded2b05965f70c0aa73f19f867cd12f970cf160c84ff904ed7823f6b029a5193",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expectedTexts": [
+        "DESCRIPTION",
+        "LEFT&MID&RIGHT"
+      ]
+    },
+    {
+      "id": "undefined-reuse",
+      "source": ".TH LOOKUP 7 \"October 3, 2026\"\n.SH DESCRIPTION\nLEFT\\*[missing]RIGHT\n.ds missing LIVE\n\\*[missing]\n.rm missing\nLEFT\\*[missing]RIGHT\n",
+      "sourceSha256": "d5d99dcfd087397f14e2fd3981741ed255b14250b0a91c5510e872fde3dabb40",
+      "oracle": {
+        "ascii": {
+          "status": 0,
+          "stdoutSha256": "19331ac13343f3c2f99044cb36ce6bfbc24edd15b6d75bd7d6a0b2730cb1af54",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutSha256": "19331ac13343f3c2f99044cb36ce6bfbc24edd15b6d75bd7d6a0b2730cb1af54",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutSha256": "f2429a36dbe206aa2aa67d0da31a6a511a682e5af69c13e35fcb8933e36280f8",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutSha256": "fd70456d447d07fa85b3b090e1ea68a09b3d4f6205dc7f95d2e29f7f24bb919d",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 2,
+          "stdoutSha256": "dbc4ce05993ceb25ebeb0727949f2b177b899669c40ecb437994016e0e85faf6",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expectedTexts": [
+        "DESCRIPTION",
+        "LEFTRIGHT",
+        "LIVE",
+        "LEFTRIGHT"
+      ]
+    },
+    {
+      "id": "unicode-keys",
+      "source": ".TH LOOKUP 7 \"October 3, 2026\"\n.SH DESCRIPTION\n.ds 短 SHORT\n.ds 短長 LONG\n\\*[短] \\*[短長]\n",
+      "sourceSha256": "1f91e82d946bbc36dc7b1ceeec6d4e2de7fde7afd58d1348d1cf0d6c8adda78f",
+      "oracle": {
+        "ascii": {
+          "status": 0,
+          "stdoutSha256": "7b1aa11ff03b75e276bd44e9bcb956dd9614e34e54ce9242e3f0121fa41005de",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutSha256": "7b1aa11ff03b75e276bd44e9bcb956dd9614e34e54ce9242e3f0121fa41005de",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutSha256": "8ee8667dd30560c9f90cb9e18e5e0378b70fac49720f241c8e59e5debfbe50ce",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutSha256": "2a894e1dbccd215ce832e926136af831f00cad899944ea4106809bd6ff388cab",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 3,
+          "stdoutSha256": "29241c3279eb74da2cfdaefdd3d1cf3b80cafd470818fe71048fe79cfe71825a",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expectedTexts": [
+        "DESCRIPTION"
+      ]
+    },
+    {
+      "id": "empty-rename",
+      "source": ".TH LOOKUP 7 \"October 3, 2026\"\n.SH DESCRIPTION\n.ds empty\n.rn empty other\nLEFT\\*[other]MID\\*[empty]RIGHT\n",
+      "sourceSha256": "9bad55fe965cf5f23ea7d7e17323387527e4349d547d77f838b0226005a61ecc",
+      "oracle": {
+        "ascii": {
+          "status": 0,
+          "stdoutSha256": "9301ea48f7fa147396a51c357dda62b6ece3edea71001d41f69565887cbbb66a",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutSha256": "9301ea48f7fa147396a51c357dda62b6ece3edea71001d41f69565887cbbb66a",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutSha256": "f022d48c3de4d82bfa4b12caf986ea519e04bcee55d719279e1bf56c519b2214",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutSha256": "f3473d2945f588fb090767d3c80a7c74c32bbe92b0c02715394a79af6aca9919",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 2,
+          "stdoutSha256": "7386115580b2fd0ef9fd9deb6b4cd2278fa046c2c1ef705a1036dbbaa9fa7b53",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expectedTexts": [
+        "DESCRIPTION",
+        "LEFTMIDRIGHT"
+      ]
+    },
+    {
+      "id": "pre-header-clearing",
+      "source": ".de B\nWRONG\n..\n.TH LOOKUP 7 \"October 3, 2026\"\n.SH DESCRIPTION\n.B RETAINED\n",
+      "sourceSha256": "334a7be7a3082241cce246b58e2645a153d0ac43eb58bd51f3eaaf5333afb732",
+      "oracle": {
+        "ascii": {
+          "status": 0,
+          "stdoutSha256": "430ddd4abb39e6b73106291dc82414ea03f2f889f2fdf1726f337807752f5171",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutSha256": "430ddd4abb39e6b73106291dc82414ea03f2f889f2fdf1726f337807752f5171",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutSha256": "c5e6895878dd3f084534fea88ccbca532031f015b43e57c8bdee0d35f490607b",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutSha256": "320d0c425f79f1938fd7352274d1846866ac8a410441968a51c6262fab1d6299",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expectedTexts": [
+        "DESCRIPTION",
+        "RETAINED"
+      ]
+    },
+    {
+      "id": "mdoc-header-clearing",
+      "source": ".de Nm\nWRONG\n..\n.Dd October 3, 2026\n.Dt LOOKUP 7\n.Os ManT\n.Sh NAME\n.Nm lookup\n.Nd probe\n.Sh DESCRIPTION\n.Nm RETAINED\n",
+      "sourceSha256": "77890c6734ab0cad084229e7aee9fa43166b3b734a73a37a059d96687238ad08",
+      "oracle": {
+        "ascii": {
+          "status": 0,
+          "stdoutSha256": "6f0ce9cd847778900e8f2404cb6233d89d1cece9554f7f7f626a07f561c2e731",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutSha256": "53101aca2fec29a0c876e940f07d6bd22570b19f7971cf1d38672e4b7ee51d78",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutSha256": "3d0266d34fa1029b5a0aaab20df7a42ba56ade6f5385150c91f7d2433590cae1",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutSha256": "a7a488f64f9cf66ed181ffc044ce9d418e8b3132b10fb573f514eb69a2e68ccd",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 1,
+          "stdoutSha256": "d3c2707f8f9972ee0bc11c560b18178a027245b1bbe2033ee31b6a7e87ce567e",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expectedTexts": [
+        "October 3, 2026",
+        "LOOKUP",
+        "7",
+        "ManT",
+        "NAME",
+        "lookup",
+        "probe",
+        "DESCRIPTION",
+        "RETAINED"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+Subject: skip inactive native string definitions before comparing names
+Upstream-Status: Local optimization (not submitted)
+
+roff_Dd clears standard macros into NULL-valued user and rename records.
+Check inactive values and the exact immutable key length before comparing
+bytes. Keep non-NULL empty definitions, lookup order, flags and fallback
+side effects unchanged; no cache or new native state is introduced.
+
+--- a/roff.c
++++ b/roff.c
+@@ -4369,8 +4369,8 @@
+ 
+ 	found = 0;
+ 	for (n = r->strtab; n != NULL; n = n->next) {
+-		if (strncmp(name, n->key.p, len) != 0 ||
+-		    n->key.p[len] != '\0' || n->val.p == NULL)
++		if (n->val.p == NULL || n->key.sz != len ||
++		    strncmp(name, n->key.p, len) != 0)
+ 			continue;
+ 		if (*deftype & ROFFDEF_USER) {
+ 			*deftype = ROFFDEF_USER;
+@@ -4381,8 +4381,8 @@
+ 		}
+ 	}
+ 	for (n = r->rentab; n != NULL; n = n->next) {
+-		if (strncmp(name, n->key.p, len) != 0 ||
+-		    n->key.p[len] != '\0' || n->val.p == NULL)
++		if (n->val.p == NULL || n->key.sz != len ||
++		    strncmp(name, n->key.p, len) != 0)
+ 			continue;
+ 		if (*deftype & ROFFDEF_REN) {
+ 			*deftype = ROFFDEF_REN;

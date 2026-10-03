@@ -12,6 +12,12 @@ thirteen isolated configurations together with private C/Rust ABI checks.
 Exact inputs were first checked with the registered pristine CVS oracle; enabled
 compatibility enhancements are explicitly distinguished from that baseline.
 
+`string_lookup.rs` checks eighteen pristine-derived namespace lifecycle cases,
+including live/empty/cleared values, exact key lengths, overrides, aliases,
+renames, header resets and fallback behavior. Expected TEXT leaves and five
+reference profile receipts live in `fixtures/string_lookup.json`. Diagnosed
+inputs remain explicit negative controls rather than valid-input claims.
+
 The vendor synchronization script separately verifies that `vendor/` is the
 exact result of applying `patches/series` to the pinned upstream snapshot. It
 does not run parser fixtures.
