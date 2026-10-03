@@ -34,6 +34,7 @@ fn parser_preserves_infix_eqn_operators() {
 }
 
 #[test]
+#[cfg(feature = "compat-gnu-eqn")]
 fn parser_normalizes_the_common_gnu_ldots_equation_macro() {
     let report = Parser::default()
         .parse_bytes(

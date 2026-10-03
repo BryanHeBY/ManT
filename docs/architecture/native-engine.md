@@ -452,6 +452,15 @@ through a per-call output sink. These are library capabilities, not a second
 ManT rendering path: `mant-codec` consumes the owned parser tree, while
 `mant-render` reports and the UI render the resulting shared source-neutral IR.
 
+The standalone parser defaults to the `compat-pandoc`, `compat-libbsd`, and
+`compat-gnu-eqn` enhancements. Each can be selected independently with default
+features disabled; the build script supplies the corresponding `MANT_MANDOC_*`
+C macro. Codec and loader dependencies explicitly request all three to retain
+ManT's reading contract. Safety limits, TLS, completeness reporting, flow/tbl
+execution evidence and private FFI layout do not depend on these switches.
+Owned equation text and codec lowering share `EquationBox::normalized_text()`;
+the native renderer retains the pinned CVS equation behavior.
+
 The active libmandoc baseline is the fixed mandoc `cvs-20260927T130954Z` snapshot,
 checked out at 2026-09-27 13:09:54 UTC and recorded by a checksummed per-file
 CVS revision manifest. Remaining mutable character, diagnostic, tag,

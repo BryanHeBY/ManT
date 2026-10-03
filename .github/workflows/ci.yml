@@ -183,6 +183,7 @@ jobs:
         run: |
           cargo test --locked --workspace
           cargo test --locked --package libmandoc-rs --all-features
+          python3 -m scripts.checks.check_libmandoc_features
           for package in mant-codec mant-loader; do
             cargo test --locked --package "$package" --no-default-features
             cargo test --locked --package "$package" --no-default-features --features roff

@@ -77,7 +77,9 @@ pub struct EquationBox {
     pub actual_args: usize,
     /// Atom spelling, when present.
     pub text: Option<String>,
-    /// Whether this atom was a complete unquoted `ldots` token after macro expansion.
+    /// Whether enabled GNU compatibility applies to this complete unquoted
+    /// `ldots` token after macro expansion. Native snapshots set this false
+    /// when `compat-gnu-eqn` is off; public values may retain a foreign flag.
     pub gnu_ldots: bool,
     /// Opening and closing fences.
     pub left: Option<String>,
@@ -133,6 +135,22 @@ fn closes_scope(fence: &str) -> bool {
 }
 
 impl EquationBox {
+    /// Atom spelling for reading, with enabled compatibility normalization.
+    ///
+    /// Native token evidence qualifies GNU `ldots`; the Cargo feature also
+    /// governs manually constructed or deserialized owned boxes. Consumers
+    /// should use this spelling rather than independently interpreting flags.
+    #[must_use]
+    pub fn normalized_text(&self) -> Option<&str> {
+        self.text.as_deref().map(|text| {
+            if cfg!(feature = "compat-gnu-eqn") && self.gnu_ldots {
+                "..."
+            } else {
+                text
+            }
+        })
+    }
+
     /// Derive readable text from the owned structure. This is the sole source
     /// of equation text used by downstream compatibility consumers.
     #[must_use]
@@ -171,11 +189,11 @@ impl EquationBox {
             output.push_str("sqrt(");
         }
         fences.append_open(output);
-        if let Some(text) = &self.text {
+        if let Some(text) = self.normalized_text() {
             // CVS eqn.c::eqn_next substitutes macros before eqn_parse splits
             // mixed-font text. The compatibility flag records a complete
             // unquoted token before that split, never a resulting fragment.
-            output.push_str(if self.gnu_ldots { "..." } else { text });
+            output.push_str(text);
         }
         if self.kind == EquationKind::Matrix {
             self.append_matrix(output);

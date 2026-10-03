@@ -19,6 +19,19 @@ so formal replay needs neither fuzz nor backup files.
 Patch categories describe responsibility. They do not claim upstream submission
 or acceptance and do not turn a no-feature build into the pristine oracle.
 
+## Compile-time compatibility
+
+All thirty patches are always replayed. Patch `0021` gates only the `libbsd`
+catalogue entry with `MANT_MANDOC_COMPAT_LIBBSD`; `0022` gates only the Pandoc
+font aliases with `MANT_MANDOC_COMPAT_PANDOC`. Encoding recovery in `0020`
+remains a baseline correctness fix.
+
+Patch `0019` always retains complete-token equation evidence. The owned-view
+shim gates its GNU compatibility admission with `MANT_MANDOC_COMPAT_GNU_EQN`,
+and the Rust projection also checks the Cargo feature when reading public values.
+No feature changes native or private-view structure layout. Rendering sources
+are selected as a group by the existing `MANT_MANDOC_RENDER` build control.
+
 ## Number mapping
 
 The previous names below refer to commit `343ba431`. `Historical-Replaces`

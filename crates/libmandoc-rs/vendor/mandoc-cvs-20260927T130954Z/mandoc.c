@@ -54,9 +54,11 @@ mandoc_font(const char *cp, int sz)
 		return ESCAPE_FONTPREV;
 	case 1:
 		switch (cp[0]) {
+#ifdef MANT_MANDOC_COMPAT_PANDOC
 		case 'C':
 		case 'V':
 			return ESCAPE_FONTCR;
+#endif
 		case 'B':
 		case '3':
 			return ESCAPE_FONTBOLD;
@@ -75,6 +77,7 @@ mandoc_font(const char *cp, int sz)
 		}
 	case 2:
 		switch (cp[0]) {
+#ifdef MANT_MANDOC_COMPAT_PANDOC
 		case 'V':
 			switch (cp[1]) {
 			case 'B':
@@ -84,6 +87,7 @@ mandoc_font(const char *cp, int sz)
 			default:
 				return ESCAPE_ERROR;
 			}
+#endif
 		case 'B':
 			switch (cp[1]) {
 			case 'I':

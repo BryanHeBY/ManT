@@ -6,20 +6,23 @@ Recognize Pandoc's fixed-pitch C/V/VB/VI font spellings at native font decoding.
 
 --- a/mandoc.c
 +++ b/mandoc.c
-@@ -54,6 +54,9 @@
+@@ -54,6 +54,11 @@
  		return ESCAPE_FONTPREV;
  	case 1:
  		switch (cp[0]) {
++#ifdef MANT_MANDOC_COMPAT_PANDOC
 +		case 'C':
 +		case 'V':
 +			return ESCAPE_FONTCR;
++#endif
  		case 'B':
  		case '3':
  			return ESCAPE_FONTBOLD;
-@@ -72,6 +75,15 @@
+@@ -72,6 +77,17 @@
  		}
  	case 2:
  		switch (cp[0]) {
++#ifdef MANT_MANDOC_COMPAT_PANDOC
 +		case 'V':
 +			switch (cp[1]) {
 +			case 'B':
@@ -29,6 +32,7 @@ Recognize Pandoc's fixed-pitch C/V/VB/VI font spellings at native font decoding.
 +			default:
 +				return ESCAPE_ERROR;
 +			}
++#endif
  		case 'B':
  			switch (cp[1]) {
  			case 'I':

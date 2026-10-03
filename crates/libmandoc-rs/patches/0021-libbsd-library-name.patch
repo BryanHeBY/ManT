@@ -6,11 +6,13 @@ Recognize the commonly installed libbsd library in the native library catalog.
 
 --- a/lib.in
 +++ b/lib.in
-@@ -31,6 +31,7 @@
+@@ -31,6 +31,9 @@
  LINE("libarm32",	"ARM32 Architecture Library (libarm32, \\-larm32)")
  LINE("libbe",		"Boot Environment Library (libbe, \\-lbe)")
  LINE("libbluetooth",	"Bluetooth Library (libbluetooth, \\-lbluetooth)")
++#ifdef MANT_MANDOC_COMPAT_LIBBSD
 +LINE("libbsd",		"Utility functions from BSD systems (libbsd, \\-lbsd)")
++#endif
  LINE("libbsdconf",	"Configuration File Library (libbsdconf, \\-lbsdconf)")
  LINE("libbsdxml",	"eXpat XML parser library (libbsdxml, \\-lbsdxml)")
  LINE("libbsm",		"Basic Security Module Library (libbsm, \\-lbsm)")

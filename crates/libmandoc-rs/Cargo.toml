@@ -32,7 +32,10 @@ links = "libmandoc_rs"
 all-features = true
 
 [features]
-default = []
+default = ["compat-pandoc", "compat-libbsd", "compat-gnu-eqn"]
+compat-pandoc = []
+compat-libbsd = []
+compat-gnu-eqn = []
 render = ["dep:unicode-width"]
 serde = ["dep:serde"]
 

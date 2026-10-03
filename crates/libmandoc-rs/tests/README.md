@@ -5,6 +5,13 @@ does not belong in unit tests. Parser regressions should embed or load the
 smallest useful roff input and make an explicit assertion; merely placing a
 `.roff` file here does not register a test.
 
+`compatibility.rs` exercises enabled and disabled font/catalogue/equation
+capabilities, the standard-font controls, native HTML and real JSON roundtrips.
+The repository's `scripts.checks.check_libmandoc_features` module runs it in
+thirteen isolated configurations together with private C/Rust ABI checks.
+Exact inputs were first checked with the registered pristine CVS oracle; enabled
+compatibility enhancements are explicitly distinguished from that baseline.
+
 The vendor synchronization script separately verifies that `vendor/` is the
 exact result of applying `patches/series` to the pinned upstream snapshot. It
 does not run parser fixtures.

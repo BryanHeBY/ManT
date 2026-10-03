@@ -35,6 +35,53 @@ run a pager. The optional reference renderers format the native tree in the
 same call that parses it; they do not turn the owned Rust AST into a second
 document model, and `ManT`'s existing engine integration remains unchanged.
 
+## Features
+
+The default features preserve the existing compatibility enhancements. Native
+rendering and Rust serialization remain opt-in. Use `default-features = false`
+to select compatibility independently:
+
+| Cargo feature | C control | Behavior |
+|---|---|---|
+| `compat-pandoc` (default) | `MANT_MANDOC_COMPAT_PANDOC` | Accept `C`, `V`, `VB`, `VI` font aliases. |
+| `compat-libbsd` (default) | `MANT_MANDOC_COMPAT_LIBBSD` | Expand `.Lb libbsd` from the native library catalogue. |
+| `compat-gnu-eqn` (default) | `MANT_MANDOC_COMPAT_GNU_EQN` | Expose qualified complete, unquoted `ldots` tokens for readable normalization. |
+| `render` | `MANT_MANDOC_RENDER` | Compile native ASCII, UTF-8 and HTML renderers. |
+| `serde` | None | Derive serialization for public Rust values. |
+
+The build script defines enabled macros consistently for upstream and shim C
+sources; disabled macros are undefined. Cargo always compiles the same checked-in
+vendor tree. It never applies a feature-dependent patch stack.
+
+With GNU equation compatibility disabled, the shim does not admit normalization
+and `EquationBox::normalized_text()` retains `ldots`, including for public values
+deserialized from an enabled producer. The private native parser still records
+whole-token evidence. Neither configuration rewrites quoted text or font-split
+fragments. Native renderers retain the selected CVS equation output; the GNU
+enhancement belongs to the owned readable projection and its consumers.
+
+Core correctness, encoding recovery, concurrency isolation, input/depth budgets,
+truncation reports, flow/tbl execution evidence and allocation fixes remain
+enabled. A minimal build is consequently not the independent pristine oracle.
+Cargo features are additive across dependencies; they cannot select different
+compatibility policies for two parser instances in the same linked crate.
+
+`mant-codec` and `mant-loader` explicitly select the three compatibility features
+and disable implicit defaults, retaining `ManT`'s current reading contract. The
+engine's native test renderer likewise declares its required features.
+
+Maintainers can run the short isolated capability and ABI matrix with:
+
+```sh
+python3 -m scripts.checks.check_libmandoc_features
+python3 -m scripts.checks.check_libmandoc_features --case minimal
+```
+
+It covers all eight compatibility combinations, defaults, render/serde without
+compatibility, their pair, and all features. Each configuration checks actual
+native behavior plus C/Rust size, alignment and field offsets. Full workspace
+tests alone cannot establish that a disabled feature stays disabled.
+
 ## Boundary model
 
 ```text

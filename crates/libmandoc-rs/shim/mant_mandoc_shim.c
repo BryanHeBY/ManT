@@ -1700,7 +1700,12 @@ mant_mandoc_eqn_box_snapshot(const struct mant_mandoc_document *document,
 	view->expected_args = source->expectargs;
 	view->actual_args = source->args;
 	view->text = source->text;
+#ifdef MANT_MANDOC_COMPAT_GNU_EQN
 	view->gnu_ldots = source->gnu_ldots;
+#else
+	/* eqn.c retains token evidence; disabled compatibility cannot apply it. */
+	view->gnu_ldots = 0;
+#endif
 	view->left = source->left;
 	view->right = source->right;
 	view->top = source->top;

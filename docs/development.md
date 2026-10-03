@@ -184,6 +184,15 @@ process probes. Do not run this matrix concurrently with another Cargo gate.
 The packaged-source gate also runs `cargo test -p mant --no-default-features --lib`, so
 the minimal surface cannot depend on files omitted from its published archive.
 
+`python3 -m scripts.checks.check_libmandoc_features` separately checks thirteen
+isolated native configurations: all eight compatibility combinations, defaults,
+render and serde without compatibility, their pair, and all features. It runs
+the small public compatibility regression file and private C/Rust ABI size,
+alignment and offset checks. `--case minimal` selects one configuration for
+quick iteration. Linux, macOS and Windows gates invoke the same standard-library
+Python module, avoiding workspace feature merging as evidence for disabled C
+behavior. This is a correctness matrix, not a performance measurement.
+
 The script checks formatting and installer syntax, runs every workspace test,
 runs clippy with all targets and features, builds the optimized executable,
 and smoke-tests its human and JSON surfaces. The result is

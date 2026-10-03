@@ -105,6 +105,8 @@ Invoke-Native -Label "test portable Rust packages" -Program "cargo" `
     -Arguments (@("test", "--locked") + $Packages)
 Invoke-Native -Label "test optional libmandoc features" -Program "cargo" `
     -Arguments @("test", "--locked", "--package", "libmandoc-rs", "--all-features")
+Invoke-Native -Label "test isolated native compatibility combinations" -Program "python" `
+    -Arguments @("-m", "scripts.checks.check_libmandoc_features")
 Invoke-Native -Label "test real terminal-cell geometry probe" -Program "cargo" `
     -Arguments @("test", "--locked", "--package", "mant-ui", "--example", "geometry_audit")
 foreach ($BoundaryPackage in @("mant-codec", "mant-loader")) {

@@ -50,13 +50,7 @@ fn expression_from_box(box_node: &EquationBox) -> EquationExpression {
         // CVS eqn.c::eqn_next substitutes aliases before eqn_parse's font
         // splitting. Only a complete unquoted token is eligible for the GNU
         // enhancement; source-neutral IR projects stored text verbatim.
-        text: box_node.text.as_deref().map(|text| {
-            if box_node.gnu_ldots {
-                "...".to_owned()
-            } else {
-                super::visible_text(text)
-            }
-        }),
+        text: box_node.normalized_text().map(super::visible_text),
         left: box_node.left.as_deref().map(super::visible_text),
         right: box_node.right.as_deref().map(super::visible_text),
         top: box_node.top.as_deref().map(super::visible_text),

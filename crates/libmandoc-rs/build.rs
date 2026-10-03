@@ -163,6 +163,7 @@ fn main() {
         upstream_sources.extend(RENDER_SOURCES.iter().map(|source| vendor_dir.join(source)));
     }
     let mut owned_sources = Vec::new();
+    define_compatibility_features(&mut build);
     if render {
         owned_sources.push(crate_dir.join("shim/mant_mandoc_output.c"));
     }
@@ -193,6 +194,20 @@ fn main() {
     println!("cargo:rerun-if-changed=shim");
     println!("cargo:rerun-if-changed={}", vendor_dir.display());
     println!("cargo:rerun-if-env-changed=LIBMANDOC_RS_ASAN");
+}
+
+fn define_compatibility_features(build: &mut cc::Build) {
+    // Define enabled capabilities for every upstream and shim translation
+    // unit. Disabled macros remain undefined, matching the C #ifdef guards.
+    for (feature, macro_name) in [
+        ("COMPAT_PANDOC", "MANT_MANDOC_COMPAT_PANDOC"),
+        ("COMPAT_LIBBSD", "MANT_MANDOC_COMPAT_LIBBSD"),
+        ("COMPAT_GNU_EQN", "MANT_MANDOC_COMPAT_GNU_EQN"),
+    ] {
+        if env::var_os(format!("CARGO_FEATURE_{feature}")).is_some() {
+            build.define(macro_name, None);
+        }
+    }
 }
 
 fn compile_native_archive(

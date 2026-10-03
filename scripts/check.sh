@@ -120,6 +120,8 @@ run "test real terminal-cell geometry probe" \
   cargo test --locked --package mant-ui --example geometry_audit
 run "test optional libmandoc features" \
   cargo test --locked --package libmandoc-rs --all-features
+run "test isolated native compatibility combinations" \
+  python3 -m scripts.checks.check_libmandoc_features
 run "check libmandoc native symbol namespace" \
   bash scripts/checks/check-libmandoc-symbols.sh
 run "test published crate source sets" bash scripts/checks/check-packaged-crates.sh

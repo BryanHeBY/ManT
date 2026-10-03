@@ -316,6 +316,7 @@ fn public_text_normalizes_native_layout_sentinels() {
 }
 
 #[test]
+#[cfg(feature = "compat-libbsd")]
 fn parser_expands_the_libbsd_library_name() {
     let report = Parser::default()
         .parse_bytes(
@@ -406,6 +407,7 @@ fn parser_expands_current_mdoc_standard_names() {
 }
 
 #[test]
+#[cfg(feature = "compat-pandoc")]
 fn parser_accepts_pandoc_verbatim_font_aliases() {
     let report = Parser::default()
         .parse_bytes(
