@@ -1,6 +1,7 @@
 //! Operation-local native head evidence, never serialized as a second IR.
 use std::collections::HashMap;
 use std::ops::Range;
+use std::rc::Rc;
 
 use mant_ir::{DefinitionItem, Inline, SourceSpan};
 
@@ -20,7 +21,7 @@ pub(crate) enum NativeHeadRole {
 
 struct HeadWitness {
     source: SourceSpan,
-    terms: Vec<Vec<Inline>>,
+    terms: HeadSnapshot,
     role: NativeHeadRole,
 }
 
@@ -48,7 +49,7 @@ pub(crate) struct CapturedHeadOperands {
 
 struct OperandWitness {
     source: SourceSpan,
-    terms: Vec<Vec<Inline>>,
+    terms: HeadSnapshot,
     operands: Vec<Vec<NativeOperand>>,
 }
 
@@ -71,6 +72,14 @@ pub(crate) struct NativeHeadEvidence {
 }
 
 impl NativeHeadEvidence {
+    /// Reuse a proven immutable snapshot, never update an older role or
+    /// operand witness when a TQ continuation changes the accepted head.
+    pub(super) fn shared_head(&self, item: &DefinitionItem) -> HeadSnapshot {
+        self.groups
+            .shared_head(item)
+            .unwrap_or_else(|| head_snapshot(&item.terms))
+    }
+
     #[cfg(feature = "roff")]
     pub(crate) fn capture_operands(&mut self, key: usize, captured: CapturedHeadOperands) {
         if !captured.operands.is_empty() {
@@ -95,11 +104,12 @@ impl NativeHeadEvidence {
         if mant_ir::inline_plain_text(term) != captured.text {
             return;
         }
+        let terms = self.shared_head(item);
         self.operand_witnesses.insert(
             owner,
             OperandWitness {
                 source,
-                terms: head_content(&item.terms),
+                terms,
                 operands: vec![captured.operands],
             },
         );
@@ -114,12 +124,13 @@ impl NativeHeadEvidence {
     #[cfg(any(feature = "roff", test))]
     pub(crate) fn record(&mut self, item: &DefinitionItem, role: NativeHeadRole) {
         let Some(source) = item.source else { return };
+        let terms = self.shared_head(item);
         if let Some(owner) = native_owner(item) {
             self.native_witnesses.insert(
                 owner,
                 HeadWitness {
                     source,
-                    terms: head_content(&item.terms),
+                    terms,
                     role,
                 },
             );
@@ -130,7 +141,7 @@ impl NativeHeadEvidence {
             .or_default()
             .push(HeadWitness {
                 source,
-                terms: head_content(&item.terms),
+                terms,
                 role,
             });
     }
@@ -143,10 +154,9 @@ impl NativeHeadEvidence {
                 .then_some(witness.role);
         }
         let candidates = self.witnesses.get(&(source.line, source.column))?;
-        let terms = head_content(&item.terms);
-        let mut matches = candidates
-            .iter()
-            .filter(|witness| witness.source == source && witness.terms == terms);
+        let mut matches = candidates.iter().filter(|witness| {
+            witness.source == source && head_matches(&item.terms, &witness.terms)
+        });
         let role = matches.next()?.role;
         matches.all(|witness| witness.role == role).then_some(role)
     }
@@ -208,6 +218,12 @@ fn inline_matches(actual: &[Inline], expected: &[Inline]) -> bool {
 
 /// Target allocation changes zero-width anchors, not declaration content.
 /// Retain all other structure, including emphasis ancestry and link targets.
+pub(super) type HeadSnapshot = Rc<[Vec<Inline>]>;
+
+pub(super) fn head_snapshot(terms: &[Vec<Inline>]) -> HeadSnapshot {
+    head_content(terms).into()
+}
+
 pub(super) fn head_content(terms: &[Vec<Inline>]) -> Vec<Vec<Inline>> {
     fn without_anchors(inlines: &[Inline]) -> Vec<Inline> {
         inlines
@@ -352,5 +368,105 @@ mod tests {
             moved.source.as_mut().unwrap().column += 1;
             assert_eq!(evidence.role(&moved), None);
         }
+    }
+
+    #[cfg(feature = "roff")]
+    fn recorded_owner() -> (DefinitionItem, NativeHeadEvidence) {
+        let mut original = item();
+        super::super::groups::mark_native_definition_owner(&mut original, 10);
+        let mut evidence = NativeHeadEvidence::default();
+        evidence.groups.record(&original, 10);
+        evidence.record(&original, NativeHeadRole::Environment);
+        evidence.capture_operands(
+            20,
+            CapturedHeadOperands {
+                text: "PATH".into(),
+                operands: vec![NativeOperand {
+                    bytes: 0..4,
+                    role: NativeOperandRole::Literal,
+                }],
+            },
+        );
+        evidence.record_operands(&original, 20);
+        (original, evidence)
+    }
+
+    #[test]
+    #[cfg(feature = "roff")]
+    fn shared_owner_proofs_still_reject_source_style_and_identity_changes() {
+        // Constructed proof mutations test admission, not a new roff gold.
+        // Sharing must not make a group snapshot authorize another owner.
+        let (original, evidence) = recorded_owner();
+        assert_eq!(evidence.role(&original), Some(NativeHeadRole::Environment));
+        assert!(evidence.operands(&original).is_some());
+
+        let mut changed = original.clone();
+        changed.source.as_mut().unwrap().end_column = Some(9);
+        assert_eq!(evidence.role(&changed), None);
+        assert!(evidence.operands(&changed).is_none());
+
+        changed = original.clone();
+        changed.terms[0][1] = Inline::Emphasis {
+            children: vec![Inline::Text {
+                value: "PATH".into(),
+            }],
+        };
+        assert_eq!(evidence.role(&changed), None);
+        assert!(evidence.operands(&changed).is_none());
+
+        changed = original;
+        changed.terms[0][0] = Inline::anchor("\0mant-native-definition-owner:1e");
+        assert_eq!(evidence.role(&changed), None);
+        assert!(evidence.operands(&changed).is_none());
+    }
+
+    #[test]
+    #[cfg(feature = "roff")]
+    fn a_continued_group_cannot_rewrite_an_earlier_operand_or_role_proof() {
+        // TQ creates a new merged-head witness. Earlier accepted operand
+        // ranges keep their original complete HEAD/source proof immutable.
+        let (original, mut evidence) = recorded_owner();
+        let mut continued = original.clone();
+        continued.terms.push(vec![Inline::Text {
+            value: "OTHER".into(),
+        }]);
+        evidence.groups.continued(&continued, 30);
+        assert!(evidence.groups.shared_head(&continued).is_some());
+        assert_eq!(evidence.role(&continued), None);
+        assert!(evidence.operands(&continued).is_none());
+        assert_eq!(evidence.role(&original), Some(NativeHeadRole::Environment));
+        assert!(evidence.operands(&original).is_some());
+    }
+
+    #[test]
+    #[cfg(feature = "roff")]
+    fn shared_head_proof_preserves_link_destination_and_title_identity() {
+        let mut original = item();
+        original.terms[0] = vec![Inline::Link {
+            target: mant_ir::LinkTarget::External {
+                uri: "https://example.invalid".into(),
+            },
+            title: Some("original".into()),
+            children: original.terms[0].clone(),
+        }];
+        super::super::groups::mark_native_definition_owner(&mut original, 10);
+        let mut evidence = NativeHeadEvidence::default();
+        evidence.groups.record(&original, 10);
+        evidence.record(&original, NativeHeadRole::Environment);
+        let mut changed = original.clone();
+        let Inline::Link { title, .. } = &mut changed.terms[0][1] else {
+            unreachable!()
+        };
+        *title = Some("changed".into());
+        assert_eq!(evidence.role(&changed), None);
+        let Inline::Link { target, title, .. } = &mut changed.terms[0][1] else {
+            unreachable!()
+        };
+        *title = Some("original".into());
+        *target = mant_ir::LinkTarget::External {
+            uri: "https://other.invalid".into(),
+        };
+        assert_eq!(evidence.role(&changed), None);
+        assert_eq!(evidence.role(&original), Some(NativeHeadRole::Environment));
     }
 }

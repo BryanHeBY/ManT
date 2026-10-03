@@ -2,13 +2,15 @@
 //! counting and allocation. No consumer repeats role or name inference.
 use std::collections::HashMap;
 
-use mant_ir::{Block, DefinitionItem, Inline, Section, SourceSpan};
+#[cfg(test)]
+use mant_ir::Inline;
+use mant_ir::{Block, DefinitionItem, Section, SourceSpan};
 
 use super::groups::GroupMatchingPlan;
 use super::{
     NativeHeadEvidence,
     context::{DefinitionContext, child_definition_context, definition_group_context},
-    evidence::head_content,
+    evidence::HeadSnapshot,
     identity::{IdentityPlan, has_semantic_spelling, identity_plan, list_identity_base},
     normalize::{normalize_definition_nesting_with_boundaries, normalize_hanging_definitions},
 };
@@ -23,7 +25,7 @@ pub(super) struct PreparedDefinitions {
 /// second document. Child normalization cannot change its parent's head.
 pub(super) struct PreparedDefinition {
     source: Option<SourceSpan>,
-    head: Vec<Vec<Inline>>,
+    head: HeadSnapshot,
     identity: IdentityPlan,
 }
 
@@ -110,21 +112,24 @@ impl PreparedDefinitions {
                     let identities = items
                         .iter()
                         .map(|item| {
-                            identity_plan(
-                                item,
-                                item_context,
-                                evidence.role(item),
-                                evidence.operands(item),
+                            (
+                                identity_plan(
+                                    item,
+                                    item_context,
+                                    evidence.role(item),
+                                    evidence.operands(item),
+                                ),
+                                evidence.shared_head(item),
                             )
                         })
                         .collect::<Vec<_>>();
                     let heads = identities
                         .iter()
-                        .map(|identity| identity.group_head)
+                        .map(|(identity, _)| identity.group_head)
                         .collect::<Vec<_>>();
                     *declaration_groups = evidence.groups.resolve(items, &heads, group_matches);
                     crate::definitions::remove_native_definition_owner_markers_from_items(items);
-                    for (item, identity) in items.iter_mut().zip(identities) {
+                    for (item, (identity, head)) in items.iter_mut().zip(identities) {
                         self.record_limit(identity.limit, item.source);
                         if has_semantic_spelling(item, &identity) {
                             *self
@@ -135,7 +140,7 @@ impl PreparedDefinitions {
                         let child_context = child_definition_context(identity.kind, item_context);
                         self.plans.push(PreparedDefinition {
                             source: item.source,
-                            head: head_content(&item.terms),
+                            head,
                             identity,
                         });
                         self.blocks(

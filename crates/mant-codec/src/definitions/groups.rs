@@ -1,6 +1,6 @@
 //! Native adjacency witnesses survive normalization without guessing from IR
 //! indentation or moving another item's description into a semantic owner.
-use super::evidence::head_content;
+use super::evidence::{HeadSnapshot, head_matches, head_snapshot};
 use mant_ir::{Block, DeclarationGroup, DefinitionItem, Inline, Section, SourceSpan};
 use std::collections::{HashMap, HashSet};
 
@@ -119,7 +119,7 @@ pub(crate) fn remove_native_definition_owner_markers(
 
 struct Witness {
     source: SourceSpan,
-    head: Vec<Vec<Inline>>,
+    head: HeadSnapshot,
     key: usize,
     last_key: usize,
 }
@@ -138,7 +138,7 @@ pub(crate) struct GroupMatchingPlan {
 
 struct OwnerBinding {
     source: SourceSpan,
-    head: Vec<Vec<Inline>>,
+    head: HeadSnapshot,
     last_key: usize,
 }
 
@@ -162,10 +162,19 @@ pub(crate) struct GroupEvidence {
     // lowering later converts it to an ordinary/ordered list. The following
     // declaration must not inherit an earlier unclassified-head barrier.
     body_closed_predecessors: HashSet<usize>,
-    items: HashMap<(u32, u32), Vec<Witness>>,
+    items: HashMap<usize, Vec<Witness>>,
 }
 
 impl GroupEvidence {
+    /// Only the current complete source/head proof can share storage. Older
+    /// continuation versions remain immutable for matching and rejection.
+    pub(super) fn shared_head(&self, item: &DefinitionItem) -> Option<HeadSnapshot> {
+        let source = item.source?;
+        let witness = self.items.get(&owner_marker(item)?)?.last()?;
+        (witness.source == source && head_matches(&item.terms, &witness.head))
+            .then(|| witness.head.clone())
+    }
+
     #[cfg(feature = "roff")]
     pub(crate) fn adjacent(&mut self, left: usize, right: usize, left_has_body: bool) {
         self.edges.insert((left, right));
@@ -184,15 +193,12 @@ impl GroupEvidence {
     #[cfg(feature = "roff")]
     pub(crate) fn record(&mut self, item: &DefinitionItem, key: usize) {
         let Some(source) = item.source else { return };
-        self.items
-            .entry((source.line, source.column))
-            .or_default()
-            .push(Witness {
-                source,
-                head: head_content(&item.terms),
-                key,
-                last_key: key,
-            });
+        self.items.entry(key).or_default().push(Witness {
+            source,
+            head: head_snapshot(&item.terms),
+            key,
+            last_key: key,
+        });
     }
     /// TQ extends one physical owner. Rebind the exact merged head to the
     /// original first node and final continuation, not its new array position
@@ -205,16 +211,13 @@ impl GroupEvidence {
         let Some(key) = owner_marker(item) else {
             return;
         };
-        let head = head_content(&item.terms);
-        self.items
-            .entry((source.line, source.column))
-            .or_default()
-            .push(Witness {
-                source,
-                head,
-                key,
-                last_key,
-            });
+        let head = head_snapshot(&item.terms);
+        self.items.entry(key).or_default().push(Witness {
+            source,
+            head,
+            key,
+            last_key,
+        });
     }
     /// Build a complete owner allocation plan only after all normalization has
     /// finished.  This rejects a damaged repeated macro stream globally, but
@@ -252,7 +255,6 @@ impl GroupEvidence {
 
     fn key(item: &DefinitionItem, plan: &mut GroupMatchingPlan) -> Option<(usize, usize)> {
         let source = item.source?;
-        let head = head_content(&item.terms);
         let owner = owner_marker(item)?;
         // A normalized rewrite must retain exactly one native owner marker.
         // Duplicate/collapsed owners are unsafe just like a missing owner;
@@ -263,7 +265,7 @@ impl GroupEvidence {
         plan.owners
             .get(&owner)?
             .iter()
-            .find(|binding| binding.source == source && binding.head == head)
+            .find(|binding| binding.source == source && head_matches(&item.terms, &binding.head))
             .map(|binding| (owner, binding.last_key))
     }
     /// One linear pass over final owners; recognizability comes from the same
@@ -711,5 +713,47 @@ mod tests {
             }]
         );
         assert_eq!(evidence.resolve(&outer, &[true, true], &mut plan).len(), 0);
+    }
+
+    #[test]
+    fn continued_heads_keep_each_complete_head_and_final_sibling_proof() {
+        // Constructed witness versions exercise TQ ownership; no new native
+        // text expectation is inferred from this source-neutral control.
+        let mut evidence = GroupEvidence::default();
+        let mut original = vec![item(12, 2, "--alpha", false), item(13, 2, "--next", true)];
+        record(&mut evidence, &mut original, &[10, 40]);
+        let mut continued = original.clone();
+        continued[0].terms.push(vec![Inline::Text {
+            value: "--alias".into(),
+        }]);
+        evidence.continued(&continued[0], 30);
+        evidence.adjacent(30, 40, false);
+        let expected = vec![mant_ir::DeclarationGroup {
+            start_item: 0,
+            end_item: 2,
+        }];
+        let mut latest = plan(&evidence, &continued);
+        assert_eq!(
+            evidence.resolve(&continued, &[true, true], &mut latest),
+            expected
+        );
+
+        // The original version did not end at node 30. A latest-only lookup
+        // would assign it a sibling edge that the native walk never recorded.
+        let mut initial = plan(&evidence, &original);
+        assert_eq!(
+            evidence
+                .resolve(&original, &[true, true], &mut initial)
+                .len(),
+            0
+        );
+        continued[0].source.as_mut().unwrap().column += 1;
+        let mut changed = plan(&evidence, &continued);
+        assert_eq!(
+            evidence
+                .resolve(&continued, &[true, true], &mut changed)
+                .len(),
+            0
+        );
     }
 }
