@@ -38,7 +38,7 @@ cargo about generate \
   --fail \
   --manifest-path crates/mant/Cargo.toml \
   --output-file "$license_tmp" \
-  licenses/about.hbs
+  scripts/release/templates/rust-licenses.hbs
 
 normalize_report() {
   sed -e 's/\r$//' -e 's/[[:blank:]]*$//' "$1" > "$2"

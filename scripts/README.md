@@ -10,6 +10,7 @@ the directory that owns their task.
 | `checks/` | Independent consumers, CLI features, package contents and native symbols |
 | `ci/` | Runner dependencies and verification of existing CI results |
 | `release/` | Archives, manuals, notices, SBOM finalization and crate publication |
+| `release/templates/` | Templates used by release artifact generators |
 | `dev/` | Fuzzing, performance measurement and maintained screenshot/schema generation |
 | `vendor/` | Private pager source replay |
 | `roff/audit/` | Audit drivers and coverage/behavior gates |
@@ -44,6 +45,12 @@ Update that file closure and its callers together, and preserve the explicit
 Packaging and publication use the immutable tag's own tools. The workflow
 accepts both their current directories and the former root layout so that
 manual retries of older tags keep working.
+
+The Rust dependency notice template belongs to `release/templates/`; root
+`LICENSES/` contains license texts, not generator inputs. Keep repository paths
+distinct after case folding so macOS and Windows checkouts have the same layout.
+The root `about.toml` remains cargo-about's default notice policy beside
+`deny.toml`, while the generated report stays at `THIRD_PARTY_LICENSES.html`.
 
 Package-owned native maintenance tools stay under
 `crates/libmandoc-rs/scripts/`. The locked source and build recipe, vendor files,

@@ -459,6 +459,7 @@ CHANGELOG.md                  Independent crate compatibility and migration hist
 deny.toml                     Dependency license, advisory, source, and ban policy
 about.toml                    Distributable Rust dependency notice policy
 LICENSE                       Apache-2.0 terms for ManT-authored work
+LICENSES/                     Complete additional distribution license texts
 THIRD_PARTY_NOTICES.md        Repository-wide third-party distribution map
 THIRD_PARTY_LICENSES.html     Generated Rust dependency license report
 SECURITY.md                   Supported versions and private reporting policy
@@ -491,6 +492,7 @@ scripts/build/build-and-smoke.sh   Unix debug/release product build and smoke te
 scripts/build/build-and-smoke.ps1 Windows debug/release product build and smoke test
 scripts/ci/find-successful-ci.sh  Exact-commit full CI verification for automation
 scripts/release/generate-rust-licenses.sh  Rebuild the locked Rust license report
+scripts/release/templates/    Release artifact generator inputs, not license texts
 scripts/release/finalize-cyclonedx.mjs  Normalize generated release SBOMs reproducibly
 scripts/ci/install-ci-native-dependencies.sh  Install native Linux CI prerequisites
 scripts/install.sh           Latest-release installer for Linux and macOS

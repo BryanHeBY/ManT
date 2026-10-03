@@ -1,4 +1,4 @@
-"""Execute source-owned workflow steps against old and current tag layouts."""
+"""Guard portable checkout paths and source-owned release tool inputs."""
 
 import os
 from pathlib import Path
@@ -47,7 +47,87 @@ def workflow_command(name):
     return "\n".join(lines)
 
 
+def case_collisions(paths):
+    """Include directory prefixes: different leaves can share a folded root."""
+    entries = {}
+    collisions = set()
+    for path in paths:
+        parts = path.split("/")
+        for end in range(1, len(parts) + 1):
+            entry = "/".join(parts[:end])
+            previous = entries.setdefault(entry.casefold(), entry)
+            if previous != entry:
+                collisions.add(tuple(sorted((previous, entry))))
+    return sorted(collisions)
+
+
 class SourceToolPathTests(unittest.TestCase):
+    def test_case_collisions_include_directories_and_files(self):
+        self.assertEqual(
+            case_collisions(["LICENSES/CC-BY.txt", "licenses/about.hbs"]),
+            [("LICENSES", "licenses")],
+        )
+        self.assertEqual(case_collisions(["docs/README.md", "docs/readme.md"]),
+                         [("docs/README.md", "docs/readme.md")])
+        self.assertEqual(case_collisions([
+            "LICENSES/CC-BY.txt", "scripts/release/templates/rust-licenses.hbs",
+            "crates/libmandoc-rs/LICENSES/ISC.txt",
+        ]), [])
+
+    def test_checkout_paths_are_distinct_on_case_insensitive_hosts(self):
+        result = subprocess.run(
+            ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z"],
+            cwd=ROOT, capture_output=True, check=True, timeout=10,
+        )
+        # Include new files before staging and ignore deleted index entries;
+        # build output remains outside Git's source inventory.
+        paths = [path for path in os.fsdecode(result.stdout).split("\0")
+                 if path and (ROOT / path).exists()]
+        self.assertEqual(case_collisions(paths), [])
+
+    @unittest.skipUnless(os.name == "posix" and BASH,
+                         "Unix notice generation requires POSIX Bash")
+    def test_notice_generation_resolves_its_template_from_another_directory(self):
+        with tempfile.TemporaryDirectory(prefix="mant license template ") as directory:
+            root = Path(directory)
+            tool_bin = root / "bin"
+            tool_bin.mkdir()
+            cargo = tool_bin / "cargo"
+            cargo.write_text("""#!/usr/bin/env bash
+set -eu
+if [[ $* == 'about --version' ]]; then
+    printf 'cargo-about 0.9.2\\n'
+    exit
+fi
+[[ $1 == about && $2 == generate ]]
+shift 2
+while (( $# )); do
+    case $1 in
+        --output-file) shift; report=$1 ;;
+        *.hbs) template=$1 ;;
+    esac
+    shift
+done
+cat "$template" > "$report"
+""")
+            cargo.chmod(0o755)
+            cargo_about = tool_bin / "cargo-about"
+            cargo_about.write_text("#!/usr/bin/env bash\nexit 0\n")
+            cargo_about.chmod(0o755)
+            output = root / "notice.html"
+            command = [BASH, str(ROOT / "scripts/release/generate-rust-licenses.sh")]
+            env = {**os.environ, "PATH": f"{tool_bin}{os.pathsep}{os.environ['PATH']}"}
+            template = ROOT / "scripts/release/templates/rust-licenses.hbs"
+            expected = "\n".join(line.rstrip(" \t")
+                                 for line in template.read_text().splitlines()) + "\n"
+            for arguments in [[str(output)], ["--check", str(output)]]:
+                result = subprocess.run(
+                    [*command, *arguments], cwd=root, env=env,
+                    capture_output=True, text=True, timeout=10, check=False,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(output.read_text(), expected)
+
     def check_bash_layout(self, layout):
         # A manual retry checks out an immutable tag: old tags only have the
         # root scripts, while current tags own the organized tools. Execute the
