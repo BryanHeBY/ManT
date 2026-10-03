@@ -2,8 +2,7 @@
 use super::*;
 
 fn cases() -> Vec<serde_json::Value> {
-    serde_json::from_str::<serde_json::Value>(include_str!("structure_observer_cases.json"))
-        .unwrap()["cases"]
+    serde_json::from_str::<serde_json::Value>(include_str!("observer_cases.json")).unwrap()["cases"]
         .as_array()
         .unwrap()
         .clone()
