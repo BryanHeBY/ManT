@@ -31,35 +31,37 @@ mod string_boundary_tests {
 include!(concat!(env!("OUT_DIR"), "/text_sentinels.rs"));
 
 pub(super) unsafe fn visible_string(pointer: *const c_char) -> Result<Option<String>, String> {
-    Ok(unsafe { checked_string(pointer) }?.map(|text| normalize_visible_text(&text)))
+    Ok(split_visible_text(unsafe { checked_string(pointer) }?).0)
 }
 
-pub(super) fn has_native_text_sentinel(text: &str) -> bool {
-    text.chars().any(|character| {
+fn has_native_text_sentinel(text: &str) -> bool {
+    // mandoc.h defines all five sentinels as single ASCII bytes. UTF-8
+    // continuation bytes cannot be mistaken for one of these controls.
+    text.bytes().any(|byte| {
         [
-            ASCII_NBRSP,
-            ASCII_NBRZW,
-            ASCII_BREAK,
-            ASCII_HYPH,
-            ASCII_TABREF,
+            ASCII_NBRSP as u8,
+            ASCII_NBRZW as u8,
+            ASCII_BREAK as u8,
+            ASCII_HYPH as u8,
+            ASCII_TABREF as u8,
         ]
-        .contains(&character)
+        .contains(&byte)
     })
 }
 
-pub(super) fn normalize_visible_text(text: &str) -> String {
-    if !text.chars().any(|character| {
-        [
-            ASCII_NBRSP,
-            ASCII_NBRZW,
-            ASCII_BREAK,
-            ASCII_HYPH,
-            ASCII_TABREF,
-        ]
-        .contains(&character)
-    }) {
-        return text.to_owned();
+/// The checked native copy already owns its bytes. Only sentinel-bearing
+/// text needs a second spelling; ordinary text keeps that same allocation.
+pub(super) fn split_visible_text(text: Option<String>) -> (Option<String>, Option<String>) {
+    match text {
+        Some(text) if has_native_text_sentinel(&text) => {
+            let visible = normalize_visible_text(&text);
+            (Some(visible), Some(text))
+        }
+        text => (text, None),
     }
+}
+
+fn normalize_visible_text(text: &str) -> String {
     text.chars()
         .filter_map(|character| match character {
             ASCII_NBRZW | ASCII_BREAK | ASCII_TABREF => None,
@@ -126,6 +128,31 @@ pub(super) unsafe fn copy_column_strings(
 mod tests {
     use super::*;
     use std::ffi::CString;
+
+    #[test]
+    fn visible_text_reuses_checked_storage_and_retains_native_sentinels() {
+        for value in ["", "ordinary text", "café 日本 😀\t\\c"] {
+            let text = value.to_owned();
+            let allocation = text.as_ptr();
+            let (visible, native) = split_visible_text(Some(text));
+            assert!(native.is_none());
+            let visible = visible.unwrap();
+            assert_eq!(visible, value);
+            assert_eq!(visible.as_ptr(), allocation);
+        }
+        assert_eq!(split_visible_text(None), (None, None));
+        // mandoc.h's ASCII_* controls retain independent native evidence,
+        // while the visible spelling follows the existing projection.
+        let text =
+            format!("中{ASCII_NBRSP}A{ASCII_NBRZW}{ASCII_BREAK}{ASCII_HYPH}{ASCII_TABREF}😀");
+        let allocation = text.as_ptr();
+        let expected_native = text.clone();
+        let (visible, native) = split_visible_text(Some(text));
+        assert_eq!(visible.as_deref(), Some("中 A-😀"));
+        let native = native.unwrap();
+        assert_eq!(native, expected_native);
+        assert_eq!(native.as_ptr(), allocation);
+    }
 
     #[test]
     fn column_pointer_count_is_validated_before_allocation_or_dereference() {

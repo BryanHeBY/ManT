@@ -15,6 +15,10 @@ that crate was not published for that change.
 
 ### libmandoc-rs 0.12.0
 
+- Reuse already checked strings during owned AST and table transfer, avoiding
+  an extra copy for ordinary text while retaining both visible and native
+  sentinel spellings where required. Strict UTF-8 validation, NULL/empty
+  distinctions, transfer budgets and public ownership contracts are unchanged.
 - Refresh the pinned mandoc CVS source again at 2026-09-27 13:09:54 UTC.
   `LIBMANDOC_VERSION` is now `cvs-20260927T130954Z`. At that refresh, the
   then-current 27 local patches replayed unchanged; upstream changed only

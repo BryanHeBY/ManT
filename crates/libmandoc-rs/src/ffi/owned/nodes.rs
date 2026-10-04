@@ -4,10 +4,7 @@ use super::super::raw::{self, CDocument, CNode, CNodeView};
 use super::{
     budget::{EquationBudget, TransferBudget},
     equations::copy_equation,
-    strings::{
-        checked_string, copy_column_strings, has_native_text_sentinel, normalize_visible_text,
-        visible_string,
-    },
+    strings::{checked_string, copy_column_strings, split_visible_text, visible_string},
     tables::{copy_table_cells, copy_table_rule_cells, table_row_kind},
 };
 use crate::{
@@ -237,12 +234,7 @@ unsafe fn copy_node_shallow(
         return Err("libmandoc returned an invalid borrowed syntax node".to_owned());
     }
     let view = unsafe { view.assume_init() };
-    let raw_text = unsafe { checked_string(view.text) }?;
-    let native_text = raw_text
-        .as_ref()
-        .filter(|text| has_native_text_sentinel(text))
-        .cloned();
-    let text = raw_text.as_deref().map(normalize_visible_text);
+    let (text, native_text) = split_visible_text(unsafe { checked_string(view.text) }?);
     let line_continuation = text.as_deref().is_some_and(ends_with_no_space_escape);
     let enclosure_open = unsafe { checked_string(view.enclosure_open) }?;
     let enclosure_close = unsafe { checked_string(view.enclosure_close) }?;

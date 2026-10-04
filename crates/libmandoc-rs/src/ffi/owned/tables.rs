@@ -5,7 +5,7 @@ use super::super::raw::{
 };
 use super::{
     budget::TransferBudget,
-    strings::{checked_string, has_native_text_sentinel, normalize_visible_text},
+    strings::{checked_string, split_visible_text},
 };
 use crate::{TableAlignment, TableCell, TableCellKind, TableFont, TableRowKind, TableRuleCellKind};
 
@@ -40,7 +40,7 @@ pub(super) unsafe fn copy_table_cells(
             return Err("libmandoc returned an invalid borrowed table cell".to_owned());
         }
         let view = unsafe { view.assume_init() };
-        let raw_text = unsafe { checked_string(view.text) }?;
+        let (text, native_text) = split_visible_text(unsafe { checked_string(view.text) }?);
         let cell = TableCell {
             kind: match view.kind {
                 1 => TableCellKind::Empty,
@@ -61,8 +61,8 @@ pub(super) unsafe fn copy_table_cells(
                 7 => Some(TableFont::CodeItalic),
                 _ => return Err("libmandoc returned an unknown table layout font".to_owned()),
             },
-            text: raw_text.as_deref().map(normalize_visible_text),
-            native_text: raw_text.filter(|text| has_native_text_sentinel(text)),
+            text,
+            native_text,
             text_block: view.text_block != 0,
             source_recovery_safe: view.source_recovery_safe != 0,
             vertical_continuation: view.vertical_continuation != 0,
