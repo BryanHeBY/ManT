@@ -15,6 +15,35 @@
 
 use super::{FieldBuffer, FieldCell};
 
+#[test]
+fn final_scan_copies_native_facts_without_output_ownership_history() {
+    let mut source = FieldBuffer::default();
+    for _ in 0..8192 {
+        source.push_graph('中', 2);
+    }
+    source.push_non_breaking_blank();
+    source.push_separator_blank();
+    source.push_break_marker();
+    let pass = source.fill_pass(32).unwrap();
+    source.commit_pass(pass, 32 * super::EN);
+    let scan = source.native_flush_scan();
+    assert_eq!(scan.cells, source.cells);
+    assert_eq!(scan.resume, source.resume);
+    assert_eq!(scan.tab_offset, source.tab_offset);
+    assert_eq!(scan.pass_tab_offset, source.pass_tab_offset);
+    assert_eq!(scan.last_graph_position, source.last_graph_position);
+    assert_eq!(scan.nonbreaking_positions, source.nonbreaking_positions);
+    assert_eq!(scan.blank_positions, source.blank_positions);
+    assert!(std::sync::Arc::ptr_eq(&scan.tabs, &source.tabs));
+    assert_eq!(scan.projection_prefix.capacity(), 0);
+    assert!(scan.projected_pass_ends.is_empty());
+    assert_eq!(scan.committed_passes.capacity(), 0);
+    assert!(scan.scan.is_none());
+    assert_eq!(source.projection_prefix.len(), source.cells.len() + 1);
+    assert!(source.projected_pass_ends.contains(&pass.end));
+    assert_eq!(source.committed_passes.len(), 1);
+}
+
 /// The native tail sweep skips markers, tabs and NBRZW, while direct NBRSP
 /// remains significant until `term_fill()` rewrites it (term.c:177-198/340-347).
 /// Check the compact metadata against that full sweep after every mutation,

@@ -28,11 +28,10 @@ impl FieldBuffer {
         targets: FillTargets,
         brtrsp: bool,
     ) -> FlushReceipt {
-        let mut scan = self.clone();
+        let mut scan = self.native_flush_scan();
         // A width prediction has not executed term_fill(). Start the real
         // remaining pass from its native col, preserving only committed
         // marker passes and their in-place byte normalization.
-        scan.scan = None;
         let mut passes = self.committed_passes.clone();
         loop {
             let first = passes.is_empty();
@@ -60,6 +59,39 @@ impl FieldBuffer {
                 };
             }
             scan.consume_break_blanks();
+        }
+    }
+
+    /// A final sweep needs native cells and tail/tab registers, not the
+    /// projection prefix, word receipts or already-emitted owner ledger.
+    /// Keep the same scanner; only avoid copying unrelated output state.
+    pub(super) fn native_flush_scan(&self) -> Self {
+        Self {
+            cells: self.cells.clone(),
+            tabs: self.tabs.clone(),
+            tab_offset: self.tab_offset,
+            pass_tab_offset: self.pass_tab_offset,
+            resume: self.resume,
+            normalized_until: self.normalized_until,
+            last_graph_position: self.last_graph_position,
+            nonbreaking_positions: self.nonbreaking_positions.clone(),
+            blank_positions: self.blank_positions.clone(),
+            projection_prefix: Vec::new(),
+            pending_projection_graph: None,
+            backbefore_armed: false,
+            backafter_armed: false,
+            committed_passes: Vec::new(),
+            word_scan: super::WordScanPolicy::Incremental,
+            last_break_marker: None,
+            projected_pass_ends: BTreeSet::new(),
+            word_space_ready: false,
+            scan: None,
+            word_first_content: None,
+            completed_empty_pass_end: None,
+            #[cfg(test)]
+            scan_work: 0,
+            #[cfg(test)]
+            projection_work: 0,
         }
     }
 

@@ -270,6 +270,23 @@ pub(super) struct DecodedText {
 
 /// Parsing evidence accompanies events; safety loss is not a displayed glyph.
 pub(super) fn decode_with_status(source: &str) -> DecodedText {
+    // term.c::term_word() copies ordinary runs before interpreting escapes.
+    // Sentinel and unsafe control bytes still need the full classifier; the
+    // fast path must not bypass their masking or native-cell evidence.
+    if !source.contains('\\')
+        && source
+            .chars()
+            .all(|character| !character.is_control() || matches!(character, '\t' | '\n' | '\r'))
+    {
+        return DecodedText {
+            events: if source.is_empty() {
+                Vec::new()
+            } else {
+                vec![RoffInlineEvent::Text(source.to_owned())]
+            },
+            budget_exhausted: false,
+        };
+    }
     Decoder::new(source).decode_with_status()
 }
 

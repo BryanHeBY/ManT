@@ -168,6 +168,10 @@ that crate was not published for that change.
   control cells, zero-width glyphs and Unicode retain their ordered execution
   paths. Text, Markdown and JSON output remain unchanged; public APIs and the
   unpublished v0.12 wire contract are unchanged.
+- Avoid temporary decoder and text-run buffers for escape-free, terminal-safe
+  roff text. Active escapes, pending breaks, zero-width glyphs and control
+  cells keep their existing ordered execution. Final field scans copy native
+  cells and registers without duplicating unrelated projection ownership.
 - Reduce canonical Markdown source-mapping overhead by eliminating temporary
   strings for each visible character and directly mapping unchanged text.
   Visible search retains exact UTF-8 source spans, escaped prefixes, entity

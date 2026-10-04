@@ -446,6 +446,18 @@ impl ZeroAdvanceState {
         font: Font,
         link: Option<&str>,
     ) {
+        if !value.is_empty()
+            && !self.machine.has_pending()
+            && !self.machine.is_armed()
+            && !value.contains(['\n', '\r'])
+        {
+            // term.c::encode()/encode1(): absent BACKAFTER/BACKBEFORE and
+            // physical line controls, no scalar can alter pending ownership.
+            // Recoveries precede the first scalar just as on the slow path.
+            self.flush_recoveries(output, buffer, font, link);
+            buffer.push_str(value);
+            return;
+        }
         for character in value.chars() {
             if matches!(character, '\n' | '\r') {
                 self.flush(output, buffer, font, link);

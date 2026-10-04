@@ -4,6 +4,31 @@ use super::{
 };
 
 #[test]
+fn ordinary_runs_keep_the_full_decoder_control_and_event_contract() {
+    // term.c::term_word() ordinary runs versus its escape/sentinel branch.
+    // The pinned reference's exact ordinary-Unicode and stateful controls
+    // were run before adding this regression; also compare all C0/C1 inputs
+    // with the unchanged full classifier, including its byte-length masking.
+    let mut sources = vec![
+        String::new(),
+        "café 中 😀 e\u{301}\t\r\n".into(),
+        r"A\zX\c".into(),
+        r"B\p C".into(),
+        r"D\&E\~F\-G".into(),
+        r"\fB中\fR 😀".into(),
+    ];
+    for scalar in 0..=255 {
+        sources.push(format!("A{}中", char::from_u32(scalar).unwrap()));
+    }
+    for source in sources {
+        let full = super::Decoder::new(&source).decode_with_status();
+        let shared = super::decode_with_status(&source);
+        assert_eq!(shared.events, full.events, "{source:?}");
+        assert_eq!(shared.budget_exhausted, full.budget_exhausted, "{source:?}");
+    }
+}
+
+#[test]
 fn emits_text_font_and_renderer_link_events() {
     assert_eq!(
         decode(r"\X'tty: link https://example.test'\fB\-h\fR\X'tty: link' FILE"),

@@ -123,6 +123,21 @@ struct TextEventState {
 }
 
 impl TextEventState {
+    fn note_text_character(&mut self, character: char) {
+        let graph = !is_formatter_word_blank(character) && character != '\n';
+        self.graph_count += usize::from(graph);
+        self.graph_seen |= graph;
+        self.graph_since_break |= self.pending_word_end_break && graph;
+        self.graph_since_blank = graph;
+        self.saw_source_cell = true;
+        self.last_breakable_blank = is_formatter_word_blank(character);
+        self.trailing_breakable_blanks = if self.last_breakable_blank {
+            self.trailing_breakable_blanks.saturating_add(1)
+        } else {
+            0
+        };
+    }
+
     fn note_graph(&mut self) {
         self.graph_seen = true;
         self.graph_since_blank = true;
@@ -163,6 +178,15 @@ fn append_text_event(
         link,
         zero_advance,
     } = destination;
+    if !state.pending_word_end_break && !state.suppress_break_whitespace && !state.wiped {
+        for character in value.chars() {
+            state.note_text_character(character);
+        }
+        // With no break-driven filtering, the chunk is byte-identical to
+        // the decoded event. Zero-advance still consumes the borrowed run.
+        zero_advance.append_text(value, output, buffer, font, link);
+        return;
+    }
     let mut chunk = String::new();
     for character in value.chars() {
         if state.wiped {
@@ -245,20 +269,7 @@ fn append_text_event(
             continue;
         }
         state.suppress_break_whitespace = false;
-        let graph = !is_formatter_word_blank(character) && character != '\n';
-        if graph {
-            state.graph_count += 1;
-        }
-        state.graph_seen |= graph;
-        state.graph_since_break |= state.pending_word_end_break && graph;
-        state.graph_since_blank = graph;
-        state.saw_source_cell = true;
-        state.last_breakable_blank = is_formatter_word_blank(character);
-        state.trailing_breakable_blanks = if state.last_breakable_blank {
-            state.trailing_breakable_blanks.saturating_add(1)
-        } else {
-            0
-        };
+        state.note_text_character(character);
         chunk.push(character);
     }
     // The decoder has already classified controls. A backslash produced by
