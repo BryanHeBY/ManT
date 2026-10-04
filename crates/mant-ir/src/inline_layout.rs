@@ -11,7 +11,7 @@ pub const MAX_INLINE_ROW_HINTS: usize = 4096;
 pub const MAX_ROW_INDENT_COLUMNS: i32 = u16::MAX as i32;
 
 /// An exceptional displacement of one logical hard row within its owner.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RowLayoutHint {
     /// Zero-based owner-local row; never a source or viewport coordinate.
@@ -19,6 +19,23 @@ pub struct RowLayoutHint {
     /// Relative display-cell correction applied to both visual origins.
     #[schemars(range(min = -65535, max = 65535))]
     pub indent_columns: i32,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct RowLayoutHintWire {
+    row: u32,
+    indent_columns: i32,
+}
+
+impl<'de> Deserialize<'de> for RowLayoutHint {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let wire: RowLayoutHintWire = deserialize_object(deserializer, "a row layout hint object")?;
+        Ok(Self {
+            row: wire.row,
+            indent_columns: wire.indent_columns,
+        })
+    }
 }
 
 /// Optional row exceptions attached to a complete inline content root.
@@ -43,7 +60,7 @@ struct InlineLayoutWire {
 
 impl<'de> Deserialize<'de> for InlineLayout {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let wire = InlineLayoutWire::deserialize(deserializer)?;
+        let wire: InlineLayoutWire = deserialize_object(deserializer, "an inline layout object")?;
         let layout = Self {
             row_hints: wire.row_hints,
         };
@@ -195,7 +212,8 @@ struct DefinitionTermWire {
 
 impl<'de> Deserialize<'de> for DefinitionTerm {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let wire = DefinitionTermWire::deserialize(deserializer)?;
+        let wire: DefinitionTermWire =
+            deserialize_object(deserializer, "a definition term object")?;
         wire.inline_layout
             .validate(&wire.content)
             .map_err(serde::de::Error::custom)?;
@@ -310,6 +328,35 @@ fn text_chunks(content: &[Inline]) -> impl Iterator<Item = &str> {
 
 fn hints_empty(hints: &[RowLayoutHint]) -> bool {
     hints.iter().all(|hint| hint.indent_columns == 0)
+}
+
+/// Restrict these new owner-layout wire types to JSON objects while retaining
+/// their derived closed-field decoding and the caller's semantic validation.
+fn deserialize_object<'de, T: Deserialize<'de>, D: serde::Deserializer<'de>>(
+    deserializer: D,
+    expected: &'static str,
+) -> Result<T, D::Error> {
+    struct Object<T> {
+        expected: &'static str,
+        value: std::marker::PhantomData<T>,
+    }
+
+    impl<'de, T: Deserialize<'de>> serde::de::Visitor<'de> for Object<T> {
+        type Value = T;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            formatter.write_str(self.expected)
+        }
+
+        fn visit_map<M: serde::de::MapAccess<'de>>(self, map: M) -> Result<T, M::Error> {
+            T::deserialize(serde::de::value::MapAccessDeserializer::new(map))
+        }
+    }
+
+    deserializer.deserialize_map(Object {
+        expected,
+        value: std::marker::PhantomData,
+    })
 }
 
 fn serialize_hints<S: serde::Serializer>(

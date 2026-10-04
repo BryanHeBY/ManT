@@ -42,6 +42,33 @@ const OWNERS: [&str; 5] = [
     "definition-term",
 ];
 
+fn assert_object_baseline(original: &Value) {
+    let wire = original.to_string();
+    let query: QueryBundle =
+        serde_json::from_str(&wire).unwrap_or_else(|error| panic!("{error}: {wire}"));
+    assert_eq!(serde_json::to_value(query).unwrap(), *original);
+    let document_wire = original["document"].to_string();
+    let document: DocumentResponse = serde_json::from_str(&document_wire)
+        .unwrap_or_else(|error| panic!("{error}: {document_wire}"));
+    assert_eq!(
+        serde_json::to_value(document).unwrap(),
+        original["document"]
+    );
+}
+
+fn assert_query_and_document_reject(original: &Value) {
+    let wire = original.to_string();
+    assert!(
+        serde_json::from_str::<QueryBundle>(&wire).is_err(),
+        "{wire}"
+    );
+    let document_wire = original["document"].to_string();
+    assert!(
+        serde_json::from_str::<DocumentResponse>(&document_wire).is_err(),
+        "{document_wire}"
+    );
+}
+
 fn wrapped_content() -> Value {
     json!([
         {"type":"anchor","id":"visible-owner"},
@@ -52,6 +79,120 @@ fn wrapped_content() -> Value {
         {"type":"link","target":{"kind":"external","uri":"https://example.org"},
          "children":[{"type":"line-break"},{"type":"text","value":"C"}]}
     ])
+}
+
+#[test]
+fn inline_layout_requires_an_object_in_each_actual_owner_wire() {
+    let content = wrapped_content();
+    let layout = json!({"rowHints":[{"row":0,"indentColumns":2},{"row":3,"indentColumns":-4}]});
+    assert_eq!(
+        serde_json::from_str::<mant_ir::InlineLayout>("{}").unwrap(),
+        mant_ir::InlineLayout::default()
+    );
+    assert!(serde_json::from_str::<mant_ir::InlineLayout>(&layout.to_string()).is_ok());
+    for owner in OWNERS {
+        assert_object_baseline(&query_with_owner(owner, &content, &layout));
+        for sequence in [json!([]), json!([[]]), json!([layout["rowHints"]])] {
+            assert!(
+                serde_json::from_str::<mant_ir::InlineLayout>(&sequence.to_string()).is_err(),
+                "accepted positional inline layout: {sequence}"
+            );
+            assert_query_and_document_reject(&query_with_owner(owner, &content, &sequence));
+        }
+    }
+}
+
+#[test]
+fn definition_term_requires_an_object_in_actual_query_and_document_wire() {
+    let content = wrapped_content();
+    let layout = json!({"rowHints":[{"row":3,"indentColumns":-4}]});
+    let baseline = query_with_owner("definition-term", &content, &layout);
+    assert_object_baseline(&baseline);
+    assert_eq!(
+        serde_json::from_str::<mant_ir::DefinitionTerm>(r#"{"content":[],"inlineLayout":{}}"#)
+            .unwrap(),
+        mant_ir::DefinitionTerm::default()
+    );
+    let term = &baseline["document"]["blocks"][0]["items"][0]["terms"][0];
+    assert!(serde_json::from_str::<mant_ir::DefinitionTerm>(&term.to_string()).is_ok());
+    for sequence in [
+        json!([]),
+        json!([[]]),
+        json!([[], {}]),
+        json!([content, layout]),
+        json!([{"content":[]}]),
+    ] {
+        assert!(
+            serde_json::from_str::<mant_ir::DefinitionTerm>(&sequence.to_string()).is_err(),
+            "accepted positional definition term: {sequence}"
+        );
+        let mut invalid = baseline.clone();
+        invalid["document"]["blocks"][0]["items"][0]["terms"][0] = sequence;
+        assert_query_and_document_reject(&invalid);
+    }
+}
+
+#[test]
+fn row_hint_requires_an_object_inside_each_actual_owner_wire() {
+    let content = wrapped_content();
+    let hint = json!({"row":3,"indentColumns":-4});
+    assert!(serde_json::from_str::<mant_ir::RowLayoutHint>(&hint.to_string()).is_ok());
+    for owner in OWNERS {
+        assert_object_baseline(&query_with_owner(
+            owner,
+            &content,
+            &json!({"rowHints":[hint]}),
+        ));
+        for sequence in [json!([3, -4]), json!([0, 2]), json!([]), json!([3])] {
+            assert!(
+                serde_json::from_str::<mant_ir::RowLayoutHint>(&sequence.to_string()).is_err(),
+                "accepted positional row hint: {sequence}"
+            );
+            assert_query_and_document_reject(&query_with_owner(
+                owner,
+                &content,
+                &json!({"rowHints":[sequence]}),
+            ));
+        }
+    }
+}
+
+#[test]
+fn object_decoding_preserves_explicit_zero_budget_and_owner_row_checks() {
+    let content = json!([{"type":"text","value":"\n".repeat(mant_ir::MAX_INLINE_ROW_HINTS)}]);
+    let mut hints = (0..mant_ir::MAX_INLINE_ROW_HINTS)
+        .map(|row| json!({"row":row,"indentColumns":0}))
+        .collect::<Vec<_>>();
+    let layout = json!({"rowHints":hints});
+    let decoded: mant_ir::InlineLayout = serde_json::from_str(&layout.to_string()).unwrap();
+    assert_eq!(decoded.row_hints.len(), mant_ir::MAX_INLINE_ROW_HINTS);
+    for owner in OWNERS {
+        let query = query_with_owner(owner, &content, &layout);
+        let wire = query.to_string();
+        assert!(serde_json::from_str::<QueryBundle>(&wire).is_ok(), "{wire}");
+        let document_wire = query["document"].to_string();
+        assert!(
+            serde_json::from_str::<DocumentResponse>(&document_wire).is_ok(),
+            "{document_wire}"
+        );
+    }
+    hints.push(json!({"row":mant_ir::MAX_INLINE_ROW_HINTS,"indentColumns":0}));
+    let over_budget = json!({"rowHints":hints});
+    assert!(serde_json::from_str::<mant_ir::InlineLayout>(&over_budget.to_string()).is_err());
+    for owner in OWNERS {
+        assert_query_and_document_reject(&query_with_owner(owner, &content, &over_budget));
+        for invalid in [
+            json!({"rowHints":[{"row":4,"indentColumns":0}]}),
+            json!({"rowHints":[{"row":0,"indentColumns":0},{"row":0,"indentColumns":0}]}),
+            json!({"rowHints":[{"row":1,"indentColumns":0},{"row":0,"indentColumns":0}]}),
+        ] {
+            assert_query_and_document_reject(&query_with_owner(
+                owner,
+                &wrapped_content(),
+                &invalid,
+            ));
+        }
+    }
 }
 
 #[test]
@@ -125,11 +266,7 @@ fn every_inline_owner_rejects_invalid_hint_addresses_and_closed_wire_fields() {
         json!({"indentColumns":1}),
     ] {
         for owner in OWNERS {
-            let wire = query_with_owner(owner, &content, &layout).to_string();
-            assert!(
-                serde_json::from_str::<QueryBundle>(&wire).is_err(),
-                "{owner}: {layout}"
-            );
+            assert_query_and_document_reject(&query_with_owner(owner, &content, &layout));
         }
     }
     for owner in OWNERS {
