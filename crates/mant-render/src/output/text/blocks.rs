@@ -46,7 +46,7 @@ impl BlockRenderer<'_> {
         role: TextRole,
     ) -> Vec<(LayoutText, i32)> {
         let children = content.content;
-        let mut rows = vec![LayoutText::default()];
+        let mut rows = vec![(LayoutText::default(), content.layout.row_indent(0))];
         let names = self
             .names
             .as_ref()
@@ -59,9 +59,9 @@ impl BlockRenderer<'_> {
             // fragments and are composed before measuring a complete row.
             for (index, piece) in decorated.split(false).into_iter().enumerate() {
                 if index > 0 {
-                    rows.push(LayoutText::default());
+                    rows.push((LayoutText::default(), content.layout.row_indent(rows.len())));
                 }
-                rows.last_mut().expect("open row").append(&piece);
+                rows.last_mut().expect("open row").0.append(&piece);
             }
         };
         if let Some(locations) = self.locations {
@@ -81,10 +81,7 @@ impl BlockRenderer<'_> {
                 );
             });
         }
-        rows.into_iter()
-            .enumerate()
-            .map(|(index, row)| (row, content.layout.row_indent(index)))
-            .collect()
+        rows
     }
 
     pub(in crate::output) fn inline_text(
