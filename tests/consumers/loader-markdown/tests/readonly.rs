@@ -71,7 +71,7 @@ fn standalone_file_loading_reads_source_without_creating_sources_or_caches() {
             .collect();
         assert_eq!(
             remaining,
-            [source.clone()],
+            std::slice::from_ref(&source),
             "read-only loading must not create configuration, sources, or caches"
         );
     }

@@ -33,6 +33,17 @@ run() {
 run "check Rust formatting" cargo fmt --all --check
 run "lint Rust workspace" \
   env CARGO_INCREMENTAL=0 cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+# These clients declare independent workspaces, so the root checks above do
+# not compile or format their authored IR examples. Check them before tests.
+for manifest in tests/consumers/*/Cargo.toml; do
+  run "check isolated consumer formatting: $manifest" \
+    cargo fmt --manifest-path "$manifest" -- --check
+done
+for manifest in tests/consumers/*/Cargo.toml; do
+  run "lint isolated consumer: $manifest" \
+    env CARGO_INCREMENTAL=0 CARGO_TARGET_DIR="$ROOT/target" \
+    cargo clippy --locked --manifest-path "$manifest" --all-targets -- -D warnings
+done
 run "check Unix installer syntax" sh -n scripts/install.sh
 run "check manual packaging script syntax" bash -n scripts/release/package-manuals.sh
 run "check protocol snapshot script syntax" bash -n scripts/dev/update-protocol-schema-snapshot.sh

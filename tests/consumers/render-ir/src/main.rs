@@ -34,6 +34,7 @@ fn section() -> Section {
         source: None,
         blocks: vec![
             Block::Paragraph {
+                inline_layout: mant_ir::InlineLayout::default(),
                 children: vec![
                     Inline::Strong {
                         children: vec![Inline::Text {
@@ -62,6 +63,7 @@ fn section() -> Section {
                 source: None,
             },
             Block::Preformatted {
+                inline_layout: mant_ir::InlineLayout::default(),
                 children: vec![Inline::Text {
                     value: "α\n\nβ".into(),
                 }],
@@ -210,6 +212,68 @@ fn check_source_rendering() -> Result<(), Box<dyn std::error::Error>> {
             serde_json::to_value(QueryBundle::from(&content))?
         );
     }
+    check_hinted_json_owner()?;
+    Ok(())
+}
+
+fn check_hinted_json_owner() -> Result<(), Box<dyn std::error::Error>> {
+    let mut authored = content();
+    let Block::Paragraph {
+        children,
+        inline_layout,
+        ..
+    } = &mut authored.document.as_mut().unwrap().sections[0].blocks[0]
+    else {
+        panic!("paragraph root");
+    };
+    *children = vec![
+        Inline::Text {
+            value: "First".into(),
+        },
+        Inline::LineBreak {},
+        Inline::Strong {
+            children: vec![Inline::Text {
+                value: "Second".into(),
+            }],
+        },
+    ];
+    inline_layout.row_hints = vec![mant_ir::RowLayoutHint {
+        row: 1,
+        indent_columns: 3,
+    }];
+    let wire = render_query_json(&authored, false)?;
+    let value: serde_json::Value = serde_json::from_str(&wire)?;
+    assert_eq!(
+        value["document"]["sections"][0]["blocks"][0]["children"][1],
+        serde_json::json!({"type": "line-break"})
+    );
+    let decoded: QueryBundle = serde_json::from_str(&wire)?;
+    let restored: ResolvedContent = decoded.into();
+    assert_eq!(restored, authored);
+    let document = restored.document.as_ref().unwrap();
+    assert!(mant_ir::validate_document(document).is_empty());
+    // A selected styled child keeps the complete owner's hard-row domain.
+    let location = mant_ir::ContentLocation::Content {
+        sections: vec![0],
+        blocks: vec![mant_ir::ContentBlockStep::Block { index: 0 }],
+        root: mant_ir::ContentInlineRoot::Inlines,
+        path: vec![2, 0],
+    };
+    let root = location.inline_content(document).unwrap();
+    assert_eq!(mant_ir::inline_plain_text(root.content), "First\nSecond");
+    assert_eq!(mant_ir::logical_row_count(root.content), 2);
+    assert_eq!(root.layout.row_indent(1), 3);
+    let Block::Paragraph {
+        children,
+        inline_layout,
+        ..
+    } = &document.sections[0].blocks[0]
+    else {
+        panic!("decoded owner");
+    };
+    assert!(std::ptr::eq(root.content, children.as_slice()));
+    assert!(std::ptr::eq(root.layout, inline_layout));
+    assert!(render_query_text(&restored).contains("\n  First\n     Second\n"));
     Ok(())
 }
 

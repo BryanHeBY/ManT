@@ -65,14 +65,19 @@ fn content(name: &str, links: bool) -> ResolvedContent {
                 layout: LayoutHint::default(),
                 source: None,
                 items: vec![DefinitionItem {
-                    terms: vec![vec![Inline::Code {
-                        value: "run".into(),
-                    }]],
+                    terms: vec![
+                        vec![Inline::Code {
+                            value: "run".into(),
+                        }]
+                        .into(),
+                    ],
                     description: vec![Block::Paragraph {
                         children: body,
+                        inline_layout: mant_ir::InlineLayout::default(),
                         layout: LayoutHint::default(),
                         source: None,
                     }],
+                    head_body_relation: mant_ir::HeadBodyRelation::Separate,
                     layout: DefinitionLayout::default(),
                     source: None,
                     entry: Some(EntryFacts {
@@ -160,6 +165,7 @@ fn exercise_queries() -> Result<(), Box<dyn std::error::Error>> {
     };
     let matches = search_query(first, &search)?;
     assert_eq!((matches.total, matches.returned), (1, 1));
+    check_row_layout_owner(first, &search)?;
     let mut explanation = ExplanationQuery {
         entry: "run".into(),
         options: ExplanationOptions::default(),
@@ -209,6 +215,66 @@ fn exercise_queries() -> Result<(), Box<dyn std::error::Error>> {
     assert!(evidence.evidence[0].evidence.content_omitted);
     assert_eq!(documents, original_documents);
     assert_eq!(graph, original_graph);
+    Ok(())
+}
+
+fn check_row_layout_owner(
+    source: &ResolvedContent,
+    search: &SearchQuery,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut hinted = source.clone();
+    let Block::DefinitionList { items, .. } = &mut hinted.document.as_mut().unwrap().blocks[0]
+    else {
+        panic!("definition owner");
+    };
+    let Block::Paragraph {
+        children,
+        inline_layout,
+        ..
+    } = &mut items[0].description[0]
+    else {
+        panic!("paragraph root");
+    };
+    children.extend([
+        Inline::LineBreak {},
+        Inline::Text {
+            value: "hinted continuation".into(),
+        },
+    ]);
+    inline_layout.row_hints = vec![mant_ir::RowLayoutHint {
+        row: 1,
+        indent_columns: 6,
+    }];
+    let restored: ResolvedContent = mant_protocol::QueryBundle::from(&hinted).into();
+    assert_eq!(restored, hinted);
+    let document = restored.document.as_ref().unwrap();
+    assert!(mant_ir::validate_document(document).is_empty());
+    let owner = document.blocks[0].entry_owner().unwrap();
+    let root = owner
+        .inline_content_root(&mant_ir::EntryInlineRoot::Block { index: 0 })
+        .unwrap();
+    assert_eq!(mant_ir::logical_row_count(root.content), 2);
+    assert_eq!(root.layout.row_indent(1), 6);
+    assert!(mant_ir::inline_plain_text(root.content).ends_with("\nhinted continuation"));
+    let excerpt = select_excerpt(&restored, &[ContentSelector::id("command-run")])?;
+    let [ExcerptSelection::DocumentEntry { entry, .. }] = &excerpt.selections[..] else {
+        panic!("complete owner excerpt");
+    };
+    let selected = entry
+        .entry_owner()
+        .unwrap()
+        .inline_content_root(&mant_ir::EntryInlineRoot::Block { index: 0 })
+        .unwrap();
+    assert_eq!(selected.content, root.content);
+    assert_eq!(selected.layout, root.layout);
+    let mut search = search.clone();
+    search.pattern = "hinted continuation".into();
+    let matches = search_query(&restored, &search)?;
+    assert_eq!((matches.total, matches.returned), (1, 1));
+    assert_eq!(
+        matches.matches[0].occurrences[0].matched_text,
+        search.pattern
+    );
     Ok(())
 }
 
