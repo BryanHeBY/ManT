@@ -426,6 +426,7 @@ mod tests {
                     MappedText {
                         text: "中BODY".into(),
                         owners: vec![(key, 0..7)],
+                        ..Default::default()
                     },
                     Tail::Shared,
                     true,
@@ -447,6 +448,7 @@ mod tests {
                 MappedText {
                     text: "α\n".into(),
                     owners: vec![(key, 0..3)],
+                    ..Default::default()
                 },
                 Tail::Open,
                 true,
@@ -462,6 +464,7 @@ mod tests {
                         MappedText {
                             text: "中BODY".into(),
                             owners: vec![(key, 0..7)],
+                            ..Default::default()
                         },
                         Tail::Shared,
                         true,

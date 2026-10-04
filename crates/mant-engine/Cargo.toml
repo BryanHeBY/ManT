@@ -16,7 +16,7 @@ include = [
   "/tests/roff_lowering.rs", "/tests/roff_lowering/**",
   "/tests/markdown_pipeline.rs", "/tests/markdown_pipeline/**",
   "/tests/definition_normalization_layout.rs",
-  "/tests/definition_content_contracts.rs",
+  "/tests/definition_content_contracts.rs", "/tests/definition_content_contracts/**",
   "/tests/native_payload_consumers.rs", "/tests/native_payload_consumers/**",
   "/tests/query_report_boundary.rs",
   "/tests/support/semantic_read.rs",

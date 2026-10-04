@@ -90,6 +90,10 @@ that crate was not published for that change.
 
 ### mant-ir, mant-protocol, mant-codec, mant-loader, mant-query, mant-render, mant-engine and mant 0.12.0
 
+- Preserve zero-width definition navigation through final Markdown block
+  assembly without adding paragraph gaps. Retain hard tails, explicit BODY
+  spacing, nested list and rule syntax, and original owner ranges. Navigation-only
+  list paragraphs do not add a copied marker gap; authored rows and spaces remain.
 - Unify effective definition BODY selection across text, TUI and both Markdown
   projections. Borrow the original block index and leading boundary with
   `DefinitionBodyRef`; empty prose and navigation-only roots retain their

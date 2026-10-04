@@ -4,7 +4,7 @@ mod definitions;
 
 use std::borrow::Cow;
 
-use definitions::render_definition_list;
+use definitions::{InlineRoot, render_definition_list, render_roots};
 
 use mant_ir::{
     Block, EntryOwner, Inline, InlineContentRef, ListItem, ListKind, SourceSpan, TableRow,
@@ -40,9 +40,8 @@ pub(crate) fn render_located_blocks(
     options: MarkdownOptions,
     locations: Option<&dyn MarkdownInlineProjection>,
 ) -> Vec<String> {
-    blocks
-        .iter()
-        .filter_map(|block| render_block(block, options, locations, false))
+    mapped_sequence(blocks, options, locations, false)
+        .into_iter()
         .map(|block| block.text)
         .collect()
 }
@@ -86,12 +85,39 @@ fn mapped_blocks(
     locations: Option<&dyn MarkdownInlineProjection>,
     track: bool,
 ) -> MappedText {
-    MappedText::join(
+    MappedText::join(mapped_sequence(blocks, options, locations, track), "\n\n")
+}
+
+fn mapped_sequence(
+    blocks: &[Block],
+    options: MarkdownOptions,
+    locations: Option<&dyn MarkdownInlineProjection>,
+    track: bool,
+) -> Vec<MappedText> {
+    coalesce_navigation(
         blocks
             .iter()
             .filter_map(|block| render_block(block, options, locations, track)),
-        "\n\n",
     )
+}
+
+fn coalesce_navigation(values: impl IntoIterator<Item = MappedText>) -> Vec<MappedText> {
+    let mut rendered = Vec::new();
+    let mut pending = MappedText::default();
+    for mut block in values {
+        if block.navigation_only {
+            pending.append(block);
+        } else {
+            block.attach_navigation_text(std::mem::take(&mut pending), false);
+            rendered.push(block);
+        }
+    }
+    if let Some(first) = rendered.first_mut() {
+        first.attach_navigation_text(pending, true);
+    } else if !pending.text.is_empty() {
+        rendered.push(pending);
+    }
+    rendered
 }
 
 fn render_block(
@@ -100,7 +126,7 @@ fn render_block(
     locations: Option<&dyn MarkdownInlineProjection>,
     track: bool,
 ) -> Option<MappedText> {
-    match block {
+    let rendered = match block {
         Block::Paragraph {
             children,
             inline_layout,
@@ -129,7 +155,9 @@ fn render_block(
             if options.preserve_anchors {
                 let markers = preformatted_anchor_markers(children);
                 if !markers.is_empty() {
-                    return Some(format!("{markers}\n\n{code}").into());
+                    return Some(
+                        MappedText::from(format!("{markers}\n\n{code}")).navigation_site(false),
+                    );
                 }
             }
             Some(code.into())
@@ -171,7 +199,14 @@ fn render_block(
                 )
             }
         }
-    }
+    };
+    rendered.map(|text| match block {
+        Block::List { .. } | Block::DefinitionList { .. } | Block::Table { .. } => text,
+        Block::Paragraph { .. }
+        | Block::Unsupported { .. }
+        | Block::Equation { display: false, .. } => text.navigation_site(false),
+        _ => text.navigation_site(true),
+    })
 }
 
 fn render_list(
@@ -192,11 +227,7 @@ fn render_list(
                 }
                 ListKind::Bullet | ListKind::Dash | ListKind::Plain => "- ".to_owned(),
             };
-            let mut blocks = item
-                .blocks
-                .iter()
-                .filter_map(|block| render_block(block, options, locations, track))
-                .collect::<Vec<_>>();
+            let mut blocks = list_item_blocks(&item.blocks, options, locations, track);
             if options.preserve_semantics
                 && let Some(facts) = &item.entry
             {
@@ -212,16 +243,26 @@ fn render_list(
                 }
             }
             let mut content = MappedText::join(blocks, "\n\n");
+            if content.text.is_empty() {
+                content = content.navigation_site(false);
+            }
             if !options.preserve_semantics
                 && options.preserve_anchors
                 && let Some(facts) = &item.entry
             {
-                content.insert(0, &html_anchor(&facts.id));
+                // A retained anchor uses the actual first block's syntax;
+                // it cannot be glued to a fence or steal a child's receiver.
+                content.attach_navigation(&html_anchor(&facts.id));
+                content.navigation_only = false;
             }
-            content
-                .with_owner(EntryOwner::List(item), track)
-                .prefix(&marker)
-                .map(|content| (content, item.layout.spacing_before_lines))
+            let content = content.with_owner(EntryOwner::List(item), track);
+            if content.navigation_only {
+                Some((content, item.layout.spacing_before_lines))
+            } else {
+                content
+                    .prefix(&marker)
+                    .map(|content| (content, item.layout.spacing_before_lines))
+            }
         })
         .collect::<Vec<_>>();
     (!rendered.is_empty()).then(|| {
@@ -238,13 +279,115 @@ fn render_list(
     })
 }
 
+fn list_item_blocks(
+    blocks: &[Block],
+    options: MarkdownOptions,
+    locations: Option<&dyn MarkdownInlineProjection>,
+    track: bool,
+) -> Vec<MappedText> {
+    let mut rendered = Vec::new();
+    let mut pending = Vec::new();
+    let mut markers = None;
+    let mut leading_space = false;
+    for block in blocks {
+        if rendered.is_empty() {
+            leading_space |= mant_ir::geometry::block_gap(block) > 0;
+        }
+        if let Block::Paragraph {
+            children,
+            inline_layout,
+            ..
+        } = block
+        {
+            let root = InlineRoot::project(
+                InlineContentRef {
+                    content: children,
+                    layout: inline_layout,
+                },
+                locations,
+            );
+            let has_output = root.has_output;
+            pending.push(root);
+            markers = None;
+            if has_output {
+                rendered.push(
+                    MappedText::from(render_roots(pending.iter(), options)).navigation_site(false),
+                );
+                pending.clear();
+            }
+        } else if let Some(block) = render_block_with_navigation(
+            block,
+            options,
+            locations,
+            track,
+            markers.get_or_insert_with(|| render_roots(pending.iter(), options)),
+        ) {
+            rendered.push(block);
+            pending.clear();
+            markers = None;
+        }
+    }
+    let markers = render_roots(pending.iter(), options);
+    if let Some(first) = rendered.first_mut() {
+        first.append_navigation(&markers);
+    } else if let Some(markers) = nonempty(markers) {
+        rendered.push(markers.navigation_site(false));
+    }
+    let mut rendered = coalesce_navigation(rendered);
+    if leading_space && !rendered.is_empty() {
+        // Represent the already resolved positive boundary independently of
+        // a transparent prefix. The first marker row frames the real blank.
+        rendered.insert(
+            0,
+            MappedText::from("<br />".to_owned()).navigation_site(false),
+        );
+    }
+    rendered
+}
+
+/// Frame navigation using the actual block syntax without making a paragraph
+/// gap. This consumes original blocks once and retains their mapped owners.
+fn render_block_with_navigation(
+    block: &Block,
+    options: MarkdownOptions,
+    locations: Option<&dyn MarkdownInlineProjection>,
+    track: bool,
+    navigation: &str,
+) -> Option<MappedText> {
+    if matches!(block, Block::ThematicBreak { .. }) {
+        // A dash rule after phrasing becomes a setext underline; directly
+        // after a bullet marker it can also escape the surrounding item.
+        let mut rendered = MappedText::from("***".to_owned()).navigation_site(true);
+        rendered.attach_navigation(navigation);
+        return Some(rendered);
+    }
+    let mut rendered = render_block(block, options, locations, track)?;
+    rendered.attach_navigation(navigation);
+    Some(rendered)
+}
+
 /// Preserve a man(7) `.PD` override when one is present, otherwise fall back
 /// to the list-wide compactness used by mdoc(7) and HTML inputs.
 fn join_definition_items(
     items: Vec<(MappedText, Option<u16>)>,
     compact: bool,
 ) -> Option<MappedText> {
-    let mut items = items.into_iter();
+    let mut physical = Vec::new();
+    let mut pending = MappedText::default();
+    for (mut item, spacing) in items {
+        if item.navigation_only {
+            pending.append(item);
+        } else {
+            item.attach_navigation_text(std::mem::take(&mut pending), false);
+            physical.push((item, spacing));
+        }
+    }
+    if let Some((first, _)) = physical.first_mut() {
+        first.attach_navigation_text(pending, true);
+    } else {
+        return pending.nonempty();
+    }
+    let mut items = physical.into_iter();
     let (mut output, _) = items.next()?;
     for (item, spacing_before_lines) in items {
         let blank_lines = spacing_before_lines.unwrap_or(u16::from(!compact));
@@ -274,7 +417,7 @@ fn render_table(rows: &[TableRow], options: MarkdownOptions, track: bool) -> Opt
     };
     let rows = super::flat::rows(rows, track);
     if rows.is_empty() {
-        return nonempty(markers);
+        return nonempty(markers).map(|markers| markers.navigation_site(false));
     }
     Some({
         let mut body = MappedText::join(rows, "\n");
@@ -288,7 +431,7 @@ fn render_table(rows: &[TableRow], options: MarkdownOptions, track: bool) -> Opt
         if !markers.is_empty() {
             body.insert(0, &format!("{markers}\n\n"));
         }
-        body
+        body.navigation_site(markers.is_empty())
     })
 }
 

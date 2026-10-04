@@ -137,6 +137,22 @@ item, preserving its payload and type. The
 fence's formatting lines are export syntax, not extra hard rows in the IR;
 Markdown semantic readback does not promise native DefinitionItem identities.
 
+Zero-width references and anchors remain navigation, even when their Markdown
+syntax is nonempty. Definition export defers them until the surrounding block
+syntax is known: they use an occupied label's phrasing context, or the first
+actual BODY block's syntax when there is no label. An empty reference cannot
+create a paragraph gap, change a hard tail, or add a list-marker content cell.
+The same rule applies between later BODY blocks and at the description's tail.
+External targets are emitted once; manual and local-target omission continues
+to follow the selected Markdown options. Original IR owners and addresses are
+unchanged. A nested definition with only navigation contributes no list marker:
+its destinations are carried to an actual surrounding output block with their
+original owner ranges. Lists beginning above one and thematic rules receive
+context-safe framing rather than relying on paragraph-interruption or setext syntax.
+For a label-free item with positive resolved BODY spacing, the existing
+canonical hard-row spelling carries the marker row before one blank boundary;
+it represents that requested spacing, never an empty navigation placeholder.
+
 `ListItem.layout: ListItemLayout` has optional `spacingBeforeLines` with the same inheritance and closed-object rules. An explicit value precedes the entire marker and body, including a display or nested list as the first block; it is not extra spacing inside the body. This preserves per-item native paragraph distance without splitting a list or changing its entry paths.
 
 Lists contain block-capable items so nested lists and displays do not flatten into prose. Each definition term is a `DefinitionTerm { content, inline_layout }` with one authoritative inline tree and optional row corrections; its JSON object uses `content` and `inlineLayout`. `DefinitionItem.terms` is an array of these objects, not an array of inline arrays. Descriptions contain blocks. Table cells likewise contain blocks even when a source parser currently produces a single paragraph.
