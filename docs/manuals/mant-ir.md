@@ -217,12 +217,21 @@ fallback when exceeded, retaining every later cell as well as the cells already
 prepared. It does not impose a source advance limit. ANSI decoration never changes
 measurement. TUI resizing may stack cells while retaining links, anchors, search
 ranges and selection coordinates.
+Early topology fallback and late placement-budget fallback preserve the same
+physical cell receipts: no-output cells do not become blank rows, while authored
+empty literal rows, hard breaks and completed spacing keep their own boundaries.
 Ordinary trailing separator spaces do not force a field wrap, but preserved
 output spaces still advance the visible cursor. A later cell never starts
 before the preceding cell's actual output ends.
 Completed blank rows are distinct from an open trailing line: a later cell
 cannot reuse a row already completed by the formatter. CLI and TUI placement
 consume the same row-completion facts, including empty final fields.
+When a portable Markdown table is emitted as fenced text, nested definitions
+still retain their `headBodyRelation`: joined words receive no invented
+separator, separated words retain a word boundary, and separate rows stay
+separate. Executed leading BODY spacing prevents sharing. Geometry may simplify;
+it does not authorize replacing the seam with a colon. An open HEAD tail's row
+origin is applied after BODY joins it, without creating padding on empty rows.
 
 `TableCell.break_after` (`breakAfter`) closes the current physical data row after
 that cell, before the next cell starts. The row may be occupied by this or an

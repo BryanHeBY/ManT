@@ -103,18 +103,10 @@ impl BlockRenderer<'_> {
         // Independent layout hints resolve columns without changing adjacency.
         if !matches!(item.head_body_relation, mant_ir::HeadBodyRelation::Separate)
             && let Some((content, layout)) = item.inline_description_content()
-            && let Some(last_rows) = terms.pop()
+            && let Some(mut last_rows) = terms.pop()
         {
-            let term_origin =
-                compose_origin(origin, last_rows.last().map_or(0, |(_, indent)| *indent));
-            let last = LayoutText::join(
-                last_rows.into_iter().map(|(row, row_indent)| {
-                    row.indented(padding(
-                        resolve_row_origins(origin, origin, row_indent).first_visual_origin,
-                    ))
-                }),
-                "\n",
-            );
+            let (mut shared_row, row_indent) = last_rows.pop().unwrap_or_default();
+            let term_origin = compose_origin(origin, row_indent);
             let last_width = mant_ir::geometry::definition_run_in_width(&item.terms).unwrap_or(0);
             let mut lines = self.inline_rows(content, TextRole::Body);
             let completed_empty_tail =
@@ -129,7 +121,7 @@ impl BlockRenderer<'_> {
                 resolve_row_origins(first_body_origin, continued_body_origin, first_line.1)
                     .first_visual_origin;
             let mut output = definition_term_rows(terms, origin);
-            let mut joined = last;
+            output.extend(definition_term_rows(vec![last_rows], origin));
             let gap = mant_ir::geometry::definition_body_gap(
                 item.head_body_relation,
                 &item.layout,
@@ -137,9 +129,11 @@ impl BlockRenderer<'_> {
                 last_width,
                 preferred_body_origin,
             );
-            joined.push_plain(&" ".repeat(gap));
-            joined.append(&first_line.0);
-            output.push(joined);
+            shared_row.push_plain(&" ".repeat(gap));
+            shared_row.append(&first_line.0);
+            // An open HEAD tail can receive BODY content. Its origin is
+            // applied to the completed shared row, never to an empty prefix.
+            output.push(shared_row.indented(padding(term_origin)));
             output.extend(lines.map(|(line, row_indent)| {
                 line.indented(padding(
                     resolve_row_origins(continued_body_origin, continued_body_origin, row_indent)

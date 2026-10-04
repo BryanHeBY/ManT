@@ -8,6 +8,7 @@ mod container_geometry;
 mod decorated_tables;
 mod definition_relations;
 mod definition_rows;
+mod definition_tails;
 mod fixtures;
 mod owner_layout;
 mod physical_rows;

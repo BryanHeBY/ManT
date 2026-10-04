@@ -90,6 +90,13 @@ that crate was not published for that change.
 
 ### mant-ir, mant-protocol, mant-codec, mant-loader, mant-query, mant-render, mant-engine and mant 0.12.0
 
+- Preserve nested definition word and row boundaries in portable Markdown
+  tables instead of inserting a colon. Keep executed leading BODY spacing,
+  authored whitespace and owner ranges through actual Markdown readback.
+- Reuse prepared physical-cell receipts for early and late text table fallback,
+  avoiding invented blank rows for no-output cells while retaining authored
+  empty literal rows and completed spacing. Apply a shared definition row's
+  origin after HEAD/BODY composition so an open tail's hint survives.
 - Make `Inline::LineBreak` a pure hard boundary. Paragraphs, literal blocks,
   headings, and typed `DefinitionTerm` labels own optional sparse `inlineLayout`
   row hints; styles and links remain transparent. Update consumers and struct
