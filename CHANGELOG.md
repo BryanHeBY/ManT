@@ -177,6 +177,12 @@ that crate was not published for that change.
   Visible search retains exact UTF-8 source spans, escaped prefixes, entity
   fallback and code-span line-ending normalization. Public APIs and the
   unpublished v0.12 wire contract are unchanged.
+- Reduce Markdown encoding passes and temporary allocations: semantic export
+  eligibility runs only when requested, row/style/code/link escaping writes
+  into shared buffers, and transparent labels retain their common inline
+  context. Angle-URL recognition scans forward without repeatedly searching
+  accumulated suffixes, including malformed openings. Canonical output,
+  supported styles, link policy and artifact ownership remain unchanged.
 - Execute visible link labels, SYNOPSIS names, definition heads, generated
   punctuation and literal content in the same text state as ordinary prose.
   Output ownership changes no longer terminate continuations or pending

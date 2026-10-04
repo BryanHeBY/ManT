@@ -64,20 +64,26 @@ fn render_inline_content_segments(
 }
 
 fn render_inline_rows(raw: &str, manual_links: bool) -> String {
-    let lines = raw
+    let mut lines = raw
         .split('\n')
         .map(|line| line.trim_matches([' ', '\t']))
-        .map(|line| (!line.is_empty()).then(|| protect_block_prefix(line)))
-        .collect::<Vec<_>>();
-    let mut output = String::new();
-    for (index, line) in lines.iter().enumerate() {
-        if let Some(line) = line {
-            output.push_str(line);
+        .peekable();
+    let mut output = String::with_capacity(raw.len());
+    let mut index = 0;
+    while let Some(line) = lines.next() {
+        if !line.is_empty() {
+            if let Some(position) = block_prefix_escape_position(line) {
+                output.push_str(&line[..position]);
+                output.push('\\');
+                output.push_str(&line[position..]);
+            } else {
+                output.push_str(line);
+            }
         }
-        let Some(next) = lines.get(index + 1) else {
+        let Some(next) = lines.peek() else {
             continue;
         };
-        if line.is_some() && next.is_some() {
+        if !line.is_empty() && !next.is_empty() {
             output.push_str("  \n");
         } else {
             // CommonMark's two-space form cannot represent a leading, trailing,
@@ -85,18 +91,24 @@ fn render_inline_rows(raw: &str, manual_links: bool) -> String {
             // At a block's first line the tag is an HTML block, not phrasing.
             // Reserve one exact spelling for the reader's narrow hard-row
             // block contract; ordinary raw HTML keeps its source policy.
-            output.push_str(if index == 0 && line.is_none() && !manual_links {
+            output.push_str(if index == 0 && line.is_empty() && !manual_links {
                 "<br />\n"
             } else {
                 "<br>\n"
             });
         }
+        index += 1;
     }
     output
 }
 
 pub(super) fn flatten_inline(children: &[Inline]) -> String {
     let mut output = String::new();
+    flatten_inline_into(&mut output, children);
+    output
+}
+
+fn flatten_inline_into(output: &mut String, children: &[Inline]) {
     for child in children {
         match child {
             Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. } => {
@@ -105,7 +117,7 @@ pub(super) fn flatten_inline(children: &[Inline]) -> String {
             Inline::Strong { children }
             | Inline::Emphasis { children }
             | Inline::Link { children, .. } => {
-                output.push_str(&flatten_inline(children));
+                flatten_inline_into(output, children);
             }
             Inline::Anchor { .. } => {}
             Inline::LineBreak { indent_columns } => {
@@ -115,7 +127,6 @@ pub(super) fn flatten_inline(children: &[Inline]) -> String {
             }
         }
     }
-    output
 }
 
 /// Fenced code cannot contain active HTML anchors. Project its zero-width
@@ -152,6 +163,26 @@ pub(super) fn preformatted_anchor_markers(children: &[Inline]) -> String {
 #[cfg(test)]
 mod tests {
     use super::escape_plain_text;
+
+    #[test]
+    fn row_stream_preserves_edge_breaks_trimming_and_block_protection() {
+        for (source, body, heading) in [
+            ("", "", ""),
+            (" \t", "", ""),
+            ("\nX", "<br />\nX", "<br>\nX"),
+            ("X\n", "X<br>\n", "X<br>\n"),
+            ("X\n\nY", "X<br>\n<br>\nY", "X<br>\n<br>\nY"),
+            (" X \n\tY ", "X  \nY", "X  \nY"),
+            (
+                "1. X\n# Y\n-",
+                "1\\. X  \n\\# Y  \n\\-",
+                "1\\. X  \n\\# Y  \n\\-",
+            ),
+        ] {
+            assert_eq!(super::render_inline_rows(source, false), body);
+            assert_eq!(super::render_inline_rows(source, true), heading);
+        }
+    }
 
     #[test]
     fn markdown_row_padding_is_preserved_without_becoming_source_text() {

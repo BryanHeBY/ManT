@@ -5,6 +5,17 @@ use std::collections::VecDeque;
 use super::InlinePiece;
 
 pub(super) fn render_inline_pieces(pieces: &mut [InlinePiece<'_>]) -> String {
+    if !pieces.iter().any(|piece| piece.styled) {
+        if let [piece] = pieces {
+            return std::mem::take(&mut piece.rendered);
+        }
+        let mut output =
+            String::with_capacity(pieces.iter().map(|piece| piece.rendered.len()).sum());
+        for piece in pieces {
+            output.push_str(&piece.rendered);
+        }
+        return output;
+    }
     let (preceding, following) = nonempty_neighbors(pieces);
     let mut pending = pieces
         .iter()
@@ -27,16 +38,16 @@ pub(super) fn render_inline_pieces(pieces: &mut [InlinePiece<'_>]) -> String {
     }
 
     let following = following_characters(pieces);
-    let mut output = String::new();
+    let mut output = String::with_capacity(pieces.iter().map(|piece| piece.rendered.len()).sum());
     for (index, piece) in pieces.iter().enumerate() {
         if let Some(markers) = piece.markers.filter(|_| piece.styled) {
-            output.push_str(&render_styled(
+            append_styled(
+                &mut output,
                 &piece.rendered,
                 markers.primary,
                 markers.alternate,
-                &output,
                 following[index],
-            ));
+            );
         } else {
             output.push_str(&piece.rendered);
         }
@@ -105,36 +116,42 @@ fn following_characters(pieces: &[InlinePiece<'_>]) -> Vec<Option<char>> {
 /// equivalent underscore marker when adjacent styles would form an ambiguous
 /// run of `*`. This keeps the output pure Markdown while preserving emphasis
 /// within ordinary words, where underscore delimiters are intentionally inert.
-fn render_styled(
+fn append_styled(
+    output: &mut String,
     rendered: &str,
     primary_marker: &str,
     alternate_marker: &str,
-    preceding: &str,
     following: Option<char>,
-) -> String {
+) {
     let core = rendered.trim_matches([' ', '\t', '\n']);
     if core.is_empty() {
-        return rendered.to_owned();
+        output.push_str(rendered);
+        return;
     }
     let leading_width = rendered.len() - rendered.trim_start_matches([' ', '\t', '\n']).len();
     let trailing_width = rendered.len() - rendered.trim_end_matches([' ', '\t', '\n']).len();
     let leading = &rendered[..leading_width];
     let trailing = &rendered[rendered.len() - trailing_width..];
-    let prefer_alternate = preceding.ends_with('*') || core.contains(primary_marker);
+    let prefer_alternate = output.ends_with('*') || core.contains(primary_marker);
     let markers = if prefer_alternate {
         [alternate_marker, primary_marker]
     } else {
         [primary_marker, alternate_marker]
     };
-    let preceding = preceding.chars().next_back();
+    let preceding = output.chars().next_back();
     let marker = markers.into_iter().find(|marker| {
         style_marker_is_available(core, marker)
             && can_delimit_style(core, marker, preceding, following)
     });
-    marker.map_or_else(
-        || rendered.to_owned(),
-        |marker| format!("{leading}{marker}{core}{marker}{trailing}"),
-    )
+    if let Some(marker) = marker {
+        output.push_str(leading);
+        output.push_str(marker);
+        output.push_str(core);
+        output.push_str(marker);
+        output.push_str(trailing);
+    } else {
+        output.push_str(rendered);
+    }
 }
 
 fn can_delimit_style(

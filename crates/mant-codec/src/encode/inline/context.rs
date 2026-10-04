@@ -124,23 +124,38 @@ fn inline_pieces<'source>(
             PhrasingNode::Node(Inline::Strong {
                 children: styled_children,
             }) => {
-                let mut segments = vec![styled_children.as_slice()];
-                while let Some(PhrasingNode::Node(Inline::Strong { children })) = nodes.peek() {
-                    segments.push(children.as_slice());
-                    nodes.next();
-                }
-                let rendered = render_inline_raw_segments(&segments, options, manual_links);
+                let rendered = if matches!(
+                    nodes.peek(),
+                    Some(PhrasingNode::Node(Inline::Strong { .. }))
+                ) {
+                    let mut segments = vec![styled_children.as_slice()];
+                    while let Some(PhrasingNode::Node(Inline::Strong { children })) = nodes.peek() {
+                        segments.push(children.as_slice());
+                        nodes.next();
+                    }
+                    render_inline_raw_segments(&segments, options, manual_links)
+                } else {
+                    render_inline_raw(styled_children, options, manual_links)
+                };
                 pieces.push(InlinePiece::styled(rendered, "**", "__"));
             }
             PhrasingNode::Node(Inline::Emphasis {
                 children: styled_children,
             }) => {
-                let mut segments = vec![styled_children.as_slice()];
-                while let Some(PhrasingNode::Node(Inline::Emphasis { children })) = nodes.peek() {
-                    segments.push(children.as_slice());
-                    nodes.next();
-                }
-                let rendered = render_inline_raw_segments(&segments, options, manual_links);
+                let rendered = if matches!(
+                    nodes.peek(),
+                    Some(PhrasingNode::Node(Inline::Emphasis { .. }))
+                ) {
+                    let mut segments = vec![styled_children.as_slice()];
+                    while let Some(PhrasingNode::Node(Inline::Emphasis { children })) = nodes.peek()
+                    {
+                        segments.push(children.as_slice());
+                        nodes.next();
+                    }
+                    render_inline_raw_segments(&segments, options, manual_links)
+                } else {
+                    render_inline_raw(styled_children, options, manual_links)
+                };
                 pieces.push(InlinePiece::styled(rendered, "*", "_"));
             }
             PhrasingNode::Node(Inline::Code { value } | Inline::Equation { value, .. }) => {
@@ -215,13 +230,13 @@ fn code_rows(value: &str) -> String {
     if !value.contains('\n') {
         return code_span(value);
     }
-    let mut output = String::new();
+    let mut output = String::with_capacity(value.len());
     for (index, row) in value.split('\n').enumerate() {
         if index > 0 {
             output.push('\n');
         }
         if !row.is_empty() {
-            output.push_str(&code_span(row));
+            super::code::append_code_span(&mut output, row);
         }
     }
     output

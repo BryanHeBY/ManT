@@ -221,8 +221,11 @@ fn render_markdown_artifact(
             .is_some_and(heading_has_local_link)
             || section_headings_have_local_links(&document.sections)
     });
-    options.preserve_semantics &=
-        !heading_links && query.document.as_ref().is_some_and(semantic::supported);
+    // Eligibility validates and visits the whole document. It has no role
+    // when semantic export was not requested (including addressable output).
+    options.preserve_semantics = options.preserve_semantics
+        && !heading_links
+        && query.document.as_ref().is_some_and(semantic::supported);
     // Raw HTML anchor blocks are not part of semantic reimport. Real heading
     // links require their destinations, so content preservation takes priority
     // over optional entry metadata for that document.

@@ -21,22 +21,35 @@ pub(in crate::encode) fn fenced_code(value: &str, language: Option<&str>) -> Str
 }
 
 pub(crate) fn code_span(value: &str) -> String {
+    let mut output = String::with_capacity(value.len() + 4);
+    append_code_span(&mut output, value);
+    output
+}
+
+pub(super) fn append_code_span(output: &mut String, value: &str) {
     let width = longest_backtick_run(value).saturating_add(1).max(1);
-    let delimiter = "`".repeat(width);
     let padding = (value.starts_with(['`', ' ']) || value.ends_with(['`', ' ']))
-        && !value.chars().all(|character| character == ' ');
+        && !value.bytes().all(|byte| byte == b' ');
+    for _ in 0..width {
+        output.push('`');
+    }
     if padding {
-        format!("{delimiter} {value} {delimiter}")
-    } else {
-        format!("{delimiter}{value}{delimiter}")
+        output.push(' ');
+    }
+    output.push_str(value);
+    if padding {
+        output.push(' ');
+    }
+    for _ in 0..width {
+        output.push('`');
     }
 }
 
 fn longest_backtick_run(value: &str) -> usize {
     let mut longest = 0;
     let mut current = 0;
-    for character in value.chars() {
-        if character == '`' {
+    for byte in value.bytes() {
+        if byte == b'`' {
             current += 1;
             longest = longest.max(current);
         } else {
@@ -44,4 +57,33 @@ fn longest_backtick_run(value: &str) -> usize {
         }
     }
     longest
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn direct_code_writes_keep_backticks_padding_and_unicode_after_readback() {
+        for (value, expected) in [
+            ("a", "`a`"),
+            ("中😀", "`中😀`"),
+            (" ", "` `"),
+            ("  ", "`  `"),
+            (" a ", "`  a  `"),
+            ("`", "`` ` ``"),
+            ("a``中", "```a``中```"),
+            ("中`", "`` 中` ``"),
+        ] {
+            let mut output = String::from("prefix");
+            super::append_code_span(&mut output, value);
+            assert_eq!(output, format!("prefix{expected}"));
+            assert_eq!(super::code_span(value), expected);
+            let codes: Vec<_> = pulldown_cmark::Parser::new(expected)
+                .filter_map(|event| match event {
+                    pulldown_cmark::Event::Code(code) => Some(code.into_string()),
+                    _ => None,
+                })
+                .collect();
+            assert_eq!(codes, [value], "{expected}");
+        }
+    }
 }

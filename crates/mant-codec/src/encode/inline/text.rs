@@ -1,29 +1,52 @@
 //! Preserve literal text and zero-width HTML destinations in Markdown syntax.
 
 pub(crate) fn escape_text(value: &str) -> String {
-    let mut output = String::new();
+    let mut output = String::with_capacity(value.len());
     let mut remainder = value;
+    let mut closings = [ClosingCursor::default(); 2];
     while let Some((start, opening_width)) = find_angle_url(remainder) {
-        output.push_str(&escape_plain_text(&remainder[..start]));
+        append_plain_text(&mut output, &remainder[..start]);
         let after_open = &remainder[start + opening_width..];
         let closing = if opening_width == 2 { ">>" } else { ">" };
-        let Some(end) = after_open.find(closing) else {
-            output.push_str(&escape_plain_text(&remainder[start..]));
+        let offset = value.len() - after_open.len();
+        let Some(end) = closings[opening_width - 1].at_or_after(value, offset, closing) else {
+            append_plain_text(&mut output, &remainder[start..]);
             return output;
         };
-        let url = &after_open[..end];
-        if url.chars().any(char::is_whitespace) || url.contains(['<', '>']) {
-            output.push_str(&escape_plain_text(&remainder[start..start + opening_width]));
+        let url = &value[offset..end];
+        if url
+            .chars()
+            .any(|character| character.is_whitespace() || matches!(character, '<' | '>'))
+        {
+            append_plain_text(&mut output, &remainder[start..start + opening_width]);
             remainder = after_open;
             continue;
         }
         output.push('<');
         output.push_str(url);
         output.push('>');
-        remainder = &after_open[end + closing.len()..];
+        remainder = &value[end + closing.len()..];
     }
-    output.push_str(&escape_plain_text(remainder));
+    append_plain_text(&mut output, remainder);
     output
+}
+
+/// Invalid openings may share a distant closing delimiter. Each delimiter
+/// kind scans the immutable source monotonically, including a missing close.
+#[derive(Clone, Copy, Default)]
+struct ClosingCursor {
+    next: Option<usize>,
+    searched: bool,
+}
+
+impl ClosingCursor {
+    fn at_or_after(&mut self, source: &str, start: usize, delimiter: &str) -> Option<usize> {
+        if !self.searched || self.next.is_some_and(|index| index < start) {
+            self.next = source[start..].find(delimiter).map(|index| start + index);
+            self.searched = true;
+        }
+        self.next
+    }
 }
 
 pub(crate) fn html_anchor(id: &str) -> String {
@@ -44,15 +67,27 @@ pub(crate) fn html_anchors(id: &str, aliases: &[mant_ir::FragmentAlias]) -> Stri
 }
 
 fn escape_html_attribute(value: &str) -> String {
-    value
-        .replace('&', "&amp;")
-        .replace('"', "&quot;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
+    let mut output = String::with_capacity(value.len());
+    for character in value.chars() {
+        match character {
+            '&' => output.push_str("&amp;"),
+            '"' => output.push_str("&quot;"),
+            '<' => output.push_str("&lt;"),
+            '>' => output.push_str("&gt;"),
+            _ => output.push(character),
+        }
+    }
+    output
 }
 
+#[cfg(test)]
 pub(super) fn escape_plain_text(value: &str) -> String {
     let mut output = String::with_capacity(value.len());
+    append_plain_text(&mut output, value);
+    output
+}
+
+fn append_plain_text(output: &mut String, value: &str) {
     let mut characters = value.chars().peekable();
     let mut previous = None;
     while let Some(character) = characters.next() {
@@ -81,7 +116,6 @@ pub(super) fn escape_plain_text(value: &str) -> String {
         output.push(character);
         previous = Some(character);
     }
-    output
 }
 
 pub(in crate::encode) fn protect_block_prefix(line: &str) -> String {
@@ -117,13 +151,87 @@ pub(in crate::encode) fn block_prefix_escape_position(line: &str) -> Option<usiz
 }
 
 fn find_angle_url(value: &str) -> Option<(usize, usize)> {
-    [
-        ("<<http://", 2),
-        ("<<https://", 2),
-        ("<http://", 1),
-        ("<https://", 1),
-    ]
-    .into_iter()
-    .filter_map(|(needle, width)| value.find(needle).map(|index| (index, width)))
-    .min_by_key(|(index, width)| (*index, usize::MAX - *width))
+    let mut cursor = 0;
+    while let Some(relative) = value[cursor..].find('<') {
+        let index = cursor + relative;
+        let candidate = &value[index..];
+        if candidate.starts_with("<<http://") || candidate.starts_with("<<https://") {
+            return Some((index, 2));
+        }
+        if candidate.starts_with("<http://") || candidate.starts_with("<https://") {
+            return Some((index, 1));
+        }
+        cursor = index + 1;
+    }
+    None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{escape_text, find_angle_url};
+
+    #[test]
+    fn angle_urls_keep_original_order_opening_width_and_invalid_text() {
+        for (source, expected) in [
+            ("ordinary 中 &amp; a_b", "ordinary 中 &amp;amp; a_b"),
+            ("<http://a.test>", "<http://a.test>"),
+            ("<<https://a.test>>", "<https://a.test>"),
+            ("<<<http://a.test>>", "\\<<http://a.test>"),
+            (
+                "<https://a.test> <<http://b.test>>",
+                "<https://a.test> <http://b.test>",
+            ),
+            ("<http://a test>", "\\<http\\://a test\\>"),
+            ("<http://a\u{a0}test>", "\\<http\\://a\u{a0}test\\>"),
+            ("<http://a<test>", "\\<http\\://a\\<test\\>"),
+            ("<<https://unclosed", "\\<\\<https\\://unclosed"),
+        ] {
+            assert_eq!(escape_text(source), expected, "{source}");
+        }
+        assert_eq!(find_angle_url("中<<https://a> <http://b>"), Some((3, 2)));
+        assert_eq!(find_angle_url("<no>é<http://a>"), Some((6, 1)));
+        assert_eq!(find_angle_url("<no> <HTTP://a>"), None);
+    }
+
+    #[test]
+    fn repeated_single_form_urls_keep_every_target_in_commonmark() {
+        let source = "<http://example.test> ".repeat(4096);
+        let markdown = escape_text(&source);
+        assert_eq!(markdown, source);
+        let links = pulldown_cmark::Parser::new(&markdown)
+            .filter(|event| {
+                matches!(event, pulldown_cmark::Event::Start(pulldown_cmark::Tag::Link {
+                    dest_url, ..
+                }) if dest_url.as_ref() == "http://example.test")
+            })
+            .count();
+        assert_eq!(links, 4096);
+    }
+
+    #[test]
+    fn repeated_invalid_openings_keep_literal_text_and_closing_policy() {
+        let spaced = format!("{}>", "<http:// ".repeat(4096));
+        assert_eq!(
+            escape_text(&spaced),
+            format!("{}\\>", "\\<http\\:// ".repeat(4096))
+        );
+        let nested = format!("{}>", "<http://".repeat(4096));
+        // The last candidate has no illegal character: the existing syntax
+        // policy accepts it even without a host. Earlier nested ones remain
+        // literal; optimizing scans must not introduce target validation.
+        assert_eq!(
+            escape_text(&nested),
+            format!("{}<http://>", "\\<http\\://".repeat(4095))
+        );
+        // A double opening with no matching double close stops the old
+        // recognizer; an inner single URL must not change that literal policy.
+        assert_eq!(
+            escape_text("<<http:// <https://example.test>"),
+            "\\<\\<http\\:// \\<https\\://example.test\\>"
+        );
+        assert_eq!(
+            escape_text("<<http://bad <http://a> >> <https://b>"),
+            "\\<\\<http\\://bad <http://a> \\>\\> <https://b>"
+        );
+    }
 }

@@ -64,7 +64,6 @@ pub(super) fn render_link(
     options: MarkdownOptions,
     manual_links: bool,
 ) -> String {
-    let label = render_inline_raw(children, options, manual_links);
     if (target.starts_with("http://") || target.starts_with("https://"))
         && flatten_inline(children) == target
         && !target.chars().any(char::is_whitespace)
@@ -72,15 +71,32 @@ pub(super) fn render_link(
     {
         return format!("<{target}>");
     }
-    let target = target
-        .replace('\\', "\\\\")
-        .replace('(', "\\(")
-        .replace(')', "\\)")
-        .replace(' ', "%20");
-    title.map_or_else(
-        || format!("[{label}]({target})"),
-        |title| format!("[{label}]({target} \"{}\")", title.replace('"', "\\\"")),
-    )
+    let label = render_inline_raw(children, options, manual_links);
+    let mut output = String::with_capacity(label.len() + target.len() + 4);
+    output.push('[');
+    output.push_str(&label);
+    output.push_str("](");
+    for character in target.chars() {
+        match character {
+            '\\' => output.push_str("\\\\"),
+            '(' => output.push_str("\\("),
+            ')' => output.push_str("\\)"),
+            ' ' => output.push_str("%20"),
+            _ => output.push(character),
+        }
+    }
+    if let Some(title) = title {
+        output.push_str(" \"");
+        for character in title.chars() {
+            if character == '"' {
+                output.push('\\');
+            }
+            output.push(character);
+        }
+        output.push('"');
+    }
+    output.push(')');
+    output
 }
 
 /// Decide wrapper policy once while preserving the typed destination.
@@ -97,5 +113,41 @@ pub(in crate::encode) fn link_destination(
         LinkTarget::Manual { .. } if !manual_links => None,
         LinkTarget::Section { .. } if !options.preserve_anchors => None,
         _ => target.to_uri().map(Cow::Owned),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn direct_destination_writes_keep_original_escapes_percent_unicode_and_title() {
+        let children = [mant_ir::Inline::Text {
+            value: "label".into(),
+        }];
+        let markdown = super::render_link(
+            "https://example.test/中(a) %25\\tail",
+            Some("say \"中\""),
+            &children,
+            super::MarkdownOptions::default(),
+            true,
+        );
+        assert_eq!(
+            markdown,
+            r#"[label](https://example.test/中\(a\)%20%25\\tail "say \"中\"")"#
+        );
+        let links: Vec<_> = pulldown_cmark::Parser::new(&markdown)
+            .filter_map(|event| match event {
+                pulldown_cmark::Event::Start(pulldown_cmark::Tag::Link {
+                    dest_url, title, ..
+                }) => Some((dest_url.into_string(), title.into_string())),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            links,
+            [(
+                "https://example.test/中(a)%20%25\\tail".into(),
+                "say \"中\"".into()
+            )]
+        );
     }
 }
