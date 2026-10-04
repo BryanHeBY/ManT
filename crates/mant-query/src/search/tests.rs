@@ -10,6 +10,8 @@ use super::{
     occurrence_line_ranges, render_addressable_markdown, search_query, validate_search_query,
 };
 
+mod row_layout;
+
 fn query() -> ResolvedContent {
     ResolvedContent {
         address: None,

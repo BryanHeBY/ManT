@@ -25,7 +25,7 @@ fn visible(markdown: &str) -> String {
 }
 
 #[test]
-fn source_rows_share_one_cursor_through_styles_links_and_literal_newlines() {
+fn ordinary_rows_ignore_hints_through_styles_links_and_literal_newlines() {
     for target in [
         mant_ir::LinkTarget::External {
             uri: "https://example.org".into(),
@@ -62,11 +62,7 @@ fn source_rows_share_one_cursor_through_styles_links_and_literal_newlines() {
             },
             MarkdownFragmentOptions::default(),
         );
-        assert_eq!(
-            visible(&markdown),
-            "\u{a0}A\n\u{a0}\u{a0}B\nC\n\u{a0}\u{a0}\u{a0}D",
-            "{markdown}"
-        );
+        assert_eq!(visible(&markdown), "A\nB\nC\nD", "{markdown}");
         assert_eq!(mant_ir::inline_plain_text(&nodes), "A\nB\nC\nD");
         assert_eq!(
             visible(&super::super::render_inline_fragment(
@@ -79,7 +75,35 @@ fn source_rows_share_one_cursor_through_styles_links_and_literal_newlines() {
 }
 
 #[test]
-fn generated_row_cells_stay_outside_nested_style_and_link_ranges() {
+fn ordinary_author_row_edges_read_back_identically_with_and_without_hints() {
+    for value in [" A  \n B ", "\tA\t\n\tB\t", " \n  ", " A\u{a0} \n B "] {
+        let nodes = [Inline::Text {
+            value: value.into(),
+        }];
+        let none = layout(&[]);
+        let hints = layout(&[(0, 4), (1, 7)]);
+        let outputs = [&none, &hints].map(|rows| {
+            super::super::render_inline_content_fragment(
+                InlineContentRef {
+                    content: &nodes,
+                    layout: rows,
+                },
+                MarkdownFragmentOptions::default(),
+            )
+        });
+        assert_eq!(outputs[0], outputs[1]);
+        assert_eq!(visible(&outputs[0]), value);
+        let parsed = parse_content(&outputs[0], None).unwrap();
+        let Block::Paragraph { children, .. } = &parsed.document.as_ref().unwrap().blocks[0] else {
+            panic!("ordinary readback")
+        };
+        assert_eq!(mant_ir::inline_plain_text(children), value);
+        assert!(!outputs[0].contains("&#160;"));
+    }
+}
+
+#[test]
+fn ordinary_link_label_keeps_author_nbsp_and_one_wrapper_without_generated_cells() {
     let nodes = [Inline::Link {
         target: mant_ir::LinkTarget::Section {
             id: "destination".into(),
@@ -101,10 +125,7 @@ fn generated_row_cells_stay_outside_nested_style_and_link_ranges() {
             preserve_anchors: true,
         },
     );
-    assert_eq!(
-        markdown,
-        "&#160;[**A**](#destination)  \n&#160;&#160;[**B\u{a0}C**](#destination)"
-    );
+    assert_eq!(markdown, "[**A  \nB\u{a0}C**](#destination)");
     let mut in_link = false;
     let mut in_strong = false;
     let mut labels = Vec::new();
@@ -130,8 +151,158 @@ fn generated_row_cells_stay_outside_nested_style_and_link_ranges() {
         }
     }
     assert_eq!(labels, ["A", "B\u{a0}C"]);
-    assert_eq!(layout_cells, 3);
+    assert_eq!(layout_cells, 0);
     assert_eq!(mant_ir::inline_plain_text(&nodes), "A\nB\u{a0}C");
+}
+
+#[test]
+fn uri_equal_labels_keep_style_and_title_independently_of_row_hints() {
+    let uri = "https://example.org";
+    for kind in 0..5 {
+        for title in [None, Some("kept title".to_owned())] {
+            let text = Inline::Text { value: uri.into() };
+            let label = match kind {
+                0 | 4 => text,
+                1 => Inline::Strong {
+                    children: vec![text],
+                },
+                2 => Inline::Emphasis {
+                    children: vec![text],
+                },
+                3 => Inline::Code { value: uri.into() },
+                _ => unreachable!(),
+            };
+            let children = if kind == 4 {
+                vec![
+                    Inline::Text {
+                        value: "https://".into(),
+                    },
+                    Inline::Text {
+                        value: "example.org".into(),
+                    },
+                ]
+            } else {
+                vec![label]
+            };
+            let nodes = [Inline::Link {
+                target: mant_ir::LinkTarget::External { uri: uri.into() },
+                title: title.clone(),
+                children,
+            }];
+            let none = layout(&[]);
+            let hints = layout(&[(0, 3)]);
+            let outputs = [&none, &hints].map(|rows| {
+                super::super::render_inline_content_fragment(
+                    InlineContentRef {
+                        content: &nodes,
+                        layout: rows,
+                    },
+                    MarkdownFragmentOptions::default(),
+                )
+            });
+            assert_eq!(outputs[0], outputs[1]);
+            assert_eq!(visible(&outputs[0]), uri);
+            let parsed = parse_content(&outputs[0], None).unwrap();
+            let Block::Paragraph { children, .. } = &parsed.document.as_ref().unwrap().blocks[0]
+            else {
+                panic!("typed label readback")
+            };
+            let [
+                Inline::Link {
+                    target,
+                    title: restored_title,
+                    children: restored_label,
+                },
+            ] = children.as_slice()
+            else {
+                panic!("one typed link: {children:?}")
+            };
+            assert_eq!(target.to_uri().as_deref(), Some(uri));
+            assert_eq!(restored_title, &title);
+            assert_eq!(mant_ir::inline_plain_text(restored_label), uri);
+            match kind {
+                0 | 4 => assert!(matches!(restored_label.as_slice(), [Inline::Text { .. }])),
+                1 => assert!(matches!(restored_label.as_slice(), [Inline::Strong { .. }])),
+                2 => assert!(matches!(
+                    restored_label.as_slice(),
+                    [Inline::Emphasis { .. }]
+                )),
+                3 => assert!(matches!(restored_label.as_slice(), [Inline::Code { .. }])),
+                _ => unreachable!(),
+            }
+        }
+    }
+}
+
+#[test]
+fn uri_equal_labels_keep_navigation_children_out_of_the_autolink_shortcut() {
+    let uri = "https://example.org";
+    let nodes = [Inline::Link {
+        target: mant_ir::LinkTarget::External { uri: uri.into() },
+        title: None,
+        children: vec![
+            Inline::Anchor {
+                id: "label-destination".into(),
+                fragment_aliases: ["label-destination", "Alias", "Alias", "Second.Alias"]
+                    .into_iter()
+                    .map(Into::into)
+                    .collect(),
+                owner_source: None,
+            },
+            Inline::Text { value: uri.into() },
+        ],
+    }];
+    for preserve_anchors in [false, true] {
+        let none = layout(&[]);
+        let hints = layout(&[(0, 3)]);
+        let outputs = [&none, &hints].map(|rows| {
+            super::super::render_inline_content_fragment(
+                InlineContentRef {
+                    content: &nodes,
+                    layout: rows,
+                },
+                MarkdownFragmentOptions { preserve_anchors },
+            )
+        });
+        let marker = if preserve_anchors {
+            "<a id=\"label-destination\"></a><a id=\"Alias\"></a><a id=\"Second.Alias\"></a>"
+        } else {
+            ""
+        };
+        assert_eq!(outputs[0], outputs[1]);
+        assert_eq!(
+            outputs[0],
+            format!("[{marker}https\\://example.org]({uri})")
+        );
+        assert_eq!(visible(&outputs[0]), uri);
+        for id in ["label-destination", "Alias", "Second.Alias"] {
+            assert_eq!(
+                outputs[0].matches(&format!("<a id=\"{id}\"></a>")).count(),
+                usize::from(preserve_anchors)
+            );
+        }
+        let parsed = parse_content(&outputs[0], None).unwrap();
+        let Block::Paragraph { children, .. } = &parsed.document.as_ref().unwrap().blocks[0] else {
+            panic!("typed label readback")
+        };
+        let [
+            Inline::Link {
+                target,
+                title,
+                children,
+            },
+        ] = children.as_slice()
+        else {
+            panic!("one typed link: {children:?}")
+        };
+        assert_eq!(target.to_uri().as_deref(), Some(uri));
+        assert_eq!(title, &None);
+        // Attributed HTML retains its established literal-source reimport policy.
+        assert_eq!(
+            mant_ir::inline_plain_text(children),
+            format!("{marker}{uri}")
+        );
+    }
 }
 
 fn reference_counts(document: &Document) -> (usize, usize) {
@@ -191,7 +362,6 @@ fn anchors_before_a_positioned_link_label_do_not_create_empty_links() {
                 }
                 Event::End(TagEnd::Link) => in_link = false,
                 Event::Text(value) if in_link => label.push_str(&value),
-                Event::InlineHtml(value) if value.contains("id=\"before\"") => assert!(!in_link),
                 _ => {}
             }
         }
@@ -204,7 +374,7 @@ fn anchors_before_a_positioned_link_label_do_not_create_empty_links() {
 }
 
 #[test]
-fn multiline_link_export_fragments_retain_the_original_artifact_owner() {
+fn multiline_link_export_retains_one_occurrence_and_the_original_artifact_owner() {
     let mut document = manual(Vec::new());
     document.blocks = vec![Block::List {
         kind: ListKind::Bullet,
@@ -274,20 +444,20 @@ fn multiline_link_export_fragments_retain_the_original_artifact_owner() {
         entries[0].1.facts().unwrap(),
         query_owners[0].owner().facts().unwrap()
     ));
-    for label in ["A", "B"] {
-        let syntax = format!("[**{label}**](https://example.org \"kept title\")");
-        let start = artifact.text().find(&syntax).unwrap();
-        assert!(entries[0].0.start <= start && start + syntax.len() <= entries[0].0.end);
-    }
+    let syntax = "[**A  \n  B**](https://example.org \"kept title\")";
+    let start = artifact.text().find(syntax).unwrap();
+    assert!(entries[0].0.start <= start && start + syntax.len() <= entries[0].0.end);
+    assert!(!artifact.text().contains("&#160;"));
     let parsed = parse_content(artifact.text(), None).unwrap();
     let parsed_document = parsed.document.as_ref().unwrap();
-    assert_eq!(reference_counts(parsed_document), (2, 1));
+    assert_eq!(reference_counts(parsed_document), (1, 1));
     mant_ir::scan_references(
         parsed_document,
         mant_ir::ReferenceScanLimits::default(),
         |reference| {
             assert!(
-                matches!(reference.link, Inline::Link { title: Some(title), .. } if title == "kept title")
+                matches!(reference.link, Inline::Link { title: Some(title), children, .. }
+                    if title == "kept title" && mant_ir::inline_plain_text(children) == "A\nB")
             );
             std::ops::ControlFlow::Continue(())
         },
@@ -369,16 +539,12 @@ fn joined_owner_layouts_preserve_one_code_context_and_no_body_word_gap() {
     };
     let markdown =
         render_blocks_fragment(&[block], MarkdownFragmentOptions::default()).join("\n\n");
-    assert_eq!(
-        visible(&markdown),
-        "\u{a0}`BODY\n\u{a0}\u{a0}NEXT",
-        "{markdown}"
-    );
+    assert_eq!(visible(&markdown), "`BODY\nNEXT", "{markdown}");
     assert!(!markdown.contains(&"&#160;".repeat(99)));
 }
 
 #[test]
-fn heading_and_table_owner_hints_reach_their_existing_markdown_projection() {
+fn ordinary_heading_omits_hints_while_fenced_table_projection_retains_them() {
     let rows = layout(&[(0, 1), (1, 2)]);
     let heading = mant_ir::Heading {
         content: vec![Inline::Text {
@@ -389,7 +555,7 @@ fn heading_and_table_owner_hints_reach_their_existing_markdown_projection() {
     };
     assert_eq!(
         super::super::render_heading_fragment(1, &heading, MarkdownFragmentOptions::default()),
-        "&#160;A  \n&#160;&#160;B\n==="
+        "A  \nB\n==="
     );
     let table = Block::Table {
         rows: vec![TableRow {
@@ -417,4 +583,78 @@ fn heading_and_table_owner_hints_reach_their_existing_markdown_projection() {
         render_blocks_fragment(&[table], MarkdownFragmentOptions::default()),
         ["```\n A\n  B\n```"]
     );
+}
+
+#[test]
+fn fenced_payload_distinguishes_generated_spaces_author_nbsp_and_open_tails() {
+    for (value, expected) in [
+        ("中\u{a0}\n  x\n", "  中\u{a0}\n  x\n"),
+        ("中\u{a0}\n  x\n\n", "  中\u{a0}\n  x\n\n"),
+    ] {
+        let block = Block::Preformatted {
+            children: vec![Inline::Text {
+                value: value.into(),
+            }],
+            inline_layout: layout(&[(0, 2), (1, -3), (2, 9)]),
+            language: None,
+            layout: LayoutHint::default(),
+            source: None,
+        };
+        let original = block.clone();
+        let markdown =
+            render_blocks_fragment(&[block], MarkdownFragmentOptions::default()).join("\n\n");
+        assert_eq!(markdown, format!("```\n{expected}\n```"));
+        let parsed = parse_content(&markdown, None).unwrap();
+        let Block::Preformatted { children, .. } = &parsed.document.as_ref().unwrap().blocks[0]
+        else {
+            panic!("literal readback")
+        };
+        assert_eq!(mant_ir::inline_plain_text(children), expected);
+        let Block::Preformatted {
+            children,
+            inline_layout,
+            ..
+        } = original
+        else {
+            unreachable!()
+        };
+        assert_eq!(mant_ir::inline_plain_text(&children), value);
+        assert_eq!(inline_layout.row_indent(2), 9);
+        assert_eq!(expected.chars().filter(|c| *c == '\u{a0}').count(), 1);
+    }
+}
+
+#[test]
+fn flattened_fenced_table_preserves_author_row_edges_and_explicit_hint_spaces() {
+    let value = " A  \n B ";
+    let table = Block::Table {
+        rows: vec![TableRow {
+            kind: mant_ir::TableRowKind::Data,
+            cells: vec![TableCell {
+                kind: mant_ir::TableCellKind::Text,
+                column_span: 1,
+                row_span: 1,
+                alignment: None,
+                blocks: vec![Block::Paragraph {
+                    children: vec![Inline::Text {
+                        value: value.into(),
+                    }],
+                    inline_layout: layout(&[(0, 2), (1, -4)]),
+                    layout: LayoutHint::default(),
+                    source: None,
+                }],
+            }],
+        }],
+        column_widths: vec![],
+        layout: LayoutHint::default(),
+        source: None,
+    };
+    let markdown =
+        render_blocks_fragment(&[table], MarkdownFragmentOptions::default()).join("\n\n");
+    assert_eq!(markdown, "```\n   A  \n B \n```");
+    let parsed = parse_content(&markdown, None).unwrap();
+    let Block::Preformatted { children, .. } = &parsed.document.as_ref().unwrap().blocks[0] else {
+        panic!("literal table projection")
+    };
+    assert_eq!(mant_ir::inline_plain_text(children), "   A  \n B ");
 }

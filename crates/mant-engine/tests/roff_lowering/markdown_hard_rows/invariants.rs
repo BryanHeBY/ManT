@@ -115,12 +115,45 @@ fn definition_reader_children(content: &mut ResolvedContent) -> &mut Vec<Inline>
 }
 
 #[test]
-fn internal_hint_link_fragments_reject_extra_empty_wrong_or_reparented_occurrences() {
+fn absent_or_empty_carrier_words_are_rejected_without_panicking() {
+    let nodes = [Inline::Emphasis {
+        children: vec![Inline::Text {
+            value: "A\n\nAFTER".into(),
+        }],
+    }];
+    assert_eq!(styles_for_word(&nodes, "AFTER"), Some(vec![2; 5]));
+    assert_eq!(styles_for_word(&nodes, "missing"), None);
+    assert_eq!(styles_for_word(&nodes, ""), None);
+    let absent = [Inline::Emphasis {
+        children: vec![Inline::Text {
+            value: "A\n\n".into(),
+        }],
+    }];
+    assert_eq!(styles_for_word(&absent, "AFTER"), None);
+
+    // The exact native source above reran pristine before this mutation.
+    // Removing the accepted token must make the public consumer check fail;
+    // it must not panic before rejecting the original owner/Link interval.
+    let case = core("M-core-tag-lk-interior-empty");
+    let original = mant_loader::load_roff_bytes(case.source.as_bytes()).unwrap();
+    let mut restored = reader(&case);
+    alter_inlines(definition_reader_children(&mut restored), &mut |node| {
+        if let Inline::Text { value } = node {
+            *value = value.replace("AFTER", "");
+        }
+    });
+    assert!(!carrier_style_is_preserved(&case, &restored, "AFTER"));
+    assert!(!carrier_is_preserved(&case, &original, &restored, "AFTER"));
+    assert!(!carrier_style_is_preserved(&case, &restored, ""));
+}
+
+#[test]
+fn whole_link_labels_reject_extra_empty_wrong_or_reparented_occurrences() {
     // This exact source ran pinned ASCII, UTF-8 and HTML before these assertions.
     // mdoc_term.c::termp_lk_pre underlines the accepted label and emits colon/URI
     // words independently; term.c::term_word ESCAPE_BREAK and term_fill retain
-    // A, one closed empty row, AFTER. Only its owner row-2 correction (+10)
-    // splits the Markdown label; the canonical IR still owns one native Link.
+    // A, one closed empty row, AFTER. Ordinary Markdown omits its row-2
+    // positioning correction (+10), retaining one complete Link label.
     let case = core("M-core-tag-lk-interior-empty");
     let original = mant_loader::load_roff_bytes(case.source.as_bytes()).unwrap();
     let restored = reader(&case);
@@ -134,10 +167,10 @@ fn internal_hint_link_fragments_reject_extra_empty_wrong_or_reparented_occurrenc
             .iter()
             .map(|(_, label, _)| label.as_str())
             .collect::<Vec<_>>(),
-        ["A", "AFTER"]
+        ["A\n\nAFTER"]
     );
     assert_fragment_mutations(&case, &original, &restored);
-    assert_missing_fragment_boundary(&case, &original, &restored);
+    assert_hint_independence(&case, &original, &restored);
 }
 
 fn assert_fragment_mutations(case: &Case, original: &ResolvedContent, restored: &ResolvedContent) {
@@ -198,22 +231,18 @@ fn assert_fragment_mutations(case: &Case, original: &ResolvedContent, restored: 
                     });
             }
             6 => {
-                let after = children
-                    .iter()
-                    .position(|node| {
-                        matches!(node, Inline::Link { children, .. }
-                            if mant_ir::inline_plain_text(children) == "AFTER")
-                    })
-                    .unwrap();
-                let moved = std::mem::replace(
-                    &mut children[after],
-                    Inline::Emphasis {
-                        children: vec![Inline::Text {
-                            value: "AFTER".into(),
-                        }],
-                    },
-                );
+                let Inline::Link {
+                    children: label, ..
+                } = &children[first]
+                else {
+                    unreachable!()
+                };
+                let label = label.clone();
+                let moved =
+                    std::mem::replace(&mut children[first], Inline::Emphasis { children: label });
                 children.push(moved);
+                // Same owner, exact target/title/label and one occurrence:
+                // only its scalar interval moved from HEAD to after BODY.
                 assert!(carrier_style_is_preserved(case, &wrong, "AFTER"));
             }
             _ => unreachable!(),
@@ -225,11 +254,7 @@ fn assert_fragment_mutations(case: &Case, original: &ResolvedContent, restored: 
     }
 }
 
-fn assert_missing_fragment_boundary(
-    case: &Case,
-    original: &ResolvedContent,
-    restored: &ResolvedContent,
-) {
+fn assert_hint_independence(case: &Case, original: &ResolvedContent, restored: &ResolvedContent) {
     let mut no_boundary = original.clone();
     let Block::DefinitionList { items, .. } =
         &mut no_boundary.document.as_mut().unwrap().sections[1].blocks[0]
@@ -237,7 +262,7 @@ fn assert_missing_fragment_boundary(
         panic!("native definition owner")
     };
     items[0].terms[0].inline_layout.row_hints.clear();
-    assert!(!carrier_is_preserved(case, &no_boundary, restored, "AFTER"));
+    assert!(carrier_is_preserved(case, &no_boundary, restored, "AFTER"));
 }
 
 fn search(content: &ResolvedContent, scope: SearchScope) -> QuerySearch {

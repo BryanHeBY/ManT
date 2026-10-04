@@ -2,8 +2,8 @@
 use super::{
     Block, BlockRenderer, DefinitionItem, Flow, LayoutText, ListItem, ListKind, ParagraphTail,
     TextRole, compose_origin, coordinate, marker_run_in_gap, padding, resolve_row_origins,
-    text_width,
 };
+use mant_ir::geometry::{list_item_spacing, list_marker, list_marker_width};
 
 impl BlockRenderer<'_> {
     pub(super) fn render_list(
@@ -15,20 +15,14 @@ impl BlockRenderer<'_> {
     ) -> Flow {
         let mut output = Flow::default();
         for (index, item) in items.iter().enumerate() {
-            output.gap(
-                item.layout
-                    .spacing_before_lines
-                    .unwrap_or(u16::from(index > 0 && !compact)),
-            );
-            let marker = match kind {
-                ListKind::Ordered { .. } => {
-                    format!("{}. ", kind.ordinal(index).expect("ordered list ordinal"))
-                }
-                ListKind::Bullet => "• ".to_owned(),
-                ListKind::Dash => "- ".to_owned(),
-                ListKind::Plain => String::new(),
-            };
-            let body_origin = compose_origin(base_indent, coordinate(text_width(&marker)));
+            output.gap(list_item_spacing(
+                item.layout.spacing_before_lines,
+                index,
+                compact,
+            ));
+            let marker = list_marker(kind, index);
+            let marker_width = list_marker_width(kind, index);
+            let body_origin = compose_origin(base_indent, coordinate(marker_width));
             if marker.is_empty() {
                 output.extend(self.block_flow(&item.blocks, body_origin));
                 continue;
@@ -43,7 +37,7 @@ impl BlockRenderer<'_> {
             ) = item.blocks.first()
                 && let Some(gap) = marker_run_in_gap(
                     base_indent,
-                    text_width(&marker),
+                    marker_width,
                     compose_origin(layout.indent_columns, inline_layout.row_indent(0)),
                 )
             {
@@ -83,11 +77,11 @@ impl BlockRenderer<'_> {
     ) -> Flow {
         let mut output = Flow::default();
         for (index, item) in items.iter().enumerate() {
-            output.gap(
-                item.layout
-                    .spacing_before_lines
-                    .unwrap_or(u16::from(index > 0 && !compact)),
-            );
+            output.gap(list_item_spacing(
+                item.layout.spacing_before_lines,
+                index,
+                compact,
+            ));
             output.extend(self.render_definition(item, base_indent));
         }
         output

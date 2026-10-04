@@ -45,12 +45,16 @@ fn native_definition_origins_survive_query_json_and_visual_copy() {
         let body = plain.lines().find(|row| row.trim() == "BodyWord").unwrap();
         assert_eq!(body, "      BodyWord", "{plain}");
         let markdown = mant_codec::encode::render_markdown(&content);
-        if expected.len() > 2 {
-            assert!(
-                markdown.contains("&#160;&#160;&#160;&#160;&#160;&#160;Beta"),
-                "{markdown}"
-            );
-        }
+        // Both exact sources reran pristine in all five profiles for LC3.
+        // Ordinary Markdown keeps the hard rows without turning the native
+        // reading origin into NBSP. Native CLI/TUI origins remain strict below.
+        let head_rows = expected
+            .iter()
+            .map(|(word, _)| *word)
+            .collect::<Vec<_>>()
+            .join("  \n  ");
+        assert!(markdown.contains(&format!("- {head_rows}")), "{markdown}");
+        assert!(!markdown.contains("&#160;"), "{markdown}");
         let view = DocumentView::new(&content);
         for width in [20, 80, 120] {
             let rendered = view.render(width);

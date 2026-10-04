@@ -2,6 +2,68 @@
 use super::*;
 
 #[test]
+fn ordered_labels_and_item_spacing_keep_hard_row_origins() {
+    for compact in [false, true] {
+        let mut builder = DocumentBuilder::new("list-defaults".into(), None);
+        builder.blocks(
+            &[Block::List {
+                kind: ListKind::Ordered { start: Some(9) },
+                compact,
+                items: [
+                    ("FIRST\nNEXT", None),
+                    ("SECOND", Some(0)),
+                    ("THIRD", Some(2)),
+                    ("FOURTH", None),
+                ]
+                .into_iter()
+                .map(|(text, spacing_before_lines)| ListItem {
+                    layout: mant_ir::ListItemLayout {
+                        spacing_before_lines,
+                    },
+                    source: None,
+                    entry: None,
+                    blocks: vec![Block::Paragraph {
+                        children: vec![Inline::Text { value: text.into() }],
+                        inline_layout: mant_ir::InlineLayout::default(),
+                        layout: LayoutHint::default(),
+                        source: None,
+                    }],
+                })
+                .collect(),
+                layout: LayoutHint::default(),
+                source: None,
+            }],
+            2,
+        );
+        let actual = builder
+            .lines
+            .iter()
+            .map(|line| {
+                let text = line
+                    .spans
+                    .iter()
+                    .map(|span| span.content.as_ref())
+                    .collect::<String>();
+                (line.indent, text)
+            })
+            .collect::<Vec<_>>();
+        let mut expected = vec![
+            (2, "9. FIRST".into()),
+            (5, "NEXT".into()),
+            (2, "10. SECOND".into()),
+            (0, String::new()),
+            (0, String::new()),
+            (2, "11. THIRD".into()),
+        ];
+        if !compact {
+            expected.push((0, String::new()));
+        }
+        expected.push((2, "12. FOURTH".into()));
+        assert_eq!(actual, expected);
+    }
+}
+
+#[test]
 fn resolved_gaps_precede_whole_items_and_share_transparent_container_budgets() {
     for rows in [0, 1, 2, 3000] {
         let mut builder = DocumentBuilder::new("gaps".into(), None);

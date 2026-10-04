@@ -25,7 +25,7 @@
     "consumer_contracts": {
       "native_rows": "Remove only the fixed pristine common five-column origin; compare all remaining glyphs, SP, NBSP and physical rows.",
       "json": "Actual serialized QueryBundle string roundtrip, original source BODY ancestry and byte SHA binding.",
-      "markdown": "Accepted children are the only visible body. Paragraph edge ASCII padding and vertical layout primitives are responsive omissions; fenced literal rows, phrasing hard LF, authored NBSP and Unicode stay exact.",
+      "markdown": "Accepted children are the only visible body. Owner layout padding and vertical layout primitives are responsive omissions; accepted ASCII edge whitespace, fenced literal rows, phrasing hard LF, authored NBSP and Unicode stay exact.",
       "tui": "Three-column ordinary section origin. Actual Buffer, copy and located body column at20/40/78/120; eight long URI source rows soft-wrap at20 and are tested through actual mapped fragments there.",
       "links": "Four sources retain visible typed label K. Native view activation is checked in every viewport; exported no-fill fences have no active links. Four invisible-label URI sources do not claim clickable suffix text."
     }

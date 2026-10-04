@@ -1,6 +1,6 @@
 //! Decide when cell-local column rendering cannot preserve resolved origins.
-use super::{compose_origin, coordinate, padding};
-use crate::{Block, ListKind, TableRow};
+use super::{compose_origin, coordinate, list_marker_width, padding};
+use crate::{Block, TableRow};
 
 /// Whether a table must render its cells in source order at the real parent
 /// origin, rather than first laying each cell out at local column zero.
@@ -50,13 +50,7 @@ pub fn table_requires_origin_preserving_stack(rows: &[TableRow], origin: i32) ->
         match block {
             Block::List { kind, items, .. } => {
                 for (index, item) in items.iter().enumerate() {
-                    let marker = match kind {
-                        ListKind::Plain => 0,
-                        ListKind::Bullet | ListKind::Dash => 2,
-                        ListKind::Ordered { .. } => {
-                            kind.ordinal(index).map_or(0, |n| n.to_string().len() + 2)
-                        }
-                    };
+                    let marker = list_marker_width(*kind, index);
                     let body = compose_origin(origin, coordinate(marker));
                     if clips(body) {
                         return true;
@@ -110,7 +104,7 @@ fn clips(origin: i32) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{LayoutHint, TableCell};
+    use crate::{LayoutHint, ListKind, TableCell};
 
     fn rows(block: Block) -> Vec<TableRow> {
         vec![TableRow {
@@ -153,6 +147,30 @@ mod tests {
             });
             assert!(table_requires_origin_preserving_stack(&nested, 7));
         }
+    }
+
+    #[test]
+    fn each_ordered_item_uses_its_own_marker_width_at_the_padding_bound() {
+        let list = |count| {
+            rows(Block::List {
+                kind: ListKind::Ordered { start: Some(9) },
+                compact: true,
+                items: (0..count)
+                    .map(|_| crate::ListItem {
+                        layout: crate::ListItemLayout::default(),
+                        blocks: vec![paragraph(0, 0)],
+                        entry: None,
+                        source: None,
+                    })
+                    .collect(),
+                layout: LayoutHint::default(),
+                source: None,
+            })
+        };
+        // At parent 4093, the first "9. " reaches 4096. The next "10. "
+        // reaches 4097, which cannot survive independent cell clipping.
+        assert!(!table_requires_origin_preserving_stack(&list(1), 4093));
+        assert!(table_requires_origin_preserving_stack(&list(2), 4093));
     }
 
     #[test]

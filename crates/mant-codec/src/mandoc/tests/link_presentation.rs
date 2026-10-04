@@ -140,11 +140,10 @@ fn zero_cell_descriptions_keep_native_content_and_a_readable_uri() {
             children,
             crate::encode::MarkdownFragmentOptions::default(),
         );
-        // Style markers interrupt raw substrings; the established encoder
-        // also retires ASCII padding at the beginning of a Markdown line.
-        // Reparse the portable spelling to verify original Unicode glyphs
-        // and ordering, while the exact native assertion above retains all
-        // authored ASCII/nonbreaking cells independently of export policy.
+        // Re-run pristine inputs before changing this assertion. The ordinary
+        // Markdown policy now protects authored ASCII row-edge cells using
+        // character references; termp_lk_pre/term_word already retained them.
+        // Generated positioning hints remain separate from this source text.
         let portable_text = pulldown_cmark::Parser::new(&markdown)
             .filter_map(|event| match event {
                 pulldown_cmark::Event::Text(text) | pulldown_cmark::Event::Code(text) => {
@@ -153,8 +152,7 @@ fn zero_cell_descriptions_keep_native_content_and_a_readable_uri() {
                 _ => None,
             })
             .collect::<String>();
-        let portable_label = text.trim_matches([' ', '\t']);
-        let expected_portable = format!("{portable_label}: {URI} AFTER");
+        let expected_portable = format!("{text}: {URI} AFTER");
         assert_eq!(portable_text, expected_portable, "{source}\n{markdown:?}");
         assert!(markdown.contains("\\:"), "accepted colon: {markdown:?}");
         if !readable {

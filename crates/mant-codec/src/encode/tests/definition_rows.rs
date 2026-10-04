@@ -33,10 +33,10 @@ fn spaced_link(kind: u8, children: Vec<Inline>) -> Inline {
 }
 
 #[test]
-fn independently_empty_link_roots_cannot_reintroduce_a_word_separator() {
-    // Source-neutral roots: an independently trimmed whitespace-only root
-    // contributes destinations, while an active link's actual label cells
-    // remain content. A transparent wrapper cannot change that decision.
+fn independent_link_roots_preserve_author_spaces_under_each_target_policy() {
+    // Source-neutral roots retain authored ASCII label cells even when a
+    // target policy omits its wrapper. Independent roots keep their authored
+    // block/term boundaries instead of becoming destination-only metadata.
     for kind in 0..3 {
         for preserve_anchors in [false, true] {
             let active = kind == 2 || kind == 1 && preserve_anchors;
@@ -76,14 +76,10 @@ fn independently_empty_link_roots_cannot_reintroduce_a_word_separator() {
                         MarkdownFragmentOptions { preserve_anchors },
                     )
                     .join("\n\n");
-                    let expected: Vec<String> = if active {
-                        if in_head {
-                            vec!["HEAD\n BODY".into()]
-                        } else {
-                            vec!["HEAD ".into(), "BODY".into()]
-                        }
+                    let expected: Vec<String> = if in_head {
+                        vec!["HEAD\n BODY".into()]
                     } else {
-                        vec!["HEADBODY".into()]
+                        vec!["HEAD ".into(), "BODY".into()]
                     };
                     assert_eq!(
                         rows(&markdown),
@@ -169,11 +165,14 @@ fn transparent_root_selection_keeps_fixed_code_spacing_and_nested_destinations()
         .join("\n\n");
         assert_eq!(
             rows(&markdown),
-            [if preserve_anchors {
-                "HEAD<a id=\"destination\"></a>BODY"
-            } else {
-                "HEADBODY"
-            }],
+            [
+                if preserve_anchors {
+                    "HEAD <a id=\"destination\"></a>"
+                } else {
+                    "HEAD "
+                },
+                "BODY"
+            ],
             "{markdown}"
         );
         assert_eq!(
@@ -243,40 +242,11 @@ fn leading_space_and_zero_output_roots_keep_effective_body_boundaries() {
     ] {
         for distance in [0, 1, 2] {
             for use_hint in [false, true] {
-                for prefix in [
-                    vec![],
-                    vec![text("")],
-                    vec![text(" \t ")],
-                    vec![Inline::Strong {
-                        children: vec![text(" \t ")],
-                    }],
-                    vec![Inline::Anchor {
-                        id: "destination".into(),
-                        fragment_aliases: vec![],
-                        owner_source: None,
-                    }],
-                    vec![
-                        Inline::Anchor {
-                            id: "destination".into(),
-                            fragment_aliases: vec![],
-                            owner_source: None,
-                        },
-                        text(" \t "),
-                    ],
-                    vec![
-                        Inline::Anchor {
-                            id: "destination".into(),
-                            fragment_aliases: vec![],
-                            owner_source: None,
-                        },
-                        Inline::Strong {
-                            children: vec![text(" \t ")],
-                        },
-                    ],
-                ] {
+                for prefix in author_prefix_roots() {
                     let has_anchor = prefix
                         .iter()
                         .any(|node| matches!(node, Inline::Anchor { .. }));
+                    let prefix_text = mant_ir::inline_plain_text(&prefix);
                     let mut body = vec![paragraph(prefix)];
                     let mut prose = paragraph(vec![text("BODY")]);
                     if use_hint {
@@ -302,15 +272,20 @@ fn leading_space_and_zero_output_roots_keep_effective_body_boundaries() {
                             MarkdownFragmentOptions { preserve_anchors },
                         )
                         .join("\n\n");
-                        let mut expected = expected_head_body_rows(distance, relation);
-                        if preserve_anchors && has_anchor {
-                            // The ManT reader deliberately retains attributed
-                            // HTML as literal source; browser destinations are
-                            // checked separately from the portable readback.
+                        let anchor = if preserve_anchors && has_anchor {
+                            "<a id=\"destination\"></a>"
+                        } else {
+                            ""
+                        };
+                        let expected = if prefix_text.is_empty() {
+                            let mut expected = expected_head_body_rows(distance, relation);
                             for row in &mut expected {
-                                *row = row.replace("BODY", "<a id=\"destination\"></a>BODY");
+                                *row = row.replace("BODY", &format!("{anchor}BODY"));
                             }
-                        }
+                            expected
+                        } else {
+                            expected_author_prefix_rows(relation, &prefix_text, anchor)
+                        };
                         assert_eq!(
                             rows(&markdown),
                             expected,
@@ -324,6 +299,55 @@ fn leading_space_and_zero_output_roots_keep_effective_body_boundaries() {
             }
         }
     }
+}
+
+fn author_prefix_roots() -> Vec<Vec<Inline>> {
+    vec![
+        vec![],
+        vec![text("")],
+        vec![text(" \t ")],
+        vec![Inline::Strong {
+            children: vec![text(" \t ")],
+        }],
+        vec![Inline::Anchor {
+            id: "destination".into(),
+            fragment_aliases: vec![],
+            owner_source: None,
+        }],
+        vec![
+            Inline::Anchor {
+                id: "destination".into(),
+                fragment_aliases: vec![],
+                owner_source: None,
+            },
+            text(" \t "),
+        ],
+        vec![
+            Inline::Anchor {
+                id: "destination".into(),
+                fragment_aliases: vec![],
+                owner_source: None,
+            },
+            Inline::Strong {
+                children: vec![text(" \t ")],
+            },
+        ],
+    ]
+}
+
+fn expected_author_prefix_rows(
+    relation: HeadBodyRelation,
+    prefix: &str,
+    anchor: &str,
+) -> Vec<String> {
+    let separator = if relation == HeadBodyRelation::Separate {
+        "\n"
+    } else if relation.joins_without_separator() {
+        ""
+    } else {
+        " "
+    };
+    vec![format!("HEAD{separator}{anchor}{prefix}"), "BODY".into()]
 }
 
 fn expected_head_body_rows(distance: u16, relation: HeadBodyRelation) -> Vec<String> {
@@ -353,10 +377,12 @@ fn destinations_and_zero_output_head_roots_do_not_fabricate_term_rows() {
         vec![vec![anchor()]],
         vec![vec![text(" \t ")]],
     ] {
-        let has_head = head
+        let authored_terms = head
             .iter()
-            .flatten()
-            .any(|node| matches!(node,Inline::Text {value} if value=="HEAD"));
+            .map(|nodes| mant_ir::inline_plain_text(nodes))
+            .filter(|value| !value.is_empty())
+            .collect::<Vec<_>>();
+        let expected = format!("{}BODY", authored_terms.join("\n"));
         for preserve_anchors in [false, true] {
             let blocks = [definition(
                 head.clone(),
@@ -372,18 +398,17 @@ fn destinations_and_zero_output_head_roots_do_not_fabricate_term_rows() {
             let visible = Parser::new(&markdown)
                 .filter_map(|event| match event {
                     Event::Text(value) => Some(value.into_string()),
+                    Event::HardBreak | Event::SoftBreak => Some("\n".into()),
                     _ => None,
                 })
                 .collect::<String>();
+            assert_eq!(visible, expected, "{markdown}");
             assert_eq!(
-                visible,
-                if has_head { "HEADBODY" } else { "BODY" },
-                "{markdown}"
-            );
-            assert!(
-                !Parser::new(&markdown)
-                    .any(|event| matches!(event, Event::HardBreak | Event::SoftBreak)),
-                "zero-width term is not another row: {markdown}"
+                Parser::new(&markdown)
+                    .filter(|event| matches!(event, Event::HardBreak | Event::SoftBreak))
+                    .count(),
+                authored_terms.len().saturating_sub(1),
+                "only authored term roots own rows: {markdown}"
             );
             if preserve_anchors
                 && head

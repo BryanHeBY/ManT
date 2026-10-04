@@ -6,7 +6,7 @@ use super::layout::LayoutText;
 use crate::presentation::{EntryStyleMap, TextPresentation, TextRole, visit_inline_text};
 #[cfg(test)]
 use mant_ir::Inline;
-use mant_ir::geometry::{compose_origin, coordinate, marker_run_in_gap, padding, text_width};
+use mant_ir::geometry::{compose_origin, coordinate, marker_run_in_gap, padding};
 use mant_ir::{
     Block, DefinitionItem, InlineContentRef, ListItem, ListKind, Section, TableCell,
     resolve_row_origins,

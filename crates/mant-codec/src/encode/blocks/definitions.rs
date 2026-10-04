@@ -2,11 +2,10 @@
 
 use std::borrow::Cow;
 
-use mant_ir::{Block, DefinitionItem, EntryOwner, Inline, InlineContentRef, InlineLayout};
+use mant_ir::{Block, DefinitionItem, EntryOwner, Inline, InlineContentRef};
 
 use super::super::inline::{
-    InlineRootNodes, block_prefix_escape_position, link_destination, render_inline_node_refs,
-    render_inline_owner_node_refs,
+    block_prefix_escape_position, link_destination, render_inline_node_refs,
 };
 use super::super::mapped::MappedText;
 use super::super::{MarkdownInlineProjection, MarkdownOptions};
@@ -51,7 +50,6 @@ struct DefinitionBody<'a> {
 
 struct InlineRoot<'a> {
     nodes: Cow<'a, [Inline]>,
-    layout: &'a InlineLayout,
     has_output: bool,
 }
 
@@ -59,15 +57,10 @@ impl<'a> InlineRoot<'a> {
     fn project(
         content: InlineContentRef<'a>,
         locations: Option<&dyn MarkdownInlineProjection>,
-        options: MarkdownOptions,
     ) -> Self {
         let nodes = project_inline(content.content, locations);
-        let has_output = inline_output(&nodes, options) == InlineOutput::Visible;
-        Self {
-            nodes,
-            layout: content.layout,
-            has_output,
-        }
+        let has_output = has_body_scalar(&nodes);
+        Self { nodes, has_output }
     }
 
     fn append_nodes<'root>(&'root self, output: &mut Vec<&'root Inline>, options: MarkdownOptions) {
@@ -93,9 +86,8 @@ fn append_destinations<'a>(
                 if link_destination(target, options, false).is_some() {
                     output.push(node);
                 } else {
-                    // This standalone root had no visible output. A wrapper
-                    // omitted by the shared policy cannot revive its trimmed
-                    // label whitespace when ownership roots are assembled.
+                    // This standalone root owns no body scalars. A transparent
+                    // wrapper contributes only its destinations to the stream.
                     append_destinations(children, output, options);
                 }
             }
@@ -111,24 +103,11 @@ fn render_roots<'a>(
     roots: impl Iterator<Item = &'a InlineRoot<'a>>,
     options: MarkdownOptions,
 ) -> String {
-    let roots = roots
-        .map(|root| {
-            let mut nodes = Vec::new();
-            root.append_nodes(&mut nodes, options);
-            InlineRootNodes {
-                nodes,
-                layout: root.layout,
-            }
-        })
-        .collect::<Vec<_>>();
-    if roots.iter().all(|root| root.layout.is_empty()) {
-        let nodes = roots
-            .iter()
-            .flat_map(|root| root.nodes.iter().copied())
-            .collect::<Vec<_>>();
-        return render_inline_node_refs(&nodes, options);
+    let mut nodes = Vec::new();
+    for root in roots {
+        root.append_nodes(&mut nodes, options);
     }
-    render_inline_owner_node_refs(&roots, options)
+    render_inline_node_refs(&nodes, options)
 }
 
 fn definition_body<'a>(
@@ -163,7 +142,6 @@ fn definition_body<'a>(
                     layout: inline_layout,
                 },
                 locations,
-                options,
             );
             if body.blocks.is_empty() {
                 let has_output = projected.has_output;
@@ -198,54 +176,17 @@ fn definition_body<'a>(
     body
 }
 
-#[derive(PartialEq, Eq)]
-enum InlineOutput {
-    Empty,
-    LabelSpacing,
-    Visible,
-}
-
-fn inline_output(nodes: &[Inline], options: MarkdownOptions) -> InlineOutput {
-    let mut output = InlineOutput::Empty;
-    for node in nodes {
-        // Classify glyphs and label spacing together in one borrowed pass.
-        // A nested transparent wrapper cannot trigger another subtree scan.
-        let current = match node {
-            Inline::Text { value } if !value.trim_matches([' ', '\t']).is_empty() => {
-                InlineOutput::Visible
-            }
-            Inline::Text { value } if !value.is_empty() => InlineOutput::LabelSpacing,
-            Inline::Code { value } | Inline::Equation { value, .. } if !value.is_empty() => {
-                InlineOutput::Visible
-            }
-            Inline::Strong { children } | Inline::Emphasis { children } => {
-                inline_output(children, options)
-            }
-            Inline::Link {
-                target, children, ..
-            } => {
-                let label = inline_output(children, options);
-                if label == InlineOutput::LabelSpacing
-                    && link_destination(target, options, false).is_some()
-                {
-                    InlineOutput::Visible
-                } else {
-                    label
-                }
-            }
-            Inline::LineBreak { .. } => InlineOutput::Visible,
-            Inline::Anchor { .. }
-            | Inline::Text { .. }
-            | Inline::Code { .. }
-            | Inline::Equation { .. } => InlineOutput::Empty,
-        };
-        match current {
-            InlineOutput::Visible => return current,
-            InlineOutput::LabelSpacing => output = current,
-            InlineOutput::Empty => {}
+fn has_body_scalar(nodes: &[Inline]) -> bool {
+    nodes.iter().any(|node| match node {
+        Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. } => {
+            !value.is_empty()
         }
-    }
-    output
+        Inline::Strong { children }
+        | Inline::Emphasis { children }
+        | Inline::Link { children, .. } => has_body_scalar(children),
+        Inline::LineBreak {} => true,
+        Inline::Anchor { .. } => false,
+    })
 }
 
 fn definition_content(
@@ -257,7 +198,7 @@ fn definition_content(
     let projected = item
         .terms
         .iter()
-        .map(|root| InlineRoot::project(root.inline_content(), locations, options))
+        .map(|root| InlineRoot::project(root.inline_content(), locations))
         .collect::<Vec<_>>();
     let has_terms = projected.iter().any(|root| root.has_output);
     // Zero-width navigation belongs to an adjacent real term row, never a new

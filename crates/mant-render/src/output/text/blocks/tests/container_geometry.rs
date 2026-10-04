@@ -1,6 +1,42 @@
 use super::*;
 
 #[test]
+fn ordered_labels_and_item_spacing_keep_hard_row_origins() {
+    let renderer = super::super::super::plain_renderer();
+    for compact in [false, true] {
+        let list = Block::List {
+            kind: ListKind::Ordered { start: Some(9) },
+            compact,
+            items: [
+                ("FIRST\nNEXT", None),
+                ("SECOND", Some(0)),
+                ("THIRD", Some(2)),
+                ("FOURTH", None),
+            ]
+            .into_iter()
+            .map(|(text, spacing_before_lines)| ListItem {
+                layout: mant_ir::ListItemLayout {
+                    spacing_before_lines,
+                },
+                source: None,
+                entry: None,
+                blocks: vec![paragraph(text, 0)],
+            })
+            .collect(),
+            layout: LayoutHint::default(),
+            source: None,
+        };
+        let inherited_separator = if compact { "\n" } else { "\n\n" };
+        assert_eq!(
+            renderer.render_blocks(&[list], 2),
+            format!(
+                "  9. FIRST\n     NEXT\n  10. SECOND\n\n\n  11. THIRD{inherited_separator}  12. FOURTH"
+            )
+        );
+    }
+}
+
+#[test]
 fn resolved_gaps_cross_transparent_containers_and_precede_whole_items() {
     let renderer = super::super::super::plain_renderer();
     for rows in [0, 1, 2] {

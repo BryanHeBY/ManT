@@ -98,6 +98,14 @@ that crate was not published for that change.
   positioning no longer becomes searchable or copyable text; authored spaces
   and NBSP remain content. Preserve separate first/wrapped origins and open
   tails, with strict hint budgets and checked owner-relative mappings.
+- Treat ordinary Markdown paragraph, heading and definition-label row hints
+  as reading layout, without exporting generated NBSP into body text. Preserve
+  authored whitespace, hard rows, styles and link identities in one shared
+  inline encoding context. Share terminal list markers and inherited item
+  spacing across reading consumers; keep literal export policy separate.
+  Preserve authored row-edge spaces/tabs and independently whitespace-only
+  definition roots instead of applying the retired Markdown trimming policy;
+  navigation-only roots still contribute no text or hard row.
 
 - Dispatch owned roff, man and mdoc macros by typed native identities throughout
   lowering, sharing the same control and enclosure classification. Visible

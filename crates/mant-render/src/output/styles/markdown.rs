@@ -189,9 +189,23 @@ mod tests {
                 preserve_anchors: true,
             },
         );
+        assert_eq!(markdown, "Alpha  \n[**Beta**](#destination)  \nGamma");
+        // Reading origins affect plain display, while ordinary Markdown keeps
+        // the source hard rows and Beta's original scalar range 6..10.
         assert_eq!(
-            markdown,
-            "Alpha  \n&#160;&#160;&#160;&#160;&#160;&#160;[**Beta**](#destination)  \nGamma"
+            styles.markdown_inline(
+                InlineContentRef::unpositioned(children),
+                mant_codec::encode::MarkdownFragmentOptions {
+                    preserve_anchors: true,
+                },
+            ),
+            markdown
+        );
+        assert_eq!(inline_layout.row_indent(1), 6);
+        assert_eq!(mant_ir::inline_plain_text(children), "Alpha\nBeta\nGamma");
+        assert_eq!(
+            mant_ir::inline_plain_text(&styles.project(children)),
+            "Alpha\nBeta\nGamma"
         );
         assert_eq!(mant_ir::inline_scalar_len(children), 16);
     }

@@ -94,9 +94,10 @@ fn projection(children: &[Inline]) -> String {
 }
 
 fn without_resolved_origins(value: &str) -> String {
-    // Only this core's generated left padding is projected to NBSP. None of
-    // its operands authors leading spaces/NBSP. Edges, repeated rows, interior
-    // spaces, and all authored glyphs remain exact; broader M tests keep NBSP.
+    // This fixture core authors no leading spaces/NBSP. Compare its row text
+    // independently of literal/table reading origins; ordinary Markdown adds
+    // no hint cells. Edge row events, interior spaces and all glyphs stay exact.
+    // Author-whitespace cohorts have separate exact, untrimmed assertions.
     value
         .split('\n')
         .map(|row| row.trim_start_matches([' ', '\u{a0}']))
@@ -104,7 +105,7 @@ fn without_resolved_origins(value: &str) -> String {
         .join("\n")
 }
 
-fn styles_for_word(children: &[Inline], word: &str) -> Vec<u8> {
+fn styles_for_word(children: &[Inline], word: &str) -> Option<Vec<u8>> {
     fn append(children: &[Inline], mask: u8, output: &mut Vec<(char, u8)>) {
         for child in children {
             match child {
@@ -128,12 +129,17 @@ fn styles_for_word(children: &[Inline], word: &str) -> Vec<u8> {
         .iter()
         .map(|(character, _)| *character)
         .collect::<String>();
-    let byte = value.find(word).unwrap();
+    if word.is_empty() {
+        return None;
+    }
+    let byte = value.find(word)?;
     let start = value[..byte].chars().count();
-    output[start..start + word.chars().count()]
-        .iter()
-        .map(|(_, mask)| *mask)
-        .collect()
+    Some(
+        output[start..start + word.chars().count()]
+            .iter()
+            .map(|(_, mask)| *mask)
+            .collect(),
+    )
 }
 
 fn assert_artifact_ranges(content: &ResolvedContent, word: &str) {
@@ -256,7 +262,8 @@ fn carrier_style_is_preserved(case: &Case, restored: &ResolvedContent, word: &st
         "Sy" => 1,
         _ => 0,
     };
-    styles_for_word(first_children(description(restored)), word) == vec![mask; word.len()]
+    styles_for_word(first_children(description(restored)), word)
+        == Some(vec![mask; word.chars().count()])
 }
 
 fn native_carrier_is_preserved(case: &Case, restored: &ResolvedContent, word: &str) -> bool {

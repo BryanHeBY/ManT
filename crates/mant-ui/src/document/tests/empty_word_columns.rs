@@ -217,21 +217,19 @@ fn check_reader_column(
     } else {
         word.into()
     };
-    let owner = case["ordinary_body_owners"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|owner| text(&owner["label"]) == source_word)
-        .unwrap();
-    let native_prefix = text(&position["prefix"]);
-    // Ordinary Markdown phrasing discards edge ASCII padding while retaining
-    // accepted definition word boundaries and the same visible spelling.
-    // Fenced literal rows and authored NBSP retain their exact cell origins.
-    let prefix = if owner["no_fill"].as_bool().unwrap() {
-        native_prefix
-    } else {
-        native_prefix.trim_start_matches([' ', '\t'])
-    };
+    assert!(
+        case["ordinary_body_owners"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|owner| text(&owner["label"]) == source_word)
+    );
+    // All 472 exact sources reran pristine in five profiles before this
+    // policy assertion. term.c::term_word emits its automatic blank before
+    // interpreting a zero-width operand; term_field defers it to the next
+    // graph. It belongs to accepted content, so ordinary phrasing and fences
+    // both preserve this prefix after the common native margin is removed.
+    let prefix = text(&position["prefix"]);
     assert_eq!(
         hit.start_column,
         mant_ir::geometry::text_width(prefix) + 3,

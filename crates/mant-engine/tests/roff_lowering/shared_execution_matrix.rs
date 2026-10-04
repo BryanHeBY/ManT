@@ -224,59 +224,62 @@ fn assert_matrix_consumers(name: &str, query: &mant_ir::ResolvedContent, expecte
         return;
     }
     let markdown = mant_codec::encode::render_markdown(query);
-    let body_markdown: Vec<&str> = markdown
-        .lines()
-        .filter(|line| !line.starts_with('#'))
-        .collect();
+    let reader = mant_loader::load_markdown_text(&markdown, None)
+        .unwrap_or_else(|error| panic!("{name}: Markdown reader: {error}"));
+    let body = markdown_body_text(reader.document.as_ref().unwrap());
     // The fixture template's section headings (NAME/DESCRIPTION/NEXT)
-    // are furniture on both sides; body words must match exactly.
-    let body_words: Vec<String> = body_markdown
-        .iter()
-        .flat_map(|line| {
-            strip_markdown_links(line)
-                .split(' ')
-                .filter(|word| !word.is_empty())
-                .map(str::to_owned)
-                .collect::<Vec<_>>()
-        })
-        .map(|word| word.replace(['\\', '*', '_', '`', '[', ']'], ""))
-        .filter(|word| {
-            !word.is_empty()
-                && !matches!(word.as_str(), "NAME" | "DESCRIPTION" | "NEXT")
-                && word != "-"
-        })
-        .collect();
+    // are furniture on both sides. Decode entities, style syntax and Link
+    // labels through the actual reader instead of editing Markdown bytes.
+    // This remains the existing token layer; native exact rows stay above.
+    let body_words = body_tokens(&body);
     let expected_body: Vec<String> = expected
         .iter()
-        .flat_map(|row| row.split(' '))
-        .filter(|word| !word.is_empty() && !matches!(*word, "NAME" | "DESCRIPTION" | "NEXT"))
-        .map(|word| word.replace(['[', ']'], ""))
+        .filter(|row| !matches!(row.as_str(), "NAME" | "DESCRIPTION" | "NEXT"))
+        .flat_map(|row| body_tokens(row))
         .collect();
-    for word in &expected_body {
-        assert!(
-            body_words.contains(word),
-            "{name}: markdown consumer lost {word:?} in:\n{body_markdown:?}"
-        );
-    }
     assert_eq!(
-        body_words.len(),
-        expected_body.len(),
-        "{name}: markdown consumer added, duplicated, or resurrected words in:\n{body_markdown:?}"
+        body_words, expected_body,
+        "{name}: Markdown reader lost, moved, duplicated or resurrected body tokens:\n{markdown}"
     );
 }
 
-/// Drop `](target)` link tails so link labels compare as plain words.
-fn strip_markdown_links(line: &str) -> String {
-    let mut stripped = String::with_capacity(line.len());
-    let mut rest = line;
-    while let Some(open) = rest.find("](") {
-        stripped.push_str(&rest[..open]);
-        let after = &rest[open + 2..];
-        match after.find(')') {
-            Some(close) => rest = &after[close + 1..],
-            None => rest = "",
+fn markdown_body_text(document: &mant_ir::Document) -> String {
+    use mant_ir::visit::{self, Visit};
+    struct BodyText(String);
+    impl Visit<'_> for BodyText {
+        fn visit_heading(&mut self, _: &mant_ir::Heading) {}
+
+        fn visit_block(&mut self, block: &mant_ir::Block) {
+            match block {
+                mant_ir::Block::Equation { value, .. }
+                | mant_ir::Block::Unsupported { text: value, .. } => self.0.push_str(value),
+                _ => visit::walk_block(self, block),
+            }
+            self.0.push('\n');
+        }
+
+        fn visit_inline(&mut self, inline: &mant_ir::Inline) {
+            match inline {
+                mant_ir::Inline::Strong { children }
+                | mant_ir::Inline::Emphasis { children }
+                | mant_ir::Inline::Link { children, .. } => {
+                    self.0.push_str(&mant_ir::inline_plain_text(children));
+                }
+                _ => self
+                    .0
+                    .push_str(&mant_ir::inline_plain_text(std::slice::from_ref(inline))),
+            }
         }
     }
-    stripped.push_str(rest);
-    stripped
+    let mut body = BodyText(String::new());
+    body.visit_document(document);
+    body.0
+}
+
+fn body_tokens(body: &str) -> Vec<String> {
+    body.split([' ', '\n'])
+        .filter(|word| !word.is_empty())
+        .map(|word| word.replace(['[', ']'], ""))
+        .filter(|word| !word.is_empty())
+        .collect()
 }

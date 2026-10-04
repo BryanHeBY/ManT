@@ -30,7 +30,8 @@ pub fn render_inline_fragment(children: &[Inline], options: MarkdownFragmentOpti
     super::inline::render_inline(children, options.document_options())
 }
 
-/// Encode a detached owner root with its optional exceptional row layout.
+/// Encode a detached owner root as ordinary Markdown phrasing.
+/// Reading layout hints stay on the owner without generating text cells.
 #[must_use]
 pub fn render_inline_content_fragment(
     content: InlineContentRef<'_>,

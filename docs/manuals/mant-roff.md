@@ -285,15 +285,20 @@ fixed blanks and word separators remain in the body. Final name bindings,
 link occurrences, excerpt/explain locations and artifact maps are rebuilt from
 that body. Their numeric offsets can change while selecting the same accepted
 glyphs; old Text spaces without generation evidence are not guessed away.
-Markdown phrasing currently expresses these presentation cells as non-breaking
-entities outside authoritative text, while fenced literal output uses spaces.
-When a multirow Link label contains an effective internal row correction,
-Markdown emits same-destination, same-title label fragments around those cells
-so the generated padding is outside the link's clickable and styled text.
-Markdown readback gains formatting-level occurrences; the original IR and its
-JSON/reference inventory keep the original Link occurrence and canonical owner.
-Artifact byte ranges still point to that original section or entry. A row-0
-prefix alone needs no split, and preceding anchors add no empty occurrence.
+Ordinary Markdown paragraphs, headings and definition terms omit these reading
+origins. Author whitespace, NBSP, accepted hard rows and typed link labels remain
+under the existing Markdown projection rules. A multiline label keeps one Link
+wrapper; layout hints do not split it into extra occurrences.
+Row-edge ASCII author spaces and tabs use character entities that decode to
+the same characters, preserving them independently from any reading hint.
+Fenced preformatted payload and flattened table output retain positive row
+corrections as ASCII spaces before occupied rows. Negative corrections produce
+no spaces; empty completed rows and open tails do not gain hint-only content.
+These generated spaces remain literal payload on Markdown readback, so exported
+scalar positions can differ from original text. Artifact and search coordinates
+refer to actual exported bytes, including that padding; generated spaces have
+no public reverse map to author scalars. Original body, names, links and owner
+identity remain unchanged.
 
 Hint displacements have the closed signed range -65535 through 65535. Strict
 owner decoding rejects unordered, duplicate or out-of-range row addresses and
@@ -725,7 +730,7 @@ Markdown export retains its explicit angle-URI autolink policy. A native `UR` su
 
 Semantic link annotations keep delayed glyphs with their original source operand. For example, `.Mt \zX a@example.org` reads `Xa@example.org`: `X` keeps the first operand's font, while only `a@example.org` is linked and copied by an address selection. Pure target decoding cannot erase that pending glyph or move its activation range.
 
-Native reading retains each accepted automatic separator written by `term_word()`, including a leading separator after an empty or control-only word. That source-buffer cell is distinct from the common manual margin and approximate device field origins, which remain omitted under the recorded geometry rules. Authored spaces and executed empty physical rows also remain observable. Portable Markdown phrasing may omit edge ASCII spaces according to its recorded projection policy; literal fences retain their accepted native row payload. Responsive HANG labels preserve the accepted hard-row sequence without promising the device's BRIND origin for each internal field pass; the separately recorded BODY origin remains active.
+Native reading retains each accepted automatic separator written by `term_word()`, including a leading separator after an empty or control-only word. That source-buffer cell is distinct from the common manual margin and approximate device field origins, which remain omitted under the recorded geometry rules. Authored spaces and executed empty physical rows also remain observable. Portable Markdown protects accepted row-edge ASCII spaces with character entities; literal fences retain their accepted native row payload. Responsive HANG labels preserve the accepted hard-row sequence without promising the device's BRIND origin for each internal field pass; the separately recorded BODY origin remains active.
 
 Accepted inline children are the only visible body in native reading, Markdown, search, explain and TUI copy. BSD lifecycle operands keep the pinned validator's native spelling (for example, `-alphaBSD`); export does not insert lifecycle commentary. An accepted `Lk` colon and URI remain visible even when a descriptive label is clickable. Link identity is resolved after native field acceptance, including partial rejection. Private description and URI owners preserve output identity through field splits and are removed at IR drain; they neither execute another formatter word nor keep a page execution history. An earlier operand's delayed glyph cannot qualify a description or enter the fallback URI's activation range. If the native field rejects every link glyph, the authored destination still survives as typed identity with an empty label, matching the existing HTML identity contract; it has no visible activation range and does not recreate rejected prose or hard rows. Two authored occurrences with the same destination keep separate identities. Ordinary Markdown links retain their authored labels without roff-generated suffixes.
 

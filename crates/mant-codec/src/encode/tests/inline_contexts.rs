@@ -71,6 +71,61 @@ fn seam_cells(markdown: &str) -> Vec<(char, u8, Option<String>)> {
 }
 
 #[test]
+fn destination_only_styles_preserve_aliases_without_visible_annotation_cells() {
+    let anchor = || Inline::Anchor {
+        id: "destination".into(),
+        fragment_aliases: vec![
+            "destination".into(),
+            "Alias".into(),
+            "Alias".into(),
+            "Second.Alias".into(),
+        ],
+        owner_source: None,
+    };
+    for navigation in [
+        Inline::Strong {
+            children: vec![anchor()],
+        },
+        Inline::Emphasis {
+            children: vec![Inline::Strong {
+                children: vec![anchor()],
+            }],
+        },
+    ] {
+        for preserve_anchors in [false, true] {
+            let options = MarkdownOptions {
+                preserve_anchors,
+                ..Default::default()
+            };
+            let middle = [navigation.clone()];
+            let markdown = super::inline::render_inline_segments(&[&middle], options);
+            assert_eq!(seam_cells(&markdown), Vec::new());
+            assert!(!markdown.contains("**"));
+            for kind in [1, 3] {
+                let head = [seam_atom(kind, "A", "https://unused.example")];
+                let body = [seam_atom(kind, "B", "https://unused.example")];
+                let markdown =
+                    super::inline::render_inline_segments(&[&head, &middle, &body], options);
+                assert_eq!(
+                    seam_cells(&markdown),
+                    [
+                        ('A', if kind == 1 { 1 } else { 4 }, None),
+                        ('B', if kind == 1 { 1 } else { 4 }, None)
+                    ]
+                );
+                assert_eq!(markdown.matches('\n').count(), 0);
+                for id in ["destination", "Alias", "Second.Alias"] {
+                    assert_eq!(
+                        markdown.matches(&format!("id=\"{id}\"")).count(),
+                        usize::from(preserve_anchors)
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn borrowed_joined_fragments_keep_exact_words_styles_and_link_owners() {
     // Constructed source-neutral inline contract: no native reachability is
     // inferred from the shape. Expectations name every accepted scalar and

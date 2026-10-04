@@ -145,23 +145,15 @@ fn description(content: &ResolvedContent) -> &[Block] {
         .blocks
 }
 
-fn markdown_payloads(content: &ResolvedContent, exporting: bool) -> Vec<String> {
+fn markdown_payloads(content: &ResolvedContent) -> Vec<String> {
     description(content)
         .iter()
         .filter_map(|block| match block {
             Block::Paragraph { children, .. } => {
-                let raw = mant_ir::inline_plain_text(children);
-                let value = if exporting {
-                    // Accepted children are the only visible body. Paragraph
-                    // edge padding remains responsive. This
-                    // explicit encoder contract does not trim authored NBSP or LF.
-                    raw.split('\n')
-                        .map(|row| row.trim_matches([' ', '\t']))
-                        .collect::<Vec<_>>()
-                        .join("\n")
-                } else {
-                    raw
-                };
+                // Ordinary Markdown preserves accepted text, including the
+                // automatic word blanks emitted before zero-width operands
+                // (term.c::term_word/term_field). Owner layout is separate.
+                let value = mant_ir::inline_plain_text(children);
                 (!value.is_empty()).then_some(value)
             }
             Block::Preformatted { children, .. } => Some(mant_ir::inline_plain_text(children)),
@@ -223,6 +215,9 @@ fn empty_buffer_newlines_preserve_exact_native_rows_and_real_json_columns() {
 
 #[test]
 fn native_markdown_readback_preserves_literal_columns_and_phrasing_hard_rows() {
+    // All 472 exact sources reran registered pristine ASCII/UTF-8/HTML/tree/
+    // lint before synchronizing the LC3 reader policy. Native rows, columns,
+    // source owners and every profile hash/status retain their original gold.
     let mut failures = Vec::new();
     for case in cases()
         .into_iter()
@@ -231,8 +226,8 @@ fn native_markdown_readback_preserves_literal_columns_and_phrasing_hard_rows() {
         let content = roundtrip(&case);
         let markdown = render_markdown_with_options(&content, MarkdownOptions::default());
         let decoded = mant_loader::load_markdown_text(&markdown, None).unwrap();
-        let expected = markdown_payloads(&content, true);
-        let actual = markdown_payloads(&decoded, false);
+        let expected = markdown_payloads(&content);
+        let actual = markdown_payloads(&decoded);
         if expected != actual {
             failures.push(format!(
                 "{}: expected {expected:?}, got {actual:?}\n{markdown}",

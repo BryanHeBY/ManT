@@ -434,7 +434,9 @@ with an empty hard row. Other edge or consecutive breaks keep the standard
 inline spelling. No visible or zero-width sentinel is inserted. Code content
 with hard rows is emitted as separate code spans around those row boundaries,
 because CommonMark normalizes line endings inside one code span to spaces.
-Boundary whitespace and hard rows can lie outside a style delimiter while the
+Author row-edge ASCII spaces and tabs are protected as character entities and
+decode to their original characters. Boundary whitespace and hard rows can lie
+outside a style delimiter while the
 surviving glyphs retain their style.
 
 The leading-row spelling applies to paragraph phrasing, including list items
@@ -461,6 +463,17 @@ escaping, and source-specific semantic annotations can change. Search
 coordinates refer to the exact generated output from the same query, not to
 the output of a later parse/render cycle. Use structured IR for semantic
 inspection and retain the original generated Markdown to reuse its offsets.
+
+Ordinary paragraph, heading and definition-term export ignores owner row
+positioning hints. It adds no NBSP or link fragments from that metadata; authored
+NBSP, accepted hard rows and existing word/delimiter rules remain intact.
+Whitespace-only term and paragraph roots keep their authored content and root
+boundaries. Anchor-only roots add navigation without creating a hard row.
+Fenced preformatted payload and flattened tables retain positive corrections as
+ASCII spaces before occupied rows. Empty rows and open tails gain no text from
+hints. These generated literal spaces remain payload after Markdown readback,
+so scalar positions can differ from original IR. Artifact/search ranges address
+the actual exported bytes rather than reverse-mapping padding to author scalars.
 
 A native definition whose label has completed its row uses a CommonMark hard
 break before a prose description. Resolved positive leading space keeps a

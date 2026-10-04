@@ -87,11 +87,8 @@ fn plain_block(block: &Block, track: bool) -> Option<MappedText> {
             // A cell can begin/end with executed hard rows (term.c::
             // ESCAPE_BREAK/term_fill; mdoc_term.c::termp_it_post). Flattening
             // its portable geometry must not trim those authored boundaries.
-            MappedText::from(literal_row_layout(
-                flatten_inline(children).trim_matches([' ', '\t']),
-                inline_layout,
-            ))
-            .nonempty()
+            MappedText::from(literal_row_layout(&flatten_inline(children), inline_layout))
+                .nonempty()
         }
         Block::List { items, .. } => MappedText::join(
             items.iter().filter_map(|item| {

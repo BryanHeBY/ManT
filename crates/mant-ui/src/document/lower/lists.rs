@@ -1,32 +1,30 @@
 //! List markers, definition heads, and their shared content/anchor ownership.
+use std::borrow::Cow;
+
 use super::super::inline::{shifted_reference_marks, spans_scalars};
 use super::super::{
     Block, ListKind, LogicalLine, Span, StyledInlineLine, WrapMode, inline_anchor_rows,
     shifted_links, spans_width, theme,
 };
 use super::DocumentBuilder;
-use mant_ir::geometry::{compose_origin, coordinate, marker_run_in_gap, padding};
+use mant_ir::geometry::{
+    compose_origin, coordinate, list_item_spacing, list_marker, list_marker_width,
+    marker_run_in_gap, padding,
+};
 use mant_ir::{DefinitionItem, ListItem};
 
 impl DocumentBuilder<'_> {
     pub(super) fn list(&mut self, kind: ListKind, compact: bool, items: &[ListItem], indent: i32) {
         for (index, item) in items.iter().enumerate() {
-            self.spacing(
-                item.layout
-                    .spacing_before_lines
-                    .unwrap_or(u16::from(index > 0 && !compact)),
-            );
+            self.spacing(list_item_spacing(
+                item.layout.spacing_before_lines,
+                index,
+                compact,
+            ));
             let item_start = self.lines.len();
-            let marker = match kind {
-                ListKind::Bullet => "• ".to_owned(),
-                ListKind::Dash => "- ".to_owned(),
-                ListKind::Ordered { .. } => {
-                    format!("{}. ", kind.ordinal(index).expect("ordered list ordinal"))
-                }
-                ListKind::Plain => String::new(),
-            };
+            let marker = list_marker(kind, index);
             let has_marker = !marker.is_empty();
-            let marker_width = mant_ir::geometry::text_width(&marker);
+            let marker_width = list_marker_width(kind, index);
             if has_marker
                 && let Some(Block::Paragraph {
                     inline_layout,
@@ -48,7 +46,7 @@ impl DocumentBuilder<'_> {
                 if has_marker {
                     self.push(LogicalLine::plain(
                         padding(indent),
-                        marker,
+                        marker.into_owned(),
                         theme::style(theme::StyleRole::ListMarker),
                     ));
                 }
@@ -71,7 +69,7 @@ impl DocumentBuilder<'_> {
     fn run_in_list_paragraph(
         &mut self,
         paragraph: &Block,
-        marker: String,
+        marker: Cow<'static, str>,
         indent: i32,
         marker_width: usize,
         gap: usize,
@@ -152,10 +150,7 @@ impl DocumentBuilder<'_> {
 
     pub(super) fn definitions(&mut self, items: &[DefinitionItem], compact: bool, indent: i32) {
         for (index, item) in items.iter().enumerate() {
-            let spacing = item
-                .layout
-                .spacing_before_lines
-                .unwrap_or(u16::from(index > 0 && !compact));
+            let spacing = list_item_spacing(item.layout.spacing_before_lines, index, compact);
             self.spacing(spacing);
             if let Some(identity) = &item.entry {
                 self.anchors

@@ -1130,21 +1130,22 @@ soft-wrap continuations. A hint corrects both after parent and structural
 layout composition, before final display bounds. It never cancels hanging
 layout: parent 0, block indent 2, continuation displacement 4 and hint +1 yield
 first/wrapped origins 3 and 7 for the first hard row. The next hard row uses
-its own hint and the element's continuation policy. Markdown currently
-projects phrasing layout as non-breaking entities and fenced layout as spaces.
-Generated layout cells remain outside original text, name/link scalar ranges
-and match coordinates.
+its own hint and the element's continuation policy. Ordinary Markdown paragraph,
+heading and definition-term phrasing omits hints without generating NBSP or
+additional link occurrences. A retained multiline Link uses one label wrapper
+and keeps its hard rows, title and destination under the existing target policy.
+Authored NBSP and word separators remain content.
+Ordinary row-edge ASCII spaces and tabs use character entities that decode to
+their original characters; layout metadata never authorizes whitespace trimming.
 
-For a multirow Link label with an effective nonzero correction inside the
-label, Markdown exports separate label fragments with the same destination
-and title to keep generated cells outside clickable and styled text. Actual
-Markdown readback counts these as separate occurrences; the original Document,
-JSON copies and original-scope reference inventory still count the one original
-Link. Distinct-target counting is unchanged. Both artifact fragments remain in
-the original section or EntryOwner's byte range, with no new canonical identity
-and no public per-fragment reverse Link map. A first-row prefix alone keeps one
-Link, and preceding anchors do not create extra empty occurrences. This is a
-specific Markdown formatting difference for retained internal row padding.
+Fenced preformatted blocks and flattened tables retain positive row corrections
+as ASCII padding before occupied payload rows. Negative corrections generate no
+padding; empty rows and open tails never acquire hint-only text. Markdown
+readback retains these generated literal spaces as payload, so its scalar
+positions can differ from the original IR. Artifact byte ranges and visible
+search coordinates include the actual exported padding. They do not claim a
+reverse map from generated cells to authored scalars. Original content,
+name/link bindings and canonical owner identity remain unchanged.
 
 Proven native first-row positioning padding is now a row-0 hint rather than
 generated body text. Authored spaces, NBSP, fixed blanks and word separators

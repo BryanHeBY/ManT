@@ -2,13 +2,17 @@
 
 use std::collections::VecDeque;
 
-use super::{InlinePiece, RenderedInline};
+use super::InlinePiece;
 
-pub(super) fn render_inline_pieces(pieces: &mut [InlinePiece<'_>]) -> RenderedInline {
+pub(super) fn render_inline_pieces(pieces: &mut [InlinePiece<'_>]) -> String {
     if !pieces.iter().any(|piece| piece.styled) {
-        let mut output = RenderedInline::default();
+        if let [piece] = pieces {
+            return std::mem::take(&mut piece.rendered);
+        }
+        let mut output =
+            String::with_capacity(pieces.iter().map(|piece| piece.rendered.len()).sum());
         for piece in pieces {
-            output.append(&piece.rendered, piece.kind);
+            output.push_str(&piece.rendered);
         }
         return output;
     }
@@ -34,21 +38,19 @@ pub(super) fn render_inline_pieces(pieces: &mut [InlinePiece<'_>]) -> RenderedIn
     }
 
     let following = following_characters(pieces);
-    let mut output = RenderedInline::default();
+    let mut output = String::with_capacity(pieces.iter().map(|piece| piece.rendered.len()).sum());
     for (index, piece) in pieces.iter().enumerate() {
-        let start = output.text.len();
         if let Some(markers) = piece.markers.filter(|_| piece.styled) {
             append_styled(
-                &mut output.text,
+                &mut output,
                 &piece.rendered,
                 markers.primary,
                 markers.alternate,
                 following[index],
             );
         } else {
-            output.text.push_str(&piece.rendered);
+            output.push_str(&piece.rendered);
         }
-        output.mark(start, piece.kind);
     }
     output
 }

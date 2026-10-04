@@ -5,15 +5,12 @@ mod context;
 mod links;
 mod text;
 
-use std::collections::HashSet;
+use std::{borrow::Cow, collections::HashSet};
 
 use mant_ir::{Inline, InlineContentRef, InlineLayout};
 
 use super::MarkdownOptions;
-use context::{
-    render_inline_raw_content_segments, render_inline_raw_nodes, render_inline_raw_owner_nodes,
-    render_inline_raw_segments,
-};
+use context::{render_inline_raw_nodes, render_inline_raw_segments};
 #[cfg(test)]
 use text::escape_plain_text;
 
@@ -31,19 +28,9 @@ pub(crate) fn render_inline_content(
     content: InlineContentRef<'_>,
     options: MarkdownOptions,
 ) -> String {
-    render_positioned_inline_segments(&[content], options, false)
-}
-
-pub(super) struct InlineRootNodes<'a> {
-    pub(super) nodes: Vec<&'a Inline>,
-    pub(super) layout: &'a InlineLayout,
-}
-
-pub(super) fn render_inline_owner_node_refs(
-    roots: &[InlineRootNodes<'_>],
-    options: MarkdownOptions,
-) -> String {
-    render_inline_rows(&render_inline_raw_owner_nodes(roots, options, false), false)
+    // Ordinary CommonMark carries author content and hard rows. Exceptional
+    // reading origins remain on the IR owner and never become text cells.
+    render_inline(content.content, options)
 }
 
 /// Encode source-owned fragments with one delimiter and escaping context.
@@ -71,18 +58,7 @@ pub(super) fn render_heading_content(
     content: InlineContentRef<'_>,
     options: MarkdownOptions,
 ) -> String {
-    render_positioned_inline_segments(&[content], options, true)
-}
-
-fn render_positioned_inline_segments(
-    segments: &[InlineContentRef<'_>],
-    options: MarkdownOptions,
-    manual_links: bool,
-) -> String {
-    render_inline_rows(
-        &render_inline_raw_content_segments(segments, options, manual_links),
-        manual_links,
-    )
+    render_inline_content_segments(&[content.content], options, true)
 }
 
 fn render_inline_content_segments(
@@ -97,20 +73,17 @@ fn render_inline_content_segments(
 }
 
 fn render_inline_rows(raw: &str, manual_links: bool) -> String {
-    let mut lines = raw
-        .split('\n')
-        .map(|line| line.trim_matches([' ', '\t']))
-        .peekable();
+    let mut lines = raw.split('\n').map(protect_author_row_edges).peekable();
     let mut output = String::with_capacity(raw.len());
     let mut index = 0;
     while let Some(line) = lines.next() {
         if !line.is_empty() {
-            if let Some(position) = block_prefix_escape_position(line) {
+            if let Some(position) = block_prefix_escape_position(&line) {
                 output.push_str(&line[..position]);
                 output.push('\\');
                 output.push_str(&line[position..]);
             } else {
-                output.push_str(line);
+                output.push_str(&line);
             }
         }
         let Some(next) = lines.peek() else {
@@ -133,6 +106,25 @@ fn render_inline_rows(raw: &str, manual_links: bool) -> String {
         index += 1;
     }
     output
+}
+
+fn protect_author_row_edges(line: &str) -> Cow<'_, str> {
+    let leading = line.len() - line.trim_start_matches([' ', '\t']).len();
+    let trailing = line.trim_end_matches([' ', '\t']).len().max(leading);
+    if leading == 0 && trailing == line.len() {
+        return Cow::Borrowed(line);
+    }
+    let mut output = String::with_capacity(line.len());
+    append_author_whitespace(&mut output, &line[..leading]);
+    output.push_str(&line[leading..trailing]);
+    append_author_whitespace(&mut output, &line[trailing..]);
+    Cow::Owned(output)
+}
+
+fn append_author_whitespace(output: &mut String, edge: &str) {
+    for character in edge.chars() {
+        output.push_str(if character == ' ' { "&#32;" } else { "&#9;" });
+    }
 }
 
 pub(super) fn flatten_inline(children: &[Inline]) -> String {
@@ -198,14 +190,18 @@ mod tests {
     use super::escape_plain_text;
 
     #[test]
-    fn row_stream_preserves_edge_breaks_trimming_and_block_protection() {
+    fn row_stream_preserves_author_whitespace_edge_breaks_and_block_protection() {
         for (source, body, heading) in [
             ("", "", ""),
-            (" \t", "", ""),
+            (" \t", "&#32;&#9;", "&#32;&#9;"),
             ("\nX", "<br />\nX", "<br>\nX"),
             ("X\n", "X<br>\n", "X<br>\n"),
             ("X\n\nY", "X<br>\n<br>\nY", "X<br>\n<br>\nY"),
-            (" X \n\tY ", "X  \nY", "X  \nY"),
+            (
+                " X \n\tY ",
+                "&#32;X&#32;  \n&#9;Y&#32;",
+                "&#32;X&#32;  \n&#9;Y&#32;",
+            ),
             (
                 "1. X\n# Y\n-",
                 "1\\. X  \n\\# Y  \n\\-",
@@ -218,7 +214,7 @@ mod tests {
     }
 
     #[test]
-    fn markdown_row_padding_is_preserved_without_becoming_source_text() {
+    fn ordinary_markdown_omits_reading_padding_while_literal_projection_retains_it() {
         let nodes = vec![
             mant_ir::Inline::Text {
                 value: "Alpha".into(),
@@ -243,7 +239,7 @@ mod tests {
         assert_eq!(super::flatten_inline_content(content), "Alpha\n   Beta");
         assert_eq!(
             super::render_inline_content(content, super::MarkdownOptions::default()),
-            "Alpha  \n&#160;&#160;&#160;**Beta**"
+            "Alpha  \n**Beta**"
         );
         assert_eq!(mant_ir::inline_plain_text(&nodes), "Alpha\nBeta");
     }

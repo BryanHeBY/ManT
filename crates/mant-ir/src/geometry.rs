@@ -16,6 +16,9 @@ pub use columns::{
     declared_field_width,
 };
 
+mod list;
+pub use list::{list_item_spacing, list_marker, list_marker_width};
+
 mod table;
 pub use table::table_requires_origin_preserving_stack;
 

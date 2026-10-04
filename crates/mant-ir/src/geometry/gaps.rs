@@ -1,10 +1,10 @@
 //! Validate the same visible-flow boundaries that consume resolved gaps.
 use super::{
-    GapPlan, block_gap, compose_origin, coordinate, marker_run_in_gap,
-    table_requires_origin_preserving_stack,
+    GapPlan, block_gap, compose_origin, coordinate, list_item_spacing, list_marker_width,
+    marker_run_in_gap, table_requires_origin_preserving_stack,
 };
 use crate::visit::Visit;
-use crate::{Block, Inline, ListKind};
+use crate::{Block, Inline};
 
 /// Whether any resolved content boundary exceeds the presentation gap budget.
 /// Transparent containers and zero-width anchors do not reset the boundary;
@@ -77,20 +77,12 @@ fn walk(blocks: &[Block], gap: &mut GapPlan, depth: usize, origin: i32) -> bool 
                 for (index, item) in items.iter().enumerate() {
                     if add(
                         gap,
-                        item.layout
-                            .spacing_before_lines
-                            .unwrap_or(u16::from(index > 0 && !compact)),
+                        list_item_spacing(item.layout.spacing_before_lines, index, *compact),
                     ) {
                         return true;
                     }
                     let mut blocks = item.blocks.as_slice();
-                    let marker_width = match kind {
-                        ListKind::Plain => 0,
-                        ListKind::Bullet | ListKind::Dash => 2,
-                        ListKind::Ordered { .. } => kind
-                            .ordinal(index)
-                            .map_or(0, |ordinal| ordinal.to_string().len() + 2),
-                    };
+                    let marker_width = list_marker_width(*kind, index);
                     if marker_width > 0 {
                         // Run-in paragraph spacing belongs before the marker.
                         if let Some(Block::Paragraph { layout, .. }) = blocks.first()
@@ -128,9 +120,7 @@ fn walk(blocks: &[Block], gap: &mut GapPlan, depth: usize, origin: i32) -> bool 
                 for (index, item) in items.iter().enumerate() {
                     if add(
                         gap,
-                        item.layout
-                            .spacing_before_lines
-                            .unwrap_or(u16::from(index > 0 && !compact)),
+                        list_item_spacing(item.layout.spacing_before_lines, index, *compact),
                     ) {
                         return true;
                     }
@@ -188,7 +178,7 @@ fn walk(blocks: &[Block], gap: &mut GapPlan, depth: usize, origin: i32) -> bool 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{LayoutHint, ListItem, TableCell, TableRow};
+    use crate::{LayoutHint, ListItem, ListKind, TableCell, TableRow};
 
     fn paragraph(indent: i32, gap: u16, children: Vec<Inline>) -> Block {
         Block::Paragraph {
