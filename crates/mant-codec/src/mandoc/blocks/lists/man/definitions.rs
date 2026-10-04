@@ -4,6 +4,7 @@ use super::super::{
     block_indent, definition_item, first_part_children, layout_with_spacing, ordinal_marker,
     paragraph_distance_lines, plain_text, prepend_definition_heads, source_span, terms_fit_inline,
 };
+use libmandoc_rs::{MacroToken::Man, ManMacro};
 
 pub(in crate::mandoc::blocks) fn lower_man_definition(
     node: &Node,
@@ -23,7 +24,7 @@ pub(in crate::mandoc::blocks) fn lower_man_definition(
     } = state;
     // pre_IP/pre_TP execute print_bvspace before HEAD and BODY words can
     // clear skipvsp. TQ requests no distance but retains its own tag role.
-    let requested = if node.macro_name.as_deref() == Some("TQ") {
+    let requested = if node.macro_token.as_ref() == Some(&Man(ManMacro::Tq)) {
         0
     } else {
         *paragraph_distance
@@ -42,7 +43,7 @@ pub(in crate::mandoc::blocks) fn lower_man_definition(
         spacing_enabled,
         formatter,
     );
-    if node.macro_name.as_deref() == Some("IP")
+    if node.macro_token.as_ref() == Some(&Man(ManMacro::Ip))
         && first_part_children(node, NodeKind::Head).is_empty()
     {
         context
@@ -54,15 +55,18 @@ pub(in crate::mandoc::blocks) fn lower_man_definition(
     // print_man_node() finishes the BLOCK after HEAD/BODY execution and
     // post_IP/post_TP; its Roman replacement updates fontlast as well.
     formatter.font.man_text_boundary();
-    let macro_name = node.macro_name.as_deref();
-    let independent_mark = matches!(macro_name, Some("IP" | "TP" | "TQ"))
-        && ip_run.is_none()
+    let macro_name = node.macro_token.as_ref();
+    let independent_mark = matches!(
+        macro_name,
+        Some(Man(ManMacro::Ip | ManMacro::Tp | ManMacro::Tq))
+    ) && ip_run.is_none()
         && record_mark_role(node, &item, context);
-    let ordinal = matches!(macro_name, Some("IP" | "TP"))
+    let ordinal = matches!(macro_name, Some(Man(ManMacro::Ip | ManMacro::Tp)))
         .then(|| {
             ordinal_marker(
                 &item,
-                macro_name == Some("IP") && context.man_ip_uses_incrementing_register(node.line),
+                macro_name == Some(&Man(ManMacro::Ip))
+                    && context.man_ip_uses_incrementing_register(node.line),
             )
         })
         .flatten();
@@ -72,7 +76,7 @@ pub(in crate::mandoc::blocks) fn lower_man_definition(
     // A TQ carrying an ambiguous punctuation mark is its own native DT/DD
     // pair. Joining it to a prior empty TP would attach its BODY to the
     // earlier declaration and invalidate its exact head-role evidence.
-    let merge = if macro_name == Some("TQ") && !independent_mark {
+    let merge = if macro_name == Some(&Man(ManMacro::Tq)) && !independent_mark {
         last_definition_location(output, indent_columns)
             .map_or(DefinitionMerge::None, DefinitionMerge::From)
     } else {
@@ -84,7 +88,7 @@ pub(in crate::mandoc::blocks) fn lower_man_definition(
         .filter_map(mant_ir::geometry::block_source)
         .map(|s| (s.line, s.column))
         .collect::<Vec<_>>();
-    if node.macro_name.as_deref() == Some("IP")
+    if node.macro_token.as_ref() == Some(&Man(ManMacro::Ip))
         && item.terms.is_empty()
         && append_ip_continuation(output, &mut item, indent_columns, spacing_before)
     {
@@ -109,7 +113,7 @@ pub(in crate::mandoc::blocks) fn lower_man_definition(
             ip_run,
         },
     );
-    if macro_name == Some("TQ")
+    if macro_name == Some(&Man(ManMacro::Tq))
         && !independent_mark
         && let Some(Block::DefinitionList { items, .. }) = output.last()
         && let Some(item) = items.last()
@@ -227,7 +231,7 @@ fn lower_man_item(
                     body_width_columns: head_field_columns,
                     field_width_columns: head_field_columns,
                     flags: crate::mandoc::inline::FieldFlags::man_head(
-                        node.macro_name.as_deref() != Some("IP"),
+                        node.macro_token.as_ref() != Some(&Man(ManMacro::Ip)),
                     ),
                 },
             },
@@ -284,7 +288,7 @@ fn last_definition_location(
 fn leading_paragraph_distance(nodes: &[Node]) -> Option<u16> {
     let mut distance = None;
     for node in nodes {
-        if node.macro_name.as_deref() == Some("PD") {
+        if node.macro_token.as_ref() == Some(&Man(ManMacro::Pd)) {
             if let Some(value) = paragraph_distance_lines(node) {
                 distance = Some(value);
             }
@@ -433,12 +437,12 @@ fn update_man_definition_width(
     current_width: &mut crate::mandoc::layout::Distance,
 ) {
     let head = first_part_children(node, NodeKind::Head);
-    let argument = match node.macro_name.as_deref() {
-        Some("TP" | "TQ") => head
+    let argument = match node.macro_token.as_ref() {
+        Some(Man(ManMacro::Tp | ManMacro::Tq)) => head
             .iter()
             .find(|child| !child.flags.line_start)
             .and_then(first_node_text),
-        Some("IP") => head.get(1).and_then(first_node_text),
+        Some(Man(ManMacro::Ip)) => head.get(1).and_then(first_node_text),
         _ => None,
     };
     if let Some(argument) = argument {
@@ -470,7 +474,7 @@ pub(in crate::mandoc::blocks) struct IpRun {
 /// mixed pair, or a styled mark remains a definition with its authored term.
 pub(in crate::mandoc::blocks) fn adjacent_ip_run(nodes: &[Node], index: usize) -> Option<IpRun> {
     fn mark(node: &Node) -> Option<IpMark> {
-        if node.kind != NodeKind::Block || node.macro_name.as_deref() != Some("IP") {
+        if node.kind != NodeKind::Block || node.macro_token.as_ref() != Some(&Man(ManMacro::Ip)) {
             return None;
         }
         match first_part_children(node, NodeKind::Head)
@@ -588,7 +592,7 @@ fn record_mark_role(node: &Node, item: &DefinitionItem, context: &LoweringContex
     // (for example, `set -`). An IP head uses the same visible DT for a
     // literal punctuation key, so retain that separate source role.
     // man_html.c::man_IP_pre() renders both spellings as authored tags.
-    if mark == '-' && styled(term, false) && node.macro_name.as_deref() != Some("IP") {
+    if mark == '-' && styled(term, false) && node.macro_token.as_ref() != Some(&Man(ManMacro::Ip)) {
         context
             .native_heads
             .borrow_mut()

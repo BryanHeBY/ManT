@@ -4,6 +4,10 @@ use super::{
     section_spacing, source_span, update_paragraph_distance,
 };
 use crate::mandoc::inline::authored_section_phrase;
+use libmandoc_rs::{
+    MacroToken::{Man, Mdoc},
+    ManMacro, MdocMacro,
+};
 
 pub(in crate::mandoc) fn lower_document_structure(
     root: &Node,
@@ -42,7 +46,7 @@ pub(in crate::mandoc) fn lower_document_structure(
         // mdoc_term.c::termp_sh_pre() tests the preceding Sh BODY's
         // child pointer, including executed state-only nodes. An empty IR
         // owner does not prove that the native section BODY was empty.
-        let has_preceding_content = if node.macro_name.as_deref() == Some("Sh") {
+        let has_preceding_content = if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Sh)) {
             previous_section_has_children || root_blocks.iter().any(block_has_visible_content)
         } else {
             sections.last().is_some_and(section_has_body)
@@ -197,7 +201,8 @@ fn block_has_visible_content(block: &Block) -> bool {
 
 pub(super) fn is_section(node: &Node, top_level: bool) -> bool {
     matches!(
-        (node.macro_name.as_deref(), top_level),
-        (Some("Sh" | "SH"), true) | (Some("Ss" | "SS"), false)
+        (node.macro_token.as_ref(), top_level),
+        (Some(Mdoc(MdocMacro::Sh) | Man(ManMacro::Sh)), true)
+            | (Some(Mdoc(MdocMacro::Ss) | Man(ManMacro::Ss)), false)
     )
 }

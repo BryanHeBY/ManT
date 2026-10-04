@@ -221,7 +221,7 @@ fn diagnostic_xo_spelling_is_not_an_explicit_definition_head_scope() {
     // -Tlint. mdoc_macro.c::blk_exp_close() breaks an intermediate It only
     // for an actual explicit block; -diag parses this Xo as literal TEXT.
     fn first_it_head(node: &libmandoc_rs::Node) -> Option<&libmandoc_rs::Node> {
-        if node.kind == libmandoc_rs::NodeKind::Block && node.macro_name.as_deref() == Some("It") {
+        if node.kind == libmandoc_rs::NodeKind::Block && node.macro_token.as_deref() == Some("It") {
             return node
                 .children
                 .iter()

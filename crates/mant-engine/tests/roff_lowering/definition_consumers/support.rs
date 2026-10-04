@@ -140,7 +140,7 @@ pub(super) fn assert_ast_owners(case: &Case) {
         .parse_bytes("consumer.1", case.source.as_bytes())
         .unwrap();
     let it = find(&report.document.root, &|node| {
-        node.kind == NodeKind::Block && node.macro_name.as_deref() == Some("It")
+        node.kind == NodeKind::Block && node.macro_token.as_deref() == Some("It")
     })
     .unwrap();
     let head = it

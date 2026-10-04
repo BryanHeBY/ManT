@@ -21,7 +21,7 @@ fn limits() -> Vec<LimitCase> {
 
 fn explicit_head_flags(node: &libmandoc_rs::Node) -> Vec<String> {
     fn visit(node: &libmandoc_rs::Node, output: &mut Vec<String>) {
-        if node.kind == libmandoc_rs::NodeKind::Element && node.macro_name.as_deref() == Some("Fl")
+        if node.kind == libmandoc_rs::NodeKind::Element && node.macro_token.as_deref() == Some("Fl")
         {
             let [operand] = node.children.as_slice() else {
                 panic!("fixture Fl has exactly one actual TEXT operand");
@@ -33,7 +33,7 @@ fn explicit_head_flags(node: &libmandoc_rs::Node) -> Vec<String> {
             visit(child, output);
         }
     }
-    if node.kind == libmandoc_rs::NodeKind::Head && node.macro_name.as_deref() == Some("It") {
+    if node.kind == libmandoc_rs::NodeKind::Head && node.macro_token.as_deref() == Some("It") {
         let mut flags = Vec::new();
         visit(node, &mut flags);
         return flags;

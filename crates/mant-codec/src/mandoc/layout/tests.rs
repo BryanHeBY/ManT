@@ -13,7 +13,7 @@ fn node(kind: NodeKind, text: Option<&str>, offset: Option<&str>) -> Node {
         section: libmandoc_rs::NormalizedSection::None,
         scope_end: None,
         reference_quotes_title: false,
-        macro_name: None,
+        macro_token: None,
         text: text.map(ToOwned::to_owned),
         native_text: None,
         tag: None,

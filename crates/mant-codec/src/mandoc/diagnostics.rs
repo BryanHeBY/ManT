@@ -53,7 +53,7 @@ use super::{LoweringContext, Node, source_span};
 
 impl LoweringContext<'_> {
     pub(super) fn warn_unhandled_structural_parts(&self, node: &Node) {
-        let macro_name = node.macro_name.as_deref().unwrap_or("unknown");
+        let macro_name = node.macro_token.as_deref().unwrap_or("unknown");
         self.diagnostics.borrow_mut().push(Diagnostic {
             impact: mant_ir::DiagnosticImpact::None,
             level: DiagnosticLevel::Warning,

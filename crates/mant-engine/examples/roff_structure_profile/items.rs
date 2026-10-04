@@ -94,7 +94,7 @@ pub(super) fn item_census(native: &Node, document: &Document) -> ItemCensus {
 }
 
 fn native_item(node: &Node) -> bool {
-    node.kind == NodeKind::Block && matches!(node.macro_name.as_deref(), Some("IP" | "TP" | "It"))
+    node.kind == NodeKind::Block && matches!(node.macro_token.as_deref(), Some("IP" | "TP" | "It"))
 }
 
 fn walk_native(
@@ -106,7 +106,7 @@ fn walk_native(
     census: &mut ItemCensus,
 ) -> bool {
     census.native_node_visits += 1;
-    let column_list = if node.kind == NodeKind::Block && node.macro_name.as_deref() == Some("Bl") {
+    let column_list = if node.kind == NodeKind::Block && node.macro_token.as_deref() == Some("Bl") {
         super::native::mdoc_list_topology_kind(node)
             == Some(super::native::MdocContainerKind::Table)
     } else {
@@ -118,7 +118,7 @@ fn walk_native(
             let index = census.native.len();
             census.native.push(NativeItem {
                 id: node.id,
-                macro_name: node.macro_name.clone().unwrap_or_default(),
+                macro_name: node.macro_token.as_deref().unwrap_or_default().to_owned(),
                 origin: Origin {
                     line: node.line,
                     column: node.column,
@@ -130,7 +130,7 @@ fn walk_native(
                     .take(MAX_ANCESTORS)
                     .copied()
                     .collect(),
-                counted: node.macro_name.as_deref() == Some("It") && !column_list
+                counted: node.macro_token.as_deref() == Some("It") && !column_list
                     || super::native::ast_tag_is_bullet(node),
                 head: String::new(),
                 body: String::new(),

@@ -291,7 +291,10 @@ emphasis
     }
 
     fn touch_owned_node(node: &Node) -> (usize, usize) {
-        let mut bytes = node.macro_name.as_ref().map_or(0, String::len)
+        let mut bytes = node
+            .macro_token
+            .as_ref()
+            .map_or(0, |token| token.as_str().len())
             + node.text.as_ref().map_or(0, String::len)
             + node.tag.as_ref().map_or(0, String::len)
             + node.offset.as_ref().map_or(0, String::len)

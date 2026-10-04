@@ -59,7 +59,7 @@ fn actual_column_body_entry_runs_after_previous_post_and_before_its_own_pre() {
     // before termp_it_pre reestablishes the next column (mdoc_term.c:314-
     // 321, 817-830, 930-964). A live NONEWLINE suppresses that source event.
     fn column_item(node: &libmandoc_rs::Node) -> Option<&libmandoc_rs::Node> {
-        if node.kind == libmandoc_rs::NodeKind::Block && node.macro_name.as_deref() == Some("It") {
+        if node.kind == libmandoc_rs::NodeKind::Block && node.macro_token.as_deref() == Some("It") {
             return Some(node);
         }
         node.children.iter().find_map(column_item)

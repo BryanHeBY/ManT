@@ -76,7 +76,7 @@ fn key(source: SourceSpan) -> (u32, u32) {
 }
 
 fn readable(node: &Node) -> bool {
-    if node.flags.no_print || matches!(node.macro_name.as_deref(), Some("Tg" | "PD" | "Sm" | "ft"))
+    if node.flags.no_print || matches!(node.macro_token.as_deref(), Some("Tg" | "PD" | "Sm" | "ft"))
     {
         return false;
     }
@@ -90,7 +90,7 @@ fn body(node: &Node) -> bool {
 }
 fn paragraph_boundary(node: &Node) -> bool {
     matches!(
-        node.macro_name.as_deref(),
+        node.macro_token.as_deref(),
         Some("PP" | "P" | "LP" | "Pp" | "sp" | "br")
     ) || node
         .children
@@ -110,7 +110,7 @@ fn bracket_head(item: &DefinitionItem) -> bool {
 fn native_numeric_label(node: &Node) -> Option<String> {
     // IP's first HEAD child is the label; subsequent children are width
     // operands. Other macro shapes need their own independent source witness.
-    if node.macro_name.as_deref() != Some("IP") {
+    if node.macro_token.as_deref() != Some("IP") {
         return None;
     }
     let head = node.children.iter().find(|n| n.kind == NodeKind::Head)?;
@@ -163,7 +163,7 @@ fn collect_mdoc_template_text(node: &Node, text: &mut String, has_argument: &mut
     if node.flags.no_print {
         return;
     }
-    if node.macro_name.as_deref() == Some("Ar") {
+    if node.macro_token.as_deref() == Some("Ar") {
         *has_argument = true;
     }
     if let Some(value) = node.text.as_deref() {
@@ -214,7 +214,7 @@ fn native_man_option_template(node: &Node) -> bool {
     // this exact source witness as presentation-only so a later `-n`/`--long`
     // semantic group may still be proven, but never generalize it to a real
     // dash option or a damaged final owner.
-    if !matches!(node.macro_name.as_deref(), Some("IP" | "TP")) {
+    if !matches!(node.macro_token.as_deref(), Some("IP" | "TP")) {
         return false;
     }
     let Some(raw) = source_head_text(node) else {
@@ -256,7 +256,7 @@ fn native_man_search_template(node: &Node) -> bool {
     // RE placeholder and a carriage-return marker. It is visible syntax, not
     // a literal command that can be selected safely. Modern mdoc forms are
     // handled separately by native_mdoc_search_template.
-    matches!(node.macro_name.as_deref(), Some("IP" | "TP"))
+    matches!(node.macro_token.as_deref(), Some("IP" | "TP"))
         && source_head_text(node).is_some_and(|text| {
             let text = text.trim_matches([' ', '\t']);
             if !matches!(text.as_bytes().first(), Some(b'/' | b'?')) {
@@ -281,7 +281,7 @@ fn native_title_head(node: &Node) -> bool {
     // rather than a selector. This covers generated contents/taxonomy labels
     // while preserving styled syntax, lower-case commands, option spelling,
     // and every label with readable owner content as audit obligations.
-    if !matches!(node.macro_name.as_deref(), Some("IP" | "TP" | "It")) || body(node) {
+    if !matches!(node.macro_token.as_deref(), Some("IP" | "TP" | "It")) || body(node) {
         return false;
     }
     let Some(text) = source_head_text(node).map(str::trim) else {
@@ -411,7 +411,7 @@ impl Audit<'_> {
         };
         self.rows.push(json!({
             "status": if retained.is_some() { "retained" } else { "rejected" }, "reason": reason,
-            "sourceOwners": run.iter().map(|(n,path)| json!({"astPath":path,"line":n.line,"column":n.column,"macro":n.macro_name,"flowEpoch":n.flow_epoch,"ownerOccurrence":self.native_owners.get(&(std::ptr::from_ref(*n) as usize)).map(|key|key.2)})).collect::<Vec<_>>(),
+            "sourceOwners": run.iter().map(|(n,path)| json!({"astPath":path,"line":n.line,"column":n.column,"macro":n.macro_token,"flowEpoch":n.flow_epoch,"ownerOccurrence":self.native_owners.get(&(std::ptr::from_ref(*n) as usize)).map(|key|key.2)})).collect::<Vec<_>>(),
             "physicalSources":sources,"observedGroup":observed_group,
         }));
     }
@@ -420,7 +420,10 @@ impl Audit<'_> {
         for (index, child) in node.children.iter().enumerate() {
             path.push(index);
             if child.kind == NodeKind::Block
-                && matches!(child.macro_name.as_deref(), Some("IP" | "TP" | "TQ" | "It"))
+                && matches!(
+                    child.macro_token.as_deref(),
+                    Some("IP" | "TP" | "TQ" | "It")
+                )
             {
                 if run
                     .last()
@@ -477,7 +480,10 @@ impl Audit<'_> {
                     self.classify(&run, "explicit-paragraph-boundary");
                     run.clear();
                 }
-            } else if !matches!(child.macro_name.as_deref(), Some("PD" | "Sm" | "Tg" | "ft")) {
+            } else if !matches!(
+                child.macro_token.as_deref(),
+                Some("PD" | "Sm" | "Tg" | "ft")
+            ) {
                 self.classify(&run, "source-container-or-content-boundary");
                 run.clear();
             }
@@ -502,7 +508,10 @@ pub(super) fn profile(root: &Node, document: &Document) -> Value {
         let mut previous: Option<(&Node, OwnerKey)> = None;
         for child in &node.children {
             if child.kind == NodeKind::Block
-                && matches!(child.macro_name.as_deref(), Some("IP" | "TP" | "It" | "TQ"))
+                && matches!(
+                    child.macro_token.as_deref(),
+                    Some("IP" | "TP" | "It" | "TQ")
+                )
             {
                 // IP's first argument is its tag; later HEAD children are
                 // layout widths, not term text (`.IP "" 4`).
@@ -514,9 +523,9 @@ pub(super) fn profile(root: &Node, document: &Document) -> Value {
                     .is_none_or(|tag| !readable(tag));
                 let continued =
                     previous.filter(|(before, _)| before.flow_epoch == child.flow_epoch);
-                let merged = child.macro_name.as_deref() == Some("TQ")
+                let merged = child.macro_token.as_deref() == Some("TQ")
                     && continued.is_some_and(|(before, _)| !body(before));
-                let continuation = child.macro_name.as_deref() == Some("IP")
+                let continuation = child.macro_token.as_deref() == Some("IP")
                     && headless
                     && continued
                         .is_some_and(|(before, key)| body(before) && !list_owners.contains(&key));
@@ -538,7 +547,10 @@ pub(super) fn profile(root: &Node, document: &Document) -> Value {
                 keys.insert(std::ptr::from_ref(child) as usize, source);
                 source_nodes.insert(source, child);
                 previous = Some((child, source));
-            } else if !matches!(child.macro_name.as_deref(), Some("PD" | "Sm" | "Tg" | "ft")) {
+            } else if !matches!(
+                child.macro_token.as_deref(),
+                Some("PD" | "Sm" | "Tg" | "ft")
+            ) {
                 previous = None;
             }
             native_keys(child, counts, keys, source_nodes, list_owners);

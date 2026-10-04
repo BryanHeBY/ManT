@@ -288,7 +288,7 @@ fn extended_head_fixtures_execute_in_the_intended_ast_owner() {
             .parse_bytes("definition-owner.1", input.as_bytes())
             .expect("parse definition fixture");
         let item = find(&report.document.root, |node| {
-            node.kind == NodeKind::Block && node.macro_name.as_deref() == Some("It")
+            node.kind == NodeKind::Block && node.macro_token.as_deref() == Some("It")
         })
         .expect("It block");
         let head = item
@@ -304,12 +304,12 @@ fn extended_head_fixtures_execute_in_the_intended_ast_owner() {
         assert!(find(body, |node| node.text.as_deref() == Some("BodyWord")).is_some());
         if kind == "diag" {
             assert_eq!(head.children[0].text.as_deref(), Some("Xo"));
-            assert!(find(head, |node| node.macro_name.as_deref() == Some("Xo")).is_none());
+            assert!(find(head, |node| node.macro_token.as_deref() == Some("Xo")).is_none());
             assert!(find(body, |node| node.text.as_deref() == Some("HeadWord")).is_some());
         } else {
             assert!(
                 find(head, |node| node.kind == NodeKind::Block
-                    && node.macro_name.as_deref() == Some("Xo"))
+                    && node.macro_token.as_deref() == Some("Xo"))
                 .is_some(),
                 "{kind}"
             );

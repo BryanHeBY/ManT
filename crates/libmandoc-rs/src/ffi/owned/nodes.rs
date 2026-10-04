@@ -4,7 +4,9 @@ use super::super::raw::{self, CDocument, CNode, CNodeView};
 use super::{
     budget::{EquationBudget, TransferBudget},
     equations::copy_equation,
-    strings::{checked_string, copy_column_strings, split_visible_text, visible_string},
+    strings::{
+        checked_macro, checked_string, copy_column_strings, split_visible_text, visible_string,
+    },
     tables::{copy_table_cells, copy_table_rule_cells, table_row_kind},
 };
 use crate::{
@@ -256,7 +258,7 @@ unsafe fn copy_node_shallow(
             1 => true,
             _ => return Err("libmandoc returned an invalid reference quote flag".to_owned()),
         },
-        macro_name: unsafe { checked_string(view.macro_name) }?,
+        macro_token: unsafe { checked_macro(view.macro_name) }?,
         text,
         native_text,
         tag: unsafe { visible_string(view.tag) }?,
@@ -302,7 +304,6 @@ unsafe fn copy_node_shallow(
     };
 
     let string_bytes = [
-        node.macro_name.as_ref(),
         node.text.as_ref(),
         node.native_text.as_ref(),
         node.tag.as_ref(),
@@ -312,7 +313,17 @@ unsafe fn copy_node_shallow(
     .into_iter()
     .flatten()
     .fold(0usize, |total, value| total.saturating_add(value.len()));
-    transfer_budget.charge(std::mem::size_of::<Node>().saturating_add(string_bytes))?;
+    // Preserve the logical transfer charge for macro spelling bytes even
+    // though known identities no longer allocate a String.
+    let macro_bytes = node
+        .macro_token
+        .as_ref()
+        .map_or(0, |token| token.as_str().len());
+    transfer_budget.charge(
+        std::mem::size_of::<Node>()
+            .saturating_add(string_bytes)
+            .saturating_add(macro_bytes),
+    )?;
 
     Ok((node, view.child, view.next))
 }

@@ -83,7 +83,7 @@ fn find_macro_mut<'a>(
     node: &'a mut libmandoc_rs::Node,
     name: &str,
 ) -> Option<&'a mut libmandoc_rs::Node> {
-    if node.macro_name.as_deref() == Some(name) {
+    if node.macro_token.as_deref() == Some(name) {
         return Some(node);
     }
     node.children

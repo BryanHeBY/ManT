@@ -3,6 +3,7 @@ use super::{
     Block, Inline, Node, NodeKind, append_inline_node_with_next, is_enclosure_macro, source_span,
     visible_text,
 };
+use libmandoc_rs::{MacroToken::Mdoc, MdocMacro};
 
 impl super::BlockLowerer<'_, '_> {
     pub(super) fn push_inline_node(&mut self, node: &Node, next: Option<&Node>) {
@@ -145,7 +146,7 @@ pub(in crate::mandoc) fn ends_with_line_continuation(node: &Node) -> bool {
     if node.kind == NodeKind::Text {
         return node.flags.line_continuation;
     }
-    if node.macro_name.as_deref() == Some("Lk") {
+    if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Lk)) {
         // mdoc_term.c::termp_lk_pre() executes a descriptive link label,
         // generated colon, and URI in that order.  The source tree keeps the
         // URI first, so a `\\c` on the label is consumed by the colon and
@@ -177,6 +178,9 @@ pub(in crate::mandoc) fn ends_with_line_continuation(node: &Node) -> bool {
 pub(super) fn participates_in_inline_flow(node: &Node) -> bool {
     matches!(node.kind, NodeKind::Text | NodeKind::Element)
         || is_inline_equation(node)
-        || is_enclosure_macro(node.macro_name.as_deref())
-        || matches!(node.macro_name.as_deref(), Some("Nd" | "Fo"))
+        || is_enclosure_macro(node.macro_token.as_ref())
+        || matches!(
+            node.macro_token.as_ref(),
+            Some(Mdoc(MdocMacro::Nd | MdocMacro::Fo))
+        )
 }

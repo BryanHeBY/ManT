@@ -52,9 +52,9 @@ fn collect_ast_structure(
         line.continues_line |= node.flags.line_continuation;
     }
     if node.kind == NodeKind::Block {
-        match node.macro_name.as_deref() {
+        match node.macro_token.as_deref() {
             Some("Bd" | "D1" | "Dl")
-                if node.macro_name.as_deref() != Some("Bd")
+                if node.macro_token.as_deref() != Some("Bd")
                     || matches!(
                         node.display_kind,
                         Some(DisplayKind::Literal | DisplayKind::Unfilled)
@@ -89,7 +89,7 @@ fn collect_ast_structure(
             _ => {}
         }
     }
-    if node.macro_name.as_deref() == Some("br") && node.kind == NodeKind::Element {
+    if node.macro_token.as_deref() == Some("br") && node.kind == NodeKind::Element {
         profile.hard_breaks += 1;
     }
     if node.kind == NodeKind::Table && node.table_row_kind.is_some() {
@@ -115,7 +115,7 @@ fn collect_ast_structure(
     }
     let child_inside_table = inside_table || node.kind == NodeKind::Table;
     let visible_rs = node.kind == NodeKind::Block
-        && node.macro_name.as_deref() == Some("RS")
+        && node.macro_token.as_deref() == Some("RS")
         && node_part_children(node, NodeKind::Body)
             .iter()
             .any(has_visible_text);
@@ -193,7 +193,7 @@ fn collect_semantic_link_origins(
         has_visible_text(node)
     };
     if node.kind == kind
-        && node.macro_name.as_deref() == Some(macro_name)
+        && node.macro_token.as_deref() == Some(macro_name)
         && node.line > 0
         && !node.flags.generated
         && has_target
@@ -301,7 +301,7 @@ fn is_roff_font_switch(text: &str) -> bool {
 
 fn is_stateful_request(node: &Node) -> bool {
     matches!(
-        node.macro_name.as_deref(),
+        node.macro_token.as_deref(),
         Some(
             "Es" | "Sm"
                 | "PD"
@@ -326,7 +326,7 @@ fn direct_list_item_count(node: &Node) -> usize {
         .iter()
         .filter(|part| part.kind == NodeKind::Body)
         .flat_map(|body| &body.children)
-        .filter(|child| child.macro_name.as_deref() == Some("It"))
+        .filter(|child| child.macro_token.as_deref() == Some("It"))
         .count()
 }
 
@@ -338,7 +338,7 @@ pub(super) enum MdocContainerKind {
 }
 
 pub(super) fn mdoc_list_topology_kind(node: &Node) -> Option<MdocContainerKind> {
-    if node.macro_name.as_deref() != Some("Bl") {
+    if node.macro_token.as_deref() != Some("Bl") {
         return None;
     }
     Some(match node.list_kind {
@@ -347,7 +347,7 @@ pub(super) fn mdoc_list_topology_kind(node: &Node) -> Option<MdocContainerKind> 
         None if node.children.iter().any(|child| {
             child.kind == NodeKind::Body
                 && child.children.iter().any(|item| {
-                    item.macro_name.as_deref() == Some("It")
+                    item.macro_token.as_deref() == Some("It")
                         && item
                             .children
                             .iter()
@@ -379,7 +379,7 @@ pub(super) fn ast_tag_is_bullet(node: &Node) -> bool {
     // Only the authored named bullet is a list obligation; punctuation and
     // editor keys such as `*` and `o` must not become fabricated expectations.
     // IP's remaining head children are layout operands, not tag text.
-    let tag = if node.macro_name.as_deref() == Some("IP") {
+    let tag = if node.macro_token.as_deref() == Some("IP") {
         let Some(tag) = head.children.first() else {
             return false;
         };
@@ -431,7 +431,7 @@ fn mdoc_column_rows(node: &Node) -> Vec<AstTableRowTopology> {
         .iter()
         .filter(|part| part.kind == NodeKind::Body)
         .flat_map(|body| &body.children)
-        .filter(|item| item.macro_name.as_deref() == Some("It"))
+        .filter(|item| item.macro_token.as_deref() == Some("It"))
         .filter_map(|item| {
             let cells = item
                 .children
@@ -553,7 +553,7 @@ fn mdoc_definition_is_recoverable_ordinal_list(node: &Node) -> bool {
         .iter()
         .filter(|part| part.kind == NodeKind::Body)
         .flat_map(|body| &body.children)
-        .filter(|item| item.macro_name.as_deref() == Some("It"))
+        .filter(|item| item.macro_token.as_deref() == Some("It"))
         .filter_map(|item| {
             item.children
                 .iter()

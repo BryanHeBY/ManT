@@ -3,6 +3,7 @@ use super::{
     Font, Inline, InlineBuilder, Node, NodeKind, RoffInlineEvent, append_inline_node,
     append_inline_nodes, decode, first_part_children, inline_children,
 };
+use libmandoc_rs::{MacroToken::Man, ManMacro};
 
 pub(in crate::mandoc::inline) mod presentation;
 
@@ -565,7 +566,7 @@ pub(in crate::mandoc) fn append_man_link(
     builder.font.select(Font::Regular); // HEAD pre
     builder.font.select(Font::Regular); // HEAD post
     builder.font.select(Font::Regular); // BODY pre
-    let link_target = if node.macro_name.as_deref() == Some("MT") {
+    let link_target = if node.macro_token.as_ref() == Some(&Man(ManMacro::Mt)) {
         mant_ir::LinkTarget::Email {
             address: target.clone(),
         }

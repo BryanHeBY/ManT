@@ -4,13 +4,27 @@ use super::{
     participates_in_inline_flow, source_span, targets,
 };
 use crate::mandoc::controls::{FormatterBoundary, formatter_control};
+use libmandoc_rs::{
+    MacroToken::{Man, Mdoc, Roff},
+    ManMacro, MdocMacro, RoffMacro,
+};
 
 pub(super) fn is_no_fill_payload(node: &Node, single_line_literal: bool) -> bool {
     (node.flags.no_fill || single_line_literal)
         && participates_in_inline_flow(node)
         && !matches!(
-            node.macro_name.as_deref(),
-            Some("PD" | "nf" | "fi" | "EX" | "EE" | "Sm" | "ft" | "in" | "sp" | "br" | "Pp")
+            node.macro_token.as_ref(),
+            Some(
+                Man(ManMacro::Pd | ManMacro::Ex | ManMacro::Ee | ManMacro::In)
+                    | Roff(
+                        RoffMacro::Nf
+                            | RoffMacro::Fi
+                            | RoffMacro::Ft
+                            | RoffMacro::Sp
+                            | RoffMacro::Br
+                    )
+                    | Mdoc(MdocMacro::Sm | MdocMacro::Pp)
+            )
         )
 }
 
@@ -22,7 +36,7 @@ pub(super) fn is_no_fill_payload(node: &Node, single_line_literal: bool) -> bool
 /// `\c`, `\p`, and `\z` state crosses them.  Requests that establish a real
 /// line boundary are settled before their normal block dispatch executes.
 pub(super) fn no_fill_boundary(node: &Node, single_line_literal: bool) -> FormatterBoundary {
-    if let Some(control) = formatter_control(node.macro_name.as_deref()) {
+    if let Some(control) = formatter_control(node.macro_token.as_ref()) {
         return control.boundary;
     }
     // These block scopes do not execute term_newln() on entry. The common
@@ -37,7 +51,7 @@ pub(super) fn no_fill_boundary(node: &Node, single_line_literal: bool) -> Format
         // Their pre handlers do not call term_newln(); only the common
         // NODE_LINE gate can close it (mdoc_term.c:314-318,1799,1921).
         || crate::mandoc::containers::is_container(node)
-        || matches!(node.macro_name.as_deref(), Some("Rs" | "UR" | "MT"))
+        || matches!(node.macro_token.as_ref(), Some(Mdoc(MdocMacro::Rs) | Man(ManMacro::Ur | ManMacro::Mt)))
     {
         FormatterBoundary::None
     } else {
@@ -81,7 +95,8 @@ impl super::BlockLowerer<'_, '_> {
 
     pub(super) fn push_no_fill_synopsis(&mut self, node: &Node) -> bool {
         let body = first_part_children(node, NodeKind::Body);
-        if node.macro_name.as_deref() != Some("SY") || !body.iter().any(|child| child.flags.no_fill)
+        if node.macro_token.as_ref() != Some(&Man(ManMacro::Sy))
+            || !body.iter().any(|child| child.flags.no_fill)
         {
             return false;
         }

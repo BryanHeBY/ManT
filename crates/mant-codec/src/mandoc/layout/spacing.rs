@@ -1,5 +1,9 @@
 //! Vertical source distances, paragraph requests and explicit boundary gaps.
 use libmandoc_rs::Node;
+use libmandoc_rs::{
+    MacroToken::{Man, Mdoc},
+    ManMacro, MdocMacro,
+};
 use mant_ir::Block;
 
 use super::first_text;
@@ -52,7 +56,7 @@ impl crate::mandoc::LoweringContext<'_> {
 
 /// Update the current man(7) paragraph distance after a `.PD` request.
 pub(in crate::mandoc) fn update_paragraph_distance(node: &Node, paragraph_distance: &mut u16) {
-    if node.macro_name.as_deref() == Some("PD")
+    if node.macro_token.as_ref() == Some(&Man(ManMacro::Pd))
         && let Some(lines) = paragraph_distance_lines(node)
     {
         *paragraph_distance = lines;
@@ -66,10 +70,10 @@ pub(in crate::mandoc) fn section_spacing(
     has_preceding_content: bool,
     paragraph_distance: u16,
 ) -> u16 {
-    match node.macro_name.as_deref() {
+    match node.macro_token.as_ref() {
         // man(7) uses the current `.PD` value, except before the first heading
         // at a level and after an empty peer section.
-        Some("SH" | "SS") => {
+        Some(Man(ManMacro::Sh | ManMacro::Ss)) => {
             if has_preceding_content {
                 paragraph_distance
             } else {
@@ -78,8 +82,8 @@ pub(in crate::mandoc) fn section_spacing(
         }
         // mdoc(7) gives top-level sections one row even before the first Sh;
         // Ss only receives it when visible content precedes the heading.
-        Some("Sh") => u16::from(is_first || has_preceding_content),
-        Some("Ss") => u16::from(has_preceding_content),
+        Some(Mdoc(MdocMacro::Sh)) => u16::from(is_first || has_preceding_content),
+        Some(Mdoc(MdocMacro::Ss)) => u16::from(has_preceding_content),
         _ => 0,
     }
 }

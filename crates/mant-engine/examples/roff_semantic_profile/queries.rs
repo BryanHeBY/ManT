@@ -39,7 +39,7 @@ fn source_candidates(
     output: &mut Vec<Value>,
 ) {
     if node.line == line && node.column == column {
-        output.push(json!({"astPath": path, "macro": node.macro_name, "nodeKind": format!("{:?}", node.kind), "text": node.text}));
+        output.push(json!({"astPath": path, "macro": node.macro_token, "nodeKind": format!("{:?}", node.kind), "text": node.text}));
     }
     for (index, child) in node.children.iter().enumerate() {
         path.push(index);

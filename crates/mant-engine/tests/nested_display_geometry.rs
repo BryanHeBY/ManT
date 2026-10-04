@@ -346,7 +346,7 @@ fn assert_column_display_source(source: &str) {
     let item = body
         .children
         .iter()
-        .find(|node| node.kind == NodeKind::Block && node.macro_name.as_deref() == Some("It"))
+        .find(|node| node.kind == NodeKind::Block && node.macro_token.as_deref() == Some("It"))
         .unwrap();
     let item_body = item
         .children
@@ -355,7 +355,7 @@ fn assert_column_display_source(source: &str) {
         .unwrap();
     assert!(
         item_body.children.iter().any(|node| {
-            node.kind == NodeKind::Block && node.macro_name.as_deref() == Some("Bd")
+            node.kind == NodeKind::Block && node.macro_token.as_deref() == Some("Bd")
         })
     );
 }

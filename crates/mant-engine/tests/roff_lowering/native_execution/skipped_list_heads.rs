@@ -15,7 +15,7 @@ struct Case {
 }
 
 fn item_head(node: &Node) -> Option<&Node> {
-    if node.kind == NodeKind::Block && node.macro_name.as_deref() == Some("It") {
+    if node.kind == NodeKind::Block && node.macro_token.as_deref() == Some("It") {
         return node
             .children
             .iter()

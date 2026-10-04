@@ -1,5 +1,8 @@
 //! Read-only native logical sibling lookup, distinct from container routing.
-use libmandoc_rs::{Node, NodeKind};
+use libmandoc_rs::{
+    MacroToken::{Man, Mdoc, Roff},
+    ManMacro, MdocMacro, Node, NodeKind, RoffMacro,
+};
 
 /// Mirror mandoc's `roff_node_next` contract: skip nonprinting controls, but
 /// never skip a visible scope such as Bf/Bk simply because its body is routed
@@ -16,20 +19,11 @@ pub(super) fn is_logical_sibling(node: &Node) -> bool {
     !node.flags.no_print
         && node.kind != NodeKind::Comment
         && !matches!(
-            node.macro_name.as_deref(),
+            node.macro_token.as_ref(),
             Some(
-                "ft" | "ll"
-                    | "mc"
-                    | "po"
-                    | "ta"
-                    | "Db"
-                    | "Es"
-                    | "Sm"
-                    | "Tg"
-                    | "DT"
-                    | "UC"
-                    | "PD"
-                    | "AT"
+                Roff(RoffMacro::Ft | RoffMacro::Ll | RoffMacro::Mc | RoffMacro::Po | RoffMacro::Ta)
+                    | Mdoc(MdocMacro::Db | MdocMacro::Es | MdocMacro::Sm | MdocMacro::Tg)
+                    | Man(ManMacro::Dt | ManMacro::Uc | ManMacro::Pd | ManMacro::At)
             )
         )
 }

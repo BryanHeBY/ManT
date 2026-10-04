@@ -1,6 +1,7 @@
 //! Container events re-enter the single driver and preserve font/flush lifetimes.
 use super::{InlineBuilder, Node, source_span, targets};
 use crate::mandoc::containers::{ContainerSink, Event};
+use libmandoc_rs::{MacroToken::Mdoc, MdocMacro};
 
 fn append_generated_event(builder: &mut InlineBuilder, event: Event<'_>) {
     match event {
@@ -100,7 +101,10 @@ impl super::BlockLowerer<'_, '_> {
             return false;
         }
         if node.scope_end.is_none()
-            && !matches!(node.macro_name.as_deref(), Some("Bf" | "Bk"))
+            && !matches!(
+                node.macro_token.as_ref(),
+                Some(Mdoc(MdocMacro::Bf | MdocMacro::Bk))
+            )
             && !self.state.formatter.no_fill
             && !self.column_field
             && !self.context.scope_posts.has_structural_payload(node)

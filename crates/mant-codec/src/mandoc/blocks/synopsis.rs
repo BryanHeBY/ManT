@@ -3,6 +3,10 @@ use super::{
     Block, Inline, InlineBuilder, LoweringContext, Node, NodeKind, ScopeFlow, first_part_children,
     layout, lower_scope, source_span,
 };
+use libmandoc_rs::{
+    MacroToken::{Man, Mdoc, Roff},
+    ManMacro, MdocMacro, RoffMacro,
+};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum SynopsisDeclarationRole {
@@ -33,15 +37,15 @@ pub(super) enum SynopsisToken {
 
 impl SynopsisToken {
     pub(super) fn from_node(node: &Node) -> Self {
-        match node.macro_name.as_deref() {
-            Some("Nm") => Self::Nm,
-            Some("Vt") => Self::Vt,
-            Some("Cd") => Self::Cd,
-            Some("Fd") => Self::Fd,
-            Some("Ft") => Self::Ft,
-            Some("Fn") => Self::Fn,
-            Some("In") => Self::In,
-            Some("Fo") => Self::Fo,
+        match node.macro_token.as_ref() {
+            Some(Mdoc(MdocMacro::Nm)) => Self::Nm,
+            Some(Mdoc(MdocMacro::Vt)) => Self::Vt,
+            Some(Mdoc(MdocMacro::Cd)) => Self::Cd,
+            Some(Mdoc(MdocMacro::Fd)) => Self::Fd,
+            Some(Mdoc(MdocMacro::Ft)) => Self::Ft,
+            Some(Mdoc(MdocMacro::Fn)) => Self::Fn,
+            Some(Mdoc(MdocMacro::In)) => Self::In,
+            Some(Mdoc(MdocMacro::Fo)) => Self::Fo,
             _ => Self::Other,
         }
     }
@@ -65,20 +69,11 @@ pub(super) fn transparent_synopsis_predecessor(node: &Node) -> bool {
     node.kind == NodeKind::Comment
         || node.flags.no_print
         || matches!(
-            node.macro_name.as_deref(),
+            node.macro_token.as_ref(),
             Some(
-                "ft" | "ll"
-                    | "mc"
-                    | "po"
-                    | "ta"
-                    | "Db"
-                    | "Es"
-                    | "Sm"
-                    | "Tg"
-                    | "DT"
-                    | "UC"
-                    | "PD"
-                    | "AT"
+                Roff(RoffMacro::Ft | RoffMacro::Ll | RoffMacro::Mc | RoffMacro::Po | RoffMacro::Ta)
+                    | Mdoc(MdocMacro::Db | MdocMacro::Es | MdocMacro::Sm | MdocMacro::Tg)
+                    | Man(ManMacro::Dt | ManMacro::Uc | ManMacro::Pd | ManMacro::At)
             )
         )
 }
@@ -132,11 +127,13 @@ fn mdoc_synopsis_declaration_role(node: &Node) -> Option<SynopsisDeclarationRole
     if !synopsis_pretty {
         return None;
     }
-    match node.macro_name.as_deref()? {
-        "Fd" => Some(SynopsisDeclarationRole::PostBreak),
-        "Cd" | "In" | "Vt" => Some(SynopsisDeclarationRole::NoPostBreak),
-        "Ft" => Some(SynopsisDeclarationRole::ReturnType),
-        "Fn" | "Fo" => Some(SynopsisDeclarationRole::Function),
+    match node.macro_token.as_ref()? {
+        Mdoc(MdocMacro::Fd) => Some(SynopsisDeclarationRole::PostBreak),
+        Mdoc(MdocMacro::Cd | MdocMacro::In | MdocMacro::Vt) => {
+            Some(SynopsisDeclarationRole::NoPostBreak)
+        }
+        Mdoc(MdocMacro::Ft) => Some(SynopsisDeclarationRole::ReturnType),
+        Mdoc(MdocMacro::Fn | MdocMacro::Fo) => Some(SynopsisDeclarationRole::Function),
         _ => None,
     }
 }
@@ -151,7 +148,7 @@ pub(super) fn lower_synopsis_head(
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) {
     let head = execute_synopsis_head(node, context, spacing_enabled, formatter);
-    if node.macro_name.as_deref() == Some("SY") {
+    if node.macro_token.as_ref() == Some(&Man(ManMacro::Sy)) {
         // The HEAD post already selected Roman; BODY entry is another
         // print_man_node() pre transition, even if its font is Roman too.
         formatter
@@ -165,7 +162,7 @@ pub(super) fn lower_synopsis_head(
         formatter,
         ScopeFlow::filled(indent_columns, spacing_enabled),
     );
-    if node.macro_name.as_deref() == Some("SY") {
+    if node.macro_token.as_ref() == Some(&Man(ManMacro::Sy)) {
         // BODY post and BLOCK post both execute the man(7) font reset.
         // Replacing Roman twice matters to a following \fP.
         formatter
@@ -211,7 +208,7 @@ pub(super) fn execute_synopsis_head(
     // man_term.c::print_man_node() and mdoc_term.c::print_mdoc_node()
     // execute HEAD children in the same formatter stream as BODY. The head
     // is a separate IR destination, not a separate font/zero-width state.
-    if node.macro_name.as_deref() == Some("SY") {
+    if node.macro_token.as_ref() == Some(&Man(ManMacro::Sy)) {
         // Unlike mdoc Nm, each man SY BLOCK/HEAD boundary resets the native
         // current font before the head pre-handler selects bold.
         formatter
@@ -233,7 +230,7 @@ pub(super) fn execute_synopsis_head(
         context.default_name,
     );
     head_builder.font.pop_scope(saved_font);
-    let head = if node.macro_name.as_deref() == Some("SY")
+    let head = if node.macro_token.as_ref() == Some(&Man(ManMacro::Sy))
         || !first_part_children(node, NodeKind::Body).is_empty()
     {
         // man_term.c::post_SY(HEAD) always flushes; mdoc_term.c's
@@ -249,7 +246,7 @@ pub(super) fn execute_synopsis_head(
         assert_eq!(no_output.len(), 0);
         head
     };
-    if node.macro_name.as_deref() == Some("SY") {
+    if node.macro_token.as_ref() == Some(&Man(ManMacro::Sy)) {
         // man_term.c::print_man_node() replaces the current font at HEAD
         // post and again at BODY entry. Both transitions update fontlast,
         // which a BODY-leading \fP reads before any visible argument.

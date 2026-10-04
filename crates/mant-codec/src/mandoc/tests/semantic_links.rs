@@ -652,7 +652,7 @@ fn mail_identity_decoding_cannot_erase_native_control_only_operands() {
 #[test]
 fn recovered_inline_man_links_share_the_document_head_identity_decoder() {
     fn block<'a>(node: &'a libmandoc_rs::Node, name: &str) -> Option<&'a libmandoc_rs::Node> {
-        if node.kind == libmandoc_rs::NodeKind::Block && node.macro_name.as_deref() == Some(name) {
+        if node.kind == libmandoc_rs::NodeKind::Block && node.macro_token.as_deref() == Some(name) {
             return Some(node);
         }
         node.children.iter().find_map(|node| block(node, name))
@@ -719,7 +719,7 @@ fn recovered_inline_man_links_share_the_document_head_identity_decoder() {
 #[test]
 fn recovered_inline_man_link_annotation_cannot_skip_native_post_words() {
     fn block<'a>(node: &'a libmandoc_rs::Node, name: &str) -> Option<&'a libmandoc_rs::Node> {
-        if node.kind == libmandoc_rs::NodeKind::Block && node.macro_name.as_deref() == Some(name) {
+        if node.kind == libmandoc_rs::NodeKind::Block && node.macro_token.as_deref() == Some(name) {
             return Some(node);
         }
         node.children.iter().find_map(|node| block(node, name))

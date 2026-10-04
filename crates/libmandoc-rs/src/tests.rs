@@ -50,7 +50,7 @@ fn parse_file(path: &std::path::Path, allow_includes: bool) -> Result<Document, 
 }
 
 fn find_macro<'a>(node: &'a Node, name: &str) -> Option<&'a Node> {
-    (node.macro_name.as_deref() == Some(name))
+    (node.macro_token.as_deref() == Some(name))
         .then_some(node)
         .or_else(|| {
             node.children

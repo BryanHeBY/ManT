@@ -24,7 +24,7 @@ fn assert_rows(body: &str, expected: &[&str]) {
             .parse_bytes("field-lifecycle.1", source.as_bytes())
             .unwrap();
         let item = find(&report.document.root, |node| {
-            node.kind == NodeKind::Block && node.macro_name.as_deref() == Some("It")
+            node.kind == NodeKind::Block && node.macro_token.as_deref() == Some("It")
         })
         .unwrap();
         let head = item
@@ -32,7 +32,7 @@ fn assert_rows(body: &str, expected: &[&str]) {
             .iter()
             .find(|node| node.kind == NodeKind::Head)
             .unwrap();
-        assert!(find(head, |node| node.macro_name.as_deref() == Some("Xo")).is_some());
+        assert!(find(head, |node| node.macro_token.as_deref() == Some("Xo")).is_some());
     }
     let query = mant_loader::load_roff_bytes(source.as_bytes()).expect("load roff");
     let json = serde_json::to_string(&mant_protocol::QueryBundle::from(&query)).unwrap();

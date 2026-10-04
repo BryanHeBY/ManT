@@ -1,5 +1,6 @@
 //! mdoc width samples and named display-offset policy.
 use libmandoc_rs::Node;
+use libmandoc_rs::{MacroToken::Mdoc, MdocMacro};
 
 use super::Distance;
 
@@ -14,7 +15,10 @@ impl crate::mandoc::LoweringContext<'_> {
     }
 
     pub(in crate::mandoc) fn display_offset(&self, node: &Node) -> Distance {
-        if matches!(node.macro_name.as_deref(), Some("D1" | "Dl")) {
+        if matches!(
+            node.macro_token.as_ref(),
+            Some(Mdoc(MdocMacro::D1 | MdocMacro::Dl))
+        ) {
             return Distance::cells(6);
         }
         match node.offset.as_deref() {

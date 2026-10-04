@@ -12,7 +12,7 @@ use libmandoc_rs::{Compression, IncludePolicy, Node, ParseOptions, Parser};
 
 #[cfg(unix)]
 fn has_macro(node: &Node, name: &str) -> bool {
-    node.macro_name.as_deref() == Some(name)
+    node.macro_token.as_deref() == Some(name)
         || node.children.iter().any(|child| has_macro(child, name))
 }
 

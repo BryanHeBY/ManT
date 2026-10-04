@@ -4,7 +4,11 @@
 //! `man_html.c`, `roff_html.c`). The one source-order node walk and its
 //! observable routing order live in [`walker`].
 
-use libmandoc_rs::{DisplayKind, Node, NodeKind};
+use libmandoc_rs::{
+    DisplayKind,
+    MacroToken::{Man, Mdoc, Roff},
+    ManMacro, MdocMacro, Node, NodeKind, RoffMacro,
+};
 use mant_ir::{Block, Inline, Section};
 
 use super::{
@@ -359,20 +363,11 @@ pub(super) fn is_native_transparent_sibling(node: &Node) -> bool {
     node.kind == NodeKind::Comment
         || node.flags.no_print
         || matches!(
-            node.macro_name.as_deref(),
+            node.macro_token.as_ref(),
             Some(
-                "ft" | "ll"
-                    | "mc"
-                    | "po"
-                    | "ta"
-                    | "Db"
-                    | "Es"
-                    | "Sm"
-                    | "Tg"
-                    | "DT"
-                    | "UC"
-                    | "PD"
-                    | "AT"
+                Roff(RoffMacro::Ft | RoffMacro::Ll | RoffMacro::Mc | RoffMacro::Po | RoffMacro::Ta)
+                    | Mdoc(MdocMacro::Db | MdocMacro::Es | MdocMacro::Sm | MdocMacro::Tg)
+                    | Man(ManMacro::Dt | ManMacro::Uc | ManMacro::Pd | ManMacro::At)
             )
         )
 }
@@ -381,7 +376,15 @@ pub(super) fn is_native_transparent_sibling(node: &Node) -> bool {
 /// structures such as tables and equations inherit the current `.in` position.
 pub(super) fn restores_macro_indent(node: &Node) -> bool {
     matches!(
-        node.macro_name.as_deref(),
-        Some("PP" | "P" | "LP" | "HP" | "TP" | "TQ" | "IP" | "RS" | "SY")
+        node.macro_token.as_ref(),
+        Some(Man(ManMacro::Pp
+            | ManMacro::P
+            | ManMacro::Lp
+            | ManMacro::Hp
+            | ManMacro::Tp
+            | ManMacro::Tq
+            | ManMacro::Ip
+            | ManMacro::Rs
+            | ManMacro::Sy))
     )
 }

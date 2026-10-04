@@ -136,8 +136,8 @@ fn man_request_font_order_follows_reading_terminal_registers() {
 #[test]
 fn retained_man_paragraph_macro_names_reset_persistent_font_state() {
     fn retain_paragraph_name(node: &mut libmandoc_rs::Node, name: &str) {
-        if node.macro_name.as_deref() == Some("PP") {
-            node.macro_name = Some(name.to_owned());
+        if node.macro_token.as_deref() == Some("PP") {
+            node.macro_token = Some(libmandoc_rs::MacroToken::from_name(name));
         }
         for child in &mut node.children {
             retain_paragraph_name(child, name);
@@ -215,7 +215,7 @@ fn diagnoses_future_structural_macros_before_discarding_visible_parts() {
         )
         .expect("parse structural fixture");
     let block = find_macro_mut(&mut report.document.root, "Fo").expect("Fo block");
-    block.macro_name = Some("FutureBlock".to_owned());
+    block.macro_token = Some(libmandoc_rs::MacroToken::Unknown("FutureBlock".to_owned()));
     let mut second_body = block
         .children
         .iter()

@@ -3,7 +3,7 @@
 use libmandoc_rs::{Node, NodeKind, Parser};
 
 fn outer_item(node: &Node) -> Option<&Node> {
-    if node.kind == NodeKind::Block && node.macro_name.as_deref() == Some("It") {
+    if node.kind == NodeKind::Block && node.macro_token.as_deref() == Some("It") {
         return Some(node);
     }
     node.children.iter().find_map(outer_item)
@@ -34,7 +34,7 @@ fn nested_list_entry_consumes_occupied_head_rows_without_borrowing_their_padding
             .unwrap();
         assert!(
             body.children.iter().any(|node| {
-                node.kind == NodeKind::Block && node.macro_name.as_deref() == Some("Bl")
+                node.kind == NodeKind::Block && node.macro_token.as_deref() == Some("Bl")
             }),
             "{name}: nested Bl must execute in the outer BODY"
         );

@@ -12,11 +12,11 @@ struct Case {
 
 fn contains_extended_head(node: &Node) -> bool {
     (node.kind == NodeKind::Head
-        && node.macro_name.as_deref() == Some("It")
+        && node.macro_token.as_deref() == Some("It")
         && node
             .children
             .iter()
-            .any(|child| child.macro_name.as_deref() == Some("Xo")))
+            .any(|child| child.macro_token.as_deref() == Some("Xo")))
         || node.children.iter().any(contains_extended_head)
 }
 

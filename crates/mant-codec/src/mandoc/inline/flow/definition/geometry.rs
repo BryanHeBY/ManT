@@ -291,10 +291,17 @@ impl super::super::InlineExecutionState {
         // rmargin only; this ledger records the offset relevant to reading.
         if self.macro_set != libmandoc_rs::MacroSet::Mdoc
             || node.kind == libmandoc_rs::NodeKind::Text
-            || node
-                .macro_name
-                .as_deref()
-                .is_some_and(|name| name.as_bytes().first().is_some_and(u8::is_ascii_lowercase))
+            || node.macro_token.as_ref().is_some_and(|token| match token {
+                // mdoc_term.c::print_mdoc_node() returns immediately for
+                // node-producing roff tokens, before geometry restoration.
+                libmandoc_rs::MacroToken::Roff(request) => request.generates_node(),
+                // Preserve the fallback for manually extended owned ASTs.
+                libmandoc_rs::MacroToken::Man(libmandoc_rs::ManMacro::In) => true,
+                libmandoc_rs::MacroToken::Unknown(name) => {
+                    name.as_bytes().first().is_some_and(u8::is_ascii_lowercase)
+                }
+                _ => false,
+            })
         {
             return None;
         }

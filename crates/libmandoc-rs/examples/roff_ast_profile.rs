@@ -125,7 +125,7 @@ fn collect_node_features(node: &Node, parent: Option<&Node>, features: &mut BTre
     features.insert(format!("node:{kind}"));
     let identity = node_identity(node);
     let mut properties = BTreeSet::new();
-    if let Some(name) = node.macro_name.as_deref() {
+    if let Some(name) = node.macro_token.as_deref() {
         features.insert(format!("macro:{name}"));
         features.insert(format!("macro-kind:{name}:{kind}"));
     }
@@ -223,7 +223,7 @@ fn collect_node_features(node: &Node, parent: Option<&Node>, features: &mut BTre
 }
 
 fn node_identity(node: &Node) -> String {
-    node.macro_name.as_deref().map_or_else(
+    node.macro_token.as_deref().map_or_else(
         || node_kind_name(node.kind).to_owned(),
         |name| format!("{name}:{}", node_kind_name(node.kind)),
     )

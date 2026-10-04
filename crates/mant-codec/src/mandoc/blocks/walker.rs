@@ -8,6 +8,10 @@
 //! return, never replay its macros.
 
 use libmandoc_rs::Node;
+use libmandoc_rs::{
+    MacroToken::{Man, Mdoc, Roff},
+    ManMacro, MdocMacro, RoffMacro,
+};
 
 use super::super::controls::{FormatterBoundary, formatter_control};
 use super::{
@@ -35,7 +39,7 @@ impl BlockLowerer<'_, '_> {
             let previous_is_sy = previous_native_is_sy;
             if !is_native_transparent_sibling(node) {
                 has_native_sibling = true;
-                previous_native_is_sy = node.macro_name.as_deref() == Some("SY");
+                previous_native_is_sy = node.macro_token.as_ref() == Some(&Man(ManMacro::Sy));
             }
             if is_inline_equation_quote_artifact(nodes, index) {
                 continue;
@@ -111,7 +115,7 @@ impl BlockLowerer<'_, '_> {
         }
         // A retained Pp executes term_vspace even when native no-fill flags
         // would otherwise route it through inline-only word lowering.
-        if node.macro_name.as_deref() == Some("Pp") {
+        if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Pp)) {
             self.state.flush_preformatted();
             let lines = self.state.resolve_vertical_space(1);
             self.state.flush_paragraph_for_line_request();
@@ -135,18 +139,24 @@ impl BlockLowerer<'_, '_> {
                 .queue_targets(structural_targets, source_span(node));
             return;
         }
-        if node.macro_name.as_deref() == Some("Rs") {
+        if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Rs)) {
             self.push_bibliography(node);
             return;
         }
-        if matches!(node.macro_name.as_deref(), Some("UR" | "MT")) {
+        if matches!(
+            node.macro_token.as_ref(),
+            Some(Man(ManMacro::Ur | ManMacro::Mt))
+        ) {
             // man_term.c::print_man_node() observes this source line before
             // pre_UR(), but pre_UR() itself does not close a formatter row.
             // Keep the active literal sink and pending \c/\z for BODY text.
             self.push_man_link(node);
             return;
         }
-        if matches!(node.macro_name.as_deref(), Some("PP" | "P" | "LP")) {
+        if matches!(
+            node.macro_token.as_ref(),
+            Some(Man(ManMacro::Pp | ManMacro::P | ManMacro::Lp))
+        ) {
             self.push_man_paragraph(node, source.predecessor);
             return;
         }
@@ -163,7 +173,7 @@ impl BlockLowerer<'_, '_> {
                 return;
             }
         }
-        if node.macro_name.as_deref() == Some("br") {
+        if node.macro_token.as_ref() == Some(&Roff(RoffMacro::Br)) {
             self.state.hard_break();
         } else if participates_in_inline_flow(node) {
             self.push_inline_node(node, next);
@@ -232,16 +242,18 @@ impl BlockLowerer<'_, '_> {
     /// Requests and words borrow the same live paragraph/native buffer; real
     /// structural nodes continue through the ordinary block driver below.
     fn push_column_payload(&mut self, node: &Node, next: Option<&Node>) -> bool {
-        if node.macro_name.as_deref() == Some("Pp") {
+        if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Pp)) {
             self.state.column_vertical_space(1);
             return true;
         }
         if participates_in_inline_flow(node)
-            || formatter_control(node.macro_name.as_deref())
+            || formatter_control(node.macro_token.as_ref())
                 .is_some_and(|control| !control.specialized)
             || matches!(
-                node.macro_name.as_deref(),
-                Some("br" | "sp" | "nf" | "fi" | "ta")
+                node.macro_token.as_ref(),
+                Some(Roff(
+                    RoffMacro::Br | RoffMacro::Sp | RoffMacro::Nf | RoffMacro::Fi | RoffMacro::Ta
+                ))
             )
         {
             self.push_inline_node(node, next);
@@ -255,7 +267,7 @@ impl BlockLowerer<'_, '_> {
         self.state.formatter.execute_tab_configuration(node);
         if !self.column_field
             && node.kind == libmandoc_rs::NodeKind::Block
-            && node.macro_name.as_deref() == Some("Bl")
+            && node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Bl))
         {
             // Bl BLOCK pre is term_newln(), including an occupied detached
             // HEAD with no BODY buffer (mdoc_term.c:1128-1134). An IR drain
@@ -271,10 +283,15 @@ impl BlockLowerer<'_, '_> {
             // owner: Bl/D1/Dl call term_newln(), and Bd's print_bvspace()
             // starts with the same call. Requests retain their own dispatch.
             if node.kind == libmandoc_rs::NodeKind::Block
-                && matches!(node.macro_name.as_deref(), Some("Bl" | "Bd" | "D1" | "Dl"))
+                && matches!(
+                    node.macro_token.as_ref(),
+                    Some(Mdoc(
+                        MdocMacro::Bl | MdocMacro::Bd | MdocMacro::D1 | MdocMacro::Dl
+                    ))
+                )
             {
                 self.state.finish_column_nested_row();
-                if node.macro_name.as_deref() == Some("Bd")
+                if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Bd))
                     && !node.compact
                     && self.paragraph_predecessor
                 {
@@ -290,7 +307,7 @@ impl BlockLowerer<'_, '_> {
             }
             return;
         }
-        let formatter_control = formatter_control(node.macro_name.as_deref());
+        let formatter_control = formatter_control(node.macro_token.as_ref());
         if formatter_control.is_some_and(|control| control.boundary == FormatterBoundary::Line) {
             // This is the actual request dispatch, after HEAD execution and
             // before BODY output. The definition checkpoint records it once.
@@ -336,13 +353,20 @@ impl BlockLowerer<'_, '_> {
                 }
             }
         }
-        if node.macro_name.as_deref() == Some("SY") {
+        if node.macro_token.as_ref() == Some(&Man(ManMacro::Sy)) {
             // man_term.c::print_man_node() replaces the active slot when SY
             // BLOCK enters; it does not clear the font stack or fontlast.
             self.state.formatter.font.man_text_boundary();
         } else if matches!(
-            node.macro_name.as_deref(),
-            Some("PP" | "P" | "LP" | "HP" | "IP" | "TP" | "TQ" | "RS")
+            node.macro_token.as_ref(),
+            Some(Man(ManMacro::Pp
+                | ManMacro::P
+                | ManMacro::Lp
+                | ManMacro::Hp
+                | ManMacro::Ip
+                | ManMacro::Tp
+                | ManMacro::Tq
+                | ManMacro::Rs))
         ) {
             // This is the BLOCK pre transition, not a fresh font stack.
             // print_man_node() preserves the independent previous register.
@@ -368,9 +392,9 @@ impl BlockLowerer<'_, '_> {
 
     pub(super) fn observe_source_fill_mode(&mut self, node: &Node) {
         let was_no_fill = self.state.formatter.no_fill;
-        match node.macro_name.as_deref() {
-            Some("nf") => self.state.formatter.no_fill = true,
-            Some("fi") => self.state.formatter.no_fill = false,
+        match node.macro_token.as_ref() {
+            Some(Roff(RoffMacro::Nf)) => self.state.formatter.no_fill = true,
+            Some(Roff(RoffMacro::Fi)) => self.state.formatter.no_fill = false,
             _ if self.display_fill == Some(DisplayFillMode::NodeFlags) => {
                 self.state.formatter.no_fill = node.flags.no_fill;
             }

@@ -6,6 +6,10 @@ use super::{
     lower_scope, lower_synopsis_head, part_child_groups, plain_text, preformatted_blocks,
     set_block_spacing, source_span,
 };
+use libmandoc_rs::{
+    MacroToken::{Man, Mdoc},
+    ManMacro, MdocMacro,
+};
 
 pub(super) struct StructuralLowerer<'a, 'source, 'state> {
     pub(super) context: &'a LoweringContext<'source>,
@@ -54,9 +58,11 @@ impl StructuralLowerer<'_, '_, '_> {
         next: Option<&Node>,
         table_embedding: Option<&TableEmbedding>,
     ) {
-        let scoped_body = if matches!(node.macro_name.as_deref(), Some("Bl" | "Rs"))
-            || (node.macro_name.as_deref() == Some("Bd")
-                && node.display_kind == Some(DisplayKind::Filled))
+        let scoped_body = if matches!(
+            node.macro_token.as_ref(),
+            Some(Mdoc(MdocMacro::Bl | MdocMacro::Rs))
+        ) || (node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Bd))
+            && node.display_kind == Some(DisplayKind::Filled))
         {
             node.children
                 .iter()
@@ -83,17 +89,23 @@ impl StructuralLowerer<'_, '_, '_> {
         next: Option<&Node>,
         table_embedding: Option<&TableEmbedding>,
     ) {
-        let continues_ip_item =
-            node.macro_name.as_deref() == Some("RS") && self.man_list_state.is_active();
-        if !matches!(node.macro_name.as_deref(), Some("IP" | "TP")) && !continues_ip_item {
+        let continues_ip_item = node.macro_token.as_ref() == Some(&Man(ManMacro::Rs))
+            && self.man_list_state.is_active();
+        if !matches!(
+            node.macro_token.as_ref(),
+            Some(Man(ManMacro::Ip | ManMacro::Tp))
+        ) && !continues_ip_item
+        {
             self.man_list_state.reset();
         }
         if self.lower_transparent_container(node, next) {
             return;
         }
-        match node.macro_name.as_deref() {
-            Some("TP" | "IP" | "TQ") => self.lower_man_definition(node),
-            Some("Bl") => {
+        match node.macro_token.as_ref() {
+            Some(Man(ManMacro::Tp | ManMacro::Ip | ManMacro::Tq)) => {
+                self.lower_man_definition(node);
+            }
+            Some(Mdoc(MdocMacro::Bl)) => {
                 let mut block = lower_mdoc_list(
                     node,
                     self.context,
@@ -116,7 +128,7 @@ impl StructuralLowerer<'_, '_, '_> {
                 }
                 self.output.push(block);
             }
-            Some("Bd" | "D1" | "Dl") => {
+            Some(Mdoc(MdocMacro::Bd | MdocMacro::D1 | MdocMacro::Dl)) => {
                 let has_predecessor = self.has_paragraph_predecessor();
                 let mut nested = preformatted_blocks(
                     node,
@@ -130,7 +142,7 @@ impl StructuralLowerer<'_, '_, '_> {
                     has_predecessor,
                     self.formatter,
                 );
-                if node.macro_name.as_deref() == Some("Bd")
+                if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Bd))
                     && has_predecessor
                     && !node.compact
                     // The shared column driver already executed native
@@ -153,7 +165,7 @@ impl StructuralLowerer<'_, '_, '_> {
                 }
                 self.output.extend(nested);
             }
-            Some("SY" | "Nm") => lower_synopsis_head(
+            Some(Man(ManMacro::Sy) | Mdoc(MdocMacro::Nm)) => lower_synopsis_head(
                 self.output,
                 node,
                 self.context,
@@ -222,7 +234,7 @@ impl StructuralLowerer<'_, '_, '_> {
         }
         let next_owner = next.filter(|next| {
             next.kind == NodeKind::Block
-                && next.macro_name.as_deref() == Some("IP")
+                && next.macro_token.as_ref() == Some(&Man(ManMacro::Ip))
                 && first_part_children(next, NodeKind::Head).is_empty()
                 && native_exit_epoch(node) == next.flow_epoch
         });
@@ -263,9 +275,9 @@ impl StructuralLowerer<'_, '_, '_> {
     }
 
     fn lower_transparent_container(&mut self, node: &Node, next: Option<&Node>) -> bool {
-        match node.macro_name.as_deref() {
-            Some("HP") => self.lower_man_hanging_paragraph(node, next),
-            Some("Bd") if node.display_kind == Some(DisplayKind::Filled) => {
+        match node.macro_token.as_ref() {
+            Some(Man(ManMacro::Hp)) => self.lower_man_hanging_paragraph(node, next),
+            Some(Mdoc(MdocMacro::Bd)) if node.display_kind == Some(DisplayKind::Filled) => {
                 let has_predecessor = self.has_paragraph_predecessor();
                 let spacing_before = u16::from(has_predecessor && !node.compact);
                 let nested = super::lower_scope(
@@ -285,7 +297,7 @@ impl StructuralLowerer<'_, '_, '_> {
                 );
                 extend_blocks_with_spacing(self.output, nested, spacing_before, node);
             }
-            Some("RS") => {
+            Some(Man(ManMacro::Rs)) => {
                 // mandoc's print_bvspace climbs first-child RS wrappers to
                 // find a predecessor. A detached item-continuation buffer
                 // must not erase that source fact: RS itself adds no gap,

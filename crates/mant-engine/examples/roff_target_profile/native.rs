@@ -95,9 +95,10 @@ fn logical_owners(flattened: &[AstNodeRef<'_>]) -> (Vec<LogicalOwner>, usize) {
                 owner_source_line: reference.node.line,
                 owner_macro: reference
                     .node
-                    .macro_name
-                    .clone()
-                    .unwrap_or_else(|| "<none>".to_owned()),
+                    .macro_token
+                    .as_deref()
+                    .unwrap_or("<none>")
+                    .to_owned(),
                 owner_kind: format!("{:?}", reference.node.kind).to_ascii_lowercase(),
                 ast_path: logical_path,
                 section_heading: reference.section_heading,
@@ -395,7 +396,7 @@ pub(super) fn classify_target_owner(logical: &LogicalOwner) -> ClassifiedOwner {
 fn explicit_targets(nodes: &[AstNodeRef<'_>]) -> Vec<ExplicitTarget> {
     let mut targets = Vec::new();
     for (index, reference) in nodes.iter().enumerate() {
-        if reference.node.macro_name.as_deref() != Some("Tg") {
+        if reference.node.macro_token.as_deref() != Some("Tg") {
             continue;
         }
         let authored = explicit_target_argument(reference.node);
@@ -453,7 +454,7 @@ fn expected_container(owner_macro: &str) -> &'static str {
 }
 
 fn target_name(node: &Node) -> Option<String> {
-    if node.macro_name.as_deref() == Some("Tg") {
+    if node.macro_token.as_deref() == Some("Tg") {
         return explicit_target_argument(node).or_else(|| node.tag.clone());
     }
     node.tag
@@ -464,7 +465,7 @@ fn target_name(node: &Node) -> Option<String> {
 }
 
 fn explicit_target_argument(node: &Node) -> Option<String> {
-    if node.macro_name.as_deref() != Some("Tg") {
+    if node.macro_token.as_deref() != Some("Tg") {
         return None;
     }
     first_text_on_line(node, node.line)
@@ -505,7 +506,7 @@ fn flatten_nodes<'a>(
     output: &mut Vec<AstNodeRef<'a>>,
 ) {
     let is_section = node.kind == NodeKind::Block
-        && matches!(node.macro_name.as_deref(), Some("SH" | "SS" | "Sh" | "Ss"));
+        && matches!(node.macro_token.as_deref(), Some("SH" | "SS" | "Sh" | "Ss"));
     let section_source_line = if is_section {
         node.line
     } else {
@@ -519,7 +520,7 @@ fn flatten_nodes<'a>(
     };
     let section_heading = inside_section_heading
         || (node.kind == NodeKind::Head
-            && matches!(node.macro_name.as_deref(), Some("SH" | "SS" | "Sh" | "Ss")));
+            && matches!(node.macro_token.as_deref(), Some("SH" | "SS" | "Sh" | "Ss")));
     let order = output.len();
     output.push(AstNodeRef {
         node,

@@ -179,7 +179,7 @@ fn fd_post_uses_the_same_empty_and_pending_word_rules_in_each_sink() {
 }
 
 fn contains_macro(node: &Node, name: &str) -> bool {
-    node.macro_name.as_deref() == Some(name)
+    node.macro_token.as_deref() == Some(name)
         || node.children.iter().any(|node| contains_macro(node, name))
 }
 

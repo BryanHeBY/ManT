@@ -113,7 +113,6 @@ fn measure_node(node: &Node, root: bool, size: &mut AstSize) {
     }
     size.child_storage += node.children.capacity() * size_of::<Node>();
     for value in [
-        node.macro_name.as_ref(),
         node.text.as_ref(),
         node.tag.as_ref(),
         node.offset.as_ref(),
@@ -123,6 +122,9 @@ fn measure_node(node: &Node, root: bool, size: &mut AstSize) {
     .flatten()
     {
         size.string_storage += value.capacity();
+    }
+    if let Some(libmandoc_rs::MacroToken::Unknown(name)) = &node.macro_token {
+        size.string_storage += name.capacity();
     }
     if let Some(equation) = &node.equation {
         size.string_storage += equation.readable_text().len();

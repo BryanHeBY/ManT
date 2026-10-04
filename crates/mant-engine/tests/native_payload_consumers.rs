@@ -49,12 +49,15 @@ fn assert_native_owner(case: &Value) {
         .unwrap();
     let mut definitions = Vec::new();
     nodes(&native.document.root, &mut definitions, |node| {
-        node.kind == NodeKind::Block && matches!(node.macro_name.as_deref(), Some("It" | "TP"))
+        node.kind == NodeKind::Block && matches!(node.macro_token.as_deref(), Some("It" | "TP"))
     });
     let [owner] = definitions.as_slice() else {
         panic!("one source declaration: {}", case["id"]);
     };
-    assert_eq!(owner.macro_name.as_deref(), Some(text(case, "owner_macro")));
+    assert_eq!(
+        owner.macro_token.as_deref(),
+        Some(text(case, "owner_macro"))
+    );
     assert_eq!(u64::from(owner.line), case["owner_line"].as_u64().unwrap());
     let head = owner
         .children

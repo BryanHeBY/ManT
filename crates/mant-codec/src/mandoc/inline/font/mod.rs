@@ -4,6 +4,7 @@ use super::{
     Font, FontState, Inline, InlineBuilder, Node, RoffInlineEvent, append_inline_nodes,
     is_formatter_word_blank,
 };
+use libmandoc_rs::{MacroToken::Man, ManMacro};
 
 mod style;
 mod text_execution;
@@ -39,7 +40,7 @@ pub(super) fn lower_man_font_scope(
     default_name: Option<&str>,
 ) {
     output.font.select(Font::Regular);
-    if let Some((first, second)) = super::alternating_font_pair(node.macro_name.as_deref()) {
+    if let Some((first, second)) = super::alternating_font_pair(node.macro_token.as_ref()) {
         for (index, child) in node.children.iter().enumerate() {
             output
                 .font
@@ -69,7 +70,7 @@ pub(super) fn lower_man_font_scope(
         output.font.select(Font::Regular);
         return;
     }
-    if node.macro_name.as_deref() == Some("OP") {
+    if node.macro_token.as_ref() == Some(&Man(ManMacro::Op)) {
         // CVS man_term.c::pre_OP() emits both brackets with term_word().
         // Keep them in the caller's formatter stream so pending `\z`/`\p`
         // state crosses authored operands and generated punctuation in order.
@@ -100,9 +101,9 @@ pub(super) fn lower_man_font_scope(
         output.font.select(Font::Regular);
         return;
     }
-    match node.macro_name.as_deref() {
-        Some("B" | "SB") => output.font.select(Font::Strong),
-        Some("I") => output.font.select(Font::Emphasis),
+    match node.macro_token.as_ref() {
+        Some(Man(ManMacro::B | ManMacro::Sb)) => output.font.select(Font::Strong),
+        Some(Man(ManMacro::I)) => output.font.select(Font::Emphasis),
         _ => {}
     }
     super::append_inline_nodes(output, &node.children, default_name);

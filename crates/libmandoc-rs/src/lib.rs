@@ -10,6 +10,7 @@ mod diagnostics;
 mod equation;
 #[allow(unsafe_code)]
 mod ffi;
+mod macros;
 mod parser;
 #[cfg(feature = "render")]
 mod renderer;
@@ -26,6 +27,7 @@ pub use ast::{
 pub use compression::MAX_DECOMPRESSED_SOURCE_BYTES;
 pub use diagnostics::{Diagnostic, DiagnosticCode, DiagnosticLevel, SourceLocation};
 pub use equation::{EquationBox, EquationFont, EquationKind, EquationPosition};
+pub use macros::{MacroToken, ManMacro, MdocMacro, RoffMacro};
 pub use parser::{
     Compression, IncludePolicy, InputFormat, ParseError, ParseErrorKind, ParseOptions, ParseReport,
     Parser,

@@ -15,6 +15,13 @@ that crate was not published for that change.
 
 ### libmandoc-rs 0.12.0
 
+- Replace the Rust `Node::macro_name: Option<String>` field with
+  `Node::macro_token: Option<MacroToken>`. Typed `RoffMacro`, `ManMacro`, and
+  `MdocMacro` identities cover the pinned named-token inventory; only unknown
+  names retain owned strings. Known names avoid per-node string allocations.
+  Update struct literals and macro matches. The optional serde representation
+  retains the `macro_name` string property and canonical parsed-AST identities;
+  this change stays within the unpublished v0.12 API.
 - Reuse already checked strings during owned AST and table transfer, avoiding
   an extra copy for ordinary text while retaining both visible and native
   sentinel spellings where required. Strict UTF-8 validation, NULL/empty
@@ -83,6 +90,9 @@ that crate was not published for that change.
 
 ### mant-ir, mant-protocol, mant-codec, mant-loader, mant-query, mant-render, mant-engine and mant 0.12.0
 
+- Dispatch owned roff, man and mdoc macros by typed native identities throughout
+  lowering, sharing the same control and enclosure classification. Visible
+  text, links, field execution and source-neutral IR contracts are unchanged.
 - Open TUI manual links and manual catalog entries with their native target plus
   an available cached command quick reference. Add `LoadPolicy::ManualWithTldr`
   independently of source selection: explicit and resolver-selected section `1`

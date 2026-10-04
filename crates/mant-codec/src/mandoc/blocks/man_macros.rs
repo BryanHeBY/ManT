@@ -1,7 +1,7 @@
 //! man(7)-specific macro handling, the seed of the analog of upstream
 //! `man_html.c`'s `man_html_acts` dispatch family.
 
-use libmandoc_rs::{Node, NodeKind};
+use libmandoc_rs::{MacroToken::Man, ManMacro, Node, NodeKind};
 
 use super::{super::first_part_children, BlockLowerer, DEFAULT_MAN_TAG_WIDTH, NodeSourceContext};
 
@@ -37,7 +37,7 @@ impl BlockLowerer<'_, '_> {
     }
 
     pub(super) fn prepare_man_synopsis_spacing(&mut self, node: &Node, source: NodeSourceContext) {
-        if node.macro_name.as_deref() != Some("SY") {
+        if node.macro_token.as_ref() != Some(&Man(ManMacro::Sy)) {
             return;
         }
         self.state.flush_preformatted();

@@ -9,7 +9,9 @@
 //! this parser declines or cannot prove completion.
 
 use libmandoc_rs::{
-    Compression, IncludePolicy, InputFormat, MacroSet, NodeKind, ParseOptions, Parser,
+    Compression, IncludePolicy, InputFormat, MacroSet,
+    MacroToken::{Man, Mdoc},
+    ManMacro, MdocMacro, NodeKind, ParseOptions, Parser,
 };
 use mant_ir::Inline;
 use std::cell::RefCell;
@@ -129,7 +131,10 @@ pub(in crate::mandoc) fn lower_source_fragment_with_formatter_state(
     }
     clear_synthetic_targets(&mut report.document.root);
     let section = report.document.root.children.iter().rev().find(|node| {
-        matches!(node.macro_name.as_deref(), Some("Sh" | "SH")) && node.kind == NodeKind::Block
+        matches!(
+            node.macro_token.as_ref(),
+            Some(Mdoc(MdocMacro::Sh) | Man(ManMacro::Sh))
+        ) && node.kind == NodeKind::Block
     })?;
     let body = section
         .children
@@ -294,7 +299,10 @@ fn lower_body(
     builder.inherit_vertical_space_debt(formatter.vertical_space_debt);
     builder.inherit_zero_advance_armed(formatter.take_zero_advance_armed());
     for (index, node) in nodes.iter().enumerate() {
-        if matches!(node.macro_name.as_deref(), Some("UR" | "MT")) {
+        if matches!(
+            node.macro_token.as_ref(),
+            Some(Man(ManMacro::Ur | ManMacro::Mt))
+        ) {
             append_man_link(&mut builder, node, default_name, node.flags.no_fill);
         } else {
             append_inline_node_with_next(&mut builder, node, nodes.get(index + 1), default_name);
@@ -328,7 +336,10 @@ fn clear_synthetic_targets(node: &mut libmandoc_rs::Node) {
 
 fn inline_request(name: &str, dialect: MacroSet) -> bool {
     use crate::mandoc::controls::{OperandControl, operand_control};
-    match operand_control(Some(name)) {
+    // This entry reads a source fragment rather than an owned node. Resolve
+    // its spelling once before sharing the typed AST control classification.
+    let token = libmandoc_rs::MacroToken::from_name(name);
+    match operand_control(Some(&token)) {
         Some(OperandControl::Font | OperandControl::Presentation) => {
             return dialect != MacroSet::None;
         }

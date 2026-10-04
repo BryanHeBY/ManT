@@ -291,9 +291,9 @@ pub(super) fn ast_pairs<'a>(
             unreachable!()
         };
         if head.kind == libmandoc_rs::NodeKind::Block
-            && head.macro_name.as_deref() == Some("HP")
+            && head.macro_token.as_deref() == Some("HP")
             && body.kind == libmandoc_rs::NodeKind::Block
-            && body.macro_name.as_deref() == Some("IP")
+            && body.macro_token.as_deref() == Some("IP")
             && body
                 .children
                 .iter()

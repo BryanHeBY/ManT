@@ -4,6 +4,10 @@ use super::{
     lower_inline_nodes_with_font_state, plain_text, source_span, update_paragraph_distance,
     vertical_space_delta,
 };
+use libmandoc_rs::{
+    MacroToken::{Man, Mdoc, Roff},
+    ManMacro, MdocMacro, RoffMacro,
+};
 
 /// A read-only request classification, not a replayable formatter effect.
 #[derive(Clone, Copy)]
@@ -15,15 +19,15 @@ enum BlockControl {
 }
 
 fn classify_control(node: &Node, dialect: libmandoc_rs::MacroSet) -> Option<BlockControl> {
-    match node.macro_name.as_deref()? {
-        "PD" => Some(BlockControl::ParagraphDistance),
-        "nf" | "fi" => Some(BlockControl::LiteralBoundary),
+    match node.macro_token.as_ref()? {
+        Man(ManMacro::Pd) => Some(BlockControl::ParagraphDistance),
+        Roff(RoffMacro::Nf | RoffMacro::Fi) => Some(BlockControl::LiteralBoundary),
         // ti executes pre_br but does not select another output container.
-        "ti" => Some(BlockControl::PreBreak),
-        "EX" | "EE" if dialect == libmandoc_rs::MacroSet::Man => {
+        Roff(RoffMacro::Ti) => Some(BlockControl::PreBreak),
+        Man(ManMacro::Ex | ManMacro::Ee) if dialect == libmandoc_rs::MacroSet::Man => {
             Some(BlockControl::LiteralBoundary)
         }
-        "Sm" => Some(BlockControl::Spacing),
+        Mdoc(MdocMacro::Sm) => Some(BlockControl::Spacing),
         _ => None,
     }
 }
@@ -32,8 +36,9 @@ impl super::BlockLowerer<'_, '_> {
     /// Consume execution requests before the no-fill word fallback can
     /// mistake numeric operands for printable text.
     pub(super) fn push_executed_spacing(&mut self, node: &Node) -> bool {
-        let space = node.macro_name.as_deref() == Some("sp");
-        if !(space || node.flags.no_fill && node.macro_name.as_deref() == Some("br")) {
+        let space = node.macro_token.as_ref() == Some(&Roff(RoffMacro::Sp));
+        if !(space || node.flags.no_fill && node.macro_token.as_ref() == Some(&Roff(RoffMacro::Br)))
+        {
             return false;
         }
         self.state.flush_preformatted();
@@ -52,7 +57,7 @@ impl super::BlockLowerer<'_, '_> {
     }
 
     pub(super) fn consume_control_or_empty_block(&mut self, node: &Node) -> bool {
-        if node.macro_name.as_deref() == Some("in")
+        if node.macro_token.as_ref() == Some(&Man(ManMacro::In))
             && self.context.macro_set == libmandoc_rs::MacroSet::Man
         {
             self.state.flush_preformatted();
@@ -92,7 +97,7 @@ impl super::BlockLowerer<'_, '_> {
             || node.flags.no_print
             || node.kind == NodeKind::Comment
             || is_section(node, false)
-            || crate::mandoc::controls::operand_control(node.macro_name.as_deref()).is_some()
+            || crate::mandoc::controls::operand_control(node.macro_token.as_ref()).is_some()
         {
             return true;
         }
@@ -129,7 +134,7 @@ impl super::BlockLowerer<'_, '_> {
     /// `.ft` selects fonts without printable block output of its own; it is
     /// the roff-request analog of upstream `roff_html.c::roff_html_pre_ft`.
     pub(super) fn consume_font_request(&mut self, node: &Node) -> bool {
-        if node.macro_name.as_deref() != Some("ft") {
+        if node.macro_token.as_ref() != Some(&Roff(RoffMacro::Ft)) {
             return false;
         }
         lower_inline_nodes_with_font_state(

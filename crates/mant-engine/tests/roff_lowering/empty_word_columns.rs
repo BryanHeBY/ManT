@@ -72,7 +72,7 @@ fn cases() -> Vec<Case> {
 fn owns_body(node: &Node, in_description: bool, owner: &Owner) -> bool {
     let in_description = in_description
         || (node.kind == NodeKind::Body
-            && node.macro_name.as_deref() == Some("Sh")
+            && node.macro_token.as_deref() == Some("Sh")
             && node.line == 7);
     (in_description
         && node.kind == NodeKind::Text

@@ -3,9 +3,10 @@ use super::{
     Font, Inline, InlineBuilder, Node, NodeKind, append_inline_node, append_inline_node_with_next,
     append_inline_nodes, first_part_children, inline_children, navigation_anchor, plain_text,
 };
+use libmandoc_rs::{MacroToken::Mdoc, MdocMacro};
 
 pub(super) fn function(builder: &mut InlineBuilder, node: &Node, name: Option<&str>) {
-    let block = node.macro_name.as_deref() == Some("Fo");
+    let block = node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Fo));
     if block && let Some(end) = node.scope_end {
         // CVS mdoc_html.c::print_mdoc_node() visits a BODY-end marker's
         // children, then mdoc_fo_post(), before the enclosing body unwinds.
@@ -62,7 +63,7 @@ pub(super) fn function(builder: &mut InlineBuilder, node: &Node, name: Option<&s
     for (index, argument) in body.iter().enumerate() {
         if argument.flags.no_print {
             append_inline_node(builder, argument, name);
-        } else if !block || argument.macro_name.as_deref() == Some("Fa") {
+        } else if !block || argument.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Fa)) {
             if block {
                 // Fa owns NODE_LINE; its operand children normally do not.
                 // Generated comma handling must not bypass that executed
@@ -90,8 +91,9 @@ pub(super) fn function(builder: &mut InlineBuilder, node: &Node, name: Option<&s
                 let next_operand = crate::mandoc::adjacency::next(&operands[operand_index + 1..]);
                 let comma = next_operand.map_or_else(
                     || {
-                        crate::mandoc::adjacency::next(&body[index + 1..])
-                            .is_some_and(|node| !block || node.macro_name.as_deref() == Some("Fa"))
+                        crate::mandoc::adjacency::next(&body[index + 1..]).is_some_and(|node| {
+                            !block || node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Fa))
+                        })
                     },
                     |node| !node.flags.delimiter_close,
                 );

@@ -2,6 +2,7 @@
 //! the native role. This is only called for an existing definition owner.
 use crate::definitions::NativeHeadRole;
 use libmandoc_rs::Node;
+use libmandoc_rs::{MacroToken::Mdoc, MdocMacro};
 
 pub(super) fn leading_role(nodes: &[Node]) -> Option<NativeHeadRole> {
     enum HeadStart {
@@ -9,12 +10,18 @@ pub(super) fn leading_role(nodes: &[Node]) -> Option<NativeHeadRole> {
         Other,
     }
     fn first(node: &Node) -> Option<HeadStart> {
-        match node.macro_name.as_deref() {
-            Some("Fl") => return Some(HeadStart::Typed(NativeHeadRole::Option)),
-            Some("Ev") => return Some(HeadStart::Typed(NativeHeadRole::Environment)),
-            Some("Ic" | "Cm") => return Some(HeadStart::Typed(NativeHeadRole::Literal)),
-            Some("Ar" | "Em" | "Sy") => return Some(HeadStart::Other),
-            Some("Tg" | "Ns" | "Sm") => return None,
+        match node.macro_token.as_ref() {
+            Some(Mdoc(MdocMacro::Fl)) => return Some(HeadStart::Typed(NativeHeadRole::Option)),
+            Some(Mdoc(MdocMacro::Ev)) => {
+                return Some(HeadStart::Typed(NativeHeadRole::Environment));
+            }
+            Some(Mdoc(MdocMacro::Ic | MdocMacro::Cm)) => {
+                return Some(HeadStart::Typed(NativeHeadRole::Literal));
+            }
+            Some(Mdoc(MdocMacro::Ar | MdocMacro::Em | MdocMacro::Sy)) => {
+                return Some(HeadStart::Other);
+            }
+            Some(Mdoc(MdocMacro::Tg | MdocMacro::Ns | MdocMacro::Sm)) => return None,
             _ => {}
         }
         if node

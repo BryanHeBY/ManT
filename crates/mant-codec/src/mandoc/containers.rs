@@ -2,7 +2,10 @@
 //!
 //! Container transparency means that payloads remain reachable. It does not
 //! mean that the entire container may be skipped by logical sibling lookup.
-use libmandoc_rs::{Node, NodeKind};
+use libmandoc_rs::{
+    MacroToken::{Man, Mdoc, Roff},
+    ManMacro, MdocMacro, Node, NodeKind, RoffMacro,
+};
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
@@ -302,11 +305,14 @@ pub(super) fn drive<'a>(
 pub(super) fn is_container(node: &Node) -> bool {
     node.scope_end.is_some()
         || matches!(
-            node.macro_name.as_deref(),
-            Some("Bf" | "Bk" | "Fo" | "Xo" | "ce" | "rj")
+            node.macro_token.as_ref(),
+            Some(
+                Mdoc(MdocMacro::Bf | MdocMacro::Bk | MdocMacro::Fo | MdocMacro::Xo)
+                    | Roff(RoffMacro::Ce | RoffMacro::Rj)
+            )
         )
-        || super::inline::is_enclosure_macro(node.macro_name.as_deref())
-        || (node.macro_name.is_none()
+        || super::inline::is_enclosure_macro(node.macro_token.as_ref())
+        || (node.macro_token.is_none()
             && matches!(
                 node.kind,
                 NodeKind::Root | NodeKind::Head | NodeKind::Body | NodeKind::Tail
@@ -331,14 +337,14 @@ pub(super) fn walk<'a>(
         emit(Event::EndNode(node));
         return true;
     }
-    match node.macro_name.as_deref() {
-        Some("Bf" | "Bk") => emit_font_or_keep(node, &mut emit),
-        Some("Fo") => {
+    match node.macro_token.as_ref() {
+        Some(Mdoc(MdocMacro::Bf | MdocMacro::Bk)) => emit_font_or_keep(node, &mut emit),
+        Some(Mdoc(MdocMacro::Fo)) => {
             emit_structural_function(node, posts, &mut emit);
         }
-        Some("ce" | "rj") => aligned_line_payload(node, &mut emit),
-        Some("Eo") => authored_enclosure(node, posts, &mut emit),
-        Some("Xo") => transparent_scope(node, posts, &mut emit),
+        Some(Roff(RoffMacro::Ce | RoffMacro::Rj)) => aligned_line_payload(node, &mut emit),
+        Some(Mdoc(MdocMacro::Eo)) => authored_enclosure(node, posts, &mut emit),
+        Some(Mdoc(MdocMacro::Xo)) => transparent_scope(node, posts, &mut emit),
         name if super::inline::is_enclosure_macro(name) => {
             if !emit_enclosure(node, posts, &mut emit) {
                 return false;
@@ -384,7 +390,7 @@ fn emit_font_or_keep<'a>(node: &'a Node, emit: &mut impl FnMut(Event<'a>)) {
         .iter()
         .find(|part| part.kind == NodeKind::Body);
     let body_id = body.map(|part| part.id);
-    if node.macro_name.as_deref() == Some("Bk") {
+    if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Bk)) {
         emit(Event::EnterKeep);
     } else if let Some(font) = node.font {
         emit(Event::EnterFont(font.into(), body_id));
@@ -395,7 +401,7 @@ fn emit_font_or_keep<'a>(node: &'a Node, emit: &mut impl FnMut(Event<'a>)) {
         emit(Event::RestoreBody(body.id));
         emit(Event::EndNode(body));
     }
-    if node.macro_name.as_deref() == Some("Bk") {
+    if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Bk)) {
         emit(Event::ExitKeep);
     } else if node.font.is_some() {
         emit(Event::ExitFont(body_id));
@@ -458,14 +464,14 @@ fn walk_scope_end<'a>(
     let Some(end) = node.scope_end else {
         return false;
     };
-    if node.macro_name.as_deref() == Some("Bf") {
+    if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Bf)) {
         emit(Event::Children(&node.children));
         emit(Event::RestoreBody(end.body_id));
         emit(Event::ExitFont(Some(end.body_id)));
         posts.finish(end.body_id);
         return true;
     }
-    if node.macro_name.as_deref() == Some("Fo") {
+    if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Fo)) {
         emit(Event::Children(&node.children));
         emit(Event::RestoreBody(end.body_id));
         if let Some(synopsis) = posts.function_suffix(end.body_id) {
@@ -475,7 +481,7 @@ fn walk_scope_end<'a>(
         }
         return true;
     }
-    if node.macro_name.as_deref() == Some("Eo") {
+    if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Eo)) {
         if !node.children.is_empty() {
             emit(Event::BeginNode(node));
             emit(Event::Tight);
@@ -498,7 +504,7 @@ fn walk_scope_end<'a>(
     }
     emit(Event::Children(&node.children));
     emit(Event::RestoreBody(end.body_id));
-    if node.macro_name.as_deref() == Some("Bd") {
+    if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Bd)) {
         emit(Event::RestoreFill(end.body_id, node));
     }
     posts.finish(end.body_id);
@@ -564,7 +570,7 @@ fn emit_structural_function<'a>(
 fn emit_function_body<'a>(body: &'a [Node], emit: &mut impl FnMut(Event<'a>)) {
     let mut pending = 0;
     for (index, node) in body.iter().enumerate() {
-        if node.macro_name.as_deref() != Some("Fa") {
+        if node.macro_token.as_ref() != Some(&Mdoc(MdocMacro::Fa)) {
             continue;
         }
         if pending < index {
@@ -572,7 +578,7 @@ fn emit_function_body<'a>(body: &'a [Node], emit: &mut impl FnMut(Event<'a>)) {
         }
         let comma_after = !node.children.is_empty()
             && super::adjacency::next(&body[index + 1..])
-                .is_some_and(|next| next.macro_name.as_deref() == Some("Fa"));
+                .is_some_and(|next| next.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Fa)));
         emit(Event::FunctionArgument(node, comma_after));
         pending = index + 1;
     }
@@ -584,8 +590,8 @@ fn emit_function_body<'a>(body: &'a [Node], emit: &mut impl FnMut(Event<'a>)) {
 fn resolved_enclosure_marks(node: &Node) -> Option<(Option<String>, Option<String>)> {
     node.enclosure.as_ref().map_or_else(
         || {
-            let name = node.macro_name.as_deref()?;
-            if name == "En" {
+            let name = node.macro_token.as_ref()?;
+            if name == &Mdoc(MdocMacro::En) {
                 Some((None, None))
             } else {
                 enclosure_marks(name).map(|(opening, closing)| {
@@ -593,7 +599,7 @@ fn resolved_enclosure_marks(node: &Node) -> Option<(Option<String>, Option<Strin
                     // print ASCII angle brackets when the enclosure's sole
                     // child is an `.Mt`; every other child shape takes the
                     // device glyph pair from the character catalog.
-                    if matches!(name, "Aq" | "Ao") && sole_mt_child(node) {
+                    if matches!(name, Mdoc(MdocMacro::Aq | MdocMacro::Ao)) && sole_mt_child(node) {
                         return (Some("<".to_owned()), Some(">".to_owned()));
                     }
                     (Some(opening), Some(closing))
@@ -616,7 +622,7 @@ fn sole_mt_child(node: &Node) -> bool {
     // termp_quote_pre accepts exactly one `.Mt` child; any sibling — a
     // second `.Mt`, a `.No`, … — falls back to the catalog glyph pair.
     match super::inline::inline_children(node) {
-        [only] => only.macro_name.as_deref() == Some("Mt"),
+        [only] => only.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Mt)),
         _ => false,
     }
 }
@@ -657,8 +663,10 @@ fn aligned_line_payload<'a>(node: &'a Node, emit: &mut impl FnMut(Event<'a>)) {
             // Still dispatch the original request afterwards, preserving
             // fill-state transitions and any source/target handling.
             if matches!(
-                children[index].macro_name.as_deref(),
-                Some("br" | "fi" | "nf" | "ti")
+                children[index].macro_token.as_ref(),
+                Some(Roff(
+                    RoffMacro::Br | RoffMacro::Fi | RoffMacro::Nf | RoffMacro::Ti
+                ))
             ) {
                 if pending < index {
                     emit(Event::Children(&children[pending..index]));
@@ -727,12 +735,17 @@ pub(super) fn has_structural_payload(node: &Node) -> bool {
 fn is_structural_payload(node: &Node) -> bool {
     node.kind == NodeKind::Table
         || matches!(
-            node.macro_name.as_deref(),
-            Some("ce" | "rj" | "nf" | "fi" | "EX" | "EE")
+            node.macro_token.as_ref(),
+            Some(
+                Roff(RoffMacro::Ce | RoffMacro::Rj | RoffMacro::Nf | RoffMacro::Fi)
+                    | Man(ManMacro::Ex | ManMacro::Ee)
+            )
         )
         || (node.kind == NodeKind::Block
             && matches!(
-                node.macro_name.as_deref(),
-                Some("Bl" | "Rs" | "Bd" | "D1" | "Dl")
+                node.macro_token.as_ref(),
+                Some(Mdoc(
+                    MdocMacro::Bl | MdocMacro::Rs | MdocMacro::Bd | MdocMacro::D1 | MdocMacro::Dl
+                ))
             ))
 }

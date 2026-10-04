@@ -4,7 +4,7 @@ use libmandoc_rs::{Node, NodeKind, Parser};
 use mant_ir::ResolvedContent;
 
 fn first_item(node: &Node) -> Option<&Node> {
-    if node.kind == NodeKind::Block && node.macro_name.as_deref() == Some("It") {
+    if node.kind == NodeKind::Block && node.macro_token.as_deref() == Some("It") {
         return Some(node);
     }
     node.children.iter().find_map(first_item)
@@ -90,7 +90,7 @@ fn generated_words_consume_every_pending_and_held_cell_state() {
                 .unwrap();
             assert_eq!(head.children.len(), 1, "{name}: literal HEAD expected");
             assert_eq!(head.children[0].kind, NodeKind::Text, "{name}");
-            assert!(head.children[0].macro_name.is_none(), "{name}");
+            assert!(head.children[0].macro_token.is_none(), "{name}");
             let body = item
                 .children
                 .iter()
@@ -99,7 +99,7 @@ fn generated_words_consume_every_pending_and_held_cell_state() {
             assert!(
                 body.children
                     .iter()
-                    .any(|node| node.macro_name.as_deref() == Some("No")),
+                    .any(|node| node.macro_token.as_deref() == Some("No")),
                 "{name}: BODY word must execute after the generated gap"
             );
         }

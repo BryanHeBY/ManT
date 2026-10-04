@@ -1,7 +1,7 @@
 //! mdoc(7)-specific macro handling, the seed of the analog of upstream
 //! `mdoc_html.c`'s `mdoc_html_acts` dispatch family.
 
-use libmandoc_rs::{Node, NodeKind};
+use libmandoc_rs::{MacroToken::Mdoc, MdocMacro, Node, NodeKind};
 
 use super::{super::source_span, Block, BlockLowerer};
 
@@ -40,22 +40,23 @@ impl BlockLowerer<'_, '_> {
 
 fn is_reference_field(node: &Node) -> bool {
     matches!(
-        node.macro_name.as_deref(),
-        Some(
-            "%A" | "%B"
-                | "%C"
-                | "%D"
-                | "%I"
-                | "%J"
-                | "%N"
-                | "%O"
-                | "%P"
-                | "%Q"
-                | "%R"
-                | "%T"
-                | "%U"
-                | "%V"
-        )
+        node.macro_token.as_ref(),
+        Some(Mdoc(
+            MdocMacro::PercentA
+                | MdocMacro::PercentB
+                | MdocMacro::PercentC
+                | MdocMacro::PercentD
+                | MdocMacro::PercentI
+                | MdocMacro::PercentJ
+                | MdocMacro::PercentN
+                | MdocMacro::PercentO
+                | MdocMacro::PercentP
+                | MdocMacro::PercentQ
+                | MdocMacro::PercentR
+                | MdocMacro::PercentT
+                | MdocMacro::PercentU
+                | MdocMacro::PercentV
+        ))
     )
 }
 
@@ -75,11 +76,12 @@ fn previous_reference_sibling(nodes: &[Node], index: usize) -> Option<usize> {
 
 /// CVS `mdoc_term.c::termp__a_pre()` adds `and` before the final author.
 pub(super) fn reference_author_conjunction(nodes: &[Node], index: usize) -> bool {
-    nodes[index].macro_name.as_deref() == Some("%A")
-        && previous_reference_sibling(nodes, index)
-            .is_some_and(|previous| nodes[previous].macro_name.as_deref() == Some("%A"))
+    nodes[index].macro_token.as_ref() == Some(&Mdoc(MdocMacro::PercentA))
+        && previous_reference_sibling(nodes, index).is_some_and(|previous| {
+            nodes[previous].macro_token.as_ref() == Some(&Mdoc(MdocMacro::PercentA))
+        })
         && next_reference_sibling(nodes, index)
-            .is_none_or(|next| nodes[next].macro_name.as_deref() != Some("%A"))
+            .is_none_or(|next| nodes[next].macro_token.as_ref() != Some(&Mdoc(MdocMacro::PercentA)))
 }
 
 /// CVS `mdoc_term.c::termp____post()` omits the first comma for exactly two
@@ -90,13 +92,18 @@ pub(super) fn reference_field_post(nodes: &[Node], index: usize) -> Option<&'sta
         return None;
     }
     let next = next_reference_sibling(nodes, index);
-    if node.macro_name.as_deref() == Some("%A")
-        && next.is_some_and(|next| nodes[next].macro_name.as_deref() == Some("%A"))
+    if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::PercentA))
+        && next.is_some_and(|next| {
+            nodes[next].macro_token.as_ref() == Some(&Mdoc(MdocMacro::PercentA))
+        })
         && next
             .and_then(|next| next_reference_sibling(nodes, next))
-            .is_none_or(|after| nodes[after].macro_name.as_deref() != Some("%A"))
-        && previous_reference_sibling(nodes, index)
-            .is_none_or(|previous| nodes[previous].macro_name.as_deref() != Some("%A"))
+            .is_none_or(|after| {
+                nodes[after].macro_token.as_ref() != Some(&Mdoc(MdocMacro::PercentA))
+            })
+        && previous_reference_sibling(nodes, index).is_none_or(|previous| {
+            nodes[previous].macro_token.as_ref() != Some(&Mdoc(MdocMacro::PercentA))
+        })
     {
         return None;
     }

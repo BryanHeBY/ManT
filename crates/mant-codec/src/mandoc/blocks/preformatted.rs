@@ -1,7 +1,7 @@
 //! Display output changes its IR destination while native node execution stays
 //! in the surrounding block driver.
 
-use libmandoc_rs::{Node, NodeKind};
+use libmandoc_rs::{MacroToken::Mdoc, MdocMacro, Node, NodeKind};
 use mant_ir::{Block, Inline};
 
 use super::{BlockLowerer, DisplayFillMode, FormatterRowBoundary, LoweringContext};
@@ -13,7 +13,10 @@ impl BlockLowerer<'_, '_> {
     pub(super) fn push_column_display(&mut self, node: &Node) -> bool {
         if !self.column_field
             || node.kind != NodeKind::Block
-            || !matches!(node.macro_name.as_deref(), Some("Bd" | "D1" | "Dl"))
+            || !matches!(
+                node.macro_token.as_ref(),
+                Some(Mdoc(MdocMacro::Bd | MdocMacro::D1 | MdocMacro::Dl))
+            )
         {
             return false;
         }
@@ -25,7 +28,7 @@ impl BlockLowerer<'_, '_> {
             .formatter
             .execution
             .definition_geometry_checkpoint(node);
-        let is_bd = node.macro_name.as_deref() == Some("Bd");
+        let is_bd = node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Bd));
         self.display_fill = Some(if is_bd {
             DisplayFillMode::NodeFlags
         } else {
@@ -120,7 +123,7 @@ pub(super) fn preformatted_blocks(
         std::mem::take(formatter),
     );
     lowerer.paragraph_predecessor = paragraph_predecessor;
-    lowerer.display_fill = Some(if node.macro_name.as_deref() == Some("Bd") {
+    lowerer.display_fill = Some(if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Bd)) {
         DisplayFillMode::NodeFlags
     } else {
         DisplayFillMode::SingleLine
@@ -143,7 +146,7 @@ pub(super) fn preformatted_blocks(
         context
             .scope_posts
             .enter_body(body.id, lowerer.state.formatter.font.checkpoint());
-        if node.macro_name.as_deref() == Some("Bd") {
+        if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Bd)) {
             context
                 .scope_posts
                 .enter_display_fill(body.id, inbound_no_fill);
@@ -167,7 +170,7 @@ pub(super) fn preformatted_blocks(
     // A crossed .Ed restores fill at its source marker. If that marker has
     // already consumed the checkpoint, a later .nf remains in force here.
     let close_at_source_marker = body_index.is_some_and(|index| {
-        node.macro_name.as_deref() == Some("Bd")
+        node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Bd))
             && match context
                 .scope_posts
                 .exit_display_fill(node.children[index].id)

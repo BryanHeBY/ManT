@@ -5,6 +5,7 @@ use super::{
     first_part_children, is_inline_equation, is_inline_equation_quote_artifact, source_span,
     targets,
 };
+use libmandoc_rs::{MacroToken::Man, ManMacro};
 
 #[derive(Clone, Copy)]
 /// Source flow at a detached definition body, separate from its geometry.
@@ -186,7 +187,7 @@ pub(super) fn definition_item(
         empty_head_rows,
         &mut description,
     );
-    if node.macro_name.as_deref() == Some("IP") {
+    if node.macro_token.as_ref() == Some(&Man(ManMacro::Ip)) {
         // man_term.c::post_IP() can complete an empty HEAD word even though
         // it supplies no tag. Its row now belongs to the description; an
         // empty term shell must not turn a headless .IP continuation into a
@@ -701,9 +702,9 @@ fn definition_head_anchor(node: &Node) -> Option<String> {
 /// Return only document content from a definition macro's mixed-purpose head.
 pub(super) fn visible_definition_head(node: &Node) -> &[Node] {
     let head = first_part_children(node, NodeKind::Head);
-    match node.macro_name.as_deref() {
-        Some("IP") => head.first().map_or(&[], std::slice::from_ref),
-        Some("TP" | "TQ") => head
+    match node.macro_token.as_ref() {
+        Some(Man(ManMacro::Ip)) => head.first().map_or(&[], std::slice::from_ref),
+        Some(Man(ManMacro::Tp | ManMacro::Tq)) => head
             .iter()
             .position(|child| child.flags.line_start)
             .map_or(&[], |visible_start| &head[visible_start..]),

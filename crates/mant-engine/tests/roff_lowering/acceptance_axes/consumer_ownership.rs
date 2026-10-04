@@ -11,7 +11,7 @@ use mant_protocol::SearchScope;
 use super::consumer_projections::{round_trip, search};
 
 fn find_block<'a>(node: &'a Node, name: &str) -> Option<&'a Node> {
-    if node.kind == NodeKind::Block && node.macro_name.as_deref() == Some(name) {
+    if node.kind == NodeKind::Block && node.macro_token.as_deref() == Some(name) {
         return Some(node);
     }
     node.children

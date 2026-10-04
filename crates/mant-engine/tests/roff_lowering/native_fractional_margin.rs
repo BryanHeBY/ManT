@@ -76,7 +76,7 @@ fn assert_case(source: &str, mode: &str, runs_in: bool) {
         .parse_bytes("fractional-head.1", source.as_bytes())
         .unwrap();
     let item = find(&report.document.root, |node| {
-        node.kind == NodeKind::Block && node.macro_name.as_deref() == Some("It")
+        node.kind == NodeKind::Block && node.macro_token.as_deref() == Some("It")
     })
     .unwrap();
     let head = item
@@ -92,8 +92,8 @@ fn assert_case(source: &str, mode: &str, runs_in: bool) {
         "{source}"
     );
     if mode == "fill_switch" {
-        assert!(find(head, |node| node.macro_name.as_deref() == Some("nf")).is_some());
-        assert!(find(head, |node| node.macro_name.as_deref() == Some("fi")).is_some());
+        assert!(find(head, |node| node.macro_token.as_deref() == Some("nf")).is_some());
+        assert!(find(head, |node| node.macro_token.as_deref() == Some("fi")).is_some());
     }
 
     let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();

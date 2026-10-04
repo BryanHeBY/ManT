@@ -2,7 +2,7 @@
 use libmandoc_rs::{Node, NodeKind, Parser};
 
 fn heads(node: &Node, epochs: &mut Vec<usize>) {
-    if node.kind == NodeKind::Block && matches!(node.macro_name.as_deref(), Some("TP" | "It")) {
+    if node.kind == NodeKind::Block && matches!(node.macro_token.as_deref(), Some("TP" | "It")) {
         epochs.push(node.flow_epoch);
     }
     for child in &node.children {

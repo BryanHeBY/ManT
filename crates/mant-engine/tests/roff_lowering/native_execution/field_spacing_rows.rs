@@ -4,14 +4,14 @@ use libmandoc_rs::{Node, NodeKind, Parser};
 use mant_ir::ResolvedContent;
 
 fn item(node: &Node) -> Option<&Node> {
-    if node.kind == NodeKind::Block && node.macro_name.as_deref() == Some("It") {
+    if node.kind == NodeKind::Block && node.macro_token.as_deref() == Some("It") {
         return Some(node);
     }
     node.children.iter().find_map(item)
 }
 
 fn contains_scope(node: &Node, name: &str) -> bool {
-    node.macro_name.as_deref() == Some(name)
+    node.macro_token.as_deref() == Some(name)
         || node
             .children
             .iter()

@@ -8,7 +8,7 @@ const HEADER: &str =
 const FOOTER: &str = ".Sh NEXT\n.No END\n";
 
 fn first_column_item(node: &Node) -> Option<&Node> {
-    if node.kind == NodeKind::Block && node.macro_name.as_deref() == Some("It") {
+    if node.kind == NodeKind::Block && node.macro_token.as_deref() == Some("It") {
         return Some(node);
     }
     node.children.iter().find_map(first_column_item)
@@ -91,7 +91,7 @@ fn column_body_post_rejects_the_same_field_in_both_legal_syntaxes() {
                     bodies[0]
                         .children
                         .iter()
-                        .any(|node| node.macro_name.as_deref() == Some("Xo")),
+                        .any(|node| node.macro_token.as_deref() == Some("Xo")),
                     extended
                 );
 

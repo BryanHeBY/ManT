@@ -128,7 +128,7 @@ mod head_word_padding {
         position: &Position,
         expected: NodeKind,
     ) -> bool {
-        if node.macro_name.as_deref() == Some("It")
+        if node.macro_token.as_deref() == Some("It")
             && matches!(node.kind, NodeKind::Head | NodeKind::Body)
         {
             owner = Some(node.kind);

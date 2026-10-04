@@ -1,6 +1,7 @@
 //! Man link labels are annotations over normally executed block content.
 use super::{Block, Inline, Node, NodeKind, first_part_children, source_span};
 use crate::mandoc::inline::{InlineBuilder, append_inline_nodes, man_link_identity_text};
+use libmandoc_rs::{MacroToken::Man, ManMacro};
 use mant_ir::LinkTarget;
 
 impl super::BlockLowerer<'_, '_> {
@@ -8,7 +9,7 @@ impl super::BlockLowerer<'_, '_> {
         let head = first_part_children(node, NodeKind::Head);
         let body = first_part_children(node, NodeKind::Body);
         let target_text = man_link_identity_text(head);
-        let target = if node.macro_name.as_deref() == Some("MT") {
+        let target = if node.macro_token.as_ref() == Some(&Man(ManMacro::Mt)) {
             LinkTarget::Email {
                 address: target_text.clone(),
             }

@@ -22,7 +22,7 @@ fn assert_rows(body: &str, expected: &[&str]) {
             .parse_bytes("display-tabs.1", source.as_bytes())
             .unwrap();
         let item = find(&report.document.root, |node| {
-            node.kind == NodeKind::Block && node.macro_name.as_deref() == Some("It")
+            node.kind == NodeKind::Block && node.macro_token.as_deref() == Some("It")
         })
         .unwrap();
         let head = item
@@ -35,7 +35,7 @@ fn assert_rows(body: &str, expected: &[&str]) {
         assert!(
             find(head, |node| {
                 node.kind == NodeKind::Block
-                    && matches!(node.macro_name.as_deref(), Some("D1" | "Dl" | "Bd"))
+                    && matches!(node.macro_token.as_deref(), Some("D1" | "Dl" | "Bd"))
             })
             .is_some(),
             "display is not in the tested HEAD: {source}"
@@ -100,7 +100,7 @@ fn normalized_unfilled_and_literal_keep_distinct_tab_execution() {
             .parse_bytes("display-kind.1", source.as_bytes())
             .unwrap();
         let block = find(&report.document.root, |node| {
-            node.kind == NodeKind::Block && node.macro_name.as_deref() == Some("Bd")
+            node.kind == NodeKind::Block && node.macro_token.as_deref() == Some("Bd")
         })
         .unwrap();
         assert_eq!(block.display_kind, Some(expected_kind));

@@ -5,6 +5,7 @@
 //! Those wrappers are otherwise transparent in `mant-ir`, so target discovery
 //! and placement must happen before their structure is discarded.
 
+use libmandoc_rs::{MacroToken::Mdoc, MdocMacro};
 use std::collections::HashSet;
 
 use libmandoc_rs::{Node, NodeKind};
@@ -45,7 +46,9 @@ impl NativeTargetPlan {
         // removed by native validation. Reserve exactly that recovery set so
         // normalization preserves their original fragment spellings as well.
         for node in &nodes {
-            if node.macro_name.as_deref() == Some("Bl") && node.kind == NodeKind::Body {
+            if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Bl))
+                && node.kind == NodeKind::Body
+            {
                 explicit.extend(
                     node.children
                         .iter()
@@ -54,7 +57,7 @@ impl NativeTargetPlan {
             }
         }
         for (index, node) in nodes.iter().enumerate() {
-            if node.macro_name.as_deref() != Some("Tg") {
+            if node.macro_token.as_ref() != Some(&Mdoc(MdocMacro::Tg)) {
                 continue;
             }
             let target = raw_target(node)
@@ -101,7 +104,7 @@ pub(super) fn list_stream_target(
     node: &Node,
     validated_owners: &HashSet<String>,
 ) -> Option<String> {
-    if node.macro_name.as_deref() != Some("Tg") {
+    if node.macro_token.as_ref() != Some(&Mdoc(MdocMacro::Tg)) {
         return None;
     }
     raw_target(node).or_else(|| {
@@ -111,7 +114,7 @@ pub(super) fn list_stream_target(
 
 /// Return the first source token used by libmandoc when a target has no tag.
 pub(super) fn raw_target(node: &Node) -> Option<String> {
-    if node.macro_name.as_deref() == Some("Tg") {
+    if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Tg)) {
         return node
             .flags
             .deep_link_target
@@ -152,7 +155,7 @@ pub(super) fn source_token(node: &Node) -> Option<String> {
 /// itself is an actual native owner: `raw_target` retains that destination,
 /// without claiming that its spelling was written as an explicit argument.
 pub(super) fn explicit_target_argument(node: &Node) -> Option<String> {
-    if node.macro_name.as_deref() != Some("Tg") {
+    if node.macro_token.as_ref() != Some(&Mdoc(MdocMacro::Tg)) {
         return None;
     }
     let target = first_text_on_line(node, node.line).map(visible_text)?;
@@ -166,8 +169,10 @@ pub(super) fn explicit_target_argument(node: &Node) -> Option<String> {
 /// recursive search would steal a target from an independently lowered child.
 pub(super) fn structural_targets(node: &Node) -> Vec<String> {
     if !matches!(
-        node.macro_name.as_deref(),
-        Some("Pp" | "Bd" | "D1" | "Dl" | "Bl")
+        node.macro_token.as_ref(),
+        Some(Mdoc(
+            MdocMacro::Pp | MdocMacro::Bd | MdocMacro::D1 | MdocMacro::Dl | MdocMacro::Bl
+        ))
     ) {
         return Vec::new();
     }
@@ -176,7 +181,7 @@ pub(super) fn structural_targets(node: &Node) -> Vec<String> {
 
 /// Collect targets moved onto an mdoc list item's structural wrappers.
 pub(super) fn item_targets(node: &Node) -> Vec<String> {
-    if node.macro_name.as_deref() != Some("It") {
+    if node.macro_token.as_ref() != Some(&Mdoc(MdocMacro::It)) {
         return Vec::new();
     }
     node_and_part_targets(node)
@@ -614,7 +619,7 @@ mod tests {
             section: libmandoc_rs::NormalizedSection::None,
             scope_end: None,
             reference_quotes_title: false,
-            macro_name: macro_name.map(ToOwned::to_owned),
+            macro_token: macro_name.map(libmandoc_rs::MacroToken::from_name),
             text: text.map(ToOwned::to_owned),
             native_text: None,
             tag: tag.map(ToOwned::to_owned),

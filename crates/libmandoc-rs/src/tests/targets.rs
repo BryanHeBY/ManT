@@ -42,7 +42,7 @@ fn explicit_target_before_an_already_tagged_subsection_remains_separate() {
         node.flags.deep_link_target && node.tag.as_deref() == Some("subsection-target")
     })
     .expect("explicit target must remain represented");
-    assert_eq!(explicit_target.macro_name.as_deref(), Some("Ss"));
+    assert_eq!(explicit_target.macro_token.as_deref(), Some("Ss"));
 
     let subsection = find_macro(&report.document.root, "Ss").expect("subsection block");
     assert!(

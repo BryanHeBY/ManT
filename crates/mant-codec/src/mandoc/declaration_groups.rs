@@ -1,5 +1,9 @@
 //! Source sibling boundaries, recorded before formatter/normalization flattening.
 use crate::definitions::NativeHeadEvidence;
+use libmandoc_rs::{
+    MacroToken::{Man, Mdoc, Roff},
+    ManMacro, MdocMacro, RoffMacro,
+};
 use libmandoc_rs::{Node, NodeKind};
 
 use super::roff_escape::visible_text;
@@ -7,10 +11,16 @@ use super::roff_escape::visible_text;
 pub(super) fn record(root: &Node, evidence: &mut NativeHeadEvidence) {
     fn declaration(node: &Node) -> bool {
         node.kind == NodeKind::Block
-            && matches!(node.macro_name.as_deref(), Some("IP" | "TP" | "TQ" | "It"))
+            && matches!(
+                node.macro_token.as_ref(),
+                Some(Man(ManMacro::Ip | ManMacro::Tp | ManMacro::Tq) | Mdoc(MdocMacro::It))
+            )
     }
     fn transparent(node: &Node) -> bool {
-        matches!(node.macro_name.as_deref(), Some("PD" | "Sm" | "Tg" | "ft"))
+        matches!(
+            node.macro_token.as_ref(),
+            Some(Man(ManMacro::Pd) | Mdoc(MdocMacro::Sm | MdocMacro::Tg) | Roff(RoffMacro::Ft))
+        )
     }
     let mut previous: Option<&Node> = None;
     for node in &root.children {
@@ -69,7 +79,7 @@ fn source_head_text(node: &Node) -> Option<&str> {
 }
 
 fn native_numeric_label(node: &Node) -> Option<()> {
-    if node.macro_name.as_deref() != Some("IP") {
+    if node.macro_token.as_ref() != Some(&Man(ManMacro::Ip)) {
         return None;
     }
     let head = node
@@ -107,7 +117,7 @@ fn collect_mdoc_template_text(node: &Node, text: &mut String, has_argument: &mut
     if node.flags.no_print {
         return;
     }
-    if node.macro_name.as_deref() == Some("Ar") {
+    if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Ar)) {
         *has_argument = true;
     }
     if let Some(value) = node.text.as_deref() {
@@ -133,7 +143,10 @@ fn native_mdoc_search_template(node: &Node) -> bool {
 }
 
 fn native_man_option_template(node: &Node) -> bool {
-    if !matches!(node.macro_name.as_deref(), Some("IP" | "TP")) {
+    if !matches!(
+        node.macro_token.as_ref(),
+        Some(Man(ManMacro::Ip | ManMacro::Tp))
+    ) {
         return false;
     }
     let Some(raw) = source_head_text(node) else {
@@ -166,41 +179,49 @@ fn source_visible_dash(source: &str) -> bool {
 }
 
 fn native_man_search_template(node: &Node) -> bool {
-    matches!(node.macro_name.as_deref(), Some("IP" | "TP"))
-        && source_head_text(node).is_some_and(|text| {
-            let text = text.trim_matches([' ', '\t']);
-            if !matches!(text.as_bytes().first(), Some(b'/' | b'?')) {
-                return false;
-            }
-            let rest = &text[1..];
-            let Some(suffix) = rest.strip_prefix("RE") else {
-                return false;
-            };
-            let Some(parameters) = suffix.strip_suffix("<carriage-return>") else {
-                return false;
-            };
-            parameters.chars().all(|character| {
-                character.is_ascii_alphabetic()
-                    || matches!(character, '/' | '?' | '[' | ']' | ' ' | '-')
-            })
+    matches!(
+        node.macro_token.as_ref(),
+        Some(Man(ManMacro::Ip | ManMacro::Tp))
+    ) && source_head_text(node).is_some_and(|text| {
+        let text = text.trim_matches([' ', '\t']);
+        if !matches!(text.as_bytes().first(), Some(b'/' | b'?')) {
+            return false;
+        }
+        let rest = &text[1..];
+        let Some(suffix) = rest.strip_prefix("RE") else {
+            return false;
+        };
+        let Some(parameters) = suffix.strip_suffix("<carriage-return>") else {
+            return false;
+        };
+        parameters.chars().all(|character| {
+            character.is_ascii_alphabetic()
+                || matches!(character, '/' | '?' | '[' | ']' | ' ' | '-')
         })
+    })
 }
 
 fn native_parameter_template(node: &Node) -> bool {
-    matches!(node.macro_name.as_deref(), Some("IP" | "TP" | "It"))
-        && source_head_text(node).is_some_and(|text| {
-            let text = visible_text(text);
-            let text = text.trim_matches([' ', '\t']);
-            text.starts_with('[')
-                && text.ends_with(']')
-                && text
-                    .chars()
-                    .any(|character| character.is_ascii_alphabetic())
-        })
+    matches!(
+        node.macro_token.as_ref(),
+        Some(Man(ManMacro::Ip | ManMacro::Tp) | Mdoc(MdocMacro::It))
+    ) && source_head_text(node).is_some_and(|text| {
+        let text = visible_text(text);
+        let text = text.trim_matches([' ', '\t']);
+        text.starts_with('[')
+            && text.ends_with(']')
+            && text
+                .chars()
+                .any(|character| character.is_ascii_alphabetic())
+    })
 }
 
 fn readable(node: &Node) -> bool {
-    if node.flags.no_print || matches!(node.macro_name.as_deref(), Some("Tg" | "PD" | "Sm" | "ft"))
+    if node.flags.no_print
+        || matches!(
+            node.macro_token.as_ref(),
+            Some(Mdoc(MdocMacro::Tg | MdocMacro::Sm) | Man(ManMacro::Pd) | Roff(RoffMacro::Ft))
+        )
     {
         return false;
     }
@@ -218,7 +239,11 @@ fn has_readable_body(node: &Node) -> bool {
 }
 
 fn native_title_head(node: &Node) -> bool {
-    if !matches!(node.macro_name.as_deref(), Some("IP" | "TP" | "It")) || has_readable_body(node) {
+    if !matches!(
+        node.macro_token.as_ref(),
+        Some(Man(ManMacro::Ip | ManMacro::Tp) | Mdoc(MdocMacro::It))
+    ) || has_readable_body(node)
+    {
         return false;
     }
     let Some(text) = source_head_text(node).map(str::trim) else {

@@ -10,7 +10,7 @@ const LIBRARY: &[u8] = b".Dd August 19, 2026\n.Dt LIBBSD 3bsd\n.Os\n.Sh LIBRARY\
 const EQUATIONS: &[u8] = b".TH EQN 7\n.SH DESCRIPTION\n.EQ\nldots\n.EN\n.EQ\n\"ldots\"\n.EN\n.EQ\nldots2\n.EN\n.EQ\ndefine xx /ldots/ xx\n.EN\n.EQ\ndefine yy /ldots2/ yy\n.EN\n";
 
 fn find_macro<'a>(node: &'a Node, name: &str) -> Option<&'a Node> {
-    if node.macro_name.as_deref() == Some(name) {
+    if node.macro_token.as_deref() == Some(name) {
         Some(node)
     } else {
         node.children

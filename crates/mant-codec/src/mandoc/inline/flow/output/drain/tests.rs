@@ -94,7 +94,7 @@ fn capacity_seam_observation_borrows_one_real_head_post_receipt() {
     // 69-78; mdoc_term.c:930-964). Reading equality or overrun from the
     // captured device tail must not perform another term_flushln sweep.
     fn item_head(node: &libmandoc_rs::Node) -> Option<&libmandoc_rs::Node> {
-        if node.kind == libmandoc_rs::NodeKind::Head && node.macro_name.as_deref() == Some("It") {
+        if node.kind == libmandoc_rs::NodeKind::Head && node.macro_token.as_deref() == Some("It") {
             Some(node)
         } else {
             node.children.iter().find_map(item_head)

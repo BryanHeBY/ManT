@@ -76,7 +76,7 @@ struct ActualNode<'a> {
 }
 
 fn collect<'a>(node: &'a Node, owner: Option<&'static str>, output: &mut Vec<ActualNode<'a>>) {
-    let owner = if node.macro_name.as_deref() == Some("It") {
+    let owner = if node.macro_token.as_deref() == Some("It") {
         match node.kind {
             NodeKind::Head => Some("It HEAD"),
             NodeKind::Body => Some("It BODY"),
@@ -150,7 +150,7 @@ fn assert_owned_ast(case: &Case) {
                     && actual.node.line == expected.line
                     && actual.node.column == expected.column
                     && (kind == NodeKind::Table
-                        || actual.node.macro_name.as_deref() == Some(&expected.label))
+                        || actual.node.macro_token.as_deref() == Some(&expected.label))
                     && actual.owner == expected.owner.as_deref()
                     && actual.node.flags.no_fill == expected.no_fill
             }),

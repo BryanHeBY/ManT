@@ -5,6 +5,10 @@ use super::{
     SourceLineObservation, SpacingMode, TrailingOutput, WordEndBreak, last_visible_character,
     trim_trailing_breakable_spaces, updated_spacing,
 };
+use libmandoc_rs::{
+    MacroToken::{Man, Roff},
+    ManMacro, RoffMacro,
+};
 
 impl InlineBuilder {
     pub(in crate::mandoc) fn tighten_next_boundary(&mut self) {
@@ -470,9 +474,9 @@ impl super::InlineExecutionState {
     }
 
     pub(in crate::mandoc) fn execute_tab_configuration(&mut self, node: &libmandoc_rs::Node) {
-        if node.macro_name.as_deref() == Some("DT") && !node.flags.no_print {
+        if node.macro_token.as_ref() == Some(&Man(ManMacro::Dt)) && !node.flags.no_print {
             self.reset_default_tabs();
-        } else if node.macro_name.as_deref() == Some("ta") && !node.flags.no_print {
+        } else if node.macro_token.as_ref() == Some(&Roff(RoffMacro::Ta)) && !node.flags.no_print {
             self.tab_stops = super::Arc::new(super::TabStops::from_arguments(
                 node.children
                     .iter()

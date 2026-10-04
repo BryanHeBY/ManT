@@ -70,7 +70,7 @@ struct SourceCandidate {
 }
 
 fn collect_source_candidates(node: &Node, output: &mut Vec<SourceCandidate>) {
-    if node.macro_name.as_deref() == Some("Bl")
+    if node.macro_token.as_deref() == Some("Bl")
         && node.list_kind == Some(NormalizedListKind::Definition)
         && let Some(style) = node.definition_list_style
     {
@@ -78,7 +78,7 @@ fn collect_source_candidates(node: &Node, output: &mut Vec<SourceCandidate>) {
             .map(|body| {
                 body.children
                     .iter()
-                    .filter(|child| child.macro_name.as_deref() == Some("It"))
+                    .filter(|child| child.macro_token.as_deref() == Some("It"))
                     .collect::<Vec<_>>()
             })
             .unwrap_or_default();

@@ -1,6 +1,10 @@
 //! Lowers typed roff events and semantic mdoc macros into inline IR nodes.
 
-use libmandoc_rs::{Node, NodeKind};
+use libmandoc_rs::{
+    MacroToken,
+    MacroToken::{Man, Mdoc, Roff},
+    ManMacro, MdocMacro, Node, NodeKind, RoffMacro,
+};
 use mant_ir::Inline;
 
 pub(crate) use mant_ir::{inline_plain_text as plain_text, terms_fit_inline};
@@ -143,7 +147,7 @@ pub(super) fn append_inline_node_with_next(
 ) {
     if node.flags.no_print || node.kind == NodeKind::Comment {
         // Tg can recover an authored target even when native output is hidden.
-        if node.macro_name.as_deref() == Some("Tg") {
+        if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Tg)) {
             scopes::append(builder, node, default_name);
         }
         return;
@@ -154,7 +158,7 @@ pub(super) fn append_inline_node_with_next(
     }
     let final_word_join_before = builder.final_word_join_state();
     if node.scope_end.is_some()
-        && node.macro_name.as_deref() == Some("Eo")
+        && node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Eo))
         && !node.children.is_empty()
     {
         // mdoc_html.c::mdoc_eo_pre() applies NOSPACE before the marker's
@@ -205,11 +209,23 @@ fn execute_inline_macro_handler(
     next: Option<&Node>,
     default_name: Option<&str>,
 ) {
-    match node.macro_name.as_deref() {
-        Some("B" | "I" | "SB" | "R" | "BI" | "BR" | "IB" | "IR" | "RB" | "RI" | "OP") => {
+    match node.macro_token.as_ref() {
+        Some(Man(
+            ManMacro::B
+            | ManMacro::I
+            | ManMacro::Sb
+            | ManMacro::R
+            | ManMacro::Bi
+            | ManMacro::Br
+            | ManMacro::Ib
+            | ManMacro::Ir
+            | ManMacro::Rb
+            | ManMacro::Ri
+            | ManMacro::Op,
+        )) => {
             lower_man_font_scope(builder, node, default_name);
         }
-        Some("Ns") => {
+        Some(Mdoc(MdocMacro::Ns)) => {
             if !node.flags.line_start {
                 builder.tighten_next_boundary();
             }
@@ -217,7 +233,7 @@ fn execute_inline_macro_handler(
         // `Pf` owns visible prefix text and suppresses only the boundary to
         // the following sibling. Treating it like the empty `Ns` request
         // silently discarded constructs such as `.Pf [\-]ddd Cm \&.`.
-        Some("Pf") => {
+        Some(Mdoc(MdocMacro::Pf)) => {
             scopes::append(builder, node, default_name);
             if next.is_some_and(|next| !next.flags.line_start) {
                 builder.tighten_next_boundary();
@@ -228,10 +244,10 @@ fn execute_inline_macro_handler(
         // it separates alternative terms without ending the owning item.
         // Keeping both inline lets the definition lowering retain that
         // distinction instead of concatenating the alternatives.
-        Some("br") => {
+        Some(Roff(RoffMacro::Br)) => {
             builder.control_line_break();
         }
-        Some("Pp") => {
+        Some(Mdoc(MdocMacro::Pp)) => {
             // mdoc_term.c::termp_pp_pre() executes term_vspace(), including
             // the current field's term_newln() and skipvsp, before recording
             // the target. Collecting a HEAD does not change that execution.
@@ -248,7 +264,7 @@ fn execute_inline_macro_handler(
         // Verbatim regions already retain their semantics through
         // libmandoc's no-fill flag, so leaking these arguments would only
         // create phantom paragraphs around preformatted blocks.
-        Some("ft") => {
+        Some(Roff(RoffMacro::Ft)) => {
             let name = node
                 .children
                 .first()
@@ -260,22 +276,22 @@ fn execute_inline_macro_handler(
                 builder.font.select(super::roff_escape::font(name));
             }
         }
-        Some("SM") => {
+        Some(Man(ManMacro::Sm)) => {
             append_inline_nodes(builder, &node.children, default_name);
         }
-        Some("Sm") => {
+        Some(Mdoc(MdocMacro::Sm)) => {
             let setting = plain_text(&lower_inline_nodes(&node.children, default_name));
             builder.set_spacing(setting.trim());
         }
-        Some("ti") => {
+        Some(Roff(RoffMacro::Ti)) => {
             builder.temporary_indent();
         }
         // The request's own roff_term_pre_br() dispatch (roff_term.c:45-58)
         // also clears the field's NOBREAK state.
-        Some("nf" | "fi") => {
+        Some(Roff(RoffMacro::Nf | RoffMacro::Fi)) => {
             builder.fill_mode_boundary();
         }
-        Some("sp") => {
+        Some(Roff(RoffMacro::Sp)) => {
             builder.execute_spacing_request(super::layout::vertical_space_delta(node));
         }
         name if super::controls::formatter_control(name)
@@ -290,7 +306,7 @@ fn execute_inline_macro_handler(
             }
         }
         name if super::controls::operand_control(name).is_some() => {}
-        Some("Ap") => {
+        Some(Mdoc(MdocMacro::Ap)) => {
             builder.tighten_next_boundary();
             builder.append_text("'");
             builder.tighten_next_boundary();
@@ -300,7 +316,7 @@ fn execute_inline_macro_handler(
 }
 
 fn execute_inline_macro_post(builder: &mut InlineBuilder, node: &Node) {
-    if node.macro_name.as_deref() == Some("Fd") {
+    if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Fd)) {
         // mdoc_term.c::print_mdoc_node() restores the font before running
         // termp_fd_post(). That post requests term_newln() for every sink,
         // even after \c. It does not run roff_pre_br(): NOBREAK field flags
@@ -311,7 +327,7 @@ fn execute_inline_macro_post(builder: &mut InlineBuilder, node: &Node) {
 }
 
 fn execute_author_pre(builder: &mut InlineBuilder, node: &Node) -> bool {
-    if node.macro_name.as_deref() != Some("An") {
+    if node.macro_token.as_ref() != Some(&Mdoc(MdocMacro::An)) {
         return false;
     }
     builder.execute_author(node.author_mode);
@@ -329,7 +345,7 @@ fn finish_inline_node_execution(
     // A bare Fl followed by a callable macro on the same source line owns an
     // external join. An explicit empty operand is different: it consumes the
     // prefix's operand position and must leave that sibling separate.
-    if node.macro_name.as_deref() == Some("Fl")
+    if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Fl))
         && node.children.is_empty()
         && next.is_some_and(|next| next.kind != NodeKind::Text && !next.flags.line_start)
     {
@@ -353,8 +369,17 @@ fn finish_inline_node_execution(
 /// have no such replacement owner to prepare at macro entry.
 fn prepares_semantic_output_owner(node: &Node) -> bool {
     matches!(
-        node.macro_name.as_deref(),
-        Some("Lk" | "Mt" | "Sx" | "In" | "Bx" | "Xr" | "MR")
+        node.macro_token.as_ref(),
+        Some(
+            Mdoc(
+                MdocMacro::Lk
+                    | MdocMacro::Mt
+                    | MdocMacro::Sx
+                    | MdocMacro::In
+                    | MdocMacro::Bx
+                    | MdocMacro::Xr
+            ) | Man(ManMacro::Mr)
+        )
     )
 }
 
@@ -515,12 +540,12 @@ pub(super) fn append_inline_nodes(
         // author run with "and". The conjunction is formatter-generated, so
         // it is not a child of either `%A` node and must be restored while the
         // sibling context is still available.
-        if node.macro_name.as_deref() == Some("%A")
+        if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::PercentA))
             && index > 0
-            && nodes[index - 1].macro_name.as_deref() == Some("%A")
+            && nodes[index - 1].macro_token.as_ref() == Some(&Mdoc(MdocMacro::PercentA))
             && nodes
                 .get(index + 1)
-                .is_none_or(|next| next.macro_name.as_deref() != Some("%A"))
+                .is_none_or(|next| next.macro_token.as_ref() != Some(&Mdoc(MdocMacro::PercentA)))
         {
             builder.append_text("and");
         }
@@ -601,23 +626,25 @@ pub(super) fn append_include(builder: &mut InlineBuilder, node: &Node, default_n
 /// `Ao`/`Ac` arrive as one opener-owned subtree after libmandoc validation.
 /// `Eo` carries its delimiters in structural head and tail nodes, while the
 /// obsolete `En` carries the state resolved from the preceding `Es` request.
-pub(super) fn is_enclosure_macro(macro_name: Option<&str>) -> bool {
+pub(super) fn is_enclosure_macro(macro_name: Option<&MacroToken>) -> bool {
     macro_name.is_some_and(|name| enclosure_marks(name).is_some())
-        || matches!(macro_name, Some("Eo" | "En"))
+        || matches!(macro_name, Some(Mdoc(MdocMacro::Eo | MdocMacro::En)))
 }
 
-pub(super) fn enclosure_marks(name: &str) -> Option<(String, String)> {
+pub(super) fn enclosure_marks(name: &MacroToken) -> Option<(String, String)> {
     let glyph = |name: &str| catalog_glyph(name).to_string();
     match name {
-        "Op" | "Oo" | "Bq" | "Bo" => Some(("[".to_owned(), "]".to_owned())),
+        Mdoc(MdocMacro::Op | MdocMacro::Oo | MdocMacro::Bq | MdocMacro::Bo) => {
+            Some(("[".to_owned(), "]".to_owned()))
+        }
         // mdoc_term.c::termp_quote_pre/post emit these through the
         // device-independent character catalog, never literal Unicode.
-        "Dq" | "Do" => Some((glyph("lq"), glyph("rq"))),
-        "Qq" | "Qo" => Some(("\"".to_owned(), "\"".to_owned())),
-        "Sq" | "So" | "Ql" => Some((glyph("oq"), glyph("cq"))),
-        "Pq" | "Po" => Some(("(".to_owned(), ")".to_owned())),
-        "Brq" | "Bro" => Some(("{".to_owned(), "}".to_owned())),
-        "Aq" | "Ao" => Some((glyph("la"), glyph("ra"))),
+        Mdoc(MdocMacro::Dq | MdocMacro::Do) => Some((glyph("lq"), glyph("rq"))),
+        Mdoc(MdocMacro::Qq | MdocMacro::Qo) => Some(("\"".to_owned(), "\"".to_owned())),
+        Mdoc(MdocMacro::Sq | MdocMacro::So | MdocMacro::Ql) => Some((glyph("oq"), glyph("cq"))),
+        Mdoc(MdocMacro::Pq | MdocMacro::Po) => Some(("(".to_owned(), ")".to_owned())),
+        Mdoc(MdocMacro::Brq | MdocMacro::Bro) => Some(("{".to_owned(), "}".to_owned())),
+        Mdoc(MdocMacro::Aq | MdocMacro::Ao) => Some((glyph("la"), glyph("ra"))),
         _ => None,
     }
 }
@@ -650,14 +677,14 @@ pub(super) fn inline_children(node: &Node) -> &[Node] {
         .map_or(&node.children, |body| &body.children)
 }
 
-pub(super) fn alternating_font_pair(macro_name: Option<&str>) -> Option<(Font, Font)> {
+pub(super) fn alternating_font_pair(macro_name: Option<&MacroToken>) -> Option<(Font, Font)> {
     match macro_name {
-        Some("BI") => Some((Font::Strong, Font::Emphasis)),
-        Some("BR") => Some((Font::Strong, Font::Regular)),
-        Some("IB") => Some((Font::Emphasis, Font::Strong)),
-        Some("IR") => Some((Font::Emphasis, Font::Regular)),
-        Some("RB") => Some((Font::Regular, Font::Strong)),
-        Some("RI") => Some((Font::Regular, Font::Emphasis)),
+        Some(Man(ManMacro::Bi)) => Some((Font::Strong, Font::Emphasis)),
+        Some(Man(ManMacro::Br)) => Some((Font::Strong, Font::Regular)),
+        Some(Man(ManMacro::Ib)) => Some((Font::Emphasis, Font::Strong)),
+        Some(Man(ManMacro::Ir)) => Some((Font::Emphasis, Font::Regular)),
+        Some(Man(ManMacro::Rb)) => Some((Font::Regular, Font::Strong)),
+        Some(Man(ManMacro::Ri)) => Some((Font::Regular, Font::Emphasis)),
         _ => None,
     }
 }

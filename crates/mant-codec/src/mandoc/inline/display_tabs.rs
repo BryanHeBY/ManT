@@ -20,7 +20,7 @@
 
 //! Display origin and tab pre handlers shared by both output destinations.
 
-use libmandoc_rs::{DisplayKind, Node, NodeKind};
+use libmandoc_rs::{DisplayKind, MacroToken::Mdoc, MdocMacro, Node, NodeKind};
 
 use super::InlineExecutionState;
 
@@ -29,7 +29,7 @@ use super::InlineExecutionState;
 /// call this same configuration phase after executing their native post.
 pub(in crate::mandoc) fn exit_post(execution: &mut InlineExecutionState, node: &Node) {
     if node.kind == NodeKind::Block
-        && node.macro_name.as_deref() == Some("Bl")
+        && node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Bl))
         && node.list_kind == Some(libmandoc_rs::NormalizedListKind::Column)
         && !node.flags.no_print
     {
@@ -43,19 +43,19 @@ pub(in crate::mandoc) fn enter_pre(execution: &mut InlineExecutionState, node: &
     if node.flags.no_print || node.scope_end.is_some() {
         return;
     }
-    match (node.macro_name.as_deref(), node.kind) {
+    match (node.macro_token.as_ref(), node.kind) {
         // termp_d1_pre(): only BLOCK calls term_newln(), adds defindent+1
         // to the native offset, then installs T .5i (mdoc_term.c:1324-1334).
         // The selected character-device contract uses the default 5-column
         // indentation. HEAD/BODY neither add the offset nor repeat the reset.
-        (Some("D1" | "Dl"), NodeKind::Block) => {
+        (Some(Mdoc(MdocMacro::D1 | MdocMacro::Dl)), NodeKind::Block) => {
             execution.add_native_display_offset(6);
             execution.reset_default_tabs();
         }
         // termp_bd_pre(): BLOCK owns print_bvspace; the BODY alone applies
         // its signed normalized offset before any graph prints (1441-1455).
         // Its node checkpoint restores this geometry only after BODY post.
-        (Some("Bd"), NodeKind::Body) => {
+        (Some(Mdoc(MdocMacro::Bd)), NodeKind::Body) => {
             if let Some(offset) = crate::mandoc::layout::display_offset_distance(node) {
                 execution.add_native_display_offset_units(offset.basic_units());
             }

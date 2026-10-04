@@ -238,7 +238,7 @@ fn capacity_controls_execute_in_the_definition_head() {
     // are under It HEAD; No BODY is under It BODY. A source-shaped matrix
     // must prove these actual AST owners, not infer them from .It spelling.
     fn first_item(node: &libmandoc_rs::Node) -> Option<&libmandoc_rs::Node> {
-        if node.kind == libmandoc_rs::NodeKind::Block && node.macro_name.as_deref() == Some("It") {
+        if node.kind == libmandoc_rs::NodeKind::Block && node.macro_token.as_deref() == Some("It") {
             Some(node)
         } else {
             node.children.iter().find_map(first_item)

@@ -222,7 +222,7 @@ fn assert_ast_owners(source: &str, word: &str) {
         .parse_bytes("link-seam.1", source.as_bytes())
         .unwrap();
     let item = find(&parsed.document.root, &|node| {
-        node.kind == NodeKind::Block && node.macro_name.as_deref() == Some("It")
+        node.kind == NodeKind::Block && node.macro_token.as_deref() == Some("It")
     })
     .unwrap();
     for (kind, marker) in [(NodeKind::Head, "HEADX"), (NodeKind::Body, word)] {

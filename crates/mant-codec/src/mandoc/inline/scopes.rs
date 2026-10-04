@@ -6,9 +6,13 @@ use super::{
     authored_section_phrase, first_part_children, inline_children, lower_equation_node,
     navigation_anchor,
 };
+use libmandoc_rs::{
+    MacroToken::{Man, Mdoc},
+    ManMacro, MdocMacro,
+};
 
 pub(super) fn append(builder: &mut InlineBuilder, node: &Node, name: Option<&str>) {
-    if node.macro_name.as_deref() == Some("Tg") {
+    if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Tg)) {
         if let Some(anchor) = navigation_anchor(node) {
             builder.append(vec![anchor]);
         }
@@ -43,7 +47,7 @@ pub(super) fn append(builder: &mut InlineBuilder, node: &Node, name: Option<&str
 
 fn append_structural_scope(builder: &mut InlineBuilder, node: &Node, name: Option<&str>) -> bool {
     if node.kind == NodeKind::Block
-        && node.macro_name.as_deref() == Some("Bl")
+        && node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Bl))
         && node.list_kind.is_some()
         && (node.list_kind == Some(libmandoc_rs::NormalizedListKind::Column)
             || builder.has_definition_list_execution())
@@ -56,7 +60,10 @@ fn append_structural_scope(builder: &mut InlineBuilder, node: &Node, name: Optio
         return true;
     }
     if node.kind == NodeKind::Block
-        && matches!(node.macro_name.as_deref(), Some("D1" | "Dl" | "Bd"))
+        && matches!(
+            node.macro_token.as_ref(),
+            Some(Mdoc(MdocMacro::D1 | MdocMacro::Dl | MdocMacro::Bd))
+        )
     {
         if let Some(anchor) = navigation_anchor(node) {
             builder.append(vec![anchor]);
@@ -69,44 +76,38 @@ fn append_structural_scope(builder: &mut InlineBuilder, node: &Node, name: Optio
 
 fn append_scope_children(builder: &mut InlineBuilder, node: &Node, name: Option<&str>) {
     let children = inline_children(node);
-    match node.macro_name.as_deref() {
-        Some("Fn" | "Fo") => super::generated::function(builder, node, name),
-        Some("Xr" | "MR") => super::generated::manual_reference(builder, node, name),
-        Some("Nm") if node.kind == NodeKind::Block => {
+    match node.macro_token.as_ref() {
+        Some(Mdoc(MdocMacro::Fn | MdocMacro::Fo)) => {
+            super::generated::function(builder, node, name);
+        }
+        Some(Mdoc(MdocMacro::Xr) | Man(ManMacro::Mr)) => {
+            super::generated::manual_reference(builder, node, name);
+        }
+        Some(Mdoc(MdocMacro::Nm)) if node.kind == NodeKind::Block => {
             builder.with_font_scope(Font::Strong, |builder| {
                 append_name(builder, first_part_children(node, NodeKind::Head), name);
             });
             append_inline_nodes(builder, first_part_children(node, NodeKind::Body), name);
         }
-        Some("Nm") => {
+        Some(Mdoc(MdocMacro::Nm)) => {
             builder.with_font_scope(Font::Strong, |builder| append_name(builder, children, name));
         }
-        Some("Fl") => builder.with_native_operand_role(
-            crate::definitions::NativeOperandRole::ExplicitOption,
-            |builder| {
-                // `termp_fl_pre()` emits the dash and then visits children;
-                // this exact scope proves each accepted option spelling.
-                builder.append_scope(
-                    |builder| {
-                        builder.with_font_scope(Font::Strong, |builder| {
-                            builder.append_text("-");
-                            builder.with_prefix_join(|builder| {
-                                append_inline_nodes(builder, children, name);
-                            });
-                        });
-                    },
-                    coalesce_font_runs,
-                );
-            },
-        ),
+        Some(Mdoc(MdocMacro::Fl)) => append_option(builder, children, name),
         // mdoc_term.c routes Cd and Fd through termp_fd_pre = termp_bold_pre
         // (dispatch lines 142/149): unconditional Strong in every section.
-        Some("Cm" | "Ic" | "Sy" | "Ms" | "Cd" | "Fd") => {
+        Some(Mdoc(
+            MdocMacro::Cm
+            | MdocMacro::Ic
+            | MdocMacro::Sy
+            | MdocMacro::Ms
+            | MdocMacro::Cd
+            | MdocMacro::Fd,
+        )) => {
             builder.with_font_scope(Font::Strong, |builder| {
                 append_inline_nodes(builder, children, name);
             });
         }
-        Some("Ar") => builder.with_native_operand_role(
+        Some(Mdoc(MdocMacro::Ar)) => builder.with_native_operand_role(
             crate::definitions::NativeOperandRole::Argument,
             |builder| {
                 // `Ar` dispatches through termp_under_pre, then its actual
@@ -117,38 +118,30 @@ fn append_scope_children(builder: &mut InlineBuilder, node: &Node, name: Option<
                 });
             },
         ),
-        Some("Pa" | "Em" | "Va" | "Vt" | "Ft" | "Fa" | "Ad" | "Fr") => {
+        Some(Mdoc(
+            MdocMacro::Pa
+            | MdocMacro::Em
+            | MdocMacro::Va
+            | MdocMacro::Vt
+            | MdocMacro::Ft
+            | MdocMacro::Fa
+            | MdocMacro::Ad
+            | MdocMacro::Fr,
+        )) => {
             builder.with_font_scope(Font::Emphasis, |builder| {
                 append_inline_nodes(builder, children, name);
             });
         }
-        Some("No" | "Dv") => builder.with_font_scope(Font::Regular, |builder| {
-            append_inline_nodes(builder, children, name);
-        }),
-        Some("Li") => builder.with_font_scope(Font::Code, |builder| {
-            append_inline_nodes(builder, children, name);
-        }),
-        Some("Sx") => {
-            let authored_target = authored_section_phrase(children, name);
-            let previous_owner = builder.zero_advance.pending_native_owner();
-            let annotated = builder.append_semantic_scope(
-                node.id,
-                |builder| {
-                    builder.with_font_scope(Font::Emphasis, |builder| {
-                        append_inline_nodes(builder, children, name);
-                    });
-                },
-                |children| section_reference(authored_target.clone(), children),
-            );
-            builder.zero_advance.bind_pending_link(
-                previous_owner,
-                mant_ir::LinkTarget::Section {
-                    id: authored_target.into(),
-                },
-                annotated,
-            );
+        Some(Mdoc(MdocMacro::No | MdocMacro::Dv)) => {
+            builder.with_font_scope(Font::Regular, |builder| {
+                append_inline_nodes(builder, children, name);
+            });
         }
-        Some("Nd") => {
+        Some(Mdoc(MdocMacro::Li)) => builder.with_font_scope(Font::Code, |builder| {
+            append_inline_nodes(builder, children, name);
+        }),
+        Some(Mdoc(MdocMacro::Sx)) => append_section_reference(builder, node.id, children, name),
+        Some(Mdoc(MdocMacro::Nd)) => {
             // mdoc_term.c::termp_nd_pre() prints `\(en` (U+2013), not an em
             // dash. Its next term_word() supplies the separate automatic
             // separator; there is no authored blank in this generated word.
@@ -157,18 +150,73 @@ fn append_scope_children(builder: &mut InlineBuilder, node: &Node, name: Option<
         }
         // mdoc_html.c::mdoc__x_pre() enriches these fields with typed
         // external targets while the visible terminal word is unchanged.
-        Some("%U") => super::links::append_reference_field_link(builder, children, name, false),
-        Some("%R") => super::links::append_reference_field_link(builder, children, name, true),
-        Some("%T") if node.reference_quotes_title => append_quoted_title(builder, children, name),
+        Some(Mdoc(MdocMacro::PercentU)) => {
+            super::links::append_reference_field_link(builder, children, name, false);
+        }
+        Some(Mdoc(MdocMacro::PercentR)) => {
+            super::links::append_reference_field_link(builder, children, name, true);
+        }
+        Some(Mdoc(MdocMacro::PercentT)) if node.reference_quotes_title => {
+            append_quoted_title(builder, children, name);
+        }
         // mdoc_term.c maps these reference fields through termp_under_pre();
         // quoted %T takes the separate branch above when a journal is present.
-        Some("%B" | "%I" | "%J" | "%T") => {
+        Some(Mdoc(
+            MdocMacro::PercentB | MdocMacro::PercentI | MdocMacro::PercentJ | MdocMacro::PercentT,
+        )) => {
             builder.with_font_scope(Font::Emphasis, |builder| {
                 append_inline_nodes(builder, children, name);
             });
         }
         _ => append_inline_nodes(builder, children, name),
     }
+}
+
+fn append_option(builder: &mut InlineBuilder, children: &[Node], name: Option<&str>) {
+    builder.with_native_operand_role(
+        crate::definitions::NativeOperandRole::ExplicitOption,
+        |builder| {
+            // mdoc_term.c::termp_fl_pre() emits the bold dash and then visits
+            // children in the same scope, proving each option spelling.
+            builder.append_scope(
+                |builder| {
+                    builder.with_font_scope(Font::Strong, |builder| {
+                        builder.append_text("-");
+                        builder.with_prefix_join(|builder| {
+                            append_inline_nodes(builder, children, name);
+                        });
+                    });
+                },
+                coalesce_font_runs,
+            );
+        },
+    );
+}
+
+fn append_section_reference(
+    builder: &mut InlineBuilder,
+    node_id: u32,
+    children: &[Node],
+    name: Option<&str>,
+) {
+    let authored_target = authored_section_phrase(children, name);
+    let previous_owner = builder.zero_advance.pending_native_owner();
+    let annotated = builder.append_semantic_scope(
+        node_id,
+        |builder| {
+            builder.with_font_scope(Font::Emphasis, |builder| {
+                append_inline_nodes(builder, children, name);
+            });
+        },
+        |children| section_reference(authored_target.clone(), children),
+    );
+    builder.zero_advance.bind_pending_link(
+        previous_owner,
+        mant_ir::LinkTarget::Section {
+            id: authored_target.into(),
+        },
+        annotated,
+    );
 }
 
 fn append_column_list(builder: &mut InlineBuilder, node: &Node, name: Option<&str>) {
@@ -189,7 +237,7 @@ fn append_column_list(builder: &mut InlineBuilder, node: &Node, name: Option<&st
     builder.begin_executed_node(body);
     let mut first_item = true;
     for item in &body.children {
-        if item.kind != NodeKind::Block || item.macro_name.as_deref() != Some("It") {
+        if item.kind != NodeKind::Block || item.macro_token.as_ref() != Some(&Mdoc(MdocMacro::It)) {
             append_inline_nodes(builder, std::slice::from_ref(item), name);
             continue;
         }
@@ -366,7 +414,7 @@ fn append_nested_list(builder: &mut InlineBuilder, node: &Node, name: Option<&st
     let mut item_count = 0usize;
     let mut previous_body_empty = false;
     for item in &body.children {
-        if item.kind != NodeKind::Block || item.macro_name.as_deref() != Some("It") {
+        if item.kind != NodeKind::Block || item.macro_token.as_ref() != Some(&Mdoc(MdocMacro::It)) {
             append_inline_nodes(builder, std::slice::from_ref(item), name);
             continue;
         }
@@ -444,7 +492,10 @@ fn append_display(builder: &mut InlineBuilder, node: &Node, name: Option<&str>) 
     // changing tab configuration (mdoc_term.c:589,1328,1436). This is the
     // ordinary newline, not roff_pre_br(): temporary BRIND flags survive.
     builder.no_fill_source_line();
-    if node.macro_name.as_deref() == Some("Bd") && !node.compact && builder.has_definition_head() {
+    if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Bd))
+        && !node.compact
+        && builder.has_definition_head()
+    {
         // print_bvspace() reaches the enclosing non-item It even when Bd
         // is its first HEAD child (mdoc_term.c:600-618). Its term_vspace()
         // is independent of roff .sp: keep BRIND/NOBREAK and consume any
@@ -461,7 +512,7 @@ fn append_display(builder: &mut InlineBuilder, node: &Node, name: Option<&str>) 
     };
     let posts = builder.scope_posts.clone();
     posts.enter_body(body.id, builder.font.checkpoint());
-    if node.macro_name.as_deref() == Some("Bd") {
+    if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Bd)) {
         posts.enter_display_fill(body.id, node.flags.no_fill);
     }
     builder.begin_executed_node(body);
@@ -473,14 +524,14 @@ fn append_display(builder: &mut InlineBuilder, node: &Node, name: Option<&str>) 
     if !posts.ended(body.id) {
         // Bd BODY post and D1/Dl BLOCK post call term_newln(), exactly
         // once for the original scope (mdoc_term.c:1131,1482).
-        if node.macro_name.as_deref() == Some("Bd") {
+        if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Bd)) {
             builder.finish_display_body(node.display_kind);
         } else {
             builder.no_fill_source_line();
         }
         posts.finish(body.id);
     }
-    if node.macro_name.as_deref() == Some("Bd") {
+    if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Bd)) {
         posts.exit_display_fill(body.id);
     }
 }
@@ -518,7 +569,10 @@ impl<'node> crate::mandoc::containers::ContainerSink<'node> for InlineContainerS
         // The caller entered the root before scope dispatch.  Direct Fo Fa
         // operands enter in function_argument(); all other nested source
         // wrappers use the same cursor as ordinary text nodes.
-        if starts_line && node.id != self.root_id && node.macro_name.as_deref() != Some("Fa") {
+        if starts_line
+            && node.id != self.root_id
+            && node.macro_token.as_ref() != Some(&Mdoc(MdocMacro::Fa))
+        {
             self.builder.begin_executed_node(node);
         }
     }
@@ -570,16 +624,16 @@ fn append_quoted_title(builder: &mut InlineBuilder, children: &[Node], name: Opt
 /// from ordinary scope lowering so new atomic forms cannot accidentally
 /// recreate an isolated zero-advance state.
 fn append_atomic(builder: &mut InlineBuilder, node: &Node, name: Option<&str>) -> bool {
-    match node.macro_name.as_deref() {
-        Some("In") => append_include(builder, node, name),
-        Some("Bx") => append_bsd_reference(builder, node, name),
-        Some("Lk") => {
+    match node.macro_token.as_ref() {
+        Some(Mdoc(MdocMacro::In)) => append_include(builder, node, name),
+        Some(Mdoc(MdocMacro::Bx)) => append_bsd_reference(builder, node, name),
+        Some(Mdoc(MdocMacro::Lk)) => {
             if let Some(anchor) = navigation_anchor(node) {
                 builder.append(vec![anchor]);
             }
             append_link(builder, node, name);
         }
-        Some("Mt") => {
+        Some(Mdoc(MdocMacro::Mt)) => {
             if let Some(anchor) = navigation_anchor(node) {
                 builder.append(vec![anchor]);
             }

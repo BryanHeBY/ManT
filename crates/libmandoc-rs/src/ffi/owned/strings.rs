@@ -13,9 +13,45 @@ pub(super) unsafe fn checked_string(pointer: *const c_char) -> Result<Option<Str
     Ok(Some(text.to_owned()))
 }
 
+/// Recognize static names while the parser-owned C string is still borrowed.
+/// Only an unknown spelling crosses this boundary as a heap allocation.
+pub(super) unsafe fn checked_macro(
+    pointer: *const c_char,
+) -> Result<Option<crate::MacroToken>, String> {
+    if pointer.is_null() {
+        return Ok(None);
+    }
+    let bytes = unsafe { CStr::from_ptr(pointer) }.to_bytes();
+    let name =
+        std::str::from_utf8(bytes).map_err(|_| "libmandoc returned a non-UTF-8 internal string")?;
+    Ok(Some(crate::MacroToken::from_name(name)))
+}
+
 #[cfg(test)]
 mod string_boundary_tests {
-    use super::checked_string;
+    use super::{checked_macro, checked_string};
+
+    #[test]
+    fn macro_identity_transfer_checks_utf8_and_owns_only_unknown_names() {
+        use crate::{MacroToken, MdocMacro};
+        use std::ffi::CString;
+
+        let known = CString::new("Fo").unwrap();
+        assert_eq!(
+            unsafe { checked_macro(known.as_ptr()) }.unwrap(),
+            Some(MacroToken::Mdoc(MdocMacro::Fo))
+        );
+        let unknown = CString::new("FutureBlock").unwrap();
+        let transferred = unsafe { checked_macro(unknown.as_ptr()) }.unwrap().unwrap();
+        drop(unknown);
+        assert_eq!(transferred, MacroToken::Unknown("FutureBlock".to_owned()));
+        assert_eq!(unsafe { checked_macro(std::ptr::null()) }.unwrap(), None);
+        let invalid = [0xff_u8, 0];
+        assert_eq!(
+            unsafe { checked_macro(invalid.as_ptr().cast()) }.unwrap_err(),
+            "libmandoc returned a non-UTF-8 internal string"
+        );
+    }
 
     #[test]
     fn successful_internal_strings_reject_invalid_utf8() {

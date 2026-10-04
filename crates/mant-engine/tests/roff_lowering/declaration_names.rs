@@ -216,7 +216,7 @@ fn has_native_head(
     macro_name: &str,
 ) -> bool {
     node.kind == libmandoc_rs::NodeKind::Block
-        && node.macro_name.as_deref() == Some(macro_name)
+        && node.macro_token.as_deref() == Some(macro_name)
         && (node.line, node.column) == (source.line, source.column)
         && node
             .children
@@ -261,11 +261,11 @@ fn has_literal_relative_pair(
         let head = &siblings[0];
         let tail = &siblings[1];
         (head.kind == libmandoc_rs::NodeKind::Element
-            && head.macro_name.as_deref() == Some(macro_name)
+            && head.macro_token.as_deref() == Some(macro_name)
             || macro_name == "TEXT" && head.kind == libmandoc_rs::NodeKind::Text)
             && native_contains_source(head, source)
             && tail.kind == libmandoc_rs::NodeKind::Block
-            && tail.macro_name.as_deref() == Some("RS")
+            && tail.macro_token.as_deref() == Some("RS")
             && tail.children.iter().any(|child| {
                 child.kind == libmandoc_rs::NodeKind::Body && native_contains_text(child, body)
             })

@@ -376,8 +376,13 @@ pub struct Node {
     pub scope_end: Option<ScopeEnd>,
     /// Normalized `%T` title quote rule inside an `Rs` reference.
     pub reference_quotes_title: bool,
-    /// Source macro name, without the leading dot, when applicable.
-    pub macro_name: Option<String>,
+    /// Typed source macro identity, when applicable.
+    ///
+    /// Known macros use allocation-free enum data. Unknown spellings remain
+    /// owned strings. With `serde`, the existing `macro_name` property still
+    /// contains the exact source-name string.
+    #[cfg_attr(feature = "serde", serde(rename = "macro_name"))]
+    pub macro_token: Option<crate::MacroToken>,
     /// Visible text carried by a text node, with libmandoc's internal break,
     /// discretionary-hyphen, and non-breaking-space sentinels normalized.
     pub text: Option<String>,

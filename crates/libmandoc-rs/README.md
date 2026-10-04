@@ -262,6 +262,43 @@ cleanup use iterative traversal, including rejected and truncated inputs.
 Enable the optional `serde` feature to derive `Serialize` and `Deserialize`
 for the public AST, parser configuration, reports, diagnostics, and errors.
 
+### Typed macro identities
+
+`Node.kind` identifies the structural role; `Node.macro_token` identifies the
+source macro as `MacroToken::Roff`, `::Man`, or `::Mdoc`. The corresponding
+`RoffMacro`, `ManMacro`, and `MdocMacro` enums cover every named token in the
+pinned registry, including known requests that only run during preprocessing.
+Known identities do not allocate a macro-name string. `MacroToken::Unknown`
+keeps an owned spelling for ASTs extended by callers or read from future data.
+
+```rust
+use libmandoc_rs::{MacroToken, ManMacro, MdocMacro, Parser};
+
+let report = Parser::default().parse_bytes(
+    "hello.1",
+    b".TH HELLO 1\n.SH NAME\nhello \\- typed manual\n",
+)?;
+for node in &report.document.root.children {
+    if let Some(MacroToken::Man(ManMacro::Sh)) = &node.macro_token {
+        assert_eq!(node.macro_token.as_deref(), Some("SH"));
+    }
+}
+assert_eq!(MacroToken::from_name("Sh"), MacroToken::Mdoc(MdocMacro::Sh));
+assert_eq!(MacroToken::from_name("SH"), MacroToken::Man(ManMacro::Sh));
+# Ok::<(), Box<dyn std::error::Error>>(())
+```
+
+`as_str()`, `Display`, and `AsRef<str>` expose exact case-sensitive names for
+logs and source reconstruction. Each family has `ALL` and `from_name()` for
+registry inspection; converting a family enum into `MacroToken` preserves that
+family. `MacroToken::from_name()` uses completed-AST identity: `Dd` is mdoc and
+`TH` is man, even though the roff preprocessing registry also knows those names.
+With `serde`, the existing `macro_name` JSON property remains a string.
+Deserializing it follows the same canonical AST policy; serialize the specific
+family enum separately when preserving either duplicate preprocessing identity.
+This replaces the Rust `Node.macro_name: Option<String>` field with
+`Node.macro_token: Option<MacroToken>` in the unpublished v0.12 API.
+
 Enable the default-off `render` feature to use `Renderer`. `RenderFormat::Ascii`
 produces portable 7-bit terminal text with traditional backspace overstrikes,
 `RenderFormat::Utf8` uses locked Rust Unicode cell widths without reading or

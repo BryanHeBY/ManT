@@ -40,7 +40,7 @@ fn normalized_sections_reference_quote_and_cross_close_survive_owned_transfer() 
         .root
         .children
         .iter()
-        .filter(|node| node.macro_name.as_deref() == Some("Sh"))
+        .filter(|node| node.macro_token.as_deref() == Some("Sh"))
         .map(|node| node.section)
         .collect::<Vec<_>>();
     assert!(sections.windows(3).any(|part| part
@@ -61,7 +61,7 @@ fn normalized_sections_reference_quote_and_cross_close_survive_owned_transfer() 
     let body = find_node(&crossed.document.root, &|node| node.id == end.body_id)
         .expect("original body is owned");
     assert_eq!(body.kind, NodeKind::Body);
-    assert_eq!(body.macro_name.as_deref(), marker.macro_name.as_deref());
+    assert_eq!(body.macro_token.as_deref(), marker.macro_token.as_deref());
 }
 
 #[test]
@@ -510,7 +510,7 @@ fn parser_preserves_same_line_layout_and_next_line_content_roles() {
         .expect("TP head");
     assert_eq!(head.children[0].text.as_deref(), Some("96u"));
     assert!(!head.children[0].flags.line_start);
-    assert_eq!(head.children[1].macro_name.as_deref(), Some("BI"));
+    assert_eq!(head.children[1].macro_token.as_deref(), Some("BI"));
     assert!(head.children[1].flags.line_start);
 }
 
@@ -568,15 +568,15 @@ fn parser_preserves_mdoc_synopsis_presentation_roles() {
     fs::remove_file(path).expect("remove synopsis-role source");
 
     let synopsis_function = find_node(&document.root, &|node| {
-        node.macro_name.as_deref() == Some("Fn") && node.line == 5
+        node.macro_token.as_deref() == Some("Fn") && node.line == 5
     })
     .expect("synopsis Fn");
     let explicit_function = find_node(&document.root, &|node| {
-        node.macro_name.as_deref() == Some("Fo") && node.kind == NodeKind::Body
+        node.macro_token.as_deref() == Some("Fo") && node.kind == NodeKind::Body
     })
     .expect("synopsis Fo body");
     let prose_function = find_node(&document.root, &|node| {
-        node.macro_name.as_deref() == Some("Fn") && node.line == 10
+        node.macro_token.as_deref() == Some("Fn") && node.line == 10
     })
     .expect("prose Fn");
 
@@ -686,10 +686,10 @@ fn parser_copies_normalized_font_and_author_modes() {
         .expect("parse normalized mdoc modes");
 
     let split = find_node(&report.document.root, &|node| {
-        node.macro_name.as_deref() == Some("An") && node.author_mode == Some(AuthorMode::Split)
+        node.macro_token.as_deref() == Some("An") && node.author_mode == Some(AuthorMode::Split)
     });
     let no_split = find_node(&report.document.root, &|node| {
-        node.macro_name.as_deref() == Some("An") && node.author_mode == Some(AuthorMode::NoSplit)
+        node.macro_token.as_deref() == Some("An") && node.author_mode == Some(AuthorMode::NoSplit)
     });
     let font = find_macro(&report.document.root, "Bf").expect("Bf node");
 

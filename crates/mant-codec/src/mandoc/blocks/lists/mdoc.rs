@@ -6,6 +6,7 @@ use super::{
     NormalizedListKind, RunInHeadStyle, ScopeFlow, TableRow, definition_item, first_part_children,
     layout, lower_scope, ordinal_sequence, source_span, targets,
 };
+use libmandoc_rs::{MacroToken::Mdoc, MdocMacro};
 
 /// Only normalized `It` blocks execute `termp_it_pre`'s paragraph distance.
 /// Navigation-only IR items inserted below do not establish this source fact.
@@ -16,7 +17,7 @@ pub(in crate::mandoc::blocks) fn has_native_mdoc_list_items(node: &Node) -> bool
 }
 
 fn is_mdoc_list_item(node: &Node) -> bool {
-    node.kind == NodeKind::Block && node.macro_name.as_deref() == Some("It")
+    node.kind == NodeKind::Block && node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::It))
 }
 
 pub(in crate::mandoc::blocks) fn lower_mdoc_list(
