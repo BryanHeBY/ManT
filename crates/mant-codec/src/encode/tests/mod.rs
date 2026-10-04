@@ -25,6 +25,7 @@ mod inline_styles;
 mod links;
 mod row_layout;
 mod table_boundaries;
+mod table_definitions;
 
 fn parse_content(
     source: &str,

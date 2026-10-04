@@ -74,16 +74,19 @@ fn nested_definition_cells_keep_content_order_and_entry_identity() {
     // A prior native viscol must not disappear merely because IR drained.
     let (_, native) = load_case("cw10_list");
     assert_eq!(&native[4..8], ["A x", "B", "", "C"]);
+    // Fresh pristine replay confirms the inner tag HEAD/BODY end on separate
+    // rows (termp_it_post -> term_newln). Portable nesting may simplify A's
+    // placement, but cannot turn the accepted x/B seam into an invented colon.
     let query = reading_roundtrip(
         "cw10_list",
         &["A", "x", "B", "", "C"],
-        "```\nA; x: B\n\nC\n```",
+        "```\nA; x\nB\n\nC\n```",
     );
     // The exact source ran pristine CVS first. termp_it_post closes B's
     // row. The definition's Paragraph frame retires its provisional empty
     // tail; the outer completed VerticalSpace owns exactly one blank row.
     // That accepted hard boundary replaces the portable topology pipe.
-    assert_reparsed_column_cell(&query, "A; x: B\n\nC");
+    assert_reparsed_column_cell(&query, "A; x\nB\n\nC");
     let document = query.document.as_ref().unwrap();
     let [
         Block::Table {

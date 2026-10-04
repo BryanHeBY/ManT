@@ -302,6 +302,9 @@ fn literal_and_nonfinal_paragraph_tails_close_before_independent_gap_rows() {
 
 #[test]
 fn nested_tables_lists_and_definitions_keep_closed_and_completed_receipts() {
+    // Separate labels own a hard row, including inside a portable table.
+    // Fresh pristine nested Bl -ohang / It TERM / No A confirms TERM\nA
+    // (mdoc_term.c::termp_it_post -> term_newln); no colon is authored.
     for kind in ["table", "list", "definition"] {
         for depth in [1, 2, 4] {
             for (closed, gap, boundary) in [
@@ -317,7 +320,7 @@ fn nested_tables_lists_and_definitions_keep_closed_and_completed_receipts() {
                     first = wrap(first, kind);
                 }
                 let prefix = if kind == "definition" {
-                    "TERM: ".repeat(depth)
+                    "TERM\n".repeat(depth)
                 } else {
                     String::new()
                 };
@@ -383,7 +386,7 @@ fn ordinary_nested_separators_remain_when_no_hard_boundary_was_accepted() {
             ),
             cell("D", false, 0),
         ]),
-        "TERM: A, B; C | D",
+        "TERM\nA, B; C | D",
     );
 }
 
@@ -432,7 +435,7 @@ fn list_and_definition_frames_close_paragraph_tails_without_closing_literal_tail
                     first = wrap(first, kind);
                 }
                 let prefix = if kind == "definition" {
-                    "TERM: ".repeat(depth)
+                    "TERM\n".repeat(depth)
                 } else {
                     String::new()
                 };

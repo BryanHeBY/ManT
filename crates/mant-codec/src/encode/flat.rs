@@ -1,5 +1,5 @@
 //! Portable table cells flatten presentation, never semantic ownership.
-use super::{inline::literal_row_layout, mapped::MappedText};
+use super::mapped::MappedText;
 use mant_ir::{
     Block, EntryOwner, InlineContentRef, TableCell, TableCellKind, TableRow, TableRowPlan,
     TableRuleCellKind, bounded_table_rows, geometry::GapPlan,
@@ -28,6 +28,8 @@ struct Projection {
     mapped: MappedText,
     tail: Tail,
     physical: bool,
+    /// An empty open row has an origin, but no padding until content arrives.
+    open_row_indent: i32,
     leading_gap: GapPlan,
     pending_gap: GapPlan,
 }
@@ -56,6 +58,15 @@ impl Projection {
             self.gap(value.pending_gap.rows(0));
             return;
         }
+        // A literal empty BODY can occupy the existing shared open row without
+        // adding a glyph or closing it. Keep that row's deferred HEAD origin
+        // until a later piece actually receives it, including another cell.
+        let retains_open_row = self.physical
+            && self.pending_gap.rows(0) == 0
+            && matches!(self.tail, Tail::Open)
+            && matches!(value.tail, Tail::Shared)
+            && separator.is_empty()
+            && value.mapped.text.is_empty();
         if self.physical {
             if self.pending_gap.rows(0) > 0 {
                 self.complete_gap();
@@ -63,13 +74,32 @@ impl Projection {
                 match self.tail {
                     Tail::EndRow => self.mapped.text.push('\n'),
                     Tail::CompletedRows => {}
-                    Tail::Shared | Tail::Open => self.mapped.text.push_str(separator),
+                    Tail::Open => {
+                        if !separator.contains('\n')
+                            && (!separator.is_empty()
+                                || value
+                                    .mapped
+                                    .text
+                                    .split('\n')
+                                    .next()
+                                    .is_some_and(|row| !row.is_empty()))
+                        {
+                            self.mapped.text.push_str(
+                                &" ".repeat(mant_ir::geometry::padding(self.open_row_indent)),
+                            );
+                        }
+                        self.mapped.text.push_str(separator);
+                    }
+                    Tail::Shared => self.mapped.text.push_str(separator),
                 }
             }
         }
         self.mapped.append(std::mem::take(&mut value.mapped));
         self.physical = true;
-        self.tail = value.tail;
+        if !retains_open_row {
+            self.tail = value.tail;
+            self.open_row_indent = value.open_row_indent;
+        }
         self.pending_gap = value.pending_gap;
     }
 
@@ -211,11 +241,20 @@ fn plain_cell(cell: &TableCell, track: bool) -> Projection {
 }
 
 fn plain_blocks(blocks: &[Block], separator: &str, tail: ParagraphTail, track: bool) -> Projection {
+    plain_blocks_in_row(blocks, separator, tail, track, None)
+}
+
+fn plain_blocks_in_row(
+    blocks: &[Block],
+    separator: &str,
+    tail: ParagraphTail,
+    track: bool,
+    shared_first: Option<usize>,
+) -> Projection {
     let mut output = Projection::default();
     for (index, block) in blocks.iter().enumerate() {
-        if let Block::VerticalSpace { lines, .. } = block {
-            output.gap(*lines);
-        } else {
+        output.gap(mant_ir::geometry::block_gap(block));
+        if !matches!(block, Block::VerticalSpace { .. }) {
             output.append(
                 plain_block(
                     block,
@@ -225,6 +264,7 @@ fn plain_blocks(blocks: &[Block], separator: &str, tail: ParagraphTail, track: b
                         ParagraphTail::BlockBoundary
                     },
                     track,
+                    shared_first == Some(index),
                 ),
                 separator,
             );
@@ -236,6 +276,7 @@ fn plain_blocks(blocks: &[Block], separator: &str, tail: ParagraphTail, track: b
 fn inline_projection(
     content: InlineContentRef<'_>,
     paragraph: Option<ParagraphTail>,
+    shared_first: bool,
 ) -> Projection {
     let mut text = String::new();
     let mut ends_in_break = false;
@@ -262,14 +303,34 @@ fn inline_projection(
     } else {
         Tail::Open
     };
-    Projection::text(
-        literal_row_layout(&text, content.layout).into(),
-        tail,
-        physical,
-    )
+    let open_row_indent = if ends_in_break && matches!(tail, Tail::Open) {
+        content
+            .layout
+            .row_indent(mant_ir::logical_row_count(content.content) - 1)
+    } else {
+        0
+    };
+    let mut mapped = String::new();
+    for (row, text) in text.split('\n').enumerate() {
+        if row > 0 {
+            mapped.push('\n');
+        }
+        if !text.is_empty() {
+            if row > 0 || !shared_first {
+                mapped.push_str(
+                    &" ".repeat(mant_ir::geometry::padding(content.layout.row_indent(row))),
+                );
+            }
+            mapped.push_str(text);
+        }
+    }
+    Projection {
+        open_row_indent,
+        ..Projection::text(mapped.into(), tail, physical)
+    }
 }
 
-fn plain_block(block: &Block, tail: ParagraphTail, track: bool) -> Projection {
+fn plain_block(block: &Block, tail: ParagraphTail, track: bool, shared_first: bool) -> Projection {
     match block {
         Block::Paragraph {
             children,
@@ -281,6 +342,7 @@ fn plain_block(block: &Block, tail: ParagraphTail, track: bool) -> Projection {
                 layout: inline_layout,
             },
             Some(tail),
+            shared_first,
         ),
         Block::Preformatted {
             children,
@@ -292,6 +354,7 @@ fn plain_block(block: &Block, tail: ParagraphTail, track: bool) -> Projection {
                 layout: inline_layout,
             },
             None,
+            shared_first,
         ),
         Block::List { items, .. } => join(
             items.iter().map(|item| {
@@ -304,18 +367,33 @@ fn plain_block(block: &Block, tail: ParagraphTail, track: bool) -> Projection {
             items.iter().map(|item| {
                 let mut terms = join(
                     item.terms.iter().map(|term| {
-                        inline_projection(term.inline_content(), Some(ParagraphTail::OpenCellRow))
+                        inline_projection(
+                            term.inline_content(),
+                            Some(ParagraphTail::OpenCellRow),
+                            false,
+                        )
                     }),
-                    ", ",
+                    "\n",
                 );
-                let mut description =
-                    plain_blocks(&item.description, "; ", ParagraphTail::BlockBoundary, track);
-                // Keep the existing portable colon for an empty HEAD or BODY.
-                terms.structural_row();
-                if description.leading_gap.rows(0) == 0 {
-                    description.structural_row();
-                }
-                terms.append(description, ": ");
+                let shared = terms.physical.then(|| first_shared_body(item)).flatten();
+                let description = plain_blocks_in_row(
+                    &item.description,
+                    "\n",
+                    ParagraphTail::BlockBoundary,
+                    track,
+                    shared,
+                );
+                // Table simplification does not authorize changing the
+                // accepted HEAD/BODY row or word seam. Geometric BODY origins
+                // cannot insert cells into a joined word (termp_it_pre/post).
+                let separator = if shared.is_none() {
+                    "\n"
+                } else if item.head_body_relation.joins_without_separator() {
+                    ""
+                } else {
+                    " "
+                };
+                terms.append(description, separator);
                 terms.with_owner(EntryOwner::Definition(item), track)
             }),
             "; ",
@@ -328,6 +406,36 @@ fn plain_block(block: &Block, tail: ParagraphTail, track: bool) -> Projection {
         }
         Block::VerticalSpace { .. } | Block::ThematicBreak { .. } => Projection::default(),
     }
+}
+
+/// Empty inline roots are transparent, but an executed leading gap or a
+/// structural BODY cannot share the final HEAD row. Read accepted IR only.
+fn first_shared_body(item: &mant_ir::DefinitionItem) -> Option<usize> {
+    if !item.inline_term() {
+        return None;
+    }
+    for (index, block) in item.description.iter().enumerate() {
+        if mant_ir::geometry::block_gap(block) > 0 {
+            return None;
+        }
+        match block {
+            Block::Paragraph { children, .. } => {
+                let mut physical = false;
+                mant_ir::visit_inline_plain_text(children, |text| physical |= !text.is_empty());
+                if physical {
+                    return Some(index);
+                }
+            }
+            Block::Preformatted { children, .. } => {
+                if mant_ir::geometry::has_literal_rows(children) {
+                    return Some(index);
+                }
+            }
+            Block::VerticalSpace { .. } => {}
+            _ => return None,
+        }
+    }
+    None
 }
 
 #[cfg(test)]
