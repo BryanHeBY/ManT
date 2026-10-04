@@ -77,14 +77,20 @@ fn sibling_subtrees_are_layout_once_even_in_topology_and_budget_fallbacks() {
 fn defensive_placement_fallback_reuses_prepared_rows_without_a_tree_access() {
     use mant_ir::geometry::{ColumnFieldWidth, DeclaredColumns};
     let cells = vec![
-        vec![LayoutText::decorated(
-            "LEFT",
-            ansi(TextPresentation::default(), "LEFT"),
-        )],
-        vec![LayoutText::decorated(
-            "RIGHT",
-            ansi(TextPresentation::default(), "RIGHT"),
-        )],
+        super::super::tables::PreparedCell::new(
+            Flow::text(LayoutText::decorated(
+                "LEFT",
+                ansi(TextPresentation::default(), "LEFT"),
+            )),
+            false,
+        ),
+        super::super::tables::PreparedCell::new(
+            Flow::text(LayoutText::decorated(
+                "RIGHT",
+                ansi(TextPresentation::default(), "RIGHT"),
+            )),
+            false,
+        ),
     ];
     // This inconsistent measurement cannot come from from_text. A defensive
     // plan failure nevertheless receives only already prepared text results,
@@ -105,14 +111,8 @@ fn defensive_placement_fallback_reuses_prepared_rows_without_a_tree_access() {
             extra_width_columns: Some(10),
         })
         .unwrap();
-        BlockRenderer::placed_column_row(
-            columns.place_at(&widths, 2),
-            cells,
-            &widths,
-            &[false, false],
-            2,
-        )
-        .finish(false)
+        BlockRenderer::placed_column_row(columns.place_at(&widths, 2), cells, &widths, 2)
+            .finish(false)
     });
     assert_eq!(undecorated(&output), "  LEFT\n  RIGHT");
     assert_eq!(counts, visits::Counts::default());

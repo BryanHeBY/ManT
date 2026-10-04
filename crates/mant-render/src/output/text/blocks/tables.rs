@@ -2,6 +2,40 @@
 
 use super::{BlockRenderer, Flow, LayoutText, indent_lines, padding};
 
+/// One completed cell visit, including whether it produced any physical row.
+/// Empty text alone cannot distinguish an absent paragraph from literal rows.
+pub(super) struct PreparedCell {
+    pub(super) lines: Vec<LayoutText>,
+    has_physical_rows: bool,
+    completed: bool,
+    break_after: bool,
+}
+
+impl PreparedCell {
+    pub(super) fn new(flow: Flow, break_after: bool) -> Self {
+        let has_physical_rows = flow.has_physical_rows();
+        let (text, completed) = flow.finish_cell();
+        Self {
+            lines: text.split(completed),
+            has_physical_rows,
+            completed,
+            break_after,
+        }
+    }
+
+    fn widths(&self) -> Vec<mant_ir::geometry::ColumnFieldWidth> {
+        let mut widths = self
+            .lines
+            .iter()
+            .map(|line| mant_ir::geometry::ColumnFieldWidth::from_text(&line.visible))
+            .collect::<Vec<_>>();
+        if let Some(last) = widths.last_mut() {
+            last.completed = self.completed || self.break_after;
+        }
+        widths
+    }
+}
+
 impl BlockRenderer<'_> {
     pub(super) fn table_flow(
         &self,
@@ -71,20 +105,11 @@ impl BlockRenderer<'_> {
             // and cannot be reused; both consumers pass that fact to the plan.
             let mut cells = Vec::with_capacity(row.cells.len());
             let mut widths = Vec::with_capacity(row.cells.len());
-            let mut empty_closures = Vec::with_capacity(row.cells.len());
             for cell in &row.cells {
-                let (text, completed) = self.cell_block_flow(&cell.blocks, 0).finish_cell();
-                empty_closures.push(cell.break_after && !completed && text.is_empty());
-                let lines = text.split(completed);
-                let mut measured = lines
-                    .iter()
-                    .map(|line| mant_ir::geometry::ColumnFieldWidth::from_text(&line.visible))
-                    .collect::<Vec<_>>();
-                if let Some(last) = measured.last_mut() {
-                    last.completed = completed || cell.break_after;
-                }
-                cells.push(lines);
-                widths.push(measured);
+                let prepared =
+                    PreparedCell::new(self.cell_block_flow(&cell.blocks, 0), cell.break_after);
+                widths.push(prepared.widths());
+                cells.push(prepared);
             }
             let bounds = row
                 .cells
@@ -94,50 +119,22 @@ impl BlockRenderer<'_> {
             let placements = columns.place_at(&widths, origin).filter(|placements| {
                 mant_ir::geometry::table_column_origins_fit(&bounds, placements, origin)
             });
-            output.extend(Self::placed_column_row(
-                placements,
-                cells,
-                &widths,
-                &empty_closures,
-                origin,
-            ));
+            output.extend(Self::placed_column_row(placements, cells, &widths, origin));
         }
         output
     }
 
     pub(super) fn placed_column_row(
         placements: Option<Vec<Vec<mant_ir::geometry::ColumnPiece>>>,
-        cells: Vec<Vec<LayoutText>>,
+        cells: Vec<PreparedCell>,
         widths: &[Vec<mant_ir::geometry::ColumnFieldWidth>],
-        empty_closures: &[bool],
         origin: i32,
     ) -> Flow {
         let mut output = Flow::default();
         let Some(placements) = placements else {
             // Reuse each prepared cell receipt exactly once, preserving
             // its open/completed tail and all decoration on empty rows.
-            let mut rows = Vec::new();
-            let mut open = false;
-            let mut completed = false;
-            for ((cell, measured), empty_closure) in
-                cells.into_iter().zip(widths).zip(empty_closures)
-            {
-                if *empty_closure {
-                    let decoration = LayoutText::join(cell, "");
-                    Self::close_empty_cell(&mut rows, decoration, completed, &mut open);
-                    completed = true;
-                } else {
-                    completed = measured.last().is_some_and(|row| row.completed);
-                    Self::append_stacked_cell(&mut rows, cell, completed, &mut open);
-                }
-            }
-            let text = LayoutText::join(rows, "\n").indented(padding(origin));
-            output.extend(if completed {
-                Flow::completed_text(text)
-            } else {
-                Flow::literal(text)
-            });
-            return output;
+            return Self::stacked_column_row(cells, origin);
         };
         let mut lines = Vec::new();
         for pieces in placements {
@@ -145,7 +142,7 @@ impl BlockRenderer<'_> {
             let mut visible = 0_usize;
             for piece in pieces {
                 line.push_plain(&" ".repeat(piece.column.saturating_sub(visible)));
-                line.append(&cells[piece.cell][piece.line]);
+                line.append(&cells[piece.cell].lines[piece.line]);
                 visible = piece
                     .column
                     .saturating_add(widths[piece.cell][piece.line].output);
@@ -279,28 +276,45 @@ impl BlockRenderer<'_> {
     /// A fallback selected only by column topology still has independent
     /// cell budgets. Reuse its original physical receipts and tail policy.
     fn independent_stacked_row(&self, cells: &[mant_ir::TableCell], origin: i32) -> Flow {
+        Self::stacked_column_row(
+            cells
+                .iter()
+                .map(|cell| PreparedCell::new(self.stacked_cell_flow(cell, 0), cell.break_after)),
+            origin,
+        )
+    }
+
+    /// Both early topology fallback and late placement fallback consume the
+    /// same receipt. No subsequent decision revisits the cell's source tree.
+    fn stacked_column_row(cells: impl IntoIterator<Item = PreparedCell>, origin: i32) -> Flow {
         let mut lines = Vec::new();
         let mut open = false;
         let mut completed = false;
         for cell in cells {
-            let flow = self.stacked_cell_flow(cell, origin);
-            if !flow.has_physical_rows() && !cell.break_after {
+            if !cell.has_physical_rows && !cell.break_after {
                 continue;
             }
-            let (text, closed) = flow.finish_cell();
-            if cell.break_after && !closed && text.is_empty() {
-                Self::close_empty_cell(&mut lines, text, completed, &mut open);
+            if cell.break_after
+                && !cell.completed
+                && cell.lines.len() == 1
+                && cell.lines[0].is_empty()
+            {
+                Self::close_empty_cell(
+                    &mut lines,
+                    LayoutText::join(cell.lines, ""),
+                    completed,
+                    &mut open,
+                );
                 completed = true;
                 continue;
             }
-            let physical = text.split(closed);
-            completed = closed || cell.break_after;
-            Self::append_stacked_cell(&mut lines, physical, completed, &mut open);
+            completed = cell.completed || cell.break_after;
+            Self::append_stacked_cell(&mut lines, cell.lines, completed, &mut open);
         }
         if lines.is_empty() {
             return Flow::completed_text(LayoutText::default());
         }
-        let text = LayoutText::join(lines, "\n");
+        let text = LayoutText::join(lines, "\n").indented(padding(origin));
         if completed {
             Flow::completed_text(text)
         } else {
