@@ -988,7 +988,8 @@ Definition-owner example:
     {
       "terms": [{"content":[{"type":"code","value":"--exclude PATTERN"}]}],
       "description": [{"type":"paragraph","children":[{"type":"text","value":"Skip matching paths."}]}],
-      "layout": {"headBodyRelation":{"type":"shared","wordBoundary":"separated","bodyAlignment":"indented"},"spacingBeforeLines":0},
+      "headBodyRelation": {"type":"shared","wordBoundary":"separated"},
+      "layout": {"spacingBeforeLines":0},
       "entry": {
         "id":"option-exclude",
         "kind":{"kind":"parameter","parameterKind":"option"},
@@ -1026,13 +1027,17 @@ Missing/empty facts `forms` means unrecorded; null forms are invalid shape.
 Shape-valid but out-of-bounds references stay in the tree with semantic
 validation diagnostics. They never transfer a child's content to its parent.
 
-Definition `layout.headBodyRelation` is a closed tagged object. The default is
+Definition item `headBodyRelation` is a closed tagged object. The default is
 `{"type":"separate"}`. A shared first description row uses
-`{"type":"shared","wordBoundary":"joined"|"separated","bodyAlignment":"after-term"|"indented"}`.
+`{"type":"shared","wordBoundary":"joined"|"separated"}`.
+The independent `layout.bodyAlignment` is `after-term` or `indented` (default
+`indented`, omitted in canonical output).
 `joined` adds no separator, preserving accepted HEAD padding; `separated`
 keeps at least `minTermGapColumns`. `after-term` locates the first BODY text
 after the label, while `indented` also respects the preferred body origin.
-Word adjacency takes precedence over that layout preference. Hard and wrapped
+Alignment has no effect with a separate row and cannot change sharing or word
+adjacency. Joined words ignore alignment and minimum gap without discarding
+those layout values. Hard and wrapped
 continuations retain their independently composed relative body origin.
 A first literal fragment shares a row only when the producer records that
 relation, and explicit leading spacing prevents sharing. Markdown preserves
@@ -1047,8 +1052,10 @@ Missing/empty layout uses the default; null layout is
 rejected. `layout.spacingBeforeLines` missing/null inherits list compactness;
 explicit zero is retained. The item-level hints are distinct from block-level
 indentation and spacing. The unreleased v0.12 contract uses this relation
-in place of the former string relations and `layout.inlineTerm`; all retired
-forms, unknown fields and mixed shapes are rejected without a version bump.
+in place of the former string relations and `layout.inlineTerm`. The retired
+`layout.headBodyRelation` and shared `headBodyRelation.bodyAlignment` are
+rejected, including mixed old/current objects. All retired forms, unknown
+fields and duplicate fields are rejected without a version bump.
 
 Rejected pre-convergence shapes: item `identity`, facts' flat `role` or semantic
 `aliases`, and item-level `inlineTerm` / `spacingBeforeLines`. They are rejected

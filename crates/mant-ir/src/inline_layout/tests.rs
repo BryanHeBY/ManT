@@ -318,6 +318,7 @@ fn validator_rechecks_every_mutated_inline_owner_instead_of_trusting_constructio
             },
             Block::DefinitionList {
                 items: vec![crate::DefinitionItem {
+                    head_body_relation: crate::HeadBodyRelation::Separate,
                     terms: vec![DefinitionTerm {
                         content: vec![text("A\nB")],
                         inline_layout: layout(&[(1, 0)]),

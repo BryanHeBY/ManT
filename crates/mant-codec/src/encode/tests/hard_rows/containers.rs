@@ -22,6 +22,7 @@ fn enclosed(children: Vec<Inline>, container: u8) -> Block {
         },
         3 | 4 => Block::DefinitionList {
             items: vec![DefinitionItem {
+                head_body_relation: mant_ir::HeadBodyRelation::Separate,
                 source: None,
                 entry: None,
                 layout: mant_ir::DefinitionLayout::default(),

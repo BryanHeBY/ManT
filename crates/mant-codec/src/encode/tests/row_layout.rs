@@ -352,13 +352,12 @@ fn joined_owner_layouts_preserve_one_code_context_and_no_body_word_gap() {
     };
     let block = Block::DefinitionList {
         items: vec![DefinitionItem {
+            head_body_relation: mant_ir::HeadBodyRelation::joined(),
             terms: vec![term],
             description: vec![body],
             entry: None,
             layout: mant_ir::DefinitionLayout {
-                head_body_relation: mant_ir::HeadBodyRelation::joined(
-                    mant_ir::DefinitionBodyAlignment::Indented,
-                ),
+                body_alignment: mant_ir::DefinitionBodyAlignment::Indented,
                 ..Default::default()
             },
             source: None,

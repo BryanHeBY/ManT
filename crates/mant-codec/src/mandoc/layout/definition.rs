@@ -2,7 +2,7 @@
 use super::{Distance, SourceIndent};
 use crate::mandoc::LoweringContext;
 use libmandoc_rs::Node;
-use mant_ir::{DefinitionLayout, HeadBodyRelation, Inline};
+use mant_ir::{DefinitionBodyAlignment, DefinitionLayout, HeadBodyRelation, Inline};
 
 #[derive(Clone, Copy)]
 pub(in crate::mandoc) enum TermPlacement {
@@ -31,7 +31,7 @@ pub(in crate::mandoc) struct DefinitionGeometry {
     /// Execution-proven head/body row relation overriding the static
     /// placement decision (`.nf`/`.fi` NOSPACE joins and filled cleared
     /// fields). `None` keeps the placement-derived relation.
-    pub(in crate::mandoc) relation_override: Option<mant_ir::HeadBodyRelation>,
+    pub(in crate::mandoc) relation_override: Option<(HeadBodyRelation, DefinitionBodyAlignment)>,
 }
 
 impl DefinitionGeometry {
@@ -55,9 +55,9 @@ impl DefinitionGeometry {
         origin: SourceIndent,
         body_origin: SourceIndent,
         terms: &[Vec<Inline>],
-    ) -> DefinitionLayout {
+    ) -> (HeadBodyRelation, DefinitionLayout) {
         let body_indent_columns = body_origin.offset_from(origin);
-        let mut head_body_relation = self.relation_override.unwrap_or(match self.placement {
+        let relation = match self.placement {
             TermPlacement::Fit
                 if !mant_ir::terms_fit_inline(
                     terms,
@@ -69,23 +69,29 @@ impl DefinitionGeometry {
             }
             TermPlacement::Fit | TermPlacement::RunIn => HeadBodyRelation::from(true),
             TermPlacement::Stacked => HeadBodyRelation::Separate,
-        });
+        };
+        let (head_body_relation, mut body_alignment) = self
+            .relation_override
+            .unwrap_or((relation, DefinitionBodyAlignment::Indented));
         // term_flushln() places a following HANG field after the last printed
         // HEAD row. Resolve this preference once, instead of making each
         // renderer infer it from historical rows. Leading empty rows alone
         // do not consume that origin (term.c:134-136,205-207,235-253).
-        if head_body_relation == HeadBodyRelation::from(true)
+        if head_body_relation == HeadBodyRelation::separated()
+            && body_alignment == DefinitionBodyAlignment::Indented
             && final_head_has_completed_content_row(terms)
         {
-            head_body_relation =
-                HeadBodyRelation::separated(mant_ir::DefinitionBodyAlignment::AfterTerm);
+            body_alignment = DefinitionBodyAlignment::AfterTerm;
         }
-        DefinitionLayout {
+        (
             head_body_relation,
-            body_indent_columns,
-            min_term_gap_columns: self.gap,
-            spacing_before_lines: None,
-        }
+            DefinitionLayout {
+                body_alignment,
+                body_indent_columns,
+                min_term_gap_columns: self.gap,
+                spacing_before_lines: None,
+            },
+        )
     }
 }
 

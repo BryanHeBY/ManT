@@ -37,17 +37,18 @@ def bundle(block):
                                        "blocks": [block]}]}}
 
 
-def definition(children, relation=None, inline_layout=None):
+def definition(children, relation=None, inline_layout=None, alignment="indented"):
     term = {"content": children}
     if inline_layout is not None:
         term["inlineLayout"] = inline_layout
     return bundle({"type": "definition-list", "items": [{"source": {"line": 9},
         "terms": [term], "description": [phrasing([text("BodyWord")])],
-        "layout": {"headBodyRelation": relation or {"type": "separate"}}}]})
+        "headBodyRelation": relation or {"type": "separate"},
+        "layout": {"bodyAlignment": alignment}}]})
 
 
-def shared(boundary="separated", alignment="indented"):
-    return {"type": "shared", "wordBoundary": boundary, "bodyAlignment": alignment}
+def shared(boundary="separated"):
+    return {"type": "shared", "wordBoundary": boundary}
 
 
 def bullet(children):
@@ -158,16 +159,23 @@ class MarkdownReaderObserverTests(unittest.TestCase):
         for alignment in ("after-term", "indented"):
             for boundary, seam, wrong in (("joined", "ABodyWord", "A BodyWord"),
                                            ("separated", "A BodyWord", "ABodyWord")):
-                original = definition([text("A")], relation=shared(boundary, alignment))
+                original = definition([text("A")], relation=shared(boundary), alignment=alignment)
                 with self.subTest(alignment=alignment, boundary=boundary):
                     self.assertTrue(good(markdown_reader_axes(one, original, bullet([text(seam)]))))
                     self.assertFalse(markdown_reader_axes(one, original,
                         bullet([text(wrong)]))["separators"])
         for relation in ("run-in", "joined-no-space", "flush-at-body",
-                         {"type": "shared", "wordBoundary": "joined"},
+                         {"type": "shared", "wordBoundary": "joined", "bodyAlignment": "indented"},
                          dict(shared(), nativeCause="field-flush")):
             self.assertFalse(good(markdown_reader_axes(one,
                 definition([text("A")], relation=relation), bullet([text("A BodyWord")]))))
+        for alignment in ("after-term", "indented"):
+            original = definition([text("A")], alignment=alignment)
+            self.assertTrue(good(markdown_reader_axes(one, original, bullet([text("A\nBodyWord")]))))
+        retired = definition([text("A")], relation=shared())
+        item = retired["document"]["sections"][0]["blocks"][0]["items"][0]
+        item["layout"]["headBodyRelation"] = item.pop("headBodyRelation")
+        self.assertFalse(good(markdown_reader_axes(one, retired, bullet([text("A BodyWord")]))))
 
     def test_column_fence_keeps_all_left_rows_and_the_real_neighbor(self):
         one = case(container="column", hardline="leading-one")

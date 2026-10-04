@@ -822,6 +822,7 @@ fn definition_term_and_run_in_description_keep_separate_source_origins() {
         query.document.as_mut().unwrap().sections[0].blocks = vec![Block::DefinitionList {
             declaration_groups: Vec::new(),
             items: vec![DefinitionItem {
+                head_body_relation: mant_ir::HeadBodyRelation::from(inline_term),
                 terms: vec![
                     vec![
                         Inline::Text {
@@ -835,7 +836,7 @@ fn definition_term_and_run_in_description_keep_separate_source_origins() {
                 entry: None,
                 source: None,
                 layout: mant_ir::DefinitionLayout {
-                    head_body_relation: mant_ir::HeadBodyRelation::from(inline_term),
+                    body_alignment: mant_ir::DefinitionBodyAlignment::Indented,
                     ..Default::default()
                 },
             }],

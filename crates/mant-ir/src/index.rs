@@ -237,6 +237,7 @@ mod tests {
             blocks: vec![crate::Block::DefinitionList {
                 declaration_groups: Vec::new(),
                 items: vec![DefinitionItem {
+                    head_body_relation: HeadBodyRelation::from(false),
                     source: None,
                     entry: Some(EntryFacts {
                         name_bindings: Vec::new(),
@@ -257,7 +258,7 @@ mod tests {
                         .collect(),
                     description: Vec::new(),
                     layout: crate::DefinitionLayout {
-                        head_body_relation: HeadBodyRelation::from(false),
+                        body_alignment: crate::DefinitionBodyAlignment::Indented,
                         spacing_before_lines: None,
                         ..Default::default()
                     },

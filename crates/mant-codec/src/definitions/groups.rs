@@ -393,6 +393,7 @@ mod tests {
 
     fn item(line: u32, column: u32, name: &str, description: bool) -> DefinitionItem {
         DefinitionItem {
+            head_body_relation: mant_ir::HeadBodyRelation::Separate,
             source: Some(SourceSpan {
                 line,
                 column,

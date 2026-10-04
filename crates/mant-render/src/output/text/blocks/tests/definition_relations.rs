@@ -9,7 +9,12 @@ fn text(value: &str) -> Inline {
     }
 }
 
-fn definition(relation: HeadBodyRelation, literal: bool, multi_head: bool) -> Block {
+fn definition(
+    relation: HeadBodyRelation,
+    alignment: DefinitionBodyAlignment,
+    literal: bool,
+    multi_head: bool,
+) -> Block {
     let mut head = Vec::new();
     if multi_head {
         head.extend([text("HEAD"), Inline::line_break()]);
@@ -67,6 +72,7 @@ fn definition(relation: HeadBodyRelation, literal: bool, multi_head: bool) -> Bl
         declaration_groups: vec![],
         compact: true,
         items: vec![DefinitionItem {
+            head_body_relation: relation,
             terms: vec![mant_ir::DefinitionTerm {
                 content: head,
                 inline_layout: mant_ir::InlineLayout {
@@ -84,7 +90,7 @@ fn definition(relation: HeadBodyRelation, literal: bool, multi_head: bool) -> Bl
             source: None,
             entry: None,
             layout: DefinitionLayout {
-                head_body_relation: relation,
+                body_alignment: alignment,
                 body_indent_columns: 12,
                 min_term_gap_columns: 2,
                 spacing_before_lines: None,
@@ -107,14 +113,14 @@ fn all_shared_word_and_alignment_policies_compose_relative_origins_once() {
     ] {
         for joined in [false, true] {
             let relation = if joined {
-                HeadBodyRelation::joined(alignment)
+                HeadBodyRelation::joined()
             } else {
-                HeadBodyRelation::separated(alignment)
+                HeadBodyRelation::separated()
             };
             for literal in [false, true] {
                 for multi_head in [false, true] {
                     for origin in [0, 5] {
-                        let block = definition(relation, literal, multi_head);
+                        let block = definition(relation, alignment, literal, multi_head);
                         let before = block.clone();
                         let term_indent = usize::from(multi_head) * 2;
                         let gap = if joined {
@@ -150,13 +156,41 @@ fn all_shared_word_and_alignment_policies_compose_relative_origins_once() {
 }
 
 #[test]
+fn changing_alignment_and_distances_cannot_change_the_item_word_relation() {
+    let renderer = super::super::super::plain_renderer();
+    for relation in [HeadBodyRelation::Separate, HeadBodyRelation::joined()] {
+        for alignment in [
+            DefinitionBodyAlignment::AfterTerm,
+            DefinitionBodyAlignment::Indented,
+        ] {
+            let mut block = definition(relation, alignment, false, false);
+            let Block::DefinitionList { items, .. } = &mut block else {
+                unreachable!()
+            };
+            items[0].layout.body_indent_columns = 40;
+            items[0].layout.min_term_gap_columns = 255;
+            assert_eq!(items[0].head_body_relation, relation);
+            let output = renderer.render_blocks(&[block], 0);
+            assert_eq!(
+                output.lines().next(),
+                Some(if relation == HeadBodyRelation::Separate {
+                    "中e\u{301}"
+                } else {
+                    "中e\u{301}BODY"
+                })
+            );
+        }
+    }
+}
+
+#[test]
 fn joined_words_retain_authored_head_padding_and_spacing_prevents_run_in() {
     let renderer = super::super::super::plain_renderer();
     for alignment in [
         DefinitionBodyAlignment::AfterTerm,
         DefinitionBodyAlignment::Indented,
     ] {
-        let mut block = definition(HeadBodyRelation::joined(alignment), false, false);
+        let mut block = definition(HeadBodyRelation::joined(), alignment, false, false);
         let Block::DefinitionList { items, .. } = &mut block else {
             unreachable!()
         };

@@ -203,6 +203,7 @@ fn addressable_markdown_emits_document_root_fragments() {
 #[test]
 fn addressable_rendering_returns_exact_semantic_node_ranges() {
     let entry = DefinitionItem {
+        head_body_relation: mant_ir::HeadBodyRelation::from(false),
         source: None,
         entry: Some(EntryFacts {
             name_bindings: Vec::new(),
@@ -230,7 +231,7 @@ fn addressable_rendering_returns_exact_semantic_node_ranges() {
             value: "Show help.".to_owned(),
         }])],
         layout: mant_ir::DefinitionLayout {
-            head_body_relation: mant_ir::HeadBodyRelation::from(false),
+            body_alignment: mant_ir::DefinitionBodyAlignment::Indented,
             spacing_before_lines: None,
             ..Default::default()
         },

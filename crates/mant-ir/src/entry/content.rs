@@ -840,6 +840,7 @@ mod tests {
     fn explicit_terms_borrow_and_unrecorded_forms_do_not_remove_owners() {
         let list_item = item("parent", EntryKind::Term, "one");
         let mut native = DefinitionItem {
+            head_body_relation: crate::HeadBodyRelation::from(false),
             source: None,
             entry: list_item.entry,
             terms: (vec![
@@ -855,7 +856,7 @@ mod tests {
             .collect(),
             description: vec![list(vec![item("child", EntryKind::Value, "auto")])],
             layout: crate::DefinitionLayout {
-                head_body_relation: crate::HeadBodyRelation::from(false),
+                body_alignment: crate::DefinitionBodyAlignment::Indented,
                 spacing_before_lines: None,
                 ..Default::default()
             },

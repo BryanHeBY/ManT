@@ -8,6 +8,8 @@ use mant_protocol::{ContentSelector, EntryProjection, ExcerptSelection, OutlineN
 
 use super::{ProjectionError, build_outline, build_outline_projection, select_excerpt};
 
+mod hanging_owner;
+
 fn section(id: &str, title: &str, children: Vec<Section>) -> Section {
     Section {
         id: id.to_owned().into(),
@@ -76,6 +78,7 @@ fn definition(
     description: Vec<Block>,
 ) -> DefinitionItem {
     DefinitionItem {
+        head_body_relation: mant_ir::HeadBodyRelation::from(false),
         source: None,
         entry: Some(EntryFacts {
             name_bindings: names
@@ -119,7 +122,7 @@ fn definition(
             .collect(),
         description,
         layout: mant_ir::DefinitionLayout {
-            head_body_relation: mant_ir::HeadBodyRelation::from(false),
+            body_alignment: mant_ir::DefinitionBodyAlignment::Indented,
             spacing_before_lines: None,
             ..Default::default()
         },
@@ -752,6 +755,7 @@ fn structural_paths_take_precedence_over_colliding_entry_ids() {
         .push(Block::DefinitionList {
             declaration_groups: Vec::new(),
             items: vec![DefinitionItem {
+                head_body_relation: mant_ir::HeadBodyRelation::from(false),
                 source: None,
                 entry: Some(EntryFacts {
                     name_bindings: Vec::new(),
@@ -774,7 +778,7 @@ fn structural_paths_take_precedence_over_colliding_entry_ids() {
                 ],
                 description: Vec::new(),
                 layout: mant_ir::DefinitionLayout {
-                    head_body_relation: mant_ir::HeadBodyRelation::from(false),
+                    body_alignment: mant_ir::DefinitionBodyAlignment::Indented,
                     spacing_before_lines: None,
                     ..Default::default()
                 },

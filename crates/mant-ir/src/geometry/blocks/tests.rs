@@ -173,6 +173,7 @@ fn nested_reparenting_never_translates_descendants_or_source_twice() {
     };
     let definition = Block::DefinitionList {
         items: vec![DefinitionItem {
+            head_body_relation: crate::HeadBodyRelation::Separate,
             terms: (vec![vec![Inline::Text {
                 value: "TERM".into(),
             }]])

@@ -23,7 +23,7 @@ fn inset_mid_word_marker_wipes_body_first_text() {
         "only navigation identity survives; no BODY text or row prints: {item:#?}"
     );
     assert!(
-        !item.layout.inline_term(),
+        !item.inline_term(),
         "accepted prefix's row ended: {item:#?}"
     );
 }
@@ -43,7 +43,7 @@ fn inset_empty_operand_after_marker_breaks_when_the_body_consumes_its_field() {
     );
     assert_eq!(inline_text(&inset.terms[0]), "alpha", "{inset:#?}");
     assert!(
-        inset.layout.inline_term(),
+        inset.inline_term(),
         "HEAD leaves the raw field live: {inset:#?}"
     );
     let [Block::Paragraph { children, .. }] = &inset.description[..] else {
@@ -58,13 +58,13 @@ fn inset_empty_operand_after_marker_breaks_when_the_body_consumes_its_field() {
         ".Bl -diag\n.It Xo\n.No alpha\\p\n.No \"\"\n.Xc\n.No tail text\n.El\n",
     );
     assert!(
-        diag.layout.inline_term(),
+        diag.inline_term(),
         "diag NOBREAK keeps the shared row: {diag:#?}"
     );
     let armed_only =
         definition_item_from_source(".Bl -inset\n.It Xo\n.No alpha\\p\n.Xc\n.No tail text\n.El\n");
     assert!(
-        armed_only.layout.inline_term(),
+        armed_only.inline_term(),
         r"a trailing \p without the empty TEXT keeps the shared row: {armed_only:#?}"
     );
 }
@@ -94,7 +94,7 @@ fn inset_separate_marker_text_wipes_body_first_text() {
         "only navigation identity survives; no BODY text or row prints: {item:#?}"
     );
     assert!(
-        !item.layout.inline_term(),
+        !item.inline_term(),
         "accepted prefix's row ended: {item:#?}"
     );
 }
@@ -119,7 +119,7 @@ fn diag_literal_head_marker_wipes_field_suffix() {
     );
     assert_eq!(inline_text(&item.terms[0]), "Xo", "{item:#?}");
     assert!(
-        item.layout.inline_term(),
+        item.inline_term(),
         "diag NOBREAK keeps the head row: {item:#?}"
     );
     let [
@@ -146,7 +146,7 @@ fn cleared_no_break_field_wraps_hang_head_words_at_the_field_width() {
     );
     assert_eq!(inline_text(&item.terms[0]), "\nafter\nspace", "{item:#?}");
     assert!(
-        item.layout.inline_term(),
+        item.inline_term(),
         "hang body stays on the last wrapped head row: {item:#?}"
     );
 }
@@ -164,7 +164,7 @@ fn no_fill_head_words_never_wrap_at_the_field_width() {
     );
     assert_eq!(inline_text(&item.terms[0]), "after space", "{item:#?}");
     assert!(
-        !item.layout.inline_term(),
+        !item.inline_term(),
         "the fill-mode boundary closed the head row before BODY: {item:#?}"
     );
 }
@@ -181,7 +181,7 @@ fn tag_marker_split_head_closes_its_final_row() {
     );
     assert_eq!(inline_text(&tag.terms[0]), "x\ny\nz", "{tag:#?}");
     assert!(
-        !tag.layout.inline_term(),
+        !tag.inline_term(),
         "tag body must start its own row: {tag:#?}"
     );
     let hang = definition_item_from_source(
@@ -189,7 +189,7 @@ fn tag_marker_split_head_closes_its_final_row() {
     );
     assert_eq!(inline_text(&hang.terms[0]), "x\ny\nz", "{hang:#?}");
     assert!(
-        hang.layout.inline_term(),
+        hang.inline_term(),
         "hang body stays on the last row: {hang:#?}"
     );
 }

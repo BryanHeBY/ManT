@@ -29,13 +29,13 @@ fn capacity_edges_and_all_styled_seams_survive_wire_reader_and_queries() {
                 .iter()
                 .any(|row| row.trim_start_matches(' ') == format!("{}BODY", case.head));
             assert_eq!(
-                item.layout.head_body_relation.joins_without_separator(),
+                item.head_body_relation.joins_without_separator(),
                 joined,
                 "{}: independent native capacity edge",
                 case.id
             );
             assert!(matches!(
-                item.layout.head_body_relation,
+                item.head_body_relation,
                 HeadBodyRelation::Shared { .. }
             ));
             assert_eq!(item.terms.len(), 1, "{}", case.id);

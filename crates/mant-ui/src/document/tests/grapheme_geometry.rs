@@ -133,6 +133,7 @@ fn definition_run_in_shifts_links_by_source_scalars_not_glyph_columns() {
         declaration_groups: vec![],
         compact: true,
         items: vec![DefinitionItem {
+            head_body_relation: mant_ir::HeadBodyRelation::from(true),
             terms: vec![vec![text("👩‍💻")].into()],
             description: vec![Block::Paragraph {
                 inline_layout: mant_ir::InlineLayout::default(),
@@ -143,7 +144,7 @@ fn definition_run_in_shifts_links_by_source_scalars_not_glyph_columns() {
             entry: None,
             source: None,
             layout: mant_ir::DefinitionLayout {
-                head_body_relation: mant_ir::HeadBodyRelation::from(true),
+                body_alignment: mant_ir::DefinitionBodyAlignment::Indented,
                 body_indent_columns: 0,
                 ..Default::default()
             },

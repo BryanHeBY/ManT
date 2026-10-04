@@ -32,7 +32,7 @@ fn operator_table_has_correct_inline_term_decisions() {
             })
             .unwrap_or_else(|| panic!("missing gawk operator term {needle:?}"));
         assert!(
-            item.layout.inline_term(),
+            item.inline_term(),
             "gawk operator {needle:?} should be inline_term=true"
         );
     }
@@ -47,7 +47,7 @@ fn operator_table_has_correct_inline_term_decisions() {
         })
         .expect("gawk relational operator term");
     assert!(
-        !relational.layout.inline_term(),
+        !relational.inline_term(),
         "gawk wide operator term should be inline_term=false"
     );
 }
@@ -75,7 +75,7 @@ fn man_format_preserves_resolved_operator_body_columns() {
                     .any(|head| common::inline_text(head) == term)
             })
             .unwrap();
-        assert!(item.layout.inline_term());
+        assert!(item.inline_term());
         assert_eq!(item.layout.body_indent_columns, 7);
         let line = output.lines().find(|line| line.contains(body)).unwrap();
         assert_eq!(

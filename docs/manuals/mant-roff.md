@@ -729,9 +729,12 @@ Native reading retains each accepted automatic separator written by `term_word()
 
 Accepted inline children are the only visible body in native reading, Markdown, search, explain and TUI copy. BSD lifecycle operands keep the pinned validator's native spelling (for example, `-alphaBSD`); export does not insert lifecycle commentary. An accepted `Lk` colon and URI remain visible even when a descriptive label is clickable. Link identity is resolved after native field acceptance, including partial rejection. Private description and URI owners preserve output identity through field splits and are removed at IR drain; they neither execute another formatter word nor keep a page execution history. An earlier operand's delayed glyph cannot qualify a description or enter the fallback URI's activation range. If the native field rejects every link glyph, the authored destination still survives as typed identity with an empty label, matching the existing HTML identity contract; it has no visible activation range and does not recreate rejected prose or hard rows. Two authored occurrences with the same destination keep separate identities. Ordinary Markdown links retain their authored labels without roff-generated suffixes.
 
-Definition HEAD/BODY relations record whether the row is separate or shared;
-shared rows carry their accepted joined/separated word boundary and preferred
-first-body alignment independently. Plain text and TUI consume the same gap
+Definition item `headBodyRelation` records whether the row is separate or shared;
+shared rows carry only their accepted joined/separated word boundary. The
+independent `layout.bodyAlignment` retains the preferred first-body alignment.
+It has no effect on separate rows; joined words receive no generated gap under
+either alignment. These layout changes cannot change the accepted relation.
+Plain text and TUI consume the same gap
 rule. Canonical Markdown also retains joined paragraph words; it has no
 alternate native-text switch. A literal BODY stays in a separate fenced block
 within its list item with the same accepted payload. Those syntax lines do not

@@ -126,6 +126,7 @@ mod tests {
             entry: None,
         };
         let definition = DefinitionItem {
+            head_body_relation: crate::HeadBodyRelation::Separate,
             terms: (vec![nodes()]).into_iter().map(Into::into).collect(),
             description: vec![],
             layout: DefinitionLayout::default(),
@@ -164,6 +165,7 @@ mod tests {
     #[test]
     fn invalid_byte_ranges_and_structural_paths_never_become_coordinates() {
         let definition = DefinitionItem {
+            head_body_relation: crate::HeadBodyRelation::Separate,
             terms: (vec![nodes()]).into_iter().map(Into::into).collect(),
             description: vec![],
             layout: DefinitionLayout::default(),

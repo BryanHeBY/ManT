@@ -15,6 +15,7 @@ fn span(line: u32) -> SourceSpan {
 
 fn definition(id: &str, line: u32, children: Vec<Block>) -> DefinitionItem {
     DefinitionItem {
+        head_body_relation: mant_ir::HeadBodyRelation::Separate,
         terms: (vec![vec![Inline::Code {
             value: "same-name".into(),
         }]])
@@ -177,6 +178,7 @@ fn declared_definition(
     description: Vec<Block>,
 ) -> DefinitionItem {
     DefinitionItem {
+        head_body_relation: mant_ir::HeadBodyRelation::from(false),
         source: None,
         entry: Some(EntryFacts {
             name_bindings: names
@@ -222,7 +224,7 @@ fn declared_definition(
         .collect(),
         description,
         layout: mant_ir::DefinitionLayout {
-            head_body_relation: mant_ir::HeadBodyRelation::from(false),
+            body_alignment: mant_ir::DefinitionBodyAlignment::Indented,
             spacing_before_lines: None,
             ..Default::default()
         },

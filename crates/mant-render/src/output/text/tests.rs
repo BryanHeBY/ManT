@@ -271,10 +271,11 @@ fn inline_definition_descriptions_are_tight_against_their_terms() {
                     source: None,
                     items: vec![
                         DefinitionItem {
+                            head_body_relation: mant_ir::HeadBodyRelation::from(true),
                             source: None,
                             entry: None,
                             layout: mant_ir::DefinitionLayout {
-                                head_body_relation: mant_ir::HeadBodyRelation::from(true),
+                                body_alignment: mant_ir::DefinitionBodyAlignment::Indented,
                                 spacing_before_lines: Some(1),
                                 ..Default::default()
                             },
@@ -294,10 +295,11 @@ fn inline_definition_descriptions_are_tight_against_their_terms() {
                             }],
                         },
                         DefinitionItem {
+                            head_body_relation: mant_ir::HeadBodyRelation::from(true),
                             source: None,
                             entry: None,
                             layout: mant_ir::DefinitionLayout {
-                                head_body_relation: mant_ir::HeadBodyRelation::from(true),
+                                body_alignment: mant_ir::DefinitionBodyAlignment::Indented,
                                 spacing_before_lines: Some(1),
                                 ..Default::default()
                             },
@@ -371,10 +373,11 @@ fn man_format_keeps_inline_definitions_tight() {
                     source: None,
                     items: vec![
                         DefinitionItem {
+                            head_body_relation: mant_ir::HeadBodyRelation::from(true),
                             source: None,
                             entry: None,
                             layout: mant_ir::DefinitionLayout {
-                                head_body_relation: mant_ir::HeadBodyRelation::from(true),
+                                body_alignment: mant_ir::DefinitionBodyAlignment::Indented,
                                 spacing_before_lines: Some(1),
                                 ..Default::default()
                             },
@@ -394,10 +397,11 @@ fn man_format_keeps_inline_definitions_tight() {
                             }],
                         },
                         DefinitionItem {
+                            head_body_relation: mant_ir::HeadBodyRelation::from(false),
                             source: None,
                             entry: None,
                             layout: mant_ir::DefinitionLayout {
-                                head_body_relation: mant_ir::HeadBodyRelation::from(false),
+                                body_alignment: mant_ir::DefinitionBodyAlignment::Indented,
                                 spacing_before_lines: Some(1),
                                 ..Default::default()
                             },

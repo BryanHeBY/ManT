@@ -50,6 +50,7 @@ fn subtree_translation_is_applied_once_at_each_visible_leaf() {
                     declaration_groups: vec![],
                     compact: false,
                     items: vec![DefinitionItem {
+                        head_body_relation: mant_ir::HeadBodyRelation::Separate,
                         terms: vec![
                             vec![Inline::Text {
                                 value: "TERM".into(),

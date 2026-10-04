@@ -686,6 +686,7 @@ fn append_list_targets(
                 targets::append_definition_targets(item, targets, layout, source);
             } else {
                 items.push(DefinitionItem {
+                    head_body_relation: mant_ir::HeadBodyRelation::from(true),
                     source: None,
                     entry: None,
                     terms: (vec![
@@ -699,7 +700,7 @@ fn append_list_targets(
                     .collect(),
                     description: Vec::new(),
                     layout: mant_ir::DefinitionLayout {
-                        head_body_relation: mant_ir::HeadBodyRelation::from(true),
+                        body_alignment: mant_ir::DefinitionBodyAlignment::Indented,
                         spacing_before_lines: None,
                         ..Default::default()
                     },

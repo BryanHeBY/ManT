@@ -147,7 +147,7 @@ fn hang_literal_tabs_use_final_print_receipt_for_body_seam() {
         assert!(mant_ir::inline_plain_text(&item.terms[0]).contains('\t'));
         assert_eq!(item.layout.min_term_gap_columns, gap, "{source}");
         assert_eq!(
-            item.layout.head_body_relation.joins_without_separator(),
+            item.head_body_relation.joins_without_separator(),
             gap == 0,
             "{source}"
         );

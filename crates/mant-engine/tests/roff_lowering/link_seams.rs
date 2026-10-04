@@ -317,12 +317,7 @@ fn assert_owned_artifact(
     word: &str,
 ) {
     let definition = item(content);
-    assert!(
-        definition
-            .layout
-            .head_body_relation
-            .joins_without_separator()
-    );
+    assert!(definition.head_body_relation.joins_without_separator());
     assert_eq!(definition.terms.len(), 1);
     let head = if head_manual { "HEADX(1)" } else { "HEADX" };
     assert_eq!(

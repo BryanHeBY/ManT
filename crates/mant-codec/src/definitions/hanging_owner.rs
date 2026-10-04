@@ -215,6 +215,7 @@ mod tests {
 
     fn body() -> DefinitionItem {
         DefinitionItem {
+            head_body_relation: mant_ir::HeadBodyRelation::Separate,
             terms: Vec::new(),
             description: vec![Block::Paragraph {
                 inline_layout: mant_ir::InlineLayout::default(),

@@ -37,6 +37,7 @@ mod tests {
         description: Vec<Block>,
     ) -> DefinitionItem {
         DefinitionItem {
+            head_body_relation: HeadBodyRelation::from(false),
             source: None,
             entry: Some(EntryFacts {
                 name_bindings: names
@@ -82,7 +83,7 @@ mod tests {
             .collect(),
             description,
             layout: crate::DefinitionLayout {
-                head_body_relation: HeadBodyRelation::from(false),
+                body_alignment: crate::DefinitionBodyAlignment::Indented,
                 spacing_before_lines: None,
                 ..Default::default()
             },

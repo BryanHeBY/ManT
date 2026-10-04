@@ -116,7 +116,7 @@ fn nested_definition_cells_keep_content_order_and_entry_identity() {
     assert_eq!(items[0].terms.len(), 1);
     assert_eq!(inline_text(&items[0].terms[0]), "x");
     assert_eq!(
-        items[0].layout.head_body_relation,
+        items[0].head_body_relation,
         mant_ir::HeadBodyRelation::Separate
     );
     let entry = items[0].entry.as_ref().expect("nested definition entry");

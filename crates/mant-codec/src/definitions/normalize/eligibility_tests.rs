@@ -238,10 +238,7 @@ fn normalization_moves_original_styled_content_and_source_without_flattening() {
     );
     assert_eq!(items[0].layout.body_indent_columns, 4);
     assert_eq!(items[0].layout.spacing_before_lines, Some(2));
-    assert_eq!(
-        items[0].layout.head_body_relation,
-        HeadBodyRelation::Separate
-    );
+    assert_eq!(items[0].head_body_relation, HeadBodyRelation::Separate);
     let mut expected_literal = literal;
     let Block::Preformatted { layout, .. } = &mut expected_literal else {
         unreachable!()

@@ -44,10 +44,11 @@ fn preserves_inline_lists_definitions_and_nested_headings() {
     let definitions = Block::DefinitionList {
         declaration_groups: Vec::new(),
         items: vec![DefinitionItem {
+            head_body_relation: mant_ir::HeadBodyRelation::from(false),
             source: None,
             entry: None,
             layout: mant_ir::DefinitionLayout {
-                head_body_relation: mant_ir::HeadBodyRelation::from(false),
+                body_alignment: mant_ir::DefinitionBodyAlignment::Indented,
                 spacing_before_lines: None,
                 ..Default::default()
             },
@@ -179,6 +180,7 @@ fn protects_hanging_definition_terms_from_becoming_nested_lists() {
             vec![Block::DefinitionList {
                 declaration_groups: Vec::new(),
                 items: vec![DefinitionItem {
+                    head_body_relation: mant_ir::HeadBodyRelation::from(true),
                     source: None,
                     entry: None,
                     terms: (vec![vec![Inline::Text {
@@ -191,7 +193,7 @@ fn protects_hanging_definition_terms_from_becoming_nested_lists() {
                         value: "first reference".to_owned(),
                     }])],
                     layout: mant_ir::DefinitionLayout {
-                        head_body_relation: mant_ir::HeadBodyRelation::from(true),
+                        body_alignment: mant_ir::DefinitionBodyAlignment::Indented,
                         spacing_before_lines: None,
                         ..Default::default()
                     },
@@ -228,10 +230,11 @@ fn preserves_definition_prose_row_relation_in_both_markdown_projections() {
                 vec![Block::DefinitionList {
                     declaration_groups: Vec::new(),
                     items: vec![DefinitionItem {
+                        head_body_relation: mant_ir::HeadBodyRelation::from(inline),
                         source: None,
                         entry: None,
                         layout: mant_ir::DefinitionLayout {
-                            head_body_relation: mant_ir::HeadBodyRelation::from(inline),
+                            body_alignment: mant_ir::DefinitionBodyAlignment::Indented,
                             ..Default::default()
                         },
                         terms: (vec![vec![Inline::Text {
@@ -276,10 +279,11 @@ fn keeps_block_definition_descriptions_on_their_own_commonmark_line() {
     let definitions = Block::DefinitionList {
         declaration_groups: Vec::new(),
         items: vec![DefinitionItem {
+            head_body_relation: mant_ir::HeadBodyRelation::from(true),
             source: None,
             entry: None,
             layout: mant_ir::DefinitionLayout {
-                head_body_relation: mant_ir::HeadBodyRelation::from(true),
+                body_alignment: mant_ir::DefinitionBodyAlignment::Indented,
                 spacing_before_lines: None,
                 ..Default::default()
             },

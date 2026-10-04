@@ -316,6 +316,7 @@ fn structural_row_origins_leave_link_search_and_copy_coordinates_consistent() {
             layout: LayoutHint::default(),
             source: None,
             items: vec![DefinitionItem {
+                head_body_relation: mant_ir::HeadBodyRelation::Separate,
                 source: None,
                 entry: None,
                 layout: mant_ir::DefinitionLayout::default(),
@@ -810,6 +811,9 @@ fn shared_term_and_body_hints_keep_separate_copy_regions() {
     document.sections.clear();
     document.blocks = vec![Block::DefinitionList {
         items: vec![DefinitionItem {
+            head_body_relation: mant_ir::HeadBodyRelation::Shared {
+                word_boundary: mant_ir::DefinitionWordBoundary::Separated,
+            },
             terms: vec![mant_ir::DefinitionTerm {
                 content: vec![Inline::Text {
                     value: "HEAD".into(),
@@ -831,10 +835,7 @@ fn shared_term_and_body_hints_keep_separate_copy_regions() {
                 source: None,
             }],
             layout: mant_ir::DefinitionLayout {
-                head_body_relation: mant_ir::HeadBodyRelation::Shared {
-                    word_boundary: mant_ir::DefinitionWordBoundary::Separated,
-                    body_alignment: mant_ir::DefinitionBodyAlignment::Indented,
-                },
+                body_alignment: mant_ir::DefinitionBodyAlignment::Indented,
                 body_indent_columns: 12,
                 min_term_gap_columns: 1,
                 spacing_before_lines: None,

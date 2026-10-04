@@ -107,14 +107,17 @@ def _observe(core, original_bundle, reader_bundle):
         body = _text(_phrasing(_one(item["description"]), "paragraph"))
         ownership = ("BodyWord" not in term and body == "BodyWord"
                      and item.get("source", {}).get("line") == 9)
-        relation = item.get("layout", {}).get("headBodyRelation", {"type": "separate"})
+        layout = item.get("layout", {})
+        if (not isinstance(layout, dict) or "headBodyRelation" in layout
+                or layout.get("bodyAlignment", "indented") not in ("after-term", "indented")):
+            raise ValueError("retired or invalid RC05 definition layout")
+        relation = item.get("headBodyRelation", {"type": "separate"})
         if relation == {"type": "separate"}:
             separator = "\n"
         elif (isinstance(relation, dict)
-              and set(relation) == {"type", "wordBoundary", "bodyAlignment"}
+              and set(relation) == {"type", "wordBoundary"}
               and relation["type"] == "shared"
-              and relation["wordBoundary"] in ("joined", "separated")
-              and relation["bodyAlignment"] in ("after-term", "indented")):
+              and relation["wordBoundary"] in ("joined", "separated")):
             separator = "" if relation["wordBoundary"] == "joined" else " "
         else:
             raise ValueError("unknown RC05 HEAD/BODY relation")

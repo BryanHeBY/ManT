@@ -261,6 +261,7 @@ fn entry_local_mapping_checks_the_combined_path_before_fixed_scratch_growth() {
         layout: crate::LayoutHint::default(),
         source: None,
         items: vec![crate::DefinitionItem {
+            head_body_relation: crate::HeadBodyRelation::Separate,
             terms: (vec![vec![Inline::Text { value: "A".into() }]])
                 .into_iter()
                 .map(Into::into)

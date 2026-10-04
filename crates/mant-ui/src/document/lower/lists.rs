@@ -161,7 +161,7 @@ impl DocumentBuilder<'_> {
                 self.anchors
                     .insert(identity.id.to_string(), self.lines.len());
             }
-            if item.layout.inline_term() {
+            if item.inline_term() {
                 self.inline_definition(item, indent);
             } else {
                 for term in &item.terms {
@@ -304,6 +304,7 @@ impl DocumentBuilder<'_> {
         let first_indent = compose_origin(block_origin, layout.indent_columns);
         let continuation_indent = compose_origin(first_indent, layout.continuation_indent_columns);
         let gap = mant_ir::geometry::definition_body_gap(
+            item.head_body_relation,
             &item.layout,
             term_origin,
             term_width,
@@ -320,6 +321,7 @@ impl DocumentBuilder<'_> {
         let origins =
             mant_ir::resolve_row_origins(first_indent, continuation_indent, body.indent_columns);
         let base_gap = mant_ir::geometry::definition_body_gap(
+            item.head_body_relation,
             &item.layout,
             term_origin,
             term_width,

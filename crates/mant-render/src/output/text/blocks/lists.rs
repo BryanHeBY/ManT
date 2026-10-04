@@ -105,12 +105,10 @@ impl BlockRenderer<'_> {
                 (rows.len() > 1 || rows.iter().any(|(row, _)| !row.is_empty())).then_some(rows)
             })
             .collect::<Vec<_>>();
-        // The relation records the word boundary and first-row alignment.
-        // Layout hints resolve columns without changing accepted adjacency.
-        if !matches!(
-            item.layout.head_body_relation,
-            mant_ir::HeadBodyRelation::Separate
-        ) && let Some((content, layout)) = item.inline_description_content()
+        // The item records shared/separate rows and the word boundary.
+        // Independent layout hints resolve columns without changing adjacency.
+        if !matches!(item.head_body_relation, mant_ir::HeadBodyRelation::Separate)
+            && let Some((content, layout)) = item.inline_description_content()
             && let Some(last_rows) = terms.pop()
         {
             let term_origin =
@@ -139,6 +137,7 @@ impl BlockRenderer<'_> {
             let mut output = definition_term_rows(terms, origin);
             let mut joined = last;
             let gap = mant_ir::geometry::definition_body_gap(
+                item.head_body_relation,
                 &item.layout,
                 term_origin,
                 last_width,

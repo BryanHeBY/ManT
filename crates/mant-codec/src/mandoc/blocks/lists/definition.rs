@@ -102,13 +102,7 @@ pub(super) fn definition_item(
     flow: DefinitionFlow,
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> DefinitionItem {
-    if formatter.definition_before_visible() {
-        // CVS termp_it_pre() enters a new list item as a structural row.
-        // That closes the outer definition's pending head/body prefix before
-        // this item's HEAD is executed.
-        formatter.note_definition_boundary();
-        formatter.note_definition_visible();
-    }
+    close_pending_definition_prefix(formatter);
     let head = visible_definition_head(node);
     let body = first_part_children(node, NodeKind::Body);
     let (displaced_equations, body) = displaced_definition_equations(head, body);
@@ -214,8 +208,9 @@ pub(super) fn definition_item(
         head_source_continues,
         &description,
     );
-    let layout = geometry.layout(indent_columns, body_origin, &terms);
+    let (head_body_relation, layout) = geometry.layout(indent_columns, body_origin, &terms);
     let mut item = DefinitionItem {
+        head_body_relation,
         source: source_span(node),
         entry: None,
         layout,
@@ -224,6 +219,16 @@ pub(super) fn definition_item(
     };
     record_definition_item(&mut item, node, head, context);
     item
+}
+
+fn close_pending_definition_prefix(formatter: &mut crate::mandoc::formatter::FormatterState) {
+    if formatter.definition_before_visible() {
+        // CVS termp_it_pre() enters a new list item as a structural row.
+        // That closes the outer definition's pending head/body prefix before
+        // this item's HEAD is executed.
+        formatter.note_definition_boundary();
+        formatter.note_definition_visible();
+    }
 }
 
 fn finalize_definition_term(mut content: Vec<Inline>) -> mant_ir::DefinitionTerm {
@@ -312,7 +317,8 @@ fn apply_executed_definition_body_layout(
         // The cleared field filled its capacity (term.c:250-253 with
         // 205-207): the body shares the head's row starting at the
         // description column, with no separator cell to count.
-        geometry.relation_override = Some(mant_ir::HeadBodyRelation::joined(
+        geometry.relation_override = Some((
+            mant_ir::HeadBodyRelation::joined(),
             mant_ir::DefinitionBodyAlignment::Indented,
         ));
         geometry.gap = 0;
@@ -320,7 +326,8 @@ fn apply_executed_definition_body_layout(
         // TERMP_NOSPACE at the body's first word leaves no separator cell:
         // the body column starts at the head's end (roff_term.c:75-78),
         // so the layout carries no minimum gap.
-        geometry.relation_override = Some(mant_ir::HeadBodyRelation::joined(
+        geometry.relation_override = Some((
+            mant_ir::HeadBodyRelation::joined(),
             mant_ir::DefinitionBodyAlignment::AfterTerm,
         ));
         geometry.gap = 0;

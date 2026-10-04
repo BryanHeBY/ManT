@@ -65,7 +65,10 @@ fn independently_empty_link_roots_cannot_reintroduce_a_word_separator() {
                     let original = definition(
                         terms,
                         body,
-                        HeadBodyRelation::joined(DefinitionBodyAlignment::AfterTerm),
+                        (
+                            HeadBodyRelation::joined(),
+                            DefinitionBodyAlignment::AfterTerm,
+                        ),
                     );
                     let before = original.clone();
                     let markdown = render_blocks_fragment(
@@ -129,7 +132,10 @@ fn transparent_root_selection_keeps_fixed_code_spacing_and_nested_destinations()
                 paragraph(vec![spaced_link(0, label)]),
                 paragraph(vec![text("BODY")]),
             ],
-            HeadBodyRelation::joined(DefinitionBodyAlignment::AfterTerm),
+            (
+                HeadBodyRelation::joined(),
+                DefinitionBodyAlignment::AfterTerm,
+            ),
         );
         let markdown =
             render_blocks_fragment(&[block], MarkdownFragmentOptions::default()).join("\n\n");
@@ -150,7 +156,10 @@ fn transparent_root_selection_keeps_fixed_code_spacing_and_nested_destinations()
             )]),
             paragraph(vec![text("BODY")]),
         ],
-        HeadBodyRelation::joined(DefinitionBodyAlignment::AfterTerm),
+        (
+            HeadBodyRelation::joined(),
+            DefinitionBodyAlignment::AfterTerm,
+        ),
     );
     for preserve_anchors in [false, true] {
         let markdown = render_blocks_fragment(
@@ -177,7 +186,7 @@ fn transparent_root_selection_keeps_fixed_code_spacing_and_nested_destinations()
 fn definition(
     terms: Vec<Vec<Inline>>,
     description: Vec<Block>,
-    relation: HeadBodyRelation,
+    (relation, body_alignment): (HeadBodyRelation, DefinitionBodyAlignment),
 ) -> Block {
     Block::DefinitionList {
         declaration_groups: vec![],
@@ -185,12 +194,13 @@ fn definition(
         layout: LayoutHint::default(),
         source: None,
         items: vec![DefinitionItem {
+            head_body_relation: relation,
             terms: terms.into_iter().map(Into::into).collect(),
             description,
             source: None,
             entry: None,
             layout: mant_ir::DefinitionLayout {
-                head_body_relation: relation,
+                body_alignment,
                 ..Default::default()
             },
         }],
@@ -217,10 +227,19 @@ fn rows(markdown: &str) -> Vec<String> {
 
 #[test]
 fn leading_space_and_zero_output_roots_keep_effective_body_boundaries() {
-    for relation in [
-        HeadBodyRelation::Separate,
-        HeadBodyRelation::joined(DefinitionBodyAlignment::AfterTerm),
-        HeadBodyRelation::separated(DefinitionBodyAlignment::Indented),
+    for (relation, body_alignment) in [
+        (
+            HeadBodyRelation::Separate,
+            DefinitionBodyAlignment::Indented,
+        ),
+        (
+            HeadBodyRelation::joined(),
+            DefinitionBodyAlignment::AfterTerm,
+        ),
+        (
+            HeadBodyRelation::separated(),
+            DefinitionBodyAlignment::Indented,
+        ),
     ] {
         for distance in [0, 1, 2] {
             for use_hint in [false, true] {
@@ -272,22 +291,18 @@ fn leading_space_and_zero_output_roots_keep_effective_body_boundaries() {
                         });
                     }
                     body.push(prose);
-                    let blocks = [definition(vec![vec![text("HEAD")]], body, relation)];
+                    let blocks = [definition(
+                        vec![vec![text("HEAD")]],
+                        body,
+                        (relation, body_alignment),
+                    )];
                     for preserve_anchors in [false, true] {
                         let markdown = render_blocks_fragment(
                             &blocks,
                             MarkdownFragmentOptions { preserve_anchors },
                         )
                         .join("\n\n");
-                        let mut expected = if distance > 0 {
-                            vec!["HEAD".to_owned(), "BODY".to_owned()]
-                        } else if relation == HeadBodyRelation::Separate {
-                            vec!["HEAD\nBODY".into()]
-                        } else if relation.joins_without_separator() {
-                            vec!["HEADBODY".into()]
-                        } else {
-                            vec!["HEAD BODY".into()]
-                        };
+                        let mut expected = expected_head_body_rows(distance, relation);
                         if preserve_anchors && has_anchor {
                             // The ManT reader deliberately retains attributed
                             // HTML as literal source; browser destinations are
@@ -308,6 +323,18 @@ fn leading_space_and_zero_output_roots_keep_effective_body_boundaries() {
                 }
             }
         }
+    }
+}
+
+fn expected_head_body_rows(distance: u16, relation: HeadBodyRelation) -> Vec<String> {
+    if distance > 0 {
+        vec!["HEAD".into(), "BODY".into()]
+    } else if relation == HeadBodyRelation::Separate {
+        vec!["HEAD\nBODY".into()]
+    } else if relation.joins_without_separator() {
+        vec!["HEADBODY".into()]
+    } else {
+        vec!["HEAD BODY".into()]
     }
 }
 
@@ -334,7 +361,10 @@ fn destinations_and_zero_output_head_roots_do_not_fabricate_term_rows() {
             let blocks = [definition(
                 head.clone(),
                 vec![paragraph(vec![text("BODY")])],
-                HeadBodyRelation::joined(DefinitionBodyAlignment::AfterTerm),
+                (
+                    HeadBodyRelation::joined(),
+                    DefinitionBodyAlignment::AfterTerm,
+                ),
             )];
             let markdown =
                 render_blocks_fragment(&blocks, MarkdownFragmentOptions { preserve_anchors })
@@ -390,7 +420,10 @@ fn joined_last_term_uses_original_roots_once_and_keeps_prior_hard_rows() {
             paragraph(vec![strong("BODY")]),
             paragraph(vec![text("TAIL")]),
         ],
-        HeadBodyRelation::joined(DefinitionBodyAlignment::AfterTerm),
+        (
+            HeadBodyRelation::joined(),
+            DefinitionBodyAlignment::AfterTerm,
+        ),
     )];
     for preserve_anchors in [false, true] {
         let roots = Roots(RefCell::new(Vec::new()));

@@ -79,6 +79,7 @@ fn evidence() -> ExplanationEvidence {
         content: Some(ExplanationContent::Entry {
             block: Block::DefinitionList {
                 items: vec![DefinitionItem {
+                    head_body_relation: mant_ir::HeadBodyRelation::Separate,
                     terms: vec![term(20), term(4)],
                     description: vec![],
                     source: None,

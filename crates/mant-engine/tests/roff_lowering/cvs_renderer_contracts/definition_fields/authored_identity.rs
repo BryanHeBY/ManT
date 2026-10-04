@@ -71,15 +71,8 @@ fn one_authored_link_keeps_one_identity_across_committed_and_rejected_fields() {
                 "lowered {style} {label}"
             );
             assert_eq!(
-                item.layout.head_body_relation,
-                if style == "hang" && !rejected {
-                    // The exact accepted X/Y rows above resolve the first
-                    // BODY alignment after the final HEAD row; consumers
-                    // no longer infer that preference from a multiline term.
-                    HeadBodyRelation::separated(DefinitionBodyAlignment::AfterTerm)
-                } else {
-                    HeadBodyRelation::Separate
-                },
+                (item.head_body_relation, item.layout.body_alignment),
+                accepted_field_policy(style, rejected),
                 "{style} {label}"
             );
         }
@@ -121,6 +114,25 @@ fn one_authored_link_keeps_one_identity_across_committed_and_rejected_fields() {
         })
         .sum::<usize>();
     assert_eq!(distinct_links, 2);
+}
+
+fn accepted_field_policy(
+    style: &str,
+    rejected: bool,
+) -> (HeadBodyRelation, DefinitionBodyAlignment) {
+    if style == "hang" && !rejected {
+        // The exact accepted X/Y rows resolve the first BODY alignment after
+        // the final HEAD row, independently from a multiline term's shape.
+        (
+            HeadBodyRelation::separated(),
+            DefinitionBodyAlignment::AfterTerm,
+        )
+    } else {
+        (
+            HeadBodyRelation::Separate,
+            DefinitionBodyAlignment::Indented,
+        )
+    }
 }
 
 #[test]

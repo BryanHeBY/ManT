@@ -136,6 +136,7 @@ fn owner_hints_do_not_print_empty_or_navigation_only_roots() {
             },
             Block::DefinitionList {
                 items: vec![DefinitionItem {
+                    head_body_relation: mant_ir::HeadBodyRelation::Separate,
                     terms: vec![mant_ir::DefinitionTerm {
                         content: children,
                         inline_layout: layout,
@@ -248,6 +249,7 @@ fn run_in_containers_preserve_completed_paragraph_rows_at_joins_and_eof() {
         *kind = ListKind::Bullet;
         let definition = Block::DefinitionList {
             items: vec![DefinitionItem {
+                head_body_relation: mant_ir::HeadBodyRelation::from(true),
                 terms: vec![
                     vec![Inline::Text {
                         value: "TERM".into(),
@@ -258,7 +260,7 @@ fn run_in_containers_preserve_completed_paragraph_rows_at_joins_and_eof() {
                 source: None,
                 entry: None,
                 layout: mant_ir::DefinitionLayout {
-                    head_body_relation: mant_ir::HeadBodyRelation::from(true),
+                    body_alignment: mant_ir::DefinitionBodyAlignment::Indented,
                     ..Default::default()
                 },
             }],

@@ -288,7 +288,7 @@ fn definition_content(
     if let (Some((indices, term)), Some(prose)) = (terms.last_mut(), &body.first_prose)
         && has_terms
         && !body.leading_space
-        && item.layout.head_body_relation.joins_without_separator()
+        && item.head_body_relation.joins_without_separator()
     {
         // Source ownership stays split; one inline context selects delimiters
         // for the physical row. Independent encoded strings cannot be joined:
@@ -324,11 +324,7 @@ fn definition_content(
             let separator = if body.leading_space {
                 "\n\n"
             } else if body.first_prose.is_some() {
-                if item.layout.inline_term() {
-                    " "
-                } else {
-                    "  \n"
-                }
+                if item.inline_term() { " " } else { "  \n" }
             } else {
                 // Fences, nested lists and display equations need their own
                 // block; they never share the term's inline coding context.

@@ -1,7 +1,7 @@
 //! Definition diagnostics policy; coordinated by the parent discovery passes.
 use super::context::{DefinitionContext, child_definition_context, definition_group_context};
 use mant_ir::inline_plain_text as plain_text;
-use mant_ir::{Block, DefinitionItem, EntryKind, Section, SourceSpan};
+use mant_ir::{Block, DefinitionItem, EntryKind, ListItem, Section, SourceSpan};
 
 /// Report definition-shaped native content that a semantic section could not
 /// classify without guessing.
@@ -31,14 +31,9 @@ fn visit_manual_discovery_blocks(
 ) {
     for block in blocks {
         match block {
-            Block::List { items, .. } => {
+            Block::List { items, source, .. } => {
                 for item in items {
-                    visit_manual_discovery_blocks(
-                        &item.blocks,
-                        context,
-                        report_unclassified,
-                        output,
-                    );
+                    visit_manual_list_item(item, *source, context, report_unclassified, output);
                 }
             }
             Block::DefinitionList { items, source, .. } => {
@@ -61,6 +56,37 @@ fn visit_manual_discovery_blocks(
             | Block::ThematicBreak { .. }
             | Block::Unsupported { .. } => {}
         }
+    }
+}
+
+fn visit_manual_list_item(
+    item: &ListItem,
+    source: Option<SourceSpan>,
+    context: DefinitionContext,
+    report_unclassified: bool,
+    output: &mut Vec<mant_ir::Diagnostic>,
+) {
+    if super::preparation::has_owned_first_block(item) {
+        let identity = item.entry.as_ref().expect("a complete form has an owner");
+        if report_unclassified
+            && context != DefinitionContext::Generic
+            && identity.kind == EntryKind::Term
+            && identity.names.is_empty()
+            && let Some(head) = identity
+                .forms
+                .first()
+                .and_then(|form| mant_ir::EntryOwner::List(item).form(form))
+        {
+            report_unclassified_term(&plain_text(&head), context, source, output);
+        }
+        visit_manual_discovery_blocks(
+            &item.blocks[1..],
+            child_definition_context(identity.kind, context),
+            false,
+            output,
+        );
+    } else {
+        visit_manual_discovery_blocks(&item.blocks, context, report_unclassified, output);
     }
 }
 
@@ -101,6 +127,15 @@ fn report_unclassified_definition(
         .terms
         .first()
         .map_or_else(String::new, |term| plain_text(term));
+    report_unclassified_term(&term, context, source, output);
+}
+
+fn report_unclassified_term(
+    term: &str,
+    context: DefinitionContext,
+    source: Option<SourceSpan>,
+    output: &mut Vec<mant_ir::Diagnostic>,
+) {
     if term.trim().is_empty() {
         return;
     }

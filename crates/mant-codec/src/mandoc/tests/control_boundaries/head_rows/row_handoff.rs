@@ -65,7 +65,7 @@ fn literal_definition_body_shares_only_a_continued_head_row() {
             item.description.first(),
             Some(Block::Preformatted { .. })
         ));
-        assert_eq!(item.layout.inline_term(), joins, "{head}: {item:#?}");
+        assert_eq!(item.inline_term(), joins, "{head}: {item:#?}");
         assert_eq!(
             item.inline_description().is_some(),
             joins,
@@ -224,19 +224,28 @@ fn head_body_relation_classifies_shared_rows() {
     for (body, expected) in [
         (
             ".Bl -hang -width 4n\n.It X\n.No BODY\n.El\n",
-            HeadBodyRelation::from(true),
+            (
+                HeadBodyRelation::from(true),
+                mant_ir::DefinitionBodyAlignment::Indented,
+            ),
         ),
         (
             ".Bl -tag -width 4n\n.It X\n.No BODY\n.El\n",
             // A short tag fits the field: the reference keeps `X     BODY`
             // on one row, like hang.
-            HeadBodyRelation::from(true),
+            (
+                HeadBodyRelation::from(true),
+                mant_ir::DefinitionBodyAlignment::Indented,
+            ),
         ),
         (
             ".Bl -tag -width 4n\n.It plain head\n.No BODY\n.El\n",
             // The reference closes the over-long tag row: `plain head`
             // then BODY at the description column.
-            HeadBodyRelation::Separate,
+            (
+                HeadBodyRelation::Separate,
+                mant_ir::DefinitionBodyAlignment::Indented,
+            ),
         ),
         (
             // This exact source was rechecked with pristine UTF-8/ASCII:
@@ -247,17 +256,27 @@ fn head_body_relation_classifies_shared_rows() {
             // receipt therefore classifies FlushAtBody, not a zero-origin
             // concatenation inferred only from the visible word seam.
             ".Bl -hang -width 4n\n.It Xo\n.nf\n.No body line\n.fi\n.Xc\n.No tail text\n.El\n",
-            HeadBodyRelation::joined(mant_ir::DefinitionBodyAlignment::Indented),
+            (
+                HeadBodyRelation::joined(),
+                mant_ir::DefinitionBodyAlignment::Indented,
+            ),
         ),
         (
             // c family: the control cleared NOBREAK and the field word
             // overran the width, so the body starts at the description
             // column; the reference prints `     aftertail text`.
             ".Bl -hang -width 2n\n.It Xo\n.sp\n.No after\n.Xc\n.No tail text\n.El\n",
-            HeadBodyRelation::joined(mant_ir::DefinitionBodyAlignment::Indented),
+            (
+                HeadBodyRelation::joined(),
+                mant_ir::DefinitionBodyAlignment::Indented,
+            ),
         ),
     ] {
         let item = definition_item_from_source(body);
-        assert_eq!(item.layout.head_body_relation, expected, "{item:#?}");
+        assert_eq!(
+            (item.head_body_relation, item.layout.body_alignment),
+            expected,
+            "{item:#?}"
+        );
     }
 }

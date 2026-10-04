@@ -207,11 +207,13 @@ mod tests {
         let definitions = rows(Block::DefinitionList {
             declaration_groups: vec![],
             items: vec![crate::DefinitionItem {
+                head_body_relation: crate::HeadBodyRelation::Separate,
                 terms: Vec::new(),
                 description: vec![paragraph(0, 0)],
                 entry: None,
                 source: None,
                 layout: crate::DefinitionLayout {
+                    body_alignment: crate::DefinitionBodyAlignment::Indented,
                     body_indent_columns: 10,
                     ..Default::default()
                 },
@@ -287,6 +289,7 @@ mod tests {
     fn definition_term_hints_participate_in_table_origin_fallback() {
         let definition = |correction| Block::DefinitionList {
             items: vec![crate::DefinitionItem {
+                head_body_relation: crate::HeadBodyRelation::Separate,
                 terms: vec![crate::DefinitionTerm {
                     content: vec![crate::Inline::Text {
                         value: "TERM".into(),

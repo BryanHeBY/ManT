@@ -197,7 +197,7 @@ known forms explicitly; missing forms never imply “use the terms”.
 use mant_ir::{
     Block, DefinitionItem, DefinitionLayout, EntryContentSlice, EntryFacts,
     EntryForm, EntryInlineRoot, EntryKind, EntryNameBinding, EntryNameEvidence,
-    EntryOwner, Inline, LayoutHint, ListItem, NameCase,
+    EntryOwner, HeadBodyRelation, Inline, InlineLayout, LayoutHint, ListItem, NameCase,
 };
 
 fn facts(form: EntryForm) -> EntryFacts {
@@ -213,7 +213,10 @@ fn facts(form: EntryForm) -> EntryFacts {
     }
 }
 fn paragraph(children: Vec<Inline>) -> Block {
-    Block::Paragraph { children, layout: LayoutHint::default(), source: None }
+    Block::Paragraph {
+        children, inline_layout: InlineLayout::default(),
+        layout: LayoutHint::default(), source: None,
+    }
 }
 
 // 1. Ordinary content is useful on its own, with no semantic owner.
@@ -238,8 +241,9 @@ assert_eq!(EntryOwner::List(&annotated).validated_names().unwrap(), ["run"]);
 // 3. A source-neutral definition owns actual terms and a separate description.
 // This is an alternative owner, not another node with the same ID in one tree.
 let definition = DefinitionItem {
+    head_body_relation: HeadBodyRelation::Separate,
     source: None, layout: DefinitionLayout::default(),
-    terms: vec![vec![Inline::Code { value: "run".into() }]],
+    terms: vec![vec![Inline::Code { value: "run".into() }].into()],
     description: vec![paragraph(vec![Inline::Text {
         value: "Start the task.".into(),
     }])],

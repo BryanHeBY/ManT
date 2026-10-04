@@ -303,6 +303,7 @@ mod tests {
 
     fn entry(id: &str, names: &[&str]) -> DefinitionItem {
         DefinitionItem {
+            head_body_relation: HeadBodyRelation::from(false),
             source: None,
             entry: Some(EntryFacts {
                 id: id.into(),
@@ -351,7 +352,7 @@ mod tests {
                 source: None,
             }],
             layout: crate::DefinitionLayout {
-                head_body_relation: HeadBodyRelation::from(false),
+                body_alignment: crate::DefinitionBodyAlignment::Indented,
                 spacing_before_lines: None,
                 ..Default::default()
             },

@@ -501,14 +501,14 @@ fn empty_operand_ends_the_continued_source_row() {
         ".nf\n.Bl -hang -width 4n\n.It Xo\n.No X\\c\n.Xc\n.No \"\"\n.No BODY\n.El\n",
     );
     assert!(
-        !emptied.layout.inline_term(),
+        !emptied.inline_term(),
         "the cleared latch ends the row: {emptied:#?}"
     );
     let zero_row = definition_item_from_source(
         ".nf\n.Bl -hang -width 4n\n.It Xo\n.No X\\c\n.sp 0\n.Xc\n.No BODY\n.El\n",
     );
     assert!(
-        zero_row.layout.inline_term(),
+        zero_row.inline_term(),
         "term_newln() alone keeps TERMP_NONEWLINE: {zero_row:#?}"
     );
 }

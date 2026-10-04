@@ -40,10 +40,11 @@ mod tests {
 
     fn definition(term: &str, description: &str) -> DefinitionItem {
         DefinitionItem {
+            head_body_relation: mant_ir::HeadBodyRelation::from(false),
             source: None,
             entry: None,
             layout: mant_ir::DefinitionLayout {
-                head_body_relation: mant_ir::HeadBodyRelation::from(false),
+                body_alignment: mant_ir::DefinitionBodyAlignment::Indented,
                 spacing_before_lines: None,
                 ..Default::default()
             },

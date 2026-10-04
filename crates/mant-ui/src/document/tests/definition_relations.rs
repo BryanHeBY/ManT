@@ -17,6 +17,7 @@ fn text(value: &str) -> Inline {
 
 fn query(
     relation: HeadBodyRelation,
+    alignment: DefinitionBodyAlignment,
     literal: bool,
     multi_head: bool,
     origin: i32,
@@ -81,6 +82,7 @@ fn query(
         declaration_groups: vec![],
         compact: true,
         items: vec![DefinitionItem {
+            head_body_relation: relation,
             terms: vec![mant_ir::DefinitionTerm {
                 content: head,
                 inline_layout: mant_ir::InlineLayout {
@@ -98,7 +100,7 @@ fn query(
             entry: None,
             source: None,
             layout: DefinitionLayout {
-                head_body_relation: relation,
+                body_alignment: alignment,
                 body_indent_columns: 12,
                 min_term_gap_columns: 2,
                 spacing_before_lines: None,
@@ -262,14 +264,14 @@ fn all_shared_policies_keep_native_words_origins_links_and_copy_after_resize() {
     ] {
         for joined in [false, true] {
             let relation = if joined {
-                HeadBodyRelation::joined(alignment)
+                HeadBodyRelation::joined()
             } else {
-                HeadBodyRelation::separated(alignment)
+                HeadBodyRelation::separated()
             };
             for literal in [false, true] {
                 for multi_head in [false, true] {
                     for origin in [0, 3] {
-                        let content = query(relation, literal, multi_head, origin);
+                        let content = query(relation, alignment, literal, multi_head, origin);
                         let before = content.clone();
                         let view = DocumentView::new(&content);
                         let initial = view.render(20).text;
@@ -336,15 +338,58 @@ fn all_shared_policies_keep_native_words_origins_links_and_copy_after_resize() {
 }
 
 #[test]
+fn changing_alignment_and_distances_keeps_relation_copy_and_links() {
+    for relation in [HeadBodyRelation::Separate, HeadBodyRelation::joined()] {
+        for alignment in [
+            DefinitionBodyAlignment::AfterTerm,
+            DefinitionBodyAlignment::Indented,
+        ] {
+            let mut content = query(relation, alignment, false, false, 0);
+            let Block::DefinitionList { items, .. } =
+                &mut content.document.as_mut().unwrap().blocks[0]
+            else {
+                unreachable!()
+            };
+            items[0].layout.body_indent_columns = 40;
+            items[0].layout.min_term_gap_columns = 255;
+            assert_eq!(items[0].head_body_relation, relation);
+            let rendered = DocumentView::new(&content).render(120);
+            let head = &rendered.search("中e\u{301}")[0];
+            let body = &rendered.search("BODY")[0];
+            if relation == HeadBodyRelation::Separate {
+                assert!(body.row > head.row);
+            } else {
+                assert_eq!(body.row, head.row);
+                assert_eq!(body.start_column, head.start_column + 3);
+            }
+            assert_word_cells(
+                &rendered,
+                "BODY",
+                120,
+                Some(&LinkTarget::External(
+                    ExternalUri::parse("https://ex.org").unwrap(),
+                )),
+            );
+        }
+    }
+}
+
+#[test]
 fn separate_rows_and_explicit_leading_spacing_prevent_sharing() {
     for literal in [false, true] {
         for spacing in [0, 1] {
             let relation = if spacing == 0 {
                 HeadBodyRelation::Separate
             } else {
-                HeadBodyRelation::joined(DefinitionBodyAlignment::Indented)
+                HeadBodyRelation::joined()
             };
-            let mut content = query(relation, literal, false, 3);
+            let mut content = query(
+                relation,
+                DefinitionBodyAlignment::Indented,
+                literal,
+                false,
+                3,
+            );
             let Block::DefinitionList { items, .. } =
                 &mut content.document.as_mut().unwrap().blocks[0]
             else {

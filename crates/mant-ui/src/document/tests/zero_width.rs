@@ -206,6 +206,7 @@ fn target_only_definition(description: Vec<Block>, inline_term: bool) -> Block {
         declaration_groups: vec![],
         compact: true,
         items: vec![DefinitionItem {
+            head_body_relation: mant_ir::HeadBodyRelation::from(inline_term),
             terms: vec![
                 vec![Inline::anchor_with_aliases(
                     "target",
@@ -217,7 +218,7 @@ fn target_only_definition(description: Vec<Block>, inline_term: bool) -> Block {
             entry: None,
             source: None,
             layout: mant_ir::DefinitionLayout {
-                head_body_relation: mant_ir::HeadBodyRelation::from(inline_term),
+                body_alignment: mant_ir::DefinitionBodyAlignment::Indented,
                 body_indent_columns: 0,
                 ..Default::default()
             },

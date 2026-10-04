@@ -263,6 +263,7 @@ mod tests {
 
     fn item() -> DefinitionItem {
         DefinitionItem {
+            head_body_relation: mant_ir::HeadBodyRelation::Separate,
             source: Some(SourceSpan {
                 line: 12,
                 column: 4,
@@ -281,6 +282,7 @@ mod tests {
             .collect(),
             description: Vec::new(),
             layout: mant_ir::DefinitionLayout {
+                body_alignment: mant_ir::DefinitionBodyAlignment::Indented,
                 spacing_before_lines: None,
                 ..Default::default()
             },

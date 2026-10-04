@@ -178,9 +178,10 @@ fn excerpt_contract_keeps_breadcrumbs_separate_from_complete_sections() {
 #[test]
 fn excerpt_contract_can_return_one_semantic_definition() {
     let entry = DefinitionItem {
+        head_body_relation: mant_ir::HeadBodyRelation::from(false),
         source: None,
         layout: mant_ir::DefinitionLayout {
-            head_body_relation: mant_ir::HeadBodyRelation::from(false),
+            body_alignment: mant_ir::DefinitionBodyAlignment::Indented,
             spacing_before_lines: None,
             ..Default::default()
         },

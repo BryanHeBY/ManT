@@ -82,10 +82,11 @@ fn anchors_follow_hard_lines_in_terms_and_run_in_bodies() {
                 declaration_groups: Vec::new(),
                 compact: true,
                 items: vec![DefinitionItem {
+                    head_body_relation: mant_ir::HeadBodyRelation::from(inline_term),
                     source: None,
                     entry: None,
                     layout: mant_ir::DefinitionLayout {
-                        head_body_relation: mant_ir::HeadBodyRelation::from(inline_term),
+                        body_alignment: mant_ir::DefinitionBodyAlignment::Indented,
                         ..Default::default()
                     },
                     terms: vec![
@@ -359,6 +360,7 @@ fn target_only_terms_are_zero_width_and_extreme_origins_are_bounded() {
                     declaration_groups: vec![],
                     compact: true,
                     items: vec![DefinitionItem {
+                        head_body_relation: mant_ir::HeadBodyRelation::from(inline_term),
                         source: None,
                         entry: None,
                         terms: vec![
@@ -370,7 +372,7 @@ fn target_only_terms_are_zero_width_and_extreme_origins_are_bounded() {
                         ],
                         description: vec![paragraph("BODY")],
                         layout: mant_ir::DefinitionLayout {
-                            head_body_relation: mant_ir::HeadBodyRelation::from(inline_term),
+                            body_alignment: mant_ir::DefinitionBodyAlignment::Indented,
                             ..Default::default()
                         },
                     }],
@@ -410,12 +412,13 @@ fn trailing_zero_width_heads_share_the_final_run_in_row() {
                 declaration_groups: vec![],
                 compact: true,
                 items: vec![DefinitionItem {
+                    head_body_relation: mant_ir::HeadBodyRelation::from(true),
                     source: None,
                     entry: None,
                     terms,
                     description: vec![paragraph("BODY")],
                     layout: mant_ir::DefinitionLayout {
-                        head_body_relation: mant_ir::HeadBodyRelation::from(true),
+                        body_alignment: mant_ir::DefinitionBodyAlignment::Indented,
                         ..Default::default()
                     },
                 }],
@@ -449,6 +452,7 @@ fn definition_continuations_keep_rows_when_reparented_across_spacing() {
                 let definition = Block::DefinitionList {
                     declaration_groups: Vec::new(),
                     items: vec![DefinitionItem {
+                        head_body_relation: mant_ir::HeadBodyRelation::from(inline_term),
                         source: None,
                         entry: None,
                         terms: vec![
@@ -459,7 +463,7 @@ fn definition_continuations_keep_rows_when_reparented_across_spacing() {
                         ],
                         description: vec![paragraph("Initial description.")],
                         layout: mant_ir::DefinitionLayout {
-                            head_body_relation: mant_ir::HeadBodyRelation::from(inline_term),
+                            body_alignment: mant_ir::DefinitionBodyAlignment::Indented,
                             spacing_before_lines: None,
                             ..Default::default()
                         },

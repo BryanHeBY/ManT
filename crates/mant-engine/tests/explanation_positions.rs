@@ -169,6 +169,7 @@ fn synthetic(names: usize, repeats: usize) -> ResolvedContent {
     content.document.as_mut().unwrap().sections[0].blocks = vec![Block::DefinitionList {
         declaration_groups: Vec::new(),
         items: vec![DefinitionItem {
+            head_body_relation: mant_ir::HeadBodyRelation::Separate,
             terms: terms.into_iter().map(Into::into).collect(),
             description: vec![],
             source: None,

@@ -111,11 +111,17 @@ fn assert_case(source: &str, mode: &str, runs_in: bool) {
         })
         .unwrap();
     assert_eq!(
-        item.layout.head_body_relation,
+        (item.head_body_relation, item.layout.body_alignment),
         if runs_in {
-            HeadBodyRelation::separated(mant_ir::DefinitionBodyAlignment::Indented)
+            (
+                HeadBodyRelation::separated(),
+                mant_ir::DefinitionBodyAlignment::Indented,
+            )
         } else {
-            HeadBodyRelation::Separate
+            (
+                HeadBodyRelation::Separate,
+                mant_ir::DefinitionBodyAlignment::Indented,
+            )
         },
         "{source}"
     );

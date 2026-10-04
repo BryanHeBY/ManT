@@ -107,6 +107,7 @@ mod tests {
     use super::*;
     fn item(text: &str) -> DefinitionItem {
         DefinitionItem {
+            head_body_relation: crate::HeadBodyRelation::from(false),
             source: None,
             entry: None,
             terms: (vec![vec![Inline::Text {
@@ -122,7 +123,7 @@ mod tests {
                 source: None,
             }],
             layout: crate::DefinitionLayout {
-                head_body_relation: crate::HeadBodyRelation::from(false),
+                body_alignment: crate::DefinitionBodyAlignment::Indented,
                 spacing_before_lines: None,
                 ..Default::default()
             },

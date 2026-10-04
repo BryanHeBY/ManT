@@ -34,6 +34,7 @@ fn sidebar_exposes_every_semantic_role_supported_by_the_document_contract() {
     .into_iter()
     .enumerate()
     .map(|(index, (role, name))| DefinitionItem {
+        head_body_relation: mant_ir::HeadBodyRelation::from(false),
         source: None,
         entry: Some(EntryFacts {
             name_bindings: vec![mant_ir::EntryNameBinding {
@@ -58,7 +59,7 @@ fn sidebar_exposes_every_semantic_role_supported_by_the_document_contract() {
         ],
         description: Vec::new(),
         layout: mant_ir::DefinitionLayout {
-            head_body_relation: mant_ir::HeadBodyRelation::from(false),
+            body_alignment: mant_ir::DefinitionBodyAlignment::Indented,
             spacing_before_lines: None,
             ..Default::default()
         },
@@ -86,6 +87,7 @@ fn sidebar_exposes_every_semantic_role_supported_by_the_document_contract() {
     entries[0].description = vec![Block::DefinitionList {
         declaration_groups: Vec::new(),
         items: vec![DefinitionItem {
+            head_body_relation: mant_ir::HeadBodyRelation::from(false),
             source: None,
             entry: Some(EntryFacts {
                 name_bindings: vec![mant_ir::EntryNameBinding {
@@ -110,7 +112,7 @@ fn sidebar_exposes_every_semantic_role_supported_by_the_document_contract() {
             ],
             description: Vec::new(),
             layout: mant_ir::DefinitionLayout {
-                head_body_relation: mant_ir::HeadBodyRelation::from(false),
+                body_alignment: mant_ir::DefinitionBodyAlignment::Indented,
                 spacing_before_lines: None,
                 ..Default::default()
             },

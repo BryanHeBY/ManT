@@ -48,7 +48,7 @@ fn measured_zero_capacity_is_not_an_unconfigured_field() {
                 let item = item_from_capacity_source(&body);
                 let joined = length > 0 && i32::try_from(length).unwrap() >= width + 2;
                 assert_eq!(
-                    item.layout.head_body_relation.joins_without_separator(),
+                    item.head_body_relation.joins_without_separator(),
                     joined,
                     "{body}: {item:#?}"
                 );
@@ -80,14 +80,24 @@ fn cleared_head_capacity_uses_final_position_and_minbl() {
                     );
                     let item = item_from_capacity_source(&body);
                     let expected = if control == ".nf\n" {
-                        HeadBodyRelation::Separate
+                        (
+                            HeadBodyRelation::Separate,
+                            mant_ir::DefinitionBodyAlignment::Indented,
+                        )
                     } else if !control.is_empty() && length >= capacity {
-                        HeadBodyRelation::joined(DefinitionBodyAlignment::Indented)
+                        (
+                            HeadBodyRelation::joined(),
+                            DefinitionBodyAlignment::Indented,
+                        )
                     } else {
-                        HeadBodyRelation::separated(DefinitionBodyAlignment::Indented)
+                        (
+                            HeadBodyRelation::separated(),
+                            DefinitionBodyAlignment::Indented,
+                        )
                     };
                     assert_eq!(
-                        item.layout.head_body_relation, expected,
+                        (item.head_body_relation, item.layout.body_alignment),
+                        expected,
                         "{body}: {item:#?}"
                     );
                     assert!(
@@ -123,12 +133,19 @@ fn native_special_cells_share_the_same_capacity_receipt() {
             );
             let item = item_from_capacity_source(&body);
             let expected = if !control.is_empty() && reaches_body {
-                HeadBodyRelation::joined(DefinitionBodyAlignment::Indented)
+                (
+                    HeadBodyRelation::joined(),
+                    DefinitionBodyAlignment::Indented,
+                )
             } else {
-                HeadBodyRelation::separated(DefinitionBodyAlignment::Indented)
+                (
+                    HeadBodyRelation::separated(),
+                    DefinitionBodyAlignment::Indented,
+                )
             };
             assert_eq!(
-                item.layout.head_body_relation, expected,
+                (item.head_body_relation, item.layout.body_alignment),
+                expected,
                 "{body}: {item:#?}"
             );
             assert!(
@@ -164,12 +181,19 @@ fn fractional_body_origin_uses_actual_device_cell_rounding() {
                 format!(".Bl -hang -width {width}\n.It Xo\n.sp\n.No {word}\n.Xc\n.No BODY\n.El\n");
             let item = item_from_capacity_source(&body);
             let expected = if length >= first_joined_length {
-                HeadBodyRelation::joined(DefinitionBodyAlignment::Indented)
+                (
+                    HeadBodyRelation::joined(),
+                    DefinitionBodyAlignment::Indented,
+                )
             } else {
-                HeadBodyRelation::separated(DefinitionBodyAlignment::Indented)
+                (
+                    HeadBodyRelation::separated(),
+                    DefinitionBodyAlignment::Indented,
+                )
             };
             assert_eq!(
-                item.layout.head_body_relation, expected,
+                (item.head_body_relation, item.layout.body_alignment),
+                expected,
                 "{body}: {item:#?}"
             );
             assert!(
@@ -208,14 +232,24 @@ fn capacity_owner_switch_keeps_empty_word_cells_and_pending_glyphs() {
                 );
                 let item = item_from_capacity_source(&body);
                 let expected = if head_owner && operand == "\\zZ" {
-                    HeadBodyRelation::separated(DefinitionBodyAlignment::AfterTerm)
+                    (
+                        HeadBodyRelation::separated(),
+                        DefinitionBodyAlignment::AfterTerm,
+                    )
                 } else if length >= 4 {
-                    HeadBodyRelation::joined(DefinitionBodyAlignment::Indented)
+                    (
+                        HeadBodyRelation::joined(),
+                        DefinitionBodyAlignment::Indented,
+                    )
                 } else {
-                    HeadBodyRelation::separated(DefinitionBodyAlignment::Indented)
+                    (
+                        HeadBodyRelation::separated(),
+                        DefinitionBodyAlignment::Indented,
+                    )
                 };
                 assert_eq!(
-                    item.layout.head_body_relation, expected,
+                    (item.head_body_relation, item.layout.body_alignment),
+                    expected,
                     "{body}: {item:#?}"
                 );
                 assert_eq!(

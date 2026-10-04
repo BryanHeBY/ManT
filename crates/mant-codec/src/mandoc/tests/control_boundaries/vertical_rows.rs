@@ -15,12 +15,12 @@ fn definition_body_uses_continuation_after_generated_words_and_zero_row_requests
     let inset =
         definition_item_from_source(".nf\n.Bl -inset\n.It Xo\n.No X\\c\n.Xc\n.No BODY\n.El\n.fi\n");
     assert_eq!(inline_text(&inset.terms[0]), "X");
-    assert!(!inset.layout.inline_term(), "{inset:#?}");
+    assert!(!inset.inline_term(), "{inset:#?}");
     for request in [".sp 0", ".ce 0", ".rj 0"] {
         let item = definition_item_from_source(&format!(
             ".nf\n.Bl -hang -width 4n\n.It Xo\n.No X\\c\n{request}\n.Xc\n.No BODY\n.El\n.fi\n"
         ));
-        assert!(item.layout.inline_term(), "{request}: {item:#?}");
+        assert!(item.inline_term(), "{request}: {item:#?}");
         assert!(item.inline_description().is_some(), "{request}: {item:#?}");
     }
 }

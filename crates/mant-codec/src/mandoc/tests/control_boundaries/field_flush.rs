@@ -104,7 +104,7 @@ fn tag_margin_flush_does_not_print_an_unconsumed_next_field_separator() {
         ".nf\n.Bl -tag -width 4n\n.It Xo\n.No QHEADQ\\c\n.mc |\n.Xc\n.No QBODYQ\n.El\n.fi\n",
     );
     assert_eq!(inline_text(&item.terms[0]), "QHEADQ", "{item:#?}");
-    assert!(!item.layout.inline_term(), "{item:#?}");
+    assert!(!item.inline_term(), "{item:#?}");
     assert!(!matches!(
         item.description.first(),
         Some(Block::VerticalSpace { .. })
@@ -171,7 +171,7 @@ fn final_hang_field_reestablishes_body_word_gap() {
         };
         let item = &items[0];
         assert!(inline_text(&item.terms[0]).ends_with('Y'), "{item:#?}");
-        assert!(item.layout.inline_term(), "{request}: {item:#?}");
+        assert!(item.inline_term(), "{request}: {item:#?}");
         assert_eq!(item.layout.min_term_gap_columns, 1, "{item:#?}");
         assert!(
             matches!(&item.description[0], Block::Paragraph { children, .. } if inline_text(children) == "BODY"),

@@ -53,7 +53,7 @@ fn final_definition_head_break_moves_once_into_stacked_layout() {
         };
         let item = &items[0];
         assert_eq!(inline_text(&item.terms[0]), expected_term, "{item:#?}");
-        assert!(!item.layout.inline_term(), "{request}: {item:#?}");
+        assert!(!item.inline_term(), "{request}: {item:#?}");
         assert!(
             matches!(&item.description[0], Block::Paragraph { children, .. } if inline_text(children) == " BODY"),
             "{request}: {item:#?}"
@@ -110,10 +110,7 @@ fn detached_definition_head_keeps_authored_vertical_rows() {
             panic!("{style} {request}: {document:#?}");
         };
         assert_eq!(inline_text(&items[0].terms[0]), expected_term);
-        assert!(
-            !items[0].layout.inline_term(),
-            "{style} {request}: {items:#?}"
-        );
+        assert!(!items[0].inline_term(), "{style} {request}: {items:#?}");
     }
 }
 

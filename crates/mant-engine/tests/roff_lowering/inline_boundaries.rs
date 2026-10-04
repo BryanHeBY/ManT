@@ -485,7 +485,7 @@ fn definition_body_executes_synopsis_pre_boundary_once() {
     let [item] = items.as_slice() else {
         panic!("expected one definition item: {items:#?}");
     };
-    assert!(item.layout.inline_term(), "{item:#?}");
+    assert!(item.inline_term(), "{item:#?}");
     let [Block::Paragraph { children, .. }] = item.description.as_slice() else {
         panic!(
             "expected one declaration paragraph: {:#?}",

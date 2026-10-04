@@ -92,17 +92,20 @@ pub fn padding(origin: i32) -> usize {
 /// deliberately outside this first-row calculation.
 #[must_use]
 pub fn definition_body_gap(
+    relation: crate::HeadBodyRelation,
     layout: &crate::DefinitionLayout,
     term_origin: i32,
     term_width: usize,
     preferred_body_origin: i32,
 ) -> usize {
     let head_end = compose_origin(term_origin, coordinate(term_width));
-    let preferred = match layout.head_body_relation.preferred_alignment() {
-        Some(crate::DefinitionBodyAlignment::AfterTerm) | None => head_end,
-        Some(crate::DefinitionBodyAlignment::Indented) => preferred_body_origin.max(head_end),
+    let preferred = match (relation, layout.body_alignment) {
+        (crate::HeadBodyRelation::Separate, _) | (_, crate::DefinitionBodyAlignment::AfterTerm) => {
+            head_end
+        }
+        (_, crate::DefinitionBodyAlignment::Indented) => preferred_body_origin.max(head_end),
     };
-    if layout.head_body_relation.joins_without_separator() {
+    if relation.joins_without_separator() {
         return 0;
     }
     padding(preferred)

@@ -106,6 +106,7 @@ fn navigation_bundle() -> ResolvedContent {
                 blocks: vec![AstBlock::DefinitionList {
                     declaration_groups: Vec::new(),
                     items: vec![DefinitionItem {
+                        head_body_relation: mant_ir::HeadBodyRelation::from(false),
                         source: None,
                         entry: Some(EntryFacts {
                             name_bindings: Vec::new(),
@@ -128,7 +129,7 @@ fn navigation_bundle() -> ResolvedContent {
                         ],
                         description: vec![paragraph("Show help")],
                         layout: mant_ir::DefinitionLayout {
-                            head_body_relation: mant_ir::HeadBodyRelation::from(false),
+                            body_alignment: mant_ir::DefinitionBodyAlignment::Indented,
                             spacing_before_lines: None,
                             ..Default::default()
                         },

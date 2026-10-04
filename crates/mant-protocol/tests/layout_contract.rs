@@ -4,7 +4,7 @@ use mant_ir::LayoutHint;
 fn definition_body_geometry_round_trips_independently_of_run_in_policy() {
     use mant_ir::DefinitionLayout;
     let layout: DefinitionLayout = serde_json::from_value(serde_json::json!({
-        "headBodyRelation": {"type":"shared","wordBoundary":"separated","bodyAlignment":"indented"},
+        "bodyAlignment": "after-term",
         "bodyIndentColumns": -2, "minTermGapColumns": 2,
         "spacingBeforeLines": 0
     }))
@@ -33,12 +33,31 @@ fn definition_body_geometry_round_trips_independently_of_run_in_policy() {
 #[test]
 fn definition_rows_round_trip_through_actual_v0_12_query_json() {
     use mant_ir::{DefinitionBodyAlignment, HeadBodyRelation};
-    for relation in [
-        HeadBodyRelation::Separate,
-        HeadBodyRelation::joined(DefinitionBodyAlignment::AfterTerm),
-        HeadBodyRelation::joined(DefinitionBodyAlignment::Indented),
-        HeadBodyRelation::separated(DefinitionBodyAlignment::AfterTerm),
-        HeadBodyRelation::separated(DefinitionBodyAlignment::Indented),
+    for (relation, alignment) in [
+        (
+            HeadBodyRelation::Separate,
+            DefinitionBodyAlignment::Indented,
+        ),
+        (
+            HeadBodyRelation::Separate,
+            DefinitionBodyAlignment::AfterTerm,
+        ),
+        (
+            HeadBodyRelation::joined(),
+            DefinitionBodyAlignment::AfterTerm,
+        ),
+        (
+            HeadBodyRelation::joined(),
+            DefinitionBodyAlignment::Indented,
+        ),
+        (
+            HeadBodyRelation::separated(),
+            DefinitionBodyAlignment::AfterTerm,
+        ),
+        (
+            HeadBodyRelation::separated(),
+            DefinitionBodyAlignment::Indented,
+        ),
     ] {
         let input = serde_json::json!({
             "schema":"mant.query/v0.12", "label":"rows",
@@ -47,7 +66,8 @@ fn definition_rows_round_trip_through_actual_v0_12_query_json() {
                 "producer":{"name":"test","version":"0"},
                 "source":{"format":"mdoc"}, "meta":{}, "sections":[],
                 "blocks":[{"type":"definition-list","items":[{
-                    "layout":{"headBodyRelation":serde_json::to_value(relation).unwrap()},
+                    "headBodyRelation":serde_json::to_value(relation).unwrap(),
+                    "layout":{"bodyAlignment":alignment},
                     "terms":[{"content":[{"type":"strong","children":[
                         {"type":"text","value":"Alpha"},
                         {"type":"line-break"},
@@ -66,12 +86,19 @@ fn definition_rows_round_trip_through_actual_v0_12_query_json() {
         let serialized: serde_json::Value = serde_json::to_value(restored).unwrap();
         assert_eq!(serialized["schema"], "mant.query/v0.12");
         let item = &serialized["document"]["blocks"][0]["items"][0];
-        let restored_relation = item["layout"]
+        let restored_relation = item
             .get("headBodyRelation")
             .map_or(HeadBodyRelation::Separate, |shape| {
                 serde_json::from_value(shape.clone()).unwrap()
             });
         assert_eq!(restored_relation, relation);
+        let restored_alignment = item["layout"]
+            .get("bodyAlignment")
+            .map_or(DefinitionBodyAlignment::Indented, |shape| {
+                serde_json::from_value(shape.clone()).unwrap()
+            });
+        assert_eq!(restored_alignment, alignment);
+        assert!(item["layout"].get("headBodyRelation").is_none());
         assert!(item["layout"].get("inlineTerm").is_none());
         assert_eq!(
             item["terms"][0]["inlineLayout"]["rowHints"][0],

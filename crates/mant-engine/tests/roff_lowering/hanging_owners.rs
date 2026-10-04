@@ -5,7 +5,7 @@ use mant_codec::encode::{
     render_markdown_with_options,
 };
 use mant_ir::{
-    Block, Document, EntryInlineRoot, EntryOwner, ListItem, ListKind, ResolvedContent,
+    Block, Document, EntryInlineRoot, EntryOwner, Inline, ListItem, ListKind, ResolvedContent,
     visit::{self, Visit},
 };
 use mant_protocol::{EvidenceBasis, ExplanationOptions, ExplanationQuery, SearchQuery};
@@ -46,6 +46,38 @@ fn owners(document: &Document) -> Vec<&ListItem> {
     let mut collect = Collect(Vec::new());
     collect.visit_document(document);
     collect.0
+}
+
+fn executed_owners<'a>(document: &'a Document, root: &libmandoc_rs::Node) -> Vec<&'a ListItem> {
+    let mut pairs = Vec::new();
+    ast_pairs(root, &mut pairs);
+    owners(document)
+        .into_iter()
+        .filter(|item| matches_pair(item, &pairs))
+        .collect()
+}
+
+fn matches_pair(item: &ListItem, pairs: &[(u32, u32, &libmandoc_rs::Node)]) -> bool {
+    let [head, Block::DefinitionList { items, .. }] = item.blocks.as_slice() else {
+        return false;
+    };
+    let [body] = items.as_slice() else {
+        return false;
+    };
+    if !body.terms.is_empty()
+        || !matches!(head, Block::Paragraph { .. } | Block::Preformatted { .. })
+    {
+        return false;
+    }
+    let (Some(head_source), Some(body_source)) =
+        (mant_ir::geometry::block_source(head), body.source)
+    else {
+        return false;
+    };
+    pairs.iter().any(|(line, column, head)| {
+        (*line, *column) == (body_source.line, body_source.column)
+            && descendant_has_source(head, head_source)
+    })
 }
 
 fn roundtrip(case: &Case) -> ResolvedContent {
@@ -152,6 +184,11 @@ fn assert_geometry(case: &Case, content: &ResolvedContent) {
     if case.owner_names.is_empty() {
         return;
     }
+    assert_native_rows(case, content);
+}
+
+fn assert_native_rows(case: &Case, content: &ResolvedContent) {
+    let text = mant_render::render_query_man(content);
     let body = text
         .split_once("OPTIONS\n")
         .unwrap()
@@ -191,8 +228,14 @@ fn executed_hanging_pairs_keep_block_forms_and_native_geometry() {
     // paragraph geometry; pre_IP permits an empty HEAD with its own BODY
     // origin. Neither macro supplies a native semantic TP declaration.
     for case in cases() {
+        let native = libmandoc_rs::Parser::default()
+            .parse_bytes("owner.1", case.source.as_bytes())
+            .unwrap();
         let content = roundtrip(&case);
-        let items = owners(content.document.as_ref().unwrap());
+        // A generic hanging definition may retain a Paragraph in the same
+        // public Plain List shape. Only real HP/headless-IP siblings prove
+        // this executed recovery; an intervening RS supplies another parent.
+        let items = executed_owners(content.document.as_ref().unwrap(), &native.document.root);
         assert_eq!(
             items.len(),
             case.owner_names.len(),
@@ -204,6 +247,110 @@ fn executed_hanging_pairs_keep_block_forms_and_native_geometry() {
         }
         assert_geometry(&case, &content);
     }
+}
+
+#[test]
+fn deeper_rs_description_keeps_a_generic_h_owner_without_claiming_an_executed_pair() {
+    // The exact container-between input was rerun in pristine ASCII, UTF-8,
+    // HTML and tree before this assertion. man_term.c::post_HP closes the
+    // original paragraph; pre/post_RS adds four cells around the nested IP.
+    // The tree has HP -> RS siblings, with IP inside RS BODY, so native pair
+    // recovery has no handoff. Existing generic deeper-layout admission still
+    // owns this declaration; preserving H keeps its original Paragraph root.
+    let case = cases()
+        .into_iter()
+        .find(|case| case.id == "container-between")
+        .unwrap();
+    let native = libmandoc_rs::Parser::default()
+        .parse_bytes("owner.1", case.source.as_bytes())
+        .unwrap();
+    let mut pairs = Vec::new();
+    ast_pairs(&native.document.root, &mut pairs);
+    assert_eq!(pairs.len(), 0);
+    let content = roundtrip(&case);
+    let document = content.document.as_ref().unwrap();
+    assert_eq!(executed_owners(document, &native.document.root).len(), 0);
+    let generic = owners(document);
+    assert_eq!(generic.len(), 1);
+    let item = generic[0];
+    assert_generic_rs_owner(item);
+    assert_geometry(&case, &content);
+    assert_native_rows(&case, &content);
+    assert_queries(&content, item);
+}
+
+fn assert_generic_rs_owner(item: &ListItem) {
+    let names = ["-n", "--quiet", "--silent"].map(str::to_owned);
+    assert_bindings(item, &names);
+    assert_eq!(item.entry.as_ref().unwrap().id.as_str(), "option-n");
+    let Block::Paragraph {
+        children,
+        layout,
+        inline_layout,
+        source,
+    } = &item.blocks[0]
+    else {
+        panic!("the generic H owner retains the original paragraph")
+    };
+    assert_eq!(layout.indent_columns, 0);
+    assert_eq!(layout.continuation_indent_columns, 7);
+    assert_eq!(inline_layout.row_hints, []);
+    assert_eq!(
+        source.map(|source| (source.line, source.column)),
+        Some((4, 1))
+    );
+    assert_eq!(item.source, *source);
+    let strong = |value: &str| Inline::Strong {
+        children: vec![Inline::Text {
+            value: value.into(),
+        }],
+    };
+    assert_eq!(
+        children.as_slice(),
+        &[
+            strong("-n"),
+            Inline::Text { value: ", ".into() },
+            strong("--quiet"),
+            Inline::Text { value: ", ".into() },
+            strong("--silent"),
+        ]
+    );
+    let Block::DefinitionList {
+        items,
+        layout,
+        source,
+        ..
+    } = &item.blocks[1]
+    else {
+        unreachable!()
+    };
+    assert_eq!(layout.indent_columns, 4);
+    assert_eq!(items[0].layout.body_indent_columns, 7);
+    assert_eq!(
+        source.map(|source| (source.line, source.column)),
+        Some((6, 2))
+    );
+    assert_eq!(items[0].source, *source);
+    let [
+        Block::Paragraph {
+            layout,
+            source,
+            children,
+            ..
+        },
+    ] = items[0].description.as_slice()
+    else {
+        panic!("the RS/IP body keeps its original paragraph")
+    };
+    assert_eq!(layout.indent_columns, 0);
+    assert_eq!(
+        source.map(|source| (source.line, source.column)),
+        Some((7, 1))
+    );
+    assert_eq!(
+        mant_ir::inline_plain_text(children),
+        "BodyWord is in another container."
+    );
 }
 
 fn assert_queries(content: &ResolvedContent, item: &ListItem) {
@@ -299,6 +446,7 @@ pub(super) fn ast_pairs<'a>(
                 .iter()
                 .find(|part| part.kind == libmandoc_rs::NodeKind::Head)
                 .is_some_and(|part| part.children.is_empty())
+            && exit_epoch(head) == body.flow_epoch
         {
             pairs.push((body.line, body.column, head));
         }
@@ -306,6 +454,15 @@ pub(super) fn ast_pairs<'a>(
     for child in &node.children {
         ast_pairs(child, pairs);
     }
+}
+
+fn exit_epoch(mut node: &libmandoc_rs::Node) -> usize {
+    // Empty PP/P/LP validation can remove a node without erasing its executed
+    // boundary. The parse's native epoch keeps that non-pair distinguishable.
+    while let Some(last) = node.children.last() {
+        node = last;
+    }
+    node.flow_epoch
 }
 
 #[test]

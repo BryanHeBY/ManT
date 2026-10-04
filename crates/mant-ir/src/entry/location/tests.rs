@@ -32,6 +32,7 @@ fn facts(name: &str, root: EntryInlineRoot) -> EntryFacts {
 
 fn definition(name: &str, children: Vec<Block>) -> DefinitionItem {
     DefinitionItem {
+        head_body_relation: crate::HeadBodyRelation::Separate,
         terms: (vec![vec![Inline::Code { value: name.into() }]])
             .into_iter()
             .map(Into::into)

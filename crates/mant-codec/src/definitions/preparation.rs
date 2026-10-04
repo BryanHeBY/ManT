@@ -12,7 +12,9 @@ use super::{
     context::{DefinitionContext, child_definition_context, definition_group_context},
     evidence::HeadSnapshot,
     identity::{IdentityPlan, has_semantic_spelling, identity_plan, list_identity_base},
-    normalize::{normalize_definition_nesting_with_boundaries, normalize_hanging_definitions},
+    normalize::{
+        normalize_definition_nesting_with_boundaries, normalize_hanging_definitions_with_evidence,
+    },
 };
 
 pub(super) struct PreparedDefinitions {
@@ -50,13 +52,14 @@ pub(super) fn prepare(
     // native pointer matching only after that movement is complete, otherwise
     // a valid macro expansion split by an ordinary paragraph looks like a
     // missing same-coordinate sibling.
-    normalize_blocks(blocks, context, evidence);
-    normalize_sections(sections, context, evidence);
+    let mut diagnostics = Vec::new();
+    normalize_blocks(blocks, context, evidence, &mut diagnostics);
+    normalize_sections(sections, context, evidence, &mut diagnostics);
     let mut group_matches = evidence.groups.matching_plan(blocks, sections);
     let mut prepared = PreparedDefinitions {
         preferred_counts: HashMap::new(),
         plans: Vec::new(),
-        diagnostics: Vec::new(),
+        diagnostics,
     };
     prepared.blocks(blocks, context, evidence, &mut group_matches);
     prepared.sections(sections, context, evidence, &mut group_matches);
@@ -130,7 +133,7 @@ impl PreparedDefinitions {
                     *declaration_groups = evidence.groups.resolve(items, &heads, group_matches);
                     crate::definitions::remove_native_definition_owner_markers_from_items(items);
                     for (item, (identity, head)) in items.iter_mut().zip(identities) {
-                        self.record_limit(identity.limit, item.source);
+                        record_limit(&mut self.diagnostics, identity.limit, item.source);
                         if has_semantic_spelling(item, &identity) {
                             *self
                                 .preferred_counts
@@ -167,21 +170,21 @@ impl PreparedDefinitions {
             }
         }
     }
+}
 
-    fn record_limit(
-        &mut self,
-        limit: Option<super::syntax::DeclarationLimit>,
-        source: Option<SourceSpan>,
-    ) {
-        if limit == Some(super::syntax::DeclarationLimit::Names) {
-            self.diagnostics.push(mant_ir::Diagnostic {
-                impact: mant_ir::DiagnosticImpact::SemanticCoverage,
-                level: mant_ir::DiagnosticLevel::Warning,
-                code: Some("manual.semantic-entry.name-limit".to_owned()),
-                message: "explicit option declaration exceeded the 256-name recognition limit; complete readable forms are retained".to_owned(),
-                source,
-            });
-        }
+pub(super) fn record_limit(
+    diagnostics: &mut Vec<mant_ir::Diagnostic>,
+    limit: Option<super::syntax::DeclarationLimit>,
+    source: Option<SourceSpan>,
+) {
+    if limit == Some(super::syntax::DeclarationLimit::Names) {
+        diagnostics.push(mant_ir::Diagnostic {
+            impact: mant_ir::DiagnosticImpact::SemanticCoverage,
+            level: mant_ir::DiagnosticLevel::Warning,
+            code: Some("manual.semantic-entry.name-limit".to_owned()),
+            message: "explicit option declaration exceeded the 256-name recognition limit; complete readable forms are retained".to_owned(),
+            source,
+        });
     }
 }
 
@@ -189,11 +192,12 @@ fn normalize_sections(
     sections: &mut [Section],
     parent: DefinitionContext,
     evidence: &NativeHeadEvidence,
+    diagnostics: &mut Vec<mant_ir::Diagnostic>,
 ) {
     for section in sections {
         let context = DefinitionContext::for_section(&section.heading.plain_text(), parent);
-        normalize_blocks(&mut section.blocks, context, evidence);
-        normalize_sections(&mut section.children, context, evidence);
+        normalize_blocks(&mut section.blocks, context, evidence, diagnostics);
+        normalize_sections(&mut section.children, context, evidence, diagnostics);
     }
 }
 
@@ -201,10 +205,11 @@ fn normalize_blocks(
     blocks: &mut Vec<Block>,
     context: DefinitionContext,
     evidence: &NativeHeadEvidence,
+    diagnostics: &mut Vec<mant_ir::Diagnostic>,
 ) {
     super::normalize::normalize_native_hanging_owners(blocks, context, &evidence.hanging);
     normalize_definition_nesting_with_boundaries(blocks, &evidence.continuations);
-    normalize_hanging_definitions(blocks, context);
+    normalize_hanging_definitions_with_evidence(blocks, context, evidence, diagnostics);
     for block in blocks {
         match block {
             Block::List { items, .. } => {
@@ -217,10 +222,10 @@ fn normalize_blocks(
                         // head. Do not run layout inference over it again;
                         // descriptions and nested owners still normalize.
                         let mut tail = item.blocks.split_off(1);
-                        normalize_blocks(&mut tail, child_context, evidence);
+                        normalize_blocks(&mut tail, child_context, evidence, diagnostics);
                         item.blocks.append(&mut tail);
                     } else {
-                        normalize_blocks(&mut item.blocks, child_context, evidence);
+                        normalize_blocks(&mut item.blocks, child_context, evidence, diagnostics);
                     }
                 }
             }
@@ -234,13 +239,13 @@ fn normalize_blocks(
                         evidence.operands(item),
                     );
                     let child_context = child_definition_context(identity.kind, item_context);
-                    normalize_blocks(&mut item.description, child_context, evidence);
+                    normalize_blocks(&mut item.description, child_context, evidence, diagnostics);
                 }
             }
             Block::Table { rows, .. } => {
                 for row in rows {
                     for cell in &mut row.cells {
-                        normalize_blocks(&mut cell.blocks, context, evidence);
+                        normalize_blocks(&mut cell.blocks, context, evidence, diagnostics);
                     }
                 }
             }
@@ -254,7 +259,7 @@ fn normalize_blocks(
     }
 }
 
-fn has_owned_first_block(item: &mant_ir::ListItem) -> bool {
+pub(super) fn has_owned_first_block(item: &mant_ir::ListItem) -> bool {
     item.entry.as_ref().is_some_and(|entry| {
         entry.forms.iter().any(|form| {
             matches!(form.parts.as_slice(), [part]
@@ -276,6 +281,7 @@ mod tests {
         let mut item = DefinitionItem {
             source: None,
             entry: None,
+            head_body_relation: mant_ir::HeadBodyRelation::Separate,
             terms: (vec![vec![Inline::Text {
                 value: "--mode=fast".into(),
             }]])
@@ -284,7 +290,6 @@ mod tests {
             .collect(),
             description: Vec::new(),
             layout: mant_ir::DefinitionLayout {
-                head_body_relation: mant_ir::HeadBodyRelation::from(false),
                 spacing_before_lines: None,
                 ..Default::default()
             },

@@ -17,12 +17,13 @@ fn entry_fragments_validate_without_inserting_a_head_anchor() {
             doc.blocks[1] = Block::DefinitionList {
                 declaration_groups: Vec::new(),
                 items: vec![DefinitionItem {
+                    head_body_relation: mant_ir::HeadBodyRelation::from(false),
                     source: None,
                     entry: item.entry,
                     terms: Vec::new(),
                     description: item.blocks,
                     layout: mant_ir::DefinitionLayout {
-                        head_body_relation: mant_ir::HeadBodyRelation::from(false),
+                        body_alignment: mant_ir::DefinitionBodyAlignment::Indented,
                         spacing_before_lines: None,
                         ..Default::default()
                     },

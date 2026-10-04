@@ -399,7 +399,7 @@ fn append_definition(
                 // Adding earlier TQ heads can tighten width fitting, but
                 // cannot reopen the final head's explicitly closed line.
                 if !terms_fit_inline(&item.terms, max_term_width) {
-                    item.layout.head_body_relation = mant_ir::HeadBodyRelation::Separate;
+                    item.head_body_relation = mant_ir::HeadBodyRelation::Separate;
                 }
             }
         }

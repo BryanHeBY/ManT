@@ -1167,6 +1167,10 @@
               }
             ]
           },
+          "headBodyRelation": {
+            "description": "Resolved row and word relation between authoritative head and body.\nThis source-neutral fact remains independent of presentation geometry.",
+            "$ref": "#/$defs/HeadBodyRelation"
+          },
           "layout": {
             "description": "Item presentation, independent of any attached semantic facts.",
             "$ref": "#/$defs/DefinitionLayout"
@@ -1200,14 +1204,14 @@
         "description": "Definition-item presentation. Missing spacing inherits list compactness;\nexplicit zero spacing is a distinct, preserved source request.\n\nThe semantic source of truth is [`HeadBodyRelation`]; the column-valued\nfields are pre-resolved hints for fixed-width terminal presentation and\nmust not drive structure decisions in other renderers.",
         "type": "object",
         "properties": {
+          "bodyAlignment": {
+            "description": "Preferred first-body alignment when the item shares a separated row.\nA joined word seam never acquires padding from this preference.",
+            "$ref": "#/$defs/DefinitionBodyAlignment"
+          },
           "bodyIndentColumns": {
             "description": "Description content origin relative to the label origin. Hard and\nwrapped continuation lines use this origin even if a long run-in head\nforces the first description text further right. A pre-resolved\nfixed-width hint (mandoc `offset`, term.c:134-136); the generic\ndefault is four cells.",
             "type": "integer",
             "format": "int32"
-          },
-          "headBodyRelation": {
-            "description": "How the head and the first body row relate. Producers decide this\nonce during lowering from source execution; renderers must derive\ntheir row structure from it instead of re-measuring columns.",
-            "$ref": "#/$defs/HeadBodyRelation"
           },
           "minTermGapColumns": {
             "description": "Minimum separation after a run-in term, independent of body origin.\nA pre-resolved fixed-width hint (mandoc `trailspace`, mdoc_term.c:801-812).",
@@ -2232,7 +2236,7 @@
         "type": "string"
       },
       "HeadBodyRelation": {
-        "description": "Source-neutral row, word-boundary and preferred first-body alignment facts.\nColumn hints never override a joined word boundary.",
+        "description": "Source-neutral row and word-boundary facts.\nColumn hints never override a joined word boundary.",
         "oneOf": [
           {
             "description": "The body starts on a separate row at its own content origin.",
@@ -2252,10 +2256,6 @@
             "description": "The first body row shares the final head row. Its word seam is\nindependent from the preferred alignment and later body origins.",
             "type": "object",
             "properties": {
-              "bodyAlignment": {
-                "description": "Preferred first-body alignment. A joined seam forbids extra\npadding even when a column hint would prefer a later origin.",
-                "$ref": "#/$defs/DefinitionBodyAlignment"
-              },
               "type": {
                 "type": "string",
                 "const": "shared"
@@ -2268,8 +2268,7 @@
             "additionalProperties": false,
             "required": [
               "type",
-              "wordBoundary",
-              "bodyAlignment"
+              "wordBoundary"
             ]
           }
         ]
@@ -4317,6 +4316,10 @@
               }
             ]
           },
+          "headBodyRelation": {
+            "description": "Resolved row and word relation between authoritative head and body.\nThis source-neutral fact remains independent of presentation geometry.",
+            "$ref": "#/$defs/HeadBodyRelation"
+          },
           "layout": {
             "description": "Item presentation, independent of any attached semantic facts.",
             "$ref": "#/$defs/DefinitionLayout"
@@ -4350,14 +4353,14 @@
         "description": "Definition-item presentation. Missing spacing inherits list compactness;\nexplicit zero spacing is a distinct, preserved source request.\n\nThe semantic source of truth is [`HeadBodyRelation`]; the column-valued\nfields are pre-resolved hints for fixed-width terminal presentation and\nmust not drive structure decisions in other renderers.",
         "type": "object",
         "properties": {
+          "bodyAlignment": {
+            "description": "Preferred first-body alignment when the item shares a separated row.\nA joined word seam never acquires padding from this preference.",
+            "$ref": "#/$defs/DefinitionBodyAlignment"
+          },
           "bodyIndentColumns": {
             "description": "Description content origin relative to the label origin. Hard and\nwrapped continuation lines use this origin even if a long run-in head\nforces the first description text further right. A pre-resolved\nfixed-width hint (mandoc `offset`, term.c:134-136); the generic\ndefault is four cells.",
             "type": "integer",
             "format": "int32"
-          },
-          "headBodyRelation": {
-            "description": "How the head and the first body row relate. Producers decide this\nonce during lowering from source execution; renderers must derive\ntheir row structure from it instead of re-measuring columns.",
-            "$ref": "#/$defs/HeadBodyRelation"
           },
           "minTermGapColumns": {
             "description": "Minimum separation after a run-in term, independent of body origin.\nA pre-resolved fixed-width hint (mandoc `trailspace`, mdoc_term.c:801-812).",
@@ -6226,7 +6229,7 @@
         "type": "string"
       },
       "HeadBodyRelation": {
-        "description": "Source-neutral row, word-boundary and preferred first-body alignment facts.\nColumn hints never override a joined word boundary.",
+        "description": "Source-neutral row and word-boundary facts.\nColumn hints never override a joined word boundary.",
         "oneOf": [
           {
             "description": "The body starts on a separate row at its own content origin.",
@@ -6246,10 +6249,6 @@
             "description": "The first body row shares the final head row. Its word seam is\nindependent from the preferred alignment and later body origins.",
             "type": "object",
             "properties": {
-              "bodyAlignment": {
-                "description": "Preferred first-body alignment. A joined seam forbids extra\npadding even when a column hint would prefer a later origin.",
-                "$ref": "#/$defs/DefinitionBodyAlignment"
-              },
               "type": {
                 "type": "string",
                 "const": "shared"
@@ -6262,8 +6261,7 @@
             "additionalProperties": false,
             "required": [
               "type",
-              "wordBoundary",
-              "bodyAlignment"
+              "wordBoundary"
             ]
           }
         ]
@@ -10345,6 +10343,10 @@
               }
             ]
           },
+          "headBodyRelation": {
+            "description": "Resolved row and word relation between authoritative head and body.\nThis source-neutral fact remains independent of presentation geometry.",
+            "$ref": "#/$defs/HeadBodyRelation"
+          },
           "layout": {
             "description": "Item presentation, independent of any attached semantic facts.",
             "$ref": "#/$defs/DefinitionLayout"
@@ -10378,14 +10380,14 @@
         "description": "Definition-item presentation. Missing spacing inherits list compactness;\nexplicit zero spacing is a distinct, preserved source request.\n\nThe semantic source of truth is [`HeadBodyRelation`]; the column-valued\nfields are pre-resolved hints for fixed-width terminal presentation and\nmust not drive structure decisions in other renderers.",
         "type": "object",
         "properties": {
+          "bodyAlignment": {
+            "description": "Preferred first-body alignment when the item shares a separated row.\nA joined word seam never acquires padding from this preference.",
+            "$ref": "#/$defs/DefinitionBodyAlignment"
+          },
           "bodyIndentColumns": {
             "description": "Description content origin relative to the label origin. Hard and\nwrapped continuation lines use this origin even if a long run-in head\nforces the first description text further right. A pre-resolved\nfixed-width hint (mandoc `offset`, term.c:134-136); the generic\ndefault is four cells.",
             "type": "integer",
             "format": "int32"
-          },
-          "headBodyRelation": {
-            "description": "How the head and the first body row relate. Producers decide this\nonce during lowering from source execution; renderers must derive\ntheir row structure from it instead of re-measuring columns.",
-            "$ref": "#/$defs/HeadBodyRelation"
           },
           "minTermGapColumns": {
             "description": "Minimum separation after a run-in term, independent of body origin.\nA pre-resolved fixed-width hint (mandoc `trailspace`, mdoc_term.c:801-812).",
@@ -11364,7 +11366,7 @@
         "type": "string"
       },
       "HeadBodyRelation": {
-        "description": "Source-neutral row, word-boundary and preferred first-body alignment facts.\nColumn hints never override a joined word boundary.",
+        "description": "Source-neutral row and word-boundary facts.\nColumn hints never override a joined word boundary.",
         "oneOf": [
           {
             "description": "The body starts on a separate row at its own content origin.",
@@ -11384,10 +11386,6 @@
             "description": "The first body row shares the final head row. Its word seam is\nindependent from the preferred alignment and later body origins.",
             "type": "object",
             "properties": {
-              "bodyAlignment": {
-                "description": "Preferred first-body alignment. A joined seam forbids extra\npadding even when a column hint would prefer a later origin.",
-                "$ref": "#/$defs/DefinitionBodyAlignment"
-              },
               "type": {
                 "type": "string",
                 "const": "shared"
@@ -11400,8 +11398,7 @@
             "additionalProperties": false,
             "required": [
               "type",
-              "wordBoundary",
-              "bodyAlignment"
+              "wordBoundary"
             ]
           }
         ]
@@ -13899,6 +13896,10 @@
               }
             ]
           },
+          "headBodyRelation": {
+            "description": "Resolved row and word relation between authoritative head and body.\nThis source-neutral fact remains independent of presentation geometry.",
+            "$ref": "#/$defs/HeadBodyRelation"
+          },
           "layout": {
             "description": "Item presentation, independent of any attached semantic facts.",
             "$ref": "#/$defs/DefinitionLayout"
@@ -13932,14 +13933,14 @@
         "description": "Definition-item presentation. Missing spacing inherits list compactness;\nexplicit zero spacing is a distinct, preserved source request.\n\nThe semantic source of truth is [`HeadBodyRelation`]; the column-valued\nfields are pre-resolved hints for fixed-width terminal presentation and\nmust not drive structure decisions in other renderers.",
         "type": "object",
         "properties": {
+          "bodyAlignment": {
+            "description": "Preferred first-body alignment when the item shares a separated row.\nA joined word seam never acquires padding from this preference.",
+            "$ref": "#/$defs/DefinitionBodyAlignment"
+          },
           "bodyIndentColumns": {
             "description": "Description content origin relative to the label origin. Hard and\nwrapped continuation lines use this origin even if a long run-in head\nforces the first description text further right. A pre-resolved\nfixed-width hint (mandoc `offset`, term.c:134-136); the generic\ndefault is four cells.",
             "type": "integer",
             "format": "int32"
-          },
-          "headBodyRelation": {
-            "description": "How the head and the first body row relate. Producers decide this\nonce during lowering from source execution; renderers must derive\ntheir row structure from it instead of re-measuring columns.",
-            "$ref": "#/$defs/HeadBodyRelation"
           },
           "minTermGapColumns": {
             "description": "Minimum separation after a run-in term, independent of body origin.\nA pre-resolved fixed-width hint (mandoc `trailspace`, mdoc_term.c:801-812).",
@@ -15960,7 +15961,7 @@
         "type": "string"
       },
       "HeadBodyRelation": {
-        "description": "Source-neutral row, word-boundary and preferred first-body alignment facts.\nColumn hints never override a joined word boundary.",
+        "description": "Source-neutral row and word-boundary facts.\nColumn hints never override a joined word boundary.",
         "oneOf": [
           {
             "description": "The body starts on a separate row at its own content origin.",
@@ -15980,10 +15981,6 @@
             "description": "The first body row shares the final head row. Its word seam is\nindependent from the preferred alignment and later body origins.",
             "type": "object",
             "properties": {
-              "bodyAlignment": {
-                "description": "Preferred first-body alignment. A joined seam forbids extra\npadding even when a column hint would prefer a later origin.",
-                "$ref": "#/$defs/DefinitionBodyAlignment"
-              },
               "type": {
                 "type": "string",
                 "const": "shared"
@@ -15996,8 +15993,7 @@
             "additionalProperties": false,
             "required": [
               "type",
-              "wordBoundary",
-              "bodyAlignment"
+              "wordBoundary"
             ]
           }
         ]

@@ -51,6 +51,45 @@ pub(super) struct IdentityPlan {
     pub(super) limit: Option<super::syntax::DeclarationLimit>,
 }
 
+impl IdentityPlan {
+    /// Reuse an accepted definition's identity while retaining its original
+    /// paragraph as the complete Block0 form. Private markers must be removed
+    /// before this captures public paths into the unchanged inline content.
+    pub(super) fn original_block_facts(self, item: &DefinitionItem) -> Option<EntryFacts> {
+        if !has_semantic_spelling(item, &self) {
+            return None;
+        }
+        debug_assert_eq!(item.terms.len(), 1);
+        let mut name_bindings =
+            super::binding::native_name_bindings(item, &self.names, &self.occurrences);
+        for part in name_bindings
+            .iter_mut()
+            .flat_map(|binding| &mut binding.occurrences)
+            .flat_map(|form| &mut form.parts)
+        {
+            part.root = mant_ir::EntryInlineRoot::Block { index: 0 };
+        }
+        Some(EntryFacts {
+            // The ordinary list allocation pass assigns the final ID.
+            id: "pending-original-owner".into(),
+            kind: self.kind,
+            case: self.case,
+            names: self.names,
+            forms: vec![mant_ir::EntryForm {
+                parts: vec![mant_ir::EntryContentSlice {
+                    root: mant_ir::EntryInlineRoot::Block { index: 0 },
+                    path: Vec::new(),
+                    bytes: None,
+                }],
+            }],
+            name_bindings,
+            alias_groups: Vec::new(),
+            alias_of: None,
+            value_domain: self.value_domain,
+        })
+    }
+}
+
 pub(super) fn identity_plan(
     item: &DefinitionItem,
     context: DefinitionContext,
@@ -145,7 +184,24 @@ pub(super) fn identity_plan(
 
 pub(super) fn list_identity_base(item: &ListItem) -> Option<String> {
     let facts = item.entry.as_ref()?;
-    let name = facts.names.first().map_or("entry", String::as_str);
+    // Aliasless original-block owners retain the definition fallback: their
+    // complete authored head supplies the preferred spelling, never padding
+    // or a reconstructed selector name.
+    let form_name = if facts.names.is_empty() {
+        facts
+            .forms
+            .first()
+            .and_then(|form| EntryOwner::List(item).form(form))
+            .map(|content| plain_text(&content))
+    } else {
+        None
+    };
+    let name = facts
+        .names
+        .first()
+        .map(String::as_str)
+        .or(form_name.as_deref())
+        .unwrap_or("entry");
     Some(format!(
         "{}-{}",
         role_id_prefix(facts.kind),

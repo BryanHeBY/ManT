@@ -8,10 +8,11 @@ use super::{environment_variable_alias, identify_definitions, option_names, opti
 
 fn item(value: &str) -> DefinitionItem {
     DefinitionItem {
+        head_body_relation: mant_ir::HeadBodyRelation::from(false),
         source: None,
         entry: None,
         layout: mant_ir::DefinitionLayout {
-            head_body_relation: mant_ir::HeadBodyRelation::from(false),
+            body_alignment: mant_ir::DefinitionBodyAlignment::Indented,
             spacing_before_lines: None,
             ..Default::default()
         },
@@ -27,10 +28,11 @@ fn item(value: &str) -> DefinitionItem {
 
 fn strong_item(value: &str) -> DefinitionItem {
     DefinitionItem {
+        head_body_relation: mant_ir::HeadBodyRelation::from(false),
         source: None,
         entry: None,
         layout: mant_ir::DefinitionLayout {
-            head_body_relation: mant_ir::HeadBodyRelation::from(false),
+            body_alignment: mant_ir::DefinitionBodyAlignment::Indented,
             spacing_before_lines: None,
             ..Default::default()
         },
@@ -120,10 +122,11 @@ fn semantic_id_allocation_ignores_a_prefilled_producer_id() {
 #[test]
 fn target_only_definitions_retain_anchors_without_becoming_entries() {
     let target_only = DefinitionItem {
+        head_body_relation: mant_ir::HeadBodyRelation::from(true),
         source: None,
         entry: None,
         layout: mant_ir::DefinitionLayout {
-            head_body_relation: mant_ir::HeadBodyRelation::from(true),
+            body_alignment: mant_ir::DefinitionBodyAlignment::Indented,
             spacing_before_lines: None,
             ..Default::default()
         },

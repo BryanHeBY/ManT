@@ -101,8 +101,11 @@ fn author_split_restarts_an_overrun_tag_field() {
         ".Bl -tag -width 6n\n.It Xo\n.No LONGTEXT\n.No A\n.An -split\n.An Bob\n.Xc\n.No BODY\n.El\n",
     );
     assert_eq!(
-        item.layout.head_body_relation,
-        HeadBodyRelation::separated(mant_ir::DefinitionBodyAlignment::AfterTerm),
+        (item.head_body_relation, item.layout.body_alignment),
+        (
+            HeadBodyRelation::separated(),
+            mant_ir::DefinitionBodyAlignment::AfterTerm
+        ),
         "{item:#?}"
     );
     let rows = item
@@ -131,17 +134,45 @@ fn author_split_families_keep_the_reference_row_shapes() {
             "tag",
             "LONGTEXT",
             2,
-            HeadBodyRelation::separated(mant_ir::DefinitionBodyAlignment::AfterTerm),
+            (
+                HeadBodyRelation::separated(),
+                mant_ir::DefinitionBodyAlignment::AfterTerm,
+            ),
         ),
-        ("tag", "A", 1, HeadBodyRelation::from(true)),
-        ("hang", "LONGTEXT", 1, HeadBodyRelation::from(true)),
-        ("hang", "A", 1, HeadBodyRelation::from(true)),
+        (
+            "tag",
+            "A",
+            1,
+            (
+                HeadBodyRelation::from(true),
+                mant_ir::DefinitionBodyAlignment::Indented,
+            ),
+        ),
+        (
+            "hang",
+            "LONGTEXT",
+            1,
+            (
+                HeadBodyRelation::from(true),
+                mant_ir::DefinitionBodyAlignment::Indented,
+            ),
+        ),
+        (
+            "hang",
+            "A",
+            1,
+            (
+                HeadBodyRelation::from(true),
+                mant_ir::DefinitionBodyAlignment::Indented,
+            ),
+        ),
     ] {
         let item = definition_item_from_source(&format!(
             ".Bl -{style} -width 6n\n.It Xo\n.No {head}\n.An -split\n.An Bob\n.Xc\n.No BODY\n.El\n"
         ));
         assert_eq!(
-            item.layout.head_body_relation, expected_relation,
+            (item.head_body_relation, item.layout.body_alignment),
+            expected_relation,
             "{style}/{head}: {item:#?}"
         );
         let rows = item

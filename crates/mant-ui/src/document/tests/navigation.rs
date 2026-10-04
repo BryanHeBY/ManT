@@ -341,6 +341,7 @@ fn inline_definitions_hang_the_description_and_expose_their_anchor() {
     bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::DefinitionList {
         declaration_groups: Vec::new(),
         items: vec![DefinitionItem {
+            head_body_relation: mant_ir::HeadBodyRelation::from(true),
             source: None,
             entry: Some(EntryFacts {
                 name_bindings: Vec::new(),
@@ -372,7 +373,7 @@ fn inline_definitions_hang_the_description_and_expose_their_anchor() {
                 source: None,
             }],
             layout: mant_ir::DefinitionLayout {
-                head_body_relation: mant_ir::HeadBodyRelation::from(true),
+                body_alignment: mant_ir::DefinitionBodyAlignment::Indented,
                 spacing_before_lines: None,
                 ..Default::default()
             },

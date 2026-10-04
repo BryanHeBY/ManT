@@ -213,7 +213,22 @@ fn last_definition_mut(block: &mut Block) -> Option<&mut DefinitionItem> {
 /// layout, but neither representation is a definition list on its own.
 /// Recognising the shared visible shape here keeps identity independent of
 /// the source macro set or source parser used by the query pipeline.
+#[cfg(test)]
 pub(super) fn normalize_hanging_definitions(blocks: &mut Vec<Block>, context: DefinitionContext) {
+    normalize_hanging_definitions_with_evidence(
+        blocks,
+        context,
+        &super::NativeHeadEvidence::default(),
+        &mut Vec::new(),
+    );
+}
+
+pub(super) fn normalize_hanging_definitions_with_evidence(
+    blocks: &mut Vec<Block>,
+    context: DefinitionContext,
+    evidence: &super::NativeHeadEvidence,
+    diagnostics: &mut Vec<mant_ir::Diagnostic>,
+) {
     let mut pending: VecDeque<Block> = mem::take(blocks).into();
     let mut normalized = Vec::with_capacity(pending.len());
 
@@ -238,37 +253,46 @@ pub(super) fn normalize_hanging_definitions(blocks: &mut Vec<Block>, context: De
         else {
             unreachable!("hanging_definition_start only accepts paragraphs");
         };
-        let description_origin = description
+        let mut item = DefinitionItem {
+            source,
+            entry: None,
+            head_body_relation: HeadBodyRelation::Separate,
+            layout: mant_ir::DefinitionLayout {
+                spacing_before_lines: Some(layout.spacing_before_lines),
+                ..Default::default()
+            },
+            terms: vec![mant_ir::DefinitionTerm {
+                content: children,
+                inline_layout,
+            }],
+            description,
+        };
+        if layout.continuation_indent_columns != 0 {
+            retain_original_hanging_owner(
+                item,
+                layout,
+                context,
+                evidence,
+                diagnostics,
+                &mut normalized,
+            );
+            continue;
+        }
+        let description_origin = item
+            .description
             .iter()
             .find_map(block_layout)
             .map_or(term_indent, |layout| layout.indent_columns);
-        for child in &mut description {
+        for child in &mut item.description {
             shift_block_indent(child, description_origin);
         }
-        let terms = vec![mant_ir::DefinitionTerm {
-            content: children,
-            inline_layout,
-        }];
+        // H=0 keeps the established definition topology. These source
+        // paragraphs were separate even when neither requested a blank line.
+        item.layout.body_indent_columns =
+            mant_ir::geometry::rebase_origin(description_origin, 0, term_indent);
         normalized.push(Block::DefinitionList {
             declaration_groups: Vec::new(),
-            items: vec![DefinitionItem {
-                source,
-                entry: None,
-                layout: mant_ir::DefinitionLayout {
-                    // This is an ownership change, not a request to join two
-                    // originally distinct source paragraphs into one line.
-                    head_body_relation: HeadBodyRelation::Separate,
-                    body_indent_columns: mant_ir::geometry::rebase_origin(
-                        description_origin,
-                        0,
-                        term_indent,
-                    ),
-                    spacing_before_lines: Some(layout.spacing_before_lines),
-                    ..Default::default()
-                },
-                terms,
-                description,
-            }],
+            items: vec![item],
             compact: true,
             layout: LayoutHint {
                 indent_columns: term_indent,
@@ -280,6 +304,62 @@ pub(super) fn normalize_hanging_definitions(blocks: &mut Vec<Block>, context: De
     }
 
     *blocks = normalized;
+}
+
+fn retain_original_hanging_owner(
+    mut item: DefinitionItem,
+    head_layout: LayoutHint,
+    context: DefinitionContext,
+    evidence: &super::NativeHeadEvidence,
+    diagnostics: &mut Vec<mant_ir::Diagnostic>,
+    normalized: &mut Vec<Block>,
+) {
+    // Use the same post-admission semantic policy as the H=0 definition path.
+    // This temporary owner moves its payload; no description is copied.
+    let item_context =
+        super::context::definition_group_context(std::slice::from_ref(&item), context);
+    let identity = super::identity::identity_plan(
+        &item,
+        item_context,
+        evidence.role(&item),
+        evidence.operands(&item),
+    );
+    super::preparation::record_limit(diagnostics, identity.limit, item.source);
+    crate::definitions::remove_native_definition_owner_markers_from_items(std::slice::from_mut(
+        &mut item,
+    ));
+    let facts = identity.original_block_facts(&item);
+    let term = item.terms.remove(0);
+    let head = Block::Paragraph {
+        children: term.content,
+        inline_layout: term.inline_layout,
+        layout: head_layout,
+        source: item.source,
+    };
+    let Some(facts) = facts else {
+        // Presentation evidence can veto semantic identity after shape
+        // admission. Keep the original blocks and their geometry in that case.
+        normalized.push(head);
+        normalized.extend(item.description);
+        return;
+    };
+    let mut blocks = Vec::with_capacity(item.description.len() + 1);
+    blocks.push(head);
+    blocks.append(&mut item.description);
+    normalized.push(Block::List {
+        kind: mant_ir::ListKind::Plain,
+        compact: true,
+        layout: LayoutHint::default(),
+        source: item.source,
+        items: vec![mant_ir::ListItem {
+            layout: mant_ir::ListItemLayout {
+                spacing_before_lines: Some(0),
+            },
+            source: item.source,
+            entry: Some(facts),
+            blocks,
+        }],
+    });
 }
 
 fn hanging_definition_start(
@@ -326,6 +406,10 @@ fn shift_block_indent(block: &mut Block, origin: i32) {
 mod eligibility_tests;
 
 #[cfg(test)]
+#[path = "normalize/hanging_policy_tests.rs"]
+mod hanging_policy_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use mant_ir::Inline;
@@ -349,6 +433,7 @@ mod tests {
             items: vec![DefinitionItem {
                 source: None,
                 entry: None,
+                head_body_relation: HeadBodyRelation::Separate,
                 terms: (vec![vec![Inline::Text {
                     value: "--owner".into(),
                 }]])
@@ -441,7 +526,7 @@ mod tests {
                     let Block::DefinitionList { items, .. } = &mut owner else {
                         unreachable!()
                     };
-                    items[0].layout.head_body_relation = if inline_term {
+                    items[0].head_body_relation = if inline_term {
                         mant_ir::HeadBodyRelation::from(true)
                     } else {
                         mant_ir::HeadBodyRelation::Separate
@@ -470,7 +555,7 @@ mod tests {
                         unreachable!()
                     };
                     assert_eq!(items[0].description.len(), 8);
-                    assert_eq!(items[0].layout.inline_term(), inline_term);
+                    assert_eq!(items[0].inline_term(), inline_term);
                     assert_eq!(
                         items[0].terms,
                         [mant_ir::DefinitionTerm::from(vec![Inline::Text {
@@ -538,7 +623,7 @@ mod tests {
             let Block::DefinitionList { items, .. } = &blocks[0] else {
                 panic!("inferred definition")
             };
-            assert!(!items[0].layout.inline_term());
+            assert!(!items[0].inline_term());
             assert_eq!(items[0].layout.spacing_before_lines, Some(0));
             assert_eq!(items[0].description[0], space(spacing));
         }
@@ -558,7 +643,7 @@ mod tests {
                     let Block::DefinitionList { items, .. } = &blocks[0] else {
                         panic!("inferred definition")
                     };
-                    assert!(!items[0].layout.inline_term());
+                    assert!(!items[0].inline_term());
                     assert_eq!(items[0].layout.body_indent_columns, offset);
                     assert_eq!(
                         absolute_geometry(&blocks),

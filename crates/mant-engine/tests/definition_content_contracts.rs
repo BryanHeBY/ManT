@@ -21,7 +21,11 @@ fn text(value: &str) -> Inline {
     }
 }
 
-fn content(relation: HeadBodyRelation, literal: bool) -> ResolvedContent {
+fn content(
+    relation: HeadBodyRelation,
+    body_alignment: DefinitionBodyAlignment,
+    literal: bool,
+) -> ResolvedContent {
     let mut content = mant_loader::load_markdown_text("# Probe\n\n## OPTIONS\n", None).unwrap();
     let children = vec![
         Inline::Link {
@@ -75,6 +79,7 @@ fn content(relation: HeadBodyRelation, literal: bool) -> ResolvedContent {
         layout: LayoutHint::default(),
         source: None,
         items: vec![DefinitionItem {
+            head_body_relation: relation,
             terms: (vec![vec![Inline::Strong {
                 children: vec![text(NAME)],
             }]])
@@ -84,7 +89,7 @@ fn content(relation: HeadBodyRelation, literal: bool) -> ResolvedContent {
             description: vec![body],
             source: None,
             layout: DefinitionLayout {
-                head_body_relation: relation,
+                body_alignment,
                 body_indent_columns: 10,
                 min_term_gap_columns: 2,
                 spacing_before_lines: None,
@@ -232,12 +237,9 @@ fn shared_policies_preserve_json_entry_bindings_explanation_and_artifact_ranges(
         DefinitionBodyAlignment::AfterTerm,
         DefinitionBodyAlignment::Indented,
     ] {
-        for relation in [
-            HeadBodyRelation::joined(alignment),
-            HeadBodyRelation::separated(alignment),
-        ] {
+        for relation in [HeadBodyRelation::joined(), HeadBodyRelation::separated()] {
             for literal in [false, true] {
-                let content = round_trip(&content(relation, literal));
+                let content = round_trip(&content(relation, alignment, literal));
                 let before = content.clone();
                 let path = assert_owner_projections(&content);
                 assert_artifact_search(&content, &path);
@@ -256,12 +258,9 @@ fn markdown_word_seams_and_fenced_payload_keep_one_item_without_inventing_hard_r
         DefinitionBodyAlignment::AfterTerm,
         DefinitionBodyAlignment::Indented,
     ] {
-        for relation in [
-            HeadBodyRelation::joined(alignment),
-            HeadBodyRelation::separated(alignment),
-        ] {
+        for relation in [HeadBodyRelation::joined(), HeadBodyRelation::separated()] {
             for literal in [false, true] {
-                let content = content(relation, literal);
+                let content = content(relation, alignment, literal);
                 let markdown = render_markdown(&content);
                 if !literal {
                     let seam = if relation.joins_without_separator() {

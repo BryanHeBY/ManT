@@ -619,6 +619,7 @@ mod tests {
             blocks: vec![Block::DefinitionList {
                 declaration_groups: Vec::new(),
                 items: vec![DefinitionItem {
+                    head_body_relation: HeadBodyRelation::from(false),
                     source: None,
                     entry: Some(EntryFacts {
                         name_bindings: Vec::new(),
@@ -634,7 +635,7 @@ mod tests {
                     terms: vec![vec![Inline::anchor(shared.clone())].into()],
                     description: Vec::new(),
                     layout: crate::DefinitionLayout {
-                        head_body_relation: HeadBodyRelation::from(false),
+                        body_alignment: crate::DefinitionBodyAlignment::Indented,
                         spacing_before_lines: None,
                         ..Default::default()
                     },
@@ -647,27 +648,7 @@ mod tests {
             source: None,
         };
         let blocks = vec![
-            Block::Paragraph {
-                inline_layout: crate::InlineLayout::default(),
-                children: vec![
-                    Inline::Link {
-                        target: LinkTarget::External {
-                            uri: "relative target".to_owned(),
-                        },
-                        title: None,
-                        children: Vec::new(),
-                    },
-                    Inline::Link {
-                        target: LinkTarget::Email {
-                            address: "missing-domain".to_owned(),
-                        },
-                        title: None,
-                        children: Vec::new(),
-                    },
-                ],
-                layout: LayoutHint::default(),
-                source: None,
-            },
+            invalid_uri_paragraph(),
             Block::Table {
                 column_widths: Vec::new(),
                 rows: vec![TableRow {
@@ -700,6 +681,30 @@ mod tests {
             "ir.invalid-email-address",
         ] {
             assert!(codes.contains(&expected), "missing {expected}: {codes:?}");
+        }
+    }
+
+    fn invalid_uri_paragraph() -> Block {
+        Block::Paragraph {
+            inline_layout: crate::InlineLayout::default(),
+            children: vec![
+                Inline::Link {
+                    target: LinkTarget::External {
+                        uri: "relative target".to_owned(),
+                    },
+                    title: None,
+                    children: Vec::new(),
+                },
+                Inline::Link {
+                    target: LinkTarget::Email {
+                        address: "missing-domain".to_owned(),
+                    },
+                    title: None,
+                    children: Vec::new(),
+                },
+            ],
+            layout: LayoutHint::default(),
+            source: None,
         }
     }
 
@@ -910,6 +915,7 @@ mod tests {
     #[test]
     fn reports_invalid_cross_document_entry_domains() {
         let mut definition = DefinitionItem {
+            head_body_relation: HeadBodyRelation::from(false),
             source: None,
             entry: Some(EntryFacts {
                 name_bindings: Vec::new(),
@@ -937,7 +943,7 @@ mod tests {
                 .collect(),
             description: Vec::new(),
             layout: crate::DefinitionLayout {
-                head_body_relation: HeadBodyRelation::from(false),
+                body_alignment: crate::DefinitionBodyAlignment::Indented,
                 spacing_before_lines: None,
                 ..Default::default()
             },

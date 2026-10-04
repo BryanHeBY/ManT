@@ -83,18 +83,23 @@ Block `spacingBeforeLines` is already resolved by the producer: zero means a tig
 
 A definition description starts at its resolved `layout.bodyIndentColumns` relative to the label origin (generic default: four cells), before applying each child's layout. `minTermGapColumns` controls minimum separation after a run-in label (default: one). `DefinitionItem::inline_description()` identifies the first paragraph or literal fragment that may share the term's line when the producer records a shared row; explicit leading spacing prevents that presentation. A literal fragment shares the row only with native continuation evidence, so ordinary no-fill input remains on separate lines. The first line clears the displayed label; hard and wrapped continuation lines, later paragraphs, nested blocks and code use the structural body origin, not the label's width. Separate source term roots retain their original lines rather than acquiring invented commas. Native continuation normalization, plain text, and the TUI share this distinction. Markdown expresses definition ownership through its own block syntax. Inferring a semantic definition from separate source paragraphs preserves their line boundary; it does not authorize run-in presentation.
 
-`DefinitionItem.layout: DefinitionLayout` groups these item-level choices:
-`headBodyRelation` defaults to `{"type":"separate"}`. A `shared` object records
-independent `wordBoundary` (`joined` or `separated`) and `bodyAlignment`
-(`after-term` or `indented`). Joined words receive no invented separator;
+`DefinitionItem.headBodyRelation` records the content boundary and defaults to
+`{"type":"separate"}`. A `shared` object contains only `wordBoundary`
+(`joined` or `separated`). `DefinitionItem.layout: DefinitionLayout` carries
+the independent `bodyAlignment` preference (`after-term` or `indented`, default
+`indented`) and geometric spacing. Joined words receive no invented separator;
 accepted authored label padding remains content. Separated words retain at least the
 minimum term gap. `after-term` uses that gap, while `indented` also considers
-the preferred first BODY origin. This choice does not change continuation
-origins or semantic ownership. Plain text and TUI use the same bounded gap
+the preferred first BODY origin. Alignment has no effect on a separate row;
+changing it cannot establish sharing or change the word boundary. Joined words
+ignore alignment and the minimum gap while preserving those layout values.
+This choice does not change continuation origins or semantic ownership.
+Plain text and TUI use the same bounded gap
 calculation without guessing whether a native field flushed. Optional `spacingBeforeLines` defaults to
 inheriting list compactness. Explicit zero spacing is preserved and does not
 mean inheritance. Missing layout and `{}` have the same default; `layout:null`,
-unknown fields, former string relations (`separate`, `run-in`,
+unknown fields, the retired `layout.headBodyRelation` and shared
+`headBodyRelation.bodyAlignment`, former string relations (`separate`, `run-in`,
 `joined-no-space`, `flush-at-body`), the former `layout.inlineTerm`, and the former top-level `inlineTerm`/`spacingBeforeLines` fields
 are rejected. Canonical output omits empty layout but retains
 `"layout":{"spacingBeforeLines":0}`. Semantic annotation never changes layout.
@@ -378,6 +383,19 @@ leaf ranges. Out-of-bounds, overlapping or reordered pieces are invalid, not
 partial forms; an empty forms collection instead means unrecorded. Markdown attaches these references without converting its
 ordinary lists to native definition items, as described in
 [mant-markdown(7)](mant-markdown.md).
+
+An accepted inferred head with nonzero paragraph continuation displacement
+(`H`) retains its original `Paragraph` as block zero of a marker-free plain
+`ListItem`. Its complete form references that block. The original block origin
+(`B`), `H`, sparse row hints, source span and description origins remain intact;
+zero `H` retains the existing `DefinitionItem` shape. When presentation evidence
+does not establish a semantic owner, the original head and description run stay
+ordinary content. Preferred names and collision-free generated IDs retain their
+spelling. Only a duplicate preferred ID or a reserved author anchor requires a
+collision fingerprint: changing the owned content shape from term to paragraph
+can then change the generated ID suffix. That suffix change does not change
+the owner coordinates, names, scalar bindings, authored anchors or links.
+Identification is stable on a second pass over the retained owner shape.
 
 Navigation, excerpts, search ownership, scope links and TUI anchors support
 both owner kinds. Excerpts retain the original single-item container and its

@@ -123,21 +123,20 @@ that crate was not published for that change.
   `v0.11` golden contracts remain checked in and unchanged. All affected Rust
   crates use `0.12.0` and `^0.12.0` internal dependencies; `mant-sources`
   remains independently versioned at `0.9.3`.
-- Replace `DefinitionLayout.inline_term` / `layout.inlineTerm` with
-  `head_body_relation` / `headBodyRelation`. The closed relation defaults to
-  `{"type":"separate"}`; `shared` records independent `wordBoundary`
-  (`joined` or `separated`) and `bodyAlignment` (`after-term` or `indented`).
-  Joined words receive no synthetic separator, including at exact field
-  capacity; layout widths do not override the word boundary. Update Rust
-  constructors and wire consumers; `DefinitionLayout::inline_term()` remains
-  a convenience accessor. The former wire fields and intermediate string
-  relations are rejected within the still-unpublished v0.12 contract.
-- Change the Rust unit variant `Inline::LineBreak` to
-  `Inline::LineBreak { indent_columns }`. Its optional wire `indentColumns`
-  defaults to zero and records the following hard row's resolved origin
-  relative to its containing block. Use `Inline::line_break()` for the default
-  break and update exhaustive patterns. Layout consumers compose this origin
-  once without treating it as a source coordinate.
+- Separate `DefinitionItem.head_body_relation` / `headBodyRelation` from
+  `DefinitionLayout.body_alignment` / `bodyAlignment`. The closed relation
+  defaults to `{"type":"separate"}`; `shared` contains only `wordBoundary`
+  (`joined` or `separated`). Alignment (`after-term` or `indented`) remains an
+  independent preference. Joined words receive no synthetic separator, including
+  at exact field capacity. Move the convenience accessor to
+  `DefinitionItem::inline_term()` and synchronize all consumers and strict
+  unpublished v0.12 wire contracts; reject retired or mixed carriers.
+- Retain inferred hanging declarations with nonzero continuation indentation
+  as their original paragraph under a plain list owner. Preserve sparse row
+  hints, source ranges, complete Block0 forms, multipart name bindings, templates
+  and bounded-recognition diagnostics. Ordinary preferred IDs remain unchanged;
+  a generated collision suffix may change with the corrected owner topology,
+  while authored anchors and current owner addressing remain intact.
 - Use one accepted inline body for reading, Markdown, search and copy. Retire
   the unpublished intermediate `Inline::PortableDisplay` variant,
   `portable-display` / `display` wire shapes, and `MarkdownOptions.native_text`

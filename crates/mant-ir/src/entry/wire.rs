@@ -206,7 +206,7 @@ fn only_ordered_lists_accept_start_in_actual_decoders() {
 #[test]
 fn definition_relations_round_trip_independent_word_and_alignment_facts() {
     use crate::{
-        DefinitionBodyAlignment, DefinitionLayout, DefinitionWordBoundary, HeadBodyRelation,
+        DefinitionBodyAlignment, DefinitionLayout, DefinitionWordBoundary, HeadBodyRelation, Inline,
     };
     for word_boundary in [
         DefinitionWordBoundary::Joined,
@@ -216,20 +216,26 @@ fn definition_relations_round_trip_independent_word_and_alignment_facts() {
             DefinitionBodyAlignment::AfterTerm,
             DefinitionBodyAlignment::Indented,
         ] {
-            let layout = DefinitionLayout {
-                head_body_relation: HeadBodyRelation::Shared {
-                    word_boundary,
+            let item = DefinitionItem {
+                head_body_relation: HeadBodyRelation::Shared { word_boundary },
+                terms: vec![
+                    vec![Inline::Text {
+                        value: "HEAD".into(),
+                    }]
+                    .into(),
+                ],
+                description: vec![],
+                entry: None,
+                source: None,
+                layout: DefinitionLayout {
                     body_alignment,
+                    body_indent_columns: -7,
+                    min_term_gap_columns: 2,
+                    spacing_before_lines: Some(0),
                 },
-                body_indent_columns: -7,
-                min_term_gap_columns: 2,
-                spacing_before_lines: Some(0),
             };
-            let wire = serde_json::to_string(&layout).unwrap();
-            assert_eq!(
-                serde_json::from_str::<DefinitionLayout>(&wire).unwrap(),
-                layout
-            );
+            let wire = serde_json::to_string(&item).unwrap();
+            assert_eq!(serde_json::from_str::<DefinitionItem>(&wire).unwrap(), item);
             let value: Value = serde_json::from_str(&wire).unwrap();
             assert_eq!(value["headBodyRelation"]["type"], "shared");
             assert!(!wire.contains("inlineTerm"));
@@ -242,15 +248,15 @@ fn definition_relations_round_trip_independent_word_and_alignment_facts() {
         json!("joined-no-space"),
         json!("flush-at-body"),
         json!({"type":"shared"}),
-        json!({"type":"shared","wordBoundary":"joined"}),
+        json!({"type":"shared","wordBoundary":"joined","bodyAlignment":"indented"}),
         json!({"type":"shared","wordBoundary":"unknown","bodyAlignment":"indented"}),
         json!({"type":"shared","wordBoundary":"joined","bodyAlignment":"unknown"}),
         json!({"type":"shared","wordBoundary":"joined","bodyAlignment":"indented","unknown":0}),
         json!({"type":"separate","wordBoundary":"joined"}),
     ] {
-        let wire = json!({"headBodyRelation":relation}).to_string();
+        let wire = json!({"headBodyRelation":relation,"terms":[],"description":[]}).to_string();
         assert!(
-            serde_json::from_str::<DefinitionLayout>(&wire).is_err(),
+            serde_json::from_str::<DefinitionItem>(&wire).is_err(),
             "{wire}"
         );
     }
@@ -277,15 +283,14 @@ fn shared_definition_gap_preserves_word_boundaries_under_origin_translation() {
                 DefinitionBodyAlignment::Indented,
             ] {
                 let layout = DefinitionLayout {
-                    head_body_relation: HeadBodyRelation::Shared {
-                        word_boundary,
-                        body_alignment,
-                    },
+                    body_alignment,
                     body_indent_columns: 12,
                     min_term_gap_columns: 1,
                     ..Default::default()
                 };
-                let gap = crate::geometry::definition_body_gap(&layout, parent, 3, parent + 12);
+                let relation = HeadBodyRelation::Shared { word_boundary };
+                let gap =
+                    crate::geometry::definition_body_gap(relation, &layout, parent, 3, parent + 12);
                 let expected = match (word_boundary, body_alignment) {
                     (DefinitionWordBoundary::Joined, _) => 0,
                     (DefinitionWordBoundary::Separated, DefinitionBodyAlignment::AfterTerm) => 1,

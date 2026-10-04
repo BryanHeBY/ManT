@@ -200,6 +200,7 @@ fn nested_cell_query(definition: bool, literal: bool, gap: u16) -> ResolvedConte
     let first = if definition {
         Block::DefinitionList {
             items: vec![DefinitionItem {
+                head_body_relation: mant_ir::HeadBodyRelation::Separate,
                 source: None,
                 entry: None,
                 terms: vec![vec![text("HEAD")].into()],

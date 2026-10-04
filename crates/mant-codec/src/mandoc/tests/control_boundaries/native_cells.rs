@@ -306,7 +306,7 @@ fn portable_hidden_source_operand_retains_its_native_owner_range() {
         "X: https://example.org",
         "{item:#?}"
     );
-    assert_eq!(item.layout.head_body_relation, HeadBodyRelation::Separate);
+    assert_eq!(item.head_body_relation, HeadBodyRelation::Separate);
     assert!(
         item.description.iter().any(|block| matches!(block,
         Block::Paragraph { children, .. } if inline_text(children) == "BodyWord")),

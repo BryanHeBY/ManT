@@ -403,8 +403,11 @@ fn empty_head_operands_do_not_predict_a_native_line_end() {
                 panic!("expected definition list: {document:?}");
             };
             assert_eq!(
-                items[0].layout.head_body_relation,
-                mant_ir::HeadBodyRelation::separated(mant_ir::DefinitionBodyAlignment::Indented)
+                (items[0].head_body_relation, items[0].layout.body_alignment),
+                (
+                    mant_ir::HeadBodyRelation::separated(),
+                    mant_ir::DefinitionBodyAlignment::Indented
+                )
             );
         }
     }

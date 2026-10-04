@@ -268,6 +268,7 @@ fn tldr_commands_use_terminal_soft_wrapping_instead_of_prose_reflow() {
 #[test]
 fn definition_lists_honour_compact_and_per_item_spacing() {
     let definition = |term: &str, description: &str, spacing_before_lines| DefinitionItem {
+        head_body_relation: mant_ir::HeadBodyRelation::from(false),
         source: None,
         entry: None,
         terms: vec![
@@ -285,7 +286,7 @@ fn definition_lists_honour_compact_and_per_item_spacing() {
             source: None,
         }],
         layout: mant_ir::DefinitionLayout {
-            head_body_relation: mant_ir::HeadBodyRelation::from(false),
+            body_alignment: mant_ir::DefinitionBodyAlignment::Indented,
             spacing_before_lines,
             ..Default::default()
         },

@@ -11,6 +11,7 @@ fn text(value: &str) -> Inline {
 
 fn item(terms: Vec<Vec<Inline>>) -> DefinitionItem {
     DefinitionItem {
+        head_body_relation: mant_ir::HeadBodyRelation::Separate,
         terms: terms.into_iter().map(Into::into).collect(),
         description: Vec::new(),
         entry: None,
