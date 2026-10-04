@@ -55,9 +55,8 @@ fn add(gap: &mut GapPlan, rows: u16) -> bool {
     gap.is_bounded()
 }
 
-// Keep the exhaustive boundary traversal together: splitting by variant must
-// not silently replace the shared flow cursor at transparent containers.
-#[allow(clippy::too_many_lines)]
+// Container walkers borrow the active cursor; an owner change never creates
+// an independent boundary unless the table layout explicitly requires one.
 fn walk(blocks: &[Block], gap: &mut GapPlan, depth: usize, origin: i32) -> bool {
     // Invalid external IR is rejected by normal validation. Keep this helper
     // bounded even when invoked independently on unchecked in-memory data.
@@ -77,41 +76,15 @@ fn walk(blocks: &[Block], gap: &mut GapPlan, depth: usize, origin: i32) -> bool 
                 layout,
                 ..
             } => {
-                let origin = compose_origin(origin, layout.indent_columns);
-                for (index, item) in items.iter().enumerate() {
-                    if add(
-                        gap,
-                        list_item_spacing(item.layout.spacing_before_lines, index, *compact),
-                    ) {
-                        return true;
-                    }
-                    let mut blocks = item.blocks.as_slice();
-                    let marker_width = list_marker_width(*kind, index);
-                    if marker_width > 0 {
-                        // Run-in paragraph spacing belongs before the marker.
-                        if let Some(Block::Paragraph { layout, .. }) = blocks.first()
-                            && marker_run_in_gap(origin, marker_width, layout.indent_columns)
-                                .is_some()
-                        {
-                            if add(gap, layout.spacing_before_lines) {
-                                return true;
-                            }
-                            *gap = GapPlan::default();
-                            // The visible marker consumes this boundary even
-                            // if the paragraph contains only zero-width anchors.
-                            blocks = &blocks[1..];
-                        } else {
-                            *gap = GapPlan::default();
-                        }
-                    }
-                    if walk(
-                        blocks,
-                        gap,
-                        depth + 1,
-                        compose_origin(origin, coordinate(marker_width)),
-                    ) {
-                        return true;
-                    }
+                if walk_list(
+                    *kind,
+                    items,
+                    *compact,
+                    gap,
+                    depth,
+                    compose_origin(origin, layout.indent_columns),
+                ) {
+                    return true;
                 }
             }
             Block::DefinitionList {
@@ -120,59 +93,24 @@ fn walk(blocks: &[Block], gap: &mut GapPlan, depth: usize, origin: i32) -> bool 
                 layout,
                 ..
             } => {
-                let origin = compose_origin(origin, layout.indent_columns);
-                for (index, item) in items.iter().enumerate() {
-                    if add(
-                        gap,
-                        list_item_spacing(item.layout.spacing_before_lines, index, *compact),
-                    ) {
-                        return true;
-                    }
-                    if item.terms.iter().any(|term| visible(term)) {
-                        *gap = GapPlan::default();
-                    }
-                    if walk(
-                        &item.description,
-                        gap,
-                        depth + 1,
-                        compose_origin(origin, item.layout.body_indent_columns),
-                    ) {
-                        return true;
-                    }
+                if walk_definitions(
+                    items,
+                    *compact,
+                    gap,
+                    depth,
+                    compose_origin(origin, layout.indent_columns),
+                ) {
+                    return true;
                 }
             }
             Block::Table { rows, layout, .. } => {
-                let origin = compose_origin(origin, layout.indent_columns);
-                let stack = table_requires_origin_preserving_stack(rows, origin);
-                for row in rows {
-                    if crate::table_row_is_navigation_only(row) {
-                        continue;
-                    }
-                    if row.cells.is_empty() || !matches!(row.kind, crate::TableRowKind::Data) {
-                        // A structural blank row or a visible rule consumes
-                        // its incoming gap, including in source-order fallback.
-                        *gap = GapPlan::default();
-                    }
-                    for cell in &row.cells {
-                        let bounded = if stack {
-                            walk(&cell.blocks, gap, depth + 1, origin)
-                        } else {
-                            walk(&cell.blocks, &mut GapPlan::default(), depth + 1, 0)
-                        };
-                        if bounded {
-                            return true;
-                        }
-                        if cell.break_after || cell.kind != crate::TableCellKind::Text {
-                            // Closing an existing empty data row is a physical
-                            // contribution even when its blocks have no glyphs.
-                            *gap = GapPlan::default();
-                        }
-                    }
-                    // The table's existing data row remains a physical row
-                    // even when all of its cells have empty content roots.
-                    // A false cell boundary permits another cell to use this
-                    // row; it does not erase the row's structural ownership.
-                    *gap = GapPlan::default();
+                if walk_table(
+                    rows,
+                    gap,
+                    depth,
+                    compose_origin(origin, layout.indent_columns),
+                ) {
+                    return true;
                 }
             }
             Block::Preformatted { children, .. } => {
@@ -192,6 +130,115 @@ fn walk(blocks: &[Block], gap: &mut GapPlan, depth: usize, origin: i32) -> bool 
             }
             Block::ThematicBreak { .. } => *gap = GapPlan::default(),
         }
+    }
+    false
+}
+
+fn walk_list(
+    kind: crate::ListKind,
+    items: &[crate::ListItem],
+    compact: bool,
+    gap: &mut GapPlan,
+    depth: usize,
+    origin: i32,
+) -> bool {
+    for (index, item) in items.iter().enumerate() {
+        if add(
+            gap,
+            list_item_spacing(item.layout.spacing_before_lines, index, compact),
+        ) {
+            return true;
+        }
+        let mut blocks = item.blocks.as_slice();
+        let marker_width = list_marker_width(kind, index);
+        if marker_width > 0 {
+            // Run-in paragraph spacing belongs before the marker.
+            if let Some(Block::Paragraph { layout, .. }) = blocks.first()
+                && marker_run_in_gap(origin, marker_width, layout.indent_columns).is_some()
+            {
+                if add(gap, layout.spacing_before_lines) {
+                    return true;
+                }
+                *gap = GapPlan::default();
+                // The visible marker consumes this boundary even
+                // if the paragraph contains only zero-width anchors.
+                blocks = &blocks[1..];
+            } else {
+                *gap = GapPlan::default();
+            }
+        }
+        if walk(
+            blocks,
+            gap,
+            depth + 1,
+            compose_origin(origin, coordinate(marker_width)),
+        ) {
+            return true;
+        }
+    }
+    false
+}
+
+fn walk_definitions(
+    items: &[crate::DefinitionItem],
+    compact: bool,
+    gap: &mut GapPlan,
+    depth: usize,
+    origin: i32,
+) -> bool {
+    for (index, item) in items.iter().enumerate() {
+        if add(
+            gap,
+            list_item_spacing(item.layout.spacing_before_lines, index, compact),
+        ) {
+            return true;
+        }
+        if item.terms.iter().any(|term| visible(term)) {
+            *gap = GapPlan::default();
+        }
+        if walk(
+            &item.description,
+            gap,
+            depth + 1,
+            compose_origin(origin, item.layout.body_indent_columns),
+        ) {
+            return true;
+        }
+    }
+    false
+}
+
+fn walk_table(rows: &[crate::TableRow], gap: &mut GapPlan, depth: usize, origin: i32) -> bool {
+    let stack = table_requires_origin_preserving_stack(rows, origin);
+    for row in rows {
+        if crate::table_row_is_navigation_only(row) {
+            continue;
+        }
+        if row.cells.is_empty() || !matches!(row.kind, crate::TableRowKind::Data) {
+            // A structural blank row or a visible rule consumes
+            // its incoming gap, including in source-order fallback.
+            *gap = GapPlan::default();
+        }
+        for cell in &row.cells {
+            let bounded = if stack {
+                walk(&cell.blocks, gap, depth + 1, origin)
+            } else {
+                walk(&cell.blocks, &mut GapPlan::default(), depth + 1, 0)
+            };
+            if bounded {
+                return true;
+            }
+            if cell.break_after || cell.kind != crate::TableCellKind::Text {
+                // Closing an existing empty data row is a physical
+                // contribution even when its blocks have no glyphs.
+                *gap = GapPlan::default();
+            }
+        }
+        // The table's existing data row remains a physical row
+        // even when all of its cells have empty content roots.
+        // A false cell boundary permits another cell to use this
+        // row; it does not erase the row's structural ownership.
+        *gap = GapPlan::default();
     }
     false
 }
