@@ -152,7 +152,8 @@ fn target_only_definitions_retain_anchors_without_becoming_entries() {
         source: None,
     }];
 
-    let retained = identify_definitions(&mut Vec::new(), &mut sections, &HashSet::new(), None);
+    let retained =
+        identify_definitions(&mut Vec::new(), &mut sections, &HashSet::new(), None).targets;
 
     let Block::DefinitionList { items, .. } = &sections[0].blocks[0] else {
         panic!("definition list");
@@ -505,7 +506,8 @@ fn keeps_native_navigation_anchors_separate_from_semantic_ids() {
         source: None,
     }];
 
-    let retained = identify_definitions(&mut Vec::new(), &mut sections, &HashSet::new(), None);
+    let retained =
+        identify_definitions(&mut Vec::new(), &mut sections, &HashSet::new(), None).targets;
     let Block::DefinitionList { items, .. } = &sections[0].blocks[0] else {
         panic!("command definition list");
     };
@@ -534,7 +536,8 @@ fn generic_terms_receive_the_anchor_their_projected_entry_advertises() {
         source: None,
     }];
 
-    let retained = identify_definitions(&mut Vec::new(), &mut sections, &HashSet::new(), None);
+    let retained =
+        identify_definitions(&mut Vec::new(), &mut sections, &HashSet::new(), None).targets;
     let Block::DefinitionList { items, .. } = &sections[0].blocks[0] else {
         panic!("term definition list");
     };

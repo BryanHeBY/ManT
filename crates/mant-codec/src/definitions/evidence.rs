@@ -13,7 +13,7 @@ pub(crate) enum NativeHeadRole {
     /// An explicitly styled, otherwise ambiguous man IP operator/key tag.
     LiteralTerm,
     /// An explicitly styled single dash in a TP/TQ head is a shell operand.
-    #[cfg_attr(not(feature = "roff"), allow(dead_code))]
+    #[cfg(feature = "roff")]
     Operand,
     /// An unstyled man IP mark supplies layout, not declaration evidence.
     Presentation,
@@ -29,6 +29,7 @@ struct HeadWitness {
 /// declaration roles through font escapes and accepted HEAD output only.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum NativeOperandRole {
+    #[cfg(any(feature = "roff", test))]
     Literal,
     Argument,
     ExplicitOption,

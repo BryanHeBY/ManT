@@ -20,6 +20,7 @@ pub(super) fn select_kind(
                 NameCase::Sensitive,
             );
         }
+        #[cfg(feature = "roff")]
         Some(NativeHeadRole::Operand) => {
             return (
                 EntryKind::Parameter {

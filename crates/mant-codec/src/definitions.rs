@@ -40,22 +40,21 @@ pub(crate) use syntax::{
 #[cfg(test)]
 use syntax::{is_value_name, option_names};
 
-/// Annotate reliably recognizable command-line options and return every
-/// inline anchor that the navigation resolver must retain.
+/// Annotate recognizable definitions and deliver their navigation targets
+/// together with diagnostics from the same recognition pass.
 pub(crate) fn identify_definitions(
     blocks: &mut Vec<Block>,
     sections: &mut [Section],
     reserved_targets: &HashSet<String>,
     document_name: Option<&str>,
-) -> HashSet<String> {
-    let DefinitionIdentification { targets, .. } = identify_definitions_with_evidence(
+) -> DefinitionIdentification {
+    identify_definitions_with_evidence(
         blocks,
         sections,
         reserved_targets,
         document_name,
         &NativeHeadEvidence::default(),
-    );
-    targets
+    )
 }
 
 pub(crate) struct DefinitionIdentification {

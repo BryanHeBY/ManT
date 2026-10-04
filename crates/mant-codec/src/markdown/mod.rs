@@ -199,7 +199,7 @@ fn parse_document_with_entries(
     } = prepared;
     let source = MarkdownSource::new(&display_source);
     let ParsedDocumentStructure {
-        diagnostics,
+        mut diagnostics,
         mut root_blocks,
         flat_sections,
         mut ids,
@@ -225,7 +225,7 @@ fn parse_document_with_entries(
     normalize_entry_lists(&mut root_blocks, &mut declarations, entry_diagnostics);
     normalize_section_entries(&mut sections, &mut declarations, entry_diagnostics);
     declarations.report_unattached(entry_diagnostics);
-    let retained_targets = crate::definitions::identify_definitions(
+    let identification = crate::definitions::identify_definitions(
         &mut root_blocks,
         &mut sections,
         // Link aliases are selectors, not physical anchors. Reserve only the
@@ -234,7 +234,8 @@ fn parse_document_with_entries(
         &ids.reserved_targets(),
         source_path.as_deref(),
     );
-    ids.retain_targets(retained_targets);
+    ids.retain_targets(identification.targets);
+    diagnostics.extend(identification.diagnostics);
     let mut document = Document {
         parser: Some(markdown_parser()),
         source: DocumentSource {

@@ -1,6 +1,8 @@
 //! Native adjacency witnesses survive normalization without guessing from IR
 //! indentation or moving another item's description into a semantic owner.
-use super::evidence::{HeadSnapshot, head_matches, head_snapshot};
+#[cfg(feature = "roff")]
+use super::evidence::head_snapshot;
+use super::evidence::{HeadSnapshot, head_matches};
 use mant_ir::{Block, DeclarationGroup, DefinitionItem, Inline, Section, SourceSpan};
 use std::collections::{HashMap, HashSet};
 

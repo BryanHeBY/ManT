@@ -108,6 +108,7 @@ impl<'a> HeadView<'a> {
             match operand.role {
                 NativeOperandRole::Argument => return true,
                 NativeOperandRole::ExplicitOption => return false,
+                #[cfg(any(feature = "roff", test))]
                 NativeOperandRole::Literal => {}
             }
         }
