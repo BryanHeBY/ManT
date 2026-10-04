@@ -147,9 +147,18 @@ fn hard_rows_cross_list_definition_body_and_fenced_container_boundaries() {
 
 #[test]
 fn row_only_containers_and_unsupported_block_quotes_keep_their_contracts() {
-    for container in [5, 6] {
-        assert_container(&[], container);
-    }
+    // An authored table data row remains physical even with an empty cell.
+    assert_container(&[], 5);
+    // Literal Text("") owns an empty row; a root with no children does not.
+    assert_container(&[text("")], 6);
+    let mut empty = query(vec![]);
+    empty.document.as_mut().unwrap().sections[0].blocks = vec![enclosed(vec![], 6)];
+    let markdown = render_markdown_with_options(&empty, MarkdownOptions::default());
+    let restored = parse_content(&markdown, None).unwrap();
+    assert_eq!(
+        restored.document.as_ref().unwrap().sections[0].blocks,
+        [] as [Block; 0]
+    );
     for rows in [1, 2, 3] {
         for container in 0..7 {
             assert_container(&vec![Inline::line_break(); rows], container);

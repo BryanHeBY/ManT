@@ -157,8 +157,8 @@ fn markdown_payloads(content: &ResolvedContent) -> Vec<String> {
                 (!value.is_empty()).then_some(value)
             }
             Block::Preformatted { children, .. } => Some(mant_ir::inline_plain_text(children)),
-            // Markdown has no vertical layout primitive. Such omissions are a
-            // separate declared axis; executed inline hard rows above stay exact.
+            // Block distance is checked independently of authored inline
+            // payloads; a retained boundary can precede either kind of root.
             Block::VerticalSpace { .. } => None,
             other => panic!("unexpected ordinary source container: {other:#?}"),
         })
@@ -227,7 +227,30 @@ fn native_markdown_readback_preserves_literal_columns_and_phrasing_hard_rows() {
         let markdown = render_markdown_with_options(&content, MarkdownOptions::default());
         let decoded = mant_loader::load_markdown_text(&markdown, None).unwrap();
         let expected = markdown_payloads(&content);
-        let actual = markdown_payloads(&decoded);
+        let mut actual = markdown_payloads(&decoded);
+        if matches!(
+            description(&content).first(),
+            Some(Block::VerticalSpace { lines: 1, .. })
+        ) {
+            // Replayed the exact sources with registered pristine ASCII/
+            // UTF-8/HTML before this assertion. mdoc_term.c::print_mdoc_node
+            // sends empty TEXT to term.c::term_vspace: that completed leading
+            // row survives even when a following literal owns its own blank.
+            // Check all physical rows against native gold, then remove only
+            // this block boundary from the separate inline-payload comparison.
+            assert_eq!(
+                rows(&mant_render::render_query_man(&decoded)),
+                case.expected_rows,
+                "{}: leading spacing consumed exactly once: {markdown}",
+                case.id
+            );
+            let first = actual.first_mut().expect("retained leading boundary");
+            assert!(first.starts_with('\n'), "{}: {markdown}", case.id);
+            first.remove(0);
+            if first.is_empty() {
+                actual.remove(0);
+            }
+        }
         if expected != actual {
             failures.push(format!(
                 "{}: expected {expected:?}, got {actual:?}\n{markdown}",

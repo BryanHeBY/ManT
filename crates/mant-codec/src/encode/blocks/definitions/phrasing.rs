@@ -8,6 +8,7 @@ use std::borrow::Cow;
 pub(in crate::encode::blocks) struct InlineRoot<'a> {
     nodes: Cow<'a, [Inline]>,
     pub(in crate::encode::blocks) has_output: bool,
+    pub(in crate::encode::blocks) open_row: bool,
 }
 
 impl<'a> InlineRoot<'a> {
@@ -17,7 +18,12 @@ impl<'a> InlineRoot<'a> {
     ) -> Self {
         let nodes = project_inline(content.content, locations);
         let has_output = has_body_scalar(&nodes);
-        Self { nodes, has_output }
+        let open_row = mant_ir::last_visible_character(&nodes) == Some('\n');
+        Self {
+            nodes,
+            has_output,
+            open_row,
+        }
     }
 
     fn append_nodes<'root>(&'root self, output: &mut Vec<&'root Inline>, options: MarkdownOptions) {

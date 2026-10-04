@@ -7,9 +7,9 @@ pub(super) use phrasing::{InlineRoot, render_roots};
 use mant_ir::{Block, DefinitionBodyRef, DefinitionItem, EntryOwner, InlineContentRef};
 
 use super::super::inline::block_prefix_escape_position;
-use super::super::mapped::MappedText;
+use super::super::mapped::{BlockSyntax, MappedText};
 use super::super::{MarkdownInlineProjection, MarkdownOptions};
-use super::{join_definition_items, nonempty, render_block};
+use super::{join_definition_items, render_block};
 
 pub(super) fn render_definition_list(
     items: &[DefinitionItem],
@@ -19,37 +19,34 @@ pub(super) fn render_definition_list(
     track: bool,
 ) -> Option<MappedText> {
     let mut rendered = Vec::new();
-    let mut pending = MappedText::default();
-    for item in items {
-        let Some(DefinitionContent {
+    for (index, item) in items.iter().enumerate() {
+        let DefinitionContent {
             mut content,
             has_terms,
-            physical,
-        }) = definition_content(item, options, locations, track)
-        else {
+        } = definition_content(item, options, locations, track);
+        content.contribution.before |=
+            mant_ir::geometry::list_item_spacing(item.layout.spacing_before_lines, index, compact)
+                > 0;
+        let Some(mut content) = content.nonempty() else {
             continue;
         };
-        if !physical {
-            content.navigation_only = true;
-            pending.append(content.with_owner(EntryOwner::Definition(item), track));
+        if !content.contribution.rows {
+            rendered.push((
+                content.with_owner(EntryOwner::Definition(item), track),
+                item.layout.spacing_before_lines,
+            ));
             continue;
         }
         // Protect block syntax formed across the final HEAD/BODY seam.
         if has_terms && let Some(position) = block_prefix_escape_position(&content.text) {
             content.insert(position, "\\");
         }
-        if let Some(mut content) = content
+        if let Some(content) = content
             .with_owner(EntryOwner::Definition(item), track)
             .prefix("- ")
         {
-            content.attach_navigation_text(std::mem::take(&mut pending), false);
             rendered.push((content, item.layout.spacing_before_lines));
         }
-    }
-    if let Some((first, _)) = rendered.first_mut() {
-        first.attach_navigation_text(pending, true);
-    } else {
-        return pending.nonempty();
     }
     join_definition_items(rendered, compact)
 }
@@ -64,6 +61,7 @@ struct DefinitionBody<'a> {
     first_block: Option<&'a Block>,
     leading_space: bool,
     carriers: MappedText,
+    pending_space: bool,
 }
 
 impl<'a> DefinitionBody<'a> {
@@ -100,10 +98,12 @@ fn definition_body<'a>(
         first_block: None,
         leading_space: start.is_some_and(|body| body.has_leading_spacing),
         carriers: MappedText::default(),
+        pending_space: false,
     };
     let mut destinations = Vec::new();
     let mut markers = None;
     for (index, block) in item.description.iter().enumerate() {
+        body.pending_space |= mant_ir::geometry::block_gap(block) > 0;
         if body.blocks.is_empty() {
             // Selection stops at structural content even if this format
             // omits it. Later executed gaps still precede the first export
@@ -114,11 +114,13 @@ fn definition_body<'a>(
             // Borrow the transparent prefix at its original owner address.
             // In particular, an empty literal root with no authored row must
             // not become an empty fence which changes BODY selection.
+            // Structural carriers still render below: no effective inline BODY
+            // does not prove that a nested container has no positive boundary.
             if let Some(root) = inline_body_root(block, locations) {
                 destinations.push(root);
                 markers = None;
+                continue;
             }
-            continue;
         }
         if matches!(block, Block::VerticalSpace { .. }) {
             continue;
@@ -138,30 +140,39 @@ fn definition_body<'a>(
                 locations,
             );
             let has_output = projected.has_output;
+            let open_row = projected.open_row;
             destinations.push(projected);
             markers = None;
             if !has_output {
                 continue;
             }
             let rendered = render_roots(destinations.iter(), options);
+            let mut rendered = MappedText::from(rendered)
+                .syntax_site(BlockSyntax::Phrasing)
+                .tail_grammar(BlockSyntax::Phrasing, open_row);
+            rendered.contribution.before = std::mem::take(&mut body.pending_space);
             if body.blocks.is_empty() {
                 body.first_prose = Some(std::mem::take(&mut destinations));
                 body.first_block = Some(block);
-                body.blocks
-                    .push(MappedText::from(rendered).navigation_site(false));
-            } else if let Some(rendered) = nonempty(rendered) {
-                body.blocks.push(rendered.navigation_site(false));
+                body.blocks.push(rendered);
+            } else if let Some(rendered) = rendered.nonempty() {
+                body.blocks.push(rendered);
                 destinations.clear();
             }
         } else if let Some(mut rendered) = render_block(block, options, locations, track) {
-            if rendered.navigation_only {
+            if !rendered.contribution.rows {
+                body.pending_space |= rendered.contribution.spacing();
+                if body.blocks.is_empty() {
+                    body.leading_space |= body.pending_space;
+                }
                 // An omitted child has destinations, not a physical BODY.
                 // Keep its borrowed owner ranges without inventing a marker.
                 body.carriers.append(rendered);
                 continue;
             }
-            if matches!(block, Block::ThematicBreak { .. }) {
-                rendered.text = "***".into();
+            rendered.contribution.before |= std::mem::take(&mut body.pending_space);
+            if body.blocks.is_empty() {
+                body.leading_space |= rendered.contribution.before;
             }
             if !body.blocks.is_empty() || !head.has_output {
                 let markers = markers.get_or_insert_with(|| {
@@ -182,6 +193,7 @@ fn definition_body<'a>(
                 destinations.clear();
             }
             markers = None;
+            body.pending_space = rendered.contribution.after;
             body.blocks.push(rendered);
         }
     }
@@ -217,7 +229,19 @@ fn inline_body_root<'a>(
 struct DefinitionContent {
     content: MappedText,
     has_terms: bool,
-    physical: bool,
+}
+
+fn mapped_terms(terms: Vec<(Vec<usize>, String)>, roots: &[InlineRoot<'_>]) -> MappedText {
+    let terms = terms.into_iter().map(|(indices, text)| {
+        let open_row = indices
+            .iter()
+            .rev()
+            .map(|&index| &roots[index])
+            .find(|root| root.has_output)
+            .is_some_and(|root| root.open_row);
+        MappedText::from(text).tail_grammar(BlockSyntax::Phrasing, open_row)
+    });
+    MappedText::join(terms, "  \n")
 }
 
 fn definition_content(
@@ -225,7 +249,7 @@ fn definition_content(
     options: MarkdownOptions,
     locations: Option<&dyn MarkdownInlineProjection>,
     track: bool,
-) -> Option<DefinitionContent> {
+) -> DefinitionContent {
     let mut head = DefinitionHead::project(&item.terms, options, locations);
     let has_terms = head.has_output;
     let mut terms = std::mem::take(&mut head.terms);
@@ -264,23 +288,25 @@ fn definition_content(
             .chain(indices.iter().map(|&index| &head.roots[index]))
             .chain(prose.iter());
         *term = render_roots(roots, options);
+        let open_row = prose
+            .iter()
+            .rev()
+            .find(|root| root.has_output)
+            .is_some_and(|root| root.open_row);
         body.blocks.remove(0);
         body.first_prose = None;
-        let head = terms.into_iter().map(|(_, text)| MappedText::from(text));
-        let head = MappedText::join(head, "  \n");
+        let mut head = mapped_terms(terms, &head.roots);
+        head.tail.open_row = open_row;
         let tail = MappedText::join(body.blocks, "\n\n");
         let content = if tail.text.is_empty() {
             head
         } else {
             MappedText::join([head, tail], "\n\n")
         };
-        let mut content = content.navigation_site(false);
+        let mut content = content.syntax_site(BlockSyntax::Phrasing);
+        content.contribution.after |= body.pending_space;
         content.attach_navigation_text(body.carriers, false);
-        return Some(DefinitionContent {
-            content,
-            has_terms,
-            physical: true,
-        });
+        return DefinitionContent { content, has_terms };
     }
     let mut head = if !has_terms && body.first_prose.is_none() && body.first_block.is_some() {
         // Zero-output HEAD destinations were already framed with the BODY.
@@ -288,8 +314,9 @@ fn definition_content(
     } else if body.blocks.is_empty() && !has_terms {
         render_roots(head.roots.iter().chain(body.navigation.iter()), options).into()
     } else {
-        MappedText::join(terms.into_iter().map(|(_, text)| text.into()), "  \n")
+        mapped_terms(terms, &head.roots)
     };
+    let first_syntax = body.blocks.first().map(|block| block.syntax);
     let description = MappedText::join(body.blocks, "\n\n");
     if !has_terms && body.leading_space && !description.text.is_empty() {
         // An empty list marker followed by a blank line cannot retain a
@@ -306,11 +333,15 @@ fn definition_content(
         }
         (false, false) => {
             let separator = if body.leading_space
-                || matches!(body.first_block, Some(Block::List { kind: mant_ir::ListKind::Ordered { start: Some(start) }, .. }) if *start != 1)
+                || matches!(first_syntax, Some(BlockSyntax::List { needs_blank: true }))
             {
                 "\n\n"
-            } else if body.first_prose.is_some() {
-                if shared_prose { " " } else { "  \n" }
+            } else if first_syntax == Some(BlockSyntax::Phrasing) {
+                if body.first_prose.is_some() && shared_prose {
+                    " "
+                } else {
+                    "  \n"
+                }
             } else {
                 // Fences, nested lists and display equations need their own
                 // block; they never share the term's inline coding context.
@@ -320,18 +351,15 @@ fn definition_content(
         }
         (false, true) => head,
         (true, false) => description,
-        (true, true) => MappedText::default().navigation_site(false),
+        (true, true) => MappedText::default().syntax_site(BlockSyntax::Phrasing),
     };
     if has_terms || body.leading_space || body.first_block.is_none() {
-        content = content.navigation_site(false);
+        content = content.syntax_site(BlockSyntax::Phrasing);
     }
     content.attach_navigation_text(body.carriers, false);
-    if content.text.is_empty() {
-        return None;
-    }
-    Some(DefinitionContent {
-        content,
-        has_terms,
-        physical: has_terms || body.first_block.is_some(),
-    })
+    content.contribution.rows = has_terms || body.first_block.is_some();
+    content.contribution.before =
+        !content.contribution.rows && (body.leading_space || body.pending_space);
+    content.contribution.after = content.contribution.rows && body.pending_space;
+    DefinitionContent { content, has_terms }
 }

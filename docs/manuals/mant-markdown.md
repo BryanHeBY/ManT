@@ -495,13 +495,41 @@ adding body rows. Existing open tails and completed empty rows keep their
 separate behavior. Imported Markdown tables default this fact to false.
 
 A native definition whose label has completed its row uses a CommonMark hard
-break before a prose description. Resolved positive leading space keeps a
+break before a description exported as phrasing, including unsupported text
+and non-display equations. Resolved positive leading space keeps a
 paragraph boundary, with numeric distance simplified to one blank line. A
 label sharing the active row remains inline; joined words use one inline
 encoding context across the original HEAD/BODY roots. These prose boundaries
 retain the accepted word and hard-row decisions. A literal, table or nested
 list uses its ordinary independent CommonMark block boundary; fenced payload
 keeps its source rows, while fence framing is export syntax.
+
+Markdown block assembly distinguishes authored rows, positive spacing and
+exported syntax from navigation. A root with only empty link labels or anchors
+does not create its own paragraph or list marker; its targets attach to an
+existing block without adding a gap. This applies at document and section
+roots as well as inside lists and definitions. Thematic rules use the star
+spelling so nearby navigation cannot turn them into Setext headings.
+
+Zero characters do not imply zero physical output. Positive spacing survives
+empty or nested containers, including block and item spacing, and can simplify
+to one blank row. Inherited item spacing is resolved at the original item index,
+including an omitted final item; explicit zero still suppresses inheritance.
+At a detached root, an actual newline entity or hard-row spelling retains a
+boundary without a neighboring receiver. Fences, rules and ordinary lists can
+interrupt that empty phrasing row. A first retained ordered marker other than one
+also requires a blank syntax separator, following CommonMark's interruption
+rule; source distance simplifies to this minimum framing. Skipped items never
+renumber the retained markers. A preformatted root with no authored children contributes
+no code block; an empty `Text("")` child or a hard break owns a literal row and
+retains its fence. Navigation relocation leaves the original IR addresses,
+names and link identities unchanged; artifact ranges follow the actual exported
+bytes.
+
+EOF spacing is framed using the last actual leaf and its container indentation,
+not the first block's variant. An already open hard tail is settled once;
+navigation cannot move or duplicate its completed empty row. This avoids
+counting the same resolved gap both as a hard row and as paragraph distance.
 
 A leading UTF-8 byte-order mark is masked so it cannot hide the embedded tldr marker or demote the first heading. Terminal-unsafe control characters are replaced with spaces. Both cases produce diagnostics while preserving source offsets.
 

@@ -90,6 +90,17 @@ that crate was not published for that change.
 
 ### mant-ir, mant-protocol, mant-codec, mant-loader, mant-query, mant-render, mant-engine and mant 0.12.0
 
+- Classify Markdown fragments by authored rows, retained positive spacing and
+  actual block syntax independently of navigation. Root, section and nested
+  navigation cannot turn thematic rules into Setext headings, create empty
+  paragraphs or discard spacing-only containers. Separate unsupported text and
+  inline equations keep hard row boundaries. A literal with no children emits
+  no fence; an authored empty literal row remains a code block. Original IR,
+  link identities and mapped owner ranges are retained. Retained ordered
+  markers keep their original ordinals and required CommonMark framing;
+  inherited final-item spacing and authored table data rows remain physical.
+  Source hard tails and EOF spacing are consumed once using the last leaf's
+  syntax, without changing the raw HTML reader policy.
 - Preserve zero-width definition navigation through final Markdown block
   assembly without adding paragraph gaps. Retain hard tails, explicit BODY
   spacing, nested list and rule syntax, and original owner ranges. Navigation-only

@@ -11,7 +11,59 @@ pub(super) struct MappedText {
     pub(super) text: String,
     pub(super) owners: Vec<(OwnerKey, Range<usize>)>,
     pub(super) navigation: Option<NavigationSite>,
-    pub(super) navigation_only: bool,
+    pub(super) contribution: Contribution,
+    pub(super) syntax: BlockSyntax,
+    pub(super) tail: TailSyntax,
+}
+
+/// Last physical leaf's framing, carried through containers rather than
+/// inferred from their closing delimiters. This is not formatter line state.
+#[derive(Default, Clone, Copy)]
+pub(super) struct TailSyntax {
+    pub(super) grammar: BlockSyntax,
+    pub(super) columns: usize,
+    pub(super) open_row: bool,
+}
+
+/// Source contribution and exported grammar are independent from navigation.
+#[derive(Default, Clone, Copy)]
+pub(super) struct Contribution {
+    /// Authored rows or structural data, never generated navigation syntax.
+    pub(super) rows: bool,
+    /// A resolved positive gap before the first physical row, or a gap-only root.
+    pub(super) before: bool,
+    /// A resolved positive gap after the last physical row.
+    pub(super) after: bool,
+}
+
+impl Contribution {
+    pub(super) fn spacing(self) -> bool {
+        self.before || self.after
+    }
+
+    fn append(&mut self, other: Self) {
+        if !self.rows {
+            self.before |= self.after || other.before;
+            self.after = other.after;
+        } else if other.rows {
+            self.after = other.after;
+        } else {
+            self.after |= other.spacing();
+        }
+        self.rows |= other.rows;
+    }
+}
+
+/// First exported grammar, which may differ from the source block's variant.
+#[derive(Default, Clone, Copy, PartialEq, Eq)]
+pub(super) enum BlockSyntax {
+    #[default]
+    Phrasing,
+    Fence,
+    List {
+        needs_blank: bool,
+    },
+    Rule,
 }
 
 /// The first accepted block's syntax receiver, before its body scalars.
@@ -26,27 +78,35 @@ pub(super) struct NavigationSite {
 
 impl From<String> for MappedText {
     fn from(text: String) -> Self {
+        let rows = !text.is_empty();
         Self {
             text,
             owners: Vec::new(),
             navigation: None,
-            navigation_only: false,
+            contribution: Contribution {
+                rows,
+                ..Default::default()
+            },
+            syntax: BlockSyntax::Phrasing,
+            tail: TailSyntax::default(),
         }
     }
 }
 
 impl MappedText {
     pub(super) fn nonempty(self) -> Option<Self> {
-        (!self.text.is_empty()).then_some(self)
+        (!self.text.is_empty() || self.contribution.spacing()).then_some(self)
     }
 
     pub(super) fn append(&mut self, mut other: Self) {
         let offset = self.text.len();
-        self.navigation_only = if offset == 0 {
-            other.navigation_only
-        } else {
-            self.navigation_only && other.navigation_only
-        };
+        if other.contribution.rows {
+            self.tail = other.tail;
+        }
+        self.contribution.append(other.contribution);
+        if offset == 0 {
+            self.syntax = other.syntax;
+        }
         if self.navigation.is_none() {
             self.navigation = other.navigation.map(|mut site| {
                 site.offset += offset;
@@ -94,13 +154,20 @@ impl MappedText {
         }
     }
 
-    pub(super) fn navigation_site(mut self, block: bool) -> Self {
+    pub(super) fn syntax_site(mut self, syntax: BlockSyntax) -> Self {
+        self.syntax = syntax;
         self.navigation = Some(NavigationSite {
             offset: 0,
             tail: 0,
-            block,
+            block: syntax != BlockSyntax::Phrasing,
             continuation_columns: 0,
         });
+        self
+    }
+
+    pub(super) fn tail_grammar(mut self, grammar: BlockSyntax, open_row: bool) -> Self {
+        self.tail.grammar = grammar;
+        self.tail.open_row = open_row;
         self
     }
 
@@ -239,7 +306,14 @@ impl MappedText {
             text: output,
             owners,
             navigation,
-            navigation_only: self.navigation_only,
+            contribution: self.contribution,
+            syntax: BlockSyntax::List {
+                needs_blank: marker.ends_with(". ") && marker != "1. ",
+            },
+            tail: TailSyntax {
+                columns: self.tail.columns.saturating_add(marker.chars().count()),
+                ..self.tail
+            },
         })
     }
 }
@@ -290,7 +364,7 @@ mod tests {
     #[test]
     fn navigation_receivers_follow_unicode_prefixes_without_new_paragraphs() {
         let mut rendered = MappedText::from("```txt\nα\n```".to_owned())
-            .navigation_site(true)
+            .syntax_site(BlockSyntax::Fence)
             .prefix("12. ")
             .unwrap();
         rendered.attach_navigation("[](first)");
@@ -309,7 +383,7 @@ mod tests {
             "entry": { "id": "own", "kind": {"kind": "term"}, "case": "sensitive", "names": ["α"] }
         }))
         .unwrap();
-        let mut rendered = MappedText::from("α".to_owned()).navigation_site(false);
+        let mut rendered = MappedText::from("α".to_owned()).syntax_site(BlockSyntax::Phrasing);
         rendered.attach_navigation("<a id=\"own\"></a>");
         let mut rendered = rendered
             .with_owner(EntryOwner::List(&item), true)
@@ -329,10 +403,10 @@ mod tests {
         let navigation = MappedText {
             text: "[](uri)".into(),
             owners: vec![(key, 0..7)],
-            navigation_only: true,
+            contribution: Contribution::default(),
             ..Default::default()
         };
-        let mut rendered = MappedText::from("BODY".to_owned()).navigation_site(false);
+        let mut rendered = MappedText::from("BODY".to_owned()).syntax_site(BlockSyntax::Phrasing);
         rendered.attach_navigation_text(navigation, false);
         assert_eq!(rendered.text, "[](uri)BODY");
         assert_eq!(&rendered.text[rendered.owners[0].1.clone()], "[](uri)");

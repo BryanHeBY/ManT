@@ -18,6 +18,9 @@ const NAME: &str = "name中";
 #[path = "definition_content_contracts/body_selection.rs"]
 mod body_selection;
 
+#[path = "definition_content_contracts/contribution_contracts.rs"]
+mod contribution_contracts;
+
 #[path = "definition_content_contracts/navigation.rs"]
 mod navigation;
 
