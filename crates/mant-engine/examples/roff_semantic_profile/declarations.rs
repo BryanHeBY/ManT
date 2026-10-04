@@ -411,7 +411,7 @@ impl Audit<'_> {
         };
         self.rows.push(json!({
             "status": if retained.is_some() { "retained" } else { "rejected" }, "reason": reason,
-            "sourceOwners": run.iter().map(|(n,path)| json!({"astPath":path,"line":n.line,"column":n.column,"macro":n.macro_token,"flowEpoch":n.flow_epoch,"ownerOccurrence":self.native_owners.get(&(std::ptr::from_ref(*n) as usize)).map(|key|key.2)})).collect::<Vec<_>>(),
+            "sourceOwners": run.iter().map(|(n,path)| json!({"astPath":path,"line":n.line,"column":n.column,"macro":n.macro_token.as_deref(),"flowEpoch":n.flow_epoch,"ownerOccurrence":self.native_owners.get(&(std::ptr::from_ref(*n) as usize)).map(|key|key.2)})).collect::<Vec<_>>(),
             "physicalSources":sources,"observedGroup":observed_group,
         }));
     }
@@ -681,6 +681,13 @@ mod tests {
         assert!(valid["sourceRuns"].as_array().unwrap().iter().any(|row| {
             row["reason"] == "unsigned-numeric-head" && row["physicalSources"] == json!([[3, 2, 0]])
         }));
+        // Pinned roff.c::roff_name and the pristine tree identify these owners
+        // as IP. Profiler JSON stores names without native serde being enabled.
+        for row in valid["sourceRuns"].as_array().unwrap() {
+            for owner in row["sourceOwners"].as_array().unwrap() {
+                assert_eq!(owner["macro"], "IP");
+            }
+        }
 
         for mutation in ["delete-group", "cross-unnamed-owner", "move-source-owner"] {
             let mut changed = document.clone();

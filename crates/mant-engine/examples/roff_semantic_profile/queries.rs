@@ -39,7 +39,7 @@ fn source_candidates(
     output: &mut Vec<Value>,
 ) {
     if node.line == line && node.column == column {
-        output.push(json!({"astPath": path, "macro": node.macro_token, "nodeKind": format!("{:?}", node.kind), "text": node.text}));
+        output.push(json!({"astPath": path, "macro": node.macro_token.as_deref(), "nodeKind": format!("{:?}", node.kind), "text": node.text}));
     }
     for (index, child) in node.children.iter().enumerate() {
         path.push(index);
@@ -51,9 +51,39 @@ fn source_candidates(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const SOURCE: &[u8] = b".TH TEST 1\n.SH OPTIONS\n.TP\n.B -x\n.TP\n.B -x ARG\nSECOND_BODY\n";
+
+    #[test]
+    fn source_witness_macro_names_remain_strings_or_null_without_native_serde() {
+        use libmandoc_rs::{MacroToken, ManMacro};
+
+        let mut node = libmandoc_rs::Parser::default()
+            .parse_bytes("probe.1", SOURCE)
+            .unwrap()
+            .document
+            .root;
+        node.children.clear();
+        for (token, expected) in [
+            (None, Value::Null),
+            (Some(MacroToken::Man(ManMacro::Tp)), json!("TP")),
+            (
+                Some(MacroToken::Unknown("FutureBlock".into())),
+                json!("FutureBlock"),
+            ),
+        ] {
+            node.macro_token = token;
+            let mut output = Vec::new();
+            source_candidates(&node, node.line, node.column, &mut Vec::new(), &mut output);
+            assert_eq!(output.len(), 1);
+            assert_eq!(output[0]["macro"], expected);
+            assert_eq!(output[0]["astPath"], json!([]));
+        }
+    }
+
     #[test]
     fn probes_retain_distinct_same_name_owners_and_original_source_coordinates() {
-        let raw = b".TH TEST 1\n.SH OPTIONS\n.TP\n.B -x\n.TP\n.B -x ARG\nSECOND_BODY\n";
+        let raw = SOURCE;
         let report = libmandoc_rs::Parser::new(Default::default())
             .parse_bytes("probe.1", raw)
             .unwrap();

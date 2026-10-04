@@ -93,6 +93,9 @@ that crate was not published for that change.
 - Dispatch owned roff, man and mdoc macros by typed native identities throughout
   lowering, sharing the same control and enclosure classification. Visible
   text, links, field execution and source-neutral IR contracts are unchanged.
+- Keep native audit profiler macro-name JSON usable without enabling the
+  optional `libmandoc-rs/serde` feature, and migrate target profiler test nodes
+  to the typed macro field.
 - Open TUI manual links and manual catalog entries with their native target plus
   an available cached command quick reference. Add `LoadPolicy::ManualWithTldr`
   independently of source selection: explicit and resolver-selected section `1`

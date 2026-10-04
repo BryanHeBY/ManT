@@ -544,7 +544,7 @@ Escape.
             section: libmandoc_rs::NormalizedSection::None,
             scope_end: None,
             reference_quotes_title: false,
-            macro_name: macro_name.map(ToOwned::to_owned),
+            macro_token: macro_name.map(libmandoc_rs::MacroToken::from_name),
             text: text.map(ToOwned::to_owned),
             native_text: None,
             tag: tag.map(ToOwned::to_owned),
