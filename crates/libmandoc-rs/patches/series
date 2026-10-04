@@ -42,3 +42,4 @@
 # Native execution performance
 0030-grow-native-text-append-runs.patch
 0031-skip-inactive-native-string-definitions.patch
+0032-grow-translated-native-words.patch

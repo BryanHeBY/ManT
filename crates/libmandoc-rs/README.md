@@ -434,7 +434,7 @@ or changing the patch stack.
 ### Local vendor patches
 
 The checked-in vendor tree is the pinned pristine source subset plus the
-30 ordered patches in `patches/series`. The stack follows build prerequisites,
+32 ordered patches in `patches/series`. The stack follows build prerequisites,
 parser safety, embedding, execution evidence, compatibility, rendering, and
 allocation performance. Patch numbers identify this stack, not Cargo features.
 See [`patches/README.md`](patches/README.md) for dependencies and the previous
@@ -559,13 +559,24 @@ they never refer to a patch number in the current series.
   empty-word separators, parse-time translations, and native owners. Private
   append receipts retire before line, validation, mutation, and owner changes;
   the bound applies to each consecutive append run, not the entire parser.
-  `.tr` conversion still uses the existing cumulative reallocations within
-  each translated word; this patch does not bound that separate path. Explicit
-  C maintenance probes under `MANDOC_APPEND_TEST` count only these two append
-  paths; normal builds contain no counters, output hooks, or added public FFI.
+  This patch does not cover the separate `.tr` conversion path. Explicit
+  C maintenance probes under `MANDOC_APPEND_TEST` count append storage;
+  normal builds contain no counters, output hooks, or added public FFI.
   Run `python3 tests/native/run_append_growth.py` from this crate directory to
   check actual parser growth, receipt retirement, and checked overflow in an
   owned scratch build. The repository's `scripts/check.sh` runs the same gate.
+
+- `0031-skip-inactive-native-string-definitions.patch` checks inactive values
+  and cached exact key lengths before comparing names, preserving empty
+  definitions, namespace precedence and undefined-string side effects.
+
+- `0032-grow-translated-native-words.patch` reuses the checked geometric
+  append helper for `.tr` conversion within each word. Translation lookup,
+  protected escapes and the upstream malformed-escape result remain intact.
+  The same C maintenance probe checks two real parse/reset/free sessions for
+  each translated source and logarithmic reserves for long translated words.
+  This bounds storage growth, not translation-table lookup or whole-parser
+  complexity. Inactive translation still takes the upstream duplicate path.
 
 Upstream already provides `MR`, modern standard names, root-element scope
 cleanup, and the `tag_put` explicit-tag guard; these are not duplicate local

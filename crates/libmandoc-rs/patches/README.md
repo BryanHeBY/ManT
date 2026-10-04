@@ -36,6 +36,11 @@ Patch `0031` skips inactive user/rename records and unequal cached key lengths
 before byte comparison. It preserves non-NULL empty definitions, definition
 precedence and undefined-string side effects without adding lookup state.
 
+Patch `0032` extends the checked geometric storage helper to translated words.
+It follows `0030` for the helper and leaves translation rules and malformed
+escapes unchanged. Maintenance-only counters retire at each local word return.
+The normal build retains no capacity state outside that call.
+
 ## Number mapping
 
 The previous names below refer to commit `343ba431`. `Historical-Replaces`

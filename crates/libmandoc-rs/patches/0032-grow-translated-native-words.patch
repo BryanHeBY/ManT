@@ -1,0 +1,79 @@
+Subject: grow translated native words geometrically
+Upstream-Status: Local optimization (not submitted)
+
+Reuse the checked private append helper for roff_strdup character and escape
+chunks. Preserve translation lookup, protected escapes, immediate termination
+and the upstream malformed-escape branch, which does not advance accepted
+length. Retire maintenance-only accounting at the local string boundary;
+normal builds contain no counters or new native/public execution state.
+
+--- a/roff.c
++++ b/roff.c
+@@ -4479,7 +4479,7 @@
+ 	const struct roffkv *cp;
+ 	char		*res;
+ 	const char	*pp;
+-	size_t		 ssz, sz;
++	size_t		 ssz, sz, capacity;
+ 	enum mandoc_esc	 esc;
+ 
+ 	if (NULL == r->xmbtab && NULL == r->xtab)
+@@ -4496,20 +4496,21 @@
+ 	 */
+ 
+ 	res = NULL;
+-	ssz = 0;
++	ssz = capacity = 0;
++#ifdef MANDOC_APPEND_TEST
++	mandoc_append_test_seed(0);
++#endif
+ 
+ 	while ('\0' != *p) {
+ 		assert((unsigned int)*p < 128);
+ 		if ('\\' != *p && r->xtab && r->xtab[(unsigned int)*p].p) {
+ 			sz = r->xtab[(int)*p].sz;
+-			res = mandoc_realloc(res, ssz + sz + 1);
+-			memcpy(res + ssz, r->xtab[(int)*p].p, sz);
+-			ssz += sz;
++			mandoc_str_append(&res, &ssz, &capacity,
++			    r->xtab[(int)*p].p, sz, 0);
+ 			p++;
+ 			continue;
+ 		} else if ('\\' != *p) {
+-			res = mandoc_realloc(res, ssz + 2);
+-			res[ssz++] = *p++;
++			mandoc_str_append(&res, &ssz, &capacity, p++, 1, 0);
+ 			continue;
+ 		}
+ 
+@@ -4524,10 +4525,8 @@
+ 			 * Append the match to the array and move
+ 			 * forward by its keysize.
+ 			 */
+-			res = mandoc_realloc(res,
+-			    ssz + cp->val.sz + 1);
+-			memcpy(res + ssz, cp->val.p, cp->val.sz);
+-			ssz += cp->val.sz;
++			mandoc_str_append(&res, &ssz, &capacity,
++			    cp->val.p, cp->val.sz, 0);
+ 			p += (int)cp->key.sz;
+ 			continue;
+ 		}
+@@ -4552,11 +4551,12 @@
+ 		 * roff_expand() was called.
+ 		 */
+ 		sz = (int)(p - pp);
+-		res = mandoc_realloc(res, ssz + sz + 1);
+-		memcpy(res + ssz, pp, sz);
+-		ssz += sz;
+-	}
+-
++		mandoc_str_append(&res, &ssz, &capacity, pp, sz, 0);
++	}
++
++#ifdef MANDOC_APPEND_TEST
++	mandoc_append_test_retire(ssz);
++#endif
+ 	res[(int)ssz] = '\0';
+ 	return res;
+ }

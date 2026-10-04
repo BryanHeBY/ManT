@@ -16,6 +16,7 @@ import tempfile
 CRATE = Path(__file__).resolve().parents[2]
 VENDOR = CRATE / "vendor" / "mandoc-cvs-20260927T130954Z"
 CASES = CRATE / "src" / "tests" / "append_growth" / "cases.json"
+TRANSLATIONS = CRATE / "tests" / "fixtures" / "translation.json"
 
 
 def tree_texts(output):
@@ -75,6 +76,11 @@ def compile_driver(directory):
 
 def materialize_cases(directory):
     cases = json.loads(CASES.read_text())
+    for case in json.loads(TRANSLATIONS.read_text())["cases"]:
+        cases.append({"id": case["id"], "source": case["source"],
+                      "oracle": {"source_sha256": case["oracle"]["sourceSha256"]},
+                      **({"translationBytes": case["translationBytes"]}
+                         if "translationBytes" in case else {})})
     paths = {}
     for case in cases:
         label = case["id"]
@@ -130,6 +136,14 @@ def parser_metrics(binary, cases, paths):
         # even if helper-only counters happened to satisfy their own bound.
         if actual["reserve"] > actual["seed"] + 32:
             raise ValueError(f"parser reserves are not logarithmic: {case['id']}")
+    for case in cases:
+        if "translationBytes" not in case:
+            continue
+        actual = metrics[case["id"]]
+        if actual["append"] < 2 * case["translationBytes"]:
+            raise ValueError(f"translated word path not exercised: {case['id']}")
+        if actual["reserve"] > actual["seed"] + 32:
+            raise ValueError(f"translated word reserves are not logarithmic: {case['id']}")
     return metrics
 
 
@@ -152,7 +166,7 @@ def main():
         overflow_checks(binary)
         print(json.dumps({"status": "pass", "sources": len(cases),
                           "growthAxes": 6, "parserSessionsPerSource": 2,
-                          "scope": "two native append paths; per active run"}))
+                          "scope": "joined TEXT, table cells and translated words; per active run"}))
 
 
 if __name__ == "__main__":
