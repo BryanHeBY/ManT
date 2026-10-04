@@ -77,6 +77,7 @@ fn tldr_bundle() -> ResolvedContent {
 
 fn navigation_bundle() -> ResolvedContent {
     let paragraph = |value: &str| AstBlock::Paragraph {
+        inline_layout: mant_ir::InlineLayout::default(),
         children: vec![Inline::Text {
             value: value.to_owned(),
         }],
@@ -119,9 +120,12 @@ fn navigation_bundle() -> ResolvedContent {
                             names: vec!["-h".to_owned(), "--help".to_owned()],
                             value_domain: None,
                         }),
-                        terms: vec![vec![Inline::Text {
-                            value: "-h, --help".to_owned(),
-                        }]],
+                        terms: vec![
+                            vec![Inline::Text {
+                                value: "-h, --help".to_owned(),
+                            }]
+                            .into(),
+                        ],
                         description: vec![paragraph("Show help")],
                         layout: mant_ir::DefinitionLayout {
                             head_body_relation: mant_ir::HeadBodyRelation::from(false),
@@ -514,6 +518,7 @@ fn clicking_a_manual_reference_requests_the_exact_page() {
         .insert(
             0,
             AstBlock::Paragraph {
+                inline_layout: mant_ir::InlineLayout::default(),
                 children: vec![Inline::Link {
                     target: mant_ir::LinkTarget::Manual {
                         name: "git-add".to_owned(),

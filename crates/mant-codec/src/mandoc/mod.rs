@@ -11,6 +11,7 @@ mod formatter;
 pub(crate) mod inline;
 mod layout;
 mod navigation;
+mod owner_layout;
 mod redirect;
 mod reference;
 mod roff_escape;
@@ -165,6 +166,7 @@ fn lower_mandoc_document_with_source(
         sections,
     };
     equation_wire::bound_wire_structure(&mut document);
+    owner_layout::bound_layout_hints(&mut document);
     document.diagnostics.extend(validate_document(&document));
     document
 }

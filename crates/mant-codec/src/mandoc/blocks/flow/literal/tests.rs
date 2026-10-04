@@ -88,6 +88,7 @@ fn typed_completed_rows_keep_content_outside_the_spacing_budget() {
     // five profiles first. Only the request rows enter the bounded gap
     // plan; an empty TEXT row remains literal content after either boundary.
     let mut blocks = vec![Block::Preformatted {
+        inline_layout: mant_ir::InlineLayout::default(),
         children: vec![text("BEFORE")],
         language: None,
         layout: mant_ir::LayoutHint::default(),

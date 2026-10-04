@@ -120,6 +120,7 @@ fn bound_link_name_keeps_type_and_modifiers_through_code_surface_and_wrapping() 
     let item = &mut items[0];
     let Block::Paragraph {
         children,
+        inline_layout,
         layout,
         source,
     } = item.blocks.remove(0)
@@ -130,6 +131,7 @@ fn bound_link_name_keeps_type_and_modifiers_through_code_surface_and_wrapping() 
     item.blocks.push(Block::Preformatted {
         language: None,
         children,
+        inline_layout,
         layout,
         source,
     });
@@ -268,10 +270,14 @@ fn definition_lists_honour_compact_and_per_item_spacing() {
     let definition = |term: &str, description: &str, spacing_before_lines| DefinitionItem {
         source: None,
         entry: None,
-        terms: vec![vec![Inline::Text {
-            value: term.to_owned(),
-        }]],
+        terms: vec![
+            vec![Inline::Text {
+                value: term.to_owned(),
+            }]
+            .into(),
+        ],
         description: vec![Block::Paragraph {
+            inline_layout: mant_ir::InlineLayout::default(),
             children: vec![Inline::Text {
                 value: description.to_owned(),
             }],

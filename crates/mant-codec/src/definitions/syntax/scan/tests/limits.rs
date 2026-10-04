@@ -20,7 +20,7 @@ fn name_limit_is_distinct_from_an_unsupported_weak_head() {
             if expected.is_some() { 0 } else { count }
         );
         let item = mant_ir::DefinitionItem {
-            terms: vec![nodes.to_vec()],
+            terms: (vec![nodes.to_vec()]).into_iter().map(Into::into).collect(),
             description: Vec::new(),
             entry: None,
             layout: mant_ir::DefinitionLayout::default(),

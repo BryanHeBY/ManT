@@ -48,7 +48,7 @@ come from `LinkTarget::to_uri`, not a renderer's human-readable label.
 
 ## Sections
 
-A `Section` contains a normalized document-local `NodeId`, optional exact `fragmentAliases`, an authoritative `Heading`, blocks, child sections, optional source coordinates, and source-requested spacing before the heading. `Heading.content` uses ordinary Inline nodes, preserving links, styles, anchors and hard breaks; `Heading.source` records actual heading provenance. Plain titles are derived, not independently mutable fields. Depth is derived from tree position rather than stored as mutable metadata.
+A `Section` contains a normalized document-local `NodeId`, optional exact `fragmentAliases`, an authoritative `Heading`, blocks, child sections, optional source coordinates, and source-requested spacing before the heading. `Heading.content` uses ordinary Inline nodes, preserving links, styles, anchors and hard breaks; optional `Heading.inlineLayout` carries owner-local row corrections, and `Heading.source` records actual heading provenance. Plain titles are derived, not independently mutable fields. Depth is derived from tree position rather than stored as mutable metadata.
 
 The virtual ID `document-overview` addresses the original document heading and root blocks before the first section, including a heading-only document, and may carry exact source aliases from the extracted Markdown H1. Its content moves to `Document.heading`; it is not discarded or duplicated in metadata. Native bibliographic titles remain metadata and do not manufacture a document heading. IDs are unique only inside one document and may change when the source changes. Consumers should rediscover them through the current index or outline rather than persisting them globally.
 
@@ -70,7 +70,7 @@ The block union preserves structures that matter across renderers:
 
 `LayoutHint` carries portable presentation facts: signed indentation in display cells and spacing rows before a block. `indentColumns` is relative to the actual parent's content origin, not a cumulative source margin. Consumers compose it exactly once, retain signed intermediate origins, and bound padding only at a visible leaf. Reparenting changes the moved root's relative offset, never its already-relative descendants. Source unit expressions and formatter state do not enter this closed object; unknown fields are rejected. It is not a general-purpose CSS or roff device model.
 
-Paragraph `continuationIndentColumns` is an additional signed displacement from its first-line origin (default zero). Hard-line continuations and visual wraps share that origin; later sibling blocks do not inherit it. It expresses hanging paragraphs without inserting spaces into source text or changing search/link coordinates. A terminal applies wrapping at its current width; unbounded text preserves hard breaks only.
+Paragraph `continuationIndentColumns` is an additional signed displacement from its first-line origin (default zero). Each logical hard row has two signed origins: its first visual line and its soft-wrap continuations. With parent origin P, block indentation B, hanging displacement H, and row correction R, the first hard row uses P+B+R and P+B+H+R respectively. Later hard rows use the paragraph's continuation policy before applying their own correction. For P=0, B=2, H=4 and R=1, the first visual line begins at column 3 and its wraps at column 7. A row correction changes both origins without cancelling hanging layout. Later sibling blocks inherit neither H nor R. A terminal applies wrapping at its current width; unbounded text preserves hard breaks only.
 
 The TUI reserves a readable content area when indentation would leave fewer
 than 16 columns, or fewer than half the columns in a narrow viewport. It
@@ -87,7 +87,7 @@ A definition description starts at its resolved `layout.bodyIndentColumns` relat
 `headBodyRelation` defaults to `{"type":"separate"}`. A `shared` object records
 independent `wordBoundary` (`joined` or `separated`) and `bodyAlignment`
 (`after-term` or `indented`). Joined words receive no invented separator;
-accepted label padding remains content. Separated words retain at least the
+accepted authored label padding remains content. Separated words retain at least the
 minimum term gap. `after-term` uses that gap, while `indented` also considers
 the preferred first BODY origin. This choice does not change continuation
 origins or semantic ownership. Plain text and TUI use the same bounded gap
@@ -115,7 +115,7 @@ Markdown semantic readback does not promise native DefinitionItem identities.
 
 `ListItem.layout: ListItemLayout` has optional `spacingBeforeLines` with the same inheritance and closed-object rules. An explicit value precedes the entire marker and body, including a display or nested list as the first block; it is not extra spacing inside the body. This preserves per-item native paragraph distance without splitting a list or changing its entry paths.
 
-Lists contain block-capable items so nested lists and displays do not flatten into prose. Definition terms contain inline trees and descriptions contain blocks. Table cells likewise contain blocks even when a source parser currently produces a single paragraph.
+Lists contain block-capable items so nested lists and displays do not flatten into prose. Each definition term is a `DefinitionTerm { content, inline_layout }` with one authoritative inline tree and optional row corrections; its JSON object uses `content` and `inlineLayout`. `DefinitionItem.terms` is an array of these objects, not an array of inline arrays. Descriptions contain blocks. Table cells likewise contain blocks even when a source parser currently produces a single paragraph.
 
 An equation expression retains the parser's box kind, font, position operator,
 fences, decorations, argument counts, and ordered children. Default font size
@@ -215,18 +215,70 @@ The inline union contains:
 | `equation` | Parsed equation in its original position between neighboring text |
 | `link` | Visible children plus a typed destination |
 | `anchor` | Zero-width document-local destination |
-| `line-break` | Explicit break inside one flow, optionally with the following row's resolved `indentColumns` |
+| `line-break` | Pure explicit hard break inside one flow; no layout fields |
 
-`line-break.indentColumns` is a nonnegative display-cell displacement from
-the containing inline root's origin, after that root's paragraph continuation
-geometry. It defaults to zero and is omitted at zero. It describes one resolved
-hard row; consumers compose its origin before bounding visible padding and
-carry that origin through any visual wrapping of that row. Text, explain and
-TUI use the same hint. Markdown phrasing uses non-breaking entities for these
-layout cells, while fenced content uses spaces. Source text, semantic names,
-link ranges, and explanation coordinates do not gain those padding scalars:
-the structural break still counts as one source scalar. Unknown fields, null,
-negative, fractional, or values above 65535 are rejected.
+`Inline::LineBreak {}` serializes as `{"type":"line-break"}`. The retired
+`indentColumns` field is rejected, including zero. A break remains one original
+text scalar regardless of presentation.
+
+### Owner Row Layout
+
+Paragraph and Preformatted blocks, document and section Headings, and each
+DefinitionTerm may carry `inlineLayout` beside their original `children` or
+`content`. Its `rowHints` contains sparse `{row, indentColumns}` objects. `row`
+is a zero-based logical hard-row position within that owner; `indentColumns`
+is a signed relative display-cell correction. Missing rows use zero without
+inheriting a preceding correction. Ordinary indentation and hanging layout
+remain structural, so ordinary Markdown paragraphs and lists need no hints.
+Strong, Emphasis and Link wrappers share their owner's row counter; anchors
+do not advance it. Each LineBreak and each actual newline in Text, Code or
+an equation's readable text closes the current row and opens the next.
+
+| Original content | Addressable row positions | Rows closed by hard breaks | Open tail |
+| --- | --- | --- | --- |
+| `[]` or anchors only | 0 | 0 | No body row is requested |
+| `A` | 0 | 0 | Row 0 contains A |
+| `A\n` | 0, 1 | 1 | Row 1 is empty and open |
+| `A\n\n` | 0, 1, 2 | 2 | Row 1 is a completed empty row; row 2 is open |
+
+An empty owner's row 0 and an open trailing row may carry a bounded hint, but
+the hint adds no glyph, blank row or clickable region. An explicit empty
+literal text leaf remains authored content. Standalone literal output settles
+its authored trailing row at the container boundary; a table fragment can
+instead let the following cell occupy its open tail. A completed empty row
+cannot be reused. `VerticalSpace` is separately owned completed block spacing
+and does not advance an inline owner's row counter.
+
+Actual owner decoding requires strictly increasing, unique, in-range `row`
+values and integer displacements from -65535 through 65535. Null layouts,
+unknown or duplicate fields, and more than 4096 hints in one owner are rejected.
+Zero corrections are validated before canonical output omits them; owners
+also omit empty or all-zero `inlineLayout`. Roff production retains at most
+65536 nonzero hints across a document, also respecting the per-owner limit.
+Excess optional hints are omitted with `layout.row-hint-budget` and diagnostic
+impact `none`; authoritative text and content completeness are preserved.
+65536 is a producer budget, not an additional whole-document JSON input limit.
+
+Consumers compose each correction with both signed visual origins, then bound
+padding only at the visible leaf. Text, located explanations and TUI use the
+same owner facts. Markdown phrasing currently projects layout cells as
+non-breaking entities, while fenced content uses spaces. These presentation
+cells never enter source text, semantic names, link ranges or match scalars.
+If a multirow Link label has an effective nonzero correction inside the label,
+Markdown keeps those generated cells outside clickable and styled text by
+emitting separate label fragments with the same destination and title. Actual
+Markdown readback then contains multiple link occurrences. The original IR,
+its JSON copies and its reference inventory still contain the one original
+Link. Artifact byte ranges retain the original section or EntryOwner identity;
+they do not create identities for the formatting fragments. A first-row prefix
+alone does not require this split, and anchors before the first glyph remain
+zero-width destinations without an extra empty link occurrence.
+Only positioning padding proven generated by the native execution boundary is
+removed from first-row text and represented as a row-0 hint. Authored spaces,
+NBSP, fixed blanks and word separators remain content. Names, links, excerpts
+and artifact maps are rebuilt against the resulting authoritative body;
+coordinates can change while still selecting the same accepted text. Old text
+with no generation evidence is not cleaned by guessing from its appearance.
 
 Inline children are the only visible body. Reading, Markdown export, search,
 semantic recognition and TUI copy traverse the same accepted glyphs, styles,
@@ -463,6 +515,15 @@ Native libmandoc nodes generally provide line and column positions but not exact
 `ContentLocation` identifies original inlines under three closed roots: document heading, section heading, or root/section content. Zero-based section indices and typed `ContentBlockStep` transitions distinguish blocks, ordinary list items, definition descriptions and table cells. `ContentInlineRoot` then identifies paragraph/preformatted inlines or a particular definition term, followed by an inline child path. Empty paths select a whole inline container; a link occurrence always has a nonempty path to its actual `Inline::Link`, including links with no visible label.
 
 Every transition is checked against the actual container and bounds. `EntryOwnerLocationRef::map_slice` maps a valid owner-local `EntryContentSlice` to the original document position; its optional UTF-8 leaf range is validated but does not become a node identity. Invalid and oversized paths return no target, never a label-based guess. Source bytes, IR leaf bytes, projected Unicode scalars and terminal cells remain separate coordinate domains.
+
+`ContentLocation::inline_content(document)` and
+`EntryOwner::inline_content_root(root)` borrow an `InlineContentRef` containing
+the complete owner's original content and layout. A checked child path does
+not create another row coordinate space. Whole-owner copies retain their
+layout; a partial scalar selection that becomes a new root uses
+`InlineContentRef::sliced_layout` to rebase its row hints, including an open
+tail. Slice coordinates count Unicode scalars, not UTF-8 bytes or display
+cells. `InlineContentRef::unpositioned` provides an explicit text-only view.
 
 For original inline text, `project_content_slice` converts the same checked owner-local slice to a `RootTextRange` of Unicode scalars. `inline_scalar_len` counts an authored hard break as one scalar and wrappers or anchors as zero additional positions. These shared IR operations do not infer names, apply styles, or include renderer-generated padding; query response coordinates are mapped separately into the returned payload.
 

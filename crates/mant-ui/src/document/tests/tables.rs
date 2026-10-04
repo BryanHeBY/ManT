@@ -9,6 +9,7 @@ fn signed_table_cells_preserve_real_origins_links_and_anchors() {
         let cell = |id: &str, text: &str| TableCell {
             kind: mant_ir::TableCellKind::Text,
             blocks: vec![Block::Paragraph {
+                inline_layout: mant_ir::InlineLayout::default(),
                 children: vec![
                     Inline::anchor_with_aliases(id, vec![format!("Exact.{id}").into()]),
                     Inline::Link {
@@ -72,6 +73,7 @@ fn signed_table_cells_preserve_real_origins_links_and_anchors() {
 fn table_cells_use_shared_content_driven_columns_and_independent_wrapping() {
     let mut bundle = bundle();
     let paragraph = |value: &str| Block::Paragraph {
+        inline_layout: mant_ir::InlineLayout::default(),
         children: vec![Inline::Text {
             value: value.to_owned(),
         }],
@@ -124,6 +126,7 @@ fn table_cells_use_shared_content_driven_columns_and_independent_wrapping() {
 #[test]
 fn short_table_keys_do_not_claim_half_of_a_wide_viewport() {
     let paragraph = |value: &str| Block::Paragraph {
+        inline_layout: mant_ir::InlineLayout::default(),
         children: vec![Inline::Text {
             value: value.to_owned(),
         }],
@@ -170,6 +173,7 @@ fn short_table_keys_do_not_claim_half_of_a_wide_viewport() {
 #[test]
 fn empty_and_ruled_table_rows_keep_distinct_terminal_surfaces() {
     let paragraph = |value: &str| Block::Paragraph {
+        inline_layout: mant_ir::InlineLayout::default(),
         children: vec![Inline::Text {
             value: value.to_owned(),
         }],
@@ -246,6 +250,7 @@ fn partial_rule_cells_remain_visible_beside_text_cells() {
                 TableCell {
                     kind: mant_ir::TableCellKind::Text,
                     blocks: vec![Block::Paragraph {
+                        inline_layout: mant_ir::InlineLayout::default(),
                         children: vec![Inline::Text {
                             value: "VISIBLE".to_owned(),
                         }],
@@ -298,6 +303,7 @@ fn stacked_partial_rule_cells_are_not_dropped() {
                 TableCell {
                     kind: mant_ir::TableCellKind::Text,
                     blocks: vec![Block::Paragraph {
+                        inline_layout: mant_ir::InlineLayout::default(),
                         children: vec![Inline::Text {
                             value: "VISIBLE".to_owned(),
                         }],
@@ -335,6 +341,7 @@ fn stacked_partial_rule_cells_are_not_dropped() {
 #[test]
 fn rule_rows_do_not_split_table_wide_column_measurement() {
     let paragraph = |value: &str| Block::Paragraph {
+        inline_layout: mant_ir::InlineLayout::default(),
         children: vec![Inline::Text {
             value: value.to_owned(),
         }],
@@ -437,6 +444,7 @@ fn declared_column_selection_and_anchor_ranges_follow_shared_origins() {
         TableCell {
             kind: mant_ir::TableCellKind::Text,
             blocks: vec![Block::Paragraph {
+                inline_layout: mant_ir::InlineLayout::default(),
                 children,
                 layout: LayoutHint::default(),
                 source: None,
@@ -540,6 +548,7 @@ fn public_ir_trailing_padding_keeps_link_search_copy_and_actual_cells_aligned() 
                                 // renderer-owned final fill span is retired.
                                 // All ten author blanks keep their ownership.
                                 Block::Preformatted {
+                                    inline_layout: mant_ir::InlineLayout::default(),
                                     children,
                                     language: None,
                                     layout: LayoutHint::default(),
@@ -547,6 +556,7 @@ fn public_ir_trailing_padding_keeps_link_search_copy_and_actual_cells_aligned() 
                                 }
                             } else {
                                 Block::Paragraph {
+                                    inline_layout: mant_ir::InlineLayout::default(),
                                     children,
                                     layout: LayoutHint::default(),
                                     source: None,

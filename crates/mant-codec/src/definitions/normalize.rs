@@ -231,6 +231,7 @@ pub(super) fn normalize_hanging_definitions(blocks: &mut Vec<Block>, context: De
 
         let Block::Paragraph {
             children,
+            inline_layout,
             layout,
             source,
         } = block
@@ -244,7 +245,10 @@ pub(super) fn normalize_hanging_definitions(blocks: &mut Vec<Block>, context: De
         for child in &mut description {
             shift_block_indent(child, description_origin);
         }
-        let terms = vec![children];
+        let terms = vec![mant_ir::DefinitionTerm {
+            content: children,
+            inline_layout,
+        }];
         normalized.push(Block::DefinitionList {
             declaration_groups: Vec::new(),
             items: vec![DefinitionItem {
@@ -328,6 +332,7 @@ mod tests {
 
     fn paragraph(text: &str, indent_columns: i32) -> Block {
         Block::Paragraph {
+            inline_layout: mant_ir::InlineLayout::default(),
             children: vec![Inline::Text { value: text.into() }],
             layout: LayoutHint {
                 indent_columns,
@@ -344,9 +349,12 @@ mod tests {
             items: vec![DefinitionItem {
                 source: None,
                 entry: None,
-                terms: vec![vec![Inline::Text {
+                terms: (vec![vec![Inline::Text {
                     value: "--owner".into(),
-                }]],
+                }]])
+                .into_iter()
+                .map(Into::into)
+                .collect(),
                 description: vec![paragraph("Initial description.", 4)],
                 layout: mant_ir::DefinitionLayout {
                     spacing_before_lines: None,
@@ -400,7 +408,7 @@ mod tests {
                         for item in items {
                             for term in &item.terms {
                                 output.push(GeometryAtom::Content {
-                                    children: term.clone(),
+                                    children: term.content.clone(),
                                     absolute_indent: term_origin,
                                     spacing_before_lines: item
                                         .layout
@@ -438,9 +446,9 @@ mod tests {
                     } else {
                         mant_ir::HeadBodyRelation::Separate
                     };
-                    items[0].terms = vec![vec![Inline::Text {
+                    items[0].terms[0].content = vec![Inline::Text {
                         value: label.into(),
-                    }]];
+                    }];
                     let mut blocks = vec![
                         owner,
                         space(1),
@@ -465,9 +473,9 @@ mod tests {
                     assert_eq!(items[0].layout.inline_term(), inline_term);
                     assert_eq!(
                         items[0].terms,
-                        [vec![Inline::Text {
+                        [mant_ir::DefinitionTerm::from(vec![Inline::Text {
                             value: label.into()
-                        }]]
+                        }])]
                     );
                     let once = blocks.clone();
                     normalize_definition_nesting(&mut blocks);

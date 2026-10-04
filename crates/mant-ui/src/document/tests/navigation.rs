@@ -5,6 +5,7 @@ use super::*;
 fn ordinary_list_entry_anchors_preserve_rows_and_numbering() {
     let mut query = bundle();
     let paragraph = |name: &str| Block::Paragraph {
+        inline_layout: mant_ir::InlineLayout::default(),
         children: vec![
             Inline::Code { value: name.into() },
             Inline::Text {
@@ -69,6 +70,7 @@ fn ordinary_list_entry_anchors_preserve_rows_and_numbering() {
         .unwrap()
         .blocks
         .push(Block::Paragraph {
+            inline_layout: mant_ir::InlineLayout::default(),
             children: vec![Inline::Link {
                 target: mant_ir::LinkTarget::Section { id: "run".into() },
                 title: None,
@@ -196,6 +198,7 @@ fn authored_fragments_jump_to_their_canonical_target_rows() {
     section.blocks.insert(
         0,
         Block::Paragraph {
+            inline_layout: mant_ir::InlineLayout::default(),
             children: vec![Inline::anchor_with_aliases(
                 "option",
                 vec!["--option".into()],
@@ -352,12 +355,16 @@ fn inline_definitions_hang_the_description_and_expose_their_anchor() {
                 names: vec!["-h".to_owned()],
                 value_domain: None,
             }),
-            terms: vec![vec![Inline::Strong {
-                children: vec![Inline::Text {
-                    value: "-h".to_owned(),
-                }],
-            }]],
+            terms: vec![
+                vec![Inline::Strong {
+                    children: vec![Inline::Text {
+                        value: "-h".to_owned(),
+                    }],
+                }]
+                .into(),
+            ],
             description: vec![Block::Paragraph {
+                inline_layout: mant_ir::InlineLayout::default(),
                 children: vec![Inline::Text {
                     value: "Show detailed command help".to_owned(),
                 }],
@@ -391,6 +398,7 @@ fn inline_definitions_hang_the_description_and_expose_their_anchor() {
 #[test]
 fn table_anchors_follow_their_cell_content_through_wrapping_and_stacking() {
     let paragraph = |children| Block::Paragraph {
+        inline_layout: mant_ir::InlineLayout::default(),
         children,
         layout: LayoutHint::default(),
         source: None,
@@ -462,6 +470,7 @@ fn section_reference_hit_regions_follow_wrapped_link_text() {
     let mut bundle = bundle();
     let document = bundle.document.as_mut().expect("document");
     document.sections[0].blocks = vec![Block::Paragraph {
+        inline_layout: mant_ir::InlineLayout::default(),
         children: vec![
             Inline::Text {
                 value: "Read ".to_owned(),
@@ -547,6 +556,7 @@ fn terminal_chrome_keeps_the_manual_section_out_of_the_sidebar_label() {
     let document = bundle.document.as_mut().expect("document");
     document.meta.manual_section = Some("1".to_owned());
     document.blocks.push(Block::Paragraph {
+        inline_layout: mant_ir::InlineLayout::default(),
         children: vec![Inline::Text {
             value: "overview".to_owned(),
         }],

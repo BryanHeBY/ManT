@@ -219,11 +219,19 @@ pub(super) fn definition_item(
         source: source_span(node),
         entry: None,
         layout,
-        terms,
+        terms: terms.into_iter().map(finalize_definition_term).collect(),
         description,
     };
     record_definition_item(&mut item, node, head, context);
     item
+}
+
+fn finalize_definition_term(mut content: Vec<Inline>) -> mant_ir::DefinitionTerm {
+    let inline_layout = crate::mandoc::inline::take_inline_layout(&mut content);
+    mant_ir::DefinitionTerm {
+        content,
+        inline_layout,
+    }
 }
 
 fn record_definition_item(
@@ -671,7 +679,9 @@ pub(super) fn split_definition_terms(
         if node == Inline::line_break() && alternatives.peek() == Some(&index) {
             alternatives.next();
             if mant_ir::has_printable_character(&current) {
+                let origin = crate::mandoc::inline::split_row_origin(&mut current);
                 terms.push(std::mem::take(&mut current));
+                current.extend(origin);
             } else {
                 // An executed but invisible author word (`\&`, or a
                 // control-only `\p`) still owns a physical formatter row.

@@ -4,15 +4,214 @@ use std::collections::BTreeMap;
 
 use super::{INTERNAL_FIELD_PREFIX, INTERNAL_FIELD_WORD, INTERNAL_ROW_ORIGIN, Inline};
 
+const NEXT_ROW: &str = "\0mant:row-layout:next:";
+const CURRENT_ROW: &str = "\0mant:row-layout:current:";
+
+/// A mutation of the active top-level output vector. Native cell/scalar
+/// receipts have a different coordinate space and must never use this map.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(in crate::mandoc::inline::flow) struct OutputNodeEdit {
+    pub(super) start: usize,
+    pub(super) removed: usize,
+    pub(super) inserted: usize,
+}
+
+impl OutputNodeEdit {
+    pub(in crate::mandoc::inline::flow) fn remap(self, position: &mut usize) {
+        if *position >= self.start.saturating_add(self.removed) {
+            *position = position
+                .saturating_sub(self.removed)
+                .saturating_add(self.inserted);
+        } else if *position >= self.start {
+            *position = self.start.saturating_add(self.inserted);
+        }
+    }
+}
+
+/// Update the carrier owned by this delimiter, rather than inserting a
+/// second receipt. An implicit zero origin needs no new node; replacing a
+/// previous nonzero receipt with zero still retires that previous origin.
+fn set_break_origin(nodes: &mut Vec<Inline>, index: usize, origin: u16) -> Option<OutputNodeEdit> {
+    for previous in (0..index).rev() {
+        let Inline::Anchor { id, .. } = &nodes[previous] else {
+            break;
+        };
+        if id.as_str().starts_with(NEXT_ROW) {
+            nodes[previous] = Inline::anchor(format!("{NEXT_ROW}{origin}"));
+            return None;
+        }
+    }
+    if origin == 0 {
+        return None;
+    }
+    nodes.insert(index, Inline::anchor(format!("{NEXT_ROW}{origin}")));
+    Some(OutputNodeEdit {
+        start: index,
+        removed: 0,
+        inserted: 1,
+    })
+}
+
+/// Only a root insertion changes saved root-vector addresses. A carrier
+/// inside a transparent annotation changes that annotation's children only.
+pub(in crate::mandoc::inline::flow) fn set_last_break_origin(
+    nodes: &mut Vec<Inline>,
+    origin: u16,
+) -> (bool, Option<OutputNodeEdit>) {
+    for index in (0..nodes.len()).rev() {
+        match &mut nodes[index] {
+            Inline::LineBreak {} => return (true, set_break_origin(nodes, index, origin)),
+            Inline::Strong { children }
+            | Inline::Emphasis { children }
+            | Inline::Link { children, .. } => {
+                if set_last_break_origin(children, origin).0 {
+                    return (true, None);
+                }
+            }
+            _ => {}
+        }
+    }
+    (false, None)
+}
+
+pub(in crate::mandoc::inline::flow) fn is_layout_carrier(node: &Inline) -> bool {
+    matches!(node, Inline::Anchor { id, .. }
+        if id.as_str().starts_with(NEXT_ROW) || id.as_str().starts_with(CURRENT_ROW))
+}
+
+/// Keep layout next to its executed delimiter until the final owner drains.
+/// These temporary anchors carry no glyphs and never enter public IR.
+pub(in crate::mandoc) fn push_row_break(nodes: &mut Vec<Inline>, origin: u16) {
+    if origin != 0 {
+        set_next_origin(nodes, origin);
+    }
+    nodes.push(Inline::line_break());
+}
+
+pub(in crate::mandoc::inline::flow) fn set_next_origin(nodes: &mut Vec<Inline>, origin: u16) {
+    let marker = Inline::anchor(format!("{NEXT_ROW}{origin}"));
+    if nodes.last().is_some_and(
+        |node| matches!(node, Inline::Anchor { id, .. } if id.as_str().starts_with(NEXT_ROW)),
+    ) {
+        *nodes.last_mut().expect("checked tail") = marker;
+    } else {
+        nodes.push(marker);
+    }
+}
+
+/// Rebase a removed alternative delimiter onto the new label's first row.
+pub(in crate::mandoc) fn split_row_origin(nodes: &mut Vec<Inline>) -> Option<Inline> {
+    let index = nodes.iter().rposition(
+        |node| matches!(node, Inline::Anchor { id, .. } if id.as_str().starts_with(NEXT_ROW)),
+    )?;
+    if nodes[index + 1..]
+        .iter()
+        .any(|node| !matches!(node, Inline::Anchor { .. }))
+    {
+        return None;
+    }
+    let Inline::Anchor { id, .. } = nodes.remove(index) else {
+        unreachable!()
+    };
+    Some(Inline::anchor(format!(
+        "{CURRENT_ROW}{}",
+        id.as_str().strip_prefix(NEXT_ROW)?
+    )))
+}
+
+/// Resolve alternative boundary addresses only after native retirement/drain.
+pub(in crate::mandoc) fn take_definition_term_breaks(nodes: &mut Vec<Inline>) -> Vec<usize> {
+    let mut positions = Vec::new();
+    let mut index = 0;
+    let mut previous_break = None;
+    nodes.retain(|node| {
+        if super::is_term_alternative(node) {
+            if let Some(index) = previous_break.take() {
+                positions.push(index);
+            }
+            return false;
+        }
+        if !matches!(node, Inline::Anchor { .. }) {
+            previous_break = matches!(node, Inline::LineBreak {}).then_some(index);
+        }
+        index += 1;
+        true
+    });
+    positions
+}
+
+pub(in crate::mandoc) fn take_inline_layout(nodes: &mut Vec<Inline>) -> mant_ir::InlineLayout {
+    fn take(
+        nodes: &mut Vec<Inline>,
+        row: &mut u32,
+        pending: &mut Option<i32>,
+        hints: &mut BTreeMap<u32, i32>,
+    ) {
+        nodes.retain_mut(|node| {
+            if super::is_term_alternative(node) {
+                return false;
+            }
+            if let Inline::Anchor { id, .. } = node {
+                if let Some(value) = id.as_str().strip_prefix(NEXT_ROW) {
+                    *pending = value.parse().ok();
+                    return false;
+                }
+                if let Some(value) = id.as_str().strip_prefix(CURRENT_ROW) {
+                    if let Ok(value) = value.parse() {
+                        hints.insert(*row, value);
+                    }
+                    return false;
+                }
+            }
+            match node {
+                Inline::LineBreak {} => {
+                    *row = row.saturating_add(1);
+                    if let Some(value) = pending.take() {
+                        hints.insert(*row, value);
+                    }
+                }
+                Inline::Text { value }
+                | Inline::Code { value }
+                | Inline::Equation { value, .. } => {
+                    if !value.is_empty() {
+                        *pending = None;
+                    }
+                    *row = row.saturating_add(
+                        u32::try_from(value.bytes().filter(|c| *c == b'\n').count())
+                            .unwrap_or(u32::MAX),
+                    );
+                }
+                Inline::Strong { children }
+                | Inline::Emphasis { children }
+                | Inline::Link { children, .. } => take(children, row, pending, hints),
+                Inline::Anchor { .. } => {}
+            }
+            true
+        });
+    }
+    let mut hints = BTreeMap::new();
+    take(nodes, &mut 0, &mut None, &mut hints);
+    mant_ir::InlineLayout {
+        row_hints: hints
+            .into_iter()
+            .filter(|(_, indent)| *indent != 0)
+            .map(|(row, indent_columns)| mant_ir::RowLayoutHint {
+                row,
+                indent_columns,
+            })
+            .collect(),
+    }
+}
+
 pub(in crate::mandoc::inline::flow) fn project_native_positions(
     nodes: &mut Vec<Inline>,
     origins: &[(String, usize, usize, bool)],
     padding: &[(String, usize, usize, bool)],
     output_start: usize,
     materialize_line_origins: bool,
-) {
+) -> Option<OutputNodeEdit> {
     if origins.is_empty() && padding.is_empty() {
-        return;
+        return None;
     }
     let mut positions = BTreeMap::<String, Vec<(usize, NativePosition, bool)>>::new();
     for (owner, scalar, origin, hidden_graph) in origins {
@@ -44,47 +243,47 @@ pub(in crate::mandoc::inline::flow) fn project_native_positions(
     // stable words/scalars rather than indices for the receipt positions.
     let pending = nodes.split_off(output_start.min(nodes.len()));
     let mut projected = cursor.project(pending);
+    let mut edit = None;
     if materialize_line_origins {
         let mut origin = None;
         materialize_origins(&mut projected, &mut origin);
-        if let Some(origin) = origin
-            && apply_tail_origin(nodes, origin).is_none()
-            && origin > 0
-        {
-            // The first represented HEAD row can start at a nonzero
-            // restored native offset without a prior row delimiter.
-            // Its accepted print owns this positioning; an empty
-            // earlier owner cannot represent it through LineBreak.
-            projected.insert(
-                0,
-                Inline::Text {
-                    value: " ".repeat(usize::from(origin)),
-                },
-            );
+        if let Some(origin) = origin {
+            let (applied, insertion) = apply_tail_origin(nodes, origin);
+            edit = insertion;
+            if applied.is_none() && origin > 0 {
+                // The first represented HEAD row can start at a nonzero
+                // restored native offset without a prior row delimiter.
+                // Its accepted print owns this positioning; an empty
+                // earlier owner cannot represent it through LineBreak.
+                projected.insert(0, Inline::anchor(format!("{CURRENT_ROW}{origin}")));
+            }
         }
     }
     nodes.extend(projected);
+    edit
 }
 
-fn apply_tail_origin(nodes: &mut [Inline], origin: u16) -> Option<bool> {
-    for node in nodes.iter_mut().rev() {
-        match node {
-            Inline::LineBreak { indent_columns } => {
-                *indent_columns = origin;
-                return Some(true);
+fn apply_tail_origin(
+    nodes: &mut Vec<Inline>,
+    origin: u16,
+) -> (Option<bool>, Option<OutputNodeEdit>) {
+    for index in (0..nodes.len()).rev() {
+        match &mut nodes[index] {
+            Inline::LineBreak {} => {
+                return (Some(true), set_break_origin(nodes, index, origin));
             }
             Inline::Strong { children }
             | Inline::Emphasis { children }
             | Inline::Link { children, .. } => {
-                if let Some(applied) = apply_tail_origin(children, origin) {
-                    return Some(applied);
+                if let (Some(applied), _) = apply_tail_origin(children, origin) {
+                    return (Some(applied), None);
                 }
             }
             Inline::Anchor { .. } => {}
-            _ => return Some(false),
+            _ => return (Some(false), None),
         }
     }
-    None
+    (None, None)
 }
 
 /// Origins sit immediately before their accepted graph. Walking backwards
@@ -92,15 +291,18 @@ fn apply_tail_origin(nodes: &mut [Inline], origin: u16) -> Option<bool> {
 /// A first-row origin has no preceding hard boundary; its pending receipt is
 /// handled by the owner projection after this boundary search completes.
 fn materialize_origins(nodes: &mut Vec<Inline>, origin: &mut Option<u16>) {
-    for node in nodes.iter_mut().rev() {
-        if let Some(columns) = super::native_row_origin(node) {
+    let mut reversed = Vec::with_capacity(nodes.len());
+    for mut node in std::mem::take(nodes).into_iter().rev() {
+        if let Some(columns) = super::native_row_origin(&node) {
             *origin = Some(u16::try_from(columns).unwrap_or(u16::MAX));
             continue;
         }
-        match node {
-            Inline::LineBreak { indent_columns } => {
+        match &mut node {
+            Inline::LineBreak {} => {
                 if let Some(columns) = origin.take() {
-                    *indent_columns = columns;
+                    reversed.push(node);
+                    reversed.push(Inline::anchor(format!("{NEXT_ROW}{columns}")));
+                    continue;
                 }
             }
             Inline::Strong { children }
@@ -109,8 +311,10 @@ fn materialize_origins(nodes: &mut Vec<Inline>, origin: &mut Option<u16>) {
             Inline::Text { value } | Inline::Code { value } if !value.is_empty() => *origin = None,
             _ => {}
         }
+        reversed.push(node);
     }
-    nodes.retain(|node| super::native_row_origin(node).is_none());
+    reversed.reverse();
+    *nodes = reversed;
 }
 
 enum NativePosition {

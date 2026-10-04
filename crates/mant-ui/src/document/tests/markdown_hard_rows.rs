@@ -325,6 +325,7 @@ fn canonical_prefix_does_not_activate_mixed_html_or_hostile_targets() {
 fn mutation_view(children: Vec<Inline>) -> RenderedDocument {
     let mut content = bundle();
     content.document.as_mut().unwrap().sections[0].blocks = vec![Block::Paragraph {
+        inline_layout: mant_ir::InlineLayout::default(),
         children,
         layout: LayoutHint::default(),
         source: None,

@@ -688,12 +688,15 @@ fn append_list_targets(
                 items.push(DefinitionItem {
                     source: None,
                     entry: None,
-                    terms: vec![
+                    terms: (vec![
                         targets
                             .into_iter()
                             .map(|target| Inline::anchor_at(target, source))
-                            .collect(),
-                    ],
+                            .collect::<Vec<_>>(),
+                    ])
+                    .into_iter()
+                    .map(Into::into)
+                    .collect(),
                     description: Vec::new(),
                     layout: mant_ir::DefinitionLayout {
                         head_body_relation: mant_ir::HeadBodyRelation::from(true),

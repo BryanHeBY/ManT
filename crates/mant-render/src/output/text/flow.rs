@@ -12,6 +12,7 @@ pub(super) struct Flow {
 
 enum Part {
     Text(LayoutText),
+    CompletedText(LayoutText),
     Literal(LayoutText),
     Gap(u16),
 }
@@ -23,7 +24,7 @@ impl Flow {
 
     pub(super) fn has_physical_rows(&self) -> bool {
         self.parts.iter().any(|part| match part {
-            Part::Text(_) | Part::Literal(_) => true,
+            Part::Text(_) | Part::CompletedText(_) | Part::Literal(_) => true,
             Part::Gap(rows) => *rows > 0,
         })
     }
@@ -39,10 +40,32 @@ impl Flow {
         }
     }
 
+    /// A paragraph whose last retained blank row was closed by authored
+    /// content. Its delimiter survives EOF and table-cell collection.
+    pub(super) fn completed_text(value: LayoutText) -> Self {
+        Self {
+            parts: vec![Part::CompletedText(value)],
+        }
+    }
+
     pub(super) fn push_text(&mut self, value: LayoutText) {
         if !value.is_empty() {
             self.parts.push(Part::Text(value));
         }
+    }
+
+    /// Put a run-in marker before the first physical row without flattening
+    /// the flow's completed tail or its pending vertical boundaries.
+    pub(super) fn prefix_first_row(mut self, removed: &str, prefix: &str) -> Self {
+        if let Some(text) = self.parts.iter_mut().find_map(|part| match part {
+            Part::Text(text) | Part::CompletedText(text) | Part::Literal(text) => Some(text),
+            Part::Gap(_) => None,
+        }) {
+            *text = std::mem::take(text).strip_prefix(removed).prefixed(prefix);
+        } else {
+            self.push_text(prefix.into());
+        }
+        self
     }
 
     pub(super) fn gap(&mut self, rows: u16) {
@@ -78,14 +101,16 @@ impl Flow {
         let mut gap = GapPlan::default();
         let mut has_content = preceding_content;
         let mut final_empty_literal_row = false;
+        let mut final_completed_row = false;
         for part in self.parts {
+            let completed_row = matches!(&part, Part::CompletedText(_));
             let empty_literal_tail = matches!(
                 &part,
                 Part::Literal(text) if text.is_empty() || text.visible.ends_with('\n')
             );
             match part {
                 Part::Gap(rows) => gap.append_resolved(rows),
-                Part::Text(text) | Part::Literal(text) => {
+                Part::Text(text) | Part::CompletedText(text) | Part::Literal(text) => {
                     if has_content {
                         output.push_plain("\n");
                     }
@@ -93,6 +118,7 @@ impl Flow {
                     output.append(&text);
                     has_content = true;
                     final_empty_literal_row = empty_literal_tail;
+                    final_completed_row = completed_row;
                     gap = GapPlan::default();
                 }
             }
@@ -107,7 +133,8 @@ impl Flow {
         // term_newln/term_vspace survive leaving NODE_NOFILL (man_term.c).
         // A cell's open final row may receive the next column; collecting
         // that fragment does not complete the surrounding physical row.
-        let completed = rows > 0 || (complete_literal_tail && final_empty_literal_row);
+        let completed =
+            rows > 0 || final_completed_row || (complete_literal_tail && final_empty_literal_row);
         if has_content && completed {
             output.push_plain("\n");
         }

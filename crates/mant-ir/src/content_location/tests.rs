@@ -8,7 +8,7 @@ fn document() -> Document {
         "parser":null,"source":{"format":"markdown"},"meta":{},
         "heading":{"content":[{"type":"link","target":{"kind":"document","name":"index"},"children":[]}]},
         "blocks":[{"type":"definition-list","items":[{
-            "entry":null,"terms":[[{"type":"link","target":{"kind":"document","name":"term"},"children":[{"type":"code","value":"é名"}]}]],
+            "entry":null,"terms":[{"content":[{"type":"link","target":{"kind":"document","name":"term"},"children":[{"type":"code","value":"é名"}]}]}],
             "description":[{"type":"paragraph","children":[{"type":"text","value":"body"}]}]
         }]}],"sections":[{"id":"part","heading":{"content":[{"type":"text","value":"Part"}]},"blocks":[],"children":[]}]
     })).unwrap()
@@ -218,6 +218,7 @@ fn wrong_container_and_out_of_bounds_addresses_never_fall_back() {
 #[test]
 fn shared_block_resolver_preserves_response_pair_depth_contract() {
     let mut block = Block::Paragraph {
+        inline_layout: crate::InlineLayout::default(),
         children: vec![],
         layout: crate::LayoutHint::default(),
         source: None,
@@ -260,8 +261,12 @@ fn entry_local_mapping_checks_the_combined_path_before_fixed_scratch_growth() {
         layout: crate::LayoutHint::default(),
         source: None,
         items: vec![crate::DefinitionItem {
-            terms: vec![vec![Inline::Text { value: "A".into() }]],
+            terms: (vec![vec![Inline::Text { value: "A".into() }]])
+                .into_iter()
+                .map(Into::into)
+                .collect(),
             description: vec![Block::Paragraph {
+                inline_layout: crate::InlineLayout::default(),
                 children: vec![Inline::Text {
                     value: "body".into(),
                 }],

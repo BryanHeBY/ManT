@@ -855,7 +855,7 @@ Each section contains:
 
 - a document-local `id`;
 - optional exact `fragmentAliases` resolving to that `id`;
-- a visible `title`;
+- authoritative `heading.content` and optional `heading.inlineLayout`;
 - optional `spacingBeforeLines`;
 - semantic `blocks`;
 - recursive `children`;
@@ -878,8 +878,8 @@ Every block is tagged by `type`:
 
 | `type` | Principal fields | Meaning |
 | --- | --- | --- |
-| `paragraph` | `children` | Filled prose |
-| `preformatted` | `children`, optional `language` | Literal/code display |
+| `paragraph` | `children`, optional `inlineLayout` | Filled prose |
+| `preformatted` | `children`, optional `language`, optional `inlineLayout` | Literal/code display |
 | `list` | structured `kind`, `items`, `compact` | Bullet, dash, ordered, or plain list |
 | `definition-list` | `items`, `compact` | Terms with block-capable descriptions |
 | `table` | `rows`, optional `columnWidths` | Block-capable cells, spans, alignment, and measured field origins |
@@ -986,7 +986,7 @@ Definition-owner example:
   "type": "definition-list",
   "items": [
     {
-      "terms": [[{"type":"code","value":"--exclude PATTERN"}]],
+      "terms": [{"content":[{"type":"code","value":"--exclude PATTERN"}]}],
       "description": [{"type":"paragraph","children":[{"type":"text","value":"Skip matching paths."}]}],
       "layout": {"headBodyRelation":{"type":"shared","wordBoundary":"separated","bodyAlignment":"indented"},"spacingBeforeLines":0},
       "entry": {
@@ -1067,19 +1067,85 @@ Inline nodes are tagged by `type`:
 | `code` | `value` | Inline or preformatted code fragment |
 | `link` | `target`, optional `title`, `children` | Typed destination described below |
 | `anchor` | `id`, optional `fragmentAliases` | Zero-width normalized destination plus exact source fragments |
-| `line-break` | optional `indentColumns` | Explicit hard break; compose the following row's resolved display-cell indent with its containing origin |
+| `line-break` | None | Pure explicit hard break, contributing one original text scalar |
 
-`line-break.indentColumns` defaults to zero and is omitted at zero. Its closed
-unsigned range is 0 through 65535; null and unknown fields are rejected. This
-is a presentation hint for the following hard row, including its visual wraps.
-Ordinary text, located explain rendering, Markdown and TUI preserve it. The
-padding does not change source or query match coordinates, which still count
-the hard break as one scalar, or the semantic identity of its text and links.
+`{"type":"line-break"}` is the complete hard-break shape. Any
+`line-break.indentColumns` field is rejected, including zero. Layout belongs
+to the inline content owner described below.
 
-For example, `[{"type":"text","value":"Alpha"},
-{"type":"line-break","indentColumns":6},
-{"type":"text","value":"Beta"}]` displays the second row six cells past
-the inline root's origin while retaining the source text `Alpha\nBeta`.
+### Inline Owner Layout
+
+Paragraph and Preformatted blocks retain `children`; document and section
+Headings retain `content`. Each may also carry optional `inlineLayout`.
+Definition-list `terms` is an array of closed DefinitionTerm objects, each with
+required `content` and optional `inlineLayout`; the former arrays of inline
+arrays are rejected. Empty or all-zero owner layouts are omitted canonically.
+There is one authoritative body per owner, also after independently decoding
+a document, excerpt or explanation response.
+
+For example:
+
+```json
+{
+  "type":"paragraph",
+  "children":[{"type":"text","value":"Alpha"},{"type":"line-break"},{"type":"text","value":"Beta"}],
+  "inlineLayout":{"rowHints":[{"row":1,"indentColumns":6}]}
+}
+```
+
+This preserves the original text `Alpha\nBeta` and corrects the second logical
+row's display origin by six cells. `row` is an unsigned zero-based owner-local
+hard-row position, not a character index or screen row. Strong, Emphasis and
+Link wrappers share that row counter; anchors do not advance it. Each hard
+break and actual newline in Text, Code or readable equation text advances it.
+An empty owner has position 0. `A\n` has positions 0 and 1, with row 1 open;
+`A\n\n` has positions 0, 1 and 2, with row 1 completed empty and row 2 open.
+Hints on empty or open trailing positions create no text, completed blank row
+or clickable range. Standalone literal output retains its authored trailing
+rows; a table fragment may let the next cell occupy an open tail. Completed
+empty rows and separately owned `VerticalSpace` cannot be reused that way.
+
+`rowHints` must be strictly increasing, unique, and in bounds for its exact
+owner, with at most 4096 objects. `indentColumns` is an integer from -65535
+through 65535. Missing rows use zero independently; accepted explicit zeros
+are validated and then omitted from canonical output. Null layouts or hint
+arrays, unknown or duplicate fields, fractional or oversized values, and
+out-of-bounds hints are rejected by actual owner decoding. The generated
+schema cannot express every content-dependent row bound.
+
+Roff production also limits the complete document to 65536 nonzero hints.
+Excess optional hints are omitted with `layout.row-hint-budget` and diagnostic
+impact `none`, preserving authoritative text and `contentComplete`. This
+producer budget does not impose a separate whole-document JSON input limit.
+
+Each logical row resolves two signed origins: its first visual line and its
+soft-wrap continuations. A hint corrects both after parent and structural
+layout composition, before final display bounds. It never cancels hanging
+layout: parent 0, block indent 2, continuation displacement 4 and hint +1 yield
+first/wrapped origins 3 and 7 for the first hard row. The next hard row uses
+its own hint and the element's continuation policy. Markdown currently
+projects phrasing layout as non-breaking entities and fenced layout as spaces.
+Generated layout cells remain outside original text, name/link scalar ranges
+and match coordinates.
+
+For a multirow Link label with an effective nonzero correction inside the
+label, Markdown exports separate label fragments with the same destination
+and title to keep generated cells outside clickable and styled text. Actual
+Markdown readback counts these as separate occurrences; the original Document,
+JSON copies and original-scope reference inventory still count the one original
+Link. Distinct-target counting is unchanged. Both artifact fragments remain in
+the original section or EntryOwner's byte range, with no new canonical identity
+and no public per-fragment reverse Link map. A first-row prefix alone keeps one
+Link, and preceding anchors do not create extra empty occurrences. This is a
+specific Markdown formatting difference for retained internal row padding.
+
+Proven native first-row positioning padding is now a row-0 hint rather than
+generated body text. Authored spaces, NBSP, fixed blanks and word separators
+remain content. Names, links, excerpts, explanations and artifact maps use the
+updated authoritative body; coordinates may change while resolving the same
+accepted text. Cached text lacking generation evidence is not trimmed by
+appearance. Whole-owner excerpts retain their hints; a partial selection that
+becomes a new body root rebases hints to its new row positions.
 
 Visible children are authoritative in every consumer. Markdown does not add
 BSD lifecycle prose or hide accepted `Lk` URI suffixes. Search coordinates and

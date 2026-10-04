@@ -246,15 +246,63 @@ geometry restore, while non-text mdoc nodes restore their entry offset after
 children and post. A later source-line event can therefore print a buffered
 word at the request's changed offset, while an outer scope return can restore
 the original offset before the final word prints. Previously submitted rows
-retain their origin. The resulting `LineBreak.indentColumns` crosses JSON
-and is consumed by text, explain, Markdown, TUI, and visual selection copying;
-these layout cells never enter original-text or link scalar coordinates.
+retain their origin. The resulting owner-local `inlineLayout.rowHints` crosses
+JSON and is consumed by text, explain, Markdown, TUI, and visual selection
+copying. Each hint contains a zero-based logical `row` and signed
+`indentColumns`; `LineBreak` itself is a pure hard break. Paragraph and literal
+blocks, document and section headings, and each DefinitionTerm carry their
+own optional layout beside their single original inline body. Definition terms
+serialize as `{content, inlineLayout?}` objects, not nested inline arrays.
+These layout cells never enter original-text or link scalar coordinates.
 These hints cover the selected list-field and roff-request offsets with their
 source-line flush and node-restoration lifetimes. Other device geometry keeps
 the existing responsive projection: for example, the additional four-column
 SYNOPSIS `Fo` BODY margin from `termp_fo_pre()` is not a portable row-origin
 promise. Explicit hard lines, body order, and executed boundaries remain required
 reading content across these layouts.
+
+Row counting passes through style and link wrappers and counts actual newlines
+inside Text, Code and readable equations as well as LineBreak nodes. Anchors
+do not advance it. A correction applies independently to one logical row's
+first visual origin and its soft-wrap continuation origin, after signed parent
+and hanging geometry are composed. For parent 0, block indent 2, hanging
+displacement 4 and correction +1, these origins are 3 and 7. The next hard row
+uses its own correction, never a previous row's temporary offset. Final padding
+is bounded only at the visible leaf.
+
+An empty or anchor-only owner has an initial row position without requesting
+blank output. `A\n` leaves row 1 open; `A\n\n` closes row 1 as an empty row and
+leaves row 2 open. A hint at an empty or open trailing position adds no glyph,
+completed row or clickable region. An independent literal settles its authored
+trailing rows at its container end; an adjoining table cell can instead occupy
+an open tail. Completed empty rows and VerticalSpace remain independently
+consumed output and cannot be reused as that tail.
+
+The producer records a proven generated first-row position as a row-0 hint
+instead of inserting Text spaces when no preceding hard break exists. Only
+padding with native generation evidence moves: authored whitespace, NBSP,
+fixed blanks and word separators remain in the body. Final name bindings,
+link occurrences, excerpt/explain locations and artifact maps are rebuilt from
+that body. Their numeric offsets can change while selecting the same accepted
+glyphs; old Text spaces without generation evidence are not guessed away.
+Markdown phrasing currently expresses these presentation cells as non-breaking
+entities outside authoritative text, while fenced literal output uses spaces.
+When a multirow Link label contains an effective internal row correction,
+Markdown emits same-destination, same-title label fragments around those cells
+so the generated padding is outside the link's clickable and styled text.
+Markdown readback gains formatting-level occurrences; the original IR and its
+JSON/reference inventory keep the original Link occurrence and canonical owner.
+Artifact byte ranges still point to that original section or entry. A row-0
+prefix alone needs no split, and preceding anchors add no empty occurrence.
+
+Hint displacements have the closed signed range -65535 through 65535. Strict
+owner decoding rejects unordered, duplicate or out-of-range row addresses and
+more than 4096 hints per owner, including invalid explicit zero hints.
+Canonical output omits zero corrections and empty owner layouts. Roff
+production additionally retains at most 65536 nonzero hints in a document;
+excess optional layout is omitted with `layout.row-hint-budget` and diagnostic
+impact `none`. Accepted body text and content completeness remain intact.
+The document total is a producer budget, not a whole-document JSON input cap.
 
 Field consumption follows `term_fill()`'s accepted native-cell prefix. A `\p` after
 an ordinary breakable blank can start the next pass before any graph, causing

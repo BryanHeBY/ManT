@@ -771,6 +771,56 @@ fn resumed_native_fields_preserve_only_their_unprinted_separator() {
 }
 
 #[test]
+fn resumed_column_separators_preserve_authored_spaces_and_fixed_blanks() {
+    // All 18 exact full sources ran pinned ASCII/UTF-8/HTML/tree/lint,
+    // lint=0, before these assertions. term_flushln()113-116,233-237 and
+    // term_field()389-427 defer field padding until an accepted graph;
+    // roff_term_pre_mc()147-150 leaves the Column's actual flags intact.
+    // Retiring that generated separator must not consume the next operand's
+    // authored space or ASCII_NBRSP (the source spelling \\~).
+    for macro_name in ["No", "Li", "Em"] {
+        for offset in [0_usize, 6] {
+            for (prefix, authored_columns) in [("", 0), (" ", 1), ("\\~", 1)] {
+                let source = format!(
+                    "{HEADER}.Bl -column \"xxxxxxxx\" \"xxxx\"\n.It Xo\n.Bd -literal -compact -offset {offset}n\n.{macro_name} \"X\\p \\p DROP\\c\"\n.mc\n.{macro_name} \"{prefix}Z\"\n.mc\n.Ed\n.No AFTER\n.Xc Ta RightWord\n.El\n{FOOTER}"
+                );
+                let query = round_trip(&source);
+                assert_eq!(
+                    physical_rows(&query),
+                    ["X", "Z", "AFTER", "RightWord"],
+                    "{source}"
+                );
+                let text = mant_render::render_query_text(&query);
+                // term_field() treats ASCII_NBRSP as an ordinary advance
+                // (term.c:406-416); reading text preserves the source NBSP.
+                // Compare visual columns while the canonical check below
+                // still requires that authored scalar to survive unchanged.
+                let display = text.replace('\u{a0}', " ");
+                for row in [
+                    format!("{}X", " ".repeat(offset)),
+                    format!("{}Z", " ".repeat(offset + 1 + authored_columns)),
+                    "AFTER".into(),
+                    "            RightWord".into(),
+                ] {
+                    assert!(
+                        display.lines().any(|line| line == row),
+                        "{source}\n{row:?}: {text:?}"
+                    );
+                }
+                assert!(!text.contains("DROP"));
+                if prefix == "\\~" {
+                    let json = serde_json::to_string(query.document.as_ref().unwrap()).unwrap();
+                    assert!(
+                        json.contains('\u{a0}'),
+                        "authored NBSP remains a source scalar: {json}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn literal_content_and_spacing_rows_keep_their_execution_order() {
     // These exact full sources ran pristine in ASCII/UTF-8/HTML/tree/lint,
     // all lint=0, before the assertions. Empty NODE_NOFILL TEXT executes

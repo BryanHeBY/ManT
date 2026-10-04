@@ -73,7 +73,7 @@ impl InlineBuilder {
         mut native: Option<NativeFieldDevice>,
     ) -> bool {
         let FieldFlush {
-            start: field_output_start,
+            start: mut field_output_start,
             gap: gap_cells,
             body: body_width_columns,
             width: field_width_columns,
@@ -81,7 +81,12 @@ impl InlineBuilder {
             boundary,
         } = field;
         let exit_field = boundary == FieldFlushBoundary::ExitField;
-        self.commit_definition_row_origin();
+        if let Some(edit) = self.commit_definition_row_origin() {
+            edit.remap(&mut field_output_start);
+            if let Some(device) = &mut native {
+                device.remap_output_positions(edit);
+            }
+        }
         if let Some(device) = &native {
             self.project_captured_definition_field(device);
         } else {

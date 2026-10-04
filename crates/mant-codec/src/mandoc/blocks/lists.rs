@@ -47,8 +47,9 @@ mod tests {
                 spacing_before_lines: None,
                 ..Default::default()
             },
-            terms: vec![text(term)],
+            terms: (vec![text(term)]).into_iter().map(Into::into).collect(),
             description: vec![Block::Paragraph {
+                inline_layout: mant_ir::InlineLayout::default(),
                 children: text(description),
                 layout: LayoutHint::default(),
                 source: None,
@@ -81,7 +82,7 @@ mod tests {
         assert!(super::terms_fit_inline(&[text("space")], 6));
         assert!(super::terms_fit_inline(&[text("* / %")], 6));
         assert!(!super::terms_fit_inline(&[text("--listed-incremental")], 6));
-        assert!(!super::terms_fit_inline(&[], 6));
+        assert!(!super::terms_fit_inline(&[] as &[Vec<Inline>], 6));
     }
 
     #[test]

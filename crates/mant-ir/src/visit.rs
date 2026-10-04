@@ -274,7 +274,7 @@ where
     V: VisitMut + ?Sized,
 {
     for term in &mut item.terms {
-        walk_inlines_mut(visitor, term);
+        walk_inlines_mut(visitor, &mut term.content);
     }
     walk_blocks_mut(visitor, &mut item.description);
 }

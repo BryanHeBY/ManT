@@ -11,6 +11,8 @@ pub(in crate::mandoc) mod field_buffer;
 use definition::DefinitionFieldState;
 mod native_field;
 mod tab_stops;
+use std::cell::{Cell, RefCell};
+use std::rc::{Rc, Weak};
 use std::sync::Arc;
 use tab_stops::TabStops;
 mod no_fill;
@@ -27,7 +29,8 @@ pub(in crate::mandoc) use output::trim_trailing_breakable_spaces;
 pub(in crate::mandoc) use output::{
     CompletedRowOrigin, consume_one_row_ending, ends_with_executed_line_break,
     has_rendered_formatter_glyph, native_row_origin, prepare_inline_output,
-    retain_inline_identities, strip_native_projection_markers, trailing_completed_row_origins,
+    retain_inline_identities, split_row_origin, strip_native_projection_markers,
+    take_definition_term_breaks, take_inline_layout, trailing_completed_row_origins,
 };
 
 /// A stable source-word range plus the device cells its IR owner already
@@ -45,6 +48,9 @@ pub(in crate::mandoc::inline) struct NativeWordAnchor {
 
 pub(in crate::mandoc) struct InlineBuilder {
     nodes: Vec<Inline>,
+    // Only live annotation scopes have an address. A checkpoint's last
+    // handle unregisters on return, including unused/early-return branches.
+    output_positions: Option<Rc<OutputPositionRegistry>>,
     pub(in crate::mandoc) head_operand_capture:
         Option<std::rc::Rc<std::cell::RefCell<HeadOperandCapture>>>,
     // Macro handlers such as pre_alternate() call term_word() directly on
@@ -56,7 +62,6 @@ pub(in crate::mandoc) struct InlineBuilder {
     // A cell executed by this builder, separate from an occupied formatter
     // row inherited from a detached HEAD or a prior output owner.
     produced_formatter_cell: CellProduction,
-    definition_term_breaks: Vec<usize>,
     // Semantic annotations begin after the first operand's executed auto
     // separator, independently of any authored leading blank glyphs.
     pending_output_scope_prefixes: Vec<String>,
@@ -257,9 +262,25 @@ pub(in crate::mandoc) enum AuthorBreakEffect {
 
 /// Start of an output slice whose source still executes in the live formatter.
 /// Semantic annotation records this boundary without saving execution state.
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub(in crate::mandoc) struct OutputCheckpoint {
-    node_count: usize,
+    position: Rc<Cell<usize>>,
+    registry: Weak<OutputPositionRegistry>,
+}
+
+type OutputPositionRegistry = RefCell<Vec<Weak<Cell<usize>>>>;
+
+impl Drop for OutputCheckpoint {
+    fn drop(&mut self) {
+        if Rc::strong_count(&self.position) == 1
+            && let Some(registry) = self.registry.upgrade()
+        {
+            let position = Rc::downgrade(&self.position);
+            registry
+                .borrow_mut()
+                .retain(|registered| !registered.ptr_eq(&position));
+        }
+    }
 }
 
 /// Formatter execution state that crosses a private presentation scope.
@@ -431,11 +452,11 @@ impl InlineBuilder {
     pub(in crate::mandoc) fn with_spacing(spacing_enabled: bool) -> Self {
         Self {
             nodes: Vec::new(),
+            output_positions: None,
             head_operand_capture: None,
             direct_word_operands: false,
             asserted_vertical_row: false,
             produced_formatter_cell: CellProduction::None,
-            definition_term_breaks: Vec::new(),
             pending_output_scope_prefixes: Vec::new(),
             execution: InlineExecutionState::with_spacing(spacing_enabled),
             external_head_row_pending: false,
@@ -448,11 +469,11 @@ impl InlineBuilder {
     ) -> Self {
         Self {
             nodes,
+            output_positions: None,
             head_operand_capture: None,
             direct_word_operands: false,
             asserted_vertical_row: false,
             produced_formatter_cell: CellProduction::None,
-            definition_term_breaks: Vec::new(),
             pending_output_scope_prefixes: Vec::new(),
             execution,
             external_head_row_pending: false,
@@ -503,35 +524,14 @@ impl InlineBuilder {
             .nodes
             .iter()
             .rposition(|node| !output::is_private_output_marker(node))
-            && matches!(self.nodes[index], Inline::LineBreak { .. })
-            && self.definition_term_breaks.last() != Some(&index)
+            && matches!(self.nodes[index], Inline::LineBreak {})
+            && !self.nodes[index + 1..]
+                .iter()
+                .any(output::is_term_alternative)
         {
-            self.definition_term_breaks.push(index);
+            self.nodes
+                .push(Inline::anchor(output::INTERNAL_TERM_ALTERNATIVE));
         }
-    }
-
-    pub(in crate::mandoc) fn take_definition_term_breaks(&mut self) -> Vec<usize> {
-        // The native ownership ledger is private. Resolve the row markers
-        // against the returned IR after private word anchors are removed.
-        let private_positions: Vec<usize> = self
-            .nodes
-            .iter()
-            .enumerate()
-            .filter_map(|(index, node)| output::is_private_output_marker(node).then_some(index))
-            .collect();
-        let mut private_cursor = 0;
-        std::mem::take(&mut self.definition_term_breaks)
-            .into_iter()
-            .map(|index| {
-                while private_positions
-                    .get(private_cursor)
-                    .is_some_and(|&marker| marker < index)
-                {
-                    private_cursor += 1;
-                }
-                index.saturating_sub(private_cursor)
-            })
-            .collect()
     }
 
     pub(in crate::mandoc) fn into_parts(self) -> (Vec<Inline>, InlineExecutionState) {

@@ -36,6 +36,7 @@ fn block_state_preserves_filled_line_boundaries_and_continuations() {
     let output = state.finish();
     let [
         Block::Paragraph {
+            inline_layout: _,
             children,
             layout: paragraph_layout,
             source: paragraph_source,
@@ -72,11 +73,13 @@ fn block_state_flushes_paragraph_before_tight_preformatted_lines() {
     let output = state.finish();
     let [
         Block::Paragraph {
+            inline_layout: _,
             children: paragraph,
             layout: paragraph_layout,
             source: paragraph_source,
         },
         Block::Preformatted {
+            inline_layout: _,
             children: preformatted,
             language,
             layout: preformatted_layout,

@@ -750,10 +750,14 @@ fn explainable_manual() -> Document {
                 names: vec!["--exclude".to_owned()],
                 value_domain: None,
             }),
-            terms: vec![vec![Inline::Text {
+            terms: (vec![vec![Inline::Text {
                 value: "--exclude=PATTERN".to_owned(),
-            }]],
+            }]])
+            .into_iter()
+            .map(Into::into)
+            .collect(),
             description: vec![Block::Paragraph {
+                inline_layout: mant_ir::InlineLayout::default(),
                 children: vec![Inline::Text {
                     value: "Exclude matching files from the archive.".to_owned(),
                 }],
@@ -797,6 +801,7 @@ fn section(id: &str, title: &str, text: &str, children: Vec<Section>) -> Section
         heading: title.into(),
         spacing_before_lines: 0,
         blocks: vec![Block::Paragraph {
+            inline_layout: mant_ir::InlineLayout::default(),
             children: vec![Inline::Text {
                 value: text.to_owned(),
             }],

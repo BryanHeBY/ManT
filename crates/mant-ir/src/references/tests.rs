@@ -29,7 +29,7 @@ fn all_content_roots_and_repeated_links_rebuild_after_serde() {
             paragraph(vec![link("root"), link("same"), link("same")]),
             json!({"type":"preformatted","children":[link("pre")]}),
             json!({"type":"list","kind":{"kind":"bullet"},"items":[{"blocks":[paragraph(vec![link("item")])]}]}),
-            json!({"type":"definition-list","items":[{"entry":null,"terms":[[link("term")]],"description":[paragraph(vec![link("description")])]}]}),
+            json!({"type":"definition-list","items":[{"entry":null,"terms":[{"content":[link("term")]}],"description":[paragraph(vec![link("description")])]}]}),
             json!({"type":"table","rows":[{"cells":[{"blocks":[paragraph(vec![link("cell")])]}]}]}),
         ],
         vec![
@@ -39,6 +39,7 @@ fn all_content_roots_and_repeated_links_rebuild_after_serde() {
         ],
     );
     document.heading = Some(crate::Heading {
+        inline_layout: crate::InlineLayout::default(),
         content: vec![serde_json::from_value(link("document-heading")).unwrap()],
         source: None,
     });
@@ -95,7 +96,7 @@ fn transparent_items_keep_nearest_semantic_owner_without_copying_forms() {
                 paragraph(vec![link("outer")]),
                 {"type":"table","rows":[{"cells":[{"blocks":[
                     {"type":"list","kind":{"kind":"bullet"},"items":[{"blocks":[paragraph(vec![link("transparent")])]}]},
-                    {"type":"definition-list","items":[{"entry":facts("child"),"terms":[[link("child")]],"description":[]}]}
+                    {"type":"definition-list","items":[{"entry":facts("child"),"terms":[{"content":[link("child")]}],"description":[]}]}
                 ]}]}]}
             ]
         }]})],

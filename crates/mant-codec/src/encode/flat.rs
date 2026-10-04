@@ -1,5 +1,8 @@
 //! Portable table cells flatten presentation, never semantic ownership.
-use super::{inline::flatten_inline, mapped::MappedText};
+use super::{
+    inline::{flatten_inline, flatten_inline_content, literal_row_layout},
+    mapped::MappedText,
+};
 use mant_ir::{
     Block, EntryOwner, TableCell, TableCellKind, TableRow, TableRowPlan, TableRuleCellKind,
     bounded_table_rows,
@@ -71,15 +74,23 @@ fn plain_cell(cell: &TableCell, track: bool) -> MappedText {
 
 fn plain_block(block: &Block, track: bool) -> Option<MappedText> {
     match block {
-        Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
+        Block::Paragraph {
+            children,
+            inline_layout,
+            ..
+        }
+        | Block::Preformatted {
+            children,
+            inline_layout,
+            ..
+        } => {
             // A cell can begin/end with executed hard rows (term.c::
             // ESCAPE_BREAK/term_fill; mdoc_term.c::termp_it_post). Flattening
             // its portable geometry must not trim those authored boundaries.
-            MappedText::from(
-                flatten_inline(children)
-                    .trim_matches([' ', '\t'])
-                    .to_owned(),
-            )
+            MappedText::from(literal_row_layout(
+                flatten_inline(children).trim_matches([' ', '\t']),
+                inline_layout,
+            ))
             .nonempty()
         }
         Block::List { items, .. } => MappedText::join(
@@ -101,7 +112,7 @@ fn plain_block(block: &Block, track: bool) -> Option<MappedText> {
                 let terms = item
                     .terms
                     .iter()
-                    .map(|term| flatten_inline(term))
+                    .map(|term| flatten_inline_content(term.inline_content()))
                     .collect::<Vec<_>>()
                     .join(", ");
                 let description = MappedText::join(

@@ -55,13 +55,17 @@ fn query() -> ResolvedContent {
                             names: vec!["--acls".to_owned()],
                             value_domain: None,
                         }),
-                        terms: vec![vec![
-                            Inline::anchor("option-acls"),
-                            Inline::Code {
-                                value: "--acls".to_owned(),
-                            },
-                        ]],
+                        terms: vec![
+                            vec![
+                                Inline::anchor("option-acls"),
+                                Inline::Code {
+                                    value: "--acls".to_owned(),
+                                },
+                            ]
+                            .into(),
+                        ],
                         description: vec![Block::Paragraph {
+                            inline_layout: mant_ir::InlineLayout::default(),
                             children: vec![
                                 Inline::Text {
                                     value: "Preserve ".to_owned(),
@@ -176,6 +180,7 @@ fn styled_identifiers_are_visible_matches_not_contiguous_markdown_source() {
     query.document.as_mut().unwrap().sections[0]
         .blocks
         .push(Block::Paragraph {
+            inline_layout: mant_ir::InlineLayout::default(),
             children: vec![
                 Inline::Emphasis {
                     children: vec![Inline::Text {
@@ -205,6 +210,7 @@ fn searches_contiguous_text_across_an_unsafe_style_boundary() {
     query.document.as_mut().expect("fixture document").sections[0]
         .blocks
         .push(Block::Paragraph {
+            inline_layout: mant_ir::InlineLayout::default(),
             children: vec![
                 Inline::Text {
                     value: "disabled with --".to_owned(),
@@ -330,6 +336,7 @@ fn visible_search_maps_padded_code_span_content_not_its_delimiters() {
             panic!("fixture contains a definition list");
         };
         items[0].description = vec![Block::Paragraph {
+            inline_layout: mant_ir::InlineLayout::default(),
             children: vec![Inline::Code {
                 value: value.to_owned(),
             }],
@@ -365,6 +372,7 @@ fn visible_search_maps_an_explicit_line_break_to_its_markdown_byte() {
         panic!("fixture contains a definition list");
     };
     items[0].description = vec![Block::Paragraph {
+        inline_layout: mant_ir::InlineLayout::default(),
         children: vec![
             Inline::Text {
                 value: "alpha".to_owned(),
@@ -396,6 +404,7 @@ fn same_line_occurrences_form_one_paginated_search_result() {
         panic!("fixture contains a definition list");
     };
     items[0].description = vec![Block::Paragraph {
+        inline_layout: mant_ir::InlineLayout::default(),
         children: vec![Inline::Text {
             value: "needle, then another needle on one line".to_owned(),
         }],
@@ -427,6 +436,7 @@ fn one_repetitive_line_has_bounded_occurrence_details() {
     };
     let occurrence_count = MAX_OCCURRENCES_PER_MATCH + 7;
     items[0].description = vec![Block::Paragraph {
+        inline_layout: mant_ir::InlineLayout::default(),
         children: vec![Inline::Text {
             value: vec!["needle"; occurrence_count].join(" "),
         }],
@@ -454,6 +464,7 @@ fn semantic_entry_ownership_ends_before_a_following_section_paragraph() {
     query.document.as_mut().expect("manual").sections[0]
         .blocks
         .push(Block::Paragraph {
+            inline_layout: mant_ir::InlineLayout::default(),
             children: vec![Inline::Text {
                 value: "General section tail".to_owned(),
             }],
@@ -474,6 +485,7 @@ fn root_content_search_resolves_to_an_addressable_document_root() {
     let document = query.document.as_mut().expect("document");
     document.source.format = SourceFormat::Markdown;
     document.blocks.push(Block::Paragraph {
+        inline_layout: mant_ir::InlineLayout::default(),
         children: vec![Inline::Text {
             value: "Read the preface needle first.".to_owned(),
         }],
@@ -582,6 +594,7 @@ fn search_results_never_cross_addressable_owner_boundaries() {
             heading: "NEXT".into(),
             spacing_before_lines: 0,
             blocks: vec![Block::Paragraph {
+                inline_layout: mant_ir::InlineLayout::default(),
                 children: vec![Inline::Text {
                     value: "Following owner".to_owned(),
                 }],
@@ -607,6 +620,7 @@ fn exclusive_newline_end_does_not_mark_the_following_context_line() {
     query.document.as_mut().expect("document").sections[0]
         .blocks
         .push(Block::Paragraph {
+            inline_layout: mant_ir::InlineLayout::default(),
             children: vec![
                 Inline::Text {
                     value: "alpha".to_owned(),
@@ -641,6 +655,7 @@ fn multibyte_match_ends_remain_valid_coordinate_boundaries() {
     query.document.as_mut().expect("document").sections[0]
         .blocks
         .push(Block::Paragraph {
+            inline_layout: mant_ir::InlineLayout::default(),
             children: vec![Inline::Text {
                 value: "café — 日本".to_owned(),
             }],
@@ -694,6 +709,7 @@ fn visible_search_preserves_unicode_ranges_across_inline_styles() {
         content.document.as_mut().expect("document").sections[0]
             .blocks
             .push(Block::Paragraph {
+                inline_layout: mant_ir::InlineLayout::default(),
                 children: vec![
                     Inline::Text {
                         value: "前 * ".into(),

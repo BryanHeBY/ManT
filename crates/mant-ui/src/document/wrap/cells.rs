@@ -12,6 +12,7 @@ pub(super) struct StyledCell {
     pub(super) width: usize,
     pub(super) style: Style,
     pub(super) link_index: Option<usize>,
+    pub(super) copyable: bool,
 }
 
 pub(super) fn styled_cells(line: &LogicalLine) -> Vec<StyledCell> {
@@ -45,15 +46,21 @@ pub(super) fn styled_cells(line: &LogicalLine) -> Vec<StyledCell> {
         let link_index = grapheme_link(line, source_index, grapheme.text().chars().count());
         if grapheme.text() == "\t" {
             let spaces = TAB_STOP - column % TAB_STOP;
-            cells.extend((0..spaces).map(|_| StyledCell {
-                source_index,
-                character: ' ',
-                display_character: Some(' '),
-                grapheme_start: true,
-                whitespace: true,
-                width: 1,
-                style,
-                link_index,
+            cells.extend((0..spaces).map(|_| {
+                StyledCell {
+                    source_index,
+                    character: ' ',
+                    display_character: Some(' '),
+                    grapheme_start: true,
+                    whitespace: true,
+                    width: 1,
+                    style,
+                    link_index,
+                    copyable: !line
+                        .layout_scalars
+                        .iter()
+                        .any(|range| range.contains(&source_index)),
+                }
             }));
             column += spaces;
             source_index += 1;
@@ -81,6 +88,10 @@ pub(super) fn styled_cells(line: &LogicalLine) -> Vec<StyledCell> {
                 width: cell_width,
                 style,
                 link_index,
+                copyable: !line
+                    .layout_scalars
+                    .iter()
+                    .any(|range| range.contains(&source_index)),
             });
             column += cell_width;
             source_index += 1;
@@ -208,6 +219,7 @@ pub(super) fn wrapped_cells_to_line(
     line: &LogicalLine,
     width: usize,
     indent: usize,
+    layout_padding: usize,
     cells: &[StyledCell],
     join_with_space: bool,
 ) -> WrappedLine {
@@ -216,18 +228,34 @@ pub(super) fn wrapped_cells_to_line(
     let mut column = indent + tldr_decoration_width(line, width) / 2;
     let mut grapheme_column = column;
     let mut active: Option<(usize, usize, usize)> = None;
+    let mut copy_map = super::RowCopyMap::default();
+    if layout_padding > 0 {
+        let start = column.saturating_sub(layout_padding.min(indent));
+        copy_map.omitted.push(start..column);
+    }
     for (index, cell) in cells.iter().enumerate() {
         if cell.grapheme_start {
             grapheme_column = column;
         }
         let next_column = column + cell.width;
-        search_cells.push(WrappedSearchCell {
-            group: 0,
-            join_before: index == 0 && join_with_space,
-            character: cell.character,
-            start_column: grapheme_column,
-            end_column: next_column,
-        });
+        if !cell.copyable && cell.width > 0 {
+            if let Some(previous) = copy_map.omitted.last_mut()
+                && previous.end == column
+            {
+                previous.end = next_column;
+            } else {
+                copy_map.omitted.push(column..next_column);
+            }
+        }
+        if cell.copyable {
+            search_cells.push(WrappedSearchCell {
+                group: 0,
+                join_before: index == 0 && join_with_space,
+                character: cell.character,
+                start_column: grapheme_column,
+                end_column: next_column,
+            });
+        }
         match (active, cell.link_index) {
             (Some((index, start, _)), Some(next)) if index == next => {
                 active = Some((index, start, next_column));
@@ -252,12 +280,17 @@ pub(super) fn wrapped_cells_to_line(
             end_column: end,
         });
     }
+    // A real empty hard row has no copyable content. Its structural prefix
+    // and viewport paint still render, but cannot become authored spaces.
+    // A whitespace-only source row has cells and retains its exact end.
+    copy_map.end = Some(if cells.is_empty() { 0 } else { column });
     WrappedLine {
         source_end: cells.last().map(|cell| cell.source_index + 1),
         anchors: Vec::new(),
         line: cells_to_line(line, width, indent, cells),
         links,
         search_cells,
+        copy_map,
     }
 }
 

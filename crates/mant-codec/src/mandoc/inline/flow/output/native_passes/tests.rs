@@ -300,7 +300,7 @@ fn existing_hard_boundaries_represent_events_without_native_scalars() {
     let input = [
         Inline::anchor(marker("word")),
         text("A"),
-        Inline::line_break_indented(3),
+        Inline::line_break(),
         text("B C"),
         Inline::line_break(),
         Inline::line_break(),
@@ -308,7 +308,7 @@ fn existing_hard_boundaries_represent_events_without_native_scalars() {
     ];
     let output = split_native_field_passes(&input, &BTreeMap::from([(marker("word"), vec![3, 1])]));
     assert_eq!(plain_text(&output), "A\nB\nC\n\nD");
-    assert!(matches!(output[2], Inline::LineBreak { indent_columns: 3 }));
+    assert!(matches!(output[2], Inline::LineBreak {}));
 }
 
 #[test]

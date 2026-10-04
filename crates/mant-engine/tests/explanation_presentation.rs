@@ -187,7 +187,7 @@ fn forms_suppression_requires_this_records_complete_materialized_owner() {
                 let mant_ir::Block::DefinitionList { items, .. } = block else {
                     unreachable!()
                 };
-                items[0].terms[0].clear();
+                items[0].terms[0].content.clear();
             }
             3 => {
                 let Some(ExplanationContent::Entry { block }) = evidence.content.take() else {

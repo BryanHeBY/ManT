@@ -41,6 +41,7 @@ fn hierarchy_bundle() -> ResolvedContent {
     let mut owner = document.sections[0].clone();
     owner.id = "owner".into();
     owner.heading = mant_ir::Heading {
+        inline_layout: mant_ir::InlineLayout::default(),
         content: vec![Inline::Link {
             target: mant_ir::LinkTarget::Document {
                 name: TARGET_PARTS.concat(),

@@ -1,8 +1,8 @@
 //! IR to logical terminal content and anchors.
-use super::inline::{styled_plain_text_lines, styled_reference_inline_lines};
+use super::inline::{styled_plain_text_lines, styled_reference_content_lines};
 use super::{
-    Arc, Block, DocumentAddress, ExternalUri, HashMap, Inline, LineSurface, LinkTarget,
-    LogicalLine, LogicalLinkRange, NavKind, NavNode, Section, SemanticIndex, Span, Style, TLDR_ID,
+    Arc, Block, DocumentAddress, ExternalUri, HashMap, LineSurface, LinkTarget, LogicalLine,
+    LogicalLinkRange, NavKind, NavNode, Section, SemanticIndex, Span, Style, TLDR_ID,
     TLDR_VERTICAL_PADDING_ROWS, TldrDocument, WrapMode, inline_anchor_rows, theme, tldr_style,
 };
 use mant_ir::geometry::{compose_origin, coordinate, padding};
@@ -129,6 +129,9 @@ impl DocumentBuilder<'_> {
             self.push(LogicalLine {
                 indent: line.indent,
                 continuation_indent: line.indent,
+                layout_padding: 0,
+                continuation_layout_padding: 0,
+                layout_scalars: Vec::new(),
                 spans: line
                     .spans
                     .into_iter()
@@ -232,10 +235,14 @@ impl DocumentBuilder<'_> {
     /// Headings use the same original inline path as prose: links, anchors,
     /// hard lines and nested source styles must not pass through a plain label.
     pub(super) fn heading(&mut self, heading: &mant_ir::Heading, indent: i32) {
-        self.inline_lines(
-            &heading.content,
+        self.inline_lines_with_surface(
+            mant_ir::InlineContentRef {
+                content: &heading.content,
+                layout: &heading.inline_layout,
+            },
             indent,
             theme::style(theme::StyleRole::Heading),
+            LineSurface::Normal,
         );
     }
 
@@ -257,7 +264,10 @@ impl DocumentBuilder<'_> {
             self.spacing(gap.rows(0));
             gap = mant_ir::geometry::GapPlan::default();
             if let Block::Paragraph {
-                children, layout, ..
+                children,
+                inline_layout,
+                layout,
+                ..
             } = block
             {
                 // A following block closes the paragraph terminator before
@@ -266,7 +276,10 @@ impl DocumentBuilder<'_> {
                 // Literal rows always retain their authored delimiters.
                 let origin = compose_origin(base_indent, layout.indent_columns);
                 self.inline_lines_with_geometry_tail(
-                    children,
+                    mant_ir::InlineContentRef {
+                        content: children,
+                        layout: inline_layout,
+                    },
                     origin,
                     compose_origin(origin, layout.continuation_indent_columns),
                     theme::style(theme::StyleRole::Text),
@@ -283,11 +296,17 @@ impl DocumentBuilder<'_> {
     pub(super) fn block(&mut self, block: &Block, base_indent: i32) {
         match block {
             Block::Paragraph {
-                children, layout, ..
+                children,
+                inline_layout,
+                layout,
+                ..
             } => {
                 let origin = compose_origin(base_indent, layout.indent_columns);
                 self.inline_lines_with_geometry_tail(
-                    children,
+                    mant_ir::InlineContentRef {
+                        content: children,
+                        layout: inline_layout,
+                    },
                     origin,
                     compose_origin(origin, layout.continuation_indent_columns),
                     theme::style(theme::StyleRole::Text),
@@ -296,11 +315,19 @@ impl DocumentBuilder<'_> {
                 );
             }
             Block::Preformatted {
-                children, layout, ..
+                children,
+                inline_layout,
+                layout,
+                ..
             } => {
-                self.inline_lines_with_surface(
-                    children,
-                    compose_origin(base_indent, layout.indent_columns),
+                let origin = compose_origin(base_indent, layout.indent_columns);
+                self.inline_lines_with_geometry(
+                    mant_ir::InlineContentRef {
+                        content: children,
+                        layout: inline_layout,
+                    },
+                    origin,
+                    compose_origin(origin, layout.continuation_indent_columns),
                     theme::style(theme::StyleRole::Text),
                     LineSurface::Code,
                 );
@@ -383,16 +410,31 @@ impl DocumentBuilder<'_> {
         }
     }
 
-    pub(super) fn inline_lines(&mut self, nodes: &[Inline], indent: i32, base_style: Style) {
-        self.inline_lines_with_surface(nodes, indent, base_style, LineSurface::Normal);
+    #[cfg(test)]
+    pub(super) fn inline_lines(
+        &mut self,
+        nodes: &[mant_ir::Inline],
+        indent: i32,
+        base_style: Style,
+    ) {
+        self.inline_lines_with_surface(
+            mant_ir::InlineContentRef::unpositioned(nodes),
+            indent,
+            base_style,
+            LineSurface::Normal,
+        );
     }
 
-    fn styled_inlines(&self, nodes: &[Inline], style: Style) -> Vec<super::StyledInlineLine> {
-        styled_reference_inline_lines(
-            nodes,
+    fn styled_inlines(
+        &self,
+        content: mant_ir::InlineContentRef<'_>,
+        style: Style,
+    ) -> Vec<super::StyledInlineLine> {
+        styled_reference_content_lines(
+            content,
             style,
             self.address.as_ref(),
-            self.entry_styles.ranges(nodes),
+            self.entry_styles.ranges(content.content),
             false,
             &self.reference_origins,
         )
@@ -400,24 +442,24 @@ impl DocumentBuilder<'_> {
 
     pub(super) fn inline_lines_with_surface(
         &mut self,
-        nodes: &[Inline],
+        content: mant_ir::InlineContentRef<'_>,
         indent: i32,
         base_style: Style,
         surface: LineSurface,
     ) {
-        self.inline_lines_with_geometry(nodes, indent, indent, base_style, surface);
+        self.inline_lines_with_geometry(content, indent, indent, base_style, surface);
     }
 
     fn inline_lines_with_geometry(
         &mut self,
-        nodes: &[Inline],
+        content: mant_ir::InlineContentRef<'_>,
         indent: i32,
         continuation: i32,
         base_style: Style,
         surface: LineSurface,
     ) {
         self.inline_lines_with_geometry_tail(
-            nodes,
+            content,
             indent,
             continuation,
             base_style,
@@ -428,38 +470,31 @@ impl DocumentBuilder<'_> {
 
     fn inline_lines_with_geometry_tail(
         &mut self,
-        nodes: &[Inline],
+        content: mant_ir::InlineContentRef<'_>,
         indent: i32,
         continuation: i32,
         base_style: Style,
         surface: LineSurface,
         trim_paragraph_tail: bool,
     ) {
+        let nodes = content.content;
         let targets = inline_anchor_rows(nodes);
-        let mut lines = styled_reference_inline_lines(
-            nodes,
+        let mut lines = styled_reference_content_lines(
+            content,
             base_style,
             self.address.as_ref(),
             self.entry_styles.ranges(nodes),
             surface == LineSurface::Code,
             &self.reference_origins,
         );
-        if trim_paragraph_tail {
-            while lines.len() > 1
-                && lines
-                    .last()
-                    .is_some_and(|line| line.spans.iter().all(|span| span.content.is_empty()))
-            {
-                let tail = lines.pop().expect("ordinary paragraph terminator");
-                self.defer_anchors(
-                    tail.reference_marks
-                        .into_iter()
-                        .map(|mark| mark.id.to_string()),
-                );
-            }
-        }
+        let mut deferred_targets = if trim_paragraph_tail {
+            Self::trim_paragraph_tail(&mut lines)
+        } else {
+            Vec::new()
+        };
         if lines.len() == 1
             && lines[0].spans.is_empty()
+            && mant_ir::logical_row_count(nodes) == 1
             && !(surface == LineSurface::Code && mant_ir::geometry::has_literal_rows(nodes))
         {
             self.defer_anchors(targets.into_iter().map(|(id, _)| id));
@@ -473,7 +508,7 @@ impl DocumentBuilder<'_> {
         }
         for (id, row) in targets {
             if trim_paragraph_tail && row >= lines.len() {
-                self.defer_anchors(std::iter::once(id));
+                deferred_targets.push(id);
             } else {
                 self.anchors.entry(id).or_insert(self.lines.len() + row);
             }
@@ -489,6 +524,25 @@ impl DocumentBuilder<'_> {
                 WrapMode::Word
             },
         );
+        self.defer_anchors(deferred_targets);
+    }
+
+    /// A final delimiter opens one provisional row. Earlier empty rows have
+    /// already completed and remain visible (`term.c::term_newln/term_vspace`).
+    fn trim_paragraph_tail(lines: &mut Vec<super::StyledInlineLine>) -> Vec<String> {
+        if lines.len() > 1
+            && lines
+                .last()
+                .is_some_and(|line| line.spans.iter().all(|span| span.content.is_empty()))
+        {
+            let tail = lines.pop().expect("ordinary paragraph terminator");
+            return tail
+                .reference_marks
+                .into_iter()
+                .map(|mark| mark.id.to_string())
+                .collect();
+        }
+        Vec::new()
     }
 
     fn push_styled_lines(
@@ -510,18 +564,17 @@ impl DocumentBuilder<'_> {
         wrap_mode: WrapMode,
     ) {
         for (index, line) in lines.into_iter().enumerate() {
-            let row_indent = i32::from(line.indent_columns);
-            let origin = compose_origin(if index == 0 { indent } else { continuation }, row_indent);
-            self.push(LogicalLine {
-                indent: padding(origin),
-                continuation_indent: padding(compose_origin(continuation, row_indent)),
-                spans: line.spans,
-                surface,
-                wrap_mode,
-                table_row: None,
-                links: line.links,
-                reference_marks: line.reference_marks,
-            });
+            let mut logical = LogicalLine::row_geometry(
+                if index == 0 { indent } else { continuation },
+                continuation,
+                line.indent_columns,
+                line.spans,
+            );
+            logical.surface = surface;
+            logical.wrap_mode = wrap_mode;
+            logical.links = line.links;
+            logical.reference_marks = line.reference_marks;
+            self.push(logical);
         }
     }
 }

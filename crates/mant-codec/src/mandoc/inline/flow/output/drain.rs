@@ -166,7 +166,7 @@ impl InlineBuilder {
             // row. Its close precedes this HEAD post (mdoc_term.c::termp_it_post).
             self.hard_break();
         }
-        self.commit_definition_row_origin();
+        let _ = self.commit_definition_row_origin();
         // This is the HEAD post's real term_newln()/term_flushln(), not an
         // owner drain. Capture before acceptance advances projection ranges;
         // geometry is restored already, and pending glyphs enter their owner
@@ -282,8 +282,12 @@ impl InlineBuilder {
                     .definition
                     .as_ref()
                     .is_some_and(|state| state.hang_row.viscol > 0);
-            let native = self.native_field_device(false);
-            self.commit_definition_row_origin();
+            let mut native = self.native_field_device(false);
+            if let Some(edit) = self.commit_definition_row_origin()
+                && let Some(device) = &mut native
+            {
+                device.remap_output_positions(edit);
+            }
             self.flush_zero_advance();
             let extra_row_end = if let Some(device) = &native {
                 self.project_captured_definition_field(device)
@@ -318,7 +322,7 @@ impl InlineBuilder {
     pub(in crate::mandoc) fn finish_preserving_execution(
         mut self,
     ) -> (Vec<Inline>, PreservedInlineState, InlineExecutionState) {
-        self.commit_definition_row_origin();
+        let _ = self.commit_definition_row_origin();
         self.project_definition_owner_prefix();
         if let Some(definition) = &mut self.execution.definition {
             definition.row.retire_row_origin();

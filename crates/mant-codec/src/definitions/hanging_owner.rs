@@ -49,6 +49,7 @@ impl HangingOwnerEvidence {
             children,
             layout,
             source,
+            ..
         }
         | Block::Preformatted {
             children,
@@ -126,6 +127,7 @@ impl HangingOwnerEvidence {
             children,
             layout,
             source,
+            ..
         }
         | Block::Preformatted {
             children,
@@ -199,6 +201,7 @@ mod tests {
 
     fn head() -> Block {
         Block::Paragraph {
+            inline_layout: mant_ir::InlineLayout::default(),
             children: vec![Inline::Code {
                 value: "--one".into(),
             }],
@@ -214,6 +217,7 @@ mod tests {
         DefinitionItem {
             terms: Vec::new(),
             description: vec![Block::Paragraph {
+                inline_layout: mant_ir::InlineLayout::default(),
                 children: vec![Inline::Text {
                     value: "Description".into(),
                 }],

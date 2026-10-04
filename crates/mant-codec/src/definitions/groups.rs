@@ -15,7 +15,7 @@ pub(crate) fn mark_native_definition_owner(item: &mut DefinitionItem, key: usize
     let Some(term) = item.terms.first_mut() else {
         return;
     };
-    mark_native_inline_owner(term, key);
+    mark_native_inline_owner(&mut term.content, key);
 }
 
 #[cfg(feature = "roff")]
@@ -69,7 +69,7 @@ fn remove_inlines(inlines: &mut Vec<Inline>) {
 pub(crate) fn remove_native_definition_owner_markers_from_items(items: &mut [DefinitionItem]) {
     for item in items {
         for term in &mut item.terms {
-            remove_inlines(term);
+            remove_inlines(&mut term.content);
         }
     }
 }
@@ -401,11 +401,15 @@ mod tests {
                 end_column: None,
             }),
             entry: None,
-            terms: vec![vec![Inline::Text {
+            terms: (vec![vec![Inline::Text {
                 value: name.to_owned(),
-            }]],
+            }]])
+            .into_iter()
+            .map(Into::into)
+            .collect(),
             description: if description {
                 vec![Block::Paragraph {
+                    inline_layout: mant_ir::InlineLayout::default(),
                     children: vec![Inline::Text {
                         value: "description".to_owned(),
                     }],
@@ -645,6 +649,7 @@ mod tests {
                 layout: LayoutHint::default(),
             },
             Block::Paragraph {
+                inline_layout: mant_ir::InlineLayout::default(),
                 children: vec![Inline::Text {
                     value: "ordinary separator".to_owned(),
                 }],
@@ -723,9 +728,12 @@ mod tests {
         let mut original = vec![item(12, 2, "--alpha", false), item(13, 2, "--next", true)];
         record(&mut evidence, &mut original, &[10, 40]);
         let mut continued = original.clone();
-        continued[0].terms.push(vec![Inline::Text {
-            value: "--alias".into(),
-        }]);
+        continued[0].terms.push(
+            vec![Inline::Text {
+                value: "--alias".into(),
+            }]
+            .into(),
+        );
         evidence.continued(&continued[0], 30);
         evidence.adjacent(30, 40, false);
         let expected = vec![mant_ir::DeclarationGroup {

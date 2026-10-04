@@ -1,7 +1,8 @@
 //! List labels and definition bodies compose into the caller's content flow.
 use super::{
-    Block, BlockRenderer, DefinitionItem, Flow, LayoutText, ListItem, ListKind, TextRole,
-    compose_origin, coordinate, marker_run_in_gap, padding, text_width,
+    Block, BlockRenderer, DefinitionItem, Flow, LayoutText, ListItem, ListKind, ParagraphTail,
+    TextRole, compose_origin, coordinate, marker_run_in_gap, padding, resolve_row_origins,
+    text_width,
 };
 
 impl BlockRenderer<'_> {
@@ -33,19 +34,38 @@ impl BlockRenderer<'_> {
                 continue;
             }
             let prefix = format!("{}{marker}", " ".repeat(padding(base_indent)));
-            if let Some(first @ Block::Paragraph { layout, .. }) = item.blocks.first()
-                && let Some(gap) =
-                    marker_run_in_gap(base_indent, text_width(&marker), layout.indent_columns)
+            if let Some(
+                first @ Block::Paragraph {
+                    layout,
+                    inline_layout,
+                    ..
+                },
+            ) = item.blocks.first()
+                && let Some(gap) = marker_run_in_gap(
+                    base_indent,
+                    text_width(&marker),
+                    compose_origin(layout.indent_columns, inline_layout.row_indent(0)),
+                )
             {
                 // The first paragraph's boundary precedes the whole item,
                 // not the text after its marker. Keep it out of string
                 // prefix tests and preserve subsequent hard-line origins.
                 output.gap(layout.spacing_before_lines);
-                let body = self.render_block(first, body_origin).finish_layout(false);
-                let indent =
-                    " ".repeat(padding(compose_origin(body_origin, layout.indent_columns)));
-                let rest = body.strip_prefix(&indent);
-                output.push_text(rest.prefixed(&format!("{prefix}{}", " ".repeat(gap))));
+                let body = self.render_block(first, body_origin);
+                let indent = " ".repeat(padding(
+                    resolve_row_origins(
+                        compose_origin(body_origin, layout.indent_columns),
+                        compose_origin(
+                            compose_origin(body_origin, layout.indent_columns),
+                            layout.continuation_indent_columns,
+                        ),
+                        inline_layout.row_indent(0),
+                    )
+                    .first_visual_origin,
+                ));
+                output.extend(
+                    body.prefix_first_row(&indent, &format!("{prefix}{}", " ".repeat(gap))),
+                );
                 output.extend(self.block_flow(&item.blocks[1..], body_origin));
             } else {
                 output.push_text(prefix.trim_end().into());
@@ -79,7 +99,7 @@ impl BlockRenderer<'_> {
             .terms
             .iter()
             .filter_map(|term| {
-                let rows = self.inline_rows(term, TextRole::DefinitionTerm);
+                let rows = self.inline_rows(term.inline_content(), TextRole::DefinitionTerm);
                 // A term that only breaks rows still owns those rows (an
                 // empty `.It` operand's field owns its blank lines).
                 (rows.len() > 1 || rows.iter().any(|(row, _)| !row.is_empty())).then_some(rows)
@@ -90,26 +110,32 @@ impl BlockRenderer<'_> {
         if !matches!(
             item.layout.head_body_relation,
             mant_ir::HeadBodyRelation::Separate
-        ) && let Some((children, layout)) = item.inline_description()
+        ) && let Some((content, layout)) = item.inline_description_content()
             && let Some(last_rows) = terms.pop()
         {
-            let term_origin = compose_origin(
-                origin,
-                i32::from(last_rows.last().map_or(0, |(_, indent)| *indent)),
-            );
+            let term_origin =
+                compose_origin(origin, last_rows.last().map_or(0, |(_, indent)| *indent));
             let last = LayoutText::join(
                 last_rows.into_iter().map(|(row, row_indent)| {
-                    row.indented(padding(compose_origin(origin, i32::from(row_indent))))
+                    row.indented(padding(
+                        resolve_row_origins(origin, origin, row_indent).first_visual_origin,
+                    ))
                 }),
                 "\n",
             );
             let last_width = mant_ir::geometry::definition_run_in_width(&item.terms).unwrap_or(0);
-            let mut lines = self.inline_rows(children, TextRole::Body).into_iter();
+            let mut lines = self.inline_rows(content, TextRole::Body);
+            let completed_empty_tail =
+                matches!(item.description.first(), Some(Block::Paragraph { .. }))
+                    && Self::close_paragraph_rows(&mut lines, ParagraphTail::BlockBoundary);
+            let mut lines = lines.into_iter();
             let first_line = lines.next().unwrap_or_default();
-            let preferred_body_origin = compose_origin(
-                compose_origin(body_origin, layout.indent_columns),
-                i32::from(first_line.1),
-            );
+            let first_body_origin = compose_origin(body_origin, layout.indent_columns);
+            let continued_body_origin =
+                compose_origin(first_body_origin, layout.continuation_indent_columns);
+            let preferred_body_origin =
+                resolve_row_origins(first_body_origin, continued_body_origin, first_line.1)
+                    .first_visual_origin;
             let mut output = definition_term_rows(terms, origin);
             let mut joined = last;
             let gap = mant_ir::geometry::definition_body_gap(
@@ -122,17 +148,19 @@ impl BlockRenderer<'_> {
             joined.append(&first_line.0);
             output.push(joined);
             output.extend(lines.map(|(line, row_indent)| {
-                line.indented(padding(compose_origin(
-                    compose_origin(
-                        compose_origin(body_origin, layout.indent_columns),
-                        layout.continuation_indent_columns,
-                    ),
-                    i32::from(row_indent),
-                )))
+                line.indented(padding(
+                    resolve_row_origins(continued_body_origin, continued_body_origin, row_indent)
+                        .first_visual_origin,
+                ))
             }));
             let mut result = Flow::default();
             result.gap(layout.spacing_before_lines);
-            result.push_text(LayoutText::join(output, "\n"));
+            let value = LayoutText::join(output, "\n");
+            result.extend(if completed_empty_tail {
+                Flow::completed_text(value)
+            } else {
+                Flow::text(value)
+            });
             result.extend(self.block_flow(&item.description[1..], body_origin));
             return result;
         }
@@ -145,12 +173,14 @@ impl BlockRenderer<'_> {
     }
 }
 
-fn definition_term_rows(terms: Vec<Vec<(LayoutText, u16)>>, origin: i32) -> Vec<LayoutText> {
+fn definition_term_rows(terms: Vec<Vec<(LayoutText, i32)>>, origin: i32) -> Vec<LayoutText> {
     terms
         .into_iter()
         .flat_map(|term| {
             term.into_iter().map(|(row, row_indent)| {
-                row.indented(padding(compose_origin(origin, i32::from(row_indent))))
+                row.indented(padding(
+                    resolve_row_origins(origin, origin, row_indent).first_visual_origin,
+                ))
             })
         })
         .collect()

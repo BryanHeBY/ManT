@@ -170,7 +170,7 @@ pub(in crate::mandoc) fn retain_inline_identities(inlines: &mut Vec<Inline>) {
         let identity =
             crate::mandoc::inline::links::presentation::retains_authored_identity(inline);
         match inline {
-            Inline::Anchor { .. } => true,
+            Inline::Anchor { .. } => !super::is_private_output_marker(inline),
             Inline::LineBreak { .. }
             | Inline::Text { .. }
             | Inline::Code { .. }
@@ -277,7 +277,11 @@ pub(in crate::mandoc) fn prepare_inline_output(nodes: &mut Vec<Inline>) {
 
 pub(in crate::mandoc) fn strip_native_projection_markers(nodes: &mut Vec<Inline>) {
     nodes.retain_mut(|node| match node {
-        Inline::Anchor { .. } => !super::is_private_output_marker(node),
+        Inline::Anchor { .. } => {
+            super::row_origins::is_layout_carrier(node)
+                || super::is_term_alternative(node)
+                || !super::is_private_output_marker(node)
+        }
         Inline::Strong { children }
         | Inline::Emphasis { children }
         | Inline::Link { children, .. } => {

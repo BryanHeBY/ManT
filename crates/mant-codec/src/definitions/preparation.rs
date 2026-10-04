@@ -276,9 +276,12 @@ mod tests {
         let mut item = DefinitionItem {
             source: None,
             entry: None,
-            terms: vec![vec![Inline::Text {
+            terms: (vec![vec![Inline::Text {
                 value: "--mode=fast".into(),
-            }]],
+            }]])
+            .into_iter()
+            .map(Into::into)
+            .collect(),
             description: Vec::new(),
             layout: mant_ir::DefinitionLayout {
                 head_body_relation: mant_ir::HeadBodyRelation::from(false),
@@ -311,9 +314,11 @@ mod tests {
             items[0].entry.is_none(),
             "preparation must not allocate a public ID"
         );
-        item.terms[0].insert(0, Inline::anchor("allocated-later"));
+        item.terms[0]
+            .content
+            .insert(0, Inline::anchor("allocated-later"));
         assert!(plan.matches(&item));
-        item.terms[0].push(Inline::Text {
+        item.terms[0].content.push(Inline::Text {
             value: " changed".into(),
         });
         assert!(!plan.matches(&item));

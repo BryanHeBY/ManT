@@ -39,8 +39,9 @@ fn core_carrier_and_owner_checks_reject_wrong_style_target_source_and_body() {
     // These are mutated IR consumers of the already pristine-bound sources;
     // they never alter native expectations or bless candidate output.
     let case = core("M-core-paragraph-em-leading-one");
+    let original = mant_loader::load_roff_bytes(case.source.as_bytes()).unwrap();
     let mut content = reader(&case);
-    assert!(carrier_is_preserved(&case, &content, "AFTER"));
+    assert!(carrier_is_preserved(&case, &original, &content, "AFTER"));
     let Block::Paragraph { children, .. } =
         &mut content.document.as_mut().unwrap().sections[1].blocks[0]
     else {
@@ -53,11 +54,12 @@ fn core_carrier_and_owner_checks_reject_wrong_style_target_source_and_body() {
             };
         }
     });
-    assert!(!carrier_is_preserved(&case, &content, "AFTER"));
+    assert!(!carrier_is_preserved(&case, &original, &content, "AFTER"));
 
     let case = core("M-core-paragraph-lk-leading-one");
+    let original = mant_loader::load_roff_bytes(case.source.as_bytes()).unwrap();
     let mut content = reader(&case);
-    assert!(carrier_is_preserved(&case, &content, "AFTER"));
+    assert!(carrier_is_preserved(&case, &original, &content, "AFTER"));
     let Block::Paragraph { children, .. } =
         &mut content.document.as_mut().unwrap().sections[1].blocks[0]
     else {
@@ -70,7 +72,7 @@ fn core_carrier_and_owner_checks_reject_wrong_style_target_source_and_body() {
             };
         }
     });
-    assert!(!carrier_is_preserved(&case, &content, "AFTER"));
+    assert!(!carrier_is_preserved(&case, &original, &content, "AFTER"));
 
     let case = core("M-core-hang-no-interior-one");
     let content = mant_loader::load_roff_bytes(case.source.as_bytes()).unwrap();
@@ -85,13 +87,157 @@ fn core_carrier_and_owner_checks_reject_wrong_style_target_source_and_body() {
         if change_source {
             items[0].source.as_mut().unwrap().line = 99;
         } else {
-            items[0].terms[0].push(Inline::Text {
+            items[0].terms[0].content.push(Inline::Text {
                 value: "BodyWord".into(),
             });
             items[0].description.clear();
         }
         assert!(!owner_is_preserved(&wrong));
     }
+}
+
+fn definition_reader_children(content: &mut ResolvedContent) -> &mut Vec<Inline> {
+    let section = content
+        .document
+        .as_mut()
+        .unwrap()
+        .sections
+        .iter_mut()
+        .find(|section| section.heading.plain_text() == "DESCRIPTION")
+        .unwrap();
+    let Block::List { items, .. } = &mut section.blocks[0] else {
+        panic!("definition reader keeps its bullet owner")
+    };
+    let Block::Paragraph { children, .. } = &mut items[0].blocks[0] else {
+        panic!("definition reader keeps its phrasing body")
+    };
+    children
+}
+
+#[test]
+fn internal_hint_link_fragments_reject_extra_empty_wrong_or_reparented_occurrences() {
+    // This exact source ran pinned ASCII, UTF-8 and HTML before these assertions.
+    // mdoc_term.c::termp_lk_pre underlines the accepted label and emits colon/URI
+    // words independently; term.c::term_word ESCAPE_BREAK and term_fill retain
+    // A, one closed empty row, AFTER. Only its owner row-2 correction (+10)
+    // splits the Markdown label; the canonical IR still owns one native Link.
+    let case = core("M-core-tag-lk-interior-empty");
+    let original = mant_loader::load_roff_bytes(case.source.as_bytes()).unwrap();
+    let restored = reader(&case);
+    assert!(native_carrier_is_preserved(&case, &original, "AFTER"));
+    assert!(carrier_is_preserved(&case, &original, &restored, "AFTER"));
+    let mut links = Links(Vec::new());
+    links.visit_document(restored.document.as_ref().unwrap());
+    assert_eq!(
+        links
+            .0
+            .iter()
+            .map(|(_, label, _)| label.as_str())
+            .collect::<Vec<_>>(),
+        ["A", "AFTER"]
+    );
+    assert_fragment_mutations(&case, &original, &restored);
+    assert_missing_fragment_boundary(&case, &original, &restored);
+}
+
+fn assert_fragment_mutations(case: &Case, original: &ResolvedContent, restored: &ResolvedContent) {
+    for mutation in 0..7 {
+        let mut wrong = restored.clone();
+        let children = definition_reader_children(&mut wrong);
+        let first = children
+            .iter()
+            .position(|node| matches!(node, Inline::Link { .. }))
+            .unwrap();
+        let duplicate = children[first].clone();
+        match mutation {
+            0 => {
+                if let Inline::Link { target, .. } = &mut children[first] {
+                    *target = LinkTarget::External {
+                        uri: "https://wrong.example".into(),
+                    };
+                }
+            }
+            1 => {
+                if let Inline::Link { title, .. } = &mut children[first] {
+                    *title = Some("wrong title".into());
+                }
+            }
+            2 => {
+                if let Inline::Link { children, .. } = &mut children[first] {
+                    *children = vec![Inline::Text {
+                        value: "wrong label".into(),
+                    }];
+                }
+            }
+            3 => children.insert(first, duplicate),
+            4 => children.insert(
+                first,
+                Inline::Link {
+                    target: LinkTarget::External {
+                        uri: "https://ex.org".into(),
+                    },
+                    title: None,
+                    children: Vec::new(),
+                },
+            ),
+            5 => {
+                let moved = children.remove(first);
+                wrong
+                    .document
+                    .as_mut()
+                    .unwrap()
+                    .sections
+                    .last_mut()
+                    .unwrap()
+                    .blocks
+                    .push(Block::Paragraph {
+                        children: vec![moved],
+                        inline_layout: mant_ir::InlineLayout::default(),
+                        layout: mant_ir::LayoutHint::default(),
+                        source: None,
+                    });
+            }
+            6 => {
+                let after = children
+                    .iter()
+                    .position(|node| {
+                        matches!(node, Inline::Link { children, .. }
+                            if mant_ir::inline_plain_text(children) == "AFTER")
+                    })
+                    .unwrap();
+                let moved = std::mem::replace(
+                    &mut children[after],
+                    Inline::Emphasis {
+                        children: vec![Inline::Text {
+                            value: "AFTER".into(),
+                        }],
+                    },
+                );
+                children.push(moved);
+                assert!(carrier_style_is_preserved(case, &wrong, "AFTER"));
+            }
+            _ => unreachable!(),
+        }
+        assert!(
+            !carrier_is_preserved(case, original, &wrong, "AFTER"),
+            "mutation {mutation}"
+        );
+    }
+}
+
+fn assert_missing_fragment_boundary(
+    case: &Case,
+    original: &ResolvedContent,
+    restored: &ResolvedContent,
+) {
+    let mut no_boundary = original.clone();
+    let Block::DefinitionList { items, .. } =
+        &mut no_boundary.document.as_mut().unwrap().sections[1].blocks[0]
+    else {
+        panic!("native definition owner")
+    };
+    items[0].terms[0].inline_layout.row_hints.clear();
+    assert!(!carrier_is_preserved(case, &no_boundary, restored, "AFTER"));
 }
 
 fn search(content: &ResolvedContent, scope: SearchScope) -> QuerySearch {

@@ -332,7 +332,12 @@ fn all_blank_literal_rows_are_not_confused_with_zero_width_targets() {
         ),
     ] {
         let mut builder = DocumentBuilder::new("literal".into(), None);
-        builder.inline_lines_with_surface(&nodes, 0, Style::default(), LineSurface::Code);
+        builder.inline_lines_with_surface(
+            mant_ir::InlineContentRef::unpositioned(&nodes),
+            0,
+            Style::default(),
+            LineSurface::Code,
+        );
         assert_eq!(builder.lines.len(), expected_rows, "{nodes:?}");
         builder.inline_lines(
             &[Inline::Text {

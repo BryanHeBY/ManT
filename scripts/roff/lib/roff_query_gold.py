@@ -29,7 +29,7 @@ def visible(value: object) -> str:
     if value.get("type") in {"anchor", "fragment-alias"}:
         return ""
     text = "".join(visible(value.get(key)) for key in
-                   ("children", "items", "terms", "description", "blocks", "rows", "cells"))
+                   ("content", "children", "items", "terms", "description", "blocks", "rows", "cells"))
     return text + ("\n" if value.get("type") in {"paragraph", "preformatted", "heading"} else "")
 
 
@@ -304,8 +304,8 @@ def self_check() -> None:
     response = {"explanation": {"counts": {"directEntry": {"total": 1}}, "evidence": [evidence]}}
     assert compare(probe, response)[0] == "passed"
     support = {"kind": "declaration-group", "block": {"items": [
-        {"source": {"line": 2, "column": 2}, "terms": [[{"type": "text", "value": "y ARG"}]], "description": []},
-        {"source": want["source"], "terms": evidence["entry"]["forms"], "description": [body]},
+        {"source": {"line": 2, "column": 2}, "terms": [{"content": [{"type": "text", "value": "y ARG"}]}], "description": []},
+        {"source": want["source"], "terms": [{"content": form} for form in evidence["entry"]["forms"]], "description": [body]},
     ]}}
     supported = copy.deepcopy(response)
     supported["explanation"]["supports"] = [support]

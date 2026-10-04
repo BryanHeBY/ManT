@@ -419,6 +419,7 @@ fn document_link(label: &str, fragment: Option<&str>) -> Inline {
 
 fn linked_block(prefix: &str, label: &str) -> Block {
     Block::Paragraph {
+        inline_layout: mant_ir::InlineLayout::default(),
         children: vec![
             Inline::Text {
                 value: prefix.into(),
@@ -610,6 +611,7 @@ fn hidden_owner_cannot_lend_its_badge_to_an_unrelated_visible_same_id() {
 fn limited_associated_inventory_never_claims_a_single_target_is_unique() {
     let mut query = bundle();
     query.document.as_mut().unwrap().heading = Some(mant_ir::Heading {
+        inline_layout: mant_ir::InlineLayout::default(),
         content: (0..1001)
             .map(|_| document_link("same", Some("part")))
             .collect(),
@@ -631,6 +633,7 @@ fn limited_associated_inventory_never_claims_a_single_target_is_unique() {
 fn references_group_full_targets_without_promoting_entries_or_rewriting_body() {
     let mut query = bundle();
     query.document.as_mut().unwrap().sections[0].blocks = vec![Block::Paragraph {
+        inline_layout: mant_ir::InlineLayout::default(),
         children: vec![
             document_link("first", None),
             Inline::Text {
@@ -706,10 +709,12 @@ fn reference_origins_follow_actual_occurrence_through_wrapping_and_table_stackin
     let mut query = bundle();
     let document = query.document.as_mut().unwrap();
     document.heading = Some(mant_ir::Heading {
+        inline_layout: mant_ir::InlineLayout::default(),
         content: vec![document_link("ROOTLINK", None)],
         source: None,
     });
     document.sections[0].heading = mant_ir::Heading {
+        inline_layout: mant_ir::InlineLayout::default(),
         content: vec![document_link("HEADLINK", None)],
         source: None,
     };
@@ -777,6 +782,7 @@ fn reference_origins_follow_actual_occurrence_through_wrapping_and_table_stackin
 fn bounded_inventory_exposes_truncation_without_removing_body_links() {
     let mut query = bundle();
     query.document.as_mut().unwrap().sections[0].blocks = vec![Block::Paragraph {
+        inline_layout: mant_ir::InlineLayout::default(),
         children: (0..1002).map(|_| document_link("x", None)).collect(),
         layout: LayoutHint::default(),
         source: None,
@@ -816,12 +822,15 @@ fn definition_term_and_run_in_description_keep_separate_source_origins() {
         query.document.as_mut().unwrap().sections[0].blocks = vec![Block::DefinitionList {
             declaration_groups: Vec::new(),
             items: vec![DefinitionItem {
-                terms: vec![vec![
-                    Inline::Text {
-                        value: "日本 ".into(),
-                    },
-                    document_link("TERM", None),
-                ]],
+                terms: vec![
+                    vec![
+                        Inline::Text {
+                            value: "日本 ".into(),
+                        },
+                        document_link("TERM", None),
+                    ]
+                    .into(),
+                ],
                 description: vec![linked_block("body prefix ", "TAILREF")],
                 entry: None,
                 source: None,

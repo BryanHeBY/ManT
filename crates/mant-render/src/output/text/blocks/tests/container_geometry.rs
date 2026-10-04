@@ -50,9 +50,12 @@ fn subtree_translation_is_applied_once_at_each_visible_leaf() {
                     declaration_groups: vec![],
                     compact: false,
                     items: vec![DefinitionItem {
-                        terms: vec![vec![Inline::Text {
-                            value: "TERM".into(),
-                        }]],
+                        terms: vec![
+                            vec![Inline::Text {
+                                value: "TERM".into(),
+                            }]
+                            .into(),
+                        ],
                         description: vec![paragraph("BODY", -2)],
                         source: None,
                         entry: None,

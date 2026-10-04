@@ -10,6 +10,7 @@ use mant_render::{render_excerpt_markdown, render_outline_markdown};
 
 fn paragraph(children: Vec<Inline>) -> Block {
     Block::Paragraph {
+        inline_layout: mant_ir::InlineLayout::default(),
         children,
         layout: LayoutHint::default(),
         source: None,

@@ -337,6 +337,7 @@ fn heading_links_to_inline_anchors_preserve_both_destination_and_occurrence() {
         }],
     }];
     section.blocks.push(mant_ir::Block::Paragraph {
+        inline_layout: mant_ir::InlineLayout::default(),
         children: vec![
             Inline::Anchor {
                 id: "inline-target".into(),

@@ -669,6 +669,7 @@ impl BlockState {
                     children,
                     layout,
                     source,
+                    ..
                 } if !crate::mandoc::inline::has_rendered_formatter_glyph(&children)
                     && has_formatter_text_cell(&children) =>
                 {
@@ -694,6 +695,7 @@ impl BlockState {
                     crate::mandoc::inline::retain_inline_identities(&mut identities);
                     if !identities.is_empty() {
                         self.output.push(Block::Paragraph {
+                            inline_layout: mant_ir::InlineLayout::default(),
                             children: identities,
                             layout,
                             source,
@@ -771,6 +773,7 @@ impl BlockState {
         if !has_flushed_row(&self.output[start..]) {
             let start = self.output.len();
             self.output.push(Block::Preformatted {
+                inline_layout: mant_ir::InlineLayout::default(),
                 children: vec![Inline::Text {
                     value: String::new(),
                 }],

@@ -16,6 +16,7 @@ fn snapshot(text: &str, addressed: bool) -> Arc<ResolvedContent> {
     let document = bundle.document.as_mut().expect("document");
     document.sections.clear();
     document.blocks = vec![AstBlock::Paragraph {
+        inline_layout: mant_ir::InlineLayout::default(),
         children: vec![Inline::Text { value: text.into() }],
         layout: LayoutHint::default(),
         source: None,

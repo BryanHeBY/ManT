@@ -204,8 +204,10 @@ impl InlineBuilder {
             if !super::super::output::ends_with_executed_line_break(&self.nodes) {
                 self.force_output_line_break();
             }
-            if let Some(Inline::LineBreak { indent_columns }) = self.nodes.last_mut() {
-                *indent_columns = row_indent;
+            if matches!(self.nodes.last(), Some(Inline::LineBreak {})) {
+                self.nodes.pop();
+                super::super::output::row_origins::set_next_origin(&mut self.nodes, row_indent);
+                super::super::output::push_row_break(&mut self.nodes, row_indent);
             }
             self.note_definition_output_row();
             if let Some(definition) = &mut self.execution.definition {

@@ -279,6 +279,7 @@ mod tests {
 
     fn paragraph(children: Vec<Inline>) -> Block {
         Block::Paragraph {
+            inline_layout: mant_ir::InlineLayout::default(),
             children,
             layout: LayoutHint::default(),
             source: None,
@@ -352,6 +353,7 @@ mod tests {
                         },
                     ]),
                     Block::Preformatted {
+                        inline_layout: mant_ir::InlineLayout::default(),
                         children: vec![Inline::Text {
                             value: "tool --config path".to_owned(),
                         }],

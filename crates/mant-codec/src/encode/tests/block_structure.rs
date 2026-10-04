@@ -51,7 +51,7 @@ fn preserves_inline_lists_definitions_and_nested_headings() {
                 spacing_before_lines: None,
                 ..Default::default()
             },
-            terms: vec![
+            terms: (vec![
                 vec![Inline::Strong {
                     children: vec![Inline::Text {
                         value: "-a".to_owned(),
@@ -62,7 +62,10 @@ fn preserves_inline_lists_definitions_and_nested_headings() {
                         value: "--all".to_owned(),
                     }],
                 }],
-            ],
+            ])
+            .into_iter()
+            .map(Into::into)
+            .collect(),
             description: vec![paragraph(vec![Inline::Text {
                 value: "Show all entries.".to_owned(),
             }])],
@@ -102,6 +105,7 @@ fn chooses_safe_fences_and_preserves_native_table_and_equation_content() {
             "DATA",
             vec![
                 Block::Preformatted {
+                    inline_layout: mant_ir::InlineLayout::default(),
                     children: vec![
                         Inline::Text {
                             value: "before ``` marker".to_owned(),
@@ -177,9 +181,12 @@ fn protects_hanging_definition_terms_from_becoming_nested_lists() {
                 items: vec![DefinitionItem {
                     source: None,
                     entry: None,
-                    terms: vec![vec![Inline::Text {
+                    terms: (vec![vec![Inline::Text {
                         value: "1.".to_owned(),
-                    }]],
+                    }]])
+                    .into_iter()
+                    .map(Into::into)
+                    .collect(),
                     description: vec![paragraph(vec![Inline::Text {
                         value: "first reference".to_owned(),
                     }])],
@@ -227,9 +234,12 @@ fn preserves_definition_prose_row_relation_in_both_markdown_projections() {
                             head_body_relation: mant_ir::HeadBodyRelation::from(inline),
                             ..Default::default()
                         },
-                        terms: vec![vec![Inline::Text {
+                        terms: (vec![vec![Inline::Text {
                             value: "HeadWord".to_owned(),
-                        }]],
+                        }]])
+                        .into_iter()
+                        .map(Into::into)
+                        .collect(),
                         description: vec![paragraph(vec![Inline::Emphasis {
                             children: vec![Inline::Text {
                                 value: "BodyWord".to_owned(),
@@ -273,10 +283,14 @@ fn keeps_block_definition_descriptions_on_their_own_commonmark_line() {
                 spacing_before_lines: None,
                 ..Default::default()
             },
-            terms: vec![vec![Inline::Text {
+            terms: (vec![vec![Inline::Text {
                 value: "plain".to_owned(),
-            }]],
+            }]])
+            .into_iter()
+            .map(Into::into)
+            .collect(),
             description: vec![Block::Preformatted {
+                inline_layout: mant_ir::InlineLayout::default(),
                 children: vec![Inline::Text {
                     value: "code_line();".to_owned(),
                 }],

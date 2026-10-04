@@ -43,6 +43,7 @@ fn item(name: &str, payload: &str, entry: bool) -> ListItem {
             }],
         }),
         blocks: vec![Block::Paragraph {
+            inline_layout: mant_ir::InlineLayout::default(),
             children: vec![
                 Inline::Code { value: name.into() },
                 Inline::Text {
@@ -331,7 +332,7 @@ fn table_search_tracks_independent_and_nested_owners_without_changing_text() {
             "type": "table", "rows": [{"cells": [
                 {"blocks": [ordinary]},
                 {"blocks": [{"type": "definition-list", "items": [{
-                    "terms": [[{"type": "code", "value": "sibling"}]],
+                    "terms": [{"content": [{"type": "code", "value": "sibling"}]}],
                     "description": item("text", "NEIGHBOR", false).blocks,
                     "entry": {"id": "sibling", "kind": {"kind": "term"},
                         "case": "sensitive", "names": []}

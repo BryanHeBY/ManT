@@ -97,7 +97,7 @@ fn lower_section(
         context.active_mdoc_section()
     };
     let authored_title = authored_section_phrase(head, context.default_name);
-    let heading = context.lower_section_heading(
+    let mut heading = context.lower_section_heading(
         head,
         formatter,
         section_context == crate::mandoc::source_context::MdocSectionContext::Authors,
@@ -159,6 +159,7 @@ fn lower_section(
         id: id.into(),
         fragment_aliases,
         heading: mant_ir::Heading {
+            inline_layout: crate::mandoc::inline::take_inline_layout(&mut heading),
             content: heading,
             source: node
                 .children

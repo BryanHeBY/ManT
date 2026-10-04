@@ -11,7 +11,7 @@ pub(in crate::definitions) fn option_names(item: &DefinitionItem) -> Vec<String>
     option_names_from_terms(&item.terms)
 }
 
-pub(crate) fn option_names_from_terms(terms: &[Vec<Inline>]) -> Vec<String> {
+pub(crate) fn option_names_from_terms(terms: &[impl AsRef<[Inline]>]) -> Vec<String> {
     let mut names = Vec::new();
     for found in option_occurrences_from_terms(terms).into_iter().flatten() {
         if !names.contains(&found.name) {
@@ -21,12 +21,14 @@ pub(crate) fn option_names_from_terms(terms: &[Vec<Inline>]) -> Vec<String> {
     names
 }
 
-pub(crate) fn option_occurrences_from_terms(terms: &[Vec<Inline>]) -> Vec<Vec<RecognizedName>> {
+pub(crate) fn option_occurrences_from_terms(
+    terms: &[impl AsRef<[Inline]>],
+) -> Vec<Vec<RecognizedName>> {
     option_occurrences_with_operands(terms, None)
 }
 
 fn option_occurrences_with_operands(
-    terms: &[Vec<Inline>],
+    terms: &[impl AsRef<[Inline]>],
     operands: Option<&[Vec<crate::definitions::NativeOperand>]>,
 ) -> Vec<Vec<RecognizedName>> {
     scan_option_occurrences(terms, operands).occurrences
@@ -38,7 +40,7 @@ pub(super) struct OptionOccurrences {
 }
 
 fn scan_option_occurrences(
-    terms: &[Vec<Inline>],
+    terms: &[impl AsRef<[Inline]>],
     operands: Option<&[Vec<crate::definitions::NativeOperand>]>,
 ) -> OptionOccurrences {
     let mut result = OptionOccurrences {
@@ -47,7 +49,7 @@ fn scan_option_occurrences(
     };
     for (index, term) in terms.iter().enumerate() {
         let scanned = super::scan::option_head(
-            term,
+            term.as_ref(),
             operands
                 .and_then(|terms| terms.get(index))
                 .map_or(&[], Vec::as_slice),
@@ -62,7 +64,7 @@ fn scan_option_occurrences(
 /// Read it before generic separator grouping can treat the comma in `-,` as
 /// alias punctuation; styled arguments still stop the literal prefix.
 pub(super) fn native_option_occurrences(
-    terms: &[Vec<Inline>],
+    terms: &[impl AsRef<[Inline]>],
     operands: Option<&[Vec<crate::definitions::NativeOperand>]>,
 ) -> OptionOccurrences {
     let mut result = scan_option_occurrences(terms, operands);
@@ -70,7 +72,7 @@ pub(super) fn native_option_occurrences(
         return result;
     }
     for (term, names) in terms.iter().zip(&mut result.occurrences) {
-        let prefix = forms::literal_prefix(term);
+        let prefix = forms::literal_prefix(term.as_ref());
         let Some(token) = prefix.split_whitespace().next() else {
             continue;
         };
@@ -92,12 +94,12 @@ pub(super) fn native_option_occurrences(
 }
 
 pub(in crate::definitions) fn parameter_occurrences(
-    terms: &[Vec<Inline>],
+    terms: &[impl AsRef<[Inline]>],
     operands: Option<&[Vec<crate::definitions::NativeOperand>]>,
 ) -> Vec<Vec<RecognizedName>> {
     let mut found = option_occurrences_with_operands(terms, operands);
     for (term, names) in terms.iter().zip(&mut found) {
-        let text = plain_text(term);
+        let text = plain_text(term.as_ref());
         let Some(token) = text.split_whitespace().next() else {
             continue;
         };

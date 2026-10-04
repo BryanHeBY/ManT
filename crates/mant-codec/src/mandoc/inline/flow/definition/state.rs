@@ -338,6 +338,17 @@ pub(in crate::mandoc::inline::flow) struct NoBreakField {
     pub(super) separator_cells: usize,
     pub(super) style: DefinitionFieldStyle,
 }
+
+impl NoBreakField {
+    pub(in crate::mandoc::inline::flow) fn remap_output_positions(
+        &mut self,
+        edit: super::super::output::row_origins::OutputNodeEdit,
+    ) {
+        edit.remap(&mut self.output_end_before_separator);
+        edit.remap(&mut self.resumed_output_start);
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum DefinitionFieldStyle {
     Tag,

@@ -17,6 +17,7 @@ pub(super) fn literal_blocks(
         .into_iter()
         .filter_map(|mut segment| {
             crate::mandoc::inline::strip_native_projection_markers(&mut segment.nodes);
+            let inline_layout = crate::mandoc::inline::take_inline_layout(&mut segment.nodes);
             if segment.nodes.is_empty() {
                 return None;
             }
@@ -25,6 +26,7 @@ pub(super) fn literal_blocks(
                 .indent_columns
                 .saturating_add(i32::try_from(segment.origin).unwrap_or(i32::MAX));
             Some(Block::Preformatted {
+                inline_layout,
                 children: segment.nodes,
                 language: None,
                 layout,

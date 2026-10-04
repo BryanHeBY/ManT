@@ -1,0 +1,169 @@
+//! Closed wire decoding of block owners and their local row hints.
+use super::{
+    Block, DefinitionItem, EquationExpression, Inline, LayoutHint, ListItem, ListKind, SourceSpan,
+    TableRow,
+};
+use serde::Deserialize;
+
+#[derive(Deserialize)]
+#[serde(
+    remote = "Block",
+    tag = "type",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+enum BlockWire {
+    /// Reflowable prose.
+    Paragraph {
+        /// Styled inline content in source order.
+        children: Vec<Inline>,
+        /// Exceptional row offsets in this content root, never inline text.
+        #[serde(default, skip_serializing_if = "crate::InlineLayout::is_empty")]
+        inline_layout: crate::InlineLayout,
+        /// Source-derived indentation and vertical spacing.
+        #[serde(default, skip_serializing_if = "LayoutHint::is_empty")]
+        layout: LayoutHint,
+        /// Original source range.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        source: Option<SourceSpan>,
+    },
+    /// Literal content that preserves line boundaries.
+    Preformatted {
+        /// Styled literal runs and line breaks.
+        children: Vec<Inline>,
+        /// Exceptional row offsets in this literal content root.
+        #[serde(default, skip_serializing_if = "crate::InlineLayout::is_empty")]
+        inline_layout: crate::InlineLayout,
+        /// Optional language hint, primarily from fenced Markdown.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        language: Option<String>,
+        /// Source-derived indentation and vertical spacing.
+        #[serde(default, skip_serializing_if = "LayoutHint::is_empty")]
+        layout: LayoutHint,
+        /// Original source range.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        source: Option<SourceSpan>,
+    },
+    /// Ordered, unordered, or marker-free block list.
+    List {
+        /// Marker behavior for the list.
+        kind: ListKind,
+        /// Whether renderers should suppress extra spacing between items.
+        #[serde(default, skip_serializing_if = "is_false")]
+        compact: bool,
+        /// List items in source order.
+        items: Vec<ListItem>,
+        /// Source-derived indentation and vertical spacing.
+        #[serde(default, skip_serializing_if = "LayoutHint::is_empty")]
+        layout: LayoutHint,
+        /// Original source range.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        source: Option<SourceSpan>,
+    },
+    /// Term-and-description list.
+    DefinitionList {
+        /// Definitions in source order.
+        items: Vec<DefinitionItem>,
+        /// Recovered consecutive declaration contexts, not alias relationships.
+        /// Ranges refer to this list only and do not change item ownership/layout.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        declaration_groups: Vec<crate::DeclarationGroup>,
+        /// Whether renderers should suppress extra spacing between definitions.
+        #[serde(default, skip_serializing_if = "is_false")]
+        compact: bool,
+        /// Source-derived indentation and vertical spacing.
+        #[serde(default, skip_serializing_if = "LayoutHint::is_empty")]
+        layout: LayoutHint,
+        /// Original source range.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        source: Option<SourceSpan>,
+    },
+    /// Block-capable table.
+    Table {
+        /// Logical rows in source order.
+        rows: Vec<TableRow>,
+        /// Measured declaration content widths in display cells, excluding
+        /// the inter-column gap. These are preferred field origins, not fixed
+        /// viewport widths. The producer resolves source escapes using its
+        /// reading device. Empty selects content-derived table layout.
+        /// Consumers share bounded 4/3/1-cell gap placement and preserve every
+        /// actual cell when declarations and cells have different lengths.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        column_widths: Vec<u16>,
+        /// Source-derived indentation and vertical spacing.
+        #[serde(default, skip_serializing_if = "LayoutHint::is_empty")]
+        layout: LayoutHint,
+        /// Original source range.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        source: Option<SourceSpan>,
+    },
+    /// Equation retained as a normalized expression.
+    Equation {
+        /// Equation source after parser normalization.
+        value: String,
+        /// Parsed equation structure, when the source parser provides it.
+        /// `value` must equal this structure's readable projection.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        expression: Option<EquationExpression>,
+        /// Whether the equation occupies its own display block.
+        #[serde(default, skip_serializing_if = "is_false")]
+        display: bool,
+        /// Source-derived indentation and vertical spacing.
+        #[serde(default, skip_serializing_if = "LayoutHint::is_empty")]
+        layout: LayoutHint,
+        /// Original source range.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        source: Option<SourceSpan>,
+    },
+    /// Completed blank rows emitted by the producer.
+    VerticalSpace {
+        /// Number of executed blank rows.
+        lines: u16,
+        /// Original source range.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        source: Option<SourceSpan>,
+    },
+    /// Horizontal thematic separator.
+    ThematicBreak {
+        /// Original source range.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        source: Option<SourceSpan>,
+    },
+    /// Source construct retained because it has no native IR representation.
+    Unsupported {
+        /// Macro or construct name, when known.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        name: Option<String>,
+        /// Best-effort visible text retained for consumers.
+        text: String,
+        /// Source-derived indentation and vertical spacing.
+        #[serde(default, skip_serializing_if = "LayoutHint::is_empty")]
+        layout: LayoutHint,
+        /// Original source range.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        source: Option<SourceSpan>,
+    },
+}
+
+impl<'de> Deserialize<'de> for Block {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let block = BlockWire::deserialize(deserializer)?;
+        if let Self::Paragraph {
+            children,
+            inline_layout,
+            ..
+        }
+        | Self::Preformatted {
+            children,
+            inline_layout,
+            ..
+        } = &block
+        {
+            inline_layout
+                .validate(children)
+                .map_err(serde::de::Error::custom)?;
+        }
+        Ok(block)
+    }
+}

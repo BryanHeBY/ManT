@@ -109,10 +109,14 @@ mod tests {
         DefinitionItem {
             source: None,
             entry: None,
-            terms: vec![vec![Inline::Text {
+            terms: (vec![vec![Inline::Text {
                 value: "--name".into(),
-            }]],
+            }]])
+            .into_iter()
+            .map(Into::into)
+            .collect(),
             description: vec![Block::Paragraph {
+                inline_layout: crate::InlineLayout::default(),
                 children: vec![Inline::Text { value: text.into() }],
                 layout: crate::LayoutHint::default(),
                 source: None,
@@ -179,6 +183,7 @@ mod tests {
                 source: None,
             },
             Block::Paragraph {
+                inline_layout: crate::InlineLayout::default(),
                 children: vec![Inline::anchor("target")],
                 layout: crate::LayoutHint::default(),
                 source: None,

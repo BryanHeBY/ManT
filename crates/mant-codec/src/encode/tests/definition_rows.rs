@@ -185,7 +185,7 @@ fn definition(
         layout: LayoutHint::default(),
         source: None,
         items: vec![DefinitionItem {
-            terms,
+            terms: terms.into_iter().map(Into::into).collect(),
             description,
             source: None,
             entry: None,

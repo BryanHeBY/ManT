@@ -82,6 +82,7 @@ pub(super) fn lower_document_structure(
                     id: id.into(),
                     fragment_aliases,
                     heading: Heading {
+                        inline_layout: mant_ir::InlineLayout::default(),
                         content: children,
                         source: Some(source.span(&(range.start..end))),
                     },

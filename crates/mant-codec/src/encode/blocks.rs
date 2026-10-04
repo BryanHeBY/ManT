@@ -7,12 +7,13 @@ use std::borrow::Cow;
 use definitions::render_definition_list;
 
 use mant_ir::{
-    Block, EntryOwner, Inline, ListItem, ListKind, SourceSpan, TableRow, content_entries,
+    Block, EntryOwner, Inline, InlineContentRef, ListItem, ListKind, SourceSpan, TableRow,
+    content_entries,
 };
 
 use super::inline::{
-    code_span, escape_text, fenced_code, flatten_inline, html_anchor, preformatted_anchor_markers,
-    protect_block_prefix, render_inline,
+    code_span, escape_text, fenced_code, flatten_inline_content, html_anchor,
+    preformatted_anchor_markers, protect_block_prefix, render_inline_content,
 };
 use super::mapped::MappedText;
 use super::{MarkdownInlineProjection, MarkdownOptions};
@@ -100,11 +101,31 @@ fn render_block(
     track: bool,
 ) -> Option<MappedText> {
     match block {
-        Block::Paragraph { children, .. } => nonempty(inline(children, options, locations)),
+        Block::Paragraph {
+            children,
+            inline_layout,
+            ..
+        } => nonempty(inline(
+            InlineContentRef {
+                content: children,
+                layout: inline_layout,
+            },
+            options,
+            locations,
+        )),
         Block::Preformatted {
-            children, language, ..
+            children,
+            language,
+            inline_layout,
+            ..
         } => {
-            let code = fenced_code(&flatten_inline(children), language.as_deref());
+            let code = fenced_code(
+                &flatten_inline_content(InlineContentRef {
+                    content: children,
+                    layout: inline_layout,
+                }),
+                language.as_deref(),
+            );
             if options.preserve_anchors {
                 let markers = preformatted_anchor_markers(children);
                 if !markers.is_empty() {
@@ -276,11 +297,17 @@ fn nonempty(value: String) -> Option<MappedText> {
 }
 
 fn inline(
-    nodes: &[mant_ir::Inline],
+    content: InlineContentRef<'_>,
     options: MarkdownOptions,
     locations: Option<&dyn MarkdownInlineProjection>,
 ) -> String {
-    render_inline(&project_inline(nodes, locations), options)
+    render_inline_content(
+        InlineContentRef {
+            content: &project_inline(content.content, locations),
+            layout: content.layout,
+        },
+        options,
+    )
 }
 
 fn project_inline<'a>(

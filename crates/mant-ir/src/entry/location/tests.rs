@@ -32,7 +32,10 @@ fn facts(name: &str, root: EntryInlineRoot) -> EntryFacts {
 
 fn definition(name: &str, children: Vec<Block>) -> DefinitionItem {
     DefinitionItem {
-        terms: vec![vec![Inline::Code { value: name.into() }]],
+        terms: (vec![vec![Inline::Code { value: name.into() }]])
+            .into_iter()
+            .map(Into::into)
+            .collect(),
         description: children,
         entry: Some(facts(name, EntryInlineRoot::Term { index: 0 })),
         layout: DefinitionLayout::default(),
@@ -63,6 +66,7 @@ fn item(name: &str) -> ListItem {
     ListItem {
         entry: Some(facts(name, EntryInlineRoot::Block { index: 0 })),
         blocks: vec![Block::Paragraph {
+            inline_layout: crate::InlineLayout::default(),
             children: vec![Inline::Code { value: name.into() }],
             layout: LayoutHint::default(),
             source: None,
@@ -233,6 +237,7 @@ fn borrowed_locations_and_semantic_index_share_root_and_section_owners() {
         sections: vec![crate::Section {
             id: "section".into(),
             heading: crate::Heading {
+                inline_layout: crate::InlineLayout::default(),
                 content: vec![Inline::Text {
                     value: "Section".into(),
                 }],

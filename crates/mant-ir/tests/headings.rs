@@ -65,6 +65,7 @@ fn obsolete_plain_section_titles_and_unknown_heading_fields_are_rejected() {
 #[test]
 fn single_line_heading_labels_normalize_structural_and_dynamic_breaks() {
     let heading = Heading {
+        inline_layout: mant_ir::InlineLayout::default(),
         content: vec![
             Inline::Text {
                 value: "before\t".into(),

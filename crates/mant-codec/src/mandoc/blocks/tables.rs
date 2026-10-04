@@ -75,7 +75,7 @@ pub(super) fn append_table_row(
                     if cell.font == Some(TableFont::Code) {
                         formatter.font.begin_code_table_cell();
                     }
-                    let children = lower_table_cell(
+                    let mut children = lower_table_cell(
                         cell,
                         recovery::CellPosition {
                             index,
@@ -104,6 +104,7 @@ pub(super) fn append_table_row(
                         formatter.clear_zero_advance();
                     }
                     vec![Block::Paragraph {
+                        inline_layout: crate::mandoc::inline::take_inline_layout(&mut children),
                         children,
                         layout: LayoutHint::default(),
                         source: source_span(node),

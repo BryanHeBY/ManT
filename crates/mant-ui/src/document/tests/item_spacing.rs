@@ -112,6 +112,7 @@ fn explicit_zero_is_distinct_from_inherited_loose_list_spacing() {
 #[test]
 fn nonparagraph_body_keeps_item_gap_before_the_whole_marker() {
     let code = Block::Preformatted {
+        inline_layout: mant_ir::InlineLayout::default(),
         language: None,
         children: vec![Inline::Text {
             value: "CODE".into(),

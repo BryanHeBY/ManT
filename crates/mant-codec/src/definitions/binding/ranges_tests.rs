@@ -11,7 +11,7 @@ fn text(value: &str) -> Inline {
 
 fn item(terms: Vec<Vec<Inline>>) -> DefinitionItem {
     DefinitionItem {
-        terms,
+        terms: terms.into_iter().map(Into::into).collect(),
         description: Vec::new(),
         entry: None,
         layout: DefinitionLayout::default(),
@@ -93,7 +93,7 @@ fn nested_styles_links_and_unicode_keep_exact_author_leaf_byte_ranges() {
 fn hard_rows_and_combining_scalars_advance_bytes_without_changing_leaf_paths() {
     let owner = item(vec![vec![
         text("界"),
-        Inline::line_break_indented(6),
+        Inline::line_break(),
         Inline::Strong {
             children: vec![text(""), text("--e\u{301}"), Inline::anchor("tail")],
         },
@@ -155,6 +155,7 @@ fn names_are_not_discovered_from_links_body_or_unrecognized_terms() {
         children: vec![text("--visible")],
     }]]);
     owner.description.push(mant_ir::Block::Paragraph {
+        inline_layout: mant_ir::InlineLayout::default(),
         children: vec![text("--hidden --visible")],
         layout: mant_ir::LayoutHint::default(),
         source: None,
@@ -185,4 +186,44 @@ fn borrowed_head_adapter_produces_the_same_bindings_without_a_temporary_owner() 
         native_name_bindings_for_head(&owner.terms[0], &names, &recognized),
         native_name_bindings(&owner, &names, &recognized)
     );
+}
+
+#[test]
+fn owner_row_layout_never_changes_name_leaf_paths_or_utf8_byte_ranges() {
+    // Constructed IR: hints describe display cells outside all name offsets.
+    let mut owner = item(vec![vec![
+        text("  界"),
+        Inline::line_break(),
+        Inline::Strong {
+            children: vec![Inline::Code {
+                value: "--é".into(),
+            }],
+        },
+    ]]);
+    let names = vec!["--é".into()];
+    let recognized = vec![vec![RecognizedName::contiguous("--é", 6)]];
+    let unpositioned = native_name_bindings(&owner, &names, &recognized);
+    owner.terms[0].inline_layout = mant_ir::InlineLayout {
+        row_hints: vec![
+            mant_ir::RowLayoutHint {
+                row: 0,
+                indent_columns: 7,
+            },
+            mant_ir::RowLayoutHint {
+                row: 1,
+                indent_columns: -2,
+            },
+        ],
+    };
+    let positioned = native_name_bindings(&owner, &names, &recognized);
+    assert_eq!(positioned, unpositioned);
+    assert_eq!(
+        positioned[0].occurrences,
+        [EntryForm {
+            parts: vec![slice(0, &[2, 0], 0..4)]
+        }]
+    );
+    assert_eq!(bound_text(&owner, &positioned[0].occurrences[0]), "--é");
+    assert_eq!(owner.terms[0].inline_layout.row_indent(0), 7);
+    assert_eq!(owner.terms[0].inline_layout.row_indent(1), -2);
 }

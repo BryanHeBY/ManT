@@ -9,7 +9,7 @@ fn definition_query(relation: &serde_json::Value) -> serde_json::Value {
     let mut query = query_fixture();
     query["document"]["sections"][0]["blocks"] = json!([{
         "type":"definition-list", "compact":true, "items":[{
-            "terms":[[{"type":"strong","children":[{"type":"text","value":"中e\u{301}"}]}]],
+            "terms":[{"content":[{"type":"strong","children":[{"type":"text","value":"中e\u{301}"}]}]}],
             "description":[{"type":"paragraph","children":[{
                 "type":"link", "target":{"kind":"external","uri":"https://ex.org"},
                 "children":[{"type":"text","value":"BODY"}]

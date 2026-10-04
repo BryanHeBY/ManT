@@ -164,6 +164,7 @@ mod tests {
                         value: " é名-param ordinary".into(),
                     },
                 ],
+                inline_layout: mant_ir::InlineLayout::default(),
                 layout: LayoutHint::default(),
                 source: None,
             }],

@@ -281,6 +281,7 @@ mod tests {
     }
     fn paragraph(children: Vec<Inline>, indent: i32, gap: u16) -> Block {
         Block::Paragraph {
+            inline_layout: mant_ir::InlineLayout::default(),
             children,
             layout: LayoutHint {
                 indent_columns: indent,
@@ -391,6 +392,7 @@ mod tests {
         let narrow = buffer_row(&line, 3);
         assert_eq!(narrow["cells"][2]["symbol"], " ");
         let bundle = bundle(vec![Block::Preformatted {
+            inline_layout: mant_ir::InlineLayout::default(),
             children: vec![text("界👩‍💻Z")],
             language: None,
             layout: LayoutHint::default(),

@@ -2,10 +2,11 @@
 
 use std::borrow::Cow;
 
-use mant_ir::{Block, DefinitionItem, EntryOwner, Inline};
+use mant_ir::{Block, DefinitionItem, EntryOwner, Inline, InlineContentRef, InlineLayout};
 
 use super::super::inline::{
-    block_prefix_escape_position, link_destination, render_inline_node_refs,
+    InlineRootNodes, block_prefix_escape_position, link_destination, render_inline_node_refs,
+    render_inline_owner_node_refs,
 };
 use super::super::mapped::MappedText;
 use super::super::{MarkdownInlineProjection, MarkdownOptions};
@@ -50,18 +51,23 @@ struct DefinitionBody<'a> {
 
 struct InlineRoot<'a> {
     nodes: Cow<'a, [Inline]>,
+    layout: &'a InlineLayout,
     has_output: bool,
 }
 
 impl<'a> InlineRoot<'a> {
     fn project(
-        nodes: &'a [Inline],
+        content: InlineContentRef<'a>,
         locations: Option<&dyn MarkdownInlineProjection>,
         options: MarkdownOptions,
     ) -> Self {
-        let nodes = project_inline(nodes, locations);
+        let nodes = project_inline(content.content, locations);
         let has_output = inline_output(&nodes, options) == InlineOutput::Visible;
-        Self { nodes, has_output }
+        Self {
+            nodes,
+            layout: content.layout,
+            has_output,
+        }
     }
 
     fn append_nodes<'root>(&'root self, output: &mut Vec<&'root Inline>, options: MarkdownOptions) {
@@ -105,11 +111,24 @@ fn render_roots<'a>(
     roots: impl Iterator<Item = &'a InlineRoot<'a>>,
     options: MarkdownOptions,
 ) -> String {
-    let mut nodes = Vec::new();
-    for root in roots {
-        root.append_nodes(&mut nodes, options);
+    let roots = roots
+        .map(|root| {
+            let mut nodes = Vec::new();
+            root.append_nodes(&mut nodes, options);
+            InlineRootNodes {
+                nodes,
+                layout: root.layout,
+            }
+        })
+        .collect::<Vec<_>>();
+    if roots.iter().all(|root| root.layout.is_empty()) {
+        let nodes = roots
+            .iter()
+            .flat_map(|root| root.nodes.iter().copied())
+            .collect::<Vec<_>>();
+        return render_inline_node_refs(&nodes, options);
     }
-    render_inline_node_refs(&nodes, options)
+    render_inline_owner_node_refs(&roots, options)
 }
 
 fn definition_body<'a>(
@@ -131,9 +150,21 @@ fn definition_body<'a>(
         if matches!(block, Block::VerticalSpace { .. }) {
             continue;
         }
-        if let Block::Paragraph { children, .. } = block {
+        if let Block::Paragraph {
+            children,
+            inline_layout,
+            ..
+        } = block
+        {
             // Decoration receives the original root, never an assembled seam.
-            let projected = InlineRoot::project(children, locations, options);
+            let projected = InlineRoot::project(
+                InlineContentRef {
+                    content: children,
+                    layout: inline_layout,
+                },
+                locations,
+                options,
+            );
             if body.blocks.is_empty() {
                 let has_output = projected.has_output;
                 destinations.push(projected);
@@ -226,7 +257,7 @@ fn definition_content(
     let projected = item
         .terms
         .iter()
-        .map(|root| InlineRoot::project(root, locations, options))
+        .map(|root| InlineRoot::project(root.inline_content(), locations, options))
         .collect::<Vec<_>>();
     let has_terms = projected.iter().any(|root| root.has_output);
     // Zero-width navigation belongs to an adjacent real term row, never a new

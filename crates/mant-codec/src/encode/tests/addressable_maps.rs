@@ -3,6 +3,7 @@ use super::*;
 #[test]
 fn navigation_only_tables_emit_targets_without_empty_fences() {
     let paragraph = |children| Block::Paragraph {
+        inline_layout: mant_ir::InlineLayout::default(),
         children,
         layout: LayoutHint::default(),
         source: None,
@@ -216,12 +217,15 @@ fn addressable_rendering_returns_exact_semantic_node_ranges() {
             names: vec!["--help".to_owned()],
             value_domain: None,
         }),
-        terms: vec![vec![
+        terms: (vec![vec![
             Inline::anchor("help-entry"),
             Inline::Code {
                 value: "--help".to_owned(),
             },
-        ]],
+        ]])
+        .into_iter()
+        .map(Into::into)
+        .collect(),
         description: vec![paragraph(vec![Inline::Text {
             value: "Show help.".to_owned(),
         }])],

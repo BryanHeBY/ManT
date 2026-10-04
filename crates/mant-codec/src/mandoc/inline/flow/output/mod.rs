@@ -17,6 +17,11 @@ pub(in crate::mandoc) enum CompletedRowOrigin {
     Layout,
     LiteralText,
 }
+pub(super) const INTERNAL_TERM_ALTERNATIVE: &str = "\0mant:output-scope:term-alternative";
+pub(super) fn is_term_alternative(node: &Inline) -> bool {
+    matches!(node, Inline::Anchor { id, .. } if id.as_str() == INTERNAL_TERM_ALTERNATIVE)
+}
+
 const INTERNAL_DEVICE_ROW_END: &str = "\0mant:output-scope:device-row-end";
 pub(in crate::mandoc::inline) const INTERNAL_FIELD_WORD: &str = "\0mant:field-word:";
 pub(in crate::mandoc::inline) const INTERNAL_OUTPUT_SCOPE: &str = "\0mant:output-scope:";
@@ -24,7 +29,8 @@ pub(in crate::mandoc::inline) const INTERNAL_OUTPUT_SCOPE: &str = "\0mant:output
 /// The public drain and local row-index consumers share this classification.
 /// Metadata can sit after a real row end without becoming that row's payload.
 pub(in crate::mandoc::inline::flow) fn is_private_output_marker(node: &Inline) -> bool {
-    matches!(node, Inline::Anchor { id, .. }
+    row_origins::is_layout_carrier(node)
+        || matches!(node, Inline::Anchor { id, .. }
         if id.as_str().starts_with(INTERNAL_FIELD_WORD)
             || id.as_str().starts_with(INTERNAL_OUTPUT_SCOPE)
             || id.as_str() == INTERNAL_LINK_SPLIT)
@@ -49,9 +55,41 @@ pub(in crate::mandoc) use projection::{
 pub(in crate::mandoc::inline::flow) mod native_passes;
 mod record;
 pub(in crate::mandoc::inline::flow) mod row_origins;
+pub(in crate::mandoc) use row_origins::{
+    push_row_break, split_row_origin, take_definition_term_breaks, take_inline_layout,
+};
 pub(in crate::mandoc::inline::flow) mod split;
 
 impl InlineBuilder {
+    /// Row-layout carriers can be inserted into an already accepted prefix.
+    /// Keep every live root-vector address on its original content boundary.
+    /// `NativeWordAnchor` and field owner ranges are `FieldBuffer` cell/scalar
+    /// positions; stable word/annotation markers and committed IR need no map.
+    pub(in crate::mandoc::inline::flow) fn remap_output_positions(
+        &mut self,
+        edit: row_origins::OutputNodeEdit,
+    ) {
+        if let Some(registry) = &self.output_positions {
+            for position in registry.borrow().iter().filter_map(std::rc::Weak::upgrade) {
+                let mut index = position.get();
+                edit.remap(&mut index);
+                position.set(index);
+            }
+        }
+        edit.remap(&mut self.execution.flush_unit_output_start);
+        if let Some(author) = &mut self.execution.author_execution {
+            edit.remap(&mut author.field_output_start);
+        }
+        if let Some(definition) = &mut self.execution.definition {
+            if let Some(field) = &mut definition.no_break {
+                field.remap_output_positions(edit);
+            }
+            if let Some(index) = &mut definition.hang_row.provisional_trailing_break {
+                edit.remap(index);
+            }
+        }
+    }
+
     /// Already executed empty endlines in the accepted output tail.
     pub(in crate::mandoc) fn completed_empty_rows(&self) -> u16 {
         u16::try_from(projection::trailing_completed_row_origins(&self.nodes).len())
@@ -101,10 +139,22 @@ impl InlineBuilder {
 
     /// Record an output slice before its source executes. The checkpoint
     /// owns no formatter registers and cannot roll execution back.
-    pub(in crate::mandoc) fn begin_output_checkpoint(&self) -> OutputCheckpoint {
+    pub(in crate::mandoc) fn begin_output_checkpoint(&mut self) -> OutputCheckpoint {
+        let position = std::rc::Rc::new(std::cell::Cell::new(self.nodes.len()));
+        let registry = self
+            .output_positions
+            .get_or_insert_with(std::rc::Rc::default);
+        registry
+            .borrow_mut()
+            .push(std::rc::Rc::downgrade(&position));
         OutputCheckpoint {
-            node_count: self.nodes.len(),
+            position,
+            registry: std::rc::Rc::downgrade(registry),
         }
+    }
+
+    fn output_checkpoint_index(&self, checkpoint: &OutputCheckpoint) -> usize {
+        checkpoint.position.get().min(self.nodes.len())
     }
 
     /// Whether the accepted output slice contains a readable semantic glyph.
@@ -127,7 +177,9 @@ impl InlineBuilder {
                 Inline::Anchor { .. } | Inline::LineBreak { .. } => false,
             })
         }
-        contains_glyph(&self.nodes[checkpoint.node_count..])
+        let present = contains_glyph(&self.nodes[self.output_checkpoint_index(&checkpoint)..]);
+        drop(checkpoint);
+        present
     }
 
     /// Wrap the output emitted since `checkpoint` without replaying its
@@ -138,7 +190,8 @@ impl InlineBuilder {
         checkpoint: OutputCheckpoint,
         wrap: impl FnMut(Vec<Inline>) -> Vec<Inline>,
     ) {
-        self.wrap_output_from(checkpoint.node_count, wrap);
+        self.wrap_output_from(self.output_checkpoint_index(&checkpoint), wrap);
+        drop(checkpoint);
     }
 
     /// Mark a local annotation scope without writing a formatter cell. A
@@ -338,7 +391,7 @@ impl InlineBuilder {
             || retiring_rejection
         {
             let row_indent = self.take_definition_row_indent();
-            self.nodes.push(Inline::line_break_indented(row_indent));
+            push_row_break(&mut self.nodes, row_indent);
             self.note_definition_output_row();
             self.execution.last_visible_character = Some('\n');
         }
@@ -464,9 +517,9 @@ impl InlineBuilder {
     ) {
         // Appending must still see the prefix, especially a preceding hard
         // break used for deduplication. Style only the new suffix afterwards.
-        let start = self.nodes.len();
+        let checkpoint = self.begin_output_checkpoint();
         append(self);
-        self.wrap_output_from(start, style);
+        self.wrap_output_since(checkpoint, style);
     }
 
     /// Annotate operands without capturing their executed automatic prefix.

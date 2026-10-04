@@ -25,11 +25,14 @@ fn enclosed(children: Vec<Inline>, container: u8) -> Block {
                 source: None,
                 entry: None,
                 layout: mant_ir::DefinitionLayout::default(),
-                terms: if container == 3 {
+                terms: (if container == 3 {
                     vec![children.clone()]
                 } else {
                     vec![]
-                },
+                })
+                .into_iter()
+                .map(Into::into)
+                .collect(),
                 description: if container == 4 {
                     vec![paragraph(children)]
                 } else {
@@ -57,6 +60,7 @@ fn enclosed(children: Vec<Inline>, container: u8) -> Block {
             source: None,
         },
         _ => Block::Preformatted {
+            inline_layout: mant_ir::InlineLayout::default(),
             children,
             language: None,
             layout: LayoutHint::default(),
@@ -163,6 +167,7 @@ fn row_only_containers_and_unsupported_block_quotes_keep_their_contracts() {
 fn canonical_paragraph_spelling_does_not_change_single_line_heading_export() {
     for depth in 3..=6 {
         let heading = mant_ir::Heading {
+            inline_layout: mant_ir::InlineLayout::default(),
             content: vec![
                 Inline::line_break(),
                 text("Label"),

@@ -4,6 +4,7 @@ use super::*;
 fn navigation_table_rows_preserve_physical_empty_row_counters() {
     let paragraph = |children| Block::Paragraph {
         children,
+        inline_layout: mant_ir::InlineLayout::default(),
         layout: LayoutHint::default(),
         source: None,
     };
@@ -29,6 +30,7 @@ fn navigation_table_rows_preserve_physical_empty_row_counters() {
                     vec![vec![Block::Preformatted {
                         children: vec![text("")],
                         language: None,
+                        inline_layout: mant_ir::InlineLayout::default(),
                         layout: LayoutHint::default(),
                         source: None,
                     }]],
@@ -89,7 +91,7 @@ fn hard_row_origins_compose_for_paragraph_and_literal_rows() {
         Inline::Text {
             value: "Alpha".into(),
         },
-        Inline::line_break_indented(6),
+        Inline::line_break(),
         Inline::Strong {
             children: vec![Inline::Text {
                 value: "Beta".into(),
@@ -103,12 +105,24 @@ fn hard_row_origins_compose_for_paragraph_and_literal_rows() {
     for block in [
         Block::Paragraph {
             children: children.clone(),
+            inline_layout: mant_ir::InlineLayout {
+                row_hints: vec![mant_ir::RowLayoutHint {
+                    row: 1,
+                    indent_columns: 6,
+                }],
+            },
             layout: LayoutHint::default(),
             source: None,
         },
         Block::Preformatted {
             children,
             language: None,
+            inline_layout: mant_ir::InlineLayout {
+                row_hints: vec![mant_ir::RowLayoutHint {
+                    row: 1,
+                    indent_columns: 6,
+                }],
+            },
             layout: LayoutHint::default(),
             source: None,
         },
@@ -130,6 +144,7 @@ fn literal_whitespace_is_content_even_at_indented_and_document_edges() {
                 children: vec![Inline::Text {
                     value: value.into(),
                 }],
+                inline_layout: mant_ir::InlineLayout::default(),
                 layout: LayoutHint::default(),
                 source: None,
             };
@@ -179,6 +194,7 @@ fn literal_typed_row_ends_match_embedded_newlines_across_block_joins() {
             let literal = Block::Preformatted {
                 children: vec![Inline::Text { value: "X".into() }, ending],
                 language: None,
+                inline_layout: mant_ir::InlineLayout::default(),
                 layout: LayoutHint::default(),
                 source: None,
             };
@@ -206,6 +222,7 @@ fn paragraph_preserves_a_formatter_generated_leading_line_break() {
                 value: "BODY".into(),
             },
         ],
+        inline_layout: mant_ir::InlineLayout::default(),
         layout: LayoutHint::default(),
         source: None,
     };
@@ -229,6 +246,7 @@ fn table_cells_preserve_formatter_generated_line_breaks() {
                             value: "B C".into(),
                         },
                     ],
+                    inline_layout: mant_ir::InlineLayout::default(),
                     layout: LayoutHint::default(),
                     source: None,
                 }],
@@ -274,6 +292,7 @@ fn table_cells_preserve_leading_and_trailing_physical_rows() {
                     kind: mant_ir::TableCellKind::Text,
                     blocks: vec![Block::Paragraph {
                         children,
+                        inline_layout: mant_ir::InlineLayout::default(),
                         layout: LayoutHint::default(),
                         source: None,
                     }],
@@ -300,6 +319,7 @@ fn an_empty_table_row_remains_a_physical_row() {
                 kind: mant_ir::TableCellKind::Text,
                 blocks: vec![Block::Paragraph {
                     children: Vec::new(),
+                    inline_layout: mant_ir::InlineLayout::default(),
                     layout: LayoutHint::default(),
                     source: None,
                 }],
@@ -316,6 +336,7 @@ fn an_empty_table_row_remains_a_physical_row() {
             children: vec![Inline::Text {
                 value: "BEFORE".into(),
             }],
+            inline_layout: mant_ir::InlineLayout::default(),
             layout: LayoutHint::default(),
             source: None,
         },
@@ -324,6 +345,7 @@ fn an_empty_table_row_remains_a_physical_row() {
             children: vec![Inline::Text {
                 value: "AFTER".into(),
             }],
+            inline_layout: mant_ir::InlineLayout::default(),
             layout: LayoutHint::default(),
             source: None,
         },

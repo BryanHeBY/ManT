@@ -419,7 +419,7 @@ impl InlineBuilder {
                 device.separator_field,
                 &mut output_start,
             );
-            super::super::output::row_origins::project_native_positions(
+            let edit = super::super::output::row_origins::project_native_positions(
                 &mut self.nodes,
                 &device.row_origins,
                 &device.field_padding,
@@ -429,6 +429,9 @@ impl InlineBuilder {
                     .as_ref()
                     .is_some_and(|state| state.column_origin_units.is_none()),
             );
+            if let Some(edit) = edit {
+                self.remap_output_positions(edit);
+            }
             if let Some(author) = &mut self.execution.author_execution {
                 author.field_output_start = self.nodes.len();
             }

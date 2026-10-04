@@ -89,7 +89,7 @@ pub(super) fn append_to_last_inline_block(blocks: &mut [Block], tail: &[Inline])
                 if items.last_mut().is_some_and(|item| {
                     append_to_last_inline_block(&mut item.description, tail)
                         || item.terms.last_mut().is_some_and(|term| {
-                            term.extend_from_slice(tail);
+                            term.content.extend_from_slice(tail);
                             true
                         })
                 }) {

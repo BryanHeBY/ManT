@@ -116,6 +116,7 @@ mod tests {
     fn nested_source_bytes_project_into_original_scalars_for_both_owners() {
         let item = ListItem {
             blocks: vec![Block::Paragraph {
+                inline_layout: crate::InlineLayout::default(),
                 children: nodes(),
                 layout: LayoutHint::default(),
                 source: None,
@@ -125,7 +126,7 @@ mod tests {
             entry: None,
         };
         let definition = DefinitionItem {
-            terms: vec![nodes()],
+            terms: (vec![nodes()]).into_iter().map(Into::into).collect(),
             description: vec![],
             layout: DefinitionLayout::default(),
             source: None,
@@ -163,7 +164,7 @@ mod tests {
     #[test]
     fn invalid_byte_ranges_and_structural_paths_never_become_coordinates() {
         let definition = DefinitionItem {
-            terms: vec![nodes()],
+            terms: (vec![nodes()]).into_iter().map(Into::into).collect(),
             description: vec![],
             layout: DefinitionLayout::default(),
             source: None,
@@ -201,7 +202,7 @@ mod tests {
                 },
                 Inline::Strong { children: vec![] },
                 Inline::Emphasis {
-                    children: vec![Inline::LineBreak { indent_columns: 0 }]
+                    children: vec![Inline::LineBreak {}]
                 },
                 Inline::Text {
                     value: "e\u{301}👩‍💻".into()

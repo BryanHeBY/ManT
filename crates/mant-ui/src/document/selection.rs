@@ -90,11 +90,13 @@ impl RenderedDocument {
                 } else {
                     (start_column, end_column)
                 };
-                Some(
-                    line_fragment(line, start_column, end_column)
-                        .trim_end_matches(' ')
-                        .to_owned(),
-                )
+                let map = self.copy_maps.get(row);
+                let text = line_fragment(line, start_column, end_column, map);
+                Some(if map.is_some_and(|map| map.end.is_some()) {
+                    text
+                } else {
+                    text.trim_end_matches(' ').to_owned()
+                })
             })
             .collect::<Vec<_>>()
             .join("\n")
@@ -119,7 +121,15 @@ impl RenderedDocument {
     }
 }
 
-fn line_fragment(line: &Line<'_>, start_column: usize, end_column: usize) -> String {
+fn line_fragment(
+    line: &Line<'_>,
+    start_column: usize,
+    end_column: usize,
+    copy_map: Option<&super::wrap::RowCopyMap>,
+) -> String {
+    let end_column = copy_map
+        .and_then(|map| map.end)
+        .map_or(end_column, |end| end_column.min(end));
     let mut output = String::new();
     let mut column: usize = 0;
     let mut previous_selected = false;
@@ -127,7 +137,14 @@ fn line_fragment(line: &Line<'_>, start_column: usize, end_column: usize) -> Str
         for grapheme in mant_render::cells::graphemes(&span.content) {
             let width = grapheme.columns();
             let next_column = column.saturating_add(width);
-            let selected = if width == 0 {
+            let omitted = copy_map.is_some_and(|map| {
+                map.omitted
+                    .iter()
+                    .any(|range| range.start < next_column && column < range.end)
+            });
+            let selected = if omitted {
+                false
+            } else if width == 0 {
                 previous_selected
             } else {
                 start_column < next_column && end_column > column
@@ -208,10 +225,10 @@ mod tests {
             Span::styled("日e\u{301}😀z", Style::default().fg(Color::Green)),
         ]);
 
-        assert_eq!(line_fragment(&line, 1, 3), "日");
-        assert_eq!(line_fragment(&line, 3, 4), "e\u{301}");
-        assert_eq!(line_fragment(&line, 4, 5), "😀");
-        assert_eq!(line_fragment(&line, 5, 6), "😀");
+        assert_eq!(line_fragment(&line, 1, 3, None), "日");
+        assert_eq!(line_fragment(&line, 3, 4, None), "e\u{301}");
+        assert_eq!(line_fragment(&line, 4, 5, None), "😀");
+        assert_eq!(line_fragment(&line, 5, 6, None), "😀");
     }
 
     #[test]

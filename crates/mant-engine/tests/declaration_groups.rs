@@ -389,7 +389,7 @@ fn invalid_group_heads_and_overlapping_ranges_are_not_semantically_complete() {
             panic!("definition list")
         };
         if empty_head {
-            items[0].terms = vec![vec![mant_ir::Inline::anchor("only-anchor")]];
+            items[0].terms = vec![vec![mant_ir::Inline::anchor("only-anchor")].into()];
         } else {
             declaration_groups.push(declaration_groups[0]);
         }

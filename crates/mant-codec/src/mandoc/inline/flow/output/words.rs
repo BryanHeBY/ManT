@@ -12,7 +12,7 @@ use crate::mandoc::inline::is_formatter_word_blank;
 /// `In`, `Bx`, `Xr`, `MR`).
 #[derive(Clone)]
 pub(in crate::mandoc) struct SemanticOwnerCheckpoint {
-    nodes_start: usize,
+    output: super::super::OutputCheckpoint,
     pending: usize,
     original: Option<Inline>,
 }
@@ -165,8 +165,9 @@ impl InlineBuilder {
         let pending = self.execution.zero_advance.pending_visible_characters();
         let original = self.execution.zero_advance.pending_projection();
         self.execution.zero_advance.begin_output_owner();
+        let output = self.begin_output_checkpoint();
         SemanticOwnerCheckpoint {
-            nodes_start: self.nodes.len(),
+            output,
             pending,
             original,
         }
@@ -185,7 +186,7 @@ impl InlineBuilder {
         } else {
             0
         };
-        let start = checkpoint.nodes_start.min(self.nodes.len());
+        let start = self.output_checkpoint_index(&checkpoint.output);
         if owned > 0
             && start < self.nodes.len()
             && let Some(original) = checkpoint.original

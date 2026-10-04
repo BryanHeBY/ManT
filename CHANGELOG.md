@@ -90,6 +90,15 @@ that crate was not published for that change.
 
 ### mant-ir, mant-protocol, mant-codec, mant-loader, mant-query, mant-render, mant-engine and mant 0.12.0
 
+- Make `Inline::LineBreak` a pure hard boundary. Paragraphs, literal blocks,
+  headings, and typed `DefinitionTerm` labels own optional sparse `inlineLayout`
+  row hints; styles and links remain transparent. Update consumers and struct
+  literals, regenerate the unpublished v0.12 schema, and reject the retired
+  line-break indentation and bare term-array shapes. Execution-proven first-row
+  positioning no longer becomes searchable or copyable text; authored spaces
+  and NBSP remain content. Preserve separate first/wrapped origins and open
+  tails, with strict hint budgets and checked owner-relative mappings.
+
 - Dispatch owned roff, man and mdoc macros by typed native identities throughout
   lowering, sharing the same control and enclosure classification. Visible
   text, links, field execution and source-neutral IR contracts are unchanged.

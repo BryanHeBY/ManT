@@ -3,12 +3,15 @@
 use mant_codec::encode::{
     MarkdownOptions, render_addressable_markdown_with_options, render_markdown_with_options,
 };
-use mant_ir::{Block, Inline, ResolvedContent};
+use mant_ir::{Block, Inline, InlineContentRef, ResolvedContent};
 use mant_protocol::{QueryBundle, SearchCase, SearchQuery, SearchScope, SearchSyntax};
 use serde::Deserialize;
 
 #[path = "markdown_hard_rows/invariants.rs"]
 mod invariants;
+
+#[path = "markdown_hard_rows/links.rs"]
+mod links;
 
 #[derive(Deserialize)]
 struct Matrix {
@@ -50,11 +53,27 @@ fn description(content: &ResolvedContent) -> &[Block] {
 }
 
 fn first_children(blocks: &[Block]) -> &[Inline] {
+    first_content(blocks).content
+}
+
+fn first_content(blocks: &[Block]) -> InlineContentRef<'_> {
     match &blocks[0] {
-        Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => children,
-        Block::DefinitionList { items, .. } => &items[0].terms[0],
-        Block::Table { rows, .. } => first_children(&rows[0].cells[0].blocks),
-        Block::List { items, .. } => first_children(&items[0].blocks),
+        Block::Paragraph {
+            children,
+            inline_layout,
+            ..
+        }
+        | Block::Preformatted {
+            children,
+            inline_layout,
+            ..
+        } => InlineContentRef {
+            content: children,
+            layout: inline_layout,
+        },
+        Block::DefinitionList { items, .. } => items[0].terms[0].inline_content(),
+        Block::Table { rows, .. } => first_content(&rows[0].cells[0].blocks),
+        Block::List { items, .. } => first_content(&items[0].blocks),
         other => panic!("unexpected consumer container: {other:#?}"),
     }
 }
@@ -199,34 +218,49 @@ fn assert_projection(
     }
 }
 
-struct Links(Vec<(mant_ir::LinkTarget, String)>);
+struct Links(Vec<(mant_ir::LinkTarget, String, Option<String>)>);
 impl<'ir> mant_ir::visit::Visit<'ir> for Links {
     fn visit_inline(&mut self, node: &'ir Inline) {
         if let Inline::Link {
-            target, children, ..
+            target,
+            title,
+            children,
         } = node
         {
-            self.0
-                .push((target.clone(), mant_ir::inline_plain_text(children)));
+            self.0.push((
+                target.clone(),
+                mant_ir::inline_plain_text(children),
+                title.clone(),
+            ));
         }
         mant_ir::visit::walk_inline(self, node);
     }
 }
 
-fn carrier_is_preserved(case: &Case, restored: &ResolvedContent, word: &str) -> bool {
+fn carrier_is_preserved(
+    case: &Case,
+    original: &ResolvedContent,
+    restored: &ResolvedContent,
+    word: &str,
+) -> bool {
     if matches!(case.metadata.container.as_str(), "column" | "literal") {
         return true;
     }
-    native_carrier_is_preserved(case, restored, word)
+    carrier_style_is_preserved(case, restored, word)
+        && (case.metadata.carrier != "Lk" || links::reader_links_are_preserved(original, restored))
 }
 
-fn native_carrier_is_preserved(case: &Case, restored: &ResolvedContent, word: &str) -> bool {
+fn carrier_style_is_preserved(case: &Case, restored: &ResolvedContent, word: &str) -> bool {
     let mask = match case.metadata.carrier.as_str() {
         "Em" | "Lk" => 2,
         "Sy" => 1,
         _ => 0,
     };
-    if styles_for_word(first_children(description(restored)), word) != vec![mask; word.len()] {
+    styles_for_word(first_children(description(restored)), word) == vec![mask; word.len()]
+}
+
+fn native_carrier_is_preserved(case: &Case, restored: &ResolvedContent, word: &str) -> bool {
+    if !carrier_style_is_preserved(case, restored, word) {
         return false;
     }
     if case.metadata.carrier == "Lk" {
@@ -284,7 +318,7 @@ fn hundred_native_carriers_keep_hard_rows_after_json_and_markdown_boundary_polic
             assert!(!readback.contains("<br />"), "{}: {readback}", case.id);
             assert_projection(&case, &content, &restored, &markdown);
             assert!(
-                carrier_is_preserved(&case, &restored, word),
+                carrier_is_preserved(&case, &content, &restored, word),
                 "{}: carrier lost\n{markdown}",
                 case.id
             );

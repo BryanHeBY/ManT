@@ -365,9 +365,9 @@ impl FormatterState {
         }
         let definition_body_gap_consumed = builder.definition_body_gap_consumed(boundary.native());
         let completed_empty_rows = builder.completed_empty_rows();
-        let definition_term_breaks = builder.take_definition_term_breaks();
-        let (output, mut execution, occupied) =
+        let (mut output, mut execution, occupied) =
             builder.finish_captured_formatter_line(preserve_rows, boundary);
+        let definition_term_breaks = super::inline::take_definition_term_breaks(&mut output);
         self.definition_head_rows = DefinitionHeadRows {
             occupied,
             completed_empty_rows,

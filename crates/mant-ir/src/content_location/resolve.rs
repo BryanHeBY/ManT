@@ -5,6 +5,15 @@ use super::{
 use crate::{Block, Document, Inline, Section};
 
 impl ContentLocation {
+    /// Borrow the complete addressed owner root and its local row layout.
+    /// Inline path selections retain their owner's coordinate space.
+    #[must_use]
+    pub fn inline_content<'a>(
+        &self,
+        document: &'a Document,
+    ) -> Option<crate::InlineContentRef<'a>> {
+        self.as_ref().inline_content(document)
+    }
     /// Resolve the checked inline container or singleton node in this snapshot.
     #[must_use]
     pub fn resolve<'a>(&self, document: &'a Document) -> Option<&'a [Inline]> {
@@ -19,6 +28,67 @@ impl ContentLocation {
 }
 
 impl ContentLocationRef<'_> {
+    /// Resolve the complete owner, validating any selected inline path first.
+    #[must_use]
+    pub fn inline_content(self, document: &Document) -> Option<crate::InlineContentRef<'_>> {
+        self.resolve(document)?;
+        match self {
+            Self::DocumentHeading { .. } => {
+                let heading = document.heading.as_ref()?;
+                Some(crate::InlineContentRef {
+                    content: &heading.content,
+                    layout: &heading.inline_layout,
+                })
+            }
+            Self::SectionHeading { sections, .. } => {
+                let heading = &resolve_content_section(document, sections)?.heading;
+                Some(crate::InlineContentRef {
+                    content: &heading.content,
+                    layout: &heading.inline_layout,
+                })
+            }
+            Self::Content {
+                sections,
+                blocks,
+                root,
+                ..
+            } => {
+                let block = resolve_content_block(content_blocks(document, sections)?, blocks)?;
+                match (block, root) {
+                    (
+                        Block::Paragraph {
+                            children,
+                            inline_layout,
+                            ..
+                        }
+                        | Block::Preformatted {
+                            children,
+                            inline_layout,
+                            ..
+                        },
+                        ContentInlineRoot::Inlines,
+                    ) => Some(crate::InlineContentRef {
+                        content: children,
+                        layout: inline_layout,
+                    }),
+                    (
+                        Block::DefinitionList { items, .. },
+                        ContentInlineRoot::DefinitionTerm {
+                            item_index,
+                            term_index,
+                        },
+                    ) => Some(
+                        items
+                            .get(item_index as usize)?
+                            .terms
+                            .get(term_index as usize)?
+                            .inline_content(),
+                    ),
+                    _ => None,
+                }
+            }
+        }
+    }
     /// Check container kinds and bounds against the exact supplied document.
     #[must_use]
     pub fn resolve(self, document: &Document) -> Option<&[Inline]> {

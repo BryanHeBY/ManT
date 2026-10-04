@@ -194,6 +194,16 @@ pub(in crate::mandoc) struct NativeFieldDevice {
 }
 
 impl NativeFieldDevice {
+    pub(in crate::mandoc::inline::flow) fn remap_output_positions(
+        &mut self,
+        edit: super::super::output::row_origins::OutputNodeEdit,
+    ) {
+        edit.remap(&mut self.output_start);
+        if let Some(field) = &mut self.separator_field {
+            field.remap_output_positions(edit);
+        }
+    }
+
     pub(in crate::mandoc::inline::flow) const fn ends_row(&self) -> bool {
         self.ends_row
     }

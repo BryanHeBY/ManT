@@ -15,9 +15,12 @@ fn item(value: &str) -> DefinitionItem {
             spacing_before_lines: None,
             ..Default::default()
         },
-        terms: vec![vec![Inline::Text {
+        terms: (vec![vec![Inline::Text {
             value: value.into(),
-        }]],
+        }]])
+        .into_iter()
+        .map(Into::into)
+        .collect(),
         description: Vec::new(),
     }
 }
@@ -31,11 +34,14 @@ fn strong_item(value: &str) -> DefinitionItem {
             spacing_before_lines: None,
             ..Default::default()
         },
-        terms: vec![vec![Inline::Strong {
+        terms: (vec![vec![Inline::Strong {
             children: vec![Inline::Text {
                 value: value.into(),
             }],
-        }]],
+        }]])
+        .into_iter()
+        .map(Into::into)
+        .collect(),
         description: Vec::new(),
     }
 }
@@ -121,7 +127,10 @@ fn target_only_definitions_retain_anchors_without_becoming_entries() {
             spacing_before_lines: None,
             ..Default::default()
         },
-        terms: vec![vec![Inline::anchor("native-target")]],
+        terms: (vec![vec![Inline::anchor("native-target")]])
+            .into_iter()
+            .map(Into::into)
+            .collect(),
         description: Vec::new(),
     };
     let mut sections = vec![Section {
@@ -365,6 +374,7 @@ fn colliding_generated_ids_follow_semantics_not_sibling_order() {
 #[test]
 fn normalizes_hanging_option_layout_before_assigning_identity() {
     let paragraph = |value: &str, indent_columns, spacing_before_lines| Block::Paragraph {
+        inline_layout: mant_ir::InlineLayout::default(),
         children: vec![Inline::Text {
             value: value.to_owned(),
         }],
@@ -419,6 +429,7 @@ fn normalizes_hanging_option_layout_before_assigning_identity() {
 #[test]
 fn normalizes_cross_platform_hanging_environment_definitions() {
     let paragraph = |value: &str, indent_columns| Block::Paragraph {
+        inline_layout: mant_ir::InlineLayout::default(),
         children: vec![Inline::Text {
             value: value.to_owned(),
         }],
@@ -474,7 +485,7 @@ fn normalizes_cross_platform_hanging_environment_definitions() {
 #[test]
 fn keeps_native_navigation_anchors_separate_from_semantic_ids() {
     let mut command = item("set-mark");
-    command.terms[0].insert(0, Inline::anchor("set"));
+    command.terms[0].content.insert(0, Inline::anchor("set"));
     let mut sections = vec![Section {
         id: "commands".into(),
         fragment_aliases: Vec::new(),

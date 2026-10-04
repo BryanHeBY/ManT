@@ -3,11 +3,14 @@
 use super::flow::Flow;
 use super::indent_lines;
 use super::layout::LayoutText;
-use crate::presentation::{
-    EntryStyleMap, InlinePresentation, TextPresentation, TextRole, visit_inline_text,
-};
+use crate::presentation::{EntryStyleMap, TextPresentation, TextRole, visit_inline_text};
+#[cfg(test)]
+use mant_ir::Inline;
 use mant_ir::geometry::{compose_origin, coordinate, marker_run_in_gap, padding, text_width};
-use mant_ir::{Block, DefinitionItem, Inline, ListItem, ListKind, Section, TableCell};
+use mant_ir::{
+    Block, DefinitionItem, InlineContentRef, ListItem, ListKind, Section, TableCell,
+    resolve_row_origins,
+};
 
 #[cfg(test)]
 mod cell_layout_tests;
@@ -18,10 +21,10 @@ mod tests;
 #[cfg(test)]
 mod visits;
 
-pub(super) struct BlockRenderer<'a> {
-    pub(super) names: Option<EntryStyleMap<'a>>,
-    pub(super) decorate: &'a dyn Fn(TextPresentation, &str) -> String,
-    pub(super) locations: Option<&'a super::super::styles::LocatedStyles<'a>>,
+pub(in crate::output) struct BlockRenderer<'a> {
+    pub(in crate::output) names: Option<EntryStyleMap<'a>>,
+    pub(in crate::output) decorate: &'a dyn Fn(TextPresentation, &str) -> String,
+    pub(in crate::output) locations: Option<&'a super::super::styles::LocatedStyles<'a>>,
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -35,17 +38,16 @@ impl BlockRenderer<'_> {
         (self.decorate)(role.into(), text)
     }
 
-    /// Rows of a term with each row's request-relative indent. A
-    /// [`LineBreak`](Inline::LineBreak) closes its row and carries the next
-    /// row's indent (a cleared-BRIND request moved the upstream offset,
-    /// roff_term.c:73-75); wrapped text rows inherit the current indent.
+    /// Decorate authoritative text once, then attach the complete owner's
+    /// signed correction to every logical hard row. Generated padding never
+    /// enters the scalar domain used by names and matches.
     pub(super) fn inline_rows(
         &self,
-        children: &[Inline],
+        content: InlineContentRef<'_>,
         role: TextRole,
-    ) -> Vec<(LayoutText, u16)> {
-        let mut rows = vec![(LayoutText::default(), 0)];
-        let mut next_indent = 0_u16;
+    ) -> Vec<(LayoutText, i32)> {
+        let children = content.content;
+        let mut rows = vec![LayoutText::default()];
         let names = self
             .names
             .as_ref()
@@ -54,22 +56,13 @@ impl BlockRenderer<'_> {
             #[cfg(test)]
             visits::inline();
             let decorated = LayoutText::decorated(value, (self.decorate)(presentation, value));
-            if let InlinePresentation {
-                line_break_indent: Some(indent),
-                ..
-            } = presentation.inline
-            {
-                next_indent = indent;
-            }
             // Decoration is applied once. Measurements retain the original
             // fragments and are composed before measuring a complete row.
             for (index, piece) in decorated.split(false).into_iter().enumerate() {
                 if index > 0 {
-                    let indent = next_indent;
-                    next_indent = 0;
-                    rows.push((LayoutText::default(), indent));
+                    rows.push(LayoutText::default());
                 }
-                rows.last_mut().expect("open row").0.append(&piece);
+                rows.last_mut().expect("open row").append(&piece);
             }
         };
         if let Some(locations) = self.locations {
@@ -89,18 +82,42 @@ impl BlockRenderer<'_> {
                 );
             });
         }
-        rows
+        rows.into_iter()
+            .enumerate()
+            .map(|(index, row)| (row, content.layout.row_indent(index)))
+            .collect()
     }
 
-    pub(super) fn inline_text(&self, children: &[Inline], role: TextRole) -> String {
-        self.inline_layout(children, role).rendered
+    pub(in crate::output) fn inline_text(
+        &self,
+        content: InlineContentRef<'_>,
+        role: TextRole,
+    ) -> String {
+        self.inline_layout(content, role).rendered
     }
 
-    pub(super) fn inline_layout(&self, children: &[Inline], role: TextRole) -> LayoutText {
+    pub(super) fn inline_layout(
+        &self,
+        content: InlineContentRef<'_>,
+        role: TextRole,
+    ) -> LayoutText {
+        self.inline_layout_at(content, role, 0)
+    }
+
+    fn inline_layout_at(
+        &self,
+        content: InlineContentRef<'_>,
+        role: TextRole,
+        origin: i32,
+    ) -> LayoutText {
         LayoutText::join(
-            self.inline_rows(children, role)
+            self.inline_rows(content, role)
                 .into_iter()
-                .map(|(row, indent)| row.indented(padding(i32::from(indent)))),
+                .map(|(row, indent)| {
+                    row.indented(padding(
+                        resolve_row_origins(origin, origin, indent).first_visual_origin,
+                    ))
+                }),
             "\n",
         )
     }
@@ -118,13 +135,17 @@ impl BlockRenderer<'_> {
     }
 
     fn section_flow(&self, section: &Section, depth: usize) -> Flow {
-        let heading_indent = "  ".repeat(depth);
+        let heading_origin = coordinate(depth.saturating_mul(2));
         let mut output = Flow::default();
         output.gap(section.spacing_before_lines);
-        output.push_text(
-            self.inline_layout(&section.heading.content, TextRole::Heading)
-                .prefixed(&heading_indent),
-        );
+        output.push_text(self.inline_layout_at(
+            InlineContentRef {
+                content: &section.heading.content,
+                layout: &section.heading.inline_layout,
+            },
+            TextRole::Heading,
+            heading_origin,
+        ));
         output.extend(self.block_flow(&section.blocks, coordinate(depth.saturating_mul(2))));
         output.extend(self.sections_flow(&section.children, depth + 1));
         output
@@ -183,11 +204,36 @@ impl BlockRenderer<'_> {
         visits::block();
         let (value, layout_indent) = match block {
             Block::Paragraph {
-                children, layout, ..
-            } => return self.paragraph_flow(children, layout, base_indent, tail),
+                children,
+                inline_layout,
+                layout,
+                ..
+            } => {
+                return self.paragraph_flow(
+                    InlineContentRef {
+                        content: children,
+                        layout: inline_layout,
+                    },
+                    layout,
+                    base_indent,
+                    tail,
+                );
+            }
             Block::Preformatted {
-                children, layout, ..
-            } => return self.preformatted_flow(children, layout, base_indent),
+                children,
+                inline_layout,
+                layout,
+                ..
+            } => {
+                return self.preformatted_flow(
+                    InlineContentRef {
+                        content: children,
+                        layout: inline_layout,
+                    },
+                    layout,
+                    base_indent,
+                );
+            }
             Block::List {
                 kind,
                 items,
@@ -248,21 +294,30 @@ impl BlockRenderer<'_> {
 
     fn preformatted_flow(
         &self,
-        children: &[mant_ir::Inline],
+        content: InlineContentRef<'_>,
         layout: &mant_ir::LayoutHint,
         base_indent: i32,
     ) -> Flow {
         // Literal newlines and whitespace are content, not layout requests.
         // They survive even when the entire block contains only blanks.
-        if !mant_ir::geometry::has_literal_rows(children) {
+        if !mant_ir::geometry::has_literal_rows(content.content) {
             return Flow::default();
         }
         let origin = compose_origin(base_indent, layout.indent_columns);
+        let continuation_origin = compose_origin(origin, layout.continuation_indent_columns);
         Flow::literal(LayoutText::join(
-            self.inline_rows(children, TextRole::Body)
+            self.inline_rows(content, TextRole::Body)
                 .into_iter()
-                .map(|(row, indent)| {
-                    row.indented(padding(compose_origin(origin, i32::from(indent))))
+                .enumerate()
+                .map(|(index, (row, indent))| {
+                    let first = if index == 0 {
+                        origin
+                    } else {
+                        continuation_origin
+                    };
+                    row.indented(padding(
+                        resolve_row_origins(first, continuation_origin, indent).first_visual_origin,
+                    ))
                 }),
             "\n",
         ))
@@ -270,38 +325,53 @@ impl BlockRenderer<'_> {
 
     fn paragraph_flow(
         &self,
-        children: &[mant_ir::Inline],
+        content: InlineContentRef<'_>,
         layout: &mant_ir::LayoutHint,
         base_indent: i32,
         tail: ParagraphTail,
     ) -> Flow {
-        let mut rows = self.inline_rows(children, TextRole::Body);
-        if rows.iter().all(|(row, _)| row.visible.trim().is_empty()) {
+        let mut rows = self.inline_rows(content, TextRole::Body);
+        if rows.len() == 1 && rows[0].0.visible.trim().is_empty() {
             return Flow::default();
         }
-        while tail == ParagraphTail::BlockBoundary
-            && rows.last().is_some_and(|(row, _)| row.is_empty())
-        {
-            let (tail, _) = rows.pop().expect("trailing row");
-            if let Some((row, _)) = rows.last_mut() {
-                row.append(&tail);
-            }
-        }
+        let completed_empty_tail = Self::close_paragraph_rows(&mut rows, tail);
         let first_origin = compose_origin(base_indent, layout.indent_columns);
-        Flow::text(LayoutText::join(
+        let continuation_origin = compose_origin(first_origin, layout.continuation_indent_columns);
+        let value = LayoutText::join(
             rows.into_iter().enumerate().map(|(index, (line, indent))| {
                 let origin = if index == 0 {
                     first_origin
                 } else {
-                    compose_origin(first_origin, layout.continuation_indent_columns)
+                    continuation_origin
                 };
                 // An empty physical row has no device advance. Preserve its
                 // opaque decoration without turning the row origin into
                 // authored blank cells (term_ascii.c::ascii_endline()).
-                line.indented(padding(compose_origin(origin, i32::from(indent))))
+                line.indented(padding(
+                    resolve_row_origins(origin, continuation_origin, indent).first_visual_origin,
+                ))
             }),
             "\n",
-        ))
+        );
+        if completed_empty_tail {
+            Flow::completed_text(value)
+        } else {
+            Flow::text(value)
+        }
+    }
+
+    fn close_paragraph_rows(rows: &mut Vec<(LayoutText, i32)>, tail: ParagraphTail) -> bool {
+        if tail == ParagraphTail::BlockBoundary
+            && rows.len() > 1
+            && rows.last().is_some_and(|(row, _)| row.is_empty())
+        {
+            let (tail, _) = rows.pop().expect("open trailing row");
+            if let Some((row, _)) = rows.last_mut() {
+                row.append(&tail);
+            }
+            return rows.last().is_some_and(|(row, _)| row.is_empty());
+        }
+        false
     }
 
     fn nonliteral_leaf(value: &LayoutText, origin: i32) -> Flow {

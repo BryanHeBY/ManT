@@ -100,6 +100,7 @@ fn confirmed_search_moves_across_a_pre_resolved_document_scope() {
             fragment_aliases: Vec::new(),
             diagnostics: Vec::new(),
             blocks: vec![AstBlock::Paragraph {
+                inline_layout: mant_ir::InlineLayout::default(),
                 children: vec![Inline::Text {
                     value: text.to_owned(),
                 }],

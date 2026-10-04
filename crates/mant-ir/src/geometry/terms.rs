@@ -9,13 +9,13 @@ use crate::Inline;
 /// closes a row and must not be erased by trimming. Width is measured after
 /// joining style/link fragments, preserving combining and wide characters.
 #[must_use]
-pub fn definition_run_in_width(terms: &[Vec<Inline>]) -> Option<usize> {
+pub fn definition_run_in_width(terms: &[impl AsRef<[Inline]>]) -> Option<usize> {
     let mut final_row = String::new();
     let mut present = false;
     for term in terms {
         let mut row = String::new();
         let mut term_present = false;
-        append(term, &mut row, &mut term_present);
+        append(term.as_ref(), &mut row, &mut term_present);
         if term_present {
             final_row = row;
             present = true;

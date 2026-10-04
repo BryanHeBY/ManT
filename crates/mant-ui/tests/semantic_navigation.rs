@@ -50,9 +50,12 @@ fn sidebar_exposes_every_semantic_role_supported_by_the_document_contract() {
             names: vec![name.to_owned()],
             value_domain: None,
         }),
-        terms: vec![vec![Inline::Code {
-            value: name.to_owned(),
-        }]],
+        terms: vec![
+            vec![Inline::Code {
+                value: name.to_owned(),
+            }]
+            .into(),
+        ],
         description: Vec::new(),
         layout: mant_ir::DefinitionLayout {
             head_body_relation: mant_ir::HeadBodyRelation::from(false),
@@ -64,10 +67,12 @@ fn sidebar_exposes_every_semantic_role_supported_by_the_document_contract() {
     entries[0].terms = vec![
         vec![Inline::Code {
             value: "--help MODE".to_owned(),
-        }],
+        }]
+        .into(),
         vec![Inline::Code {
             value: "-h".to_owned(),
-        }],
+        }]
+        .into(),
     ];
     let facts = entries[0].entry.as_mut().unwrap();
     facts.forms = vec![mant_ir::EntryForm::term(0), mant_ir::EntryForm::term(1)];
@@ -97,9 +102,12 @@ fn sidebar_exposes_every_semantic_role_supported_by_the_document_contract() {
                 names: vec!["brief".to_owned()],
                 value_domain: None,
             }),
-            terms: vec![vec![Inline::Code {
-                value: "brief".to_owned(),
-            }]],
+            terms: vec![
+                vec![Inline::Code {
+                    value: "brief".to_owned(),
+                }]
+                .into(),
+            ],
             description: Vec::new(),
             layout: mant_ir::DefinitionLayout {
                 head_body_relation: mant_ir::HeadBodyRelation::from(false),

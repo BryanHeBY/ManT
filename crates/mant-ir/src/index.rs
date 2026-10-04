@@ -251,7 +251,10 @@ mod tests {
                         names: vec!["--help".to_owned()],
                         value_domain: None,
                     }),
-                    terms: vec![vec![Inline::anchor(id.clone())]],
+                    terms: (vec![vec![Inline::anchor(id.clone())]])
+                        .into_iter()
+                        .map(Into::into)
+                        .collect(),
                     description: Vec::new(),
                     layout: crate::DefinitionLayout {
                         head_body_relation: HeadBodyRelation::from(false),
@@ -287,6 +290,7 @@ mod tests {
             source: None,
         };
         section.blocks.push(crate::Block::Paragraph {
+            inline_layout: crate::InlineLayout::default(),
             children: vec![Inline::anchor_with_aliases(
                 "option",
                 vec![FragmentAlias::from("--option")],

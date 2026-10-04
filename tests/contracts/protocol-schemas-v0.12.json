@@ -738,6 +738,10 @@
                   "$ref": "#/$defs/Inline"
                 }
               },
+              "inlineLayout": {
+                "description": "Exceptional row offsets in this content root, never inline text.",
+                "$ref": "#/$defs/InlineLayout"
+              },
               "layout": {
                 "description": "Source-derived indentation and vertical spacing.",
                 "$ref": "#/$defs/LayoutHint"
@@ -774,6 +778,10 @@
                 "items": {
                   "$ref": "#/$defs/Inline"
                 }
+              },
+              "inlineLayout": {
+                "description": "Exceptional row offsets in this literal content root.",
+                "$ref": "#/$defs/InlineLayout"
               },
               "language": {
                 "description": "Optional language hint, primarily from fenced Markdown.",
@@ -1178,10 +1186,7 @@
             "description": "One or more displayed terms sharing this description, not necessarily\nequivalent names or interchangeable invocation forms.",
             "type": "array",
             "items": {
-              "type": "array",
-              "items": {
-                "$ref": "#/$defs/Inline"
-              }
+              "$ref": "#/$defs/DefinitionTerm"
             }
           }
         },
@@ -1223,6 +1228,27 @@
           }
         },
         "additionalProperties": false
+      },
+      "DefinitionTerm": {
+        "description": "A definition label with its own local row layout and authoritative text.",
+        "type": "object",
+        "properties": {
+          "content": {
+            "description": "Original styled label content; layout is never inserted as text.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/Inline"
+            }
+          },
+          "inlineLayout": {
+            "description": "Optional owner-local row layout.",
+            "$ref": "#/$defs/InlineLayout"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "content"
+        ]
       },
       "DefinitionWordBoundary": {
         "description": "Word boundary at a shared definition head/body seam.",
@@ -2259,6 +2285,10 @@
               "$ref": "#/$defs/Inline"
             }
           },
+          "inlineLayout": {
+            "description": "Optional exceptional row origins of this independent content root.",
+            "$ref": "#/$defs/InlineLayout"
+          },
           "source": {
             "description": "Actual heading provenance, when provided by the producer.",
             "anyOf": [
@@ -2457,16 +2487,9 @@
             ]
           },
           {
-            "description": "Hard line break that renderers must preserve.\n\n`indent_columns` is the following row's indent relative to the\ncontaining block's origin - a fixed-width hint for the row a\nrequest started at (mandoc's cleared-BRIND `offset <- rmargin`,\nroff_term.c:73-75; a `.ti` one-row override, roff_term.c:267-273).\nZero keeps the block origin. The producer resolves the following\nhard row's origin when its field flushes, after applying any source\nscope restores (mdoc_term.c:329-330, 437-439). Consumers compose this\nhint for that row without adding padding to source coordinates.",
+            "description": "An explicit hard line break. Row layout belongs to its content owner.",
             "type": "object",
             "properties": {
-              "indentColumns": {
-                "description": "Columns the following row indents to.",
-                "type": "integer",
-                "format": "uint16",
-                "maximum": 65535,
-                "minimum": 0
-              },
               "type": {
                 "type": "string",
                 "const": "line-break"
@@ -2478,6 +2501,21 @@
             ]
           }
         ]
+      },
+      "InlineLayout": {
+        "description": "Optional row exceptions attached to a complete inline content root.\nOrdinary paragraphs and structural list indentation need no row hints.",
+        "type": "object",
+        "properties": {
+          "rowHints": {
+            "description": "Strictly increasing, unique row corrections. Missing rows use zero.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/RowLayoutHint"
+            },
+            "maxItems": 4096
+          }
+        },
+        "additionalProperties": false
       },
       "LayoutHint": {
         "description": "Presentation hints retained from roff but optional for semantic outputs.",
@@ -3056,6 +3094,30 @@
         "required": [
           "start",
           "end"
+        ]
+      },
+      "RowLayoutHint": {
+        "description": "An exceptional displacement of one logical hard row within its owner.",
+        "type": "object",
+        "properties": {
+          "indentColumns": {
+            "description": "Relative display-cell correction applied to both visual origins.",
+            "type": "integer",
+            "format": "int32",
+            "maximum": 65535,
+            "minimum": -65535
+          },
+          "row": {
+            "description": "Zero-based owner-local row; never a source or viewport coordinate.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "row",
+          "indentColumns"
         ]
       },
       "Section": {
@@ -3730,6 +3792,10 @@
                   "$ref": "#/$defs/Inline"
                 }
               },
+              "inlineLayout": {
+                "description": "Exceptional row offsets in this content root, never inline text.",
+                "$ref": "#/$defs/InlineLayout"
+              },
               "layout": {
                 "description": "Source-derived indentation and vertical spacing.",
                 "$ref": "#/$defs/LayoutHint"
@@ -3766,6 +3832,10 @@
                 "items": {
                   "$ref": "#/$defs/Inline"
                 }
+              },
+              "inlineLayout": {
+                "description": "Exceptional row offsets in this literal content root.",
+                "$ref": "#/$defs/InlineLayout"
               },
               "language": {
                 "description": "Optional language hint, primarily from fenced Markdown.",
@@ -4266,10 +4336,7 @@
             "description": "One or more displayed terms sharing this description, not necessarily\nequivalent names or interchangeable invocation forms.",
             "type": "array",
             "items": {
-              "type": "array",
-              "items": {
-                "$ref": "#/$defs/Inline"
-              }
+              "$ref": "#/$defs/DefinitionTerm"
             }
           }
         },
@@ -4311,6 +4378,27 @@
           }
         },
         "additionalProperties": false
+      },
+      "DefinitionTerm": {
+        "description": "A definition label with its own local row layout and authoritative text.",
+        "type": "object",
+        "properties": {
+          "content": {
+            "description": "Original styled label content; layout is never inserted as text.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/Inline"
+            }
+          },
+          "inlineLayout": {
+            "description": "Optional owner-local row layout.",
+            "$ref": "#/$defs/InlineLayout"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "content"
+        ]
       },
       "DefinitionWordBoundary": {
         "description": "Word boundary at a shared definition head/body seam.",
@@ -6361,16 +6449,9 @@
             ]
           },
           {
-            "description": "Hard line break that renderers must preserve.\n\n`indent_columns` is the following row's indent relative to the\ncontaining block's origin - a fixed-width hint for the row a\nrequest started at (mandoc's cleared-BRIND `offset <- rmargin`,\nroff_term.c:73-75; a `.ti` one-row override, roff_term.c:267-273).\nZero keeps the block origin. The producer resolves the following\nhard row's origin when its field flushes, after applying any source\nscope restores (mdoc_term.c:329-330, 437-439). Consumers compose this\nhint for that row without adding padding to source coordinates.",
+            "description": "An explicit hard line break. Row layout belongs to its content owner.",
             "type": "object",
             "properties": {
-              "indentColumns": {
-                "description": "Columns the following row indents to.",
-                "type": "integer",
-                "format": "uint16",
-                "maximum": 65535,
-                "minimum": 0
-              },
               "type": {
                 "type": "string",
                 "const": "line-break"
@@ -6382,6 +6463,21 @@
             ]
           }
         ]
+      },
+      "InlineLayout": {
+        "description": "Optional row exceptions attached to a complete inline content root.\nOrdinary paragraphs and structural list indentation need no row hints.",
+        "type": "object",
+        "properties": {
+          "rowHints": {
+            "description": "Strictly increasing, unique row corrections. Missing rows use zero.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/RowLayoutHint"
+            },
+            "maxItems": 4096
+          }
+        },
+        "additionalProperties": false
       },
       "LayoutHint": {
         "description": "Presentation hints retained from roff but optional for semantic outputs.",
@@ -6960,6 +7056,30 @@
         "required": [
           "start",
           "end"
+        ]
+      },
+      "RowLayoutHint": {
+        "description": "An exceptional displacement of one logical hard row within its owner.",
+        "type": "object",
+        "properties": {
+          "indentColumns": {
+            "description": "Relative display-cell correction applied to both visual origins.",
+            "type": "integer",
+            "format": "int32",
+            "maximum": 65535,
+            "minimum": -65535
+          },
+          "row": {
+            "description": "Zero-based owner-local row; never a source or viewport coordinate.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "row",
+          "indentColumns"
         ]
       },
       "SourceSpan": {
@@ -9796,6 +9916,10 @@
                   "$ref": "#/$defs/Inline"
                 }
               },
+              "inlineLayout": {
+                "description": "Exceptional row offsets in this content root, never inline text.",
+                "$ref": "#/$defs/InlineLayout"
+              },
               "layout": {
                 "description": "Source-derived indentation and vertical spacing.",
                 "$ref": "#/$defs/LayoutHint"
@@ -9832,6 +9956,10 @@
                 "items": {
                   "$ref": "#/$defs/Inline"
                 }
+              },
+              "inlineLayout": {
+                "description": "Exceptional row offsets in this literal content root.",
+                "$ref": "#/$defs/InlineLayout"
               },
               "language": {
                 "description": "Optional language hint, primarily from fenced Markdown.",
@@ -10236,10 +10364,7 @@
             "description": "One or more displayed terms sharing this description, not necessarily\nequivalent names or interchangeable invocation forms.",
             "type": "array",
             "items": {
-              "type": "array",
-              "items": {
-                "$ref": "#/$defs/Inline"
-              }
+              "$ref": "#/$defs/DefinitionTerm"
             }
           }
         },
@@ -10281,6 +10406,27 @@
           }
         },
         "additionalProperties": false
+      },
+      "DefinitionTerm": {
+        "description": "A definition label with its own local row layout and authoritative text.",
+        "type": "object",
+        "properties": {
+          "content": {
+            "description": "Original styled label content; layout is never inserted as text.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/Inline"
+            }
+          },
+          "inlineLayout": {
+            "description": "Optional owner-local row layout.",
+            "$ref": "#/$defs/InlineLayout"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "content"
+        ]
       },
       "DefinitionWordBoundary": {
         "description": "Word boundary at a shared definition head/body seam.",
@@ -11271,6 +11417,10 @@
               "$ref": "#/$defs/Inline"
             }
           },
+          "inlineLayout": {
+            "description": "Optional exceptional row origins of this independent content root.",
+            "$ref": "#/$defs/InlineLayout"
+          },
           "source": {
             "description": "Actual heading provenance, when provided by the producer.",
             "anyOf": [
@@ -11469,16 +11619,9 @@
             ]
           },
           {
-            "description": "Hard line break that renderers must preserve.\n\n`indent_columns` is the following row's indent relative to the\ncontaining block's origin - a fixed-width hint for the row a\nrequest started at (mandoc's cleared-BRIND `offset <- rmargin`,\nroff_term.c:73-75; a `.ti` one-row override, roff_term.c:267-273).\nZero keeps the block origin. The producer resolves the following\nhard row's origin when its field flushes, after applying any source\nscope restores (mdoc_term.c:329-330, 437-439). Consumers compose this\nhint for that row without adding padding to source coordinates.",
+            "description": "An explicit hard line break. Row layout belongs to its content owner.",
             "type": "object",
             "properties": {
-              "indentColumns": {
-                "description": "Columns the following row indents to.",
-                "type": "integer",
-                "format": "uint16",
-                "maximum": 65535,
-                "minimum": 0
-              },
               "type": {
                 "type": "string",
                 "const": "line-break"
@@ -11490,6 +11633,21 @@
             ]
           }
         ]
+      },
+      "InlineLayout": {
+        "description": "Optional row exceptions attached to a complete inline content root.\nOrdinary paragraphs and structural list indentation need no row hints.",
+        "type": "object",
+        "properties": {
+          "rowHints": {
+            "description": "Strictly increasing, unique row corrections. Missing rows use zero.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/RowLayoutHint"
+            },
+            "maxItems": 4096
+          }
+        },
+        "additionalProperties": false
       },
       "LayoutHint": {
         "description": "Presentation hints retained from roff but optional for semantic outputs.",
@@ -11890,6 +12048,30 @@
         "required": [
           "start",
           "end"
+        ]
+      },
+      "RowLayoutHint": {
+        "description": "An exceptional displacement of one logical hard row within its owner.",
+        "type": "object",
+        "properties": {
+          "indentColumns": {
+            "description": "Relative display-cell correction applied to both visual origins.",
+            "type": "integer",
+            "format": "int32",
+            "maximum": 65535,
+            "minimum": -65535
+          },
+          "row": {
+            "description": "Zero-based owner-local row; never a source or viewport coordinate.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "row",
+          "indentColumns"
         ]
       },
       "Section": {
@@ -13192,6 +13374,10 @@
                   "$ref": "#/$defs/Inline"
                 }
               },
+              "inlineLayout": {
+                "description": "Exceptional row offsets in this content root, never inline text.",
+                "$ref": "#/$defs/InlineLayout"
+              },
               "layout": {
                 "description": "Source-derived indentation and vertical spacing.",
                 "$ref": "#/$defs/LayoutHint"
@@ -13228,6 +13414,10 @@
                 "items": {
                   "$ref": "#/$defs/Inline"
                 }
+              },
+              "inlineLayout": {
+                "description": "Exceptional row offsets in this literal content root.",
+                "$ref": "#/$defs/InlineLayout"
               },
               "language": {
                 "description": "Optional language hint, primarily from fenced Markdown.",
@@ -13728,10 +13918,7 @@
             "description": "One or more displayed terms sharing this description, not necessarily\nequivalent names or interchangeable invocation forms.",
             "type": "array",
             "items": {
-              "type": "array",
-              "items": {
-                "$ref": "#/$defs/Inline"
-              }
+              "$ref": "#/$defs/DefinitionTerm"
             }
           }
         },
@@ -13773,6 +13960,27 @@
           }
         },
         "additionalProperties": false
+      },
+      "DefinitionTerm": {
+        "description": "A definition label with its own local row layout and authoritative text.",
+        "type": "object",
+        "properties": {
+          "content": {
+            "description": "Original styled label content; layout is never inserted as text.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/Inline"
+            }
+          },
+          "inlineLayout": {
+            "description": "Optional owner-local row layout.",
+            "$ref": "#/$defs/InlineLayout"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "content"
+        ]
       },
       "DefinitionWordBoundary": {
         "description": "Word boundary at a shared definition head/body seam.",
@@ -15975,16 +16183,9 @@
             ]
           },
           {
-            "description": "Hard line break that renderers must preserve.\n\n`indent_columns` is the following row's indent relative to the\ncontaining block's origin - a fixed-width hint for the row a\nrequest started at (mandoc's cleared-BRIND `offset <- rmargin`,\nroff_term.c:73-75; a `.ti` one-row override, roff_term.c:267-273).\nZero keeps the block origin. The producer resolves the following\nhard row's origin when its field flushes, after applying any source\nscope restores (mdoc_term.c:329-330, 437-439). Consumers compose this\nhint for that row without adding padding to source coordinates.",
+            "description": "An explicit hard line break. Row layout belongs to its content owner.",
             "type": "object",
             "properties": {
-              "indentColumns": {
-                "description": "Columns the following row indents to.",
-                "type": "integer",
-                "format": "uint16",
-                "maximum": 65535,
-                "minimum": 0
-              },
               "type": {
                 "type": "string",
                 "const": "line-break"
@@ -15996,6 +16197,21 @@
             ]
           }
         ]
+      },
+      "InlineLayout": {
+        "description": "Optional row exceptions attached to a complete inline content root.\nOrdinary paragraphs and structural list indentation need no row hints.",
+        "type": "object",
+        "properties": {
+          "rowHints": {
+            "description": "Strictly increasing, unique row corrections. Missing rows use zero.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/RowLayoutHint"
+            },
+            "maxItems": 4096
+          }
+        },
+        "additionalProperties": false
       },
       "LayoutHint": {
         "description": "Presentation hints retained from roff but optional for semantic outputs.",
@@ -16774,6 +16990,30 @@
           "query",
           "documents",
           "edges"
+        ]
+      },
+      "RowLayoutHint": {
+        "description": "An exceptional displacement of one logical hard row within its owner.",
+        "type": "object",
+        "properties": {
+          "indentColumns": {
+            "description": "Relative display-cell correction applied to both visual origins.",
+            "type": "integer",
+            "format": "int32",
+            "maximum": 65535,
+            "minimum": -65535
+          },
+          "row": {
+            "description": "Zero-based owner-local row; never a source or viewport coordinate.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "row",
+          "indentColumns"
         ]
       },
       "ScopeExplanation": {

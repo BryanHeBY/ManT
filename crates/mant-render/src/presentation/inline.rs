@@ -18,9 +18,6 @@ pub struct InlinePresentation {
     pub link: bool,
     /// This span is an IR-authored structural line break, not untrusted text.
     pub structural_break: bool,
-    /// For a structural break: the indent the following row carries
-    /// (a request moved the upstream offset, roff_term.c:73-75).
-    pub line_break_indent: Option<u16>,
     /// This exact source range belongs to a validated semantic name.
     pub entry_kind: Option<EntryKind>,
 }
@@ -124,11 +121,10 @@ fn walk<'a>(
                     emit,
                 );
             }
-            Inline::LineBreak { indent_columns } => text(
+            Inline::LineBreak {} => text(
                 "\n",
                 InlinePresentation {
                     structural_break: true,
-                    line_break_indent: Some(*indent_columns),
                     ..style
                 },
                 target,
@@ -195,6 +191,31 @@ fn text<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn structural_break_visits_only_the_authored_scalar_and_annotation() {
+        let nodes = [
+            Inline::Text {
+                value: "  A".into(),
+            },
+            Inline::line_break(),
+            Inline::Code {
+                value: "B\nC".into(),
+            },
+        ];
+        let mut text = String::new();
+        let mut breaks = 0;
+        visit_inline_text(&nodes, &[], |style, _, value| {
+            text.push_str(value);
+            breaks += usize::from(style.structural_break);
+            if style.structural_break {
+                assert_eq!(value, "\n");
+            }
+        });
+        assert_eq!(text, "  A\nB\nC");
+        assert_eq!(breaks, 1);
+        assert_eq!(mant_ir::inline_scalar_len(&nodes), text.chars().count());
+    }
     #[test]
     fn nested_markup_and_split_name_remain_orthogonal() {
         let nodes = [Inline::Emphasis {

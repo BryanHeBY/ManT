@@ -17,7 +17,7 @@ pub(super) fn assert_flow(body: &str, expected: &str) {
     let blocks = &document.sections[1].blocks;
     let inlines = match &blocks[0] {
         Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => children,
-        Block::DefinitionList { items, .. } => &items[0].terms[0],
+        Block::DefinitionList { items, .. } => &items[0].terms[0].content,
         Block::Table { rows, .. } => match &rows[0].cells[0].blocks[0] {
             Block::Paragraph { children, .. } => children,
             other => panic!("{other:?}"),

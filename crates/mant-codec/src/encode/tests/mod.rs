@@ -23,6 +23,7 @@ mod inline_contexts;
 mod inline_escaping;
 mod inline_styles;
 mod links;
+mod row_layout;
 
 fn parse_content(
     source: &str,
@@ -40,6 +41,7 @@ fn parse_content(
 
 fn paragraph(children: Vec<Inline>) -> Block {
     Block::Paragraph {
+        inline_layout: mant_ir::InlineLayout::default(),
         children,
         layout: LayoutHint::default(),
         source: None,

@@ -25,8 +25,11 @@ def text(value):
     return {"type": "text", "value": value}
 
 
-def phrasing(children, kind="paragraph"):
-    return {"type": kind, "children": children}
+def phrasing(children, kind="paragraph", inline_layout=None):
+    block = {"type": kind, "children": children}
+    if inline_layout is not None:
+        block["inlineLayout"] = inline_layout
+    return block
 
 
 def bundle(block):
@@ -34,9 +37,12 @@ def bundle(block):
                                        "blocks": [block]}]}}
 
 
-def definition(children, relation=None):
+def definition(children, relation=None, inline_layout=None):
+    term = {"content": children}
+    if inline_layout is not None:
+        term["inlineLayout"] = inline_layout
     return bundle({"type": "definition-list", "items": [{"source": {"line": 9},
-        "terms": [children], "description": [phrasing([text("BodyWord")])],
+        "terms": [term], "description": [phrasing([text("BodyWord")])],
         "layout": {"headBodyRelation": relation or {"type": "separate"}}}]})
 
 
@@ -94,13 +100,46 @@ class MarkdownReaderObserverTests(unittest.TestCase):
 
     def test_definition_bullet_does_not_create_a_content_glyph_or_duplicate_origin(self):
         one = case(container="tag")
-        original = definition([text("A"), {"type": "line-break", "indentColumns": 10},
-                               text("AFTER")])
+        original = definition([text("A"), {"type": "line-break"}, text("AFTER")],
+                              inline_layout={"rowHints": [{"row": 1, "indentColumns": 10}]})
         reader = bullet([text("A\n" + "\u00a0" * 10 + "AFTER\nBodyWord")])
         self.assertTrue(good(markdown_reader_axes(one, original, reader)))
         for wrong in ("A\nAFTER\n", "A\nAFTERBodyWord", "A\n\nAFTER\nBodyWord"):
             with self.subTest(wrong=wrong):
                 self.assertFalse(good(markdown_reader_axes(one, original, bullet([text(wrong)]))))
+
+    def test_owner_hints_never_become_body_or_create_hard_rows(self):
+        layout = {"rowHints": [{"row": 0, "indentColumns": -3},
+                               {"row": 1, "indentColumns": 65535},
+                               {"row": 2, "indentColumns": 8}]}
+        # These mutate already materialized IR, without asserting new native
+        # formatter behavior or treating layout cells as source content.
+        for container, kind in (("paragraph", "paragraph"), ("literal", "preformatted")):
+            one = case(container=container)
+            original = bundle(phrasing([
+                {"type": "strong", "children": [text("A\n"),
+                    {"type": "link", "target": {"kind": "external", "uri": "https://ex.org"},
+                     "children": [{"type": "code", "value": "AFTER\n"}]}]},
+                {"type": "anchor", "id": "tail"}], kind, layout))
+            reader = bundle(phrasing([text("A\nAFTER\n")], kind))
+            reader["document"]["sections"][0]["heading"]["inlineLayout"] = {
+                "rowHints": [{"row": 0, "indentColumns": 12}]}
+            with self.subTest(container=container):
+                self.assertTrue(good(markdown_reader_axes(one, original, reader)))
+                self.assertFalse(markdown_reader_axes(one, original,
+                    bundle(phrasing([text("A\nAFTER")], kind)))["rows"])
+
+    def test_retired_break_layout_and_term_arrays_are_not_current_ir(self):
+        one = case()
+        current = bundle(phrasing([text("A"), {"type": "line-break"}, text("AFTER")]))
+        for columns in (0, 10):
+            retired = copy.deepcopy(current)
+            retired["document"]["sections"][0]["blocks"][0]["children"][1]["indentColumns"] = columns
+            self.assertFalse(good(markdown_reader_axes(one, retired, current)))
+        one = case(container="tag")
+        retired = definition([text("A")])
+        retired["document"]["sections"][0]["blocks"][0]["items"][0]["terms"] = [[text("A")]]
+        self.assertFalse(good(markdown_reader_axes(one, retired, bullet([text("A\nBodyWord")]))))
 
     def test_body_ownership_and_original_source_are_distinct_from_equal_text(self):
         one = case(container="hang")

@@ -309,10 +309,14 @@ mod tests {
                 spacing_before_lines: None,
                 ..Default::default()
             },
-            terms: vec![vec![Inline::Text {
+            terms: (vec![vec![Inline::Text {
                 value: term.to_owned(),
-            }]],
+            }]])
+            .into_iter()
+            .map(Into::into)
+            .collect(),
             description: vec![Block::Paragraph {
+                inline_layout: mant_ir::InlineLayout::default(),
                 children: vec![Inline::Text {
                     value: description.to_owned(),
                 }],
@@ -364,7 +368,9 @@ mod tests {
     #[test]
     fn ordered_conversion_conserves_a_native_term_target() {
         let mut item = definition("1.", "item");
-        item.terms[0].insert(0, Inline::anchor("native-target"));
+        item.terms[0]
+            .content
+            .insert(0, Inline::anchor("native-target"));
         let marker = super::ordinal_marker(&item, false).expect("punctuated ordinal");
         let mut output = Vec::new();
         let mut state = super::ManListState::new();

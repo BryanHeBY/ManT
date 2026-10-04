@@ -61,6 +61,11 @@ pub(crate) enum LinkTarget {
 pub(super) struct LogicalLine {
     pub(super) indent: usize,
     pub(super) continuation_indent: usize,
+    /// Generated row-hint padding, separate from structural list indentation.
+    pub(super) layout_padding: usize,
+    pub(super) continuation_layout_padding: usize,
+    /// Hint-generated gaps inside a marker or shared HEAD/BODY visual row.
+    pub(super) layout_scalars: Vec<std::ops::Range<usize>>,
     pub(super) spans: Vec<Span<'static>>,
     pub(super) surface: LineSurface,
     pub(super) wrap_mode: WrapMode,
@@ -157,7 +162,7 @@ impl LogicalTableCell {
 pub(super) struct StyledInlineLine {
     /// Presentation origin of this hard row, relative to its inline root.
     /// Padding stays outside source scalar, link, and reference coordinates.
-    pub(super) indent_columns: u16,
+    pub(super) indent_columns: i32,
     pub(super) spans: Vec<Span<'static>>,
     pub(super) links: Vec<LogicalLinkRange>,
     pub(super) reference_marks: Vec<ReferenceMark>,
@@ -182,10 +187,36 @@ pub(super) enum LineSurface {
 }
 
 impl LogicalLine {
+    /// Compose signed owner origins once, then bound display padding. Retain
+    /// only the additional padding supplied by a hint for visual copy mapping.
+    pub(super) fn row_geometry(
+        first: i32,
+        continuation: i32,
+        correction: i32,
+        spans: Vec<Span<'static>>,
+    ) -> Self {
+        let origins = mant_ir::resolve_row_origins(first, continuation, correction);
+        let mut line = Self::hanging(
+            mant_ir::geometry::padding(origins.first_visual_origin),
+            mant_ir::geometry::padding(origins.continuation_origin),
+            spans,
+        );
+        line.layout_padding = line
+            .indent
+            .saturating_sub(mant_ir::geometry::padding(first));
+        line.continuation_layout_padding = line
+            .continuation_indent
+            .saturating_sub(mant_ir::geometry::padding(continuation));
+        line
+    }
+
     pub(super) fn empty() -> Self {
         Self {
             indent: 0,
             continuation_indent: 0,
+            layout_padding: 0,
+            continuation_layout_padding: 0,
+            layout_scalars: Vec::new(),
             spans: Vec::new(),
             surface: LineSurface::Normal,
             wrap_mode: WrapMode::Word,
@@ -199,6 +230,9 @@ impl LogicalLine {
         Self {
             indent,
             continuation_indent: indent,
+            layout_padding: 0,
+            continuation_layout_padding: 0,
+            layout_scalars: Vec::new(),
             spans: vec![Span::styled(value.into(), style)],
             surface: LineSurface::Normal,
             wrap_mode: WrapMode::Word,
@@ -236,6 +270,9 @@ impl LogicalLine {
         Self {
             indent,
             continuation_indent,
+            layout_padding: 0,
+            continuation_layout_padding: 0,
+            layout_scalars: Vec::new(),
             spans,
             surface: LineSurface::Normal,
             wrap_mode: WrapMode::Word,
@@ -253,6 +290,9 @@ impl LogicalLine {
         Self {
             indent,
             continuation_indent: indent,
+            layout_padding: 0,
+            continuation_layout_padding: 0,
+            layout_scalars: Vec::new(),
             spans: Vec::new(),
             surface: LineSurface::Normal,
             wrap_mode: WrapMode::Word,
@@ -274,6 +314,9 @@ impl LogicalLine {
         Self {
             indent,
             continuation_indent: indent,
+            layout_padding: 0,
+            continuation_layout_padding: 0,
+            layout_scalars: Vec::new(),
             spans: Vec::new(),
             surface: LineSurface::Normal,
             wrap_mode: WrapMode::Word,

@@ -100,6 +100,7 @@ fn stacked_cells_reuse_only_an_open_logical_tail() {
         children.push(Inline::anchor("tail-owner"));
         let first = if literal {
             Block::Preformatted {
+                inline_layout: mant_ir::InlineLayout::default(),
                 children,
                 language: None,
                 layout: mant_ir::LayoutHint::default(),
@@ -107,6 +108,7 @@ fn stacked_cells_reuse_only_an_open_logical_tail() {
             }
         } else {
             Block::Paragraph {
+                inline_layout: mant_ir::InlineLayout::default(),
                 children,
                 layout: mant_ir::LayoutHint::default(),
                 source: None,
@@ -123,6 +125,7 @@ fn stacked_cells_reuse_only_an_open_logical_tail() {
             uri: "https://e.example/cell".into(),
         };
         let second = Block::Paragraph {
+            inline_layout: mant_ir::InlineLayout::default(),
             children: vec![Inline::Link {
                 target,
                 title: None,
@@ -180,6 +183,7 @@ fn nested_cell_query(definition: bool, literal: bool, gap: u16) -> ResolvedConte
     let children = vec![text("FIRST"), Inline::line_break()];
     let payload = if literal {
         Block::Preformatted {
+            inline_layout: mant_ir::InlineLayout::default(),
             children,
             language: None,
             layout: mant_ir::LayoutHint::default(),
@@ -187,6 +191,7 @@ fn nested_cell_query(definition: bool, literal: bool, gap: u16) -> ResolvedConte
         }
     } else {
         Block::Paragraph {
+            inline_layout: mant_ir::InlineLayout::default(),
             children,
             layout: mant_ir::LayoutHint::default(),
             source: None,
@@ -197,7 +202,7 @@ fn nested_cell_query(definition: bool, literal: bool, gap: u16) -> ResolvedConte
             items: vec![DefinitionItem {
                 source: None,
                 entry: None,
-                terms: vec![vec![text("HEAD")]],
+                terms: vec![vec![text("HEAD")].into()],
                 description: vec![payload],
                 layout: DefinitionLayout {
                     body_indent_columns: 0,
@@ -244,6 +249,7 @@ fn nested_cell_query(definition: bool, literal: bool, gap: u16) -> ResolvedConte
                     },
                 ]),
                 cell(vec![Block::Paragraph {
+                    inline_layout: mant_ir::InlineLayout::default(),
                     children: vec![text("SECOND")],
                     layout: mant_ir::LayoutHint::default(),
                     source: None,

@@ -19,6 +19,7 @@ fn explicit_spacing_overrides_the_definition_join_default_even_at_zero() {
                     children: vec![Inline::Text {
                         value: "CONTENT".into(),
                     }],
+                    inline_layout: mant_ir::InlineLayout::default(),
                     layout: LayoutHint::default(),
                     source: None,
                 },
@@ -81,6 +82,7 @@ fn paragraph(value: &str, strong: bool) -> Block {
         } else {
             text
         },
+        inline_layout: mant_ir::InlineLayout::default(),
         layout: LayoutHint::default(),
         source: None,
     }
@@ -202,6 +204,7 @@ fn vertical_space_sets_the_gap_instead_of_stacking_blank_lines() {
             children: vec![Inline::Text {
                 value: value.to_owned(),
             }],
+            inline_layout: mant_ir::InlineLayout::default(),
             layout: LayoutHint::default(),
             source: None,
         }
@@ -275,13 +278,17 @@ fn inline_definition_descriptions_are_tight_against_their_terms() {
                                 spacing_before_lines: Some(1),
                                 ..Default::default()
                             },
-                            terms: vec![vec![Inline::Text {
-                                value: "* / %".to_owned(),
-                            }]],
+                            terms: vec![
+                                vec![Inline::Text {
+                                    value: "* / %".to_owned(),
+                                }]
+                                .into(),
+                            ],
                             description: vec![Block::Paragraph {
                                 children: vec![Inline::Text {
                                     value: "Multiplication, division, and modulus.".to_owned(),
                                 }],
+                                inline_layout: mant_ir::InlineLayout::default(),
                                 layout: LayoutHint::default(),
                                 source: None,
                             }],
@@ -294,13 +301,17 @@ fn inline_definition_descriptions_are_tight_against_their_terms() {
                                 spacing_before_lines: Some(1),
                                 ..Default::default()
                             },
-                            terms: vec![vec![Inline::Text {
-                                value: "space".to_owned(),
-                            }]],
+                            terms: vec![
+                                vec![Inline::Text {
+                                    value: "space".to_owned(),
+                                }]
+                                .into(),
+                            ],
                             description: vec![Block::Paragraph {
                                 children: vec![Inline::Text {
                                     value: "String concatenation.".to_owned(),
                                 }],
+                                inline_layout: mant_ir::InlineLayout::default(),
                                 layout: LayoutHint::default(),
                                 source: None,
                             }],
@@ -367,13 +378,17 @@ fn man_format_keeps_inline_definitions_tight() {
                                 spacing_before_lines: Some(1),
                                 ..Default::default()
                             },
-                            terms: vec![vec![Inline::Text {
-                                value: "&&".to_owned(),
-                            }]],
+                            terms: vec![
+                                vec![Inline::Text {
+                                    value: "&&".to_owned(),
+                                }]
+                                .into(),
+                            ],
                             description: vec![Block::Paragraph {
                                 children: vec![Inline::Text {
                                     value: "Logical AND.".to_owned(),
                                 }],
+                                inline_layout: mant_ir::InlineLayout::default(),
                                 layout: LayoutHint::default(),
                                 source: None,
                             }],
@@ -386,13 +401,17 @@ fn man_format_keeps_inline_definitions_tight() {
                                 spacing_before_lines: Some(1),
                                 ..Default::default()
                             },
-                            terms: vec![vec![Inline::Text {
-                                value: "--long-option-name".to_owned(),
-                            }]],
+                            terms: vec![
+                                vec![Inline::Text {
+                                    value: "--long-option-name".to_owned(),
+                                }]
+                                .into(),
+                            ],
                             description: vec![Block::Paragraph {
                                 children: vec![Inline::Text {
                                     value: "A lengthy flag.".to_owned(),
                                 }],
+                                inline_layout: mant_ir::InlineLayout::default(),
                                 layout: LayoutHint::default(),
                                 source: None,
                             }],

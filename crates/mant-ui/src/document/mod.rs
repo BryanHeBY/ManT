@@ -144,6 +144,7 @@ pub struct RenderedDocument {
     anchor_rows: HashMap<String, usize>,
     links: Vec<RenderedLinkRegion>,
     search_records: Vec<RenderedSearchRecord>,
+    copy_maps: Vec<wrap::RowCopyMap>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -371,6 +372,7 @@ impl DocumentView {
         let mut links = Vec::new();
         let mut search_records = Vec::new();
         let mut surfaces = Vec::new();
+        let mut copy_maps = Vec::new();
         let mut logical_rows = Vec::with_capacity(self.lines.len() + 1);
         let mut anchor_rows = HashMap::new();
 
@@ -390,6 +392,7 @@ impl DocumentView {
                     end_column: link.end_column,
                 }));
                 rows.push(wrapped.line);
+                copy_maps.push(wrapped.copy_map);
                 surfaces.push(line.surface);
             }
         }
@@ -410,6 +413,7 @@ impl DocumentView {
             anchor_rows,
             links,
             search_records,
+            copy_maps,
         }
     }
 }

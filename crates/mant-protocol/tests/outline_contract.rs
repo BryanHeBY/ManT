@@ -246,6 +246,7 @@ fn excerpt_contract_can_return_one_semantic_definition() {
 #[test]
 fn document_root_contract_addresses_content_before_the_first_heading() {
     let blocks = vec![Block::Paragraph {
+        inline_layout: mant_ir::InlineLayout::default(),
         children: vec![Inline::Text {
             value: "Document preface.".to_owned(),
         }],

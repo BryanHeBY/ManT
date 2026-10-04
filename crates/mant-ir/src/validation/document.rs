@@ -202,6 +202,12 @@ struct InvariantCollector {
 }
 
 impl InvariantCollector {
+    fn validate_inline_layout(&mut self, content: &[Inline], layout: &crate::InlineLayout) {
+        if let Err(message) = layout.validate(content) {
+            self.diagnostics
+                .push(invariant("ir.invalid-inline-layout", message.to_owned()));
+        }
+    }
     fn validate_entry(&mut self, item: crate::EntryOwner<'_>) {
         if let Some(source) = item.source() {
             validate_source_span(&mut self.diagnostics, source);
@@ -259,6 +265,7 @@ impl InvariantCollector {
 
 impl<'ir> Visit<'ir> for InvariantCollector {
     fn visit_heading(&mut self, heading: &'ir crate::Heading) {
+        self.validate_inline_layout(&heading.content, &heading.inline_layout);
         if let Some(source) = heading.source {
             validate_source_span(&mut self.diagnostics, source);
         }
@@ -272,6 +279,19 @@ impl<'ir> Visit<'ir> for InvariantCollector {
     }
 
     fn visit_block(&mut self, block: &'ir Block) {
+        if let Block::Paragraph {
+            children,
+            inline_layout,
+            ..
+        }
+        | Block::Preformatted {
+            children,
+            inline_layout,
+            ..
+        } = block
+        {
+            self.validate_inline_layout(children, inline_layout);
+        }
         if let Block::Equation {
             value,
             expression: Some(expression),
@@ -351,6 +371,9 @@ impl<'ir> Visit<'ir> for InvariantCollector {
     }
 
     fn visit_definition_item(&mut self, item: &'ir DefinitionItem) {
+        for term in &item.terms {
+            self.validate_inline_layout(&term.content, &term.inline_layout);
+        }
         self.validate_entry(crate::EntryOwner::Definition(item));
         visit::walk_definition_item(self, item);
     }
@@ -494,6 +517,7 @@ mod tests {
                     source: None,
                 },
                 Block::Paragraph {
+                    inline_layout: crate::InlineLayout::default(),
                     children: vec![Inline::Equation {
                         value: "other".into(),
                         expression,
@@ -538,6 +562,7 @@ mod tests {
             }],
         };
         let blocks = vec![Block::Paragraph {
+            inline_layout: crate::InlineLayout::default(),
             children: vec![
                 Inline::anchor("anchor"),
                 link("section"),
@@ -606,7 +631,7 @@ mod tests {
                         names: vec!["term".to_owned()],
                         value_domain: None,
                     }),
-                    terms: vec![vec![Inline::anchor(shared.clone())]],
+                    terms: vec![vec![Inline::anchor(shared.clone())].into()],
                     description: Vec::new(),
                     layout: crate::DefinitionLayout {
                         head_body_relation: HeadBodyRelation::from(false),
@@ -623,6 +648,7 @@ mod tests {
         };
         let blocks = vec![
             Block::Paragraph {
+                inline_layout: crate::InlineLayout::default(),
                 children: vec![
                     Inline::Link {
                         target: LinkTarget::External {
@@ -701,6 +727,7 @@ mod tests {
                     cells: vec![TableCell {
                         kind: crate::TableCellKind::HorizontalRule,
                         blocks: vec![Block::Paragraph {
+                            inline_layout: crate::InlineLayout::default(),
                             children: Vec::new(),
                             layout: LayoutHint::default(),
                             source: None,
@@ -904,7 +931,10 @@ mod tests {
                     source: None,
                 }),
             }),
-            terms: vec![vec![Inline::anchor("option-output")]],
+            terms: (vec![vec![Inline::anchor("option-output")]])
+                .into_iter()
+                .map(Into::into)
+                .collect(),
             description: Vec::new(),
             layout: crate::DefinitionLayout {
                 head_body_relation: HeadBodyRelation::from(false),

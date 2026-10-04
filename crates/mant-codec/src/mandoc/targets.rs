@@ -256,6 +256,7 @@ pub(super) fn attach_targets(
     blocks.insert(
         insertion,
         Block::Paragraph {
+            inline_layout: mant_ir::InlineLayout::default(),
             children,
             layout,
             source,
@@ -289,7 +290,7 @@ pub(super) fn attach_definition_targets(
         return;
     }
     if let Some(term) = item.terms.first_mut() {
-        prepend_inlines(term, &targets, source);
+        prepend_inlines(&mut term.content, &targets, source);
     } else if prepend_to_first_descendant(&mut item.description, &targets, source) {
     } else {
         item.terms.push(
@@ -327,7 +328,7 @@ pub(super) fn append_definition_targets(
     if !item.description.is_empty() {
         append_targets(&mut item.description, targets, layout, source);
     } else if let Some(term) = item.terms.last_mut() {
-        term.extend(
+        term.content.extend(
             targets
                 .into_iter()
                 .map(|target| Inline::anchor_at(target, source)),
@@ -362,6 +363,7 @@ pub(super) fn append_targets(
         return;
     }
     blocks.push(Block::Paragraph {
+        inline_layout: mant_ir::InlineLayout::default(),
         children: targets
             .into_iter()
             .map(|target| Inline::anchor_at(target, source))
@@ -427,7 +429,7 @@ fn prepend_to_first_descendant(
                     return false;
                 };
                 if let Some(term) = item.terms.first_mut() {
-                    prepend_inlines(term, targets, source);
+                    prepend_inlines(&mut term.content, targets, source);
                     return true;
                 }
                 if prepend_to_first_descendant(&mut item.description, targets, source) {
@@ -483,7 +485,7 @@ fn append_to_last_descendant(
                     return true;
                 }
                 if let Some(term) = item.terms.last_mut() {
-                    term.extend(
+                    term.content.extend(
                         targets
                             .iter()
                             .cloned()
@@ -750,6 +752,7 @@ mod tests {
                 source: None,
                 entry: None,
                 blocks: vec![Block::Preformatted {
+                    inline_layout: mant_ir::InlineLayout::default(),
                     children: vec![Inline::Text {
                         value: "body".to_owned(),
                     }],

@@ -11,6 +11,7 @@ fn document(children: Vec<Inline>) -> ResolvedContent {
     let doc = bundle.document.as_mut().unwrap();
     doc.sections.clear();
     doc.blocks = vec![Block::Paragraph {
+        inline_layout: mant_ir::InlineLayout::default(),
         children,
         layout: LayoutHint::default(),
         source: None,
@@ -132,8 +133,9 @@ fn definition_run_in_shifts_links_by_source_scalars_not_glyph_columns() {
         declaration_groups: vec![],
         compact: true,
         items: vec![DefinitionItem {
-            terms: vec![vec![text("👩‍💻")]],
+            terms: vec![vec![text("👩‍💻")].into()],
             description: vec![Block::Paragraph {
+                inline_layout: mant_ir::InlineLayout::default(),
                 children: vec![link("Z", "z")],
                 layout: LayoutHint::default(),
                 source: None,

@@ -293,8 +293,8 @@ impl<'a> LoweringContext<'a> {
         if let Some(saved_font) = saved_font {
             builder.font.pop_scope(saved_font);
         }
-        let breaks = builder.take_definition_term_breaks();
-        let (output, execution) = formatter.finish_inline_scope(builder);
+        let (mut output, execution) = formatter.finish_inline_scope(builder);
+        let breaks = inline::take_definition_term_breaks(&mut output);
         if let Some(key) = operand_key {
             self.native_heads
                 .borrow_mut()

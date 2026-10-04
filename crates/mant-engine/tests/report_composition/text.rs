@@ -53,6 +53,7 @@ fn paragraph(value: &str, strong: bool) -> Block {
         value: value.to_owned(),
     }];
     Block::Paragraph {
+        inline_layout: mant_ir::InlineLayout::default(),
         children: if strong {
             vec![Inline::Strong { children: text }]
         } else {

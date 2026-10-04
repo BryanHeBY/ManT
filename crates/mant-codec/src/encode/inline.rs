@@ -7,10 +7,13 @@ mod text;
 
 use std::collections::HashSet;
 
-use mant_ir::Inline;
+use mant_ir::{Inline, InlineContentRef, InlineLayout};
 
 use super::MarkdownOptions;
-use context::{render_inline_raw_nodes, render_inline_raw_segments};
+use context::{
+    render_inline_raw_content_segments, render_inline_raw_nodes, render_inline_raw_owner_nodes,
+    render_inline_raw_segments,
+};
 #[cfg(test)]
 use text::escape_plain_text;
 
@@ -22,6 +25,25 @@ pub(crate) use text::{escape_text, html_anchor, html_anchors};
 
 pub(crate) fn render_inline(children: &[Inline], options: MarkdownOptions) -> String {
     render_inline_segments(&[children], options)
+}
+
+pub(crate) fn render_inline_content(
+    content: InlineContentRef<'_>,
+    options: MarkdownOptions,
+) -> String {
+    render_positioned_inline_segments(&[content], options, false)
+}
+
+pub(super) struct InlineRootNodes<'a> {
+    pub(super) nodes: Vec<&'a Inline>,
+    pub(super) layout: &'a InlineLayout,
+}
+
+pub(super) fn render_inline_owner_node_refs(
+    roots: &[InlineRootNodes<'_>],
+    options: MarkdownOptions,
+) -> String {
+    render_inline_rows(&render_inline_raw_owner_nodes(roots, options, false), false)
 }
 
 /// Encode source-owned fragments with one delimiter and escaping context.
@@ -40,16 +62,27 @@ pub(super) fn render_inline_node_refs(nodes: &[&Inline], options: MarkdownOption
     )
 }
 
+#[cfg(test)]
 pub(super) fn render_heading_inline(children: &[Inline], options: MarkdownOptions) -> String {
-    render_inline_content(children, options, true)
+    render_inline_content_segments(&[children], options, true)
 }
 
-fn render_inline_content(
-    children: &[Inline],
+pub(super) fn render_heading_content(
+    content: InlineContentRef<'_>,
+    options: MarkdownOptions,
+) -> String {
+    render_positioned_inline_segments(&[content], options, true)
+}
+
+fn render_positioned_inline_segments(
+    segments: &[InlineContentRef<'_>],
     options: MarkdownOptions,
     manual_links: bool,
 ) -> String {
-    render_inline_content_segments(&[children], options, manual_links)
+    render_inline_rows(
+        &render_inline_raw_content_segments(segments, options, manual_links),
+        manual_links,
+    )
 }
 
 fn render_inline_content_segments(
@@ -103,30 +136,30 @@ fn render_inline_rows(raw: &str, manual_links: bool) -> String {
 }
 
 pub(super) fn flatten_inline(children: &[Inline]) -> String {
-    let mut output = String::new();
-    flatten_inline_into(&mut output, children);
-    output
+    mant_ir::inline_plain_text(children)
 }
 
-fn flatten_inline_into(output: &mut String, children: &[Inline]) {
-    for child in children {
-        match child {
-            Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. } => {
-                output.push_str(value);
-            }
-            Inline::Strong { children }
-            | Inline::Emphasis { children }
-            | Inline::Link { children, .. } => {
-                flatten_inline_into(output, children);
-            }
-            Inline::Anchor { .. } => {}
-            Inline::LineBreak { indent_columns } => {
-                output.push('\n');
-                output
-                    .push_str(&" ".repeat(mant_ir::geometry::padding(i32::from(*indent_columns))));
-            }
+pub(super) fn flatten_inline_content(content: InlineContentRef<'_>) -> String {
+    literal_row_layout(&flatten_inline(content.content), content.layout)
+}
+
+pub(super) fn literal_row_layout(text: &str, layout: &InlineLayout) -> String {
+    if layout.is_empty() {
+        return text.to_owned();
+    }
+    let mut output = String::with_capacity(text.len());
+    for (index, row) in text.split('\n').enumerate() {
+        if index > 0 {
+            output.push('\n');
+        }
+        // An empty open tail or anchor-only root cannot become literal text
+        // solely because its addressable row carries a layout correction.
+        if !row.is_empty() {
+            output.push_str(&" ".repeat(mant_ir::geometry::padding(layout.row_indent(index))));
+            output.push_str(row);
         }
     }
+    output
 }
 
 /// Fenced code cannot contain active HTML anchors. Project its zero-width
@@ -190,16 +223,26 @@ mod tests {
             mant_ir::Inline::Text {
                 value: "Alpha".into(),
             },
-            mant_ir::Inline::line_break_indented(3),
+            mant_ir::Inline::line_break(),
             mant_ir::Inline::Strong {
                 children: vec![mant_ir::Inline::Text {
                     value: "Beta".into(),
                 }],
             },
         ];
-        assert_eq!(super::flatten_inline(&nodes), "Alpha\n   Beta");
+        let layout = mant_ir::InlineLayout {
+            row_hints: vec![mant_ir::RowLayoutHint {
+                row: 1,
+                indent_columns: 3,
+            }],
+        };
+        let content = mant_ir::InlineContentRef {
+            content: &nodes,
+            layout: &layout,
+        };
+        assert_eq!(super::flatten_inline_content(content), "Alpha\n   Beta");
         assert_eq!(
-            super::render_inline(&nodes, super::MarkdownOptions::default()),
+            super::render_inline_content(content, super::MarkdownOptions::default()),
             "Alpha  \n&#160;&#160;&#160;**Beta**"
         );
         assert_eq!(mant_ir::inline_plain_text(&nodes), "Alpha\nBeta");

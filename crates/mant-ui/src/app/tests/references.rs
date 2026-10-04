@@ -6,6 +6,7 @@ use std::sync::Arc;
 fn unqualified_manual_link_preserves_manual_only_intent_for_the_host() {
     let mut bundle = navigation_bundle();
     bundle.document.as_mut().unwrap().sections[0].blocks = vec![AstBlock::Paragraph {
+        inline_layout: mant_ir::InlineLayout::default(),
         children: vec![Inline::Link {
             target: mant_ir::LinkTarget::Manual {
                 name: "printf".into(),
@@ -185,6 +186,7 @@ fn direct_and_picker_copy_keep_encoded_native_topics_distinct_from_sections() {
 fn malformed_reference_copy_reports_failure_without_repairing_the_address() {
     let mut bundle = navigation_bundle();
     bundle.document.as_mut().unwrap().sections[0].blocks = vec![AstBlock::Paragraph {
+        inline_layout: mant_ir::InlineLayout::default(),
         children: vec![Inline::Link {
             target: mant_ir::LinkTarget::Manual {
                 name: "bad\nname".into(),

@@ -50,6 +50,35 @@ pub(super) struct WrappedLine {
     pub(super) line: Line<'static>,
     pub(super) links: Vec<WrappedLink>,
     pub(super) search_cells: Vec<WrappedSearchCell>,
+    pub(super) copy_map: RowCopyMap,
+}
+
+/// Display coordinates of generated hint padding and the original content end.
+/// This map is derived from the same cells as links/search, never whitespace.
+#[derive(Clone, Debug, Default)]
+pub(super) struct RowCopyMap {
+    pub(super) omitted: Vec<std::ops::Range<usize>>,
+    pub(super) end: Option<usize>,
+}
+
+impl RowCopyMap {
+    pub(super) fn append_shifted(&mut self, other: &Self, offset: usize, width: usize) {
+        self.omitted.extend(
+            other
+                .omitted
+                .iter()
+                .map(|range| offset.saturating_add(range.start)..offset.saturating_add(range.end)),
+        );
+        let content_end = other.end.unwrap_or(width);
+        if content_end == 0 {
+            // An empty hard row cannot acquire copyable content from its
+            // parent column's placement. Preserve the explicit empty end.
+            self.end.get_or_insert(0);
+            return;
+        }
+        let end = offset.saturating_add(content_end);
+        self.end = Some(self.end.unwrap_or(0).max(end));
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -106,7 +135,14 @@ fn wrap_logical_line(line: &LogicalLine, width: usize) -> Vec<WrappedLine> {
     let mut cells = styled_cells(line);
 
     if cells.is_empty() {
-        return vec![wrapped_cells_to_line(line, width, first_indent, &[], false)];
+        return vec![wrapped_cells_to_line(
+            line,
+            width,
+            first_indent,
+            line.layout_padding,
+            &[],
+            false,
+        )];
     }
 
     let mut result = Vec::new();
@@ -117,6 +153,11 @@ fn wrap_logical_line(line: &LogicalLine, width: usize) -> Vec<WrappedLine> {
             first_indent
         } else {
             continuation_indent
+        };
+        let layout_padding = if first_row {
+            line.layout_padding
+        } else {
+            line.continuation_layout_padding
         };
         let available = width
             .saturating_sub(indent)
@@ -129,6 +170,7 @@ fn wrap_logical_line(line: &LogicalLine, width: usize) -> Vec<WrappedLine> {
                 line,
                 width,
                 indent,
+                layout_padding,
                 &cells,
                 join_with_space,
             ));
@@ -140,6 +182,7 @@ fn wrap_logical_line(line: &LogicalLine, width: usize) -> Vec<WrappedLine> {
                 line,
                 width,
                 indent,
+                layout_padding,
                 &cells[..fit],
                 join_with_space,
             ));
@@ -149,7 +192,7 @@ fn wrap_logical_line(line: &LogicalLine, width: usize) -> Vec<WrappedLine> {
             join_with_space = wrap_word_row(
                 line,
                 width,
-                indent,
+                (indent, layout_padding),
                 &mut cells,
                 fit,
                 join_with_space,
@@ -170,6 +213,7 @@ fn surface_row(line: &LogicalLine, width: usize) -> Option<WrappedLine> {
                 line: panel_border(width, '┌', '┐'),
                 links: Vec::new(),
                 search_cells: Vec::new(),
+                copy_map: RowCopyMap::default(),
             });
         }
         LineSurface::TldrBottom => {
@@ -179,6 +223,7 @@ fn surface_row(line: &LogicalLine, width: usize) -> Option<WrappedLine> {
                 line: panel_border(width, '└', '┘'),
                 links: Vec::new(),
                 search_cells: Vec::new(),
+                copy_map: RowCopyMap::default(),
             });
         }
         LineSurface::Divider => {
@@ -191,6 +236,7 @@ fn surface_row(line: &LogicalLine, width: usize) -> Option<WrappedLine> {
                 )),
                 links: Vec::new(),
                 search_cells: Vec::new(),
+                copy_map: RowCopyMap::default(),
             });
         }
         LineSurface::Rule => {
@@ -207,6 +253,7 @@ fn surface_row(line: &LogicalLine, width: usize) -> Option<WrappedLine> {
                 ]),
                 links: Vec::new(),
                 search_cells: Vec::new(),
+                copy_map: RowCopyMap::default(),
             });
         }
         LineSurface::DoubleRule => {
@@ -223,6 +270,7 @@ fn surface_row(line: &LogicalLine, width: usize) -> Option<WrappedLine> {
                 ]),
                 links: Vec::new(),
                 search_cells: Vec::new(),
+                copy_map: RowCopyMap::default(),
             });
         }
         LineSurface::Normal | LineSurface::Code | LineSurface::Tldr => {}
@@ -252,12 +300,13 @@ fn bound_first_grapheme(cells: &mut [StyledCell], available: usize) {
 fn wrap_word_row(
     line: &LogicalLine,
     width: usize,
-    indent: usize,
+    origin: (usize, usize),
     cells: &mut Vec<StyledCell>,
     fit: usize,
     join_with_space: bool,
     result: &mut Vec<WrappedLine>,
 ) -> bool {
+    let (indent, layout_padding) = origin;
     let split = cells[..fit]
         .iter()
         .rposition(|cell| cell.grapheme_start && cell.whitespace)
@@ -278,6 +327,7 @@ fn wrap_word_row(
             line,
             width,
             indent,
+            layout_padding,
             &cells[..row_end],
             join_with_space,
         ));

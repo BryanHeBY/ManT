@@ -12,6 +12,7 @@ pub(super) fn text(value: &str) -> Inline {
 pub(super) fn paragraph(children: Vec<Inline>) -> Block {
     Block::Paragraph {
         children,
+        inline_layout: mant_ir::InlineLayout::default(),
         layout: LayoutHint::default(),
         source: None,
     }
@@ -21,6 +22,7 @@ pub(super) fn literal(children: Vec<Inline>) -> Block {
     Block::Preformatted {
         children,
         language: None,
+        inline_layout: mant_ir::InlineLayout::default(),
         layout: LayoutHint::default(),
         source: None,
     }

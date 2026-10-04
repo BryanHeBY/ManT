@@ -77,7 +77,13 @@ fn render_query_body_with(
                     decorate,
                     locations: None,
                 }
-                .inline_layout(&heading.content, TextRole::Document)
+                .inline_layout(
+                    mant_ir::InlineContentRef {
+                        content: &heading.content,
+                        layout: &heading.inline_layout,
+                    },
+                    TextRole::Document,
+                )
             },
         );
     let mut output = flow::Flow::text(title);

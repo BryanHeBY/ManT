@@ -107,6 +107,37 @@ pub(super) fn styled_reference_inline_lines(
     lines
 }
 
+/// Layout belongs to the complete owner, so style/link wrappers share its row
+/// cursor. Applying sorted hints after text projection keeps scalar positions
+/// and all reference marks independent of display corrections.
+pub(super) fn styled_reference_content_lines(
+    content: mant_ir::InlineContentRef<'_>,
+    style: Style,
+    current_address: Option<&DocumentAddress>,
+    names: &[mant_render::InlineNameRange],
+    code: bool,
+    origins: &super::references::ReferenceOrigins,
+) -> Vec<StyledInlineLine> {
+    let mut lines = styled_reference_inline_lines(
+        content.content,
+        style,
+        current_address,
+        names,
+        code,
+        origins,
+    );
+    let mut hints = content.layout.row_hints.iter().peekable();
+    for (row, line) in lines.iter_mut().enumerate() {
+        while hints.peek().is_some_and(|hint| (hint.row as usize) < row) {
+            hints.next();
+        }
+        if hints.peek().is_some_and(|hint| hint.row as usize == row) {
+            line.indent_columns = hints.next().expect("matching row hint").indent_columns;
+        }
+    }
+    lines
+}
+
 fn reference_marks(
     nodes: &[Inline],
     origins: &super::references::ReferenceOrigins,
@@ -244,11 +275,6 @@ fn append_inline(
             }
         } else {
             append_text(text, theme::inline_style(style, source), lines);
-        }
-        if let Some(indent) = source.line_break_indent {
-            // An authored structural break carries the resolved origin of
-            // its following row. Keep it out of the text's scalar ranges.
-            lines.last_mut().expect("break starts a row").indent_columns = indent;
         }
         if let Some(target) = target.and_then(|target| local_link_target(target, current_address)) {
             record_link(lines, first_line, first_scalar, &target);

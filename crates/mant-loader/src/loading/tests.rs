@@ -741,6 +741,7 @@ fn readable_best_effort_document_survives_parser_findings() {
 fn root_only_native_document_is_readable() {
     let mut root_only = document(SourceFormat::Man, false, false);
     root_only.blocks.push(Block::Paragraph {
+        inline_layout: mant_ir::InlineLayout::default(),
         children: vec![Inline::Text {
             value: "manual text before any section".to_owned(),
         }],

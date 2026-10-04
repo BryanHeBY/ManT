@@ -16,7 +16,11 @@ pub(super) fn native_name_bindings(
     names: &[String],
     recognized: &[Vec<super::RecognizedName>],
 ) -> Vec<EntryNameBinding> {
-    name_bindings(item.terms.iter().map(Vec::as_slice), names, recognized)
+    name_bindings(
+        item.terms.iter().map(mant_ir::DefinitionTerm::as_slice),
+        names,
+        recognized,
+    )
 }
 
 /// Map an already recognized paragraph head without copying it into a

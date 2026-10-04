@@ -31,13 +31,19 @@ fn content(relation: HeadBodyRelation, literal: bool) -> ResolvedContent {
             title: None,
             children: vec![text("BodyWord")],
         },
-        Inline::line_break_indented(3),
+        Inline::line_break(),
         Inline::Code {
             value: "TailWord".into(),
         },
     ];
     let body = if literal {
         Block::Preformatted {
+            inline_layout: InlineLayout {
+                row_hints: vec![RowLayoutHint {
+                    row: 1,
+                    indent_columns: 3,
+                }],
+            },
             children,
             language: None,
             layout: LayoutHint::default(),
@@ -45,6 +51,12 @@ fn content(relation: HeadBodyRelation, literal: bool) -> ResolvedContent {
         }
     } else {
         Block::Paragraph {
+            inline_layout: InlineLayout {
+                row_hints: vec![RowLayoutHint {
+                    row: 1,
+                    indent_columns: 3,
+                }],
+            },
             children,
             layout: LayoutHint::default(),
             source: None,
@@ -63,9 +75,12 @@ fn content(relation: HeadBodyRelation, literal: bool) -> ResolvedContent {
         layout: LayoutHint::default(),
         source: None,
         items: vec![DefinitionItem {
-            terms: vec![vec![Inline::Strong {
+            terms: (vec![vec![Inline::Strong {
                 children: vec![text(NAME)],
-            }]],
+            }]])
+            .into_iter()
+            .map(Into::into)
+            .collect(),
             description: vec![body],
             source: None,
             layout: DefinitionLayout {

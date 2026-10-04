@@ -6,6 +6,7 @@ fn narrow_view_reduces_only_presentation_indent_and_keeps_link_search_copy_cells
     let mut bundle = bundle();
     let target = LinkTarget::Section("options".into());
     bundle.document.as_mut().unwrap().sections[0].blocks = vec![Block::Paragraph {
+        inline_layout: mant_ir::InlineLayout::default(),
         children: vec![Inline::Link {
             target: mant_ir::LinkTarget::Section {
                 id: "options".into(),
@@ -68,6 +69,7 @@ fn narrow_view_reduces_only_presentation_indent_and_keeps_link_search_copy_cells
 fn rendered_search_finds_literal_options_and_decorates_every_match() {
     let mut bundle = bundle();
     bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::Paragraph {
+        inline_layout: mant_ir::InlineLayout::default(),
         children: vec![Inline::Text {
             value: "Use --acls, then repeat --acls.".to_owned(),
         }],
@@ -121,6 +123,7 @@ fn unicode_search_uses_the_same_transform_before_and_after_visual_wrapping() {
     ] {
         let mut bundle = bundle();
         bundle.document.as_mut().unwrap().sections[0].blocks = vec![Block::Preformatted {
+            inline_layout: mant_ir::InlineLayout::default(),
             children: vec![Inline::Text {
                 value: text.to_owned(),
             }],
@@ -153,6 +156,7 @@ fn unicode_search_uses_the_same_transform_before_and_after_visual_wrapping() {
 fn search_matches_one_logical_phrase_across_soft_wrapping() {
     let mut bundle = bundle();
     bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::Paragraph {
+        inline_layout: mant_ir::InlineLayout::default(),
         children: vec![Inline::Text {
             value: "alpha searchable phrase omega".to_owned(),
         }],
@@ -182,6 +186,7 @@ fn search_matches_one_logical_phrase_across_soft_wrapping() {
 fn search_preserves_a_space_wrapped_exactly_after_the_row_boundary() {
     let mut bundle = bundle();
     bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::Paragraph {
+        inline_layout: mant_ir::InlineLayout::default(),
         children: vec![Inline::Text {
             value: "Relative inset end".to_owned(),
         }],
@@ -200,6 +205,7 @@ fn search_preserves_a_space_wrapped_exactly_after_the_row_boundary() {
 fn character_wrapped_code_remains_contiguous_for_search() {
     let mut bundle = bundle();
     bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::Preformatted {
+        inline_layout: mant_ir::InlineLayout::default(),
         children: vec![Inline::Text {
             value: "abcdefghijklmnop".to_owned(),
         }],
@@ -224,6 +230,7 @@ fn character_wrapped_code_remains_contiguous_for_search() {
 fn forced_word_splitting_does_not_insert_a_search_space() {
     let mut bundle = bundle();
     bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::Paragraph {
+        inline_layout: mant_ir::InlineLayout::default(),
         children: vec![Inline::Text {
             value: "supercalifragilistic".to_owned(),
         }],

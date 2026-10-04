@@ -169,7 +169,7 @@ fn synthetic(names: usize, repeats: usize) -> ResolvedContent {
     content.document.as_mut().unwrap().sections[0].blocks = vec![Block::DefinitionList {
         declaration_groups: Vec::new(),
         items: vec![DefinitionItem {
-            terms,
+            terms: terms.into_iter().map(Into::into).collect(),
             description: vec![],
             source: None,
             layout: DefinitionLayout::default(),
@@ -210,12 +210,15 @@ fn split_occurrences_follow_authored_form_order_not_term_indices() {
             children: vec![Inline::Text {
                 value: "名".into()
             }],
-        }],
+        }]
+        .into(),
         vec![Inline::Strong {
             children: vec![Inline::Code { value: "é".into() }],
-        }],
+        }]
+        .into(),
     ];
     item.description = vec![Block::Paragraph {
+        inline_layout: mant_ir::InlineLayout::default(),
         children: vec![Inline::Text {
             value: "終".into()
         }],
@@ -247,7 +250,8 @@ fn split_occurrences_follow_authored_form_order_not_term_indices() {
         0,
         vec![Inline::Text {
             value: "unreferenced".into(),
-        }],
+        }]
+        .into(),
     );
     let facts = item.entry.as_mut().unwrap();
     facts.names = vec!["é名終".into()];
@@ -388,7 +392,7 @@ fn matched_facts_and_body_survive_when_expanded_form_metadata_does_not_fit() {
         unreachable!()
     };
     let item = &mut items[0];
-    item.terms[0] = vec![Inline::Code {
+    item.terms[0].content = vec![Inline::Code {
         value: format!("name0 {}", "填".repeat(400)),
     }];
     item.entry.as_mut().unwrap().forms = vec![EntryForm::term(0); 100];

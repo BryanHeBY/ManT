@@ -39,18 +39,20 @@ def _qualified(case):
     return canonical
 
 
-def _text(children, *, native=False):
+def _text(children):
     pieces = []
     for child in children:
         kind = child["type"]
         if kind in ("text", "code", "equation"):
             pieces.append(child["value"])
         elif kind == "line-break":
-            pieces.append("\n" + " " * child.get("indentColumns", 0))
+            if set(child) != {"type"}:
+                raise ValueError("RC05 line-break must be a pure hard boundary")
+            pieces.append("\n")
         elif kind == "anchor":
             continue
         elif kind in ("strong", "emphasis", "link"):
-            pieces.append(_text(child["children"], native=native))
+            pieces.append(_text(child["children"]))
         else:
             raise ValueError("unexpected RC05 inline kind: " + kind)
     return "".join(pieces)
@@ -77,6 +79,13 @@ def _phrasing(block, kind):
     return block["children"]
 
 
+def _term(term):
+    if (not isinstance(term, dict) or "content" not in term
+            or set(term) - {"content", "inlineLayout"}):
+        raise ValueError("RC05 definition term must retain its content owner")
+    return term["content"]
+
+
 def _origins(value):
     # The exact 100-source core authors no leading SP/NBSP. These are only
     # resolved device origins; every LF and every internal scalar survives.
@@ -94,7 +103,7 @@ def _observe(core, original_bundle, reader_bundle):
         if reader["kind"] != {"kind": "bullet"}:
             raise ValueError("RC05 definition projection must remain a bullet")
         item = _one(original["items"])
-        term = _text(_one(item["terms"]))
+        term = _text(_term(_one(item["terms"])))
         body = _text(_phrasing(_one(item["description"]), "paragraph"))
         ownership = ("BodyWord" not in term and body == "BodyWord"
                      and item.get("source", {}).get("line") == 9)
@@ -119,8 +128,8 @@ def _observe(core, original_bundle, reader_bundle):
         row = _one(original["rows"])
         if len(row["cells"]) != 2:
             raise ValueError("RC05 column cell ownership changed")
-        left = _text(_phrasing(_one(row["cells"][0]["blocks"]), "paragraph"), native=True)
-        right = _text(_phrasing(_one(row["cells"][1]["blocks"]), "paragraph"), native=True)
+        left = _text(_phrasing(_one(row["cells"][0]["blocks"]), "paragraph"))
+        right = _text(_phrasing(_one(row["cells"][1]["blocks"]), "paragraph"))
         ownership = right == "RIGHT"
         # Keep the complete right-cell witness as well as every left-cell LF;
         # a missing/changed neighbor cannot be hidden by splitting at a pipe.
@@ -128,7 +137,7 @@ def _observe(core, original_bundle, reader_bundle):
         actual = _text(_phrasing(reader, "preformatted"))
     else:
         kind = "preformatted" if container == "literal" else "paragraph"
-        expected = _text(_phrasing(original, kind), native=container == "literal")
+        expected = _text(_phrasing(original, kind))
         actual = _text(_phrasing(reader, kind))
     return _origins(expected), _origins(actual), ownership
 

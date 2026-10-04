@@ -14,6 +14,7 @@ fn resolved_gaps_precede_whole_items_and_share_transparent_container_budgets() {
                     source: None,
                     entry: None,
                     blocks: vec![Block::Paragraph {
+                        inline_layout: mant_ir::InlineLayout::default(),
                         children: vec![Inline::Text {
                             value: "BODY\nNEXT".into(),
                         }],
@@ -57,6 +58,7 @@ fn resolved_gaps_precede_whole_items_and_share_transparent_container_budgets() {
                         source: None,
                     },
                     Block::Paragraph {
+                        inline_layout: mant_ir::InlineLayout::default(),
                         children: vec![Inline::Text {
                             value: "BODY".into(),
                         }],
@@ -86,21 +88,25 @@ fn anchors_follow_hard_lines_in_terms_and_run_in_bodies() {
                         head_body_relation: mant_ir::HeadBodyRelation::from(inline_term),
                         ..Default::default()
                     },
-                    terms: vec![vec![
-                        Inline::Text {
-                            value: "FIRST".into(),
-                        },
-                        Inline::line_break(),
-                        Inline::Strong {
-                            children: vec![
-                                Inline::anchor_at("second-head", None),
-                                Inline::Text {
-                                    value: "SECOND".into(),
-                                },
-                            ],
-                        },
-                    ]],
+                    terms: vec![
+                        vec![
+                            Inline::Text {
+                                value: "FIRST".into(),
+                            },
+                            Inline::line_break(),
+                            Inline::Strong {
+                                children: vec![
+                                    Inline::anchor_at("second-head", None),
+                                    Inline::Text {
+                                        value: "SECOND".into(),
+                                    },
+                                ],
+                            },
+                        ]
+                        .into(),
+                    ],
                     description: vec![Block::Paragraph {
+                        inline_layout: mant_ir::InlineLayout::default(),
                         children: vec![
                             Inline::anchor_at("body", None),
                             Inline::Text {
@@ -135,6 +141,7 @@ fn anchors_follow_hard_lines_in_terms_and_run_in_bodies() {
                 source: None,
                 entry: None,
                 blocks: vec![Block::Paragraph {
+                    inline_layout: mant_ir::InlineLayout::default(),
                     children: vec![
                         Inline::anchor_at("first", None),
                         Inline::Text {
@@ -168,6 +175,7 @@ fn hanging_paragraph_preserves_hard_and_soft_continuation_origins() {
     let mut builder = DocumentBuilder::new("hanging".into(), None);
     builder.blocks(
         &[Block::Paragraph {
+            inline_layout: mant_ir::InlineLayout::default(),
             children: vec![
                 Inline::Text {
                     value: "FIRST words words words".into(),
@@ -224,6 +232,7 @@ fn container_translation_and_nonparagraph_marker_width_are_preserved() {
                 source: None,
                 entry: None,
                 blocks: vec![Block::Preformatted {
+                    inline_layout: mant_ir::InlineLayout::default(),
                     children: vec![Inline::Text {
                         value: "CODE".into(),
                     }],
@@ -297,6 +306,7 @@ fn outdented_list_paragraph_keeps_links_on_the_visible_body() {
                 source: None,
                 entry: None,
                 blocks: vec![Block::Paragraph {
+                    inline_layout: mant_ir::InlineLayout::default(),
                     children: vec![
                         Inline::Link {
                             title: None,
@@ -352,10 +362,11 @@ fn target_only_terms_are_zero_width_and_extreme_origins_are_bounded() {
                         source: None,
                         entry: None,
                         terms: vec![
-                            vec![Inline::anchor_at("target", None)],
+                            vec![Inline::anchor_at("target", None)].into(),
                             vec![Inline::Text {
                                 value: "TERM".into(),
-                            }],
+                            }]
+                            .into(),
                         ],
                         description: vec![paragraph("BODY")],
                         layout: mant_ir::DefinitionLayout {
@@ -386,11 +397,12 @@ fn target_only_terms_are_zero_width_and_extreme_origins_are_bounded() {
 #[test]
 fn trailing_zero_width_heads_share_the_final_run_in_row() {
     for trailing_count in [1, 2, 3] {
-        let mut terms = vec![vec![Inline::Text {
+        let mut terms = vec![mant_ir::DefinitionTerm::from(vec![Inline::Text {
             value: "TERM".into(),
-        }]];
+        }])];
         terms.extend(
-            (0..trailing_count).map(|i| vec![Inline::anchor_at(format!("target-{i}"), None)]),
+            (0..trailing_count)
+                .map(|i| vec![Inline::anchor_at(format!("target-{i}"), None)].into()),
         );
         let mut builder = DocumentBuilder::new("trailing-targets".into(), None);
         builder.blocks(
@@ -439,9 +451,12 @@ fn definition_continuations_keep_rows_when_reparented_across_spacing() {
                     items: vec![DefinitionItem {
                         source: None,
                         entry: None,
-                        terms: vec![vec![Inline::Text {
-                            value: label.into(),
-                        }]],
+                        terms: vec![
+                            vec![Inline::Text {
+                                value: label.into(),
+                            }]
+                            .into(),
+                        ],
                         description: vec![paragraph("Initial description.")],
                         layout: mant_ir::DefinitionLayout {
                             head_body_relation: mant_ir::HeadBodyRelation::from(inline_term),
@@ -481,7 +496,7 @@ fn definition_continuations_keep_rows_when_reparented_across_spacing() {
 fn preformatted_rows_share_one_full_width_surface() {
     let mut builder = DocumentBuilder::new("demo".to_owned(), None);
     builder.inline_lines_with_surface(
-        &[
+        mant_ir::InlineContentRef::unpositioned(&[
             Inline::Text {
                 value: "short".to_owned(),
             },
@@ -489,7 +504,7 @@ fn preformatted_rows_share_one_full_width_surface() {
             Inline::Text {
                 value: "longer code".to_owned(),
             },
-        ],
+        ]),
         3,
         Style::default().fg(theme::TEXT),
         LineSurface::Code,
@@ -530,6 +545,7 @@ fn indented_continuation_without_spacing_follows_its_lead_row() {
     bundle.document.as_mut().expect("document").sections[0].blocks = vec![
         paragraph("alternate object database"),
         Block::Paragraph {
+            inline_layout: mant_ir::InlineLayout::default(),
             children: vec![Inline::Text {
                 value: "Via the alternates mechanism, a repository can inherit objects.".to_owned(),
             }],
@@ -603,6 +619,7 @@ fn bullet_lists_share_the_first_row_and_use_a_hanging_indent() {
             source: None,
             entry: None,
             blocks: vec![Block::Paragraph {
+                inline_layout: mant_ir::InlineLayout::default(),
                 children: vec![Inline::Text {
                     value: "alpha beta gamma".to_owned(),
                 }],
@@ -629,6 +646,7 @@ fn bullet_lists_share_the_first_row_and_use_a_hanging_indent() {
 #[test]
 fn adjacent_blocks_add_only_explicit_vertical_space() {
     let paragraph = |value: &str| Block::Paragraph {
+        inline_layout: mant_ir::InlineLayout::default(),
         children: vec![Inline::Text {
             value: value.to_owned(),
         }],
@@ -639,6 +657,7 @@ fn adjacent_blocks_add_only_explicit_vertical_space() {
     bundle.document.as_mut().expect("document").sections[0].blocks = vec![
         paragraph("before"),
         Block::Preformatted {
+            inline_layout: mant_ir::InlineLayout::default(),
             children: vec![Inline::Text {
                 value: "display".to_owned(),
             }],
@@ -675,6 +694,7 @@ fn adjacent_blocks_add_only_explicit_vertical_space() {
 fn ordered_list_markers_saturate_instead_of_overflowing() {
     let mut bundle = bundle();
     let paragraph = |value: &str| Block::Paragraph {
+        inline_layout: mant_ir::InlineLayout::default(),
         children: vec![Inline::Text {
             value: value.to_owned(),
         }],

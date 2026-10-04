@@ -113,10 +113,12 @@
                   ]
                 },
                 "terms": [
-                  [
-                    { "type": "anchor", "id": "almost-all-option" },
-                    { "type": "strong", "children": [{ "type": "text", "value": "-A, --almost-all" }] }
-                  ]
+                  {
+                    "content": [
+                      { "type": "anchor", "id": "almost-all-option" },
+                      { "type": "strong", "children": [{ "type": "text", "value": "-A, --almost-all" }] }
+                    ]
+                  }
                 ],
                 "description": [
                   {

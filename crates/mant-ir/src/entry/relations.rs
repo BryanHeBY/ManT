@@ -331,15 +331,19 @@ mod tests {
                     })
                     .collect(),
             }),
-            terms: names
+            terms: (names
                 .iter()
                 .map(|name| {
                     vec![Inline::Code {
                         value: (*name).into(),
                     }]
                 })
-                .collect(),
+                .collect::<Vec<_>>())
+            .into_iter()
+            .map(Into::into)
+            .collect(),
             description: vec![Block::Paragraph {
+                inline_layout: crate::InlineLayout::default(),
                 children: vec![Inline::Text {
                     value: "Body --hidden".into(),
                 }],

@@ -1,5 +1,5 @@
 //! Inline content and typed navigation intent, independent of host actions.
-use super::{EquationExpression, SourceSpan, is_zero_u16};
+use super::{EquationExpression, SourceSpan};
 use crate::NodeId;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -71,34 +71,15 @@ pub enum Inline {
         #[serde(skip_serializing_if = "Option::is_none")]
         owner_source: Option<SourceSpan>,
     },
-    /// Hard line break that renderers must preserve.
-    ///
-    /// `indent_columns` is the following row's indent relative to the
-    /// containing block's origin - a fixed-width hint for the row a
-    /// request started at (mandoc's cleared-BRIND `offset <- rmargin`,
-    /// roff_term.c:73-75; a `.ti` one-row override, roff_term.c:267-273).
-    /// Zero keeps the block origin. The producer resolves the following
-    /// hard row's origin when its field flushes, after applying any source
-    /// scope restores (mdoc_term.c:329-330, 437-439). Consumers compose this
-    /// hint for that row without adding padding to source coordinates.
-    LineBreak {
-        /// Columns the following row indents to.
-        #[serde(default, skip_serializing_if = "is_zero_u16")]
-        indent_columns: u16,
-    },
+    /// An explicit hard line break. Row layout belongs to its content owner.
+    LineBreak {},
 }
 
 impl Inline {
-    /// Hard line break keeping the containing block's origin.
+    /// A pure hard line break, independent of display geometry.
     #[must_use]
     pub const fn line_break() -> Self {
-        Self::LineBreak { indent_columns: 0 }
-    }
-
-    /// Hard line break whose following row indents by `indent_columns`.
-    #[must_use]
-    pub const fn line_break_indented(indent_columns: u16) -> Self {
-        Self::LineBreak { indent_columns }
+        Self::LineBreak {}
     }
 
     /// Construct a normalized local anchor without source-authored aliases.

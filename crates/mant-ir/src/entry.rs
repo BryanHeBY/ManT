@@ -69,14 +69,17 @@ mod tests {
                 names: names.iter().map(|alias| (*alias).to_owned()).collect(),
                 value_domain: None,
             }),
-            terms: forms
+            terms: (forms
                 .iter()
                 .map(|form| {
                     vec![Inline::Code {
                         value: (*form).to_owned(),
                     }]
                 })
-                .collect(),
+                .collect::<Vec<_>>())
+            .into_iter()
+            .map(Into::into)
+            .collect(),
             description,
             layout: crate::DefinitionLayout {
                 head_body_relation: HeadBodyRelation::from(false),
@@ -232,6 +235,7 @@ mod tests {
             &["winget.exe"],
             &[],
             vec![Block::Paragraph {
+                inline_layout: crate::InlineLayout::default(),
                 children: vec![Inline::Link {
                     target: LinkTarget::Document {
                         name: "description-only".to_owned(),
@@ -246,16 +250,19 @@ mod tests {
                 source: None,
             }],
         );
-        item.terms = vec![vec![Inline::Link {
-            target: LinkTarget::Document {
-                name: "winget.exe".to_owned(),
-                fragment: None,
-            },
-            title: None,
-            children: vec![Inline::Code {
-                value: "winget.exe".to_owned(),
-            }],
-        }]];
+        item.terms = vec![
+            vec![Inline::Link {
+                target: LinkTarget::Document {
+                    name: "winget.exe".to_owned(),
+                    fragment: None,
+                },
+                title: None,
+                children: vec![Inline::Code {
+                    value: "winget.exe".to_owned(),
+                }],
+            }]
+            .into(),
+        ];
 
         assert_eq!(
             entry_from_definition(&item).unwrap().document_targets.len(),

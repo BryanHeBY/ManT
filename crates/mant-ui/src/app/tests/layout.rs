@@ -64,6 +64,7 @@ fn settled_sidebar_resize_keeps_the_visible_code_logically_anchored() {
     let mut bundle = navigation_bundle();
     bundle.document.as_mut().expect("document").sections[0].blocks = vec![
         AstBlock::Paragraph {
+            inline_layout: mant_ir::InlineLayout::default(),
             children: vec![Inline::Text {
                 value: "A long paragraph before the example repeats enough words to wrap very differently when the content pane changes width. ".repeat(8),
             }],
@@ -71,6 +72,7 @@ fn settled_sidebar_resize_keeps_the_visible_code_logically_anchored() {
             source: None,
         },
         AstBlock::Preformatted {
+            inline_layout: mant_ir::InlineLayout::default(),
             children: vec![Inline::Text {
                 value: "sentinel_code_block();".to_owned(),
             }],

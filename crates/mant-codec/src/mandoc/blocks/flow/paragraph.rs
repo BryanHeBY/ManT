@@ -172,14 +172,16 @@ impl ParagraphFlow {
         indent: crate::mandoc::layout::SourceIndent,
         line_request: bool,
     ) -> (Option<Block>, bool, u16) {
-        let (children, empty_word_end_break, completed_vertical_rows) = self
+        let (mut children, empty_word_end_break, completed_vertical_rows) = self
             .with_inline_builder(formatter, |builder| {
                 builder.take_paragraph_segment(line_request)
             });
+        let inline_layout = crate::mandoc::inline::take_inline_layout(&mut children);
         let source = self.source.take();
         self.last_line = None;
         (
             (!children.is_empty()).then(|| Block::Paragraph {
+                inline_layout,
                 children,
                 layout: layout(indent),
                 source,

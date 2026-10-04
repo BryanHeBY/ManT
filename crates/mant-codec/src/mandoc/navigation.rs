@@ -171,7 +171,7 @@ fn promote_manual_references(blocks: &mut [Block]) {
             Block::DefinitionList { items, .. } => {
                 for item in items {
                     for term in &mut item.terms {
-                        promote_manual_reference_inlines(term);
+                        promote_manual_reference_inlines(&mut term.content);
                     }
                     promote_manual_references(&mut item.description);
                 }
@@ -269,7 +269,7 @@ fn resolve_blocks(
             Block::DefinitionList { items, .. } => {
                 for item in items {
                     for term in &mut item.terms {
-                        resolve_inlines(term, targets, explicit_targets, diagnostics);
+                        resolve_inlines(&mut term.content, targets, explicit_targets, diagnostics);
                     }
                     resolve_blocks(
                         &mut item.description,

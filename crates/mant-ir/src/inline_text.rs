@@ -95,7 +95,7 @@ fn last_character(node: &Inline) -> Option<char> {
 
 /// Decide whether definition terms fit beside their first description line.
 #[must_use]
-pub fn terms_fit_inline(terms: &[Vec<Inline>], max_width: usize) -> bool {
+pub fn terms_fit_inline(terms: &[impl AsRef<[Inline]>], max_width: usize) -> bool {
     crate::geometry::definition_run_in_width(terms)
         .is_some_and(|width| (1..=max_width).contains(&width))
 }
@@ -142,6 +142,7 @@ mod tests {
         assert!(has_printable_character(&nodes));
         assert_eq!(
             crate::Heading {
+                inline_layout: crate::InlineLayout::default(),
                 content: nodes.clone(),
                 source: None
             }

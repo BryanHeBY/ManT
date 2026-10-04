@@ -76,7 +76,15 @@ fn render_selection(
             context,
             heading
                 .as_ref()
-                .map(|heading| renderer.inline_text(&heading.content, TextRole::Heading))
+                .map(|heading| {
+                    renderer.inline_text(
+                        mant_ir::InlineContentRef {
+                            content: &heading.content,
+                            layout: &heading.inline_layout,
+                        },
+                        TextRole::Heading,
+                    )
+                })
                 .unwrap_or_default(),
             renderer.render_blocks(blocks, 0),
         ]),

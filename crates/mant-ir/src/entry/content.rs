@@ -93,7 +93,7 @@ pub enum EntryForms<'a> {
     #[default]
     Unrecorded,
     /// Complete consecutive native terms borrowed as one slice.
-    Borrowed(&'a [Vec<Inline>]),
+    Borrowed(&'a [crate::DefinitionTerm]),
     /// Explicit forms, borrowing complete roots and materializing only slices
     /// that actually require reconstruction of text or style wrappers.
     Projected(Vec<Cow<'a, [Inline]>>),
@@ -102,14 +102,14 @@ pub enum EntryForms<'a> {
 impl EntryForms<'_> {
     /// Iterate complete forms in their declared order, without cloning content.
     pub fn iter(&self) -> impl Iterator<Item = &[Inline]> {
-        let (terms, projected): (&[Vec<Inline>], &[Cow<'_, [Inline]>]) = match self {
+        let (terms, projected): (&[crate::DefinitionTerm], &[Cow<'_, [Inline]>]) = match self {
             Self::Unrecorded => (&[], &[]),
             Self::Borrowed(terms) => (terms, &[]),
             Self::Projected(forms) => (&[], forms),
         };
         terms
             .iter()
-            .map(Vec::as_slice)
+            .map(|term| term.content.as_slice())
             .chain(projected.iter().map(AsRef::as_ref))
     }
 
@@ -118,7 +118,7 @@ impl EntryForms<'_> {
     pub fn into_owned(self) -> Vec<Vec<Inline>> {
         match self {
             Self::Unrecorded => Vec::new(),
-            Self::Borrowed(terms) => terms.to_vec(),
+            Self::Borrowed(terms) => terms.iter().map(|term| term.content.clone()).collect(),
             Self::Projected(forms) => forms.into_iter().map(Cow::into_owned).collect(),
         }
     }
@@ -240,13 +240,48 @@ impl<'a> EntryOwner<'a> {
     pub fn inline_root(self, root: &EntryInlineRoot) -> Option<&'a [Inline]> {
         match root {
             EntryInlineRoot::Term { index } => match self {
-                Self::Definition(item) => item.terms.get(*index).map(Vec::as_slice),
+                Self::Definition(item) => {
+                    item.terms.get(*index).map(|term| term.content.as_slice())
+                }
                 Self::List(_) => None,
             },
             EntryInlineRoot::Block { index } => match self.blocks().get(*index)? {
                 Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
                     Some(children)
                 }
+                _ => None,
+            },
+        }
+    }
+
+    /// Borrow a complete owner-local root with its exceptional row origins.
+    #[must_use]
+    pub fn inline_content_root(
+        self,
+        root: &EntryInlineRoot,
+    ) -> Option<crate::InlineContentRef<'a>> {
+        match root {
+            EntryInlineRoot::Term { index } => match self {
+                Self::Definition(item) => item
+                    .terms
+                    .get(*index)
+                    .map(crate::DefinitionTerm::inline_content),
+                Self::List(_) => None,
+            },
+            EntryInlineRoot::Block { index } => match self.blocks().get(*index)? {
+                Block::Paragraph {
+                    children,
+                    inline_layout,
+                    ..
+                }
+                | Block::Preformatted {
+                    children,
+                    inline_layout,
+                    ..
+                } => Some(crate::InlineContentRef {
+                    content: children,
+                    layout: inline_layout,
+                }),
                 _ => None,
             },
         }
@@ -331,6 +366,24 @@ impl<'a> EntryOwner<'a> {
             .map(|form| self.form(form))
             .collect::<Option<Vec<_>>>()
             .map(EntryForms::Projected)
+    }
+
+    /// Layout of a form that selects one contiguous interval of a real root.
+    /// Composite noncontiguous labels have no source row geometry to inherit.
+    #[must_use]
+    pub fn form_inline_layout(self, form: &EntryForm) -> Option<crate::InlineLayout> {
+        let mut parts = form.parts.iter();
+        let first = crate::project_content_slice(self, parts.next()?)?;
+        let mut end = first.chars.end;
+        for part in parts {
+            let next = crate::project_content_slice(self, part)?;
+            if next.root != first.root || next.chars.start != end {
+                return None;
+            }
+            end = next.chars.end;
+        }
+        self.inline_content_root(&first.root)?
+            .sliced_layout(first.chars.start..end)
     }
 
     /// Count complete valid form bindings without copying inline content or names.
@@ -500,6 +553,7 @@ mod tests {
                 }],
             }),
             blocks: vec![Block::Paragraph {
+                inline_layout: crate::InlineLayout::default(),
                 children: vec![
                     Inline::Code { value: name.into() },
                     Inline::Text {
@@ -788,14 +842,17 @@ mod tests {
         let mut native = DefinitionItem {
             source: None,
             entry: list_item.entry,
-            terms: vec![
+            terms: (vec![
                 vec![Inline::Code {
                     value: "one".into(),
                 }],
                 vec![Inline::Code {
                     value: "two".into(),
                 }],
-            ],
+            ])
+            .into_iter()
+            .map(Into::into)
+            .collect(),
             description: vec![list(vec![item("child", EntryKind::Value, "auto")])],
             layout: crate::DefinitionLayout {
                 head_body_relation: crate::HeadBodyRelation::from(false),

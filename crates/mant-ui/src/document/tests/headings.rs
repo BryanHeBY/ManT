@@ -25,6 +25,7 @@ fn heading_only_root_retains_links_styles_anchors_and_hard_lines_once() {
     document.sections.clear();
     document.meta.title = Some("metadata-is-not-body".into());
     document.heading = Some(mant_ir::Heading {
+        inline_layout: mant_ir::InlineLayout::default(),
         content: vec![
             link(
                 "Catalog",
@@ -86,6 +87,7 @@ fn heading_only_root_retains_links_styles_anchors_and_hard_lines_once() {
 fn section_labels_do_not_replace_linked_body_heading_content() {
     let mut query = bundle();
     query.document.as_mut().unwrap().sections[0].heading = mant_ir::Heading {
+        inline_layout: mant_ir::InlineLayout::default(),
         content: vec![
             link(
                 "Heading",

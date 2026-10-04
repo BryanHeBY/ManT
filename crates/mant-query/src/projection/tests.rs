@@ -114,6 +114,7 @@ fn definition(
                 vec![Inline::Code {
                     value: (*form).to_owned(),
                 }]
+                .into()
             })
             .collect(),
         description,
@@ -316,6 +317,7 @@ fn every_projected_entry_path_round_trips_through_read_and_explain() {
                 &[],
                 &["operate-and-get-next (C-o)"],
                 vec![Block::Paragraph {
+                    inline_layout: mant_ir::InlineLayout::default(),
                     children: vec![Inline::Text {
                         value: "Accept the current line and fetch the next history entry."
                             .to_owned(),
@@ -545,6 +547,7 @@ fn addresses_document_content_before_the_first_heading_as_root() {
     let document = query.document.as_mut().expect("document");
     document.source.format = SourceFormat::Markdown;
     document.blocks.push(Block::Paragraph {
+        inline_layout: mant_ir::InlineLayout::default(),
         children: vec![Inline::Text {
             value: "Document preface.".to_owned(),
         }],
@@ -577,6 +580,125 @@ fn addresses_document_content_before_the_first_heading_as_root() {
     assert_eq!(
         excerpt.source.as_ref().map(|source| source.format),
         Some(SourceFormat::Markdown)
+    );
+}
+
+fn query_with_owner_row_hints() -> ResolvedContent {
+    let mut content = query();
+    let document = content.document.as_mut().unwrap();
+    document.source.format = SourceFormat::Markdown;
+    let rows = mant_ir::InlineLayout {
+        row_hints: vec![mant_ir::RowLayoutHint {
+            row: 1,
+            indent_columns: -3,
+        }],
+    };
+    let mut heading: mant_ir::Heading = "Heading\ncontinued".into();
+    heading.inline_layout = rows.clone();
+    document.heading = Some(heading.clone());
+    document.sections[0].heading = heading;
+    let paragraph = Block::Paragraph {
+        children: vec![Inline::Text {
+            value: "description\ncontinued".into(),
+        }],
+        inline_layout: rows.clone(),
+        layout: LayoutHint::default(),
+        source: None,
+    };
+    let literal = Block::Preformatted {
+        children: vec![Inline::Code {
+            value: "literal\n\n".into(),
+        }],
+        language: None,
+        inline_layout: mant_ir::InlineLayout {
+            row_hints: vec![mant_ir::RowLayoutHint {
+                row: 2,
+                indent_columns: 5,
+            }],
+        },
+        layout: LayoutHint::default(),
+        source: None,
+    };
+    document.blocks = vec![paragraph.clone(), literal.clone()];
+    let mut item = definition(
+        "layout-owner",
+        EntryKind::Term,
+        &["--layout"],
+        &["--layout\nTAIL"],
+        vec![paragraph, literal],
+    );
+    item.terms[0].inline_layout = rows;
+    document.sections[0].blocks = vec![Block::DefinitionList {
+        items: vec![item],
+        compact: true,
+        layout: LayoutHint::default(),
+        source: None,
+        declaration_groups: Vec::new(),
+    }];
+    content
+}
+
+#[test]
+fn excerpts_and_explanations_retain_owner_hints_after_independent_json_decoding() {
+    let original = query_with_owner_row_hints();
+    let wire = serde_json::to_string(&mant_protocol::QueryBundle::from(&original)).unwrap();
+    let content: ResolvedContent = serde_json::from_str::<mant_protocol::QueryBundle>(&wire)
+        .unwrap()
+        .into();
+    let document = content.document.as_ref().unwrap();
+    assert_eq!(document, original.document.as_ref().unwrap());
+
+    for selector in [
+        ContentSelector::path("root"),
+        ContentSelector::path("1"),
+        ContentSelector::id("layout-owner"),
+    ] {
+        let excerpt = select_excerpt(&content, &[selector]).unwrap();
+        let wire = serde_json::to_string(&excerpt).unwrap();
+        let restored: mant_protocol::QueryExcerpt = serde_json::from_str(&wire).unwrap();
+        assert_eq!(restored, excerpt);
+        match &restored.selections[0] {
+            ExcerptSelection::DocumentRoot {
+                heading, blocks, ..
+            } => {
+                assert_eq!(heading, &document.heading);
+                assert_eq!(blocks, &document.blocks);
+            }
+            ExcerptSelection::DocumentSection { section, .. } => {
+                assert_eq!(section, &document.sections[0]);
+            }
+            ExcerptSelection::DocumentEntry { entry, .. } => {
+                assert_eq!(entry, &document.sections[0].blocks[0]);
+            }
+            ExcerptSelection::Tldr { .. } => panic!("manual selection"),
+        }
+    }
+
+    let explanation = super::select_explanation(&content, "--layout").unwrap();
+    let wire = serde_json::to_string(&explanation).unwrap();
+    let restored: mant_protocol::QueryExplanation = serde_json::from_str(&wire).unwrap();
+    assert_eq!(restored, explanation);
+    let mut invalid = serde_json::to_value(&restored).unwrap();
+    invalid["evidence"][0]["content"]["block"]["items"][0]["terms"][0]["inlineLayout"]["rowHints"]
+        [0]["row"] = 2.into();
+    assert!(serde_json::from_str::<mant_protocol::QueryExplanation>(&invalid.to_string()).is_err());
+    let evidence = &restored.evidence[0];
+    let Some(mant_protocol::ExplanationContent::Entry { block }) = &evidence.content else {
+        panic!("complete returned owner");
+    };
+    assert_eq!(block, &document.sections[0].blocks[0]);
+    let entry = evidence.entry.as_ref().unwrap();
+    let binding = &entry.name_bindings[0];
+    assert_eq!(entry.names[binding.name_index as usize], "--layout");
+    assert_ne!(binding.occurrences, []);
+    let range = &binding.occurrences[0].content[0];
+    let text = range.resolve(block).unwrap().safe_text();
+    assert_eq!(
+        text.chars()
+            .skip(range.char_range().start)
+            .take(range.char_range().len())
+            .collect::<String>(),
+        "--layout"
     );
 }
 
@@ -644,9 +766,12 @@ fn structural_paths_take_precedence_over_colliding_entry_ids() {
                     names: vec!["-3".to_owned()],
                     value_domain: None,
                 }),
-                terms: vec![vec![Inline::Code {
-                    value: "-3".to_owned(),
-                }]],
+                terms: vec![
+                    vec![Inline::Code {
+                        value: "-3".to_owned(),
+                    }]
+                    .into(),
+                ],
                 description: Vec::new(),
                 layout: mant_ir::DefinitionLayout {
                     head_body_relation: mant_ir::HeadBodyRelation::from(false),

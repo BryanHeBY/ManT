@@ -27,6 +27,7 @@ fn bundle() -> ResolvedContent {
                 heading: "Description".into(),
                 spacing_before_lines: 0,
                 blocks: vec![Block::Paragraph {
+                    inline_layout: mant_ir::InlineLayout::default(),
                     children: vec![Inline::Text {
                         value: "a deliberately long sentence".to_owned(),
                     }],
@@ -60,6 +61,7 @@ fn geometry_bundle() -> ResolvedContent {
     let document = bundle.document.as_mut().expect("document");
     document.sections[0].blocks = vec![
         Block::Paragraph {
+            inline_layout: mant_ir::InlineLayout::default(),
             children: vec![
                 Inline::Text {
                     value: "Read 多语言 documentation in ".to_owned(),
@@ -81,6 +83,7 @@ fn geometry_bundle() -> ResolvedContent {
             source: None,
         },
         Block::Preformatted {
+            inline_layout: mant_ir::InlineLayout::default(),
             children: vec![Inline::Text {
                 value: "git status --short\n路径/with spaces".to_owned(),
             }],
@@ -127,6 +130,7 @@ fn geometry_bundle() -> ResolvedContent {
 
 fn paragraph(value: &str) -> Block {
     Block::Paragraph {
+        inline_layout: mant_ir::InlineLayout::default(),
         children: vec![Inline::Text {
             value: value.to_owned(),
         }],
@@ -364,6 +368,7 @@ fn horizontal_spans_align_the_following_cell_with_later_rows() {
     let cell = |text: &str, column_span| TableCell {
         kind: mant_ir::TableCellKind::Text,
         blocks: vec![Block::Paragraph {
+            inline_layout: mant_ir::InlineLayout::default(),
             children: vec![Inline::Text { value: text.into() }],
             layout: LayoutHint::default(),
             source: None,
@@ -414,6 +419,7 @@ fn thematic_breaks_fill_the_remaining_content_width() {
 #[test]
 fn case_folding_maps_expanding_unicode_back_to_the_source_character() {
     let rendered = RenderedDocument {
+        copy_maps: Vec::new(),
         text: Text::from(Line::from("İstanbul")),
         row_count: 1,
         surfaces: vec![LineSurface::Normal],

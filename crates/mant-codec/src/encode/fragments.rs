@@ -1,6 +1,6 @@
 //! Safe report-facing fragments, without document-wide semantic declarations.
 
-use mant_ir::{Block, Heading, Inline, Section};
+use mant_ir::{Block, Heading, Inline, InlineContentRef, Section};
 
 use super::{MarkdownInlineProjection, MarkdownOptions};
 
@@ -28,6 +28,15 @@ impl MarkdownFragmentOptions {
 #[must_use]
 pub fn render_inline_fragment(children: &[Inline], options: MarkdownFragmentOptions) -> String {
     super::inline::render_inline(children, options.document_options())
+}
+
+/// Encode a detached owner root with its optional exceptional row layout.
+#[must_use]
+pub fn render_inline_content_fragment(
+    content: InlineContentRef<'_>,
+    options: MarkdownFragmentOptions,
+) -> String {
+    super::inline::render_inline_content(content, options.document_options())
 }
 
 /// Encode detached blocks without semantic declaration metadata.

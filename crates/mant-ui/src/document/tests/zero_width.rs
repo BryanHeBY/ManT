@@ -126,6 +126,7 @@ fn assert_navigation_table_case(
 #[test]
 fn navigation_only_table_rows_preserve_targets_gaps_and_physical_row_counters() {
     let navigation = Block::Paragraph {
+        inline_layout: mant_ir::InlineLayout::default(),
         children: vec![Inline::Strong {
             children: vec![Inline::Emphasis {
                 children: vec![Inline::anchor_with_aliases(
@@ -148,6 +149,7 @@ fn navigation_only_table_rows_preserve_targets_gaps_and_physical_row_counters() 
             (vec![vec![], vec![navigation.clone()]], 1),
             (
                 vec![vec![Block::Preformatted {
+                    inline_layout: mant_ir::InlineLayout::default(),
                     children: vec![Inline::Text {
                         value: String::new(),
                     }],
@@ -204,10 +206,13 @@ fn target_only_definition(description: Vec<Block>, inline_term: bool) -> Block {
         declaration_groups: vec![],
         compact: true,
         items: vec![DefinitionItem {
-            terms: vec![vec![Inline::anchor_with_aliases(
-                "target",
-                vec!["Exact.Target".into()],
-            )]],
+            terms: vec![
+                vec![Inline::anchor_with_aliases(
+                    "target",
+                    vec!["Exact.Target".into()],
+                )]
+                .into(),
+            ],
             description,
             entry: None,
             source: None,
@@ -280,6 +285,7 @@ fn body_only_definition_uses_body_origin_without_synthetic_term_gap() {
 #[test]
 fn standalone_zero_width_targets_cross_spacing_and_use_an_eof_sentinel() {
     let target = Block::Paragraph {
+        inline_layout: mant_ir::InlineLayout::default(),
         children: vec![Inline::anchor_with_aliases(
             "target",
             vec!["Exact.Target".into()],
@@ -321,6 +327,7 @@ fn real_literal_empty_lines_keep_their_rows_and_precise_anchor_positions() {
     builder.inline_lines(&[Inline::anchor("deferred")], 0, Style::default());
     builder.blocks(
         &[Block::Preformatted {
+            inline_layout: mant_ir::InlineLayout::default(),
             language: None,
             children: vec![
                 Inline::anchor("first"),

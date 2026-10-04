@@ -35,6 +35,7 @@ fn snapshot() -> (ResolvedDocumentScope, Vec<ResolvedContent>) {
                 diagnostics: vec![],
                 sections: vec![],
                 blocks: vec![Block::Paragraph {
+                    inline_layout: mant_ir::InlineLayout::default(),
                     children: vec![Inline::Text {
                         value: format!("needle in {name}"),
                     }],

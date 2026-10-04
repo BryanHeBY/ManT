@@ -192,6 +192,7 @@ mod tests {
 
     fn paragraph(indent: i32, gap: u16, children: Vec<Inline>) -> Block {
         Block::Paragraph {
+            inline_layout: crate::InlineLayout::default(),
             children,
             layout: LayoutHint {
                 indent_columns: indent,
@@ -232,7 +233,7 @@ mod tests {
             ),
             (
                 vec![Inline::Emphasis {
-                    children: vec![Inline::LineBreak { indent_columns: 0 }],
+                    children: vec![Inline::LineBreak {}],
                 }],
                 true,
             ),
@@ -324,6 +325,7 @@ mod tests {
                         source: None
                     },
                     Block::Preformatted {
+                        inline_layout: crate::InlineLayout::default(),
                         children,
                         language: None,
                         layout: LayoutHint::default(),

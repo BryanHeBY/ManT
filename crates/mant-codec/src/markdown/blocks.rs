@@ -34,6 +34,7 @@ pub(super) fn parse_blocks_until(
             let start = range.start;
             let (children, inline_end) = parse_inline_run(cursor, source, diagnostics);
             blocks.push(Block::Paragraph {
+                inline_layout: mant_ir::InlineLayout::default(),
                 children,
                 layout: LayoutHint::default(),
                 source: Some(source.span(&(start..inline_end))),
@@ -62,6 +63,7 @@ pub(super) fn parse_block(
             let start = range.start;
             let (children, end) = parse_inlines(cursor, source, diagnostics, TagEnd::Paragraph);
             Some(Block::Paragraph {
+                inline_layout: mant_ir::InlineLayout::default(),
                 children,
                 layout: LayoutHint::default(),
                 source: Some(source.span(&(start..end))),
@@ -93,6 +95,7 @@ pub(super) fn parse_block(
             Some(source.unsupported_block(name, whole, diagnostics))
         }
         Event::Text(value) | Event::Code(value) => Some(Block::Paragraph {
+            inline_layout: mant_ir::InlineLayout::default(),
             children: vec![Inline::Text {
                 value: value.into_string(),
             }],
@@ -137,6 +140,7 @@ fn parse_code_block(
             .map(ToOwned::to_owned),
     };
     Block::Preformatted {
+        inline_layout: mant_ir::InlineLayout::default(),
         children: vec![Inline::Text { value }],
         language,
         layout: LayoutHint::default(),
@@ -257,6 +261,7 @@ fn parse_table_row(
                     Vec::new()
                 } else {
                     vec![Block::Paragraph {
+                        inline_layout: mant_ir::InlineLayout::default(),
                         children,
                         layout: LayoutHint::default(),
                         source: Some(source.span(&(start..cell_end))),

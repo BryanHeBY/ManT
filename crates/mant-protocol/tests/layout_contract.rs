@@ -48,12 +48,12 @@ fn definition_rows_round_trip_through_actual_v0_12_query_json() {
                 "source":{"format":"mdoc"}, "meta":{}, "sections":[],
                 "blocks":[{"type":"definition-list","items":[{
                     "layout":{"headBodyRelation":serde_json::to_value(relation).unwrap()},
-                    "terms":[[{"type":"strong","children":[
+                    "terms":[{"content":[{"type":"strong","children":[
                         {"type":"text","value":"Alpha"},
-                        {"type":"line-break","indentColumns":6},
+                        {"type":"line-break"},
                         {"type":"link","target":{"kind":"external","uri":"https://example.org"},
                          "children":[{"type":"text","value":"Beta"}]}
-                    ]}]],
+                    ]}],"inlineLayout":{"rowHints":[{"row":1,"indentColumns":6}]}}],
                     "description":[]
                 }]}]
             }
@@ -73,9 +73,18 @@ fn definition_rows_round_trip_through_actual_v0_12_query_json() {
             });
         assert_eq!(restored_relation, relation);
         assert!(item["layout"].get("inlineTerm").is_none());
-        assert_eq!(item["terms"][0][0]["children"][1]["indentColumns"], 6);
+        assert_eq!(
+            item["terms"][0]["inlineLayout"]["rowHints"][0],
+            serde_json::json!({"row":1,"indentColumns":6})
+        );
+        assert_eq!(
+            item["terms"][0]["content"][0]["children"][1],
+            serde_json::json!({"type":"line-break"})
+        );
     }
     for input in [
+        r#"{"type":"line-break","indentColumns":0}"#,
+        r#"{"type":"line-break","indentColumns":6}"#,
         r#"{"type":"line-break","indentColumns":null}"#,
         r#"{"type":"line-break","indentColumns":-1}"#,
         r#"{"type":"line-break","indentColumns":65536}"#,

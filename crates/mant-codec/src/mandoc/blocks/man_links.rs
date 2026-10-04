@@ -179,12 +179,12 @@ pub(super) fn wrap_first_visible_block(
                 .any(|block| wrap_first_visible_block(block, target, marker, started, skip_visible))
         }),
         Block::DefinitionList { items, .. } => items.iter_mut().any(|item| {
-            item.terms
+            item.terms.iter_mut().any(|term| {
+                wrap_first_visible_inline(&mut term.content, target, marker, started, skip_visible)
+            }) || item
+                .description
                 .iter_mut()
-                .any(|term| wrap_first_visible_inline(term, target, marker, started, skip_visible))
-                || item.description.iter_mut().any(|block| {
-                    wrap_first_visible_block(block, target, marker, started, skip_visible)
-                })
+                .any(|block| wrap_first_visible_block(block, target, marker, started, skip_visible))
         }),
         Block::Table { rows, .. } => rows.iter_mut().any(|row| {
             row.cells.iter_mut().any(|cell| {
@@ -234,7 +234,7 @@ pub(super) fn remove_link_cursor_block(block: &mut Block, marker: &str) -> bool 
         Block::DefinitionList { items, .. } => {
             for item in items {
                 for term in &mut item.terms {
-                    remove_link_cursor(term, marker);
+                    remove_link_cursor(&mut term.content, marker);
                 }
                 item.description
                     .retain_mut(|block| !remove_link_cursor_block(block, marker));

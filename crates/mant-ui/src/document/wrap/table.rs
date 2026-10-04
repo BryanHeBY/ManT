@@ -1,7 +1,7 @@
 //! Bounded table columns and stacked fallback, preserving cell-local payload.
 use super::{
-    Line, LogicalTableCell, LogicalTableLayout, LogicalTableRow, Span, TableAlignment, WrappedLine,
-    WrappedLink, WrappedSearchCell, wrap_line_with_links,
+    Line, LogicalTableCell, LogicalTableLayout, LogicalTableRow, RowCopyMap, Span, TableAlignment,
+    WrappedLine, WrappedLink, WrappedSearchCell, wrap_line_with_links,
 };
 const TABLE_COLUMN_GAP: usize = 2;
 pub(super) fn render_table_row_with_links(
@@ -19,6 +19,7 @@ pub(super) fn render_table_row_with_links(
             line: Line::default(),
             links: Vec::new(),
             search_cells: Vec::new(),
+            copy_map: RowCopyMap::default(),
         }];
     }
     let indent = super::readable_origins(indent, indent, width).0;
@@ -102,12 +103,18 @@ fn render_declared_columns(
             let mut links = Vec::new();
             let mut search_cells = Vec::new();
             let mut anchors = Vec::new();
+            let mut copy_map = RowCopyMap::default();
             let mut visible = 0_usize;
             for piece in pieces {
                 let row = &cells[piece.cell][piece.line];
                 spans.push(Span::raw(" ".repeat(piece.column.saturating_sub(visible))));
                 spans.extend(row.line.spans.clone());
                 let offset = indent.saturating_add(piece.column);
+                copy_map.append_shifted(
+                    &row.copy_map,
+                    offset,
+                    super::super::inline::spans_width(&row.line.spans),
+                );
                 links.extend(row.links.iter().map(|link| WrappedLink {
                     target: link.target.clone(),
                     start_column: offset.saturating_add(link.start_column),
@@ -131,6 +138,7 @@ fn render_declared_columns(
                 line: Line::from(spans),
                 links,
                 search_cells,
+                copy_map,
             }
         })
         .collect()
@@ -167,6 +175,7 @@ fn render_layout_rule(
         line: Line::from(spans),
         links: Vec::new(),
         search_cells: Vec::new(),
+        copy_map: RowCopyMap::default(),
     }]
 }
 
@@ -208,6 +217,7 @@ fn stack_table_cells(indent: usize, table: &LogicalTableRow, width: usize) -> Ve
             line: Line::default(),
             links: Vec::new(),
             search_cells: Vec::new(),
+            copy_map: RowCopyMap::default(),
         });
     }
     if let Some(last) = rows.last_mut() {
@@ -259,6 +269,7 @@ fn wrap_table_cell(
             line: Line::default(),
             links: Vec::new(),
             search_cells: Vec::new(),
+            copy_map: RowCopyMap::default(),
         });
     }
     for (id, logical) in &cell.anchors {
@@ -303,6 +314,7 @@ fn render_table_columns(
             let mut spans = Vec::new();
             let mut links = Vec::new();
             let mut search_cells = Vec::new();
+            let mut copy_map = RowCopyMap::default();
             let mut column_offset = indent;
             if indent > 0 {
                 spans.push(Span::raw(" ".repeat(indent)));
@@ -328,6 +340,11 @@ fn render_table_columns(
                         spans.push(Span::raw(" ".repeat(left_padding)));
                     }
                     spans.extend(row.line.spans.clone());
+                    copy_map.append_shifted(
+                        &row.copy_map,
+                        column_offset.saturating_add(left_padding),
+                        used,
+                    );
                     links.extend(row.links.iter().map(|link| WrappedLink {
                         target: link.target.clone(),
                         start_column: column_offset + left_padding + link.start_column,
@@ -356,6 +373,7 @@ fn render_table_columns(
                 line: Line::from(spans),
                 links,
                 search_cells,
+                copy_map,
             }
         })
         .collect()

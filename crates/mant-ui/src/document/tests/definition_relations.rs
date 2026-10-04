@@ -24,7 +24,7 @@ fn query(
     let mut query = bundle();
     let mut head = Vec::new();
     if multi_head {
-        head.extend([text("HEAD"), Inline::line_break_indented(2)]);
+        head.extend([text("HEAD"), Inline::line_break()]);
     }
     head.push(Inline::Strong {
         children: vec![text("中e\u{301}")],
@@ -39,7 +39,7 @@ fn query(
                 value: "BODY".into(),
             }],
         },
-        Inline::line_break_indented(1),
+        Inline::line_break(),
         Inline::Emphasis {
             children: vec![text("CONT")],
         },
@@ -51,6 +51,12 @@ fn query(
     };
     let body = if literal {
         Block::Preformatted {
+            inline_layout: mant_ir::InlineLayout {
+                row_hints: vec![mant_ir::RowLayoutHint {
+                    row: 1,
+                    indent_columns: 1,
+                }],
+            },
             children,
             layout,
             language: None,
@@ -58,6 +64,12 @@ fn query(
         }
     } else {
         Block::Paragraph {
+            inline_layout: mant_ir::InlineLayout {
+                row_hints: vec![mant_ir::RowLayoutHint {
+                    row: 1,
+                    indent_columns: 1,
+                }],
+            },
             children,
             layout,
             source: None,
@@ -69,7 +81,19 @@ fn query(
         declaration_groups: vec![],
         compact: true,
         items: vec![DefinitionItem {
-            terms: vec![head],
+            terms: vec![mant_ir::DefinitionTerm {
+                content: head,
+                inline_layout: mant_ir::InlineLayout {
+                    row_hints: if multi_head {
+                        vec![mant_ir::RowLayoutHint {
+                            row: 1,
+                            indent_columns: 2,
+                        }]
+                    } else {
+                        Vec::new()
+                    },
+                },
+            }],
             description: vec![body],
             entry: None,
             source: None,
@@ -335,24 +359,21 @@ fn separate_rows_and_explicit_leading_spacing_prevent_sharing() {
             let view = DocumentView::new(&content);
             let logical_body = logical_line(&view, "BODY");
             assert_eq!(logical_body.indent, 13);
-            assert_eq!(
-                logical_body.continuation_indent,
-                if literal { 13 } else { 15 }
-            );
+            assert_eq!(logical_body.continuation_indent, 15);
+            assert_eq!(logical_line(&view, "CONT").indent, 16);
             for width in [20, 40, 78, 120, 20] {
                 let rendered = view.render(width);
                 let head = &rendered.search("中e\u{301}")[0];
                 let body = &rendered.search("BODY")[0];
                 assert_eq!(body.row, head.row + 1 + usize::from(spacing));
-                // A paragraph keeps its additional continuation displacement;
-                // a standalone literal has one code-row origin. The existing
-                // narrow-view reduction therefore moves them by 5 or 3 cells.
-                let body_origin = if width == 20 {
-                    if literal { 10 } else { 8 }
-                } else {
-                    13
-                };
+                // Both inline owner kinds keep the hanging increment. The
+                // existing narrow-view reduction translates both origins.
+                let body_origin = if width == 20 { 8 } else { 13 };
                 assert_eq!(body.start_column, body_origin);
+                assert_eq!(
+                    rendered.search("CONT")[0].start_column,
+                    if width == 20 { 10 } else { 16 }
+                );
                 assert_word_cells(
                     &rendered,
                     "BODY",

@@ -128,7 +128,9 @@ fn visit_blocks(blocks: &mut [Block], array_depth: usize, summary: &mut Summary)
             Block::DefinitionList { items, .. } => {
                 for item in items {
                     for term in &mut item.terms {
-                        visit_inlines(term, object_depth + 4, summary);
+                        // terms[] now contains a DefinitionTerm object whose
+                        // content[] is one level deeper than the retired array.
+                        visit_inlines(&mut term.content, object_depth + 5, summary);
                     }
                     visit_blocks(&mut item.description, object_depth + 3, summary);
                 }
@@ -521,10 +523,14 @@ mod tests {
                     items: vec![DefinitionItem {
                         source: None,
                         entry: None,
-                        terms: vec![vec![Inline::Text {
+                        terms: (vec![vec![Inline::Text {
                             value: "definition term".into(),
-                        }]],
+                        }]])
+                        .into_iter()
+                        .map(Into::into)
+                        .collect(),
                         description: vec![Block::Paragraph {
+                            inline_layout: mant_ir::InlineLayout::default(),
                             children: vec![Inline::Text {
                                 value: "definition body".into(),
                             }],
@@ -545,6 +551,7 @@ mod tests {
                         cells: vec![TableCell {
                             kind: TableCellKind::Text,
                             blocks: vec![Block::Paragraph {
+                                inline_layout: mant_ir::InlineLayout::default(),
                                 children: vec![Inline::Text {
                                     value: "table cell".into(),
                                 }],

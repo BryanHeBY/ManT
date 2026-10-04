@@ -83,6 +83,7 @@ fn independent_paragraph_and_vertical_space_requests_are_not_erased() {
             source: None,
         },
         Block::Paragraph {
+            inline_layout: mant_ir::InlineLayout::default(),
             children: Vec::new(),
             layout: layout_with_spacing(4.into(), 1),
             source: None,

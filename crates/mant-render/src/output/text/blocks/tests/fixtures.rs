@@ -27,6 +27,7 @@ pub(super) fn navigation_table(widths: &[u16], origin: i32, cells: Vec<Vec<Block
 pub(super) fn paragraph(text: &str, indent: i32) -> Block {
     Block::Paragraph {
         children: vec![Inline::Text { value: text.into() }],
+        inline_layout: mant_ir::InlineLayout::default(),
         layout: LayoutHint {
             indent_columns: indent,
             ..Default::default()

@@ -315,7 +315,7 @@ impl InlineBuilder {
             trim_trailing_breakable_spaces(&mut self.nodes, usize::MAX);
             for _ in 0..accepted_row_break {
                 let row_indent = self.take_definition_row_indent();
-                self.nodes.push(Inline::line_break_indented(row_indent));
+                super::push_row_break(&mut self.nodes, row_indent);
             }
             if leading_cells > 0 {
                 push_text(&mut self.nodes, " ".repeat(leading_cells));

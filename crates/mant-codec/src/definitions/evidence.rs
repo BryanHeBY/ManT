@@ -170,12 +170,12 @@ fn native_owner(item: &DefinitionItem) -> Option<usize> {
 
 /// Compare the entire accepted head without cloning it on each lookup.
 /// Parse-private and allocated navigation anchors never change glyph identity.
-pub(super) fn head_matches(actual: &[Vec<Inline>], expected: &[Vec<Inline>]) -> bool {
+pub(super) fn head_matches(actual: &[impl AsRef<[Inline]>], expected: &[Vec<Inline>]) -> bool {
     actual.len() == expected.len()
         && actual
             .iter()
             .zip(expected)
-            .all(|(a, e)| inline_matches(a, e))
+            .all(|(a, e)| inline_matches(a.as_ref(), e))
 }
 
 fn inline_matches(actual: &[Inline], expected: &[Inline]) -> bool {
@@ -220,11 +220,11 @@ fn inline_matches(actual: &[Inline], expected: &[Inline]) -> bool {
 /// Retain all other structure, including emphasis ancestry and link targets.
 pub(super) type HeadSnapshot = Rc<[Vec<Inline>]>;
 
-pub(super) fn head_snapshot(terms: &[Vec<Inline>]) -> HeadSnapshot {
+pub(super) fn head_snapshot(terms: &[impl AsRef<[Inline]>]) -> HeadSnapshot {
     head_content(terms).into()
 }
 
-pub(super) fn head_content(terms: &[Vec<Inline>]) -> Vec<Vec<Inline>> {
+pub(super) fn head_content(terms: &[impl AsRef<[Inline]>]) -> Vec<Vec<Inline>> {
     fn without_anchors(inlines: &[Inline]) -> Vec<Inline> {
         inlines
             .iter()
@@ -251,7 +251,10 @@ pub(super) fn head_content(terms: &[Vec<Inline>]) -> Vec<Vec<Inline>> {
             })
             .collect()
     }
-    terms.iter().map(|term| without_anchors(term)).collect()
+    terms
+        .iter()
+        .map(|term| without_anchors(term.as_ref()))
+        .collect()
 }
 
 #[cfg(test)]
@@ -268,11 +271,14 @@ mod tests {
                 end_column: None,
             }),
             entry: None,
-            terms: vec![vec![Inline::Strong {
+            terms: (vec![vec![Inline::Strong {
                 children: vec![Inline::Text {
                     value: "PATH".into(),
                 }],
-            }]],
+            }]])
+            .into_iter()
+            .map(Into::into)
+            .collect(),
             description: Vec::new(),
             layout: mant_ir::DefinitionLayout {
                 spacing_before_lines: None,
@@ -284,22 +290,22 @@ mod tests {
     #[test]
     fn linked_head_navigation_does_not_invalidate_native_evidence() {
         let mut original = item();
-        original.terms[0] = vec![Inline::Link {
+        original.terms[0].content = vec![Inline::Link {
             target: mant_ir::LinkTarget::External {
                 uri: "https://example.invalid".into(),
             },
             title: None,
-            children: original.terms[0].clone(),
+            children: original.terms[0].content.clone(),
         }];
         let mut evidence = NativeHeadEvidence::default();
         evidence.record(&original, NativeHeadRole::Environment);
         let mut moved = original.clone();
-        let Inline::Link { children, .. } = &mut moved.terms[0][0] else {
+        let Inline::Link { children, .. } = &mut moved.terms[0].content[0] else {
             panic!("linked head");
         };
         children.insert(0, Inline::anchor("allocated-navigation-id"));
         assert_eq!(evidence.role(&moved), Some(NativeHeadRole::Environment));
-        moved.terms[0].push(Inline::Text {
+        moved.terms[0].content.push(Inline::Text {
             value: "different native text".into(),
         });
         assert_eq!(evidence.role(&moved), None);
@@ -311,21 +317,26 @@ mod tests {
         let mut evidence = NativeHeadEvidence::default();
         evidence.record(&original, NativeHeadRole::Environment);
         let mut moved = Box::new(original.clone());
-        moved.terms[0].insert(0, Inline::anchor("new-navigation-id"));
+        moved.terms[0]
+            .content
+            .insert(0, Inline::anchor("new-navigation-id"));
         assert_eq!(evidence.role(&moved), Some(NativeHeadRole::Environment));
         moved.source.as_mut().unwrap().column += 1;
         assert_eq!(evidence.role(&moved), None);
         moved.source = original.source;
-        moved.terms[0] = vec![Inline::Emphasis {
+        moved.terms[0].content = vec![Inline::Emphasis {
             children: vec![Inline::Text {
                 value: "PATH".into(),
             }],
         }];
         assert_eq!(evidence.role(&moved), None);
         moved.terms = original.terms.clone();
-        moved.terms.push(vec![Inline::Text {
-            value: "OTHER".into(),
-        }]);
+        moved.terms.push(
+            vec![Inline::Text {
+                value: "OTHER".into(),
+            }]
+            .into(),
+        );
         assert_eq!(evidence.role(&moved), None);
         evidence.record(&original, NativeHeadRole::Literal);
         assert_eq!(evidence.role(&original), None);
@@ -336,7 +347,7 @@ mod tests {
         let mut evidence = NativeHeadEvidence::default();
         for key in 1..=256 {
             let mut native = item();
-            native.terms[0].insert(
+            native.terms[0].content.insert(
                 0,
                 Inline::anchor(format!("\0mant-native-definition-owner:{key:x}")),
             );
@@ -353,7 +364,7 @@ mod tests {
         assert_eq!(evidence.witnesses.len(), 0);
         for key in 1..=256 {
             let mut moved = item();
-            moved.terms[0].insert(
+            moved.terms[0].content.insert(
                 0,
                 Inline::anchor(format!("\0mant-native-definition-owner:{key:x}")),
             );
@@ -406,7 +417,7 @@ mod tests {
         assert!(evidence.operands(&changed).is_none());
 
         changed = original.clone();
-        changed.terms[0][1] = Inline::Emphasis {
+        changed.terms[0].content[1] = Inline::Emphasis {
             children: vec![Inline::Text {
                 value: "PATH".into(),
             }],
@@ -415,7 +426,7 @@ mod tests {
         assert!(evidence.operands(&changed).is_none());
 
         changed = original;
-        changed.terms[0][0] = Inline::anchor("\0mant-native-definition-owner:1e");
+        changed.terms[0].content[0] = Inline::anchor("\0mant-native-definition-owner:1e");
         assert_eq!(evidence.role(&changed), None);
         assert!(evidence.operands(&changed).is_none());
     }
@@ -427,9 +438,12 @@ mod tests {
         // ranges keep their original complete HEAD/source proof immutable.
         let (original, mut evidence) = recorded_owner();
         let mut continued = original.clone();
-        continued.terms.push(vec![Inline::Text {
-            value: "OTHER".into(),
-        }]);
+        continued.terms.push(
+            vec![Inline::Text {
+                value: "OTHER".into(),
+            }]
+            .into(),
+        );
         evidence.groups.continued(&continued, 30);
         assert!(evidence.groups.shared_head(&continued).is_some());
         assert_eq!(evidence.role(&continued), None);
@@ -442,24 +456,24 @@ mod tests {
     #[cfg(feature = "roff")]
     fn shared_head_proof_preserves_link_destination_and_title_identity() {
         let mut original = item();
-        original.terms[0] = vec![Inline::Link {
+        original.terms[0].content = vec![Inline::Link {
             target: mant_ir::LinkTarget::External {
                 uri: "https://example.invalid".into(),
             },
             title: Some("original".into()),
-            children: original.terms[0].clone(),
+            children: original.terms[0].content.clone(),
         }];
         super::super::groups::mark_native_definition_owner(&mut original, 10);
         let mut evidence = NativeHeadEvidence::default();
         evidence.groups.record(&original, 10);
         evidence.record(&original, NativeHeadRole::Environment);
         let mut changed = original.clone();
-        let Inline::Link { title, .. } = &mut changed.terms[0][1] else {
+        let Inline::Link { title, .. } = &mut changed.terms[0].content[1] else {
             unreachable!()
         };
         *title = Some("changed".into());
         assert_eq!(evidence.role(&changed), None);
-        let Inline::Link { target, title, .. } = &mut changed.terms[0][1] else {
+        let Inline::Link { target, title, .. } = &mut changed.terms[0].content[1] else {
             unreachable!()
         };
         *title = Some("original".into());

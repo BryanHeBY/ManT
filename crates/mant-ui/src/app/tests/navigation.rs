@@ -863,6 +863,7 @@ fn clicking_a_wrapped_section_reference_opens_its_target() {
         .insert(
             0,
             AstBlock::Paragraph {
+                inline_layout: mant_ir::InlineLayout::default(),
                 children: vec![
                     Inline::Text {
                         value: "Continue with ".to_owned(),
@@ -1008,6 +1009,7 @@ fn clicking_an_external_link_returns_the_uri_to_the_host() {
         .insert(
             0,
             AstBlock::Paragraph {
+                inline_layout: mant_ir::InlineLayout::default(),
                 children: vec![Inline::Link {
                     target: mant_ir::LinkTarget::External {
                         uri: "https://example.test/docs".to_owned(),
@@ -1076,6 +1078,7 @@ fn clicking_encoded_invalid_mailto_links_never_reaches_the_host() {
             .insert(
                 0,
                 AstBlock::Paragraph {
+                    inline_layout: mant_ir::InlineLayout::default(),
                     children: vec![Inline::Link {
                         target: mant_ir::LinkTarget::External {
                             uri: uri.to_owned(),
@@ -1126,6 +1129,7 @@ fn keyboard_navigation_moves_from_tldr_and_markdown_overview_to_manual_sections(
 
     let mut with_overview = navigation_bundle();
     with_overview.document.as_mut().expect("document").blocks = vec![AstBlock::Paragraph {
+        inline_layout: mant_ir::InlineLayout::default(),
         children: vec![Inline::Text {
             value: "Document overview".to_owned(),
         }],

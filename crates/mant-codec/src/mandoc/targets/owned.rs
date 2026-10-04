@@ -32,6 +32,7 @@ mod tests {
         assert_eq!(
             blocks,
             [Block::Paragraph {
+                inline_layout: mant_ir::InlineLayout::default(),
                 children: vec![
                     Inline::anchor_at("first", source(3)),
                     Inline::anchor_at("alias", source(3)),

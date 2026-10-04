@@ -60,7 +60,7 @@ fn keeps_adjacent_bold_and_italic_runs_unambiguous_in_commonmark() {
                 spacing_before_lines: None,
                 ..Default::default()
             },
-            terms: vec![vec![
+            terms: (vec![vec![
                 Inline::Strong {
                     children: vec![Inline::Text {
                         value: "-r ".to_owned(),
@@ -84,7 +84,10 @@ fn keeps_adjacent_bold_and_italic_runs_unambiguous_in_commonmark() {
                         value: "prompt".to_owned(),
                     }],
                 },
-            ]],
+            ]])
+            .into_iter()
+            .map(Into::into)
+            .collect(),
             description: vec![paragraph(vec![Inline::Text {
                 value: "Set the pager prompt.".to_owned(),
             }])],

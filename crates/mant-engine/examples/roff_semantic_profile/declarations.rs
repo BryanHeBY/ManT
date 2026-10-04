@@ -654,9 +654,12 @@ mod tests {
         assert_eq!(declaration_groups[0].end_item, 3);
         // Coupled corruption must not turn a real source declaration into a
         // numeric exception and then bless the shortened observed group.
-        items[0].terms = vec![vec![mant_ir::Inline::Text {
-            value: "422".into(),
-        }]];
+        items[0].terms = vec![
+            vec![mant_ir::Inline::Text {
+                value: "422".into(),
+            }]
+            .into(),
+        ];
         items[0].entry.as_mut().unwrap().names.clear();
         declaration_groups[0].start_item = 1;
         let changed = profile(&native.document.root, &document);

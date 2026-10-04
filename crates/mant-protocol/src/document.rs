@@ -249,6 +249,7 @@ mod tests {
                     source: None,
                 },
                 Block::Paragraph {
+                    inline_layout: mant_ir::InlineLayout::default(),
                     children: vec![mant_ir::Inline::Equation {
                         value: "x".into(),
                         expression,

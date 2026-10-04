@@ -31,13 +31,15 @@ fn retired_display_shapes_are_rejected_at_every_inline_depth() {
 fn accepted_styles_links_and_rows_round_trip_without_a_second_spelling() {
     let body = json!([
         {"type":"strong","children":[{"type":"text","value":"-alphaBSD"}]},
-        {"type":"line-break","indentColumns":6},
+        {"type":"line-break"},
         {"type":"link","target":{"kind":"external","uri":"https://ex.org"},
          "children":[{"type":"emphasis","children":[{"type":"text","value":"label"}]}]},
         {"type":"text","value":": https://ex.org"}
     ]);
     let mut value: serde_json::Value = query_fixture();
     value["document"]["sections"][0]["blocks"][0]["children"] = body.clone();
+    value["document"]["sections"][0]["blocks"][0]["inlineLayout"] =
+        json!({"rowHints":[{"row":1,"indentColumns":6}]});
     let query: QueryBundle = serde_json::from_str(&value.to_string()).unwrap();
     let wire = serde_json::to_string(&query).unwrap();
     let restored: QueryBundle = serde_json::from_str(&wire).unwrap();

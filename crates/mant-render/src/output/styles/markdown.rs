@@ -3,17 +3,23 @@
 use super::{LocatedStyles, Span, key, pieces};
 use crate::presentation::TextPresentation;
 use mant_codec::encode::MarkdownInlineProjection;
-use mant_ir::Inline;
+use mant_ir::{Inline, InlineContentRef};
 use mant_protocol::ExplanationTextRoot;
 use std::borrow::Cow;
 
 impl LocatedStyles<'_> {
     pub(in crate::output) fn markdown_inline(
         &self,
-        nodes: &[Inline],
+        content: InlineContentRef<'_>,
         options: mant_codec::encode::MarkdownFragmentOptions,
     ) -> String {
-        mant_codec::encode::render_inline_fragment(&self.project(nodes), options)
+        mant_codec::encode::render_inline_content_fragment(
+            InlineContentRef {
+                content: &self.project(content.content),
+                layout: content.layout,
+            },
+            options,
+        )
     }
 }
 
@@ -108,7 +114,7 @@ mod tests {
                 Inline::Text {
                     value: "Alpha".into(),
                 },
-                Inline::line_break_indented(6),
+                Inline::line_break(),
                 Inline::Link {
                     target: mant_ir::LinkTarget::Section {
                         id: "destination".into(),
@@ -123,10 +129,21 @@ mod tests {
                     value: "Gamma".into(),
                 },
             ],
+            inline_layout: mant_ir::InlineLayout {
+                row_hints: vec![mant_ir::RowLayoutHint {
+                    row: 1,
+                    indent_columns: 6,
+                }],
+            },
             layout: mant_ir::LayoutHint::default(),
             source: None,
         }];
-        let mant_ir::Block::Paragraph { children, .. } = &blocks[0] else {
+        let mant_ir::Block::Paragraph {
+            children,
+            inline_layout,
+            ..
+        } = &blocks[0]
+        else {
             unreachable!()
         };
         let mut styles = LocatedStyles::default();
@@ -147,17 +164,27 @@ mod tests {
         });
         assert_eq!(text, "Alpha\n      BETA\nGamma");
         assert_eq!(
-            styles.inline(children, crate::presentation::TextRole::Body, &|p, text| {
-                if p.matched {
-                    text.to_uppercase()
-                } else {
-                    text.into()
+            styles.inline(
+                InlineContentRef {
+                    content: children,
+                    layout: inline_layout
+                },
+                crate::presentation::TextRole::Body,
+                &|p, text| {
+                    if p.matched {
+                        text.to_uppercase()
+                    } else {
+                        text.into()
+                    }
                 }
-            }),
+            ),
             text
         );
         let markdown = styles.markdown_inline(
-            children,
+            InlineContentRef {
+                content: children,
+                layout: inline_layout,
+            },
             mant_codec::encode::MarkdownFragmentOptions {
                 preserve_anchors: true,
             },
@@ -199,8 +226,14 @@ mod tests {
         assert!(matches!(styles.project(&nodes), Cow::Owned(_)));
         assert!(matches!(styles.project(&other), Cow::Borrowed(_)));
         let options = mant_codec::encode::MarkdownFragmentOptions::default();
-        assert_eq!(styles.markdown_inline(&nodes, options), "A**LPH**A");
-        assert_eq!(styles.markdown_inline(&other, options), "ALPHA");
+        assert_eq!(
+            styles.markdown_inline(InlineContentRef::unpositioned(&nodes), options),
+            "A**LPH**A"
+        );
+        assert_eq!(
+            styles.markdown_inline(InlineContentRef::unpositioned(&other), options),
+            "ALPHA"
+        );
         assert_eq!(
             mant_codec::encode::render_inline_fragment(&nodes, options),
             "ALPHA"
@@ -213,6 +246,7 @@ mod tests {
             children: vec![Inline::Text {
                 value: "ALPHA".into(),
             }],
+            inline_layout: mant_ir::InlineLayout::default(),
             layout: mant_ir::LayoutHint::default(),
             source: None,
         }];

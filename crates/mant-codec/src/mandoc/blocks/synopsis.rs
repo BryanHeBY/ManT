@@ -147,7 +147,7 @@ pub(super) fn lower_synopsis_head(
     spacing_enabled: bool,
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) {
-    let head = execute_synopsis_head(node, context, spacing_enabled, formatter);
+    let mut head = execute_synopsis_head(node, context, spacing_enabled, formatter);
     if node.macro_token.as_ref() == Some(&Man(ManMacro::Sy)) {
         // The HEAD post already selected Roman; BODY entry is another
         // print_man_node() pre transition, even if its font is Roman too.
@@ -178,20 +178,40 @@ pub(super) fn lower_synopsis_head(
     }
 
     if let Some(Block::Paragraph {
-        children, source, ..
+        children,
+        source,
+        inline_layout,
+        ..
     }) = nested.first_mut()
     {
+        let head_layout = crate::mandoc::inline::take_inline_layout(&mut head);
+        let row_offset = u32::try_from(mant_ir::logical_row_count(&head) - 1).unwrap_or(u32::MAX);
+        for hint in &mut inline_layout.row_hints {
+            hint.row = hint.row.saturating_add(row_offset);
+        }
         let body = std::mem::take(children);
         let mut synopsis = InlineBuilder::with_spacing(spacing_enabled);
         synopsis.append(head);
         synopsis.append(body);
         *children = synopsis.finish();
+        let mut hints = std::collections::BTreeMap::new();
+        for hint in head_layout.row_hints.iter().chain(&inline_layout.row_hints) {
+            hints.insert(hint.row, hint.indent_columns);
+        }
+        inline_layout.row_hints = hints
+            .into_iter()
+            .map(|(row, indent_columns)| mant_ir::RowLayoutHint {
+                row,
+                indent_columns,
+            })
+            .collect();
         *source = source_span(node);
         output.extend(nested);
         return;
     }
 
     output.push(Block::Paragraph {
+        inline_layout: crate::mandoc::inline::take_inline_layout(&mut head),
         children: head,
         layout: layout(indent_columns),
         source: source_span(node),

@@ -12,7 +12,7 @@ fn text(value: &str) -> Inline {
 fn definition(relation: HeadBodyRelation, literal: bool, multi_head: bool) -> Block {
     let mut head = Vec::new();
     if multi_head {
-        head.extend([text("HEAD"), Inline::LineBreak { indent_columns: 2 }]);
+        head.extend([text("HEAD"), Inline::line_break()]);
     }
     head.push(Inline::Strong {
         children: vec![text("中e\u{301}")],
@@ -27,7 +27,7 @@ fn definition(relation: HeadBodyRelation, literal: bool, multi_head: bool) -> Bl
                 value: "BODY".into(),
             }],
         },
-        Inline::LineBreak { indent_columns: 1 },
+        Inline::line_break(),
         Inline::Emphasis {
             children: vec![text("CONT")],
         },
@@ -41,12 +41,24 @@ fn definition(relation: HeadBodyRelation, literal: bool, multi_head: bool) -> Bl
         Block::Preformatted {
             children,
             language: None,
+            inline_layout: mant_ir::InlineLayout {
+                row_hints: vec![mant_ir::RowLayoutHint {
+                    row: 1,
+                    indent_columns: 1,
+                }],
+            },
             layout,
             source: None,
         }
     } else {
         Block::Paragraph {
             children,
+            inline_layout: mant_ir::InlineLayout {
+                row_hints: vec![mant_ir::RowLayoutHint {
+                    row: 1,
+                    indent_columns: 1,
+                }],
+            },
             layout,
             source: None,
         }
@@ -55,7 +67,19 @@ fn definition(relation: HeadBodyRelation, literal: bool, multi_head: bool) -> Bl
         declaration_groups: vec![],
         compact: true,
         items: vec![DefinitionItem {
-            terms: vec![head],
+            terms: vec![mant_ir::DefinitionTerm {
+                content: head,
+                inline_layout: mant_ir::InlineLayout {
+                    row_hints: if multi_head {
+                        vec![mant_ir::RowLayoutHint {
+                            row: 1,
+                            indent_columns: 2,
+                        }]
+                    } else {
+                        vec![]
+                    },
+                },
+            }],
             description: vec![body],
             source: None,
             entry: None,
@@ -136,7 +160,7 @@ fn joined_words_retain_authored_head_padding_and_spacing_prevents_run_in() {
         let Block::DefinitionList { items, .. } = &mut block else {
             unreachable!()
         };
-        items[0].terms[0].push(text("\u{a0}"));
+        items[0].terms[0].content.push(text("\u{a0}"));
         assert!(
             renderer
                 .render_blocks(std::slice::from_ref(&block), 0)

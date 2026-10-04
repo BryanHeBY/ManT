@@ -11,6 +11,7 @@ fn distinct_term_roots_and_hard_lines_do_not_acquire_commas() {
                     vec![Inline::Text {
                         value: value.into(),
                     }]
+                    .into()
                 })
                 .into(),
             description: vec![paragraph("FIRST\nCONTINUATION", 0)],
@@ -48,10 +49,11 @@ fn zero_width_terms_and_clipped_markers_do_not_move_body_text() {
             source: None,
             entry: None,
             terms: vec![
-                vec![Inline::anchor_at("target", None)],
+                vec![Inline::anchor_at("target", None)].into(),
                 vec![Inline::Text {
                     value: "TERM".into(),
-                }],
+                }]
+                .into(),
             ],
             description: vec![paragraph("BODY", 0)],
             layout: mant_ir::DefinitionLayout {
@@ -88,7 +90,7 @@ fn empty_head_prefix_rows_preserve_the_recorded_run_in_body_origin() {
             items: vec![DefinitionItem {
                 source: None,
                 entry: None,
-                terms: vec![head],
+                terms: vec![head.into()],
                 description: vec![paragraph("BODY", 0)],
                 layout: mant_ir::DefinitionLayout {
                     head_body_relation: mant_ir::HeadBodyRelation::separated(

@@ -30,6 +30,7 @@ fn variants(source: Option<SourceSpan>) -> Vec<(Block, bool)> {
     vec![
         (
             Block::Paragraph {
+                inline_layout: crate::InlineLayout::default(),
                 children: Vec::new(),
                 layout,
                 source,
@@ -38,6 +39,7 @@ fn variants(source: Option<SourceSpan>) -> Vec<(Block, bool)> {
         ),
         (
             Block::Preformatted {
+                inline_layout: crate::InlineLayout::default(),
                 children: Vec::new(),
                 language: Some("roff".into()),
                 layout,
@@ -144,6 +146,7 @@ fn reparenting_all_variants_changes_only_root_origins() {
 #[test]
 fn nested_reparenting_never_translates_descendants_or_source_twice() {
     let paragraph = Block::Paragraph {
+        inline_layout: crate::InlineLayout::default(),
         children: vec![
             Inline::anchor("target"),
             Inline::Text {
@@ -170,9 +173,12 @@ fn nested_reparenting_never_translates_descendants_or_source_twice() {
     };
     let definition = Block::DefinitionList {
         items: vec![DefinitionItem {
-            terms: vec![vec![Inline::Text {
+            terms: (vec![vec![Inline::Text {
                 value: "TERM".into(),
-            }]],
+            }]])
+            .into_iter()
+            .map(Into::into)
+            .collect(),
             description: vec![table],
             entry: None,
             source: Some(source()),

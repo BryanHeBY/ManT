@@ -22,8 +22,8 @@ use crate::ResolvedContent;
 use anchors::anchor_markers;
 pub use fragments::{
     MarkdownFragmentOptions, commonmark_code_span, escape_commonmark, html_anchor,
-    render_blocks_fragment, render_heading_fragment, render_inline_fragment,
-    render_located_blocks_fragment, render_sections_fragment,
+    render_blocks_fragment, render_heading_fragment, render_inline_content_fragment,
+    render_inline_fragment, render_located_blocks_fragment, render_sections_fragment,
 };
 use mant_ir::DOCUMENT_ROOT_ID;
 
@@ -599,7 +599,13 @@ pub(super) fn render_heading(
     heading: &mant_ir::Heading,
     options: MarkdownOptions,
 ) -> String {
-    let content = inline::render_heading_inline(&heading.content, options);
+    let content = inline::render_heading_content(
+        mant_ir::InlineContentRef {
+            content: &heading.content,
+            layout: &heading.inline_layout,
+        },
+        options,
+    );
     if depth <= 2 && content.contains('\n') {
         // Setext headings are the portable CommonMark form that retains
         // explicit inline breaks; an ATX newline would end the heading.

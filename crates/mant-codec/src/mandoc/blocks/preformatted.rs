@@ -226,7 +226,9 @@ mod tests {
             builder.hard_break();
             builder.append_text("second");
         });
-        let styled = builder.finish();
+        let mut styled = builder.finish();
+        let inline_layout = crate::mandoc::inline::take_inline_layout(&mut styled);
+        assert!(inline_layout.is_empty());
 
         assert!(matches!(
             styled.as_slice(),

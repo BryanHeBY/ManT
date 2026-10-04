@@ -17,6 +17,7 @@ fn take_recognitions() -> usize {
 
 fn paragraph(value: &str, indent_columns: i32) -> Block {
     Block::Paragraph {
+        inline_layout: mant_ir::InlineLayout::default(),
         children: vec![Inline::Text {
             value: value.into(),
         }],
@@ -170,11 +171,17 @@ fn normalization_moves_original_styled_content_and_source_without_flattening() {
         },
     ];
     let literal = Block::Preformatted {
+        inline_layout: mant_ir::InlineLayout {
+            row_hints: vec![mant_ir::RowLayoutHint {
+                row: 1,
+                indent_columns: 2,
+            }],
+        },
         children: vec![
             Inline::Code {
                 value: "First".into(),
             },
-            Inline::line_break_indented(2),
+            Inline::line_break(),
             Inline::Code {
                 value: "Second".into(),
             },
@@ -187,8 +194,15 @@ fn normalization_moves_original_styled_content_and_source_without_flattening() {
         },
         source,
     };
+    let head_layout = mant_ir::InlineLayout {
+        row_hints: vec![mant_ir::RowLayoutHint {
+            row: 0,
+            indent_columns: -2,
+        }],
+    };
     let mut blocks = vec![
         Block::Paragraph {
+            inline_layout: head_layout.clone(),
             children: children.clone(),
             layout: LayoutHint {
                 indent_columns: 5,
@@ -215,7 +229,13 @@ fn normalization_moves_original_styled_content_and_source_without_flattening() {
     assert_eq!(*list_source, source);
     assert_eq!(layout.indent_columns, 5);
     assert_eq!(items[0].source, source);
-    assert_eq!(items[0].terms, [children]);
+    assert_eq!(
+        items[0].terms,
+        [mant_ir::DefinitionTerm {
+            content: children,
+            inline_layout: head_layout
+        }]
+    );
     assert_eq!(items[0].layout.body_indent_columns, 4);
     assert_eq!(items[0].layout.spacing_before_lines, Some(2));
     assert_eq!(

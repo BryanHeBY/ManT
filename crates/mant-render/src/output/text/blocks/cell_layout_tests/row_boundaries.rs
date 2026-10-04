@@ -1,6 +1,39 @@
 use super::*;
 
 #[test]
+fn source_neutral_completed_paragraph_rows_survive_the_cell_open_tail() {
+    for decorate in [plain as fn(TextPresentation, &str) -> String, ansi] {
+        let renderer = renderer(&decorate);
+        for (value, suffix) in [("X\n\n", "X\n\n       C"), ("\n\n", "\n\n       C")] {
+            let block = table(
+                &[3, 3],
+                vec![
+                    cell(vec![paragraph(vec![text(value)])]),
+                    cell(vec![paragraph(vec![text("C")])]),
+                ],
+                0,
+            );
+            assert_eq!(undecorated(&renderer.render_blocks(&[block], 0)), suffix);
+        }
+        let block = table(
+            &[3, 3],
+            vec![
+                cell(vec![
+                    paragraph(vec![text("X\n\n")]),
+                    paragraph(vec![text("Y")]),
+                ]),
+                cell(vec![paragraph(vec![text("C")])]),
+            ],
+            0,
+        );
+        assert_eq!(
+            undecorated(&renderer.render_blocks(&[block], 0)),
+            "X\n\nY      C"
+        );
+    }
+}
+
+#[test]
 fn completed_rows_and_open_rows_are_distinct_in_nested_cell_results() {
     // Exact roff display/no-fill seeds were run first. term_vspace executes
     // completed blank rows; a LineBreak closes graph and leaves an open row.

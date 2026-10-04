@@ -195,34 +195,25 @@ impl InlineBuilder {
     /// Assign origin when the buffered row actually prints. The last word
     /// can print after its enclosing scope restored offset, while earlier
     /// rows have already been committed by source-line events.
-    pub(in crate::mandoc) fn commit_definition_row_origin(&mut self) {
-        fn set_last_break(nodes: &mut [Inline], origin: u16) -> bool {
-            for node in nodes.iter_mut().rev() {
-                match node {
-                    Inline::LineBreak { indent_columns } => {
-                        *indent_columns = origin;
-                        return true;
-                    }
-                    Inline::Strong { children }
-                    | Inline::Emphasis { children }
-                    | Inline::Link { children, .. } => {
-                        if set_last_break(children, origin) {
-                            return true;
-                        }
-                    }
-                    _ => {}
-                }
-            }
-            false
-        }
+    pub(in crate::mandoc::inline::flow) fn commit_definition_row_origin(
+        &mut self,
+    ) -> Option<super::super::output::row_origins::OutputNodeEdit> {
         if self.has_formatter_cell()
             && let Some(definition) = &self.execution.definition
             && definition.row.has_pending_origin()
             && definition.field_buffer.resume_offset() < definition.field_buffer.cells().len()
         {
-            set_last_break(&mut self.nodes, definition.row.indent_columns);
+            let (_, edit) = super::super::output::row_origins::set_last_break_origin(
+                &mut self.nodes,
+                definition.row.indent_columns,
+            );
+            if let Some(edit) = edit {
+                self.remap_output_positions(edit);
+            }
             self.definition_state_mut().row.retire_row_origin();
+            return edit;
         }
+        None
     }
 
     pub(in crate::mandoc) fn note_definition_output_row(&mut self) {
@@ -241,7 +232,7 @@ impl InlineBuilder {
             return;
         }
         self.flush_zero_advance();
-        self.nodes.push(Inline::line_break_indented(row_indent));
+        super::super::output::push_row_break(&mut self.nodes, row_indent);
         self.note_definition_output_row();
         self.execution.last_visible_character = Some('\n');
         self.execution.trailing_output = TrailingOutput::None;
@@ -327,5 +318,99 @@ impl super::super::InlineExecutionState {
             definition.field_offset_units = checkpoint.field_offset_units;
             definition.margin_override = checkpoint.margin_override;
         }
+    }
+}
+
+#[cfg(test)]
+mod row_origin_tests {
+    use super::super::super::NativeWordAnchor;
+    use super::super::super::field_buffer::FieldWrite;
+    use super::super::state::{DefinitionFieldStyle, NoBreakField};
+    use super::*;
+
+    fn text(value: &str) -> Inline {
+        Inline::Text {
+            value: value.into(),
+        }
+    }
+
+    #[test]
+    fn inserted_carriers_rebase_every_live_output_address_but_not_native_coordinates() {
+        let mut builder = InlineBuilder::new();
+        builder.nodes = vec![text("X"), Inline::line_break(), text("  "), text("Z")];
+        builder.inherit_author_execution(crate::mandoc::formatter::AuthorFlow::Automatic, false);
+        builder
+            .execution
+            .author_execution
+            .as_mut()
+            .unwrap()
+            .field_output_start = 3;
+        builder.execution.flush_unit_output_start = 2;
+        builder.execution.formatter_column = FormatterColumn::Advanced;
+        let definition = builder.definition_state_mut();
+        definition.row.indent_columns = 6;
+        definition.row.note_row_origin();
+        definition
+            .field_buffer
+            .apply_writes(&FieldWrite::literal("Z"));
+        definition.hang_row.provisional_trailing_break = Some(1);
+        definition.field_word_anchors.push(NativeWordAnchor {
+            start: 7,
+            owner: "native-word".into(),
+            content: 9,
+            projected_device_padding: 2,
+            projected_field_prefix: false,
+        });
+        definition.no_break = Some(NoBreakField {
+            flags: super::super::super::native_field::FieldFlags::column(false),
+            output_end_before_separator: 2,
+            resumed_output_start: 3,
+            resumed_execution_epoch: 0,
+            field_width: 0,
+            body_width: 12,
+            field_capacity_columns: 12,
+            trailspace_cells: 1,
+            separator_cells: 2,
+            style: DefinitionFieldStyle::Tag,
+        });
+        let mut captured_field = definition.no_break.unwrap();
+        let edit = builder.commit_definition_row_origin().unwrap();
+        edit.remap(&mut captured_field.output_end_before_separator);
+        edit.remap(&mut captured_field.resumed_output_start);
+        assert_eq!(
+            builder
+                .execution
+                .author_execution
+                .unwrap()
+                .field_output_start,
+            4
+        );
+        assert_eq!(builder.execution.flush_unit_output_start, 3);
+        let definition = builder.execution.definition.as_ref().unwrap();
+        assert_eq!(definition.no_break, Some(captured_field));
+        assert_eq!(captured_field.output_end_before_separator, 3);
+        assert_eq!(captured_field.resumed_output_start, 4);
+        assert_eq!(definition.hang_row.provisional_trailing_break, Some(2));
+        assert_eq!(definition.field_word_anchors[0].start, 7);
+        assert_eq!(definition.field_word_anchors[0].content, 9);
+        assert_eq!(definition.field_word_anchors[0].projected_device_padding, 2);
+        assert_eq!(definition.field_buffer.cells().len(), 1);
+        let definition = builder.definition_state_mut();
+        definition.row.indent_columns = 2;
+        definition.row.note_row_origin();
+        assert!(builder.commit_definition_row_origin().is_none());
+        assert_eq!(builder.nodes.len(), 5);
+        assert_eq!(
+            builder
+                .execution
+                .author_execution
+                .unwrap()
+                .field_output_start,
+            4
+        );
+        assert_eq!(
+            super::super::super::output::take_inline_layout(&mut builder.nodes).row_indent(1),
+            2
+        );
     }
 }

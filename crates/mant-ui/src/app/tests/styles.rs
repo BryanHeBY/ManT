@@ -8,6 +8,7 @@ fn entries_and_references_keep_distinct_group_colors_in_the_final_frame() {
     content.document.as_mut().unwrap().sections[0]
         .blocks
         .push(AstBlock::Paragraph {
+            inline_layout: mant_ir::InlineLayout::default(),
             children: vec![Inline::Link {
                 target: mant_ir::LinkTarget::Manual {
                     name: "printf".into(),

@@ -241,7 +241,7 @@ pub(super) fn identify_item(
     if !anchors.iter().any(|anchor| anchor == &id)
         && let Some(term) = item.terms.first_mut()
     {
-        term.insert(0, Inline::anchor(id.clone()));
+        term.content.insert(0, Inline::anchor(id.clone()));
     }
     retained.insert(id.clone());
     item.entry = Some(EntryFacts {

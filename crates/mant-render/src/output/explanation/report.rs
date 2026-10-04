@@ -5,6 +5,9 @@ use crate::presentation::{TextPresentation, TextRole};
 use mant_protocol::{EvidenceClass, EvidenceCounts, ExplanationEvidence, ExplanationIdentityField};
 use std::fmt::Write;
 
+#[cfg(test)]
+mod tests;
+
 pub(super) struct Report<'a> {
     pub(super) markdown: bool,
     pub(super) decorate: &'a dyn Fn(TextPresentation, &str) -> String,
@@ -79,7 +82,7 @@ impl Report<'_> {
             previous = Some(e.class);
             let reference = e.source_reference(supports);
             let covered = reference.is_some();
-            self.owner(output, e, address, covered);
+            self.owner(output, e, address, covered, supports);
             if let Some(support) = reference.and_then(|index| supports.get(index)) {
                 let Some(block) = support.materialized(supports) else {
                     continue;
@@ -181,8 +184,9 @@ impl Report<'_> {
         e: &ExplanationEvidence,
         address: Option<&str>,
         covered: bool,
+        supports: &[mant_protocol::ExplanationSupport],
     ) {
-        let locations = spans::LocatedStyles::new(e);
+        let locations = spans::LocatedStyles::with_pool(e, supports);
         write!(
             output,
             "\n\n{}{} [{}]",
@@ -228,7 +232,7 @@ impl Report<'_> {
             TextRole::Metadata,
             &format!("Matched by: {}", metadata::bases(e)),
         );
-        self.details(output, e, &locations, covered);
+        self.details(output, e, &locations, covered, supports);
         if !covered {
             self.body(output, e, &locations);
         }
@@ -252,6 +256,7 @@ impl Report<'_> {
         evidence: &ExplanationEvidence,
         locations: &spans::LocatedStyles<'_>,
         covered: bool,
+        supports: &[mant_protocol::ExplanationSupport],
     ) {
         let Some(entry) = &evidence.entry else { return };
         if !covered
@@ -259,14 +264,19 @@ impl Report<'_> {
             && !DefinitionDisplay::new(evidence).is_some_and(|body| body.includes_forms())
         {
             self.line(output, TextRole::Metadata, "Forms:");
-            for form in &entry.forms {
+            for (index, form) in entry.forms.iter().enumerate() {
+                let layout = form_layout(evidence, supports, index, form).unwrap_or_default();
+                let content = mant_ir::InlineContentRef {
+                    content: form,
+                    layout: &layout,
+                };
                 let text = if self.markdown {
                     locations.markdown_inline(
-                        form,
+                        content,
                         mant_codec::encode::MarkdownFragmentOptions::default(),
                     )
                 } else {
-                    locations.inline(form, TextRole::Body, &|p, t| {
+                    locations.inline(content, TextRole::Body, &|p, t| {
                         (self.decorate)(p, &metadata::safe(t))
                     })
                 };
@@ -392,4 +402,29 @@ impl Report<'_> {
             }
         }
     }
+}
+
+/// Returned forms are derived metadata. A validated source owner and its
+/// exact indexed form binding can supply geometry for a contiguous slice.
+fn form_layout(
+    evidence: &ExplanationEvidence,
+    supports: &[mant_protocol::ExplanationSupport],
+    index: usize,
+    returned: &[mant_ir::Inline],
+) -> Option<mant_ir::InlineLayout> {
+    let content = evidence.content.as_ref()?;
+    let owner = match content {
+        mant_protocol::ExplanationContent::Entry { block }
+        | mant_protocol::ExplanationContent::Block { block } => block.entry_owner()?,
+        _ => content.referenced_owner(supports)?,
+    };
+    let facts = owner.facts()?;
+    if facts.id.as_str() != evidence.outline.node.id() {
+        return None;
+    }
+    let binding = facts.forms.get(index)?;
+    if owner.form(binding)?.as_ref() != returned {
+        return None;
+    }
+    owner.form_inline_layout(binding)
 }

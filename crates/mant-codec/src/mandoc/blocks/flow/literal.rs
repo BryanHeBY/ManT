@@ -402,6 +402,7 @@ fn append_completed_rows(
                         });
                     }
                     blocks.push(Block::Preformatted {
+                        inline_layout: mant_ir::InlineLayout::default(),
                         children,
                         language: None,
                         layout,

@@ -102,7 +102,7 @@ fn assert_bindings(item: &ListItem, names: &[String]) {
         panic!("original empty-head IP carrier");
     };
     assert_eq!(items.len(), 1);
-    assert_eq!(items[0].terms, [] as [Vec<mant_ir::Inline>; 0]);
+    assert_eq!(items[0].terms, [] as [mant_ir::DefinitionTerm; 0]);
     assert_ne!(items[0].description, []);
 }
 

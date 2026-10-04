@@ -26,7 +26,7 @@ fn code_state_crosses_authored_styles_links_anchors_and_structural_breaks() {
                 }],
             }],
         },
-        Inline::LineBreak { indent_columns: 7 },
+        Inline::line_break(),
         Inline::anchor("middle"),
         text("return 12; */\nreturn 34;"),
     ];
@@ -34,8 +34,17 @@ fn code_state_crosses_authored_styles_links_anchors_and_structural_breaks() {
         chars: 3..5,
         kind: EntryKind::Variable,
     }];
-    let lines = styled_reference_inline_lines(
-        &nodes,
+    let hints = mant_ir::InlineLayout {
+        row_hints: vec![mant_ir::RowLayoutHint {
+            row: 1,
+            indent_columns: 7,
+        }],
+    };
+    let lines = crate::document::inline::styled_reference_content_lines(
+        mant_ir::InlineContentRef {
+            content: &nodes,
+            layout: &hints,
+        },
         theme::style(theme::StyleRole::Text),
         None,
         &names,
@@ -93,6 +102,7 @@ fn wrapped_highlighted_unicode_links_remain_searchable_and_copyable() {
     let label = "e\u{301}多语言👩‍💻";
     let mut content = bundle();
     content.document.as_mut().unwrap().sections[0].blocks = vec![Block::Preformatted {
+        inline_layout: mant_ir::InlineLayout::default(),
         children: vec![
             text("echo \""),
             Inline::Link {

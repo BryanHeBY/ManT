@@ -1,7 +1,7 @@
 //! DTO-only, operation-local decoration. No query strings or document access.
 mod markdown;
 use crate::presentation::{InlinePresentation, TextPresentation, TextRole, visit_inline_text};
-use mant_ir::{EntryKind, Inline};
+use mant_ir::{EntryKind, Inline, InlineContentRef};
 use mant_protocol::{
     EvidenceBasis, ExplanationEvidence, ExplanationOccurrence, ExplanationTextRoot,
 };
@@ -30,9 +30,6 @@ fn key(root: ExplanationTextRoot<'_>) -> (u8, usize) {
 }
 
 impl<'a> LocatedStyles<'a> {
-    pub(super) fn new(evidence: &'a ExplanationEvidence) -> Self {
-        Self::with_pool(evidence, &[])
-    }
     pub(super) fn with_pool(
         evidence: &'a ExplanationEvidence,
         pool: &'a [mant_protocol::ExplanationSupport],
@@ -245,27 +242,16 @@ impl<'a> LocatedStyles<'a> {
 
     pub(super) fn inline(
         &self,
-        nodes: &[Inline],
+        content: InlineContentRef<'_>,
         role: TextRole,
         decorate: &dyn Fn(TextPresentation, &str) -> String,
     ) -> String {
-        let mut output = String::new();
-        let mut row_indent = 0;
-        self.visit_inline(nodes, role, |style, text| {
-            let decorated = decorate(style, text);
-            for (index, piece) in decorated.split('\n').enumerate() {
-                if index > 0 {
-                    output.push('\n');
-                    row_indent = style.inline.line_break_indent.unwrap_or(0);
-                }
-                if !piece.is_empty() {
-                    output.push_str(&" ".repeat(mant_ir::geometry::padding(i32::from(row_indent))));
-                    row_indent = 0;
-                    output.push_str(piece);
-                }
-            }
-        });
-        output
+        crate::output::text::blocks::BlockRenderer {
+            names: None,
+            locations: Some(self),
+            decorate,
+        }
+        .inline_text(content, role)
     }
 
     /// Decorate source-owned pieces before any row padding is added. Match

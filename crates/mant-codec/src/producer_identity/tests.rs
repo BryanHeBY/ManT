@@ -15,9 +15,12 @@ fn span(line: u32) -> SourceSpan {
 
 fn definition(id: &str, line: u32, children: Vec<Block>) -> DefinitionItem {
     DefinitionItem {
-        terms: vec![vec![Inline::Code {
+        terms: (vec![vec![Inline::Code {
             value: "same-name".into(),
-        }]],
+        }]])
+        .into_iter()
+        .map(Into::into)
+        .collect(),
         description: children,
         entry: Some(EntryFacts {
             id: id.into(),
@@ -51,6 +54,7 @@ fn section(id: &str, line: u32, blocks: Vec<Block>, children: Vec<Section>) -> S
     Section {
         id: id.into(),
         heading: Heading {
+            inline_layout: mant_ir::InlineLayout::default(),
             content: vec![Inline::Text {
                 value: "heading".into(),
             }],
@@ -205,14 +209,17 @@ fn declared_definition(
             names: names.iter().map(|alias| (*alias).to_owned()).collect(),
             value_domain: None,
         }),
-        terms: forms
+        terms: (forms
             .iter()
             .map(|form| {
                 vec![Inline::Code {
                     value: (*form).to_owned(),
                 }]
             })
-            .collect(),
+            .collect::<Vec<_>>())
+        .into_iter()
+        .map(Into::into)
+        .collect(),
         description,
         layout: mant_ir::DefinitionLayout {
             head_body_relation: mant_ir::HeadBodyRelation::from(false),

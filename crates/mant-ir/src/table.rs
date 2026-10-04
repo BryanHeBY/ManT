@@ -200,6 +200,7 @@ mod tests {
             value: value.into(),
         };
         let paragraph = |children| Block::Paragraph {
+            inline_layout: crate::InlineLayout::default(),
             children,
             layout: crate::LayoutHint::default(),
             source: None,
@@ -242,12 +243,14 @@ mod tests {
                 source: None,
             }],
             vec![Block::Preformatted {
+                inline_layout: crate::InlineLayout::default(),
                 children: vec![Inline::anchor("target"), text("\n")],
                 language: None,
                 layout: crate::LayoutHint::default(),
                 source: None,
             }],
             vec![Block::Paragraph {
+                inline_layout: crate::InlineLayout::default(),
                 children: vec![Inline::anchor("target")],
                 layout: crate::LayoutHint {
                     spacing_before_lines: 1,

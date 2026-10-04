@@ -2,6 +2,7 @@
 use super::{EquationExpression, Inline, SourceSpan, is_false, is_zero_u16};
 use crate::EntryFacts;
 use schemars::JsonSchema;
+mod wire;
 use serde::{Deserialize, Deserializer, Serialize};
 
 /// Presentation hints retained from roff but optional for semantic outputs.
@@ -26,7 +27,7 @@ pub struct LayoutHint {
 }
 
 /// A document block capable of preserving nested manual structures.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(
     tag = "type",
     rename_all = "kebab-case",
@@ -38,6 +39,9 @@ pub enum Block {
     Paragraph {
         /// Styled inline content in source order.
         children: Vec<Inline>,
+        /// Exceptional row offsets in this content root, never inline text.
+        #[serde(default, skip_serializing_if = "crate::InlineLayout::is_empty")]
+        inline_layout: crate::InlineLayout,
         /// Source-derived indentation and vertical spacing.
         #[serde(default, skip_serializing_if = "LayoutHint::is_empty")]
         layout: LayoutHint,
@@ -49,6 +53,9 @@ pub enum Block {
     Preformatted {
         /// Styled literal runs and line breaks.
         children: Vec<Inline>,
+        /// Exceptional row offsets in this literal content root.
+        #[serde(default, skip_serializing_if = "crate::InlineLayout::is_empty")]
+        inline_layout: crate::InlineLayout,
         /// Optional language hint, primarily from fenced Markdown.
         #[serde(skip_serializing_if = "Option::is_none")]
         language: Option<String>,
@@ -279,7 +286,7 @@ pub struct DefinitionItem {
     pub entry: Option<EntryFacts>,
     /// One or more displayed terms sharing this description, not necessarily
     /// equivalent names or interchangeable invocation forms.
-    pub terms: Vec<Vec<Inline>>,
+    pub terms: Vec<crate::DefinitionTerm>,
     /// Block content describing the terms.
     pub description: Vec<Block>,
     /// Item presentation, independent of any attached semantic facts.
@@ -531,6 +538,33 @@ impl DefinitionItem {
             Block::Preformatted {
                 children, layout, ..
             } if layout.spacing_before_lines == 0 => Some((children, layout)),
+            _ => None,
+        }
+    }
+
+    /// Borrow the first shared description row together with its owner layout.
+    #[must_use]
+    pub fn inline_description_content(&self) -> Option<(crate::InlineContentRef<'_>, &LayoutHint)> {
+        self.inline_description()?;
+        match self.description.first()? {
+            Block::Paragraph {
+                children,
+                inline_layout,
+                layout,
+                ..
+            }
+            | Block::Preformatted {
+                children,
+                inline_layout,
+                layout,
+                ..
+            } => Some((
+                crate::InlineContentRef {
+                    content: children,
+                    layout: inline_layout,
+                },
+                layout,
+            )),
             _ => None,
         }
     }

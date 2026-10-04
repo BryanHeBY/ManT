@@ -41,6 +41,12 @@ pub fn table_requires_origin_preserving_stack(rows: &[TableRow], origin: i32) ->
         {
             return true;
         }
+        if let Block::Paragraph { inline_layout, .. } | Block::Preformatted { inline_layout, .. } =
+            block
+            && hints_require_stack(inline_layout, origin, layout.continuation_indent_columns)
+        {
+            return true;
+        }
         match block {
             Block::List { kind, items, .. } => {
                 for (index, item) in items.iter().enumerate() {
@@ -60,6 +66,13 @@ pub fn table_requires_origin_preserving_stack(rows: &[TableRow], origin: i32) ->
             }
             Block::DefinitionList { items, .. } => {
                 for item in items {
+                    if item
+                        .terms
+                        .iter()
+                        .any(|term| hints_require_stack(&term.inline_layout, origin, 0))
+                    {
+                        return true;
+                    }
                     let body = compose_origin(origin, item.layout.body_indent_columns);
                     if item.layout.body_indent_columns < 0 || clips(body) {
                         return true;
@@ -77,6 +90,17 @@ pub fn table_requires_origin_preserving_stack(rows: &[TableRow], origin: i32) ->
         }
     }
     false
+}
+
+fn hints_require_stack(layout: &crate::InlineLayout, origin: i32, hanging: i32) -> bool {
+    layout.row_hints.iter().any(|hint| {
+        hint.indent_columns < 0
+            || clips(compose_origin(origin, hint.indent_columns))
+            || clips(compose_origin(
+                compose_origin(origin, hanging),
+                hint.indent_columns,
+            ))
+    })
 }
 
 fn clips(origin: i32) -> bool {
@@ -103,6 +127,7 @@ mod tests {
 
     fn paragraph(indent: i32, continuation: i32) -> Block {
         Block::Paragraph {
+            inline_layout: crate::InlineLayout::default(),
             children: vec![],
             layout: LayoutHint {
                 indent_columns: indent,
@@ -182,7 +207,7 @@ mod tests {
         let definitions = rows(Block::DefinitionList {
             declaration_groups: vec![],
             items: vec![crate::DefinitionItem {
-                terms: vec![],
+                terms: Vec::new(),
                 description: vec![paragraph(0, 0)],
                 entry: None,
                 source: None,
@@ -197,5 +222,107 @@ mod tests {
         });
         assert!(table_requires_origin_preserving_stack(&definitions, 4090));
         assert!(!table_requires_origin_preserving_stack(&definitions, 4086));
+    }
+
+    #[test]
+    fn owner_row_hints_preserve_signed_parent_composition_before_cell_clipping() {
+        let inline_layout = |correction| crate::InlineLayout {
+            row_hints: vec![crate::RowLayoutHint {
+                row: 0,
+                indent_columns: correction,
+            }],
+        };
+        let paragraph = |correction, hanging| Block::Paragraph {
+            children: vec![crate::Inline::Text {
+                value: "BODY".into(),
+            }],
+            inline_layout: inline_layout(correction),
+            layout: LayoutHint {
+                continuation_indent_columns: hanging,
+                ..Default::default()
+            },
+            source: None,
+        };
+        // Local clipping of -3 followed by parent +5 would produce 5;
+        // resolving the real parent first correctly places the glyph at 2.
+        assert!(table_requires_origin_preserving_stack(
+            &rows(paragraph(-3, 0)),
+            5
+        ));
+        assert!(!table_requires_origin_preserving_stack(
+            &rows(paragraph(3, 4)),
+            5
+        ));
+        assert!(!table_requires_origin_preserving_stack(
+            &rows(paragraph(6, 0)),
+            4090
+        ));
+        assert!(table_requires_origin_preserving_stack(
+            &rows(paragraph(7, 0)),
+            4090
+        ));
+        assert!(table_requires_origin_preserving_stack(
+            &rows(paragraph(3, 4)),
+            4090
+        ));
+
+        let literal = Block::Preformatted {
+            children: vec![crate::Inline::Text {
+                value: "FIRST\nSECOND".into(),
+            }],
+            inline_layout: crate::InlineLayout {
+                row_hints: vec![crate::RowLayoutHint {
+                    row: 1,
+                    indent_columns: -2,
+                }],
+            },
+            language: None,
+            layout: LayoutHint::default(),
+            source: None,
+        };
+        assert!(table_requires_origin_preserving_stack(&rows(literal), 5));
+    }
+
+    #[test]
+    fn definition_term_hints_participate_in_table_origin_fallback() {
+        let definition = |correction| Block::DefinitionList {
+            items: vec![crate::DefinitionItem {
+                terms: vec![crate::DefinitionTerm {
+                    content: vec![crate::Inline::Text {
+                        value: "TERM".into(),
+                    }],
+                    inline_layout: crate::InlineLayout {
+                        row_hints: vec![crate::RowLayoutHint {
+                            row: 0,
+                            indent_columns: correction,
+                        }],
+                    },
+                }],
+                description: vec![],
+                layout: crate::DefinitionLayout::default(),
+                entry: None,
+                source: None,
+            }],
+            compact: true,
+            declaration_groups: vec![],
+            layout: LayoutHint::default(),
+            source: None,
+        };
+        assert!(table_requires_origin_preserving_stack(
+            &rows(definition(-3)),
+            5
+        ));
+        assert!(!table_requires_origin_preserving_stack(
+            &rows(definition(3)),
+            5
+        ));
+        assert!(!table_requires_origin_preserving_stack(
+            &rows(definition(6)),
+            4090
+        ));
+        assert!(table_requires_origin_preserving_stack(
+            &rows(definition(7)),
+            4090
+        ));
     }
 }

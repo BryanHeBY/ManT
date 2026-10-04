@@ -81,7 +81,7 @@ impl InlineBuilder {
     /// Return the consumed native tail to callers with a real post effect.
     /// This is the same execution, never another IR-width observation.
     pub(in crate::mandoc::inline::flow) fn execute_native_newline_with_tail(&mut self) -> bool {
-        self.commit_definition_row_origin();
+        let _ = self.commit_definition_row_origin();
         self.execution.boundary = PendingBoundary::Tight;
         if self.execution.definition.as_ref().is_some_and(|state| {
             state.field_buffer.is_empty() && !state.hang_row.native_row_occupied()
@@ -170,7 +170,7 @@ impl InlineBuilder {
     /// has settled that field.  A plain `hard_break()` loses BRIND geometry,
     /// so `.br`, `.ti`, and the break phase of `.sp` must use this entrypoint.
     pub(in crate::mandoc) fn control_line_break(&mut self) -> bool {
-        self.commit_definition_row_origin();
+        let _ = self.commit_definition_row_origin();
         // term_newln selects NOSPACE before its lastcol/viscol test or flush
         // (term.c:475-481). BRIND/NOBREAK still describe the old buffer here.
         self.execution.boundary = PendingBoundary::Tight;
