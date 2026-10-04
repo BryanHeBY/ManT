@@ -102,16 +102,16 @@ impl BlockRenderer<'_> {
         // The item records shared/separate rows and the word boundary.
         // Independent layout hints resolve columns without changing adjacency.
         if !matches!(item.head_body_relation, mant_ir::HeadBodyRelation::Separate)
-            && let Some((content, layout)) = item.inline_description_content()
+            && let Some(body) = item.shared_description()
+            && let Some((content, layout)) = body.inline_content()
             && let Some(mut last_rows) = terms.pop()
         {
             let (mut shared_row, row_indent) = last_rows.pop().unwrap_or_default();
             let term_origin = compose_origin(origin, row_indent);
             let last_width = mant_ir::geometry::definition_run_in_width(&item.terms).unwrap_or(0);
             let mut lines = self.inline_rows(content, TextRole::Body);
-            let completed_empty_tail =
-                matches!(item.description.first(), Some(Block::Paragraph { .. }))
-                    && Self::close_paragraph_rows(&mut lines, ParagraphTail::BlockBoundary);
+            let completed_empty_tail = matches!(body.block, Block::Paragraph { .. })
+                && Self::close_paragraph_rows(&mut lines, ParagraphTail::BlockBoundary);
             let mut lines = lines.into_iter();
             let first_line = lines.next().unwrap_or_default();
             let first_body_origin = compose_origin(body_origin, layout.indent_columns);
@@ -141,6 +141,7 @@ impl BlockRenderer<'_> {
                 ))
             }));
             let mut result = Flow::default();
+            result.extend(self.block_flow(body.leading_blocks, body_origin));
             result.gap(layout.spacing_before_lines);
             let value = LayoutText::join(output, "\n");
             result.extend(if completed_empty_tail {
@@ -148,7 +149,7 @@ impl BlockRenderer<'_> {
             } else {
                 Flow::text(value)
             });
-            result.extend(self.block_flow(&item.description[1..], body_origin));
+            result.extend(self.block_flow(&item.description[body.block_index + 1..], body_origin));
             return result;
         }
         // Rows keep their request-relative indents (a cleared-BRIND request

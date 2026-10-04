@@ -4,6 +4,9 @@ use crate::EntryFacts;
 use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize};
 
+mod body;
+pub use body::DefinitionBodyRef;
+
 /// Displayed terms share a description containing arbitrary blocks.
 /// Sharing that content does not establish behavioral equivalence of the terms.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -235,55 +238,4 @@ impl DefinitionItem {
     /// set [`DefinitionLayout::body_indent_columns`]; consumers must read that
     /// resolved field rather than applying this default a second time.
     pub const DESCRIPTION_INDENT_COLUMNS: u16 = 4;
-
-    /// The first content row that can share the term's displayed line.
-    ///
-    /// Only this block's wrapped lines hang from its first-line text.
-    /// Every later block uses [`DefinitionLayout::body_indent_columns`] from the
-    /// definition container, independently of label width and inline mode.
-    /// The producer sets `inline_term` for a literal first block only when
-    /// source execution kept the physical HEAD row open. Explicit leading
-    /// spacing prevents the inline presentation.
-    #[must_use]
-    pub fn inline_description(&self) -> Option<(&[Inline], &LayoutHint)> {
-        if !self.inline_term() {
-            return None;
-        }
-        match self.description.first()? {
-            Block::Paragraph {
-                children, layout, ..
-            } if layout.spacing_before_lines == 0 => Some((children, layout)),
-            Block::Preformatted {
-                children, layout, ..
-            } if layout.spacing_before_lines == 0 => Some((children, layout)),
-            _ => None,
-        }
-    }
-
-    /// Borrow the first shared description row together with its owner layout.
-    #[must_use]
-    pub fn inline_description_content(&self) -> Option<(crate::InlineContentRef<'_>, &LayoutHint)> {
-        self.inline_description()?;
-        match self.description.first()? {
-            Block::Paragraph {
-                children,
-                inline_layout,
-                layout,
-                ..
-            }
-            | Block::Preformatted {
-                children,
-                inline_layout,
-                layout,
-                ..
-            } => Some((
-                crate::InlineContentRef {
-                    content: children,
-                    layout: inline_layout,
-                },
-                layout,
-            )),
-            _ => None,
-        }
-    }
 }

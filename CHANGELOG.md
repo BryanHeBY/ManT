@@ -90,6 +90,12 @@ that crate was not published for that change.
 
 ### mant-ir, mant-protocol, mant-codec, mant-loader, mant-query, mant-render, mant-engine and mant 0.12.0
 
+- Unify effective definition BODY selection across text, TUI and both Markdown
+  projections. Borrow the original block index and leading boundary with
+  `DefinitionBodyRef`; empty prose and navigation-only roots retain their
+  anchors without interrupting a shared row. Preserve authored literal rows,
+  hard breaks, positive spacing and subsequent blocks. Existing convenience
+  accessors delegate to the same rule; the unpublished v0.12 wire is unchanged.
 - Preserve nested definition word and row boundaries in portable Markdown
   tables instead of inserting a colon. Keep executed leading BODY spacing,
   authored whitespace and owner ranges through actual Markdown readback.

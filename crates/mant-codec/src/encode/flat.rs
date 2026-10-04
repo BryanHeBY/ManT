@@ -375,7 +375,10 @@ fn plain_block(block: &Block, tail: ParagraphTail, track: bool, shared_first: bo
                     }),
                     "\n",
                 );
-                let shared = terms.physical.then(|| first_shared_body(item)).flatten();
+                let shared = terms
+                    .physical
+                    .then(|| item.shared_description().map(|body| body.block_index))
+                    .flatten();
                 let description = plain_blocks_in_row(
                     &item.description,
                     "\n",
@@ -406,36 +409,6 @@ fn plain_block(block: &Block, tail: ParagraphTail, track: bool, shared_first: bo
         }
         Block::VerticalSpace { .. } | Block::ThematicBreak { .. } => Projection::default(),
     }
-}
-
-/// Empty inline roots are transparent, but an executed leading gap or a
-/// structural BODY cannot share the final HEAD row. Read accepted IR only.
-fn first_shared_body(item: &mant_ir::DefinitionItem) -> Option<usize> {
-    if !item.inline_term() {
-        return None;
-    }
-    for (index, block) in item.description.iter().enumerate() {
-        if mant_ir::geometry::block_gap(block) > 0 {
-            return None;
-        }
-        match block {
-            Block::Paragraph { children, .. } => {
-                let mut physical = false;
-                mant_ir::visit_inline_plain_text(children, |text| physical |= !text.is_empty());
-                if physical {
-                    return Some(index);
-                }
-            }
-            Block::Preformatted { children, .. } => {
-                if mant_ir::geometry::has_literal_rows(children) {
-                    return Some(index);
-                }
-            }
-            Block::VerticalSpace { .. } => {}
-            _ => return None,
-        }
-    }
-    None
 }
 
 #[cfg(test)]

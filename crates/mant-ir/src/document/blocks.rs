@@ -9,8 +9,8 @@ mod list;
 mod table;
 mod wire;
 pub use definition::{
-    DefinitionBodyAlignment, DefinitionItem, DefinitionLayout, DefinitionWordBoundary,
-    HeadBodyRelation,
+    DefinitionBodyAlignment, DefinitionBodyRef, DefinitionItem, DefinitionLayout,
+    DefinitionWordBoundary, HeadBodyRelation,
 };
 pub use layout::LayoutHint;
 pub use list::{ListItem, ListItemLayout, ListKind};

@@ -101,10 +101,15 @@ impl<'ir> Visit<'ir> for Rows {
                         .collect::<Vec<_>>()
                         .join(" ");
                     let mut body = Rows::default();
-                    for block in &item.description {
+                    let shared = item.shared_description();
+                    // This visitor reads accepted IR, not empty source TEXT.
+                    // A transparent prefix must not manufacture rows before
+                    // the original effective block selected by the item.
+                    let body_start = shared.map_or(0, |body| body.block_index);
+                    for block in &item.description[body_start..] {
                         body.visit_block(block);
                     }
-                    if item.inline_description().is_some() && !body.0.is_empty() {
+                    if shared.is_some() && !body.0.is_empty() {
                         let gap = " ".repeat(usize::from(item.layout.min_term_gap_columns));
                         self.0.push(term + &gap + &body.0.remove(0));
                     } else if !term.is_empty() {

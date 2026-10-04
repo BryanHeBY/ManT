@@ -15,6 +15,9 @@ use mant_protocol::{
 
 const NAME: &str = "name中";
 
+#[path = "definition_content_contracts/body_selection.rs"]
+mod body_selection;
+
 fn text(value: &str) -> Inline {
     Inline::Text {
         value: value.into(),

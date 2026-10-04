@@ -209,9 +209,10 @@ impl DocumentBuilder<'_> {
             self.blocks(&item.description, block_origin);
             return;
         }
+        let description = item.shared_description();
         // A trailing zero-width root shares the last head/body row when that
         // row runs in. Its provisional slot is not a new visible line.
-        let last_target_row = if item.inline_description().is_some() {
+        let last_target_row = if description.is_some() {
             head_lines.len().saturating_sub(1)
         } else {
             head_lines.len()
@@ -225,12 +226,18 @@ impl DocumentBuilder<'_> {
                     .with_reference_marks(line.reference_marks),
             );
         }
-        if let Some((content, layout)) = item.inline_description_content() {
+        if let Some(description) = description {
+            // Transparent prefix roots keep their original targets. They
+            // defer navigation until this shared row is pushed, without
+            // inventing content or rebasing the selected owner's coordinates.
+            self.blocks(description.leading_blocks, block_origin);
+            let (content, layout) = description
+                .inline_content()
+                .expect("shared description has an inline root");
             let children = content.content;
             let mut description_lines =
                 self.styled_inlines(content, theme::style(theme::StyleRole::Text));
-            let literal_inline =
-                matches!(item.description.first(), Some(Block::Preformatted { .. }));
+            let literal_inline = matches!(description.block, Block::Preformatted { .. });
             let mut deferred_targets = if literal_inline {
                 Vec::new()
             } else {
@@ -270,7 +277,10 @@ impl DocumentBuilder<'_> {
                 );
             }
             self.defer_anchors(deferred_targets);
-            self.blocks(&item.description[1..], block_origin);
+            self.blocks(
+                &item.description[description.block_index + 1..],
+                block_origin,
+            );
         } else {
             self.push(
                 LogicalLine::row_geometry(indent, indent, last.indent_columns, last.spans)

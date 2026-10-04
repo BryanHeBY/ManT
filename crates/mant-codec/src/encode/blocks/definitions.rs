@@ -2,7 +2,7 @@
 
 use std::borrow::Cow;
 
-use mant_ir::{Block, DefinitionItem, EntryOwner, Inline, InlineContentRef};
+use mant_ir::{Block, DefinitionBodyRef, DefinitionItem, EntryOwner, Inline, InlineContentRef};
 
 use super::super::inline::{
     block_prefix_escape_position, link_destination, render_inline_node_refs,
@@ -111,7 +111,8 @@ fn render_roots<'a>(
 }
 
 fn definition_body<'a>(
-    blocks: &'a [Block],
+    item: &'a DefinitionItem,
+    start: Option<DefinitionBodyRef<'a>>,
     options: MarkdownOptions,
     locations: Option<&dyn MarkdownInlineProjection>,
     track: bool,
@@ -119,12 +120,24 @@ fn definition_body<'a>(
     let mut body = DefinitionBody {
         blocks: Vec::new(),
         first_prose: None,
-        leading_space: false,
+        leading_space: start.is_some_and(|body| body.has_leading_spacing),
     };
     let mut destinations = Vec::new();
-    for block in blocks {
-        if body.blocks.is_empty() && mant_ir::geometry::block_gap(block) > 0 {
-            body.leading_space = true;
+    for (index, block) in item.description.iter().enumerate() {
+        if body.blocks.is_empty() {
+            // Selection stops at structural content even if this format
+            // omits it. Later executed gaps still precede the first export
+            // output; they must not collapse into an ordinary hard row.
+            body.leading_space |= mant_ir::geometry::block_gap(block) > 0;
+        }
+        if start.is_none_or(|body| index < body.block_index) {
+            // Borrow the transparent prefix at its original owner address.
+            // In particular, an empty literal root with no authored row must
+            // not become an empty fence which changes BODY selection.
+            if let Some(root) = inline_body_root(block, locations) {
+                destinations.push(root);
+            }
+            continue;
         }
         if matches!(block, Block::VerticalSpace { .. }) {
             continue;
@@ -176,6 +189,31 @@ fn definition_body<'a>(
     body
 }
 
+fn inline_body_root<'a>(
+    block: &'a Block,
+    locations: Option<&dyn MarkdownInlineProjection>,
+) -> Option<InlineRoot<'a>> {
+    match block {
+        Block::Paragraph {
+            children,
+            inline_layout,
+            ..
+        }
+        | Block::Preformatted {
+            children,
+            inline_layout,
+            ..
+        } => Some(InlineRoot::project(
+            InlineContentRef {
+                content: children,
+                layout: inline_layout,
+            },
+            locations,
+        )),
+        _ => None,
+    }
+}
+
 fn has_body_scalar(nodes: &[Inline]) -> bool {
     nodes.iter().any(|node| match node {
         Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. } => {
@@ -225,10 +263,14 @@ fn definition_content(
             (!text.is_empty()).then_some((indices, text))
         })
         .collect::<Vec<_>>();
-    let mut body = definition_body(&item.description, options, locations, track);
+    let start = item.description_start();
+    let shared_prose = start.is_some_and(|body| {
+        body.can_share(item.head_body_relation) && matches!(body.block, Block::Paragraph { .. })
+    });
+    let mut body = definition_body(item, start, options, locations, track);
     if let (Some((indices, term)), Some(prose)) = (terms.last_mut(), &body.first_prose)
         && has_terms
-        && !body.leading_space
+        && shared_prose
         && item.head_body_relation.joins_without_separator()
     {
         // Source ownership stays split; one inline context selects delimiters
@@ -265,7 +307,7 @@ fn definition_content(
             let separator = if body.leading_space {
                 "\n\n"
             } else if body.first_prose.is_some() {
-                if item.inline_term() { " " } else { "  \n" }
+                if shared_prose { " " } else { "  \n" }
             } else {
                 // Fences, nested lists and display equations need their own
                 // block; they never share the term's inline coding context.

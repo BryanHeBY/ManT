@@ -2,4 +2,5 @@
 
 mod definition_rows;
 mod fixtures;
+mod prefix_rows;
 mod table_rows;

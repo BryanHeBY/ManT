@@ -81,7 +81,24 @@ At sufficient width, these logical origins are presented without that reduction.
 
 Block `spacingBeforeLines` is already resolved by the producer: zero means a tight boundary, including when omitted from JSON. It is not an invitation for a frontend to supply paragraph spacing. Independent `VerticalSpace` blocks add their already-resolved blank rows to that boundary, including repeated equal blocks; each executed row has one IR consumption point. Empty anchors and transparent containers do not reset the boundary. Presentation bounds each accumulated gap at 4096 rows, independently of literal blank lines inside text. Native lowering reports `manual.vertical-spacing-limit` when this loses requested spacing. Definition-item optional spacing is different: absence inherits list compactness, while explicit zero suppresses that default.
 
-A definition description starts at its resolved `layout.bodyIndentColumns` relative to the label origin (generic default: four cells), before applying each child's layout. `minTermGapColumns` controls minimum separation after a run-in label (default: one). `DefinitionItem::inline_description()` identifies the first paragraph or literal fragment that may share the term's line when the producer records a shared row; explicit leading spacing prevents that presentation. A literal fragment shares the row only with native continuation evidence, so ordinary no-fill input remains on separate lines. The first line clears the displayed label; hard and wrapped continuation lines, later paragraphs, nested blocks and code use the structural body origin, not the label's width. Separate source term roots retain their original lines rather than acquiring invented commas. Native continuation normalization, plain text, and the TUI share this distinction. Markdown expresses definition ownership through its own block syntax. Inferring a semantic definition from separate source paragraphs preserves their line boundary; it does not authorize run-in presentation.
+A definition description starts at its resolved `layout.bodyIndentColumns` relative to the label origin (generic default: four cells), before applying each child's layout. `minTermGapColumns` controls minimum separation after a run-in label (default: one). `DefinitionItem::shared_description()` borrows the first effective paragraph or literal fragment that may share the term's line when the producer records a shared row; explicit leading spacing prevents that presentation. A literal fragment shares the row only with native continuation evidence, so ordinary no-fill input remains on separate lines. The first line clears the displayed label; hard and wrapped continuation lines, later paragraphs, nested blocks and code use the structural body origin, not the label's width. Separate source term roots retain their original lines rather than acquiring invented commas. Native continuation normalization, plain text, and the TUI share this distinction. Markdown expresses definition ownership through its own block syntax. Inferring a semantic definition from separate source paragraphs preserves their line boundary; it does not authorize run-in presentation.
+
+All reading and export consumers use the same borrowed BODY selection.
+`DefinitionItem::description_start()` returns a `DefinitionBodyRef` with the
+original block index, preceding blocks, effective block and resolved leading
+spacing. Empty paragraphs, empty text, anchor-only inline roots and zero-row
+`VerticalSpace` do not interrupt a declared shared relation. Their navigation
+targets remain at their original addresses and resolve on the selected row;
+subsequent blocks remain independent. A layout hint alone cannot create a row.
+Authored spaces, hard breaks and an empty literal `Text("")` do contribute
+physical rows and cannot be skipped. Positive spacing, including spacing on
+an otherwise empty block, prevents sharing. A structural block ends the
+selection even if an export format simplifies its representation. The legacy
+`inline_description()` convenience accessor delegates to this selection;
+consumers traversing the rest of the BODY must retain the original index and
+prefix from `shared_description()`. These rules consume accepted IR, not raw
+roff empty TEXT nodes: native empty-line and word effects have already been
+resolved by the producer.
 
 `DefinitionItem.headBodyRelation` records the content boundary and defaults to
 `{"type":"separate"}`. A `shared` object contains only `wordBoundary`
@@ -112,8 +129,10 @@ The first effective BODY block carries its resolved leading boundary across
 empty and destination-only roots. A separate prose row becomes a hard break;
 positive leading `VerticalSpace` or block `spacingBeforeLines` becomes a
 paragraph boundary. Markdown may simplify a positive vertical distance to one
-blank line, but never joins that prose back onto the HEAD row. A literal
-description remains a separate fenced code block in the corresponding list
+blank line, but never joins that prose back onto the HEAD row. Omitting an empty
+structural BODY root does not authorize sharing a later paragraph; resolved
+spacing before the first exported content still creates a paragraph boundary.
+A literal description remains a separate fenced code block in the corresponding list
 item, preserving its payload and type. The
 fence's formatting lines are export syntax, not extra hard rows in the IR;
 Markdown semantic readback does not promise native DefinitionItem identities.
