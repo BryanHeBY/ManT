@@ -57,9 +57,14 @@ impl BlockRenderer<'_> {
                     )
                     .first_visual_origin,
                 ));
-                output.extend(
-                    body.prefix_first_row(&indent, &format!("{prefix}{}", " ".repeat(gap))),
-                );
+                // Zero-width navigation keeps its identity, but cannot turn
+                // the marker's content gap into a copied physical cell.
+                let prefix = if body.has_physical_rows() {
+                    format!("{prefix}{}", " ".repeat(gap))
+                } else {
+                    prefix.trim_end().to_owned()
+                };
+                output.extend(body.prefix_first_row(&indent, &prefix));
                 output.extend(self.block_flow(&item.blocks[1..], body_origin));
             } else {
                 output.push_text(prefix.trim_end().into());

@@ -10,6 +10,7 @@ mod definition_relations;
 mod definition_rows;
 mod definition_tails;
 mod fixtures;
+mod navigation_markers;
 mod owner_layout;
 mod physical_rows;
 mod table_gaps;

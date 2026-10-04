@@ -108,6 +108,13 @@ impl DocumentBuilder<'_> {
         let first = inline_lines
             .first_mut()
             .map_or_else(StyledInlineLine::default, std::mem::take);
+        // Reference marks can inhabit the marker row without adding body
+        // cells. Authored whitespace and hard rows still own their gap.
+        let gap = if first.spans.is_empty() && mant_ir::logical_row_count(children) == 1 {
+            0
+        } else {
+            gap
+        };
         let mut spans = vec![Span::styled(
             marker,
             theme::style(theme::StyleRole::ListMarker),
