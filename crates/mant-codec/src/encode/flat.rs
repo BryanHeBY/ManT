@@ -1,133 +1,398 @@
 //! Portable table cells flatten presentation, never semantic ownership.
-use super::{
-    inline::{flatten_inline, flatten_inline_content, literal_row_layout},
-    mapped::MappedText,
-};
+use super::{inline::literal_row_layout, mapped::MappedText};
 use mant_ir::{
-    Block, EntryOwner, TableCell, TableCellKind, TableRow, TableRowPlan, TableRuleCellKind,
-    bounded_table_rows,
+    Block, EntryOwner, InlineContentRef, TableCell, TableCellKind, TableRow, TableRowPlan,
+    TableRuleCellKind, bounded_table_rows, geometry::GapPlan,
 };
 
+#[derive(Clone, Copy, Default)]
+enum Tail {
+    #[default]
+    Shared,
+    Open,
+    EndRow,
+    CompletedRows,
+}
+
+#[derive(Clone, Copy)]
+enum ParagraphTail {
+    OpenCellRow,
+    BlockBoundary,
+}
+
+/// Accepted IR row facts, not formatter state. Pending boundaries remain
+/// separate through transparent containers until the next physical contribution.
+/// Generated separators never acquire an owner.
+#[derive(Default)]
+struct Projection {
+    mapped: MappedText,
+    tail: Tail,
+    physical: bool,
+    leading_gap: GapPlan,
+    pending_gap: GapPlan,
+}
+
+impl Projection {
+    fn text(mapped: MappedText, tail: Tail, physical: bool) -> Self {
+        Self {
+            mapped,
+            tail,
+            physical,
+            ..Self::default()
+        }
+    }
+
+    fn gap(&mut self, rows: u16) {
+        if self.physical {
+            self.pending_gap.append_resolved(rows);
+        } else {
+            self.leading_gap.append_resolved(rows);
+        }
+    }
+
+    fn append(&mut self, mut value: Self, separator: &str) {
+        self.gap(value.leading_gap.rows(0));
+        if !value.physical {
+            self.gap(value.pending_gap.rows(0));
+            return;
+        }
+        if self.physical {
+            if self.pending_gap.rows(0) > 0 {
+                self.complete_gap();
+            } else {
+                match self.tail {
+                    Tail::EndRow => self.mapped.text.push('\n'),
+                    Tail::CompletedRows => {}
+                    Tail::Shared | Tail::Open => self.mapped.text.push_str(separator),
+                }
+            }
+        }
+        self.mapped.append(std::mem::take(&mut value.mapped));
+        self.physical = true;
+        self.tail = value.tail;
+        self.pending_gap = value.pending_gap;
+    }
+
+    fn complete_gap(&mut self) {
+        let rows = self.pending_gap.rows(0);
+        if rows > 0 {
+            // A literal open tail is an existing empty row. Close it before
+            // appending independent resolved empty rows (term.c::term_vspace).
+            if self.physical && !matches!(self.tail, Tail::CompletedRows) {
+                self.mapped.text.push('\n');
+            }
+            self.mapped.text.push_str(&"\n".repeat(usize::from(rows)));
+            self.tail = Tail::CompletedRows;
+            self.pending_gap = GapPlan::default();
+        }
+    }
+
+    fn structural_row(&mut self) {
+        if !self.physical {
+            self.pending_gap = std::mem::take(&mut self.leading_gap);
+            if self.pending_gap.rows(0) > 0 {
+                // These requests already own the empty data rows. Keep their
+                // budget pending until another cell or this whole row ends;
+                // structural occupancy adds no second empty-row delimiter.
+                self.tail = Tail::CompletedRows;
+            }
+            self.physical = true;
+        }
+    }
+
+    fn with_owner(mut self, owner: EntryOwner<'_>, track: bool) -> Self {
+        self.mapped = self.mapped.with_owner(owner, track);
+        self
+    }
+
+    fn finish(mut self) -> MappedText {
+        let leading = self.leading_gap.rows(0);
+        if leading > 0 {
+            self.mapped.insert(0, &"\n".repeat(usize::from(leading)));
+        }
+        self.complete_gap();
+        self.mapped
+    }
+}
+
+fn join(values: impl IntoIterator<Item = Projection>, separator: &str) -> Projection {
+    let mut output = Projection::default();
+    for value in values {
+        output.append(value, separator);
+    }
+    output
+}
+
 pub(super) fn rows(rows: &[TableRow], track: bool) -> Vec<MappedText> {
+    project_rows(rows, track).map(Projection::finish).collect()
+}
+
+fn project_rows(rows: &[TableRow], track: bool) -> impl Iterator<Item = Projection> + '_ {
     bounded_table_rows(rows)
         .into_iter()
         .zip(rows)
         .filter_map(|(plan, row)| (!mant_ir::table_row_is_navigation_only(row)).then_some(plan))
-        .map(|row| match row {
-            TableRowPlan::Empty => MappedText::default(),
-            TableRowPlan::WholeRule { double } => {
-                MappedText::from(if double { "===" } else { "---" }.to_owned())
-            }
-            TableRowPlan::LayoutRule { cells } => MappedText::join(
-                cells.iter().map(|cell| {
-                    MappedText::from(
-                        match cell {
-                            TableRuleCellKind::Horizontal => "---",
-                            TableRuleCellKind::DoubleHorizontal => "===",
-                        }
-                        .to_owned(),
-                    )
-                }),
-                " | ",
-            ),
-            TableRowPlan::Dense { slots } => MappedText::join(
-                slots.into_iter().map(|cell| {
-                    cell.map_or_else(MappedText::default, |cell| plain_cell(cell, track))
-                }),
-                " | ",
-            ),
-            TableRowPlan::Sparse { cells } => MappedText::join(
-                cells.into_iter().map(|positioned| {
-                    let mut value = plain_cell(positioned.cell, track);
-                    value.insert(
-                        0,
-                        &format!("column {}: ", positioned.column.saturating_add(1)),
-                    );
-                    value
-                }),
-                " | ",
-            ),
+        .map(move |row| {
+            let mut output = match row {
+                TableRowPlan::Empty => Projection::text(MappedText::default(), Tail::EndRow, true),
+                TableRowPlan::WholeRule { double } => Projection::text(
+                    if double { "===" } else { "---" }.to_owned().into(),
+                    Tail::Shared,
+                    true,
+                ),
+                TableRowPlan::LayoutRule { cells } => Projection::text(
+                    MappedText::join(
+                        cells.iter().map(|cell| {
+                            match cell {
+                                TableRuleCellKind::Horizontal => "---",
+                                TableRuleCellKind::DoubleHorizontal => "===",
+                            }
+                            .to_owned()
+                            .into()
+                        }),
+                        " | ",
+                    ),
+                    Tail::Shared,
+                    true,
+                ),
+                TableRowPlan::Dense { slots } => join(
+                    slots.into_iter().map(|cell| {
+                        cell.map_or_else(
+                            || Projection::text(MappedText::default(), Tail::Shared, true),
+                            |cell| plain_cell(cell, track),
+                        )
+                    }),
+                    " | ",
+                ),
+                TableRowPlan::Sparse { cells } => join(
+                    cells.into_iter().map(|positioned| {
+                        let mut value = plain_cell(positioned.cell, track);
+                        value.mapped.insert(
+                            0,
+                            &format!("column {}: ", positioned.column.saturating_add(1)),
+                        );
+                        value
+                    }),
+                    " | ",
+                ),
+            };
+            // A whole data row consumes its pending boundary. A later row
+            // begins an independent budget; navigation-only rows were filtered
+            // before reaching this physical boundary.
+            output.complete_gap();
+            output
         })
-        .collect()
 }
 
-fn plain_cell(cell: &TableCell, track: bool) -> MappedText {
-    // tbl_term.c::term_tbl/tbl_hrule distinguish data, whole-row and
-    // layout rules. The portable spelling keeps their order and strength;
-    // a ruled cell's suppressed payload never becomes table text.
-    match cell.kind {
-        TableCellKind::HorizontalRule | TableCellKind::IsolatedHorizontalRule => {
-            return "---".to_owned().into();
-        }
+fn plain_cell(cell: &TableCell, track: bool) -> Projection {
+    // tbl_term.c::term_tbl/tbl_hrule distinguish rules from suppressed payload.
+    let rule = match cell.kind {
+        TableCellKind::HorizontalRule | TableCellKind::IsolatedHorizontalRule => Some("---"),
         TableCellKind::DoubleHorizontalRule | TableCellKind::IsolatedDoubleHorizontalRule => {
-            return "===".to_owned().into();
+            Some("===")
         }
-        TableCellKind::Text => {}
+        TableCellKind::Text => None,
+    };
+    let mut output = rule.map_or_else(
+        || plain_blocks(&cell.blocks, "; ", ParagraphTail::OpenCellRow, track),
+        |rule| Projection::text(rule.to_owned().into(), Tail::Shared, true),
+    );
+    // An actual data cell retains its structural row even without glyphs.
+    output.structural_row();
+    if cell.break_after {
+        // Explicit closure consumes this row's existing gap once. Later
+        // leading requests use a new budget even if the gap is already full.
+        output.complete_gap();
+        if !matches!(output.tail, Tail::CompletedRows) {
+            output.tail = Tail::EndRow;
+        }
     }
-    MappedText::join(
-        cell.blocks
-            .iter()
-            .filter_map(|block| plain_block(block, track)),
-        "; ",
+    output
+}
+
+fn plain_blocks(blocks: &[Block], separator: &str, tail: ParagraphTail, track: bool) -> Projection {
+    let mut output = Projection::default();
+    for (index, block) in blocks.iter().enumerate() {
+        if let Block::VerticalSpace { lines, .. } = block {
+            output.gap(*lines);
+        } else {
+            output.append(
+                plain_block(
+                    block,
+                    if index + 1 == blocks.len() {
+                        tail
+                    } else {
+                        ParagraphTail::BlockBoundary
+                    },
+                    track,
+                ),
+                separator,
+            );
+        }
+    }
+    output
+}
+
+fn inline_projection(
+    content: InlineContentRef<'_>,
+    paragraph: Option<ParagraphTail>,
+) -> Projection {
+    let mut text = String::new();
+    let mut ends_in_break = false;
+    let mut authored_row = false;
+    mant_ir::visit_inline_plain_text(content.content, |chunk| {
+        authored_row = true;
+        text.push_str(chunk);
+        if let Some(last) = chunk.as_bytes().last() {
+            ends_in_break = *last == b'\n';
+        }
+    });
+    let physical = if paragraph.is_some() {
+        !text.is_empty()
+    } else {
+        authored_row
+    };
+    let tail = if !ends_in_break {
+        Tail::Shared
+    } else if matches!(paragraph, Some(ParagraphTail::BlockBoundary)) {
+        // Nonfinal paragraphs retire one provisional empty row; their frame
+        // closes the retained row. Literal content never retires that tail.
+        text.pop();
+        Tail::EndRow
+    } else {
+        Tail::Open
+    };
+    Projection::text(
+        literal_row_layout(&text, content.layout).into(),
+        tail,
+        physical,
     )
 }
 
-fn plain_block(block: &Block, track: bool) -> Option<MappedText> {
+fn plain_block(block: &Block, tail: ParagraphTail, track: bool) -> Projection {
     match block {
         Block::Paragraph {
             children,
             inline_layout,
             ..
-        }
-        | Block::Preformatted {
+        } => inline_projection(
+            InlineContentRef {
+                content: children,
+                layout: inline_layout,
+            },
+            Some(tail),
+        ),
+        Block::Preformatted {
             children,
             inline_layout,
             ..
-        } => {
-            // A cell can begin/end with executed hard rows (term.c::
-            // ESCAPE_BREAK/term_fill; mdoc_term.c::termp_it_post). Flattening
-            // its portable geometry must not trim those authored boundaries.
-            MappedText::from(literal_row_layout(&flatten_inline(children), inline_layout))
-                .nonempty()
-        }
-        Block::List { items, .. } => MappedText::join(
-            items.iter().filter_map(|item| {
-                MappedText::join(
-                    item.blocks
-                        .iter()
-                        .filter_map(|block| plain_block(block, track)),
-                    ", ",
-                )
-                .with_owner(EntryOwner::List(item), track)
-                .nonempty()
+        } => inline_projection(
+            InlineContentRef {
+                content: children,
+                layout: inline_layout,
+            },
+            None,
+        ),
+        Block::List { items, .. } => join(
+            items.iter().map(|item| {
+                plain_blocks(&item.blocks, ", ", ParagraphTail::BlockBoundary, track)
+                    .with_owner(EntryOwner::List(item), track)
             }),
             ", ",
-        )
-        .nonempty(),
-        Block::DefinitionList { items, .. } => MappedText::join(
+        ),
+        Block::DefinitionList { items, .. } => join(
             items.iter().map(|item| {
-                let terms = item
-                    .terms
-                    .iter()
-                    .map(|term| flatten_inline_content(term.inline_content()))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                let description = MappedText::join(
-                    item.description
-                        .iter()
-                        .filter_map(|block| plain_block(block, track)),
-                    "; ",
+                let mut terms = join(
+                    item.terms.iter().map(|term| {
+                        inline_projection(term.inline_content(), Some(ParagraphTail::OpenCellRow))
+                    }),
+                    ", ",
                 );
-                MappedText::join([terms.into(), description], ": ")
-                    .with_owner(EntryOwner::Definition(item), track)
+                let mut description =
+                    plain_blocks(&item.description, "; ", ParagraphTail::BlockBoundary, track);
+                // Keep the existing portable colon for an empty HEAD or BODY.
+                terms.structural_row();
+                if description.leading_gap.rows(0) == 0 {
+                    description.structural_row();
+                }
+                terms.append(description, ": ");
+                terms.with_owner(EntryOwner::Definition(item), track)
             }),
             "; ",
-        )
-        .nonempty(),
-        Block::Table { rows: table, .. } => MappedText::join(rows(table, track), "; ").nonempty(),
+        ),
+        Block::Table { rows, .. } => join(project_rows(rows, track), "; "),
         Block::Equation { value, .. } | Block::Unsupported { text: value, .. } => {
-            MappedText::from(value.trim().to_owned()).nonempty()
+            let text = value.trim().to_owned();
+            let physical = !text.is_empty();
+            Projection::text(text.into(), Tail::Shared, physical)
         }
-        Block::VerticalSpace { .. } | Block::ThematicBreak { .. } => None,
+        Block::VerticalSpace { .. } | Block::ThematicBreak { .. } => Projection::default(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn closed_cell_joins_rebase_existing_unicode_owner_ranges() {
+        // Opaque borrowed keys are sufficient; no facts are dereferenced.
+        let key = std::ptr::null();
+        let output = join(
+            [
+                Projection::text("α\n\n".to_owned().into(), Tail::CompletedRows, true),
+                Projection::text(
+                    MappedText {
+                        text: "中BODY".into(),
+                        owners: vec![(key, 0..7)],
+                    },
+                    Tail::Shared,
+                    true,
+                ),
+            ],
+            " | ",
+        )
+        .finish();
+        assert_eq!(output.text, "α\n\n中BODY");
+        assert_eq!(output.owners, [(key, 4..11)]);
+        assert_eq!(&output.text[output.owners[0].1.clone()], "中BODY");
+    }
+
+    #[test]
+    fn nested_literal_gap_closures_rebase_bytes_without_claiming_generated_rows() {
+        let key = std::ptr::null();
+        for depth in [1, 2, 4] {
+            let mut first = Projection::text(
+                MappedText {
+                    text: "α\n".into(),
+                    owners: vec![(key, 0..3)],
+                },
+                Tail::Open,
+                true,
+            );
+            first.gap(1);
+            for _ in 0..depth {
+                first = join([first], ", ");
+            }
+            let output = join(
+                [
+                    first,
+                    Projection::text(
+                        MappedText {
+                            text: "中BODY".into(),
+                            owners: vec![(key, 0..7)],
+                        },
+                        Tail::Shared,
+                        true,
+                    ),
+                ],
+                " | ",
+            )
+            .finish();
+            assert_eq!(output.text, "α\n\n\n中BODY");
+            assert_eq!(output.owners, [(key, 0..3), (key, 5..12)]);
+            assert_eq!(&output.text[output.owners[0].1.clone()], "α\n");
+            assert_eq!(&output.text[output.owners[1].1.clone()], "中BODY");
+        }
     }
 }

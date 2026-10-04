@@ -650,10 +650,11 @@ mod tests {
         let blocks = vec![
             invalid_uri_paragraph(),
             Block::Table {
-                column_widths: Vec::new(),
+                column_preferences: crate::ColumnPreferences::default(),
                 rows: vec![TableRow {
                     kind: crate::TableRowKind::Data,
                     cells: vec![TableCell {
+                        break_after: false,
                         kind: crate::TableCellKind::Text,
                         blocks: Vec::new(),
                         column_span: 0,
@@ -711,11 +712,12 @@ mod tests {
     #[test]
     fn rejects_rule_rows_with_data_or_without_layout_strengths() {
         let blocks = vec![Block::Table {
-            column_widths: Vec::new(),
+            column_preferences: crate::ColumnPreferences::default(),
             rows: vec![
                 TableRow {
                     kind: crate::TableRowKind::HorizontalRule,
                     cells: vec![TableCell {
+                        break_after: false,
                         kind: crate::TableCellKind::Text,
                         blocks: Vec::new(),
                         column_span: 1,
@@ -730,6 +732,7 @@ mod tests {
                 TableRow {
                     kind: crate::TableRowKind::Data,
                     cells: vec![TableCell {
+                        break_after: false,
                         kind: crate::TableCellKind::HorizontalRule,
                         blocks: vec![Block::Paragraph {
                             inline_layout: crate::InlineLayout::default(),

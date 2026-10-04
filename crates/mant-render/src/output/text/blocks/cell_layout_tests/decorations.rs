@@ -163,7 +163,11 @@ fn dense_empty_tail_segments_keep_opaque_closures_and_real_blank_rows() {
             let output = renderer(&ansi).render_blocks(std::slice::from_ref(&block), 0);
             assert_eq!(
                 undecorated(&output),
-                format!("A{}{}", " | ".repeat(empty_cells), "\n".repeat(blank_rows))
+                format!(
+                    "A{}{}",
+                    " | ".repeat(empty_cells),
+                    "\n".repeat(blank_rows + 1)
+                )
             );
             assert_eq!(
                 output.matches("\x1b[1m").count(),
@@ -175,7 +179,9 @@ fn dense_empty_tail_segments_keep_opaque_closures_and_real_blank_rows() {
                 output.matches("\x1b]8;;\x1b\\").count(),
                 "{output:?}"
             );
-            assert!(output.ends_with("\x1b]8;;\x1b\\"), "{output:?}");
+            // Closing a completed empty physical row happens after opaque
+            // style/link closures, without retiring that row at EOF.
+            assert!(output.ends_with("\x1b]8;;\x1b\\\n"), "{output:?}");
         }
     }
     let blocks = [

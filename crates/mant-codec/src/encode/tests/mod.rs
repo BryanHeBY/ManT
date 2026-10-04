@@ -24,6 +24,7 @@ mod inline_escaping;
 mod inline_styles;
 mod links;
 mod row_layout;
+mod table_boundaries;
 
 fn parse_content(
     source: &str,
@@ -45,6 +46,22 @@ fn paragraph(children: Vec<Inline>) -> Block {
         children,
         layout: LayoutHint::default(),
         source: None,
+    }
+}
+
+fn native_column_preferences(widths: &[u16]) -> mant_ir::ColumnPreferences {
+    if widths.is_empty() {
+        return mant_ir::ColumnPreferences::default();
+    }
+    mant_ir::ColumnPreferences {
+        widths: widths.to_vec(),
+        gap_columns: match widths.len() {
+            count if count < 5 => 4,
+            5 => 3,
+            _ => 1,
+        },
+        advance_limit_columns: Some(256),
+        extra_width_columns: Some(10),
     }
 }
 

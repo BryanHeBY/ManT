@@ -1,6 +1,39 @@
 use super::super::InlineBuilder;
 use super::head_row::HeadRowState;
 
+/// Current reading geometry of one column BODY. The native buffer keeps its
+/// existing relative coordinates; only an accepted print projects the signed
+/// source offset that those coordinates cannot represent below zero. Every
+/// distance in this record uses native basic units, before cell rounding.
+#[derive(Clone, Copy)]
+pub(in crate::mandoc) struct ColumnReadingOrigin {
+    offset: i32,
+    floor: i32,
+    pub(super) correction: i32,
+}
+
+impl ColumnReadingOrigin {
+    pub(super) fn new(parent_units: usize, column_units: usize) -> Self {
+        Self {
+            offset: 0,
+            floor: i32::try_from(parent_units.saturating_add(column_units))
+                .unwrap_or(i32::MAX)
+                .saturating_neg(),
+            correction: 0,
+        }
+    }
+
+    pub(super) fn apply(&mut self, units: i32, native_delta: i128) {
+        let previous = self.offset;
+        self.offset = previous.saturating_add(units).clamp(self.floor, 4096 * 24);
+        let correction = i128::from(self.correction)
+            .saturating_add(i128::from(self.offset) - i128::from(previous))
+            .saturating_sub(native_delta);
+        self.correction =
+            i32::try_from(correction).unwrap_or(if correction < 0 { i32::MIN } else { i32::MAX });
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(in crate::mandoc::inline::flow) struct DefinitionOutcome(u8);
 // The booleans are independent native registers (fed flags and latch
@@ -17,6 +50,7 @@ pub(in crate::mandoc::inline::flow) struct DefinitionFieldState {
     /// already represented by table placement; temporary node origins are
     /// not. This geometry is set at BODY pre, independently of IR owners.
     pub(in crate::mandoc::inline::flow) column_origin_units: Option<usize>,
+    pub(in crate::mandoc::inline::flow) column_reading_origin: Option<ColumnReadingOrigin>,
     /// The normal BODY origin is already expressed by list/definition IR
     /// placement. Only later temporary geometry can add inline positioning.
     pub(in crate::mandoc::inline::flow) declared_body_origin_units: Option<usize>,

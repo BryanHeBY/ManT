@@ -160,6 +160,14 @@ impl TableText for LayoutText {
         }
     }
 
+    fn ends_with_break(&self) -> bool {
+        self.visible.ends_with('\n')
+    }
+
+    fn width(&self) -> usize {
+        mant_ir::geometry::text_width(&self.visible)
+    }
+
     fn physical_lines(&self) -> Vec<Self> {
         if self.is_empty() {
             vec![self.clone()]

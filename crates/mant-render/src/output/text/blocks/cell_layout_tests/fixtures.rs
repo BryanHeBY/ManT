@@ -30,6 +30,7 @@ pub(super) fn literal(children: Vec<Inline>) -> Block {
 
 pub(super) fn cell(blocks: Vec<Block>) -> TableCell {
     TableCell {
+        break_after: false,
         blocks,
         kind: TableCellKind::Text,
         column_span: 1,
@@ -44,7 +45,7 @@ pub(super) fn table(widths: &[u16], cells: Vec<TableCell>, origin: i32) -> Block
             cells,
             kind: TableRowKind::Data,
         }],
-        column_widths: widths.into(),
+        column_preferences: declared_preferences(widths),
         layout: LayoutHint {
             indent_columns: origin,
             ..LayoutHint::default()
@@ -179,5 +180,21 @@ pub(super) fn matched_evidence(block: Block) -> mant_protocol::ExplanationEviden
         match_details_omitted: false,
         name_bindings_omitted: false,
         content_omitted: false,
+    }
+}
+
+fn declared_preferences(widths: &[u16]) -> mant_ir::ColumnPreferences {
+    if widths.is_empty() {
+        return mant_ir::ColumnPreferences::default();
+    }
+    mant_ir::ColumnPreferences {
+        widths: widths.to_vec(),
+        gap_columns: match widths.len() {
+            n if n < 5 => 4,
+            5 => 3,
+            _ => 1,
+        },
+        advance_limit_columns: Some(256),
+        extra_width_columns: Some(10),
     }
 }

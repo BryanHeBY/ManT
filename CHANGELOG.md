@@ -152,11 +152,20 @@ that crate was not published for that change.
   `.Bx` glyphs and accepted link URI text are no longer replaced or hidden by
   a second spelling; owned AST `Node::native_text` and `TableCell::native_text`
   remain execution evidence.
-- Add `Block::Table.column_widths` / `columnWidths` for measured mdoc
-  `.Bl -column` declarations, and `ListKind::Dash` for distinct dash markers.
-  Update table constructors and list-kind matches. Text and TUI share bounded
-  column geometry, retain actual cells when declaration counts differ, and
-  distinguish declared content widths from intercolumn gaps.
+- Add `Block::Table.column_preferences` / `columnPreferences` for optional
+  source-neutral widths, gaps, advance limits and excess-field capacity.
+  Producers resolve mdoc's source rules; readers measure their actual viewport
+  before bounded placement or source-order stacking. Reject the retired
+  `columnWidths` field in the unpublished v0.12 wire. Explicit zero constraints
+  remain distinct from absence, and generated positioning has a separate budget
+  that never limits authored content. Column preferences and table cells require
+  JSON objects; positional arrays are rejected.
+- Preserve current data-row closures with `TableCell.break_after` / `breakAfter`,
+  independently of open literal tails and completed empty rows. Keep hard rows
+  through nested tables, responsive fallback, Markdown readback and actual
+  JSON/UI copy and link ranges. Closing an existing empty data row preserves
+  that row; a closure never creates an additional blank row.
+  Add `ListKind::Dash` for distinct dash markers, with shared list defaults.
 - Add the closed `TableRow.kind` fact (`data`, `horizontal-rule`,
   `double-horizontal-rule`, or a per-column `layout-rule`) to `mant-ir` and the
   native protocol family. Add the closed `TableCell.kind` fact so partial tbl

@@ -927,22 +927,35 @@ Decoded text is never interpreted a second time as roff syntax. In particular, l
 
 Text, Markdown and TUI preserve the logical column after a horizontal span; covered slots stay empty instead of shifting later cells left. Tables wider than 256 logical columns use explicit column labels in text/Markdown and stacked cells in the TUI, avoiding span-driven allocation amplification.
 
-Mdoc `.Bl -column` keeps its ordered width declarations as `Table.columnWidths`:
+Mdoc `.Bl -column` keeps its ordered width declarations in `Table.columnPreferences.widths`:
 measured content widths in display cells of ManT's UTF-8 reading device,
 excluding the gap between columns. Roff escapes affect this measurement; a
 numeric-looking declaration such as `8n` remains a width sample, not a scale
-expression. Both terminal consumers add the upstream 4/3/1-cell gap for fewer
-than, exactly, or more than five declarations. Additional cells start after
-all declared fields, rather than adding an invented default stride. The last
-field keeps its complete content.
+expression. The codec records the upstream 4/3/1-cell gap for fewer than, exactly,
+or more than five declarations as `gapColumns`, along with
+`advanceLimitColumns:256` and `extraWidthColumns:10`. Generic terminal consumers
+use these explicit preferences rather than interpreting a source macro or
+choosing a native gap from the number of declarations. Additional cells start
+after all declared fields, rather than adding an invented default stride. Their
+ten-cell content capacity excludes any added gap. The last field keeps its
+complete content.
 
-These widths are preferred origins, not a promise of fixed viewport columns.
+These are preferred origins, not a promise of fixed viewport columns. Tables
+without source constraints use the source-neutral default: empty widths, gap 2,
+and no advance limit or extra-field width. Empty widths use content-derived
+layout, consuming the gap while retaining any supplied advance/extra-field
+constraints for declared-field layout only. Explicit zero constraints remain
+distinct from absence in IR and JSON. The retired `columnWidths` wire field is
+rejected in unreleased v0.12 rather than silently discarded.
 Plain and ANSI output use the same measurement before decoration. Successive
 cells continue after the preceding cell's last physical row; they are never
 zipped by local line number. A full field moves the following cell to a new
-row. One positioning advance is bounded to 256 cells, including for hand-built
-or decoded IR. More than 256 columns, span/rule combinations, and origins
-that require preserving signed descendant coordinates use source-order
+row. The native `advanceLimitColumns:256` bounds one positioning advance;
+hand-built or decoded preferences without that constraint do not inherit it.
+An independent 4096-cell generated-padding budget uses source-order fallback
+when exceeded and preserves every prepared and later cell. More than 256
+columns, span/rule combinations, and origins that require preserving signed
+descendant coordinates use source-order
 fallback. The TUI uses these same facts at readable widths and stacks cells
 when a viewport cannot accommodate the declared starts; links, anchors,
 search coordinates and selection follow the visible cell content.
@@ -953,6 +966,18 @@ An executed empty row remains completed when a cell changes output container;
 the next cell starts after it. A final empty field may instead close a row
 already occupied by a preceding field, which does not request another blank
 row. Both terminal consumers use the same distinction.
+
+The producer records a closed table data row after a cell as
+`TableCell.breakAfter:true`.
+For example, `.sp 1` inside an extended column head can close the printed `A`
+row before `Ta B` without requesting an additional blank row. The cell body
+remains `A`, with no invented inline newline; the next cell starts separately.
+The same fact can close a row occupied by an earlier cell or an existing empty
+structural data row; it does not request another empty row. Navigation-only
+carrier rows remain nonprinting. Further executed empty rows remain their own
+content or resolved spacing. The default false does not close an open tail or
+undo an already completed row. The boundary is source-neutral: readers consume
+it without replaying a request or retaining formatter state.
 
 Nested lists, displays and tables retain their block identities. Their
 responsive reading layout can differ from mandoc's device column geometry;

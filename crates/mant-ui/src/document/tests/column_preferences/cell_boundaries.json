@@ -1,0 +1,2000 @@
+{
+  "cases": [
+    {
+      "id": "sp-zero",
+      "source": ".Dd October 4, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd column probe\n.Sh DESCRIPTION\n.Bl -column -compact \"xxxxxxxx\" \"xxxx\"\n.It Xo\n.No A\n.sp 0\n.Xc Ta B\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "a8cd66bf384c78ff5d8cce38134faad0b81f1828a76bc2c00bd218dac60d81e8",
+      "profiles": {
+        "ascii": {
+          "args": [
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "status": 0,
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt - column probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     A           B\n\nN\bNE\bEX\bXT\bT\n     END\n\nLinux 6.18.40.1-microsoft-standard-WSL2\n                                October 4, 2026                        TEST(1)\n",
+          "stderr": "",
+          "stdout_sha256": "4427476bb785e5af966037e33c721fe77c77712cc68427b90851882b5b13196a",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "args": [
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "status": 0,
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – column probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     A           B\n\nN\bNE\bEX\bXT\bT\n     END\n\nLinux 6.18.40.1-microsoft-standard-WSL2\n                                October 4, 2026                        TEST(1)\n",
+          "stderr": "",
+          "stdout_sha256": "c30d8339643c12d936046dafceea25c87e244cd05fe3684f483fc48f5c2a2859",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "args": [
+            "-Thtml"
+          ],
+          "status": 0,
+          "stdout": "<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"utf-8\"/>\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>\n  <style>\n    table.head, table.foot { width: 100%; }\n    td.head-rtitle, td.foot-os { text-align: right; }\n    td.head-vol { text-align: center; }\n    .Nd, .Bf, .Op { display: inline; }\n    .Pa, .Ad { font-style: italic; }\n    .Ms { font-weight: bold; }\n    .Bl-diag > dt { font-weight: bold; }\n    code.Nm, .Fl, .Cm, .Ic, code.In, .Fd, .Fn, .Cd { font-weight: bold;\n      font-family: inherit; }\n  </style>\n  <title>TEST(1)</title>\n</head>\n<body>\n<div class=\"head\" role=\"doc-pageheader\" aria-label=\"Manual header\n  line\"><span class=\"head-ltitle\">TEST(1)</span> <span class=\"head-vol\">General\n  Commands Manual</span> <span class=\"head-rtitle\">TEST(1)</span></div>\n<main class=\"manual-text\">\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NAME\"><a class=\"permalink\" href=\"#NAME\">NAME</a></h2>\n<p class=\"Pp\"><code class=\"Nm\">test</code> &#x2014;\n    <span class=\"Nd\" role=\"doc-subtitle\">column probe</span></p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"DESCRIPTION\"><a class=\"permalink\" href=\"#DESCRIPTION\">DESCRIPTION</a></h2>\n<table class=\"Bl-column Bl-compact\">\n  <tr id=\"A\">\n    <td><a class=\"permalink\" href=\"#A\"><span class=\"No\">A</span></a>\n    <p class=\"Pp\"></p>\n    </td>\n    <td>B</td>\n  </tr>\n</table>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NEXT\"><a class=\"permalink\" href=\"#NEXT\">NEXT</a></h2>\n<p class=\"Pp\"><span class=\"No\">END</span></p>\n</section>\n</main>\n<div class=\"foot\" role=\"doc-pagefooter\" aria-label=\"Manual footer\n  line\"><span class=\"foot-left\">Linux 6.18.40.1-microsoft-standard-WSL2</span>\n  <span class=\"foot-date\">October 4, 2026</span>\n  <span class=\"foot-right\">TEST(1)</span></div>\n</body>\n</html>\n",
+          "stderr": "",
+          "stdout_sha256": "f4c87e923e56fe5484946c25cf28618f9a7b41fca9430cb4320a3be59c6a8570",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "args": [
+            "-Ttree"
+          ],
+          "status": 0,
+          "stdout": "title = \"TEST\"\nname  = \"test\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.40.1-microsoft-standard-WSL2\"\ndate  = \"October 4, 2026\"\n\nDd (elem) *1:2 NOPRT\n    October 4, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    TEST (text) 2:5\n    1 (text) 2:10\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          test (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            column probe (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      Bl (block) -column [ [xxxxxxxx] [xxxx] ] -compact *8:2\n        Bl (head) 8:2\n        Bl (body) 8:2\n            It (block) *9:2 ID=A\n              It (head) 9:2\n              It (body) 9:2\n                  Xo (block) 9:5\n                    Xo (head) 9:5\n                    Xo (body) 9:5\n                        No (elem) *10:2 HREF\n                            A (text) 10:5\n                        sp (elem) *11:2\n                            0 (text) 11:5\n              It (body) 12:5\n                  B (text) 12:8\nSh (block) *14:2\n  Sh (head) 14:2 ID=HREF\n      NEXT (text) 14:5\n  Sh (body) 14:2\n      No (elem) *15:2\n          END (text) 15:5\n",
+          "stderr": "",
+          "stdout_sha256": "37d17b55a215bcd1a07a5c35e04af5adcee978a0ecc3ce92566ae632d1a9a89c",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "args": [
+            "-Tlint",
+            "-Wall"
+          ],
+          "status": 0,
+          "stdout": "",
+          "stderr": "",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_rows": [
+        "     A           B"
+      ],
+      "stop_heading": "NEXT",
+      "ast_cells": [
+        {
+          "line": 9,
+          "column": 2,
+          "texts": [
+            {
+              "value": "A",
+              "line": 10,
+              "column": 5,
+              "line_start": false,
+              "no_fill": false
+            },
+            {
+              "value": "0",
+              "line": 11,
+              "column": 5,
+              "line_start": false,
+              "no_fill": false
+            }
+          ]
+        },
+        {
+          "line": 12,
+          "column": 5,
+          "texts": [
+            {
+              "value": "B",
+              "line": 12,
+              "column": 8,
+              "line_start": false,
+              "no_fill": false
+            }
+          ]
+        }
+      ],
+      "break_after": false,
+      "reading_policy": "native-relative-hard-rows-no-source-margin",
+      "cli_rows": [
+        "A           B"
+      ],
+      "ui_rows_78": [
+        "   A           B"
+      ],
+      "payloads": [
+        "A",
+        "B"
+      ],
+      "linked": false
+    },
+    {
+      "id": "br-open",
+      "source": ".Dd October 4, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd column probe\n.Sh DESCRIPTION\n.Bl -column -compact \"xxxxxxxx\" \"xxxx\"\n.It Xo\n.No A\n.br\n.Xc Ta B\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "d20749c38eea506c3ad06b9505be70ca8a55fb0be4e2d00e0b76f0fa9ead8d09",
+      "profiles": {
+        "ascii": {
+          "args": [
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "status": 0,
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt - column probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     A           B\n\nN\bNE\bEX\bXT\bT\n     END\n\nLinux 6.18.40.1-microsoft-standard-WSL2\n                                October 4, 2026                        TEST(1)\n",
+          "stderr": "",
+          "stdout_sha256": "4427476bb785e5af966037e33c721fe77c77712cc68427b90851882b5b13196a",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "args": [
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "status": 0,
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – column probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     A           B\n\nN\bNE\bEX\bXT\bT\n     END\n\nLinux 6.18.40.1-microsoft-standard-WSL2\n                                October 4, 2026                        TEST(1)\n",
+          "stderr": "",
+          "stdout_sha256": "c30d8339643c12d936046dafceea25c87e244cd05fe3684f483fc48f5c2a2859",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "args": [
+            "-Thtml"
+          ],
+          "status": 0,
+          "stdout": "<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"utf-8\"/>\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>\n  <style>\n    table.head, table.foot { width: 100%; }\n    td.head-rtitle, td.foot-os { text-align: right; }\n    td.head-vol { text-align: center; }\n    .Nd, .Bf, .Op { display: inline; }\n    .Pa, .Ad { font-style: italic; }\n    .Ms { font-weight: bold; }\n    .Bl-diag > dt { font-weight: bold; }\n    code.Nm, .Fl, .Cm, .Ic, code.In, .Fd, .Fn, .Cd { font-weight: bold;\n      font-family: inherit; }\n  </style>\n  <title>TEST(1)</title>\n</head>\n<body>\n<div class=\"head\" role=\"doc-pageheader\" aria-label=\"Manual header\n  line\"><span class=\"head-ltitle\">TEST(1)</span> <span class=\"head-vol\">General\n  Commands Manual</span> <span class=\"head-rtitle\">TEST(1)</span></div>\n<main class=\"manual-text\">\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NAME\"><a class=\"permalink\" href=\"#NAME\">NAME</a></h2>\n<p class=\"Pp\"><code class=\"Nm\">test</code> &#x2014;\n    <span class=\"Nd\" role=\"doc-subtitle\">column probe</span></p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"DESCRIPTION\"><a class=\"permalink\" href=\"#DESCRIPTION\">DESCRIPTION</a></h2>\n<table class=\"Bl-column Bl-compact\">\n  <tr id=\"A\">\n    <td><a class=\"permalink\" href=\"#A\"><span class=\"No\">A</span></a>\n    <br/>\n    </td>\n    <td>B</td>\n  </tr>\n</table>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NEXT\"><a class=\"permalink\" href=\"#NEXT\">NEXT</a></h2>\n<p class=\"Pp\"><span class=\"No\">END</span></p>\n</section>\n</main>\n<div class=\"foot\" role=\"doc-pagefooter\" aria-label=\"Manual footer\n  line\"><span class=\"foot-left\">Linux 6.18.40.1-microsoft-standard-WSL2</span>\n  <span class=\"foot-date\">October 4, 2026</span>\n  <span class=\"foot-right\">TEST(1)</span></div>\n</body>\n</html>\n",
+          "stderr": "",
+          "stdout_sha256": "f7d80297374f318e3d3adeec4a5639e6fd7cbce3dd812eb7d5df9a687f0ed086",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "args": [
+            "-Ttree"
+          ],
+          "status": 0,
+          "stdout": "title = \"TEST\"\nname  = \"test\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.40.1-microsoft-standard-WSL2\"\ndate  = \"October 4, 2026\"\n\nDd (elem) *1:2 NOPRT\n    October 4, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    TEST (text) 2:5\n    1 (text) 2:10\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          test (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            column probe (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      Bl (block) -column [ [xxxxxxxx] [xxxx] ] -compact *8:2\n        Bl (head) 8:2\n        Bl (body) 8:2\n            It (block) *9:2 ID=A\n              It (head) 9:2\n              It (body) 9:2\n                  Xo (block) 9:5\n                    Xo (head) 9:5\n                    Xo (body) 9:5\n                        No (elem) *10:2 HREF\n                            A (text) 10:5\n                        br (elem) *11:2\n              It (body) 12:5\n                  B (text) 12:8\nSh (block) *14:2\n  Sh (head) 14:2 ID=HREF\n      NEXT (text) 14:5\n  Sh (body) 14:2\n      No (elem) *15:2\n          END (text) 15:5\n",
+          "stderr": "",
+          "stdout_sha256": "243f401574fdb091c0dfd8f23d51fb65ee61b65b8e67e482d82213f538151ca4",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "args": [
+            "-Tlint",
+            "-Wall"
+          ],
+          "status": 0,
+          "stdout": "",
+          "stderr": "",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_rows": [
+        "     A           B"
+      ],
+      "stop_heading": "NEXT",
+      "ast_cells": [
+        {
+          "line": 9,
+          "column": 2,
+          "texts": [
+            {
+              "value": "A",
+              "line": 10,
+              "column": 5,
+              "line_start": false,
+              "no_fill": false
+            }
+          ]
+        },
+        {
+          "line": 12,
+          "column": 5,
+          "texts": [
+            {
+              "value": "B",
+              "line": 12,
+              "column": 8,
+              "line_start": false,
+              "no_fill": false
+            }
+          ]
+        }
+      ],
+      "break_after": false,
+      "reading_policy": "native-relative-hard-rows-no-source-margin",
+      "cli_rows": [
+        "A           B"
+      ],
+      "ui_rows_78": [
+        "   A           B"
+      ],
+      "payloads": [
+        "A",
+        "B"
+      ],
+      "linked": false
+    },
+    {
+      "id": "sp-reopened",
+      "source": ".Dd October 4, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd column probe\n.Sh DESCRIPTION\n.Bl -column -compact \"xxxxxxxx\" \"xxxx\"\n.It Xo\n.No A\n.sp 1\n.No Y\n.Xc Ta B\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "d76d1a7fa2a3a90fa86d91a918d77b35e6cf5a8356bc33b97671e7dd0a2ae73e",
+      "profiles": {
+        "ascii": {
+          "args": [
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "status": 0,
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt - column probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     A\n     Y           B\n\nN\bNE\bEX\bXT\bT\n     END\n\nLinux 6.18.40.1-microsoft-standard-WSL2\n                                October 4, 2026                        TEST(1)\n",
+          "stderr": "",
+          "stdout_sha256": "4e238018766e56669fc483a7579ee30cf55d3b712e9044f287047ef869c4e6f8",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "args": [
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "status": 0,
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – column probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     A\n     Y           B\n\nN\bNE\bEX\bXT\bT\n     END\n\nLinux 6.18.40.1-microsoft-standard-WSL2\n                                October 4, 2026                        TEST(1)\n",
+          "stderr": "",
+          "stdout_sha256": "f24302cb44705c2d92f32357fa590ef7bcb3c2fd19d9434659bf9162a53a371d",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "args": [
+            "-Thtml"
+          ],
+          "status": 0,
+          "stdout": "<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"utf-8\"/>\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>\n  <style>\n    table.head, table.foot { width: 100%; }\n    td.head-rtitle, td.foot-os { text-align: right; }\n    td.head-vol { text-align: center; }\n    .Nd, .Bf, .Op { display: inline; }\n    .Pa, .Ad { font-style: italic; }\n    .Ms { font-weight: bold; }\n    .Bl-diag > dt { font-weight: bold; }\n    code.Nm, .Fl, .Cm, .Ic, code.In, .Fd, .Fn, .Cd { font-weight: bold;\n      font-family: inherit; }\n  </style>\n  <title>TEST(1)</title>\n</head>\n<body>\n<div class=\"head\" role=\"doc-pageheader\" aria-label=\"Manual header\n  line\"><span class=\"head-ltitle\">TEST(1)</span> <span class=\"head-vol\">General\n  Commands Manual</span> <span class=\"head-rtitle\">TEST(1)</span></div>\n<main class=\"manual-text\">\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NAME\"><a class=\"permalink\" href=\"#NAME\">NAME</a></h2>\n<p class=\"Pp\"><code class=\"Nm\">test</code> &#x2014;\n    <span class=\"Nd\" role=\"doc-subtitle\">column probe</span></p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"DESCRIPTION\"><a class=\"permalink\" href=\"#DESCRIPTION\">DESCRIPTION</a></h2>\n<table class=\"Bl-column Bl-compact\">\n  <tr id=\"A\">\n    <td><a class=\"permalink\" href=\"#A\"><span class=\"No\">A</span></a>\n    <p class=\"Pp\"><span class=\"No\">Y</span></p>\n    </td>\n    <td>B</td>\n  </tr>\n</table>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NEXT\"><a class=\"permalink\" href=\"#NEXT\">NEXT</a></h2>\n<p class=\"Pp\"><span class=\"No\">END</span></p>\n</section>\n</main>\n<div class=\"foot\" role=\"doc-pagefooter\" aria-label=\"Manual footer\n  line\"><span class=\"foot-left\">Linux 6.18.40.1-microsoft-standard-WSL2</span>\n  <span class=\"foot-date\">October 4, 2026</span>\n  <span class=\"foot-right\">TEST(1)</span></div>\n</body>\n</html>\n",
+          "stderr": "",
+          "stdout_sha256": "8f71255ae9a3dde3dad3053f97d914c019c1bd91fa75fcfc4817f5da046f98cf",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "args": [
+            "-Ttree"
+          ],
+          "status": 0,
+          "stdout": "title = \"TEST\"\nname  = \"test\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.40.1-microsoft-standard-WSL2\"\ndate  = \"October 4, 2026\"\n\nDd (elem) *1:2 NOPRT\n    October 4, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    TEST (text) 2:5\n    1 (text) 2:10\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          test (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            column probe (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      Bl (block) -column [ [xxxxxxxx] [xxxx] ] -compact *8:2\n        Bl (head) 8:2\n        Bl (body) 8:2\n            It (block) *9:2 ID=A\n              It (head) 9:2\n              It (body) 9:2\n                  Xo (block) 9:5\n                    Xo (head) 9:5\n                    Xo (body) 9:5\n                        No (elem) *10:2 HREF\n                            A (text) 10:5\n                        sp (elem) *11:2\n                            1 (text) 11:5\n                        No (elem) *12:2\n                            Y (text) 12:5\n              It (body) 13:5\n                  B (text) 13:8\nSh (block) *15:2\n  Sh (head) 15:2 ID=HREF\n      NEXT (text) 15:5\n  Sh (body) 15:2\n      No (elem) *16:2\n          END (text) 16:5\n",
+          "stderr": "",
+          "stdout_sha256": "333bd16ffa551b1bcae5648465745950e4840373c461bb94837b1999ef0ff811",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "args": [
+            "-Tlint",
+            "-Wall"
+          ],
+          "status": 0,
+          "stdout": "",
+          "stderr": "",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_rows": [
+        "     A",
+        "     Y           B"
+      ],
+      "stop_heading": "NEXT",
+      "ast_cells": [
+        {
+          "line": 9,
+          "column": 2,
+          "texts": [
+            {
+              "value": "A",
+              "line": 10,
+              "column": 5,
+              "line_start": false,
+              "no_fill": false
+            },
+            {
+              "value": "1",
+              "line": 11,
+              "column": 5,
+              "line_start": false,
+              "no_fill": false
+            },
+            {
+              "value": "Y",
+              "line": 12,
+              "column": 5,
+              "line_start": false,
+              "no_fill": false
+            }
+          ]
+        },
+        {
+          "line": 13,
+          "column": 5,
+          "texts": [
+            {
+              "value": "B",
+              "line": 13,
+              "column": 8,
+              "line_start": false,
+              "no_fill": false
+            }
+          ]
+        }
+      ],
+      "break_after": false,
+      "reading_policy": "native-relative-hard-rows-no-source-margin",
+      "cli_rows": [
+        "A",
+        "Y           B"
+      ],
+      "ui_rows_78": [
+        "   A",
+        "   Y           B"
+      ],
+      "payloads": [
+        "A\nY",
+        "B"
+      ],
+      "linked": false
+    },
+    {
+      "id": "sp-empty-word",
+      "source": ".Dd October 4, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd column probe\n.Sh DESCRIPTION\n.Bl -column -compact \"xxxxxxxx\" \"xxxx\"\n.It Xo\n.No A\n.sp 1\n.No \"\"\n.Xc Ta B\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "8e4e6709c78d5ad1659ec352f3214431ffc0802052f6ae7ea8e3c0a1786a4c54",
+      "profiles": {
+        "ascii": {
+          "args": [
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "status": 0,
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt - column probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     A\n                 B\n\nN\bNE\bEX\bXT\bT\n     END\n\nLinux 6.18.40.1-microsoft-standard-WSL2\n                                October 4, 2026                        TEST(1)\n",
+          "stderr": "",
+          "stdout_sha256": "fc70c4db236b47ebb66abb14baf310b672b66d7fc7f904e5d4035ce0773b4571",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "args": [
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "status": 0,
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – column probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     A\n                 B\n\nN\bNE\bEX\bXT\bT\n     END\n\nLinux 6.18.40.1-microsoft-standard-WSL2\n                                October 4, 2026                        TEST(1)\n",
+          "stderr": "",
+          "stdout_sha256": "1f632d3f064ed1e622e4df87323f5db0c94b1a79aa146518529bbe3913e4d7f3",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "args": [
+            "-Thtml"
+          ],
+          "status": 0,
+          "stdout": "<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"utf-8\"/>\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>\n  <style>\n    table.head, table.foot { width: 100%; }\n    td.head-rtitle, td.foot-os { text-align: right; }\n    td.head-vol { text-align: center; }\n    .Nd, .Bf, .Op { display: inline; }\n    .Pa, .Ad { font-style: italic; }\n    .Ms { font-weight: bold; }\n    .Bl-diag > dt { font-weight: bold; }\n    code.Nm, .Fl, .Cm, .Ic, code.In, .Fd, .Fn, .Cd { font-weight: bold;\n      font-family: inherit; }\n  </style>\n  <title>TEST(1)</title>\n</head>\n<body>\n<div class=\"head\" role=\"doc-pageheader\" aria-label=\"Manual header\n  line\"><span class=\"head-ltitle\">TEST(1)</span> <span class=\"head-vol\">General\n  Commands Manual</span> <span class=\"head-rtitle\">TEST(1)</span></div>\n<main class=\"manual-text\">\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NAME\"><a class=\"permalink\" href=\"#NAME\">NAME</a></h2>\n<p class=\"Pp\"><code class=\"Nm\">test</code> &#x2014;\n    <span class=\"Nd\" role=\"doc-subtitle\">column probe</span></p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"DESCRIPTION\"><a class=\"permalink\" href=\"#DESCRIPTION\">DESCRIPTION</a></h2>\n<table class=\"Bl-column Bl-compact\">\n  <tr id=\"A\">\n    <td><a class=\"permalink\" href=\"#A\"><span class=\"No\">A</span></a>\n    <p class=\"Pp\"><span class=\"No\"></span></p>\n    </td>\n    <td>B</td>\n  </tr>\n</table>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NEXT\"><a class=\"permalink\" href=\"#NEXT\">NEXT</a></h2>\n<p class=\"Pp\"><span class=\"No\">END</span></p>\n</section>\n</main>\n<div class=\"foot\" role=\"doc-pagefooter\" aria-label=\"Manual footer\n  line\"><span class=\"foot-left\">Linux 6.18.40.1-microsoft-standard-WSL2</span>\n  <span class=\"foot-date\">October 4, 2026</span>\n  <span class=\"foot-right\">TEST(1)</span></div>\n</body>\n</html>\n",
+          "stderr": "",
+          "stdout_sha256": "68b8713af8eeebcf553f98860b025cda4090affe127a410b403fd6d51cf30fde",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "args": [
+            "-Ttree"
+          ],
+          "status": 0,
+          "stdout": "title = \"TEST\"\nname  = \"test\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.40.1-microsoft-standard-WSL2\"\ndate  = \"October 4, 2026\"\n\nDd (elem) *1:2 NOPRT\n    October 4, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    TEST (text) 2:5\n    1 (text) 2:10\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          test (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            column probe (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      Bl (block) -column [ [xxxxxxxx] [xxxx] ] -compact *8:2\n        Bl (head) 8:2\n        Bl (body) 8:2\n            It (block) *9:2 ID=A\n              It (head) 9:2\n              It (body) 9:2\n                  Xo (block) 9:5\n                    Xo (head) 9:5\n                    Xo (body) 9:5\n                        No (elem) *10:2 HREF\n                            A (text) 10:5\n                        sp (elem) *11:2\n                            1 (text) 11:5\n                        No (elem) *12:2\n                             (text) 12:5\n              It (body) 13:5\n                  B (text) 13:8\nSh (block) *15:2\n  Sh (head) 15:2 ID=HREF\n      NEXT (text) 15:5\n  Sh (body) 15:2\n      No (elem) *16:2\n          END (text) 16:5\n",
+          "stderr": "",
+          "stdout_sha256": "320b00ea6d3b3642a8f06e4469e407b076ef8938b8d5241b89d69af65930edaf",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "args": [
+            "-Tlint",
+            "-Wall"
+          ],
+          "status": 0,
+          "stdout": "",
+          "stderr": "",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_rows": [
+        "     A",
+        "                 B"
+      ],
+      "stop_heading": "NEXT",
+      "ast_cells": [
+        {
+          "line": 9,
+          "column": 2,
+          "texts": [
+            {
+              "value": "A",
+              "line": 10,
+              "column": 5,
+              "line_start": false,
+              "no_fill": false
+            },
+            {
+              "value": "1",
+              "line": 11,
+              "column": 5,
+              "line_start": false,
+              "no_fill": false
+            },
+            {
+              "value": "",
+              "line": 12,
+              "column": 5,
+              "line_start": false,
+              "no_fill": false
+            }
+          ]
+        },
+        {
+          "line": 13,
+          "column": 5,
+          "texts": [
+            {
+              "value": "B",
+              "line": 13,
+              "column": 8,
+              "line_start": false,
+              "no_fill": false
+            }
+          ]
+        }
+      ],
+      "break_after": true,
+      "reading_policy": "native-relative-hard-rows-no-source-margin",
+      "cli_rows": [
+        "A",
+        "            B"
+      ],
+      "ui_rows_78": [
+        "   A",
+        "               B"
+      ],
+      "payloads": [
+        "A",
+        "B"
+      ],
+      "linked": false,
+      "receipt_rule": "Empty No operand or zero-width No after sp1 writes no accepted new graph; the latest term_vspace close remains current, without an inline delimiter."
+    },
+    {
+      "id": "sp-zero-cell",
+      "source": ".Dd October 4, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd column probe\n.Sh DESCRIPTION\n.Bl -column -compact \"xxxxxxxx\" \"xxxx\"\n.It Xo\n.No A\n.sp 1\n.No \"\\&\"\n.Xc Ta B\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "135e22c1dea64e5017e916e68e89a01b43866919948347544530cb4dd8594f4b",
+      "profiles": {
+        "ascii": {
+          "args": [
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "status": 0,
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt - column probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     A\n                 B\n\nN\bNE\bEX\bXT\bT\n     END\n\nLinux 6.18.40.1-microsoft-standard-WSL2\n                                October 4, 2026                        TEST(1)\n",
+          "stderr": "",
+          "stdout_sha256": "fc70c4db236b47ebb66abb14baf310b672b66d7fc7f904e5d4035ce0773b4571",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "args": [
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "status": 0,
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – column probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     A\n                 B\n\nN\bNE\bEX\bXT\bT\n     END\n\nLinux 6.18.40.1-microsoft-standard-WSL2\n                                October 4, 2026                        TEST(1)\n",
+          "stderr": "",
+          "stdout_sha256": "1f632d3f064ed1e622e4df87323f5db0c94b1a79aa146518529bbe3913e4d7f3",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "args": [
+            "-Thtml"
+          ],
+          "status": 0,
+          "stdout": "<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"utf-8\"/>\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>\n  <style>\n    table.head, table.foot { width: 100%; }\n    td.head-rtitle, td.foot-os { text-align: right; }\n    td.head-vol { text-align: center; }\n    .Nd, .Bf, .Op { display: inline; }\n    .Pa, .Ad { font-style: italic; }\n    .Ms { font-weight: bold; }\n    .Bl-diag > dt { font-weight: bold; }\n    code.Nm, .Fl, .Cm, .Ic, code.In, .Fd, .Fn, .Cd { font-weight: bold;\n      font-family: inherit; }\n  </style>\n  <title>TEST(1)</title>\n</head>\n<body>\n<div class=\"head\" role=\"doc-pageheader\" aria-label=\"Manual header\n  line\"><span class=\"head-ltitle\">TEST(1)</span> <span class=\"head-vol\">General\n  Commands Manual</span> <span class=\"head-rtitle\">TEST(1)</span></div>\n<main class=\"manual-text\">\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NAME\"><a class=\"permalink\" href=\"#NAME\">NAME</a></h2>\n<p class=\"Pp\"><code class=\"Nm\">test</code> &#x2014;\n    <span class=\"Nd\" role=\"doc-subtitle\">column probe</span></p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"DESCRIPTION\"><a class=\"permalink\" href=\"#DESCRIPTION\">DESCRIPTION</a></h2>\n<table class=\"Bl-column Bl-compact\">\n  <tr id=\"A\">\n    <td><a class=\"permalink\" href=\"#A\"><span class=\"No\">A</span></a>\n    <p class=\"Pp\"><span class=\"No\"></span></p>\n    </td>\n    <td>B</td>\n  </tr>\n</table>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NEXT\"><a class=\"permalink\" href=\"#NEXT\">NEXT</a></h2>\n<p class=\"Pp\"><span class=\"No\">END</span></p>\n</section>\n</main>\n<div class=\"foot\" role=\"doc-pagefooter\" aria-label=\"Manual footer\n  line\"><span class=\"foot-left\">Linux 6.18.40.1-microsoft-standard-WSL2</span>\n  <span class=\"foot-date\">October 4, 2026</span>\n  <span class=\"foot-right\">TEST(1)</span></div>\n</body>\n</html>\n",
+          "stderr": "",
+          "stdout_sha256": "68b8713af8eeebcf553f98860b025cda4090affe127a410b403fd6d51cf30fde",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "args": [
+            "-Ttree"
+          ],
+          "status": 0,
+          "stdout": "title = \"TEST\"\nname  = \"test\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.40.1-microsoft-standard-WSL2\"\ndate  = \"October 4, 2026\"\n\nDd (elem) *1:2 NOPRT\n    October 4, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    TEST (text) 2:5\n    1 (text) 2:10\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          test (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            column probe (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      Bl (block) -column [ [xxxxxxxx] [xxxx] ] -compact *8:2\n        Bl (head) 8:2\n        Bl (body) 8:2\n            It (block) *9:2 ID=A\n              It (head) 9:2\n              It (body) 9:2\n                  Xo (block) 9:5\n                    Xo (head) 9:5\n                    Xo (body) 9:5\n                        No (elem) *10:2 HREF\n                            A (text) 10:5\n                        sp (elem) *11:2\n                            1 (text) 11:5\n                        No (elem) *12:2\n                            \\& (text) 12:5\n              It (body) 13:5\n                  B (text) 13:8\nSh (block) *15:2\n  Sh (head) 15:2 ID=HREF\n      NEXT (text) 15:5\n  Sh (body) 15:2\n      No (elem) *16:2\n          END (text) 16:5\n",
+          "stderr": "",
+          "stdout_sha256": "6d5cd4b0bcda1c18decc1b51b124bebc54335fb993ca023532d6840c9c44b1e1",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "args": [
+            "-Tlint",
+            "-Wall"
+          ],
+          "status": 0,
+          "stdout": "",
+          "stderr": "",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_rows": [
+        "     A",
+        "                 B"
+      ],
+      "stop_heading": "NEXT",
+      "ast_cells": [
+        {
+          "line": 9,
+          "column": 2,
+          "texts": [
+            {
+              "value": "A",
+              "line": 10,
+              "column": 5,
+              "line_start": false,
+              "no_fill": false
+            },
+            {
+              "value": "1",
+              "line": 11,
+              "column": 5,
+              "line_start": false,
+              "no_fill": false
+            },
+            {
+              "value": "\\&",
+              "line": 12,
+              "column": 5,
+              "line_start": false,
+              "no_fill": false
+            }
+          ]
+        },
+        {
+          "line": 13,
+          "column": 5,
+          "texts": [
+            {
+              "value": "B",
+              "line": 13,
+              "column": 8,
+              "line_start": false,
+              "no_fill": false
+            }
+          ]
+        }
+      ],
+      "break_after": true,
+      "reading_policy": "native-relative-hard-rows-no-source-margin",
+      "cli_rows": [
+        "A",
+        "            B"
+      ],
+      "ui_rows_78": [
+        "   A",
+        "               B"
+      ],
+      "payloads": [
+        "A",
+        "B"
+      ],
+      "linked": false,
+      "receipt_rule": "Empty No operand or zero-width No after sp1 writes no accepted new graph; the latest term_vspace close remains current, without an inline delimiter."
+    },
+    {
+      "id": "sp-style-only",
+      "source": ".Dd October 4, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd column probe\n.Sh DESCRIPTION\n.Bl -column -compact \"xxxxxxxx\" \"xxxx\"\n.It Xo\n.No A\n.sp 1\n.ft B\n.Xc Ta B\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "ba5e9c1b5b20277242f0cb2d8c21e8e58193c23d8f5751b1a0d494e9e1838b4d",
+      "profiles": {
+        "ascii": {
+          "args": [
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "status": 0,
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt - column probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     A\n                 B\bB\n\nN\bNE\bEX\bXT\bT\n     END\n\nLinux 6.18.40.1-microsoft-standard-WSL2\n                                October 4, 2026                        TEST(1)\n",
+          "stderr": "",
+          "stdout_sha256": "65a5683eedb15104371bf4422c2c5de3fdfdb0a824a7f469694cae93cb7977e0",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "args": [
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "status": 0,
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – column probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     A\n                 B\bB\n\nN\bNE\bEX\bXT\bT\n     END\n\nLinux 6.18.40.1-microsoft-standard-WSL2\n                                October 4, 2026                        TEST(1)\n",
+          "stderr": "",
+          "stdout_sha256": "3bd37aa8b9a5227b95532429fb62294216bb68036dfeb834914fd6c1a4f6498c",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "args": [
+            "-Thtml"
+          ],
+          "status": 0,
+          "stdout": "<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"utf-8\"/>\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>\n  <style>\n    table.head, table.foot { width: 100%; }\n    td.head-rtitle, td.foot-os { text-align: right; }\n    td.head-vol { text-align: center; }\n    .Nd, .Bf, .Op { display: inline; }\n    .Pa, .Ad { font-style: italic; }\n    .Ms { font-weight: bold; }\n    .Bl-diag > dt { font-weight: bold; }\n    code.Nm, .Fl, .Cm, .Ic, code.In, .Fd, .Fn, .Cd { font-weight: bold;\n      font-family: inherit; }\n  </style>\n  <title>TEST(1)</title>\n</head>\n<body>\n<div class=\"head\" role=\"doc-pageheader\" aria-label=\"Manual header\n  line\"><span class=\"head-ltitle\">TEST(1)</span> <span class=\"head-vol\">General\n  Commands Manual</span> <span class=\"head-rtitle\">TEST(1)</span></div>\n<main class=\"manual-text\">\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NAME\"><a class=\"permalink\" href=\"#NAME\">NAME</a></h2>\n<p class=\"Pp\"><code class=\"Nm\">test</code> &#x2014;\n    <span class=\"Nd\" role=\"doc-subtitle\">column probe</span></p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"DESCRIPTION\"><a class=\"permalink\" href=\"#DESCRIPTION\">DESCRIPTION</a></h2>\n<table class=\"Bl-column Bl-compact\">\n  <tr id=\"A\">\n    <td><a class=\"permalink\" href=\"#A\"><span class=\"No\">A</span></a>\n    <p class=\"Pp\"></p>\n    </td>\n    <td><b>B</b></td>\n  </tr>\n</table>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NEXT\"><a class=\"permalink\" href=\"#NEXT\"><b>NEXT</b></a></h2>\n<p class=\"Pp\"><span class=\"No\"><b>END</b></span></p>\n</section>\n</main>\n<div class=\"foot\" role=\"doc-pagefooter\" aria-label=\"Manual footer\n  line\"><span class=\"foot-left\"><b>Linux\n  6.18.40.1-microsoft-standard-WSL2</b></span>\n  <span class=\"foot-date\"><b>October 4, 2026</b></span>\n  <span class=\"foot-right\"><b>TEST(1)</b></span></div>\n</body>\n</html>\n",
+          "stderr": "",
+          "stdout_sha256": "6a8896578f41c77cbf832c209e545055b9e1462823cf9c68cf1979e2903d78e1",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "args": [
+            "-Ttree"
+          ],
+          "status": 0,
+          "stdout": "title = \"TEST\"\nname  = \"test\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.40.1-microsoft-standard-WSL2\"\ndate  = \"October 4, 2026\"\n\nDd (elem) *1:2 NOPRT\n    October 4, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    TEST (text) 2:5\n    1 (text) 2:10\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          test (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            column probe (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      Bl (block) -column [ [xxxxxxxx] [xxxx] ] -compact *8:2\n        Bl (head) 8:2\n        Bl (body) 8:2\n            It (block) *9:2 ID=A\n              It (head) 9:2\n              It (body) 9:2\n                  Xo (block) 9:5\n                    Xo (head) 9:5\n                    Xo (body) 9:5\n                        No (elem) *10:2 HREF\n                            A (text) 10:5\n                        sp (elem) *11:2\n                            1 (text) 11:5\n                        ft (elem) *12:2\n                            B (text) 12:5\n              It (body) 13:5\n                  B (text) 13:8\nSh (block) *15:2\n  Sh (head) 15:2 ID=HREF\n      NEXT (text) 15:5\n  Sh (body) 15:2\n      No (elem) *16:2\n          END (text) 16:5\n",
+          "stderr": "",
+          "stdout_sha256": "522bb7c99e6461e3059077f3b0777eaef9824dcf7b864879449b1f745b74c357",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "args": [
+            "-Tlint",
+            "-Wall"
+          ],
+          "status": 0,
+          "stdout": "",
+          "stderr": "",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_rows": [
+        "     A",
+        "                 B"
+      ],
+      "stop_heading": "NEXT",
+      "ast_cells": [
+        {
+          "line": 9,
+          "column": 2,
+          "texts": [
+            {
+              "value": "A",
+              "line": 10,
+              "column": 5,
+              "line_start": false,
+              "no_fill": false
+            },
+            {
+              "value": "1",
+              "line": 11,
+              "column": 5,
+              "line_start": false,
+              "no_fill": false
+            },
+            {
+              "value": "B",
+              "line": 12,
+              "column": 5,
+              "line_start": false,
+              "no_fill": false
+            }
+          ]
+        },
+        {
+          "line": 13,
+          "column": 5,
+          "texts": [
+            {
+              "value": "B",
+              "line": 13,
+              "column": 8,
+              "line_start": false,
+              "no_fill": false
+            }
+          ]
+        }
+      ],
+      "break_after": true,
+      "reading_policy": "native-relative-hard-rows-no-source-margin",
+      "cli_rows": [
+        "A",
+        "            B"
+      ],
+      "ui_rows_78": [
+        "   A",
+        "               B"
+      ],
+      "payloads": [
+        "A",
+        "B"
+      ],
+      "linked": false
+    },
+    {
+      "id": "sp-anchor-only",
+      "source": ".Dd October 4, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd column probe\n.Sh DESCRIPTION\n.Bl -column -compact \"xxxxxxxx\" \"xxxx\"\n.It Xo\n.No A\n.sp 1\n.Tg point\n.Xc Ta B\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "8fa17f2489a6eb84f6fe3ab6cb5dfb09b6b84fc9bc4c56dceec3085b35b48025",
+      "profiles": {
+        "ascii": {
+          "args": [
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "status": 0,
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt - column probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     A\n                 B\n\nN\bNE\bEX\bXT\bT\n     END\n\nLinux 6.18.40.1-microsoft-standard-WSL2\n                                October 4, 2026                        TEST(1)\n",
+          "stderr": "",
+          "stdout_sha256": "fc70c4db236b47ebb66abb14baf310b672b66d7fc7f904e5d4035ce0773b4571",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "args": [
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "status": 0,
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – column probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     A\n                 B\n\nN\bNE\bEX\bXT\bT\n     END\n\nLinux 6.18.40.1-microsoft-standard-WSL2\n                                October 4, 2026                        TEST(1)\n",
+          "stderr": "",
+          "stdout_sha256": "1f632d3f064ed1e622e4df87323f5db0c94b1a79aa146518529bbe3913e4d7f3",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "args": [
+            "-Thtml"
+          ],
+          "status": 0,
+          "stdout": "<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"utf-8\"/>\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>\n  <style>\n    table.head, table.foot { width: 100%; }\n    td.head-rtitle, td.foot-os { text-align: right; }\n    td.head-vol { text-align: center; }\n    .Nd, .Bf, .Op { display: inline; }\n    .Pa, .Ad { font-style: italic; }\n    .Ms { font-weight: bold; }\n    .Bl-diag > dt { font-weight: bold; }\n    code.Nm, .Fl, .Cm, .Ic, code.In, .Fd, .Fn, .Cd { font-weight: bold;\n      font-family: inherit; }\n  </style>\n  <title>TEST(1)</title>\n</head>\n<body>\n<div class=\"head\" role=\"doc-pageheader\" aria-label=\"Manual header\n  line\"><span class=\"head-ltitle\">TEST(1)</span> <span class=\"head-vol\">General\n  Commands Manual</span> <span class=\"head-rtitle\">TEST(1)</span></div>\n<main class=\"manual-text\">\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NAME\"><a class=\"permalink\" href=\"#NAME\">NAME</a></h2>\n<p class=\"Pp\"><code class=\"Nm\">test</code> &#x2014;\n    <span class=\"Nd\" role=\"doc-subtitle\">column probe</span></p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"DESCRIPTION\"><a class=\"permalink\" href=\"#DESCRIPTION\">DESCRIPTION</a></h2>\n<table class=\"Bl-column Bl-compact\">\n  <tr id=\"A\">\n    <td><a class=\"permalink\" href=\"#A\"><span class=\"No\">A</span></a>\n    <p class=\"Pp\"></p>\n    </td>\n    <td>B</td>\n  </tr>\n</table>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"point\"><a class=\"permalink\" href=\"#point\">NEXT</a></h2>\n<p class=\"Pp\"><span class=\"No\">END</span></p>\n</section>\n</main>\n<div class=\"foot\" role=\"doc-pagefooter\" aria-label=\"Manual footer\n  line\"><span class=\"foot-left\">Linux 6.18.40.1-microsoft-standard-WSL2</span>\n  <span class=\"foot-date\">October 4, 2026</span>\n  <span class=\"foot-right\">TEST(1)</span></div>\n</body>\n</html>\n",
+          "stderr": "",
+          "stdout_sha256": "cdd6683c8910009ad734fef29ee127a856149b8b7145d610bc4342b3942415be",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "args": [
+            "-Ttree"
+          ],
+          "status": 0,
+          "stdout": "title = \"TEST\"\nname  = \"test\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.40.1-microsoft-standard-WSL2\"\ndate  = \"October 4, 2026\"\n\nDd (elem) *1:2 NOPRT\n    October 4, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    TEST (text) 2:5\n    1 (text) 2:10\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          test (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            column probe (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      Bl (block) -column [ [xxxxxxxx] [xxxx] ] -compact *8:2\n        Bl (head) 8:2\n        Bl (body) 8:2\n            It (block) *9:2 ID=A\n              It (head) 9:2\n              It (body) 9:2\n                  Xo (block) 9:5\n                    Xo (head) 9:5\n                    Xo (body) 9:5\n                        No (elem) *10:2 HREF\n                            A (text) 10:5\n                        sp (elem) *11:2\n                            1 (text) 11:5\n                        Tg (elem) *12:2 NOPRT\n                            point (text) 12:5\n              It (body) 13:5\n                  B (text) 13:8\nSh (block) *15:2\n  Sh (head) 15:2 ID=HREF=point\n      NEXT (text) 15:5\n  Sh (body) 15:2\n      No (elem) *16:2\n          END (text) 16:5\n",
+          "stderr": "",
+          "stdout_sha256": "cb6eb299516c2bf20fbb88f4f4554c8dff25b34e9267c575d6698f357558b1a7",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "args": [
+            "-Tlint",
+            "-Wall"
+          ],
+          "status": 0,
+          "stdout": "",
+          "stderr": "",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_rows": [
+        "     A",
+        "                 B"
+      ],
+      "stop_heading": "NEXT",
+      "ast_cells": [
+        {
+          "line": 9,
+          "column": 2,
+          "texts": [
+            {
+              "value": "A",
+              "line": 10,
+              "column": 5,
+              "line_start": false,
+              "no_fill": false
+            },
+            {
+              "value": "1",
+              "line": 11,
+              "column": 5,
+              "line_start": false,
+              "no_fill": false
+            },
+            {
+              "value": "point",
+              "line": 12,
+              "column": 5,
+              "line_start": false,
+              "no_fill": false
+            }
+          ]
+        },
+        {
+          "line": 13,
+          "column": 5,
+          "texts": [
+            {
+              "value": "B",
+              "line": 13,
+              "column": 8,
+              "line_start": false,
+              "no_fill": false
+            }
+          ]
+        }
+      ],
+      "break_after": true,
+      "reading_policy": "native-relative-hard-rows-no-source-margin",
+      "cli_rows": [
+        "A",
+        "            B"
+      ],
+      "ui_rows_78": [
+        "   A",
+        "               B"
+      ],
+      "payloads": [
+        "A",
+        "B"
+      ],
+      "linked": false
+    },
+    {
+      "id": "nofill-sp-one",
+      "source": ".Dd October 4, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd column probe\n.Sh DESCRIPTION\n.Bl -column -compact \"xxxxxxxx\" \"xxxx\"\n.It Xo\n.nf\nA\n.sp 1\n.fi\n.Xc Ta B\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "fca37c8a960ccaa94571ae4fd0ae94a2b599c07d54e9913e8b789c23ab87192b",
+      "profiles": {
+        "ascii": {
+          "args": [
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "status": 0,
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt - column probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     A\n                 B\n\nN\bNE\bEX\bXT\bT\n     END\n\nLinux 6.18.40.1-microsoft-standard-WSL2\n                                October 4, 2026                        TEST(1)\n",
+          "stderr": "",
+          "stdout_sha256": "fc70c4db236b47ebb66abb14baf310b672b66d7fc7f904e5d4035ce0773b4571",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "args": [
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "status": 0,
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – column probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     A\n                 B\n\nN\bNE\bEX\bXT\bT\n     END\n\nLinux 6.18.40.1-microsoft-standard-WSL2\n                                October 4, 2026                        TEST(1)\n",
+          "stderr": "",
+          "stdout_sha256": "1f632d3f064ed1e622e4df87323f5db0c94b1a79aa146518529bbe3913e4d7f3",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "args": [
+            "-Thtml"
+          ],
+          "status": 0,
+          "stdout": "<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"utf-8\"/>\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>\n  <style>\n    table.head, table.foot { width: 100%; }\n    td.head-rtitle, td.foot-os { text-align: right; }\n    td.head-vol { text-align: center; }\n    .Nd, .Bf, .Op { display: inline; }\n    .Pa, .Ad { font-style: italic; }\n    .Ms { font-weight: bold; }\n    .Bl-diag > dt { font-weight: bold; }\n    code.Nm, .Fl, .Cm, .Ic, code.In, .Fd, .Fn, .Cd { font-weight: bold;\n      font-family: inherit; }\n  </style>\n  <title>TEST(1)</title>\n</head>\n<body>\n<div class=\"head\" role=\"doc-pageheader\" aria-label=\"Manual header\n  line\"><span class=\"head-ltitle\">TEST(1)</span> <span class=\"head-vol\">General\n  Commands Manual</span> <span class=\"head-rtitle\">TEST(1)</span></div>\n<main class=\"manual-text\">\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NAME\"><a class=\"permalink\" href=\"#NAME\">NAME</a></h2>\n<p class=\"Pp\"><code class=\"Nm\">test</code> &#x2014;\n    <span class=\"Nd\" role=\"doc-subtitle\">column probe</span></p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"DESCRIPTION\"><a class=\"permalink\" href=\"#DESCRIPTION\">DESCRIPTION</a></h2>\n<table class=\"Bl-column Bl-compact\">\n  <tr>\n    <td>\n    <pre>A\n\n    </pre>\n    </td>\n    <td>B</td>\n  </tr>\n</table>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NEXT\"><a class=\"permalink\" href=\"#NEXT\">NEXT</a></h2>\n<p class=\"Pp\"><span class=\"No\">END</span></p>\n</section>\n</main>\n<div class=\"foot\" role=\"doc-pagefooter\" aria-label=\"Manual footer\n  line\"><span class=\"foot-left\">Linux 6.18.40.1-microsoft-standard-WSL2</span>\n  <span class=\"foot-date\">October 4, 2026</span>\n  <span class=\"foot-right\">TEST(1)</span></div>\n</body>\n</html>\n",
+          "stderr": "",
+          "stdout_sha256": "98b9237384f8908d62eae457cfc8f03aaee1b2c5f07e0a58c596f698fd865aea",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "args": [
+            "-Ttree"
+          ],
+          "status": 0,
+          "stdout": "title = \"TEST\"\nname  = \"test\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.40.1-microsoft-standard-WSL2\"\ndate  = \"October 4, 2026\"\n\nDd (elem) *1:2 NOPRT\n    October 4, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    TEST (text) 2:5\n    1 (text) 2:10\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          test (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            column probe (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      Bl (block) -column [ [xxxxxxxx] [xxxx] ] -compact *8:2\n        Bl (head) 8:2\n        Bl (body) 8:2\n            It (block) *9:2\n              It (head) 9:2\n              It (body) 9:2\n                  Xo (block) 9:5\n                    Xo (head) 9:5\n                    Xo (body) 9:5\n                        nf (elem) *10:2\n                        A (text) *11:1 NOFILL\n                        sp (elem) *12:2 NOFILL\n                            1 (text) 12:5 NOFILL\n                        fi (elem) *13:2 NOFILL\n              It (body) 14:5\n                  B (text) 14:8\nSh (block) *16:2\n  Sh (head) 16:2 ID=HREF\n      NEXT (text) 16:5\n  Sh (body) 16:2\n      No (elem) *17:2\n          END (text) 17:5\n",
+          "stderr": "",
+          "stdout_sha256": "f326044a1934902ecf115831e5439a04098e97c2ce58947e137ab996aeea7747",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "args": [
+            "-Tlint",
+            "-Wall"
+          ],
+          "status": 0,
+          "stdout": "",
+          "stderr": "",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_rows": [
+        "     A",
+        "                 B"
+      ],
+      "stop_heading": "NEXT",
+      "ast_cells": [
+        {
+          "line": 9,
+          "column": 2,
+          "texts": [
+            {
+              "value": "A",
+              "line": 11,
+              "column": 1,
+              "line_start": true,
+              "no_fill": true
+            },
+            {
+              "value": "1",
+              "line": 12,
+              "column": 5,
+              "line_start": false,
+              "no_fill": true
+            }
+          ]
+        },
+        {
+          "line": 14,
+          "column": 5,
+          "texts": [
+            {
+              "value": "B",
+              "line": 14,
+              "column": 8,
+              "line_start": false,
+              "no_fill": false
+            }
+          ]
+        }
+      ],
+      "break_after": true,
+      "reading_policy": "native-relative-hard-rows-no-source-margin",
+      "cli_rows": [
+        "A",
+        "            B"
+      ],
+      "ui_rows_78": [
+        "   A",
+        "               B"
+      ],
+      "payloads": [
+        "A",
+        "B"
+      ],
+      "linked": false
+    },
+    {
+      "id": "literal-sp-one",
+      "source": ".Dd October 4, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd column probe\n.Sh DESCRIPTION\n.Bl -column -compact \"xxxxxxxx\" \"xxxx\"\n.It Xo\n.Bd -literal -compact\nA\n.sp 1\n.Ed\n.Xc Ta B\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "e41408a41815a655d619a4289757dae7d3aaa77e2cf6150205d827396afc16f7",
+      "profiles": {
+        "ascii": {
+          "args": [
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "status": 0,
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt - column probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     A\n                 B\n\nN\bNE\bEX\bXT\bT\n     END\n\nLinux 6.18.40.1-microsoft-standard-WSL2\n                                October 4, 2026                        TEST(1)\n",
+          "stderr": "",
+          "stdout_sha256": "fc70c4db236b47ebb66abb14baf310b672b66d7fc7f904e5d4035ce0773b4571",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "args": [
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "status": 0,
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – column probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     A\n                 B\n\nN\bNE\bEX\bXT\bT\n     END\n\nLinux 6.18.40.1-microsoft-standard-WSL2\n                                October 4, 2026                        TEST(1)\n",
+          "stderr": "",
+          "stdout_sha256": "1f632d3f064ed1e622e4df87323f5db0c94b1a79aa146518529bbe3913e4d7f3",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "args": [
+            "-Thtml"
+          ],
+          "status": 0,
+          "stdout": "<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"utf-8\"/>\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>\n  <style>\n    table.head, table.foot { width: 100%; }\n    td.head-rtitle, td.foot-os { text-align: right; }\n    td.head-vol { text-align: center; }\n    .Nd, .Bf, .Op { display: inline; }\n    .Pa, .Ad { font-style: italic; }\n    .Ms { font-weight: bold; }\n    .Bl-diag > dt { font-weight: bold; }\n    code.Nm, .Fl, .Cm, .Ic, code.In, .Fd, .Fn, .Cd { font-weight: bold;\n      font-family: inherit; }\n  </style>\n  <title>TEST(1)</title>\n</head>\n<body>\n<div class=\"head\" role=\"doc-pageheader\" aria-label=\"Manual header\n  line\"><span class=\"head-ltitle\">TEST(1)</span> <span class=\"head-vol\">General\n  Commands Manual</span> <span class=\"head-rtitle\">TEST(1)</span></div>\n<main class=\"manual-text\">\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NAME\"><a class=\"permalink\" href=\"#NAME\">NAME</a></h2>\n<p class=\"Pp\"><code class=\"Nm\">test</code> &#x2014;\n    <span class=\"Nd\" role=\"doc-subtitle\">column probe</span></p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"DESCRIPTION\"><a class=\"permalink\" href=\"#DESCRIPTION\">DESCRIPTION</a></h2>\n<table class=\"Bl-column Bl-compact\">\n  <tr>\n    <td>\n    <div class=\"Bd Li\">\n    <pre>A\n\n    </pre>\n    </div>\n    </td>\n    <td>B</td>\n  </tr>\n</table>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NEXT\"><a class=\"permalink\" href=\"#NEXT\">NEXT</a></h2>\n<p class=\"Pp\"><span class=\"No\">END</span></p>\n</section>\n</main>\n<div class=\"foot\" role=\"doc-pagefooter\" aria-label=\"Manual footer\n  line\"><span class=\"foot-left\">Linux 6.18.40.1-microsoft-standard-WSL2</span>\n  <span class=\"foot-date\">October 4, 2026</span>\n  <span class=\"foot-right\">TEST(1)</span></div>\n</body>\n</html>\n",
+          "stderr": "",
+          "stdout_sha256": "9e5ff51d3eccbcd19c5929d38c7dbfca876f446b7be061db885daf8de81dfdef",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "args": [
+            "-Ttree"
+          ],
+          "status": 0,
+          "stdout": "title = \"TEST\"\nname  = \"test\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.40.1-microsoft-standard-WSL2\"\ndate  = \"October 4, 2026\"\n\nDd (elem) *1:2 NOPRT\n    October 4, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    TEST (text) 2:5\n    1 (text) 2:10\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          test (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            column probe (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      Bl (block) -column [ [xxxxxxxx] [xxxx] ] -compact *8:2\n        Bl (head) 8:2\n        Bl (body) 8:2\n            It (block) *9:2\n              It (head) 9:2\n              It (body) 9:2\n                  Xo (block) 9:5\n                    Xo (head) 9:5\n                    Xo (body) 9:5\n                        Bd (block) -literal -compact *10:2\n                          Bd (head) 10:2\n                          Bd (body) 10:2\n                              A (text) *11:1 NOFILL\n                              sp (elem) *12:2 NOFILL\n                                  1 (text) 12:5 NOFILL\n              It (body) 14:5\n                  B (text) 14:8\nSh (block) *16:2\n  Sh (head) 16:2 ID=HREF\n      NEXT (text) 16:5\n  Sh (body) 16:2\n      No (elem) *17:2\n          END (text) 17:5\n",
+          "stderr": "",
+          "stdout_sha256": "fa75d42da4a429174fc51cbbfe59f6a0f15236bb7a6f79c0acc150d545ab5e16",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "args": [
+            "-Tlint",
+            "-Wall"
+          ],
+          "status": 0,
+          "stdout": "",
+          "stderr": "",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_rows": [
+        "     A",
+        "                 B"
+      ],
+      "stop_heading": "NEXT",
+      "ast_cells": [
+        {
+          "line": 9,
+          "column": 2,
+          "texts": [
+            {
+              "value": "A",
+              "line": 11,
+              "column": 1,
+              "line_start": true,
+              "no_fill": true
+            },
+            {
+              "value": "1",
+              "line": 12,
+              "column": 5,
+              "line_start": false,
+              "no_fill": true
+            }
+          ]
+        },
+        {
+          "line": 14,
+          "column": 5,
+          "texts": [
+            {
+              "value": "B",
+              "line": 14,
+              "column": 8,
+              "line_start": false,
+              "no_fill": false
+            }
+          ]
+        }
+      ],
+      "break_after": true,
+      "reading_policy": "native-relative-hard-rows-no-source-margin",
+      "cli_rows": [
+        "A",
+        "            B"
+      ],
+      "ui_rows_78": [
+        "   A",
+        "               B"
+      ],
+      "payloads": [
+        "A",
+        "B"
+      ],
+      "linked": false
+    },
+    {
+      "id": "literal-sp-reopened",
+      "source": ".Dd October 4, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd column probe\n.Sh DESCRIPTION\n.Bl -column -compact \"xxxxxxxx\" \"xxxx\"\n.It Xo\n.Bd -literal -compact\nA\n.sp 1\nY\n.Ed\n.Xc Ta B\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "64096fd62e797ce8b696ef281af3fbfbdaf18cdfdd0cc11ef1cb795153c6e605",
+      "profiles": {
+        "ascii": {
+          "args": [
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "status": 0,
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt - column probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     A\n     Y           B\n\nN\bNE\bEX\bXT\bT\n     END\n\nLinux 6.18.40.1-microsoft-standard-WSL2\n                                October 4, 2026                        TEST(1)\n",
+          "stderr": "",
+          "stdout_sha256": "4e238018766e56669fc483a7579ee30cf55d3b712e9044f287047ef869c4e6f8",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "args": [
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "status": 0,
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – column probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     A\n     Y           B\n\nN\bNE\bEX\bXT\bT\n     END\n\nLinux 6.18.40.1-microsoft-standard-WSL2\n                                October 4, 2026                        TEST(1)\n",
+          "stderr": "",
+          "stdout_sha256": "f24302cb44705c2d92f32357fa590ef7bcb3c2fd19d9434659bf9162a53a371d",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "args": [
+            "-Thtml"
+          ],
+          "status": 0,
+          "stdout": "<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"utf-8\"/>\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>\n  <style>\n    table.head, table.foot { width: 100%; }\n    td.head-rtitle, td.foot-os { text-align: right; }\n    td.head-vol { text-align: center; }\n    .Nd, .Bf, .Op { display: inline; }\n    .Pa, .Ad { font-style: italic; }\n    .Ms { font-weight: bold; }\n    .Bl-diag > dt { font-weight: bold; }\n    code.Nm, .Fl, .Cm, .Ic, code.In, .Fd, .Fn, .Cd { font-weight: bold;\n      font-family: inherit; }\n  </style>\n  <title>TEST(1)</title>\n</head>\n<body>\n<div class=\"head\" role=\"doc-pageheader\" aria-label=\"Manual header\n  line\"><span class=\"head-ltitle\">TEST(1)</span> <span class=\"head-vol\">General\n  Commands Manual</span> <span class=\"head-rtitle\">TEST(1)</span></div>\n<main class=\"manual-text\">\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NAME\"><a class=\"permalink\" href=\"#NAME\">NAME</a></h2>\n<p class=\"Pp\"><code class=\"Nm\">test</code> &#x2014;\n    <span class=\"Nd\" role=\"doc-subtitle\">column probe</span></p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"DESCRIPTION\"><a class=\"permalink\" href=\"#DESCRIPTION\">DESCRIPTION</a></h2>\n<table class=\"Bl-column Bl-compact\">\n  <tr>\n    <td>\n    <div class=\"Bd Li\">\n    <pre>A\n\nY</pre>\n    </div>\n    </td>\n    <td>B</td>\n  </tr>\n</table>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NEXT\"><a class=\"permalink\" href=\"#NEXT\">NEXT</a></h2>\n<p class=\"Pp\"><span class=\"No\">END</span></p>\n</section>\n</main>\n<div class=\"foot\" role=\"doc-pagefooter\" aria-label=\"Manual footer\n  line\"><span class=\"foot-left\">Linux 6.18.40.1-microsoft-standard-WSL2</span>\n  <span class=\"foot-date\">October 4, 2026</span>\n  <span class=\"foot-right\">TEST(1)</span></div>\n</body>\n</html>\n",
+          "stderr": "",
+          "stdout_sha256": "aeae1ab2400e120b0b0746b812809123cf609f502845c7a58ec7a8c114ee9318",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "args": [
+            "-Ttree"
+          ],
+          "status": 0,
+          "stdout": "title = \"TEST\"\nname  = \"test\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.40.1-microsoft-standard-WSL2\"\ndate  = \"October 4, 2026\"\n\nDd (elem) *1:2 NOPRT\n    October 4, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    TEST (text) 2:5\n    1 (text) 2:10\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          test (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            column probe (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      Bl (block) -column [ [xxxxxxxx] [xxxx] ] -compact *8:2\n        Bl (head) 8:2\n        Bl (body) 8:2\n            It (block) *9:2\n              It (head) 9:2\n              It (body) 9:2\n                  Xo (block) 9:5\n                    Xo (head) 9:5\n                    Xo (body) 9:5\n                        Bd (block) -literal -compact *10:2\n                          Bd (head) 10:2\n                          Bd (body) 10:2\n                              A (text) *11:1 NOFILL\n                              sp (elem) *12:2 NOFILL\n                                  1 (text) 12:5 NOFILL\n                              Y (text) *13:1 NOFILL\n              It (body) 15:5\n                  B (text) 15:8\nSh (block) *17:2\n  Sh (head) 17:2 ID=HREF\n      NEXT (text) 17:5\n  Sh (body) 17:2\n      No (elem) *18:2\n          END (text) 18:5\n",
+          "stderr": "",
+          "stdout_sha256": "5e01f707df6008d856fa191360f27a0ab2711a87d74a2084376689fc51cfef7f",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "args": [
+            "-Tlint",
+            "-Wall"
+          ],
+          "status": 0,
+          "stdout": "",
+          "stderr": "",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_rows": [
+        "     A",
+        "     Y           B"
+      ],
+      "stop_heading": "NEXT",
+      "ast_cells": [
+        {
+          "line": 9,
+          "column": 2,
+          "texts": [
+            {
+              "value": "A",
+              "line": 11,
+              "column": 1,
+              "line_start": true,
+              "no_fill": true
+            },
+            {
+              "value": "1",
+              "line": 12,
+              "column": 5,
+              "line_start": false,
+              "no_fill": true
+            },
+            {
+              "value": "Y",
+              "line": 13,
+              "column": 1,
+              "line_start": true,
+              "no_fill": true
+            }
+          ]
+        },
+        {
+          "line": 15,
+          "column": 5,
+          "texts": [
+            {
+              "value": "B",
+              "line": 15,
+              "column": 8,
+              "line_start": false,
+              "no_fill": false
+            }
+          ]
+        }
+      ],
+      "break_after": false,
+      "reading_policy": "native-relative-hard-rows-no-source-margin",
+      "cli_rows": [
+        "A",
+        "Y           B"
+      ],
+      "ui_rows_78": [
+        "   A",
+        "   Y           B"
+      ],
+      "payloads": [
+        "A\nY",
+        "B"
+      ],
+      "linked": false
+    },
+    {
+      "id": "empty-source-row",
+      "source": ".Dd October 4, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd column probe\n.Sh DESCRIPTION\n.Bl -column -compact \"xxxxxxxx\" \"xxxx\"\n.It Xo\n.No A\n\n.Xc Ta B\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "2cd78a575703f51b4e6bb3c32e0b20760bdd96a66c36b380371127f756554411",
+      "profiles": {
+        "ascii": {
+          "args": [
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "status": 0,
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt - column probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     A\n                 B\n\nN\bNE\bEX\bXT\bT\n     END\n\nLinux 6.18.40.1-microsoft-standard-WSL2\n                                October 4, 2026                        TEST(1)\n",
+          "stderr": "",
+          "stdout_sha256": "fc70c4db236b47ebb66abb14baf310b672b66d7fc7f904e5d4035ce0773b4571",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "args": [
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "status": 0,
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – column probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     A\n                 B\n\nN\bNE\bEX\bXT\bT\n     END\n\nLinux 6.18.40.1-microsoft-standard-WSL2\n                                October 4, 2026                        TEST(1)\n",
+          "stderr": "",
+          "stdout_sha256": "1f632d3f064ed1e622e4df87323f5db0c94b1a79aa146518529bbe3913e4d7f3",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "args": [
+            "-Thtml"
+          ],
+          "status": 0,
+          "stdout": "<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"utf-8\"/>\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>\n  <style>\n    table.head, table.foot { width: 100%; }\n    td.head-rtitle, td.foot-os { text-align: right; }\n    td.head-vol { text-align: center; }\n    .Nd, .Bf, .Op { display: inline; }\n    .Pa, .Ad { font-style: italic; }\n    .Ms { font-weight: bold; }\n    .Bl-diag > dt { font-weight: bold; }\n    code.Nm, .Fl, .Cm, .Ic, code.In, .Fd, .Fn, .Cd { font-weight: bold;\n      font-family: inherit; }\n  </style>\n  <title>TEST(1)</title>\n</head>\n<body>\n<div class=\"head\" role=\"doc-pageheader\" aria-label=\"Manual header\n  line\"><span class=\"head-ltitle\">TEST(1)</span> <span class=\"head-vol\">General\n  Commands Manual</span> <span class=\"head-rtitle\">TEST(1)</span></div>\n<main class=\"manual-text\">\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NAME\"><a class=\"permalink\" href=\"#NAME\">NAME</a></h2>\n<p class=\"Pp\"><code class=\"Nm\">test</code> &#x2014;\n    <span class=\"Nd\" role=\"doc-subtitle\">column probe</span></p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"DESCRIPTION\"><a class=\"permalink\" href=\"#DESCRIPTION\">DESCRIPTION</a></h2>\n<table class=\"Bl-column Bl-compact\">\n  <tr id=\"A\">\n    <td><a class=\"permalink\" href=\"#A\"><span class=\"No\">A</span></a>\n    <p class=\"Pp\"></p>\n    </td>\n    <td>B</td>\n  </tr>\n</table>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NEXT\"><a class=\"permalink\" href=\"#NEXT\">NEXT</a></h2>\n<p class=\"Pp\"><span class=\"No\">END</span></p>\n</section>\n</main>\n<div class=\"foot\" role=\"doc-pagefooter\" aria-label=\"Manual footer\n  line\"><span class=\"foot-left\">Linux 6.18.40.1-microsoft-standard-WSL2</span>\n  <span class=\"foot-date\">October 4, 2026</span>\n  <span class=\"foot-right\">TEST(1)</span></div>\n</body>\n</html>\n",
+          "stderr": "",
+          "stdout_sha256": "f4c87e923e56fe5484946c25cf28618f9a7b41fca9430cb4320a3be59c6a8570",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "args": [
+            "-Ttree"
+          ],
+          "status": 0,
+          "stdout": "title = \"TEST\"\nname  = \"test\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.40.1-microsoft-standard-WSL2\"\ndate  = \"October 4, 2026\"\n\nDd (elem) *1:2 NOPRT\n    October 4, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    TEST (text) 2:5\n    1 (text) 2:10\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          test (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            column probe (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      Bl (block) -column [ [xxxxxxxx] [xxxx] ] -compact *8:2\n        Bl (head) 8:2\n        Bl (body) 8:2\n            It (block) *9:2 ID=A\n              It (head) 9:2\n              It (body) 9:2\n                  Xo (block) 9:5\n                    Xo (head) 9:5\n                    Xo (body) 9:5\n                        No (elem) *10:2 HREF\n                            A (text) 10:5\n                        sp (elem) *11:1\n              It (body) 12:5\n                  B (text) 12:8\nSh (block) *14:2\n  Sh (head) 14:2 ID=HREF\n      NEXT (text) 14:5\n  Sh (body) 14:2\n      No (elem) *15:2\n          END (text) 15:5\n",
+          "stderr": "",
+          "stdout_sha256": "0d6e528dd06db14fb4de7a529b1d59cf11927038413c3319c7f5d8b52f4768e7",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "args": [
+            "-Tlint",
+            "-Wall"
+          ],
+          "status": 2,
+          "stdout": "mandoc: /home/hby/dev/ManT/target/audits/layout-convergence-20261004/lc4-column-review/cell-boundaries/empty-source-row.roff:11:1: WARNING: blank line in fill mode, using .sp\n",
+          "stderr": "",
+          "stdout_sha256": "eeb8e06c1b32bd47e50d710c5c27f39823367df58411e9e3d8fdf1b017b90267",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_rows": [
+        "     A",
+        "                 B"
+      ],
+      "stop_heading": "NEXT",
+      "ast_cells": [
+        {
+          "line": 9,
+          "column": 2,
+          "texts": [
+            {
+              "value": "A",
+              "line": 10,
+              "column": 5,
+              "line_start": false,
+              "no_fill": false
+            }
+          ]
+        },
+        {
+          "line": 12,
+          "column": 5,
+          "texts": [
+            {
+              "value": "B",
+              "line": 12,
+              "column": 8,
+              "line_start": false,
+              "no_fill": false
+            }
+          ]
+        }
+      ],
+      "break_after": true,
+      "reading_policy": "native-relative-hard-rows-no-source-margin",
+      "cli_rows": [
+        "A",
+        "            B"
+      ],
+      "ui_rows_78": [
+        "   A",
+        "               B"
+      ],
+      "payloads": [
+        "A",
+        "B"
+      ],
+      "linked": false
+    },
+    {
+      "id": "rejected-marker-tail",
+      "source": ".Dd October 4, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd column probe\n.Sh DESCRIPTION\n.Bl -column -compact \"xxxxxxxx\" \"xxxx\"\n.It Xo\n.No \"A\\p \\p\"\n.No AFTER\n.Xc Ta B\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "897ea6393bc57e7462f6d65bc00782f3a332bf95f6f75d79c491f439c5361a49",
+      "profiles": {
+        "ascii": {
+          "args": [
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "status": 0,
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt - column probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     A\n                 B\n\nN\bNE\bEX\bXT\bT\n     END\n\nLinux 6.18.40.1-microsoft-standard-WSL2\n                                October 4, 2026                        TEST(1)\n",
+          "stderr": "",
+          "stdout_sha256": "fc70c4db236b47ebb66abb14baf310b672b66d7fc7f904e5d4035ce0773b4571",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "args": [
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "status": 0,
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – column probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     A\n                 B\n\nN\bNE\bEX\bXT\bT\n     END\n\nLinux 6.18.40.1-microsoft-standard-WSL2\n                                October 4, 2026                        TEST(1)\n",
+          "stderr": "",
+          "stdout_sha256": "1f632d3f064ed1e622e4df87323f5db0c94b1a79aa146518529bbe3913e4d7f3",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "args": [
+            "-Thtml"
+          ],
+          "status": 0,
+          "stdout": "<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"utf-8\"/>\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>\n  <style>\n    table.head, table.foot { width: 100%; }\n    td.head-rtitle, td.foot-os { text-align: right; }\n    td.head-vol { text-align: center; }\n    .Nd, .Bf, .Op { display: inline; }\n    .Pa, .Ad { font-style: italic; }\n    .Ms { font-weight: bold; }\n    .Bl-diag > dt { font-weight: bold; }\n    code.Nm, .Fl, .Cm, .Ic, code.In, .Fd, .Fn, .Cd { font-weight: bold;\n      font-family: inherit; }\n  </style>\n  <title>TEST(1)</title>\n</head>\n<body>\n<div class=\"head\" role=\"doc-pageheader\" aria-label=\"Manual header\n  line\"><span class=\"head-ltitle\">TEST(1)</span> <span class=\"head-vol\">General\n  Commands Manual</span> <span class=\"head-rtitle\">TEST(1)</span></div>\n<main class=\"manual-text\">\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NAME\"><a class=\"permalink\" href=\"#NAME\">NAME</a></h2>\n<p class=\"Pp\"><code class=\"Nm\">test</code> &#x2014;\n    <span class=\"Nd\" role=\"doc-subtitle\">column probe</span></p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"DESCRIPTION\"><a class=\"permalink\" href=\"#DESCRIPTION\">DESCRIPTION</a></h2>\n<table class=\"Bl-column Bl-compact\">\n  <tr id=\"A_p__p\">\n    <td><a class=\"permalink\" href=\"#A_p__p\"><span class=\"No\">A\n    <br/>\n    </span></a> <span class=\"No\">AFTER</span></td>\n    <td>B</td>\n  </tr>\n</table>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NEXT\"><a class=\"permalink\" href=\"#NEXT\">NEXT</a></h2>\n<p class=\"Pp\"><span class=\"No\">END</span></p>\n</section>\n</main>\n<div class=\"foot\" role=\"doc-pagefooter\" aria-label=\"Manual footer\n  line\"><span class=\"foot-left\">Linux 6.18.40.1-microsoft-standard-WSL2</span>\n  <span class=\"foot-date\">October 4, 2026</span>\n  <span class=\"foot-right\">TEST(1)</span></div>\n</body>\n</html>\n",
+          "stderr": "",
+          "stdout_sha256": "5ef8b6b52538933345531931b21db09a9417c1bba8409004d569aae55da1c83a",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "args": [
+            "-Ttree"
+          ],
+          "status": 0,
+          "stdout": "title = \"TEST\"\nname  = \"test\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.40.1-microsoft-standard-WSL2\"\ndate  = \"October 4, 2026\"\n\nDd (elem) *1:2 NOPRT\n    October 4, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    TEST (text) 2:5\n    1 (text) 2:10\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          test (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            column probe (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      Bl (block) -column [ [xxxxxxxx] [xxxx] ] -compact *8:2\n        Bl (head) 8:2\n        Bl (body) 8:2\n            It (block) *9:2 ID=A\\p \\p\n              It (head) 9:2\n              It (body) 9:2\n                  Xo (block) 9:5\n                    Xo (head) 9:5\n                    Xo (body) 9:5\n                        No (elem) *10:2 HREF\n                            A\\p \\p (text) 10:5\n                        No (elem) *11:2\n                            AFTER (text) 11:5\n              It (body) 12:5\n                  B (text) 12:8\nSh (block) *14:2\n  Sh (head) 14:2 ID=HREF\n      NEXT (text) 14:5\n  Sh (body) 14:2\n      No (elem) *15:2\n          END (text) 15:5\n",
+          "stderr": "",
+          "stdout_sha256": "ba034c3e421f626641df22ef28fd44787a554f604be4d78db0470c14c56bdeab",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "args": [
+            "-Tlint",
+            "-Wall"
+          ],
+          "status": 0,
+          "stdout": "",
+          "stderr": "",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_rows": [
+        "     A",
+        "                 B"
+      ],
+      "stop_heading": "NEXT",
+      "ast_cells": [
+        {
+          "line": 9,
+          "column": 2,
+          "texts": [
+            {
+              "value": "A\\p \\p",
+              "line": 10,
+              "column": 5,
+              "line_start": false,
+              "no_fill": false
+            },
+            {
+              "value": "AFTER",
+              "line": 11,
+              "column": 5,
+              "line_start": false,
+              "no_fill": false
+            }
+          ]
+        },
+        {
+          "line": 12,
+          "column": 5,
+          "texts": [
+            {
+              "value": "B",
+              "line": 12,
+              "column": 8,
+              "line_start": false,
+              "no_fill": false
+            }
+          ]
+        }
+      ],
+      "break_after": true,
+      "reading_policy": "native-relative-hard-rows-no-source-margin",
+      "cli_rows": [
+        "A",
+        "            B"
+      ],
+      "ui_rows_78": [
+        "   A",
+        "               B"
+      ],
+      "payloads": [
+        "A",
+        "B"
+      ],
+      "linked": false
+    },
+    {
+      "id": "accepted-zero-loop-end",
+      "source": ".Dd October 4, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd column probe\n.Sh DESCRIPTION\n.Bl -column -compact \"xxxxxxxx\" \"xxxx\"\n.It Xo\n.No \"\\& \\p Y\"\n.No AFTER\n.Xc Ta B\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "fcbc27021a55fa1a4686906e9cfee43730dee747995874d9ab7c3921c4e5ab9d",
+      "profiles": {
+        "ascii": {
+          "args": [
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "status": 0,
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt - column probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n\n                 B\n\nN\bNE\bEX\bXT\bT\n     END\n\nLinux 6.18.40.1-microsoft-standard-WSL2\n                                October 4, 2026                        TEST(1)\n",
+          "stderr": "",
+          "stdout_sha256": "5af8dafd1932860901a3240e98c7c107b32eb2541a9c3acb1772ccf2bc5633ff",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "args": [
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "status": 0,
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – column probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n\n                 B\n\nN\bNE\bEX\bXT\bT\n     END\n\nLinux 6.18.40.1-microsoft-standard-WSL2\n                                October 4, 2026                        TEST(1)\n",
+          "stderr": "",
+          "stdout_sha256": "f07a1202242699a4f1a49c121aa6d2a74288cb1d93ff25105f345c5b679cddcb",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "args": [
+            "-Thtml"
+          ],
+          "status": 0,
+          "stdout": "<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"utf-8\"/>\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>\n  <style>\n    table.head, table.foot { width: 100%; }\n    td.head-rtitle, td.foot-os { text-align: right; }\n    td.head-vol { text-align: center; }\n    .Nd, .Bf, .Op { display: inline; }\n    .Pa, .Ad { font-style: italic; }\n    .Ms { font-weight: bold; }\n    .Bl-diag > dt { font-weight: bold; }\n    code.Nm, .Fl, .Cm, .Ic, code.In, .Fd, .Fn, .Cd { font-weight: bold;\n      font-family: inherit; }\n  </style>\n  <title>TEST(1)</title>\n</head>\n<body>\n<div class=\"head\" role=\"doc-pageheader\" aria-label=\"Manual header\n  line\"><span class=\"head-ltitle\">TEST(1)</span> <span class=\"head-vol\">General\n  Commands Manual</span> <span class=\"head-rtitle\">TEST(1)</span></div>\n<main class=\"manual-text\">\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NAME\"><a class=\"permalink\" href=\"#NAME\">NAME</a></h2>\n<p class=\"Pp\"><code class=\"Nm\">test</code> &#x2014;\n    <span class=\"Nd\" role=\"doc-subtitle\">column probe</span></p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"DESCRIPTION\"><a class=\"permalink\" href=\"#DESCRIPTION\">DESCRIPTION</a></h2>\n<table class=\"Bl-column Bl-compact\">\n  <tr>\n    <td><span class=\"No\">\n    <br/>\nY</span> <span class=\"No\">AFTER</span></td>\n    <td>B</td>\n  </tr>\n</table>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NEXT\"><a class=\"permalink\" href=\"#NEXT\">NEXT</a></h2>\n<p class=\"Pp\"><span class=\"No\">END</span></p>\n</section>\n</main>\n<div class=\"foot\" role=\"doc-pagefooter\" aria-label=\"Manual footer\n  line\"><span class=\"foot-left\">Linux 6.18.40.1-microsoft-standard-WSL2</span>\n  <span class=\"foot-date\">October 4, 2026</span>\n  <span class=\"foot-right\">TEST(1)</span></div>\n</body>\n</html>\n",
+          "stderr": "",
+          "stdout_sha256": "1b8e764e0d818d131c4092835ce620ed8943909a3ceed142877ec38f4bb254d5",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "args": [
+            "-Ttree"
+          ],
+          "status": 0,
+          "stdout": "title = \"TEST\"\nname  = \"test\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.40.1-microsoft-standard-WSL2\"\ndate  = \"October 4, 2026\"\n\nDd (elem) *1:2 NOPRT\n    October 4, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    TEST (text) 2:5\n    1 (text) 2:10\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          test (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            column probe (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      Bl (block) -column [ [xxxxxxxx] [xxxx] ] -compact *8:2\n        Bl (head) 8:2\n        Bl (body) 8:2\n            It (block) *9:2\n              It (head) 9:2\n              It (body) 9:2\n                  Xo (block) 9:5\n                    Xo (head) 9:5\n                    Xo (body) 9:5\n                        No (elem) *10:2\n                            \\& \\p Y (text) 10:5\n                        No (elem) *11:2\n                            AFTER (text) 11:5\n              It (body) 12:5\n                  B (text) 12:8\nSh (block) *14:2\n  Sh (head) 14:2 ID=HREF\n      NEXT (text) 14:5\n  Sh (body) 14:2\n      No (elem) *15:2\n          END (text) 15:5\n",
+          "stderr": "",
+          "stdout_sha256": "1a2bd74fc848b0fd7685581fc9c65b841098fad065f29320dfa7fa28606cb059",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "args": [
+            "-Tlint",
+            "-Wall"
+          ],
+          "status": 0,
+          "stdout": "",
+          "stderr": "",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_rows": [
+        "",
+        "                 B"
+      ],
+      "ast_cells": [
+        {
+          "line": 9,
+          "column": 2,
+          "texts": [
+            {
+              "value": "\\& \\p Y",
+              "line": 10,
+              "column": 5,
+              "line_start": false,
+              "no_fill": false
+            },
+            {
+              "value": "AFTER",
+              "line": 11,
+              "column": 5,
+              "line_start": false,
+              "no_fill": false
+            }
+          ]
+        },
+        {
+          "line": 12,
+          "column": 5,
+          "texts": [
+            {
+              "value": "B",
+              "line": 12,
+              "column": 8,
+              "line_start": false,
+              "no_fill": false
+            }
+          ]
+        }
+      ],
+      "stop_heading": "NEXT",
+      "break_after": true,
+      "reading_policy": "accepted-zero-graph-endline-versus-open-zero-cell",
+      "cli_rows": [
+        "",
+        "            B"
+      ],
+      "payloads": [
+        "",
+        "B"
+      ],
+      "linked": false,
+      "ui_rows_78": [
+        "",
+        "               B"
+      ]
+    },
+    {
+      "id": "zero-open-cell",
+      "source": ".Dd October 4, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd column probe\n.Sh DESCRIPTION\n.Bl -column -compact \"xxxxxxxx\" \"xxxx\"\n.It Xo\n.No \"\\&\"\n.Xc Ta B\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "489a947dc84194c96cb7706f0410e1c4d161017de13e066919b0def8e99a4677",
+      "profiles": {
+        "ascii": {
+          "args": [
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "status": 0,
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt - column probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n                 B\n\nN\bNE\bEX\bXT\bT\n     END\n\nLinux 6.18.40.1-microsoft-standard-WSL2\n                                October 4, 2026                        TEST(1)\n",
+          "stderr": "",
+          "stdout_sha256": "7a04a561ce46930dd59ab494a70aa062aff5baf43028504410acc9a69facd72c",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "args": [
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "status": 0,
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – column probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n                 B\n\nN\bNE\bEX\bXT\bT\n     END\n\nLinux 6.18.40.1-microsoft-standard-WSL2\n                                October 4, 2026                        TEST(1)\n",
+          "stderr": "",
+          "stdout_sha256": "611a2e3c7437c28baeff1cfa80d0a6dca4b5dda285cff94ff44dd27d649245dc",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "args": [
+            "-Thtml"
+          ],
+          "status": 0,
+          "stdout": "<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"utf-8\"/>\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>\n  <style>\n    table.head, table.foot { width: 100%; }\n    td.head-rtitle, td.foot-os { text-align: right; }\n    td.head-vol { text-align: center; }\n    .Nd, .Bf, .Op { display: inline; }\n    .Pa, .Ad { font-style: italic; }\n    .Ms { font-weight: bold; }\n    .Bl-diag > dt { font-weight: bold; }\n    code.Nm, .Fl, .Cm, .Ic, code.In, .Fd, .Fn, .Cd { font-weight: bold;\n      font-family: inherit; }\n  </style>\n  <title>TEST(1)</title>\n</head>\n<body>\n<div class=\"head\" role=\"doc-pageheader\" aria-label=\"Manual header\n  line\"><span class=\"head-ltitle\">TEST(1)</span> <span class=\"head-vol\">General\n  Commands Manual</span> <span class=\"head-rtitle\">TEST(1)</span></div>\n<main class=\"manual-text\">\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NAME\"><a class=\"permalink\" href=\"#NAME\">NAME</a></h2>\n<p class=\"Pp\"><code class=\"Nm\">test</code> &#x2014;\n    <span class=\"Nd\" role=\"doc-subtitle\">column probe</span></p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"DESCRIPTION\"><a class=\"permalink\" href=\"#DESCRIPTION\">DESCRIPTION</a></h2>\n<table class=\"Bl-column Bl-compact\">\n  <tr>\n    <td><span class=\"No\"></span></td>\n    <td>B</td>\n  </tr>\n</table>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NEXT\"><a class=\"permalink\" href=\"#NEXT\">NEXT</a></h2>\n<p class=\"Pp\"><span class=\"No\">END</span></p>\n</section>\n</main>\n<div class=\"foot\" role=\"doc-pagefooter\" aria-label=\"Manual footer\n  line\"><span class=\"foot-left\">Linux 6.18.40.1-microsoft-standard-WSL2</span>\n  <span class=\"foot-date\">October 4, 2026</span>\n  <span class=\"foot-right\">TEST(1)</span></div>\n</body>\n</html>\n",
+          "stderr": "",
+          "stdout_sha256": "8480183fdf92fde7742549a51b43ffe0385e1c31400e540397d367ca76c21c0b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "args": [
+            "-Ttree"
+          ],
+          "status": 0,
+          "stdout": "title = \"TEST\"\nname  = \"test\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.40.1-microsoft-standard-WSL2\"\ndate  = \"October 4, 2026\"\n\nDd (elem) *1:2 NOPRT\n    October 4, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    TEST (text) 2:5\n    1 (text) 2:10\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          test (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            column probe (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      Bl (block) -column [ [xxxxxxxx] [xxxx] ] -compact *8:2\n        Bl (head) 8:2\n        Bl (body) 8:2\n            It (block) *9:2\n              It (head) 9:2\n              It (body) 9:2\n                  Xo (block) 9:5\n                    Xo (head) 9:5\n                    Xo (body) 9:5\n                        No (elem) *10:2\n                            \\& (text) 10:5\n              It (body) 11:5\n                  B (text) 11:8\nSh (block) *13:2\n  Sh (head) 13:2 ID=HREF\n      NEXT (text) 13:5\n  Sh (body) 13:2\n      No (elem) *14:2\n          END (text) 14:5\n",
+          "stderr": "",
+          "stdout_sha256": "f17cf3a9d21648a86f1ef9d2ad652d06995efe26a35af379ad9841fae71a1fce",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "args": [
+            "-Tlint",
+            "-Wall"
+          ],
+          "status": 0,
+          "stdout": "",
+          "stderr": "",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_rows": [
+        "                 B"
+      ],
+      "ast_cells": [
+        {
+          "line": 9,
+          "column": 2,
+          "texts": [
+            {
+              "value": "\\&",
+              "line": 10,
+              "column": 5,
+              "line_start": false,
+              "no_fill": false
+            }
+          ]
+        },
+        {
+          "line": 11,
+          "column": 5,
+          "texts": [
+            {
+              "value": "B",
+              "line": 11,
+              "column": 8,
+              "line_start": false,
+              "no_fill": false
+            }
+          ]
+        }
+      ],
+      "stop_heading": "NEXT",
+      "break_after": false,
+      "reading_policy": "accepted-zero-graph-endline-versus-open-zero-cell",
+      "cli_rows": [
+        "            B"
+      ],
+      "payloads": [
+        "",
+        "B"
+      ],
+      "linked": false,
+      "ui_rows_78": [
+        "               B"
+      ]
+    },
+    {
+      "id": "empty-list",
+      "source": ".Dd October 4, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd column probe\n.Sh DESCRIPTION\n.Bl -column -compact \"xxxxxxxx\" \"xxxx\"\n.It Xo\n.No A\n.sp 1\n.Bl -item -compact\n.El\n.Xc Ta B\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "90a481690275d1c3d76f1e40321a1ed7e627ad652894a992ef56853c3cfc115b",
+      "profiles": {
+        "ascii": {
+          "args": [
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "status": 0,
+          "stdout_sha256": "fc70c4db236b47ebb66abb14baf310b672b66d7fc7f904e5d4035ce0773b4571",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt - column probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     A\n                 B\n\nN\bNE\bEX\bXT\bT\n     END\n\nLinux 6.18.40.1-microsoft-standard-WSL2\n                                October 4, 2026                        TEST(1)\n",
+          "stderr": ""
+        },
+        "utf8": {
+          "args": [
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "status": 0,
+          "stdout_sha256": "1f632d3f064ed1e622e4df87323f5db0c94b1a79aa146518529bbe3913e4d7f3",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – column probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     A\n                 B\n\nN\bNE\bEX\bXT\bT\n     END\n\nLinux 6.18.40.1-microsoft-standard-WSL2\n                                October 4, 2026                        TEST(1)\n",
+          "stderr": ""
+        },
+        "html": {
+          "args": [
+            "-Thtml"
+          ],
+          "status": 0,
+          "stdout_sha256": "de77a09b76eda2a0c95384b3db8bcd5582e7028ec42ce2b77ac7336e70be1ff3",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout": "<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"utf-8\"/>\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>\n  <style>\n    table.head, table.foot { width: 100%; }\n    td.head-rtitle, td.foot-os { text-align: right; }\n    td.head-vol { text-align: center; }\n    .Nd, .Bf, .Op { display: inline; }\n    .Pa, .Ad { font-style: italic; }\n    .Ms { font-weight: bold; }\n    .Bl-diag > dt { font-weight: bold; }\n    code.Nm, .Fl, .Cm, .Ic, code.In, .Fd, .Fn, .Cd { font-weight: bold;\n      font-family: inherit; }\n  </style>\n  <title>TEST(1)</title>\n</head>\n<body>\n<div class=\"head\" role=\"doc-pageheader\" aria-label=\"Manual header\n  line\"><span class=\"head-ltitle\">TEST(1)</span> <span class=\"head-vol\">General\n  Commands Manual</span> <span class=\"head-rtitle\">TEST(1)</span></div>\n<main class=\"manual-text\">\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NAME\"><a class=\"permalink\" href=\"#NAME\">NAME</a></h2>\n<p class=\"Pp\"><code class=\"Nm\">test</code> &#x2014;\n    <span class=\"Nd\" role=\"doc-subtitle\">column probe</span></p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"DESCRIPTION\"><a class=\"permalink\" href=\"#DESCRIPTION\">DESCRIPTION</a></h2>\n<table class=\"Bl-column Bl-compact\">\n  <tr id=\"A\">\n    <td><a class=\"permalink\" href=\"#A\"><span class=\"No\">A</span></a>\n    <p class=\"Pp\"></p>\n    <ul class=\"Bl-item Bl-compact\">\n    </ul>\n    </td>\n    <td>B</td>\n  </tr>\n</table>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NEXT\"><a class=\"permalink\" href=\"#NEXT\">NEXT</a></h2>\n<p class=\"Pp\"><span class=\"No\">END</span></p>\n</section>\n</main>\n<div class=\"foot\" role=\"doc-pagefooter\" aria-label=\"Manual footer\n  line\"><span class=\"foot-left\">Linux 6.18.40.1-microsoft-standard-WSL2</span>\n  <span class=\"foot-date\">October 4, 2026</span>\n  <span class=\"foot-right\">TEST(1)</span></div>\n</body>\n</html>\n",
+          "stderr": ""
+        },
+        "tree": {
+          "args": [
+            "-Ttree"
+          ],
+          "status": 0,
+          "stdout_sha256": "9486c5480a054a398da83b2e26fd2a05b7e9f805217f2050c30ef7c96f74e935",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout": "title = \"TEST\"\nname  = \"test\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.40.1-microsoft-standard-WSL2\"\ndate  = \"October 4, 2026\"\n\nDd (elem) *1:2 NOPRT\n    October 4, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    TEST (text) 2:5\n    1 (text) 2:10\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          test (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            column probe (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      Bl (block) -column [ [xxxxxxxx] [xxxx] ] -compact *8:2\n        Bl (head) 8:2\n        Bl (body) 8:2\n            It (block) *9:2 ID=A\n              It (head) 9:2\n              It (body) 9:2\n                  Xo (block) 9:5\n                    Xo (head) 9:5\n                    Xo (body) 9:5\n                        No (elem) *10:2 HREF\n                            A (text) 10:5\n                        sp (elem) *11:2\n                            1 (text) 11:5\n                        Bl (block) -item -compact *12:2\n                          Bl (head) 12:2\n                          Bl (body) 12:2\n              It (body) 14:5\n                  B (text) 14:8\nSh (block) *16:2\n  Sh (head) 16:2 ID=HREF\n      NEXT (text) 16:5\n  Sh (body) 16:2\n      No (elem) *17:2\n          END (text) 17:5\n",
+          "stderr": ""
+        },
+        "lint": {
+          "args": [
+            "-Tlint",
+            "-Wall"
+          ],
+          "status": 2,
+          "stdout_sha256": "6cb424fcc36afb18ffa4474398d9ee6bb500147d80053f69cd80423704f6a223",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout": "mandoc: /home/hby/dev/ManT/target/audits/layout-convergence-20261004/lc4-column-review/empty-container-tail-readonly/empty-list.roff:12:2: WARNING: empty block: Bl\n",
+          "stderr": ""
+        }
+      },
+      "native_rows": [
+        "     A",
+        "                 B"
+      ],
+      "stop_heading": "NEXT",
+      "break_after": true,
+      "reading_policy": "native-relative-hard-rows-no-source-margin",
+      "cli_rows": [
+        "A",
+        "            B"
+      ],
+      "ui_rows_78": [
+        "   A",
+        "               B"
+      ],
+      "payloads": [
+        "A",
+        "B"
+      ],
+      "linked": false,
+      "ast_cells": [
+        {
+          "line": 9,
+          "column": 2,
+          "texts": [
+            {
+              "value": "A",
+              "line": 10,
+              "column": 5,
+              "line_start": false,
+              "no_fill": false
+            },
+            {
+              "value": "1",
+              "line": 11,
+              "column": 5,
+              "line_start": false,
+              "no_fill": false
+            }
+          ]
+        },
+        {
+          "line": 14,
+          "column": 5,
+          "texts": [
+            {
+              "value": "B",
+              "line": 14,
+              "column": 8,
+              "line_start": false,
+              "no_fill": false
+            }
+          ]
+        }
+      ],
+      "receipt_rule": "mdoc_term.c::termp_bl_pre/post call term_newln only; zero-output container cannot reopen prior closed graph. Actual accepted Y reopens; inner empty It post adds its independently completed row."
+    },
+    {
+      "id": "empty-anchored-list",
+      "source": ".Dd October 4, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd column probe\n.Sh DESCRIPTION\n.Bl -column -compact \"xxxxxxxx\" \"xxxx\"\n.It Xo\n.No A\n.sp 1\n.Bl -item -compact\n.Tg point\n.It\n.El\n.Xc Ta B\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "c38bf3ff77b64056d6ccfc0f28d64613e4ab5eda2e82f20cb01f03474b9e47f0",
+      "profiles": {
+        "ascii": {
+          "args": [
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "status": 0,
+          "stdout_sha256": "94cf30d3fcc4fa538c7590635debdf7270645382c906096aec9b7e230a8ba362",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt - column probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     A\n\n                 B\n\nN\bNE\bEX\bXT\bT\n     END\n\nLinux 6.18.40.1-microsoft-standard-WSL2\n                                October 4, 2026                        TEST(1)\n",
+          "stderr": ""
+        },
+        "utf8": {
+          "args": [
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "status": 0,
+          "stdout_sha256": "5a7619f0ecc2bb4138aa122ea091faf90cd1ad338fe1d1ce16d05942e6f26c3f",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – column probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     A\n\n                 B\n\nN\bNE\bEX\bXT\bT\n     END\n\nLinux 6.18.40.1-microsoft-standard-WSL2\n                                October 4, 2026                        TEST(1)\n",
+          "stderr": ""
+        },
+        "html": {
+          "args": [
+            "-Thtml"
+          ],
+          "status": 0,
+          "stdout_sha256": "7fb9919514ae198969043de0e724e353f333c20038a50c402b455cd6af794654",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout": "<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"utf-8\"/>\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>\n  <style>\n    table.head, table.foot { width: 100%; }\n    td.head-rtitle, td.foot-os { text-align: right; }\n    td.head-vol { text-align: center; }\n    .Nd, .Bf, .Op { display: inline; }\n    .Pa, .Ad { font-style: italic; }\n    .Ms { font-weight: bold; }\n    .Bl-diag > dt { font-weight: bold; }\n    code.Nm, .Fl, .Cm, .Ic, code.In, .Fd, .Fn, .Cd { font-weight: bold;\n      font-family: inherit; }\n  </style>\n  <title>TEST(1)</title>\n</head>\n<body>\n<div class=\"head\" role=\"doc-pageheader\" aria-label=\"Manual header\n  line\"><span class=\"head-ltitle\">TEST(1)</span> <span class=\"head-vol\">General\n  Commands Manual</span> <span class=\"head-rtitle\">TEST(1)</span></div>\n<main class=\"manual-text\">\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NAME\"><a class=\"permalink\" href=\"#NAME\">NAME</a></h2>\n<p class=\"Pp\"><code class=\"Nm\">test</code> &#x2014;\n    <span class=\"Nd\" role=\"doc-subtitle\">column probe</span></p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"DESCRIPTION\"><a class=\"permalink\" href=\"#DESCRIPTION\">DESCRIPTION</a></h2>\n<table class=\"Bl-column Bl-compact\">\n  <tr id=\"A\">\n    <td><a class=\"permalink\" href=\"#A\"><span class=\"No\">A</span></a>\n    <p class=\"Pp\"></p>\n    <ul class=\"Bl-item Bl-compact\">\n      <mark id=\"point\"></mark>\n      <li></li>\n    </ul>\n    </td>\n    <td>B</td>\n  </tr>\n</table>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NEXT\"><a class=\"permalink\" href=\"#NEXT\">NEXT</a></h2>\n<p class=\"Pp\"><span class=\"No\">END</span></p>\n</section>\n</main>\n<div class=\"foot\" role=\"doc-pagefooter\" aria-label=\"Manual footer\n  line\"><span class=\"foot-left\">Linux 6.18.40.1-microsoft-standard-WSL2</span>\n  <span class=\"foot-date\">October 4, 2026</span>\n  <span class=\"foot-right\">TEST(1)</span></div>\n</body>\n</html>\n",
+          "stderr": ""
+        },
+        "tree": {
+          "args": [
+            "-Ttree"
+          ],
+          "status": 0,
+          "stdout_sha256": "fc4eee3a1b56ada236358132c5dcb8e050f0e1218f17a0904ec5f01128b1e84e",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout": "title = \"TEST\"\nname  = \"test\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.40.1-microsoft-standard-WSL2\"\ndate  = \"October 4, 2026\"\n\nDd (elem) *1:2 NOPRT\n    October 4, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    TEST (text) 2:5\n    1 (text) 2:10\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          test (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            column probe (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      Bl (block) -column [ [xxxxxxxx] [xxxx] ] -compact *8:2\n        Bl (head) 8:2\n        Bl (body) 8:2\n            It (block) *9:2 ID=A\n              It (head) 9:2\n              It (body) 9:2\n                  Xo (block) 9:5\n                    Xo (head) 9:5\n                    Xo (body) 9:5\n                        No (elem) *10:2 HREF\n                            A (text) 10:5\n                        sp (elem) *11:2\n                            1 (text) 11:5\n                        Bl (block) -item -compact *12:2\n                          Bl (head) 12:2\n                          Bl (body) 12:2\n                              Tg (elem) *13:2 ID=point\n                                  point (text) 13:5\n                              It (block) *14:2\n                                It (head) 14:2\n                                It (body) 14:2\n              It (body) 16:5\n                  B (text) 16:8\nSh (block) *18:2\n  Sh (head) 18:2 ID=HREF\n      NEXT (text) 18:5\n  Sh (body) 18:2\n      No (elem) *19:2\n          END (text) 19:5\n",
+          "stderr": ""
+        },
+        "lint": {
+          "args": [
+            "-Tlint",
+            "-Wall"
+          ],
+          "status": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout": "",
+          "stderr": ""
+        }
+      },
+      "native_rows": [
+        "     A",
+        "",
+        "                 B"
+      ],
+      "stop_heading": "NEXT",
+      "break_after": true,
+      "reading_policy": "native-relative-hard-rows-no-source-margin",
+      "cli_rows": [
+        "A",
+        "",
+        "            B"
+      ],
+      "ui_rows_78": [
+        "   A",
+        "",
+        "               B"
+      ],
+      "payloads": [
+        "A",
+        "B"
+      ],
+      "linked": false,
+      "ast_cells": [
+        {
+          "line": 9,
+          "column": 2,
+          "texts": [
+            {
+              "value": "A",
+              "line": 10,
+              "column": 5,
+              "line_start": false,
+              "no_fill": false
+            },
+            {
+              "value": "1",
+              "line": 11,
+              "column": 5,
+              "line_start": false,
+              "no_fill": false
+            },
+            {
+              "value": "point",
+              "line": 13,
+              "column": 5,
+              "line_start": false,
+              "no_fill": false
+            }
+          ]
+        },
+        {
+          "line": 16,
+          "column": 5,
+          "texts": [
+            {
+              "value": "B",
+              "line": 16,
+              "column": 8,
+              "line_start": false,
+              "no_fill": false
+            }
+          ]
+        }
+      ],
+      "receipt_rule": "mdoc_term.c::termp_bl_pre/post call term_newln only; zero-output container cannot reopen prior closed graph. Actual accepted Y reopens; inner empty It post adds its independently completed row."
+    },
+    {
+      "id": "empty-list-reopened",
+      "source": ".Dd October 4, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd column probe\n.Sh DESCRIPTION\n.Bl -column -compact \"xxxxxxxx\" \"xxxx\"\n.It Xo\n.No A\n.sp 1\n.Bl -item -compact\n.El\n.No Y\n.Xc Ta B\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "473f7ab2e7be35608fa6dbc6a1ca10cb38f706fadeb2958e523879854df6f93a",
+      "profiles": {
+        "ascii": {
+          "args": [
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "status": 0,
+          "stdout_sha256": "4e238018766e56669fc483a7579ee30cf55d3b712e9044f287047ef869c4e6f8",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt - column probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     A\n     Y           B\n\nN\bNE\bEX\bXT\bT\n     END\n\nLinux 6.18.40.1-microsoft-standard-WSL2\n                                October 4, 2026                        TEST(1)\n",
+          "stderr": ""
+        },
+        "utf8": {
+          "args": [
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "status": 0,
+          "stdout_sha256": "f24302cb44705c2d92f32357fa590ef7bcb3c2fd19d9434659bf9162a53a371d",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – column probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     A\n     Y           B\n\nN\bNE\bEX\bXT\bT\n     END\n\nLinux 6.18.40.1-microsoft-standard-WSL2\n                                October 4, 2026                        TEST(1)\n",
+          "stderr": ""
+        },
+        "html": {
+          "args": [
+            "-Thtml"
+          ],
+          "status": 0,
+          "stdout_sha256": "188e5b5572eb340a873d97c34af4ee8c4a026791179b52585577b7db29186257",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout": "<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"utf-8\"/>\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>\n  <style>\n    table.head, table.foot { width: 100%; }\n    td.head-rtitle, td.foot-os { text-align: right; }\n    td.head-vol { text-align: center; }\n    .Nd, .Bf, .Op { display: inline; }\n    .Pa, .Ad { font-style: italic; }\n    .Ms { font-weight: bold; }\n    .Bl-diag > dt { font-weight: bold; }\n    code.Nm, .Fl, .Cm, .Ic, code.In, .Fd, .Fn, .Cd { font-weight: bold;\n      font-family: inherit; }\n  </style>\n  <title>TEST(1)</title>\n</head>\n<body>\n<div class=\"head\" role=\"doc-pageheader\" aria-label=\"Manual header\n  line\"><span class=\"head-ltitle\">TEST(1)</span> <span class=\"head-vol\">General\n  Commands Manual</span> <span class=\"head-rtitle\">TEST(1)</span></div>\n<main class=\"manual-text\">\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NAME\"><a class=\"permalink\" href=\"#NAME\">NAME</a></h2>\n<p class=\"Pp\"><code class=\"Nm\">test</code> &#x2014;\n    <span class=\"Nd\" role=\"doc-subtitle\">column probe</span></p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"DESCRIPTION\"><a class=\"permalink\" href=\"#DESCRIPTION\">DESCRIPTION</a></h2>\n<table class=\"Bl-column Bl-compact\">\n  <tr id=\"A\">\n    <td><a class=\"permalink\" href=\"#A\"><span class=\"No\">A</span></a>\n    <p class=\"Pp\"></p>\n    <ul class=\"Bl-item Bl-compact\">\n    </ul>\n    <span class=\"No\">Y</span></td>\n    <td>B</td>\n  </tr>\n</table>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NEXT\"><a class=\"permalink\" href=\"#NEXT\">NEXT</a></h2>\n<p class=\"Pp\"><span class=\"No\">END</span></p>\n</section>\n</main>\n<div class=\"foot\" role=\"doc-pagefooter\" aria-label=\"Manual footer\n  line\"><span class=\"foot-left\">Linux 6.18.40.1-microsoft-standard-WSL2</span>\n  <span class=\"foot-date\">October 4, 2026</span>\n  <span class=\"foot-right\">TEST(1)</span></div>\n</body>\n</html>\n",
+          "stderr": ""
+        },
+        "tree": {
+          "args": [
+            "-Ttree"
+          ],
+          "status": 0,
+          "stdout_sha256": "b491341a8dbed66fac887c3211387dd18f173f7b94de90b9899b7e91599f68f2",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout": "title = \"TEST\"\nname  = \"test\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.40.1-microsoft-standard-WSL2\"\ndate  = \"October 4, 2026\"\n\nDd (elem) *1:2 NOPRT\n    October 4, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    TEST (text) 2:5\n    1 (text) 2:10\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          test (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            column probe (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      Bl (block) -column [ [xxxxxxxx] [xxxx] ] -compact *8:2\n        Bl (head) 8:2\n        Bl (body) 8:2\n            It (block) *9:2 ID=A\n              It (head) 9:2\n              It (body) 9:2\n                  Xo (block) 9:5\n                    Xo (head) 9:5\n                    Xo (body) 9:5\n                        No (elem) *10:2 HREF\n                            A (text) 10:5\n                        sp (elem) *11:2\n                            1 (text) 11:5\n                        Bl (block) -item -compact *12:2\n                          Bl (head) 12:2\n                          Bl (body) 12:2\n                        No (elem) *14:2\n                            Y (text) 14:5\n              It (body) 15:5\n                  B (text) 15:8\nSh (block) *17:2\n  Sh (head) 17:2 ID=HREF\n      NEXT (text) 17:5\n  Sh (body) 17:2\n      No (elem) *18:2\n          END (text) 18:5\n",
+          "stderr": ""
+        },
+        "lint": {
+          "args": [
+            "-Tlint",
+            "-Wall"
+          ],
+          "status": 2,
+          "stdout_sha256": "fc38acd3eff1b86554a79ad9e7525e97e21d8ac558a874607a0334717d47be96",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout": "mandoc: /home/hby/dev/ManT/target/audits/layout-convergence-20261004/lc4-column-review/empty-container-tail-readonly/empty-list-reopened.roff:12:2: WARNING: empty block: Bl\n",
+          "stderr": ""
+        }
+      },
+      "native_rows": [
+        "     A",
+        "     Y           B"
+      ],
+      "stop_heading": "NEXT",
+      "break_after": false,
+      "reading_policy": "native-relative-hard-rows-no-source-margin",
+      "cli_rows": [
+        "A",
+        "Y           B"
+      ],
+      "ui_rows_78": [
+        "   A",
+        "   Y           B"
+      ],
+      "payloads": [
+        "A\nY",
+        "B"
+      ],
+      "linked": false,
+      "ast_cells": [
+        {
+          "line": 9,
+          "column": 2,
+          "texts": [
+            {
+              "value": "A",
+              "line": 10,
+              "column": 5,
+              "line_start": false,
+              "no_fill": false
+            },
+            {
+              "value": "1",
+              "line": 11,
+              "column": 5,
+              "line_start": false,
+              "no_fill": false
+            },
+            {
+              "value": "Y",
+              "line": 14,
+              "column": 5,
+              "line_start": false,
+              "no_fill": false
+            }
+          ]
+        },
+        {
+          "line": 15,
+          "column": 5,
+          "texts": [
+            {
+              "value": "B",
+              "line": 15,
+              "column": 8,
+              "line_start": false,
+              "no_fill": false
+            }
+          ]
+        }
+      ],
+      "receipt_rule": "mdoc_term.c::termp_bl_pre/post call term_newln only; zero-output container cannot reopen prior closed graph. Actual accepted Y reopens; inner empty It post adds its independently completed row."
+    }
+  ],
+  "header": {
+    "count": 17,
+    "profiles_per_source": 5,
+    "expectations_from_product": false,
+    "oracle_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+    "native_rule": "term_vspace closes NOBREAK graph once; new accepted words reopen its tail; term_newln/sp0 do not force NOBREAK endline; completed empty rows stay separate."
+  }
+}

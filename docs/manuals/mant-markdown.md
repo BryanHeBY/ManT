@@ -475,6 +475,25 @@ hints. These generated literal spaces remain payload after Markdown readback,
 so scalar positions can differ from original IR. Artifact/search ranges address
 the actual exported bytes rather than reverse-mapping padding to author scalars.
 
+Table column preferences belong to reading layout. Imported Markdown tables use
+empty width preferences, gap 2 and no source advance or extra-field constraint.
+Terminal readers resolve supplied preferences at their actual viewport. With
+empty widths they apply the gap; retained advance/extra-field constraints apply
+only to declared-field layout. Cell content, spans and links remain unchanged.
+Portable Markdown keeps its existing
+flattened fenced-table spelling; column preferences do not add author characters
+or pre-wrap the IR cells. Literal row-hint projection remains the separate policy
+described above.
+
+A table cell's `breakAfter` closes the current physical data row before the next
+cell in the flattened fenced spelling. This format boundary adds no extra empty
+row and does not change the canonical cell body or its scalar ownership. An empty
+first cell retains its existing structural row before the next cell; an empty
+middle cell can close a row occupied by an earlier cell while its pipe retains
+the cell topology. Navigation-only carrier rows remain outside the fence without
+adding body rows. Existing open tails and completed empty rows keep their
+separate behavior. Imported Markdown tables default this fact to false.
+
 A native definition whose label has completed its row uses a CommonMark hard
 break before a prose description. Resolved positive leading space keeps a
 paragraph boundary, with numeric distance simplified to one blank line. A

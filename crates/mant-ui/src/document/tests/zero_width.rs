@@ -76,6 +76,7 @@ fn navigation_table(widths: &[u16], cells: Vec<Vec<Block>>) -> Block {
             cells: cells
                 .into_iter()
                 .map(|blocks| TableCell {
+                    break_after: false,
                     blocks,
                     kind: mant_ir::TableCellKind::Text,
                     column_span: 1,
@@ -84,7 +85,7 @@ fn navigation_table(widths: &[u16], cells: Vec<Vec<Block>>) -> Block {
                 })
                 .collect(),
         }],
-        column_widths: widths.to_vec(),
+        column_preferences: declared_preferences(widths),
         layout: LayoutHint::default(),
         source: None,
     }
@@ -351,4 +352,20 @@ fn real_literal_empty_lines_keep_their_rows_and_precise_anchor_positions() {
     assert_eq!(built.content.anchors.get("deferred"), Some(&0));
     assert_eq!(built.content.anchors.get("first"), Some(&0));
     assert_eq!(built.content.anchors.get("second"), Some(&1));
+}
+
+fn declared_preferences(widths: &[u16]) -> mant_ir::ColumnPreferences {
+    if widths.is_empty() {
+        return mant_ir::ColumnPreferences::default();
+    }
+    mant_ir::ColumnPreferences {
+        widths: widths.to_vec(),
+        gap_columns: match widths.len() {
+            n if n < 5 => 4,
+            5 => 3,
+            _ => 1,
+        },
+        advance_limit_columns: Some(256),
+        extra_width_columns: Some(10),
+    }
 }

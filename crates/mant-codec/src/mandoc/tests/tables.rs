@@ -901,10 +901,21 @@ fn bl_column_widths_measure_executed_device_glyphs() {
         b".Dd September 8, 2026\n.Dt BL-COLUMN-WIDTH 7\n.Os\n.Sh DESCRIPTION\n.Bl -column \\(lq\\(rq a\\&b \xe4\xb8\xad\xe4\xb8\xad\n.It A Ta B\n.El\n",
     )
     .expect("lower a column list");
-    let Block::Table { column_widths, .. } = &document.sections[0].blocks[0] else {
+    let Block::Table {
+        column_preferences, ..
+    } = &document.sections[0].blocks[0]
+    else {
         panic!("expected one lowered column table");
     };
-    assert_eq!(column_widths, &[2, 2, 4]);
+    assert_eq!(
+        column_preferences,
+        &mant_ir::ColumnPreferences {
+            widths: vec![2, 2, 4],
+            gap_columns: 4,
+            advance_limit_columns: Some(256),
+            extra_width_columns: Some(10),
+        }
+    );
 }
 
 #[test]
@@ -921,8 +932,19 @@ fn bl_column_widths_saturate_at_the_ir_bound() {
         .as_bytes(),
     )
     .expect("lower an oversized column declaration");
-    let Block::Table { column_widths, .. } = &document.sections[0].blocks[0] else {
+    let Block::Table {
+        column_preferences, ..
+    } = &document.sections[0].blocks[0]
+    else {
         panic!("expected one lowered column table");
     };
-    assert_eq!(column_widths, &[u16::MAX, 3]);
+    assert_eq!(
+        column_preferences,
+        &mant_ir::ColumnPreferences {
+            widths: vec![u16::MAX, 3],
+            gap_columns: 4,
+            advance_limit_columns: Some(256),
+            extra_width_columns: Some(10),
+        }
+    );
 }

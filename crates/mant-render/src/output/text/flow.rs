@@ -15,6 +15,9 @@ enum Part {
     CompletedText(LayoutText),
     Literal(LayoutText),
     Gap(u16),
+    /// Consume completed gap rows at a whole table-data-row boundary without
+    /// manufacturing a second empty physical row.
+    CompleteGap,
 }
 
 impl Flow {
@@ -26,6 +29,7 @@ impl Flow {
         self.parts.iter().any(|part| match part {
             Part::Text(_) | Part::CompletedText(_) | Part::Literal(_) => true,
             Part::Gap(rows) => *rows > 0,
+            Part::CompleteGap => false,
         })
     }
     pub(super) fn text(value: LayoutText) -> Self {
@@ -59,7 +63,7 @@ impl Flow {
     pub(super) fn prefix_first_row(mut self, removed: &str, prefix: &str) -> Self {
         if let Some(text) = self.parts.iter_mut().find_map(|part| match part {
             Part::Text(text) | Part::CompletedText(text) | Part::Literal(text) => Some(text),
-            Part::Gap(_) => None,
+            Part::Gap(_) | Part::CompleteGap => None,
         }) {
             *text = std::mem::take(text).strip_prefix(removed).prefixed(prefix);
         } else {
@@ -74,6 +78,96 @@ impl Flow {
 
     pub(super) fn extend(&mut self, other: Self) {
         self.parts.extend(other.parts);
+    }
+
+    /// Retain cell gap requests until the actual parent consumes them.
+    /// A successor can reuse one provisional literal tail only when no
+    /// completed gap intervenes; this never trims author whitespace.
+    pub(super) fn append_stack_cell(&mut self, mut cell: Self, break_after: bool) {
+        let completed = cell.parts.iter().rev().find_map(|part| match part {
+            Part::Text(_) | Part::Literal(_) => Some(false),
+            Part::CompletedText(_) | Part::CompleteGap => Some(true),
+            Part::Gap(rows) if *rows > 0 => Some(true),
+            Part::Gap(_) => None,
+        });
+        let has_row = cell.parts.iter().any(|part| {
+            matches!(
+                part,
+                Part::Text(_) | Part::CompletedText(_) | Part::Literal(_)
+            )
+        });
+        if has_row {
+            let leading_gap = cell
+                .parts
+                .iter()
+                .take_while(|part| matches!(part, Part::Gap(_)))
+                .any(|part| matches!(part, Part::Gap(rows) if *rows > 0));
+            if !leading_gap {
+                self.retire_open_tail();
+            }
+        }
+        for part in &mut cell.parts {
+            if let Part::Text(text) = part {
+                // A collected cell retains its final open physical row,
+                // including one supplied by an ordinary Paragraph.
+                *part = Part::Literal(std::mem::take(text));
+            }
+        }
+        self.extend(cell);
+        if break_after {
+            if completed == Some(true) {
+                // An explicit close consumes the existing completed gap
+                // boundary once; the following cell starts a fresh budget.
+                self.complete_table_gap();
+            } else {
+                self.close_stack_cell();
+            }
+        }
+    }
+
+    pub(super) fn complete_table_gap(&mut self) {
+        if self
+            .parts
+            .iter()
+            .rev()
+            .take_while(|part| matches!(part, Part::Gap(_)))
+            .any(|part| matches!(part, Part::Gap(rows) if *rows > 0))
+        {
+            self.parts.push(Part::CompleteGap);
+        }
+    }
+
+    fn retire_open_tail(&mut self) {
+        for part in self.parts.iter_mut().rev() {
+            match part {
+                Part::Gap(rows) if *rows > 0 => return,
+                Part::Text(text) | Part::Literal(text) => {
+                    if text.visible.ends_with('\n') {
+                        // split(true) removes exactly the provisional row's
+                        // delimiter and carries its zero-width decoration.
+                        *text = LayoutText::join(text.split(true), "\n");
+                    }
+                    return;
+                }
+                Part::CompletedText(_) => return,
+                Part::Gap(_) | Part::CompleteGap => {}
+            }
+        }
+    }
+
+    fn close_stack_cell(&mut self) {
+        for part in self.parts.iter_mut().rev() {
+            match part {
+                Part::Gap(rows) if *rows > 0 => return,
+                Part::Text(text) | Part::Literal(text) => {
+                    *part = Part::CompletedText(std::mem::take(text));
+                    return;
+                }
+                Part::CompletedText(_) | Part::CompleteGap => break,
+                Part::Gap(_) => {}
+            }
+        }
+        self.parts.push(Part::CompletedText(LayoutText::default()));
     }
 
     pub(super) fn finish(self, preceding_content: bool) -> String {
@@ -110,6 +204,19 @@ impl Flow {
             );
             match part {
                 Part::Gap(rows) => gap.append_resolved(rows),
+                Part::CompleteGap => {
+                    let rows = gap.rows(0);
+                    if rows > 0 {
+                        if has_content {
+                            output.push_plain("\n");
+                        }
+                        output.push_plain(&"\n".repeat(usize::from(rows)));
+                        has_content = false;
+                        final_empty_literal_row = false;
+                        final_completed_row = true;
+                    }
+                    gap = GapPlan::default();
+                }
                 Part::Text(text) | Part::CompletedText(text) | Part::Literal(text) => {
                     if has_content {
                         output.push_plain("\n");
@@ -178,5 +285,63 @@ mod tests {
             parent.finish(false),
             format!("BEFORE{}AFTER\n\nLITERAL", "\n".repeat(4097))
         );
+    }
+
+    #[test]
+    fn stacked_cell_edges_share_the_active_cursor_until_a_real_row_arrives() {
+        for leading in [true, false] {
+            let mut parent = Flow::text("BEFORE".into());
+            parent.gap(3000);
+            let mut cell = Flow::default();
+            cell.gap(3000);
+            cell.push_text("BODY".into());
+            if leading {
+                parent.append_stack_cell(cell, false);
+            } else {
+                let mut first = Flow::text("FIRST".into());
+                first.gap(3000);
+                parent = first;
+                parent.append_stack_cell(cell, false);
+            }
+            parent.complete_table_gap();
+            let output = parent.finish(false);
+            assert_eq!(output.matches('\n').count(), 4097);
+            assert!(output.ends_with("BODY"));
+        }
+    }
+
+    #[test]
+    fn whole_data_row_consumes_gap_only_receipts_without_an_extra_blank() {
+        for break_after in [false, true] {
+            let mut parent = Flow::text("BEFORE".into());
+            let mut cell = Flow::default();
+            cell.gap(3000);
+            parent.append_stack_cell(cell, break_after);
+            parent.complete_table_gap();
+            parent.gap(3000);
+            parent.push_text("AFTER".into());
+            let output = parent.finish(false);
+            assert_eq!(output.matches('\n').count(), 6001);
+            assert!(output.ends_with("AFTER"));
+        }
+        let mut nested = Flow::default();
+        nested.gap(1);
+        nested.complete_table_gap();
+        let mut outer = Flow::default();
+        outer.append_stack_cell(nested, true);
+        assert_eq!(outer.finish(false), "\n");
+    }
+
+    #[test]
+    fn ordinary_cell_open_rows_keep_their_receipt_through_eof_and_successors() {
+        let mut eof = Flow::default();
+        eof.append_stack_cell(Flow::text("A\n".into()), false);
+        assert_eq!(eof.finish(false), "A\n\n");
+        for (closed, expected) in [(false, "A\nB"), (true, "A\n\nB")] {
+            let mut row = Flow::default();
+            row.append_stack_cell(Flow::text("A\n".into()), closed);
+            row.append_stack_cell(Flow::text("B".into()), false);
+            assert_eq!(row.finish(false), expected);
+        }
     }
 }

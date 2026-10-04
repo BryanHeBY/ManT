@@ -311,7 +311,7 @@ fn lower_body(
     // This admitted fragment owns one independent tbl cell. Its closing
     // term_newln consumes the same receipt as a paragraph drain, retaining
     // completed empty rows separately from the ordinary closing delimiter.
-    let (mut inlines, _, completed_rows) = builder.take_paragraph_segment(true);
+    let (mut inlines, _, completed_rows, _) = builder.take_paragraph_segment(true);
     if completed_rows > 0 {
         // A cell's split_terminator consumes the printed row's closing
         // delimiter. Completed empty rows therefore need their own ones.

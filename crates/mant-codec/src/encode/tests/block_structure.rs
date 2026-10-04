@@ -123,11 +123,12 @@ fn chooses_safe_fences_and_preserves_native_table_and_equation_content() {
                     source: None,
                 },
                 Block::Table {
-                    column_widths: Vec::new(),
+                    column_preferences: mant_ir::ColumnPreferences::default(),
                     rows: vec![TableRow {
                         kind: mant_ir::TableRowKind::Data,
                         cells: vec![
                             TableCell {
+                                break_after: false,
                                 kind: mant_ir::TableCellKind::Text,
                                 blocks: vec![paragraph(vec![Inline::Text {
                                     value: "left".to_owned(),
@@ -137,6 +138,7 @@ fn chooses_safe_fences_and_preserves_native_table_and_equation_content() {
                                 alignment: None,
                             },
                             TableCell {
+                                break_after: false,
                                 kind: mant_ir::TableCellKind::Text,
                                 blocks: vec![paragraph(vec![Inline::Text {
                                     value: "right".to_owned(),

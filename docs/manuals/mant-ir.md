@@ -62,7 +62,7 @@ The block union preserves structures that matter across renderers:
 | `preformatted` | Literal flow with an optional language |
 | `list` | Bullet, ordered, or plain items containing blocks |
 | `definition-list` | Terms and block descriptions with item layout, source, and optional `entry` facts |
-| `table` | Rows and block-capable cells with spans, alignment, and optional measured `columnWidths` |
+| `table` | Rows and block-capable cells with spans, alignment, and optional `columnPreferences` |
 | `equation` | Parsed expression and its checked readable text projection when available; legacy producers may supply text alone |
 | `vertical-space` | Executed blank terminal rows |
 | `thematic-break` | Semantic separator |
@@ -184,24 +184,59 @@ fields, and negative/fractional/oversized starts are rejected during decoding.
 
 Every canonical ID in `DocumentIndex` is a local navigation target, including entries attached directly to ordinary list items or native definitions. A `LinkTarget::Section` may target any such ID; its historical variant name does not restrict links to heading-backed sections. Entry targets do not need an additional inline anchor. Producers resolve exact authored fragments to canonical IDs before validation; duplicate identities and incompatible roles remain separate errors.
 
-`Table.columnWidths` is an ordered array of measured declaration content widths,
-in display cells of the producer's reading device, excluding the inter-column
-gap. Empty or omitted uses content-derived table layout; `null` is invalid.
-Every element is an integer from 0 through 65535. These are preferred field
-origins rather than fixed viewport widths: shared terminal placement adds a
-4/3/1-cell gap for fewer than, exactly, or more than five declarations. Cells
-beyond the declarations start after the sum of all declared fields. One advance
-is bounded to 256 cells. More than 256 declared or actual columns, incompatible
-spans/rules, and signed descendant origins use the existing source-order
-fallback; all actual content remains owned by its original cell. ANSI decoration
-never changes measurement. TUI resizing may stack cells while retaining links,
-anchors, search ranges and selection coordinates.
+`Table.column_preferences: ColumnPreferences` carries optional reading preferences,
+serialized as `columnPreferences`. Its closed object has `widths`, an ordered
+array of preferred content widths excluding the gap; `gapColumns`, the preferred
+inter-column blank count; optional `advanceLimitColumns`, limiting one positioning
+advance; and optional `extraWidthColumns`, the content capacity for fields beyond
+the declarations, excluding any added gap. Those fields share the preferred
+origin after all declared fields. Every supplied number is an integer from 0
+through 65535. These are display-cell preferences, not final viewport coordinates
+or another cell body.
+The source-neutral default is `{ widths: [], gap_columns: 2,
+advance_limit_columns: None, extra_width_columns: None }`. Empty widths select
+content-derived layout, where a custom gap still applies. Nondefault advance and
+extra-field constraints remain in canonical JSON even with empty widths, but
+apply only to declared-field layout. Explicit zero is retained;
+`Some(0)` differs from an absent constraint. Optional constraints accept null as
+absence and serialize by omission. The object and its widths/gap cannot be null.
+Missing preferences and `{}` use the same default, and canonical output omits
+only that complete default. Positional arrays are rejected even when empty.
+Unknown or duplicate fields, the retired
+`columnWidths` array, and mixed old/new shapes are rejected.
+
+The producer resolves source escapes and source-specific gap/advance rules.
+For mdoc column lists it supplies measured widths, a 4/3/1-cell gap, a 256-cell
+advance limit and extra-field width 10. Generic consumers use the supplied
+preferences without interpreting a macro or inferring a gap from the width count.
+They measure and wrap at the actual viewport before collision and placement.
+More than 256 declared or actual columns, incompatible spans/rules, and signed
+descendant origins use the existing source-order fallback; every cell keeps its
+content and owner. The independent 4096-cell generated-padding budget uses that
+fallback when exceeded, retaining every later cell as well as the cells already
+prepared. It does not impose a source advance limit. ANSI decoration never changes
+measurement. TUI resizing may stack cells while retaining links, anchors, search
+ranges and selection coordinates.
 Ordinary trailing separator spaces do not force a field wrap, but preserved
 output spaces still advance the visible cursor. A later cell never starts
 before the preceding cell's actual output ends.
 Completed blank rows are distinct from an open trailing line: a later cell
 cannot reuse a row already completed by the formatter. CLI and TUI placement
 consume the same row-completion facts, including empty final fields.
+
+`TableCell.break_after` (`breakAfter`) closes the current physical data row after
+that cell, before the next cell starts. The row may be occupied by this or an
+earlier cell, or be an empty row already present in the table structure. Its
+default is false and canonical JSON omits false. It adds no body scalar or
+additional empty row: an empty first cell with this boundary retains its existing
+data row before the next cell. Navigation-only carrier rows remain nonprinting.
+An inline hard break may leave an open tail for the next cell; this closure
+prevents reuse of that tail. Already completed empty rows retain their existing
+single consumption point.
+The closure consumes a resolved gap once before the next cell begins a new
+budget. Unclosed cells in an origin-preserving stacked row share the active
+parent budget; ordinary column cells remain independent. The whole data-row
+boundary also consumes pending gaps, even when its content roots are empty.
 
 `TableGrid` supplies shared sparse logical-column coordinates for table consumers. Each row has a closed `kind`: `data`, `horizontal-rule`, `double-horizontal-rule`, or `layout-rule`. A layout rule retains one `horizontal` or `double-horizontal` strength per logical column, including mixed `_`/`=` layout rows. Data-row cells also have a closed `kind`: omitted/`text`, `horizontal-rule`, `double-horizontal-rule`, `isolated-horizontal-rule`, or `isolated-double-horizontal-rule`. These cell roles preserve partial layout rows and tbl data-cell rule tokens without inventing text blocks; a rule cell must have no ordinary block content. A data row with no cells is an intentional physical blank row; it is not interchangeable with a rule. Horizontal spans omit covered cells; vertical continuations retain explicit empty cells in subsequent rows, while `rowSpan` remains on the content owner. Covered content is never repeated. Callers can request dense column slots with an explicit budget, so large span values need not allocate a dense grid.
 

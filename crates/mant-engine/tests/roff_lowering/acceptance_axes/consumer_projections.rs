@@ -220,11 +220,12 @@ fn assert_markdown_projection(
         if name == "column_tail_hard_row" {
             // The exact source was rerun with pristine CVS first:
             // term.c::term_word buffers ESCAPE_BREAK, and term_fill
-            // accepts D before the rejected suffix. The column fence
-            // preserves that executed trailing row; its generated pipe
-            // does not justify trimming the cell's LF. Native snapshots
-            // retain the original two rows independently of this spelling.
-            assert_eq!(projected_rows, ["D", "| RightWord"]);
+            // accepts D before the rejected suffix. The public breakAfter
+            // fact closes the accepted data row without another blank row.
+            // Its hard boundary replaces the portable topology pipe, which
+            // is format syntax rather than accepted source body content.
+            // Native snapshots retain their independent exact row contract.
+            assert_eq!(projected_rows, ["D", "RightWord"]);
         }
         for boundary in &hard_rows.expect {
             let left = super::axis_model::row_containing(&projected_rows, boundary.left)

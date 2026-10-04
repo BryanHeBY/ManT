@@ -882,7 +882,7 @@ Every block is tagged by `type`:
 | `preformatted` | `children`, optional `language`, optional `inlineLayout` | Literal/code display |
 | `list` | structured `kind`, `items`, `compact` | Bullet, dash, ordered, or plain list |
 | `definition-list` | `items`, `compact` | Terms with block-capable descriptions |
-| `table` | `rows`, optional `columnWidths` | Block-capable cells, spans, alignment, and measured field origins |
+| `table` | `rows`, optional `columnPreferences` | Block-capable cells, spans, alignment, and reading preferences |
 | `equation` | `value`, optional `expression`, `display` | Readable text projected from parsed equation structure when available |
 | `vertical-space` | `lines` | Executed blank rows |
 | `thematic-break` | None | Semantic horizontal break |
@@ -922,17 +922,46 @@ Table cells contain `blocks`;
 `columnSpan` and `rowSpan` default to `1`, and `alignment` can be `left`,
 `center`, or `right`.
 
-Table `columnWidths` is a closed array of unsigned integer display-cell widths
-(0 through 65535), measured by the producer after interpreting declaration
-escapes, and excluding the inter-column gap. Missing and `[]` select
-content-derived layout; canonical output omits the empty array. Null, negative,
-fractional and out-of-range values are rejected in actual JSON decoding. For
-example, `"columnWidths":[8,1]` gives the second field a preferred origin of
-12 cells after the four-cell gap. Plain and ANSI consumers use the same bounded
-geometry as the TUI. Extreme widths remain valid IR, but an individual advance
-is bounded to 256 cells and tables beyond the dense placement budget use the
-existing source-order fallback. Widths never authorize dropping cells or
-changing their entry, link or span ownership.
+Optional table-cell `breakAfter` is a boolean, defaulting to false and omitted
+canonically when false. True closes the current physical data row after that
+cell, so the next cell starts on a new row. The row can be occupied by an earlier
+cell or already exist as an empty structural data row; closing it adds neither
+body text nor an additional empty row. Navigation-only carrier rows remain
+nonprinting. Open tails left by inline hard breaks and already completed empty
+rows remain distinct. Null, nonboolean values, unknown cell fields and duplicate
+`breakAfter` fields are rejected. A cell must be an object; positional arrays
+are rejected. The closure consumes any resolved gap at that boundary once;
+subsequent cells start a new gap budget. Without the closure, adjacent requests
+in an origin-preserving stacked row share their parent's budget. Ordinary
+column cells retain independent budgets.
+
+Table `columnPreferences` is a closed object containing optional reading
+preferences. `widths` defaults to `[]` and contains preferred content widths,
+excluding inter-column blanks. `gapColumns` defaults to 2. Optional
+`advanceLimitColumns` limits one positioning advance; optional `extraWidthColumns`
+gives the content capacity for fields beyond the declarations, excluding any
+added gap. Those fields share the preferred origin after all declared fields.
+Every number is an integer from 0 through 65535. Missing preferences and `{}` are equivalent,
+and canonical JSON omits only the complete default: empty widths, gap 2, and no
+constraints. With empty widths, content-derived layout uses the gap; nondefault
+advance and extra-field constraints are retained but apply only to declared-field
+layout. Explicit zero is meaningful and survives serialization, including zero-valued
+optional constraints. Those two optional fields accept null as absence and omit
+it canonically; `columnPreferences`, `widths`, and `gapColumns` cannot be null.
+The preferences must be an object; positional arrays, including `[]`, are rejected.
+Unknown and duplicate fields, negative/fractional/oversized numbers, the retired
+top-level `columnWidths`, and mixed old/new shapes are rejected by JSON decoding.
+
+For example, `"columnPreferences":{"widths":[8,1],"gapColumns":4,
+"advanceLimitColumns":256,"extraWidthColumns":10}` retains an mdoc two-column
+source preference, giving the second field a preferred origin of 12 cells.
+The producer chooses those source constraints; a generic consumer never infers
+the native 4/3/1 gap or 256-cell limit from the declaration count. CLI and TUI
+share measurement and collision rules, with viewport wrapping performed before
+placement. Extreme preferences remain valid IR. The independent 4096-cell
+generated-padding budget uses the source-order fallback when exceeded, retaining
+every prepared and later cell. Preferences cannot drop cells or change entry,
+link, span, or author-scalar ownership.
 
 Native equation blocks carry `expression`, a nested box tree with `kind`,
 `font`, `position`, parsed text/fences/decorations, argument counts and ordered

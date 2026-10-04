@@ -719,6 +719,7 @@ fn empty_cell_hard_rows_do_not_copy_the_parent_column_origin() {
     document.blocks = vec![Block::Table {
         rows: vec![TableRow {
             cells: vec![TableCell {
+                break_after: false,
                 blocks: vec![Block::Paragraph {
                     children: vec![Inline::Text {
                         value: "A\n\n".into(),
@@ -737,7 +738,7 @@ fn empty_cell_hard_rows_do_not_copy_the_parent_column_origin() {
             }],
             kind: mant_ir::TableRowKind::Data,
         }],
-        column_widths: vec![],
+        column_preferences: mant_ir::ColumnPreferences::default(),
         layout: LayoutHint {
             indent_columns: 2,
             ..Default::default()
@@ -883,6 +884,7 @@ fn table_placement_moves_hint_copy_regions_with_their_cells() {
     let document = content.document.as_mut().unwrap();
     document.sections.clear();
     let cell = |word: &str, correction| TableCell {
+        break_after: false,
         blocks: vec![Block::Paragraph {
             children: vec![Inline::Link {
                 target: mant_ir::LinkTarget::Section {
@@ -907,7 +909,7 @@ fn table_placement_moves_hint_copy_regions_with_their_cells() {
             cells: vec![cell("LEFT", 3), cell("RIGHT", 1)],
             kind: mant_ir::TableRowKind::Data,
         }],
-        column_widths: vec![],
+        column_preferences: mant_ir::ColumnPreferences::default(),
         layout: LayoutHint::default(),
         source: None,
     }];

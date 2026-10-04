@@ -32,6 +32,7 @@ fn printed_origin_advances_survive_node_geometry_until_the_real_row_end() {
         indent_columns: 0,
         field_offset: 0,
         field_offset_units: 0,
+        column_reading_origin: None,
         margin_override: None,
     };
     builder.execution.add_native_display_offset(6);
@@ -78,6 +79,45 @@ fn a_source_origin_overrides_existing_minimum_field_spacing() {
     // removal cannot subtract that register again (term.c:113-116).
     assert_eq!(device.unprojected_origin_units, 6 * 24);
     assert_eq!(builder.definition.as_ref().unwrap().hang_row.minbl, 1);
+}
+
+#[test]
+fn accepted_column_reading_origins_preserve_signed_display_offsets_once() {
+    // Exact Bd -offset -3n/0n/6n with a +5n column parent ran all five
+    // pristine profiles before this assertion. Bd BODY applies a signed
+    // offset and print_mdoc_node restores it after post (mdoc_term.c:
+    // 1449-1455,437-439). The reading correction never changes native
+    // buffer capacity or acceptance; positive native geometry is counted once.
+    for columns in [-3_i32, 0, 6] {
+        let mut builder = InlineBuilder::new();
+        builder.begin_column_body(12, 0, false);
+        builder.set_column_reading_parent(10 * 24);
+        let state = builder.definition.as_ref().unwrap();
+        let saved = DefinitionGeometryCheckpoint {
+            indent_columns: state.row.indent_columns,
+            field_offset: state.hang_row.field_offset,
+            field_offset_units: state.field_offset_units,
+            column_reading_origin: state.column_reading_origin,
+            margin_override: state.margin_override,
+        };
+        builder
+            .execution
+            .add_native_display_offset_units(columns * 24);
+        builder.append_text("A");
+        let device = builder.native_field_device(false).unwrap();
+        assert_eq!(device.row_origins[0].2, columns);
+        assert_eq!(
+            builder.definition.as_ref().unwrap().field_offset_units,
+            usize::try_from(columns.max(0)).unwrap() * 24,
+            "reading coordinates do not reconfigure the native field"
+        );
+        builder.execution.restore_definition_geometry(Some(saved));
+        assert_eq!(
+            builder.native_field_device(false).unwrap().row_origins[0].2,
+            0,
+            "pending accepted words use geometry restored at the real post"
+        );
+    }
 }
 
 #[test]

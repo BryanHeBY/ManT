@@ -135,6 +135,7 @@ fn stacked_cells_reuse_only_an_open_logical_tail() {
             source: None,
         };
         let cell = |blocks| TableCell {
+            break_after: false,
             blocks,
             kind: TableCellKind::Text,
             column_span: 1,
@@ -149,7 +150,7 @@ fn stacked_cells_reuse_only_an_open_logical_tail() {
                 cells: vec![cell(first), cell(vec![second])],
                 kind: TableRowKind::Data,
             }],
-            column_widths: vec![8, 4],
+            column_preferences: declared_preferences(&[8, 4]),
             layout: mant_ir::LayoutHint::default(),
             source: None,
         }];
@@ -230,6 +231,7 @@ fn nested_cell_query(definition: bool, literal: bool, gap: u16) -> ResolvedConte
         }
     };
     let cell = |blocks| TableCell {
+        break_after: false,
         blocks,
         kind: TableCellKind::Text,
         column_span: 1,
@@ -258,7 +260,7 @@ fn nested_cell_query(definition: bool, literal: bool, gap: u16) -> ResolvedConte
             ],
             kind: TableRowKind::Data,
         }],
-        column_widths: vec![8, 4],
+        column_preferences: declared_preferences(&[8, 4]),
         layout: mant_ir::LayoutHint::default(),
         source: None,
     }];
@@ -340,5 +342,21 @@ fn assert_pointer_and_copy(query: &ResolvedContent, label: &str, target: &str) {
             text
         });
         assert_eq!(copied, [label], "width={width}");
+    }
+}
+
+fn declared_preferences(widths: &[u16]) -> mant_ir::ColumnPreferences {
+    if widths.is_empty() {
+        return mant_ir::ColumnPreferences::default();
+    }
+    mant_ir::ColumnPreferences {
+        widths: widths.to_vec(),
+        gap_columns: match widths.len() {
+            n if n < 5 => 4,
+            5 => 3,
+            _ => 1,
+        },
+        advance_limit_columns: Some(256),
+        extra_width_columns: Some(10),
     }
 }

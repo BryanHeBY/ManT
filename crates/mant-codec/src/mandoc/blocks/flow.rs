@@ -6,8 +6,16 @@ mod literal;
 mod paragraph;
 #[cfg(test)]
 mod tests;
+use crate::mandoc::inline::OutputRowEnd;
 use literal::LiteralFlow;
 use paragraph::ParagraphFlow;
+
+#[derive(Clone, Copy)]
+struct ClosedOutputTail {
+    output_end: usize,
+    owner: usize,
+    row_end: OutputRowEnd,
+}
 
 pub(super) struct BlockState {
     pub(super) output: Vec<Block>,
@@ -20,6 +28,10 @@ pub(super) struct BlockState {
     // an empty vector or a device row which has just ended. Neither fact is
     // permission to run the same native buffer against a different Vec.
     column_display_owner: bool,
+    // Only the latest accepted output tail can hand a closed graph boundary
+    // to its cell. Transparent structures relocate this owner position;
+    // later accepted graph reopens the tail.
+    closed_output_tail: Option<ClosedOutputTail>,
     pending_targets: targets::PendingTargets,
     // A paragraph pre request can finish its BODY with a live text row. Its
     // leading distance belongs to the next emitted block, not a Rust return.
@@ -163,6 +175,7 @@ impl BlockState {
             paragraph: ParagraphFlow::new(),
             literal: LiteralFlow::new(),
             column_display_owner: false,
+            closed_output_tail: None,
             pending_targets: targets::PendingTargets::new(),
             pending_spacing: None,
             indent_columns,
@@ -348,10 +361,44 @@ impl BlockState {
         if self.pending_targets.is_empty() {
             return;
         }
+        let previous_end = self.output.len();
         let mut lowered = self.output.split_off(output_start.min(self.output.len()));
         self.pending_targets
             .attach_leading(&mut lowered, layout(self.indent_columns));
         self.output.append(&mut lowered);
+        if let Some(tail) = &mut self.closed_output_tail
+            && tail.output_end == previous_end
+        {
+            // Target fallback may insert a zero-width paragraph. It writes
+            // no native cell and cannot reopen the accepted physical tail.
+            if tail.owner >= output_start {
+                tail.owner += self.output.len().saturating_sub(previous_end);
+            }
+            tail.output_end = self.output.len();
+        }
+    }
+
+    pub(super) fn finish_structural_output(
+        &mut self,
+        previous_end: usize,
+        accepted_before: (u64, bool),
+    ) {
+        if let Some(tail) = self.closed_output_tail
+            && tail.output_end == previous_end
+        {
+            // Bl pre/post only call term_newln (mdoc_term.c:1128-1154).
+            // An empty wrapper after a real endline changes IR topology,
+            // but only another accepted graph can reopen that device row.
+            // Use the execution receipt, never a block visibility guess.
+            self.closed_output_tail = (!self
+                .formatter
+                .execution
+                .has_visible_content_since(accepted_before))
+            .then_some(ClosedOutputTail {
+                output_end: self.output.len(),
+                ..tail
+            });
+        }
     }
 
     pub(super) fn request_leading_spacing(
@@ -510,9 +557,11 @@ impl BlockState {
     /// A no-fill word clears CVS skipvsp; its zero-width registers are
     /// already updated by the shared text executor.
     pub(super) fn begin_column_body(&mut self, width: u16, origin: usize, last: bool) {
+        let parent_units = self.indent_columns.physical_basic_units();
         self.paragraph
             .with_inline_builder(&mut self.formatter, |builder| {
                 builder.begin_column_body(width, origin, last);
+                builder.set_column_reading_parent(parent_units);
             });
     }
 
@@ -659,9 +708,9 @@ impl BlockState {
             return;
         }
         let output_start = self.output.len();
-        let (block, empty_word_end_break, completed_vertical_rows) =
-            self.paragraph
-                .take(&mut self.formatter, self.indent_columns, line_request);
+        let (block, empty_word_end_break, completed_vertical_rows, closed_tail) = self
+            .paragraph
+            .take(&mut self.formatter, self.indent_columns, line_request);
         let mut suppressed_head_row = false;
         if let Some(block) = block {
             match block {
@@ -745,6 +794,11 @@ impl BlockState {
             self.formatter.settle_definition_head_rows();
         }
         if self.output.len() > output_start {
+            self.closed_output_tail = closed_tail.is_closed().then_some(ClosedOutputTail {
+                output_end: self.output.len(),
+                owner: output_start,
+                row_end: closed_tail,
+            });
             if let Some(origin) = self.hanging_origin
                 && let Some(Block::Paragraph { layout, .. }) = self.output.last_mut()
             {
@@ -757,8 +811,17 @@ impl BlockState {
 
     pub(super) fn flush_preformatted(&mut self) {
         let output_start = self.output.len();
+        let closed_tail = self.literal.closed_graph_tail();
         self.output.extend(self.literal.take(self.indent_columns));
         if self.output.len() > output_start {
+            self.closed_output_tail = closed_tail.is_closed().then_some(ClosedOutputTail {
+                output_end: self.output.len(),
+                // Literal origins can split one accepted vector into
+                // several blocks. Its tail proof belongs to the final
+                // projected owner, including a trailing literal group.
+                owner: self.output.len() - 1,
+                row_end: closed_tail,
+            });
             self.consume_hanging_first_line();
         }
         self.attach_pending_to_new_output(output_start);
@@ -799,17 +862,17 @@ impl BlockState {
         formatter: &mut crate::mandoc::formatter::FormatterState,
         row_boundary: super::FormatterRowBoundary,
         next_column_entry: Option<&libmandoc_rs::Node>,
-    ) -> Vec<Block> {
-        self.settle(row_boundary, next_column_entry);
+    ) -> (Vec<Block>, bool) {
+        let break_after = self.settle(row_boundary, next_column_entry);
         *formatter = self.formatter;
-        self.output
+        (self.output, break_after)
     }
 
     fn settle(
         &mut self,
         row_boundary: super::FormatterRowBoundary,
         next_column_entry: Option<&libmandoc_rs::Node>,
-    ) {
+    ) -> bool {
         let mut column_closed_row = false;
         if matches!(row_boundary, super::FormatterRowBoundary::Column { .. }) {
             let finish_column = |builder: &mut InlineBuilder| {
@@ -853,26 +916,48 @@ impl BlockState {
         }
         self.flush_preformatted();
         self.flush_paragraph();
-        if column_closed_row
+        let closed_tail = self
+            .closed_output_tail
+            .filter(|tail| tail.output_end == self.output.len());
+        let break_after = (column_closed_row || closed_tail.is_some())
             && matches!(
                 row_boundary,
                 super::FormatterRowBoundary::Column { last: false, .. }
-            )
-            && let Some(Block::Paragraph { children, .. } | Block::Preformatted { children, .. }) =
-                self.output.last_mut()
-            && !matches!(children.last(), Some(Inline::LineBreak { .. }))
+            );
+        if matches!(row_boundary, super::FormatterRowBoundary::Column { .. })
+            && let Some(tail) = closed_tail
+            && tail.row_end == OutputRowEnd::GeneratedClose
+            && let Some(
+                Block::Paragraph {
+                    children,
+                    inline_layout,
+                    ..
+                }
+                | Block::Preformatted {
+                    children,
+                    inline_layout,
+                    ..
+                },
+            ) = self.output.get_mut(tail.owner)
         {
-            // It post closed an already represented graph row before the
-            // following cell. A final cell is closed by the table owner;
-            // adding a second delimiter there would create an empty row.
-            // Here the break opens the next cell's row, not a blank row.
-            children.push(Inline::line_break());
+            // Every column BODY post retires its proved generated delimiter,
+            // including the last field: the whole table row owns that close.
+            // Only a non-last cell exports breakAfter for the next field.
+            // LiteralClose preserves the author's LB and empty TEXT,
+            // including after transparent structural output.
+            if crate::mandoc::inline::consume_one_row_ending(children) {
+                let rows = mant_ir::logical_row_count(children);
+                inline_layout
+                    .row_hints
+                    .retain(|hint| usize::try_from(hint.row).is_ok_and(|row| row < rows));
+            }
         }
         if let Some((lines, source)) = self.pending_spacing.take() {
             self.output.push(Block::VerticalSpace { lines, source });
         }
         let output_end = self.output.len();
         self.attach_pending_to_structural_output(output_end);
+        break_after
     }
 }
 

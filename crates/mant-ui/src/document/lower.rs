@@ -19,6 +19,13 @@ pub(super) struct DocumentBuilder<'a> {
     pub(super) reference_origins: Arc<super::references::ReferenceOrigins>,
     pending_anchors: Vec<String>,
     pending_gap: mant_ir::geometry::GapPlan,
+    /// An inherited cursor has already emitted its rows in the actual parent.
+    /// It must limit new requests without becoming this cell's completed tail.
+    pending_gap_inherited: bool,
+    has_content_row: bool,
+    /// A nested row consumed already printed inherited gap rows without
+    /// producing a new local row. Keep this finite completed-tail receipt.
+    completed_external_gap: bool,
 }
 
 /// Logical payload and its anchors must cross layout boundaries together.
@@ -58,12 +65,18 @@ impl DocumentBuilder<'_> {
             reference_origins: Arc::default(),
             pending_anchors: Vec::new(),
             pending_gap: mant_ir::geometry::GapPlan::default(),
+            pending_gap_inherited: false,
+            has_content_row: false,
+            completed_external_gap: false,
         }
     }
 
     pub(super) fn push(&mut self, line: LogicalLine) {
         self.resolve_pending_anchors();
         self.pending_gap = mant_ir::geometry::GapPlan::default();
+        self.pending_gap_inherited = false;
+        self.has_content_row = true;
+        self.completed_external_gap = false;
         self.lines.push(line);
     }
 
@@ -360,13 +373,13 @@ impl DocumentBuilder<'_> {
             }
             Block::Table {
                 rows,
-                column_widths,
+                column_preferences,
                 layout,
                 ..
             } => {
                 self.table(
                     rows,
-                    column_widths,
+                    column_preferences,
                     compose_origin(base_indent, layout.indent_columns),
                 );
             }
@@ -405,6 +418,9 @@ impl DocumentBuilder<'_> {
     pub(super) fn spacing(&mut self, lines: u16) {
         let before = self.pending_gap.rows(0);
         self.pending_gap.append_resolved(lines);
+        if lines > 0 {
+            self.pending_gap_inherited = false;
+        }
         for _ in before..self.pending_gap.rows(0) {
             self.lines.push(LogicalLine::empty());
         }

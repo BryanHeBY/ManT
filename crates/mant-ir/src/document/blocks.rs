@@ -26,6 +26,56 @@ pub struct LayoutHint {
     pub spacing_before_lines: u16,
 }
 
+/// Source-neutral preferences for measured table columns.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ColumnPreferences {
+    /// Preferred content widths in display cells. Empty uses measured content.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub widths: Vec<u16>,
+    /// Whitespace between columns, excluding any renderer's structural glyph.
+    #[serde(
+        default = "default_column_gap",
+        skip_serializing_if = "is_default_column_gap"
+    )]
+    pub gap_columns: u16,
+    /// Optional maximum advance toward a preferred field origin. Zero disables
+    /// that advance; absence leaves it unrestricted by the source device.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub advance_limit_columns: Option<u16>,
+    /// Optional capacity of fields beyond the declared widths. These fields
+    /// share the end of all declarations as their preferred origin.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub extra_width_columns: Option<u16>,
+}
+
+const fn default_column_gap() -> u16 {
+    2
+}
+#[allow(clippy::trivially_copy_pass_by_ref)] // Serde predicate.
+fn is_default_column_gap(value: &u16) -> bool {
+    *value == default_column_gap()
+}
+
+impl Default for ColumnPreferences {
+    fn default() -> Self {
+        Self {
+            widths: Vec::new(),
+            gap_columns: default_column_gap(),
+            advance_limit_columns: None,
+            extra_width_columns: None,
+        }
+    }
+}
+
+impl ColumnPreferences {
+    /// Whether omitting this value preserves all column preferences.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self == &Self::default()
+    }
+}
+
 /// A document block capable of preserving nested manual structures.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(
@@ -104,14 +154,9 @@ pub enum Block {
     Table {
         /// Logical rows in source order.
         rows: Vec<TableRow>,
-        /// Measured declaration content widths in display cells, excluding
-        /// the inter-column gap. These are preferred field origins, not fixed
-        /// viewport widths. The producer resolves source escapes using its
-        /// reading device. Empty selects content-derived table layout.
-        /// Consumers share bounded 4/3/1-cell gap placement and preserve every
-        /// actual cell when declarations and cells have different lengths.
-        #[serde(default, skip_serializing_if = "Vec::is_empty")]
-        column_widths: Vec<u16>,
+        /// Preferred column geometry, independent of source macro rules.
+        #[serde(default, skip_serializing_if = "ColumnPreferences::is_empty")]
+        column_preferences: ColumnPreferences,
         /// Source-derived indentation and vertical spacing.
         #[serde(default, skip_serializing_if = "LayoutHint::is_empty")]
         layout: LayoutHint,
@@ -606,7 +651,7 @@ pub enum TableRuleCellKind {
 }
 
 /// Block-capable table cell with optional layout information.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TableCell {
     /// Effective native cell content after tbl layout-rule precedence.
@@ -614,6 +659,11 @@ pub struct TableCell {
     pub kind: TableCellKind,
     /// Block content contained in the cell.
     pub blocks: Vec<Block>,
+    /// Close the current physical data row after this cell, before the next.
+    /// The row can be occupied by an earlier cell or already exist as an empty
+    /// structural row. This adds neither body scalars nor an additional row.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub break_after: bool,
     /// Number of logical columns occupied by the cell.
     #[serde(default = "one_u16", skip_serializing_if = "is_one_u16")]
     pub column_span: u16,

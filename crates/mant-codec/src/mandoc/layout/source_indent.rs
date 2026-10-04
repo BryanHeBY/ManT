@@ -30,6 +30,13 @@ impl SourceIndent {
             .saturating_sub(self.parent.position_columns())
     }
 
+    /// Actual source parent including the common five-cell terminal margin.
+    /// This page floor bounds signed reading origins without reconfiguring
+    /// the column's native field or copying its formatter state.
+    pub(in crate::mandoc) fn physical_basic_units(self) -> usize {
+        usize::try_from(self.source.basic_units().saturating_add(5 * 24).max(0)).unwrap_or_default()
+    }
+
     pub(in crate::mandoc) fn content_origin(self) -> Self {
         Self {
             source: self.source,

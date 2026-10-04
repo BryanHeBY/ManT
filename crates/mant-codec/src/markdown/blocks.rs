@@ -233,7 +233,7 @@ fn parse_table(
         }
     }
     Block::Table {
-        column_widths: Vec::new(),
+        column_preferences: mant_ir::ColumnPreferences::default(),
         rows,
         layout: LayoutHint::default(),
         source: Some(source.span(&(start_range.start..end))),
@@ -268,6 +268,7 @@ fn parse_table_row(
                     }]
                 };
                 cells.push(TableCell {
+                    break_after: false,
                     kind: mant_ir::TableCellKind::Text,
                     blocks,
                     column_span: 1,
@@ -281,6 +282,7 @@ fn parse_table_row(
             Event::Start(tag) => {
                 let whole = cursor.consume_balanced(range);
                 cells.push(TableCell {
+                    break_after: false,
                     kind: mant_ir::TableCellKind::Text,
                     blocks: vec![source.unsupported_block(
                         unsupported_block_name(&tag),

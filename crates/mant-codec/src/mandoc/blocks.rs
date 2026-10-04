@@ -193,6 +193,18 @@ pub(super) fn lower_scope(
     formatter: &mut crate::mandoc::formatter::FormatterState,
     flow: ScopeFlow<'_>,
 ) -> Vec<Block> {
+    lower_scope_with_boundary(nodes, context, paragraph_distance, formatter, flow).0
+}
+
+/// A column owner also receives the final accepted physical row boundary.
+/// This result owns no source registers or event history.
+pub(super) fn lower_scope_with_boundary(
+    nodes: &[Node],
+    context: &LoweringContext<'_>,
+    paragraph_distance: &mut u16,
+    formatter: &mut crate::mandoc::formatter::FormatterState,
+    flow: ScopeFlow<'_>,
+) -> (Vec<Block>, bool) {
     let mut lowerer = BlockLowerer::new(
         context,
         flow.indent_columns,
@@ -334,6 +346,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         row_boundary: FormatterRowBoundary,
     ) -> Vec<Block> {
         self.finish_into_before_column_entry(formatter, row_boundary, None)
+            .0
     }
 
     fn finish_into_before_column_entry(
@@ -341,18 +354,18 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         formatter: &mut crate::mandoc::formatter::FormatterState,
         row_boundary: FormatterRowBoundary,
         next_column_entry: Option<&Node>,
-    ) -> Vec<Block> {
+    ) -> (Vec<Block>, bool) {
         if row_boundary == FormatterRowBoundary::Settle {
             // Native BODY posts settle the field before its IR owner drains.
             // In a column, NOBREAK may leave the device row occupied afterwards.
             self.state.finish_column_nested_row();
             self.settle_no_fill_inline();
         }
-        let blocks = self
-            .state
-            .finish_with_formatter(formatter, row_boundary, next_column_entry);
+        let (blocks, break_after) =
+            self.state
+                .finish_with_formatter(formatter, row_boundary, next_column_entry);
         self.context.check_gap_bounds(&blocks);
-        blocks
+        (blocks, break_after)
     }
 }
 

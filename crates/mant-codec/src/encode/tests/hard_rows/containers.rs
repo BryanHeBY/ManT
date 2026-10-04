@@ -49,6 +49,7 @@ fn enclosed(children: Vec<Inline>, container: u8) -> Block {
             rows: vec![TableRow {
                 kind: mant_ir::TableRowKind::Data,
                 cells: vec![TableCell {
+                    break_after: false,
                     kind: mant_ir::TableCellKind::Text,
                     blocks: vec![paragraph(children)],
                     column_span: 1,
@@ -56,7 +57,7 @@ fn enclosed(children: Vec<Inline>, container: u8) -> Block {
                     alignment: None,
                 }],
             }],
-            column_widths: vec![],
+            column_preferences: mant_ir::ColumnPreferences::default(),
             layout: LayoutHint::default(),
             source: None,
         },

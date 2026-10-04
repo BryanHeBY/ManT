@@ -1,26 +1,63 @@
 //! Decide when cell-local column rendering cannot preserve resolved origins.
 use super::{compose_origin, coordinate, list_marker_width, padding};
-use crate::{Block, TableRow};
+use crate::{Block, TableCell, TableRow};
 
-/// Whether a table must render its cells in source order at the real parent
-/// origin, rather than first laying each cell out at local column zero.
-///
-/// An origin outside the final padding bounds, a negative displacement, or a
-/// descendant crossing the bounds cannot survive clipping a cell independently
-/// and then translating its already-rendered text. This
-/// conservative fallback preserves blocks, links, anchors, and relative
-/// offsets; ordinary in-range nonnegative tables retain their column layout. The scan
-/// is iterative so callers do not add recursive traversal depth here.
+/// Operation-local extrema of a cell's relative visual origins. This contains
+/// no body, source execution history, or serialized document state.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct CellOriginBounds {
+    minimum: i32,
+    maximum: i32,
+    negative_displacement: bool,
+    parent_sensitive: bool,
+}
+
+impl CellOriginBounds {
+    fn observe(&mut self, origin: i32) {
+        self.minimum = self.minimum.min(origin);
+        self.maximum = self.maximum.max(origin);
+    }
+
+    fn inline(&mut self, layout: &crate::InlineLayout, origin: i32, hanging: i32) {
+        for hint in &layout.row_hints {
+            self.negative_displacement |= hint.indent_columns < 0;
+            self.observe(compose_origin(origin, hint.indent_columns));
+            self.observe(compose_origin(
+                compose_origin(origin, hanging),
+                hint.indent_columns,
+            ));
+        }
+    }
+
+    /// Whether every visual origin fits after composing the actual parent.
+    /// Author text extent is independent of these generated display origins.
+    #[must_use]
+    pub fn fits_at(self, origin: i32) -> bool {
+        !clips(compose_origin(origin, self.minimum)) && !clips(compose_origin(origin, self.maximum))
+    }
+}
+
+/// Whether a table needs source-order cells rendered at the actual parent.
+/// Negative displacements conservatively retain their original owner context.
 #[must_use]
 pub fn table_requires_origin_preserving_stack(rows: &[TableRow], origin: i32) -> bool {
-    if clips(origin) {
-        return true;
-    }
-    let mut pending = rows
+    clips(origin)
+        || rows.iter().flat_map(|row| &row.cells).any(|cell| {
+            let bounds = table_cell_origin_bounds(cell);
+            bounds.negative_displacement || bounds.parent_sensitive || !bounds.fits_at(origin)
+        })
+}
+
+/// Collect cell origin facts once, before viewport wrapping or field placement.
+/// Pinned `mdoc_term.c::termp_bd_pre` composes offsets with the active parent;
+/// consumers similarly compose parent, actual field, and child before clipping.
+#[must_use]
+pub fn table_cell_origin_bounds(cell: &TableCell) -> CellOriginBounds {
+    let mut bounds = CellOriginBounds::default();
+    let mut pending = cell
+        .blocks
         .iter()
-        .flat_map(|row| &row.cells)
-        .flat_map(|cell| &cell.blocks)
-        .map(|block| (block, origin))
+        .map(|block| (block, 0))
         .collect::<Vec<_>>();
     while let Some((block, parent)) = pending.pop() {
         let layout = match block {
@@ -34,66 +71,66 @@ pub fn table_requires_origin_preserving_stack(rows: &[TableRow], origin: i32) ->
             Block::VerticalSpace { .. } | Block::ThematicBreak { .. } => continue,
         };
         let origin = compose_origin(parent, layout.indent_columns);
-        if layout.indent_columns < 0
-            || layout.continuation_indent_columns < 0
-            || clips(origin)
-            || clips(compose_origin(origin, layout.continuation_indent_columns))
-        {
-            return true;
-        }
+        bounds.negative_displacement |=
+            layout.indent_columns < 0 || layout.continuation_indent_columns < 0;
+        bounds.observe(origin);
+        bounds.observe(compose_origin(origin, layout.continuation_indent_columns));
         if let Block::Paragraph { inline_layout, .. } | Block::Preformatted { inline_layout, .. } =
             block
-            && hints_require_stack(inline_layout, origin, layout.continuation_indent_columns)
         {
-            return true;
+            bounds.inline(inline_layout, origin, layout.continuation_indent_columns);
         }
         match block {
             Block::List { kind, items, .. } => {
                 for (index, item) in items.iter().enumerate() {
-                    let marker = list_marker_width(*kind, index);
-                    let body = compose_origin(origin, coordinate(marker));
-                    if clips(body) {
-                        return true;
-                    }
+                    let body = compose_origin(origin, coordinate(list_marker_width(*kind, index)));
+                    bounds.observe(body);
                     pending.extend(item.blocks.iter().map(|block| (block, body)));
                 }
             }
             Block::DefinitionList { items, .. } => {
                 for item in items {
-                    if item
-                        .terms
-                        .iter()
-                        .any(|term| hints_require_stack(&term.inline_layout, origin, 0))
-                    {
-                        return true;
+                    for term in &item.terms {
+                        bounds.inline(&term.inline_layout, origin, 0);
                     }
                     let body = compose_origin(origin, item.layout.body_indent_columns);
-                    if item.layout.body_indent_columns < 0 || clips(body) {
-                        return true;
-                    }
+                    bounds.negative_displacement |= item.layout.body_indent_columns < 0;
+                    bounds.observe(body);
                     pending.extend(item.description.iter().map(|block| (block, body)));
                 }
             }
-            Block::Table { rows, .. } => pending.extend(
-                rows.iter()
-                    .flat_map(|row| &row.cells)
-                    .flat_map(|cell| &cell.blocks)
-                    .map(|block| (block, origin)),
-            ),
+            Block::Table { rows, .. } => {
+                bounds.parent_sensitive = true;
+                pending.extend(
+                    rows.iter()
+                        .flat_map(|row| &row.cells)
+                        .flat_map(|cell| &cell.blocks)
+                        .map(|block| (block, origin)),
+                );
+            }
             _ => {}
         }
     }
-    false
+    bounds
 }
 
-fn hints_require_stack(layout: &crate::InlineLayout, origin: i32, hanging: i32) -> bool {
-    layout.row_hints.iter().any(|hint| {
-        hint.indent_columns < 0
-            || clips(compose_origin(origin, hint.indent_columns))
-            || clips(compose_origin(
-                compose_origin(origin, hanging),
-                hint.indent_columns,
-            ))
+/// Check actual field starts in one pass, then each cell's cached extrema once.
+/// A long cell never causes a scan of its blocks per physical output row.
+#[must_use]
+pub fn table_column_origins_fit(
+    bounds: &[CellOriginBounds],
+    placements: &[Vec<super::ColumnPiece>],
+    parent: i32,
+) -> bool {
+    let mut maximum = vec![None::<usize>; bounds.len()];
+    for piece in placements.iter().flatten() {
+        let Some(start) = maximum.get_mut(piece.cell) else {
+            return false;
+        };
+        *start = Some(start.map_or(piece.column, |previous| previous.max(piece.column)));
+    }
+    bounds.iter().zip(maximum).all(|(bounds, start)| {
+        start.is_none_or(|start| bounds.fits_at(compose_origin(parent, coordinate(start))))
     })
 }
 
@@ -110,6 +147,7 @@ mod tests {
         vec![TableRow {
             kind: crate::TableRowKind::Data,
             cells: vec![TableCell {
+                break_after: false,
                 kind: crate::TableCellKind::Text,
                 blocks: vec![block],
                 column_span: 1,
@@ -140,7 +178,7 @@ mod tests {
         assert!(table_requires_origin_preserving_stack(&positive, -2));
         for (indent, continuation) in [(-2, 0), (3, -2)] {
             let nested = rows(Block::Table {
-                column_widths: Vec::new(),
+                column_preferences: crate::ColumnPreferences::default(),
                 rows: rows(paragraph(indent, continuation)),
                 layout: LayoutHint::default(),
                 source: None,
@@ -192,7 +230,7 @@ mod tests {
             4096
         ));
         let nested = rows(Block::Table {
-            column_widths: Vec::new(),
+            column_preferences: crate::ColumnPreferences::default(),
             rows: rows(paragraph(4, 0)),
             layout: LayoutHint {
                 indent_columns: 3,
@@ -344,6 +382,65 @@ mod tests {
         assert!(table_requires_origin_preserving_stack(
             &rows(definition(7)),
             4090
+        ));
+    }
+    #[test]
+    fn actual_field_parent_and_child_origins_are_checked_together() {
+        let cell = |indent, correction| {
+            rows(Block::Paragraph {
+                children: vec![crate::Inline::Text { value: "B".into() }],
+                inline_layout: crate::InlineLayout {
+                    row_hints: if correction == 0 {
+                        vec![]
+                    } else {
+                        vec![crate::RowLayoutHint {
+                            row: 0,
+                            indent_columns: correction,
+                        }]
+                    },
+                },
+                layout: LayoutHint {
+                    indent_columns: indent,
+                    ..Default::default()
+                },
+                source: None,
+            })
+            .remove(0)
+            .cells
+            .remove(0)
+        };
+        let placements = vec![vec![super::super::ColumnPiece {
+            cell: 0,
+            line: 0,
+            column: 6,
+        }]];
+        for (indent, correction, fits) in [(0, 0, true), (2, 0, false), (0, 2, false)] {
+            let bounds = table_cell_origin_bounds(&cell(indent, correction));
+            assert!(bounds.fits_at(4090));
+            assert_eq!(table_column_origins_fit(&[bounds], &placements, 4090), fits);
+        }
+        // Both hard-row first origins and soft continuations contribute to
+        // extrema; a correction retains the hanging increment.
+        let mut hanging = cell(0, 2);
+        if let Block::Paragraph { layout, .. } = &mut hanging.blocks[0] {
+            layout.continuation_indent_columns = 2;
+        }
+        let bounds = table_cell_origin_bounds(&hanging);
+        assert!(bounds.fits_at(4092));
+        assert!(!bounds.fits_at(4093));
+        assert!(table_requires_origin_preserving_stack(
+            &rows(Block::Paragraph {
+                children: vec![crate::Inline::Text {
+                    value: "OUTDENT".into()
+                }],
+                inline_layout: crate::InlineLayout::default(),
+                layout: LayoutHint {
+                    indent_columns: -2,
+                    ..Default::default()
+                },
+                source: None,
+            }),
+            5
         ));
     }
 }

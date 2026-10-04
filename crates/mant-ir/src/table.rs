@@ -3,9 +3,9 @@ use crate::{Block, Inline, TableCell, TableCellKind, TableRow, TableRowKind, Tab
 
 /// A navigation carrier has targets but no physical row payload.
 ///
-/// Empty text, literal rows, hard breaks, vertical space and rules remain
-/// physical content. Only anchors and transparent emphasis wrappers inside
-/// paragraphs in one unspanned cell qualify. Multi-cell and spanning rows
+/// Empty text, literal rows, hard breaks, vertical space, explicit cell
+/// closures and rules remain physical content. Only anchors and transparent
+/// emphasis wrappers inside paragraphs in one unspanned cell qualify. Multi-cell and spanning rows
 /// retain their physical topology; an ordinary empty data row does not qualify.
 #[must_use]
 pub fn table_row_is_navigation_only(row: &TableRow) -> bool {
@@ -25,7 +25,11 @@ pub fn table_row_is_navigation_only(row: &TableRow) -> bool {
             .cells
             .iter()
             .try_fold(0_usize, |count, cell| {
-                if cell.kind != TableCellKind::Text || cell.column_span != 1 || cell.row_span != 1 {
+                if cell.kind != TableCellKind::Text
+                    || cell.column_span != 1
+                    || cell.row_span != 1
+                    || cell.break_after
+                {
                     return None;
                 }
                 let cell_anchors = cell.blocks.iter().try_fold(0_usize, |count, block| {
@@ -186,6 +190,7 @@ mod tests {
     use super::*;
     fn cell(columns: u16, rows: u16) -> TableCell {
         TableCell {
+            break_after: false,
             kind: crate::TableCellKind::Text,
             blocks: Vec::new(),
             column_span: columns,
@@ -270,6 +275,52 @@ mod tests {
             ..cell(1, 1)
         });
         assert!(!table_row_is_navigation_only(&row));
+    }
+
+    #[test]
+    fn explicit_cell_closure_keeps_anchor_data_rows_without_body_or_hint_glyphs() {
+        for break_after in [false, true] {
+            let row = TableRow {
+                kind: TableRowKind::Data,
+                cells: vec![TableCell {
+                    break_after,
+                    blocks: vec![Block::Paragraph {
+                        children: vec![Inline::Strong {
+                            children: vec![Inline::Emphasis {
+                                children: vec![Inline::anchor("target")],
+                            }],
+                        }],
+                        inline_layout: crate::InlineLayout {
+                            row_hints: vec![crate::RowLayoutHint {
+                                row: 0,
+                                indent_columns: 12,
+                            }],
+                        },
+                        layout: crate::LayoutHint::default(),
+                        source: None,
+                    }],
+                    ..cell(1, 1)
+                }],
+            };
+            assert_eq!(table_row_is_navigation_only(&row), !break_after);
+            let wire = serde_json::to_string(&row).unwrap();
+            let restored: TableRow = serde_json::from_str(&wire).unwrap();
+            assert_eq!(restored, row);
+            assert_eq!(table_row_is_navigation_only(&restored), !break_after);
+            let [
+                Block::Paragraph {
+                    children,
+                    inline_layout,
+                    ..
+                },
+            ] = restored.cells[0].blocks.as_slice()
+            else {
+                panic!("original paragraph owner");
+            };
+            assert_eq!(crate::inline_plain_text(children), "");
+            assert_eq!(inline_layout.row_indent(0), 12);
+            assert_eq!(wire.contains("\"breakAfter\":true"), break_after);
+        }
     }
 
     #[test]

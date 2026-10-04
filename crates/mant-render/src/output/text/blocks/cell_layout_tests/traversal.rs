@@ -98,8 +98,21 @@ fn defensive_placement_fallback_reuses_prepared_rows_without_a_tree_access() {
         vec![ColumnFieldWidth::from_text("RIGHT")],
     ];
     let (output, counts) = visits::observe(|| {
-        BlockRenderer::placed_column_row(&DeclaredColumns::new(&[3, 3]).unwrap(), cells, &widths, 2)
-            .finish(false)
+        let columns = DeclaredColumns::new(&mant_ir::ColumnPreferences {
+            widths: vec![3, 3],
+            gap_columns: 4,
+            advance_limit_columns: Some(256),
+            extra_width_columns: Some(10),
+        })
+        .unwrap();
+        BlockRenderer::placed_column_row(
+            columns.place_at(&widths, 2),
+            cells,
+            &widths,
+            &[false, false],
+            2,
+        )
+        .finish(false)
     });
     assert_eq!(undecorated(&output), "  LEFT\n  RIGHT");
     assert_eq!(counts, visits::Counts::default());

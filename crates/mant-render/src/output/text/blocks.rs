@@ -4,13 +4,12 @@ use super::flow::Flow;
 use super::indent_lines;
 use super::layout::LayoutText;
 use crate::presentation::{EntryStyleMap, TextPresentation, TextRole, visit_inline_text};
-#[cfg(test)]
-use mant_ir::Inline;
 use mant_ir::geometry::{compose_origin, coordinate, marker_run_in_gap, padding};
 use mant_ir::{
-    Block, DefinitionItem, InlineContentRef, ListItem, ListKind, Section, TableCell,
-    resolve_row_origins,
+    Block, DefinitionItem, InlineContentRef, ListItem, ListKind, Section, resolve_row_origins,
 };
+#[cfg(test)]
+use mant_ir::{Inline, TableCell};
 
 #[cfg(test)]
 mod cell_layout_tests;
@@ -262,12 +261,12 @@ impl BlockRenderer<'_> {
             }
             Block::Table {
                 rows,
-                column_widths,
+                column_preferences,
                 layout,
                 ..
             } => {
                 let origin = compose_origin(base_indent, layout.indent_columns);
-                return self.table_flow(rows, column_widths, origin);
+                return self.table_flow(rows, column_preferences, origin);
             }
             Block::Equation { value, layout, .. }
             | Block::Unsupported {
@@ -331,7 +330,7 @@ impl BlockRenderer<'_> {
         tail: ParagraphTail,
     ) -> Flow {
         let mut rows = self.inline_rows(content, TextRole::Body);
-        if rows.len() == 1 && rows[0].0.visible.trim().is_empty() {
+        if rows.len() == 1 && rows[0].0.visible.is_empty() {
             return Flow::default();
         }
         let completed_empty_tail = Self::close_paragraph_rows(&mut rows, tail);

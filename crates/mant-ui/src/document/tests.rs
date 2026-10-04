@@ -92,11 +92,12 @@ fn geometry_bundle() -> ResolvedContent {
             source: None,
         },
         Block::Table {
-            column_widths: Vec::new(),
+            column_preferences: mant_ir::ColumnPreferences::default(),
             rows: vec![TableRow {
                 kind: mant_ir::TableRowKind::Data,
                 cells: vec![
                     TableCell {
+                        break_after: false,
                         kind: mant_ir::TableCellKind::Text,
                         blocks: vec![paragraph("alpha beta gamma")],
                         column_span: 1,
@@ -104,6 +105,7 @@ fn geometry_bundle() -> ResolvedContent {
                         alignment: None,
                     },
                     TableCell {
+                        break_after: false,
                         kind: mant_ir::TableCellKind::Text,
                         blocks: vec![paragraph("right hand value")],
                         column_span: 1,
@@ -366,6 +368,7 @@ fn manual_children_keep_the_same_gaps_as_the_established_layout() {
 fn horizontal_spans_align_the_following_cell_with_later_rows() {
     let mut bundle = bundle();
     let cell = |text: &str, column_span| TableCell {
+        break_after: false,
         kind: mant_ir::TableCellKind::Text,
         blocks: vec![Block::Paragraph {
             inline_layout: mant_ir::InlineLayout::default(),
@@ -378,7 +381,7 @@ fn horizontal_spans_align_the_following_cell_with_later_rows() {
         alignment: None,
     };
     bundle.document.as_mut().unwrap().sections[0].blocks = vec![Block::Table {
-        column_widths: Vec::new(),
+        column_preferences: mant_ir::ColumnPreferences::default(),
         rows: vec![
             TableRow {
                 kind: mant_ir::TableRowKind::Data,
@@ -459,6 +462,7 @@ fn case_folding_maps_expanding_unicode_back_to_the_source_character() {
 }
 
 mod code_highlighting;
+mod column_preferences;
 mod control_line_payloads;
 mod control_row_relations;
 mod definition_relations;
@@ -478,6 +482,8 @@ mod row_origins;
 mod search;
 mod source_geometry;
 mod styles;
+mod table_boundaries;
+mod table_gaps;
 mod tables;
 mod unsupported_hard_lines;
 mod zero_width;

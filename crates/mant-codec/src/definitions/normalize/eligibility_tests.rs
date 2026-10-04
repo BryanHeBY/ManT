@@ -39,12 +39,21 @@ fn space(lines: u16) -> Block {
 fn table(indent_columns: i32) -> Block {
     Block::Table {
         rows: Vec::new(),
-        column_widths: vec![4],
+        column_preferences: native_column_preferences(&[4]),
         layout: LayoutHint {
             indent_columns,
             ..LayoutHint::default()
         },
         source: None,
+    }
+}
+
+fn native_column_preferences(widths: &[u16]) -> mant_ir::ColumnPreferences {
+    mant_ir::ColumnPreferences {
+        widths: widths.to_vec(),
+        gap_columns: 4,
+        advance_limit_columns: Some(256),
+        extra_width_columns: Some(10),
     }
 }
 

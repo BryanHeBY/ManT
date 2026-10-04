@@ -205,7 +205,7 @@ pub(in crate::mandoc) fn take_inline_layout(nodes: &mut Vec<Inline>) -> mant_ir:
 
 pub(in crate::mandoc::inline::flow) fn project_native_positions(
     nodes: &mut Vec<Inline>,
-    origins: &[(String, usize, usize, bool)],
+    origins: &[(String, usize, i32, bool)],
     padding: &[(String, usize, usize, bool)],
     output_start: usize,
     materialize_line_origins: bool,
@@ -318,7 +318,7 @@ fn materialize_origins(nodes: &mut Vec<Inline>, origin: &mut Option<u16>) {
 }
 
 enum NativePosition {
-    RowOrigin(usize),
+    RowOrigin(i32),
     FieldPadding(usize),
 }
 

@@ -13,11 +13,12 @@ fn navigation_only_tables_emit_targets_without_empty_fences() {
             kind: mant_ir::TableRowKind::Data,
             cells,
         }],
-        column_widths: vec![3, 3],
+        column_preferences: native_column_preferences(&[3, 3]),
         layout: LayoutHint::default(),
         source: None,
     };
     let cell = |blocks| TableCell {
+        break_after: false,
         blocks,
         kind: mant_ir::TableCellKind::Text,
         column_span: 1,

@@ -142,6 +142,49 @@ class ConsumerFixtureContractTests(unittest.TestCase):
                 self.assertRegex(profile["stdoutSha256"], r"^[0-9a-f]{64}$")
                 self.assertRegex(profile["stderrSha256"], r"^[0-9a-f]{64}$")
 
+    def test_column_preferences_published_fixture_mirrors_exact_engine_resource(self):
+        for filename in ("cases.json", "cell_boundaries.json"):
+            engine = FIXTURE_ROOT / "column_preferences" / filename
+            ui = FIXTURE.parents[5] / "crates/mant-ui/src/document/tests/column_preferences" / filename
+            self.assertEqual(ui.read_bytes(), engine.read_bytes())
+
+    def test_column_preferences_keep_exact_sources_profiles_and_native_rows(self):
+        for filename, count in (("cases.json", 23), ("cell_boundaries.json", 17)):
+            self.check_column_preferences_fixture(filename, count)
+
+    def check_column_preferences_fixture(self, filename, count):
+        fixture = json.loads((FIXTURE_ROOT / "column_preferences" / filename).read_text())
+        self.assertEqual(fixture["header"]["count"], count)
+        self.assertEqual(fixture["header"]["profiles_per_source"], 5)
+        self.assertFalse(fixture["header"]["expectations_from_product"])
+        self.assertEqual(fixture["header"]["oracle_sha256"],
+                         "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6")
+        self.assertEqual(len({case["source"] for case in fixture["cases"]}), count)
+        for case in fixture["cases"]:
+            with self.subTest(case=case["id"]):
+                self.assertEqual(hashlib.sha256(case["source"].encode()).hexdigest(),
+                                 case["source_sha256"])
+                self.assertEqual(set(case["profiles"]), {"ascii", "utf8", "html", "tree", "lint"})
+                for name, profile in case["profiles"].items():
+                    self.assertIn(profile["status"], {0, 1, 2} if name == "lint" else {0})
+                    for stream in ("stdout", "stderr"):
+                        self.assertEqual(hashlib.sha256(profile[stream].encode()).hexdigest(),
+                                         profile[stream + "_sha256"])
+                # Backspaces remove one preceding scalar; no whitespace is
+                # trimmed or folded, including completed empty physical rows.
+                projected = []
+                for character in case["profiles"]["utf8"]["stdout"]:
+                    if character == "\b":
+                        if projected:
+                            projected.pop()
+                    else:
+                        projected.append(character)
+                region = "".join(projected).split("DESCRIPTION\n", 1)[1]
+                region = region.split("\n" + case["stop_heading"] + "\n", 1)[0]
+                self.assertEqual(region.splitlines(), case["native_rows"])
+                self.assertEqual(len(case["ast_cells"]), len(case["payloads"]))
+                self.assertTrue(case["reading_policy"])
+
     def test_empty_word_published_fixture_mirrors_exact_engine_resource(self):
         # Each published crate owns its compile-time input. The mirror retains
         # the exact independently recorded 472-source matrix, without new gold.

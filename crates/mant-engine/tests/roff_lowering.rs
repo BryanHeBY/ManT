@@ -20,6 +20,8 @@ fn parse_manual_source(
 
 #[path = "roff_lowering/acceptance_axes/mod.rs"]
 mod acceptance_axes;
+#[path = "roff_lowering/column_preferences.rs"]
+mod column_preferences;
 #[path = "roff_lowering/consumer_boundaries.rs"]
 mod consumer_boundaries;
 #[path = "roff_lowering/cvs_renderer_contracts.rs"]

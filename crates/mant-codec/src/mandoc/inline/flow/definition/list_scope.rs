@@ -35,6 +35,7 @@ pub(in crate::mandoc) struct NestedListScope {
     offset_units: usize,
     offset_columns: usize,
     column_origin_units: Option<usize>,
+    column_reading_origin: Option<super::state::ColumnReadingOrigin>,
     declared_body_origin_units: Option<usize>,
     indent_columns: u16,
     outcome: DefinitionOutcome,
@@ -61,6 +62,7 @@ impl InlineBuilder {
             offset_units: definition.field_offset_units,
             offset_columns: definition.hang_row.field_offset,
             column_origin_units: definition.column_origin_units,
+            column_reading_origin: definition.column_reading_origin,
             declared_body_origin_units: definition.declared_body_origin_units,
             indent_columns: definition.row.indent_columns,
             outcome: definition.outcome,
@@ -256,6 +258,10 @@ impl InlineBuilder {
         let state = self.definition_state_mut();
         state.field_offset_units = origin.saturating_mul(24);
         state.column_origin_units = Some(state.field_offset_units);
+        state.column_reading_origin = Some(super::state::ColumnReadingOrigin::new(
+            5 * 24,
+            state.field_offset_units,
+        ));
         state.hang_row.field_offset = origin;
         state.native_margin_units =
             Some(origin.saturating_add(usize::from(width)).saturating_mul(24));
@@ -263,6 +269,16 @@ impl InlineBuilder {
         // Column BODY pre clears minbl, independently of the incoming
         // term_word NOSPACE register (mdoc_term.c:916-921).
         self.execution.pending_field_spaces = 0;
+    }
+
+    /// The column's source parent sets only the reading page floor. It never
+    /// changes native field capacity, acceptance, viscol or tab coordinates.
+    pub(in crate::mandoc) fn set_column_reading_parent(&mut self, parent_units: usize) {
+        let state = self.definition_state_mut();
+        state.column_reading_origin = Some(super::state::ColumnReadingOrigin::new(
+            parent_units,
+            state.column_origin_units.unwrap_or(0),
+        ));
     }
 
     /// A column BODY post calls `term_flushln()`, rather than `term_newln()`:
@@ -352,6 +368,12 @@ impl InlineBuilder {
                 }
             }
         }
+        if closed_represented_row {
+            // This exact It BODY post executed the physical endline
+            // (mdoc_term.c:953; term.c:250-253). Keep its delimiter proof
+            // with the accepted owner before the paragraph drain strips it.
+            self.record_device_row_end();
+        }
         self.enter_nested_column_part(true);
         closed_represented_row
     }
@@ -363,6 +385,7 @@ impl InlineBuilder {
         definition.field_offset_units = saved.offset_units;
         definition.hang_row.field_offset = saved.offset_columns;
         definition.column_origin_units = saved.column_origin_units;
+        definition.column_reading_origin = saved.column_reading_origin;
         definition.declared_body_origin_units = saved.declared_body_origin_units;
         definition.row.indent_columns = saved.indent_columns;
     }

@@ -2,35 +2,40 @@
 
 use super::{
     CompletedRowOrigin, INTERNAL_COMPLETED_ROW, INTERNAL_DEVICE_ROW_END, INTERNAL_LINK_SPLIT,
-    INTERNAL_LITERAL_ROW, Inline,
+    INTERNAL_LITERAL_ROW, Inline, OutputRowEnd,
 };
 
 /// A row-end receipt can precede or follow the same projected delimiter.
-/// Accepted later cells start another row; completed empty rows have their
-/// own summary and must not be counted as this graph-row boundary.
-pub(in crate::mandoc) fn trailing_device_row_end_receipt(nodes: &[Inline]) -> bool {
-    fn visit(nodes: &[Inline], protected: &mut bool) {
+/// Accepted later cells start another row. Literal empty rows stay authored
+/// content, while spacing-request rows transfer to their separate gap owner.
+pub(in crate::mandoc) fn trailing_device_row_end_receipt(nodes: &[Inline]) -> OutputRowEnd {
+    fn visit(nodes: &[Inline], protected: &mut OutputRowEnd) {
         for node in nodes {
             match node {
                 Inline::Anchor { id, .. } if id.as_str() == INTERNAL_DEVICE_ROW_END => {
-                    *protected = true;
+                    *protected = OutputRowEnd::GeneratedClose;
                 }
-                Inline::Anchor { id, .. }
-                    if matches!(id.as_str(), INTERNAL_COMPLETED_ROW | INTERNAL_LITERAL_ROW) =>
-                {
-                    *protected = false;
+                Inline::Anchor { id, .. } if id.as_str() == INTERNAL_COMPLETED_ROW => {
+                    *protected = OutputRowEnd::CompletedClose;
+                }
+                Inline::Anchor { id, .. } if id.as_str() == INTERNAL_LITERAL_ROW => {
+                    // print_mdoc_node() empty no-fill TEXT executes vspace;
+                    // term.c:489-497 closes this actual empty literal row.
+                    *protected = OutputRowEnd::LiteralClose;
                 }
                 Inline::Strong { children }
                 | Inline::Emphasis { children }
                 | Inline::Link { children, .. } => visit(children, protected),
+                // Empty TEXT here is an executed formatter-word witness;
+                // transparent empty style/anchor scopes never enter this arm.
                 Inline::Text { .. } | Inline::Code { .. } | Inline::Equation { .. } => {
-                    *protected = false;
+                    *protected = OutputRowEnd::Open;
                 }
                 _ => {}
             }
         }
     }
-    let mut protected = false;
+    let mut protected = OutputRowEnd::Open;
     visit(nodes, &mut protected);
     protected
 }
@@ -292,7 +297,7 @@ pub(in crate::mandoc) fn strip_native_projection_markers(nodes: &mut Vec<Inline>
     });
 }
 
-pub(in crate::mandoc) fn native_row_origin(node: &Inline) -> Option<usize> {
+pub(in crate::mandoc) fn native_row_origin(node: &Inline) -> Option<i32> {
     let Inline::Anchor { id, .. } = node else {
         return None;
     };

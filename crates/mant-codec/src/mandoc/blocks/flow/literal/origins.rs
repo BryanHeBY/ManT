@@ -3,7 +3,7 @@
 use mant_ir::{Block, Inline, LayoutHint, SourceSpan};
 
 struct Segment {
-    origin: usize,
+    origin: i32,
     nodes: Vec<Inline>,
 }
 
@@ -22,9 +22,7 @@ pub(super) fn literal_blocks(
                 return None;
             }
             let mut layout = layout;
-            layout.indent_columns = layout
-                .indent_columns
-                .saturating_add(i32::try_from(segment.origin).unwrap_or(i32::MAX));
+            layout.indent_columns = layout.indent_columns.saturating_add(segment.origin);
             Some(Block::Preformatted {
                 inline_layout,
                 children: segment.nodes,
@@ -36,7 +34,7 @@ pub(super) fn literal_blocks(
         .collect()
 }
 
-fn split_origins(nodes: Vec<Inline>, inherited: usize) -> (Vec<Segment>, usize) {
+fn split_origins(nodes: Vec<Inline>, inherited: i32) -> (Vec<Segment>, i32) {
     let mut segments = vec![Segment {
         origin: inherited,
         nodes: Vec::new(),

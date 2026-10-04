@@ -77,16 +77,18 @@ fn nested_definition_cells_keep_content_order_and_entry_identity() {
     let query = reading_roundtrip(
         "cw10_list",
         &["A", "x", "B", "", "C"],
-        "```\nA; x: B\n | C\n```",
+        "```\nA; x: B\n\nC\n```",
     );
     // The exact source ran pristine CVS first. termp_it_post closes B's
-    // row; the real Markdown reader retains that cell LF after flattening.
-    assert_reparsed_column_cell(&query, "A; x: B\n | C");
+    // row. The definition's Paragraph frame retires its provisional empty
+    // tail; the outer completed VerticalSpace owns exactly one blank row.
+    // That accepted hard boundary replaces the portable topology pipe.
+    assert_reparsed_column_cell(&query, "A; x: B\n\nC");
     let document = query.document.as_ref().unwrap();
     let [
         Block::Table {
             rows,
-            column_widths,
+            column_preferences,
             ..
         },
         Block::VerticalSpace { lines: 1, .. },
@@ -94,7 +96,15 @@ fn nested_definition_cells_keep_content_order_and_entry_identity() {
     else {
         panic!("nested table boundaries changed: {:?}", document.sections);
     };
-    assert_eq!(column_widths, &[1, 1]);
+    assert_eq!(
+        column_preferences,
+        &mant_ir::ColumnPreferences {
+            widths: vec![1, 1],
+            gap_columns: 4,
+            advance_limit_columns: Some(256),
+            extra_width_columns: Some(10),
+        }
+    );
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].cells.len(), 2);
     let [
@@ -225,7 +235,7 @@ fn boxed_tbl_keeps_its_single_cell_without_copying_device_frame_glyphs() {
     let [
         Block::Table {
             rows,
-            column_widths,
+            column_preferences,
             ..
         },
         Block::VerticalSpace { lines: 1, .. },
@@ -233,7 +243,7 @@ fn boxed_tbl_keeps_its_single_cell_without_copying_device_frame_glyphs() {
     else {
         panic!("boxed table boundaries changed: {:?}", document.sections);
     };
-    assert_eq!(column_widths.len(), 0);
+    assert_eq!(column_preferences, &mant_ir::ColumnPreferences::default());
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].kind, TableRowKind::Data);
     assert_eq!(rows[0].cells.len(), 1);

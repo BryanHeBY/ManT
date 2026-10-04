@@ -36,7 +36,7 @@ fn column_cells(document: &mant_ir::Document) -> Vec<String> {
         .cells
         .iter()
         .map(|cell| {
-            cell.blocks
+            let mut text = cell.blocks
                 .iter()
                 .map(|block| match block {
                     Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
@@ -45,7 +45,17 @@ fn column_cells(document: &mant_ir::Document) -> Vec<String> {
                     Block::VerticalSpace { lines, .. } => "\n".repeat(usize::from(*lines)),
                     _ => String::new(),
                 })
-                .collect::<String>()
+                .collect::<String>();
+            // Reran these 34 exact sources in five pristine profiles for
+            // LC4. mdoc_term.c::termp_it_post and NODE_NOFILL entry still
+            // own the same physical hard rows; their occupied graph close
+            // now lives on the cell instead of a synthetic trailing LB.
+            // An existing completed gap already carries its row delimiter.
+            let completed_gap = matches!(cell.blocks.last(), Some(Block::VerticalSpace { lines, .. }) if *lines > 0);
+            if cell.break_after && !completed_gap {
+                text.push('\n');
+            }
+            text
         })
         .collect()
 }

@@ -733,11 +733,12 @@ fn reference_origins_follow_actual_occurrence_through_wrapping_and_table_stackin
             source: None,
         },
         Block::Table {
-            column_widths: Vec::new(),
+            column_preferences: mant_ir::ColumnPreferences::default(),
             rows: vec![TableRow {
                 kind: mant_ir::TableRowKind::Data,
                 cells: vec![
                     TableCell {
+                        break_after: false,
                         kind: mant_ir::TableCellKind::Text,
                         blocks: vec![linked_block("left ", "CELLLINK")],
                         column_span: 1,
@@ -745,6 +746,7 @@ fn reference_origins_follow_actual_occurrence_through_wrapping_and_table_stackin
                         alignment: None,
                     },
                     TableCell {
+                        break_after: false,
                         kind: mant_ir::TableCellKind::Text,
                         blocks: vec![paragraph("right column has substantial wrapped content")],
                         column_span: 1,

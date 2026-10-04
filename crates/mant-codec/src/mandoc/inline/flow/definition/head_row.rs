@@ -5,6 +5,8 @@ pub(in crate::mandoc) struct DefinitionGeometryCheckpoint {
     pub(in crate::mandoc::inline::flow) indent_columns: u16,
     pub(in crate::mandoc::inline::flow) field_offset: usize,
     pub(in crate::mandoc::inline::flow) field_offset_units: usize,
+    pub(in crate::mandoc::inline::flow) column_reading_origin:
+        Option<super::state::ColumnReadingOrigin>,
     pub(in crate::mandoc::inline::flow) margin_override: Option<usize>,
 }
 

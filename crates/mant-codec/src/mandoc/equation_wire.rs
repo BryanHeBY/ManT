@@ -546,10 +546,11 @@ mod tests {
                     source: None,
                 },
                 Block::Table {
-                    column_widths: Vec::new(),
+                    column_preferences: mant_ir::ColumnPreferences::default(),
                     rows: vec![TableRow {
                         kind: TableRowKind::Data,
                         cells: vec![TableCell {
+                            break_after: false,
                             kind: TableCellKind::Text,
                             blocks: vec![Block::Paragraph {
                                 inline_layout: mant_ir::InlineLayout::default(),

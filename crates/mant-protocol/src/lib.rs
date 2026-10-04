@@ -110,3 +110,9 @@ mod inline_layout_contract_tests;
 
 #[cfg(test)]
 mod definition_contract_tests;
+
+#[cfg(test)]
+mod column_preferences_contract_tests;
+
+#[cfg(test)]
+mod table_boundaries_contract_tests;

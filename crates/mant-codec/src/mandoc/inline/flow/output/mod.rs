@@ -17,6 +17,25 @@ pub(in crate::mandoc) enum CompletedRowOrigin {
     Layout,
     LiteralText,
 }
+
+/// Proof attached to the latest accepted physical row, before private markers
+/// leave its owner. A generated close can replace its projected delimiter;
+/// completed literal content must keep its delimiter and empty-row witness.
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub(in crate::mandoc) enum OutputRowEnd {
+    Open,
+    GeneratedClose,
+    LiteralClose,
+    // The gap owner carries the completed row, without an inline delimiter
+    // to retire. This still proves that the latest physical row was closed.
+    CompletedClose,
+}
+
+impl OutputRowEnd {
+    pub(in crate::mandoc) const fn is_closed(self) -> bool {
+        !matches!(self, Self::Open)
+    }
+}
 pub(super) const INTERNAL_TERM_ALTERNATIVE: &str = "\0mant:output-scope:term-alternative";
 pub(super) fn is_term_alternative(node: &Inline) -> bool {
     matches!(node, Inline::Anchor { id, .. } if id.as_str() == INTERNAL_TERM_ALTERNATIVE)
@@ -99,6 +118,15 @@ impl InlineBuilder {
     /// This is a boundary receipt, not an additional completed empty row.
     pub(in crate::mandoc) fn record_device_row_end(&mut self) {
         self.nodes.push(Inline::anchor(INTERNAL_DEVICE_ROW_END));
+    }
+
+    /// Read the accepted tail before its private execution proof is stripped.
+    pub(in crate::mandoc) fn closed_graph_tail(&self) -> OutputRowEnd {
+        Self::output_has_closed_graph_tail(&self.nodes)
+    }
+
+    pub(in crate::mandoc) fn output_has_closed_graph_tail(nodes: &[Inline]) -> OutputRowEnd {
+        projection::trailing_device_row_end_receipt(nodes)
     }
 
     /// Record an executed empty row in its active output owner. A later

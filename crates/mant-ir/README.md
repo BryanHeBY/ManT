@@ -61,6 +61,7 @@ The important public families are:
 | API | Purpose |
 | --- | --- |
 | `Document`, `Section`, `Block`, `Inline` | Source-neutral content tree |
+| `ColumnPreferences` | Optional table widths, gap and positioning constraints; source interpretation stays in the producer |
 | `ListItem`, `DefinitionItem`, `ListKind` | Distinct content shapes, independent of optional semantic annotation |
 | `EntryFacts`, `EntryKind`, `NameCase` | Common facts and classification attached through either item's `entry` field |
 | `EntryOwner`, `EntryForm`, `EntryContentSlice` | Borrowed content owners and validated final-IR form references, without duplicate bodies |
@@ -133,6 +134,28 @@ add across transparent containers; repeated projections of one request belong
 at only one consumption point. List-item and definition-item absent spacing instead inherits
 compactness. Frontends cap a resolved boundary at 4096 rows, without merging
 literal blank lines. Visual wrapping never changes source lines or entry facts.
+
+`Block::Table.column_preferences` carries `ColumnPreferences`: preferred content
+widths, a default two-cell gap, and optional advance/extra-field constraints.
+Generic readers resolve these at the actual viewport; they do not infer native
+gap rules from the width count. Empty widths use content-derived layout with the
+supplied gap; advance/extra-field constraints are retained but apply only to
+declared-field layout. The codec supplies mdoc's explicit 4/3/1 gap,
+256-cell advance limit and ten-cell extra-field content capacity, excluding any
+added gap. An independent 4096-cell generated-padding budget falls back to source
+order while preserving every prepared and later cell. Cell trees, spans,
+reading order and links remain authoritative and are never replaced by a
+pre-wrapped second body. JSON uses the closed `columnPreferences` object and
+rejects the retired `columnWidths` field. Only the complete default is omitted;
+zero constraints remain distinct from absence.
+
+`TableCell.break_after` (`breakAfter`) defaults to false. True closes the current
+physical data row after that cell, before the next cell. The row may be occupied
+by an earlier cell or already exist as an empty structural data row; closing it
+adds no body scalar or additional empty row. Navigation-only carrier rows remain
+nonprinting. This boundary remains distinct from an inline break's open tail and
+an already completed empty row. Producers resolve it; readers consume the fact
+without source formatter state.
 
 Literal rows are content: an explicit empty text row in `Preformatted` is
 different from an anchor-only block and ends the preceding gap boundary.

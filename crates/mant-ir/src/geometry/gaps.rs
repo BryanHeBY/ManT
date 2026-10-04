@@ -36,12 +36,16 @@ impl<'ir> Visit<'ir> for VisibleText {
         }
         match inline {
             Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. } => {
-                self.0 = !value.trim().is_empty();
+                // Accepted author whitespace still owns a physical row.
+                // Only a truly empty paragraph word contributes no output;
+                // the source formatter already resolved invisible cell rows.
+                self.0 = !value.is_empty();
             }
             Inline::Strong { .. } | Inline::Emphasis { .. } | Inline::Link { .. } => {
                 crate::visit::walk_inline(self, inline);
             }
-            Inline::LineBreak { .. } | Inline::Anchor { .. } => {}
+            Inline::LineBreak { .. } => self.0 = true,
+            Inline::Anchor { .. } => {}
         }
     }
 }
@@ -140,17 +144,34 @@ fn walk(blocks: &[Block], gap: &mut GapPlan, depth: usize, origin: i32) -> bool 
             Block::Table { rows, layout, .. } => {
                 let origin = compose_origin(origin, layout.indent_columns);
                 let stack = table_requires_origin_preserving_stack(rows, origin);
-                for cell in rows.iter().flat_map(|row| &row.cells) {
-                    let bounded = if stack {
-                        walk(&cell.blocks, gap, depth + 1, origin)
-                    } else {
-                        walk(&cell.blocks, &mut GapPlan::default(), depth + 1, 0)
-                    };
-                    if bounded {
-                        return true;
+                for row in rows {
+                    if crate::table_row_is_navigation_only(row) {
+                        continue;
                     }
-                }
-                if !stack {
+                    if row.cells.is_empty() || !matches!(row.kind, crate::TableRowKind::Data) {
+                        // A structural blank row or a visible rule consumes
+                        // its incoming gap, including in source-order fallback.
+                        *gap = GapPlan::default();
+                    }
+                    for cell in &row.cells {
+                        let bounded = if stack {
+                            walk(&cell.blocks, gap, depth + 1, origin)
+                        } else {
+                            walk(&cell.blocks, &mut GapPlan::default(), depth + 1, 0)
+                        };
+                        if bounded {
+                            return true;
+                        }
+                        if cell.break_after || cell.kind != crate::TableCellKind::Text {
+                            // Closing an existing empty data row is a physical
+                            // contribution even when its blocks have no glyphs.
+                            *gap = GapPlan::default();
+                        }
+                    }
+                    // The table's existing data row remains a physical row
+                    // even when all of its cells have empty content roots.
+                    // A false cell boundary permits another cell to use this
+                    // row; it does not erase the row's structural ownership.
                     *gap = GapPlan::default();
                 }
             }
@@ -212,9 +233,9 @@ mod tests {
                 vec![Inline::Code {
                     value: "\u{2003}\t".into(),
                 }],
-                true,
+                false,
             ),
-            (vec![Inline::line_break(), Inline::anchor("target")], true),
+            (vec![Inline::line_break(), Inline::anchor("target")], false),
             (
                 vec![Inline::Strong {
                     children: Vec::new(),
@@ -225,7 +246,7 @@ mod tests {
                 vec![Inline::Emphasis {
                     children: vec![Inline::LineBreak {}],
                 }],
-                true,
+                false,
             ),
             (
                 vec![Inline::Link {
@@ -237,7 +258,7 @@ mod tests {
                         children: vec![Inline::Text { value: " ".into() }],
                     }],
                 }],
-                true,
+                false,
             ),
             (
                 vec![Inline::Strong {
@@ -354,10 +375,11 @@ mod tests {
     fn signed_stacked_tables_share_the_gap_budget_with_their_parent() {
         for (origin, expected) in [(-2, true), (2, false)] {
             let table = Block::Table {
-                column_widths: Vec::new(),
+                column_preferences: crate::ColumnPreferences::default(),
                 rows: vec![TableRow {
                     kind: crate::TableRowKind::Data,
                     cells: vec![TableCell {
+                        break_after: false,
                         kind: crate::TableCellKind::Text,
                         blocks: vec![paragraph(3, 3000, text())],
                         column_span: 1,

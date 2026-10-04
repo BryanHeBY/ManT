@@ -92,6 +92,12 @@ impl InlineBuilder {
         let completed_rows = rows.saturating_sub(u16::from(closes_printed_row));
         self.retain_line_breaks(usize::from(rows));
         self.finish_native_vertical_row(usize::from(rows));
+        if closes_printed_row && self.execution.has_column_output_scope() {
+            // term_vspace's first backend endline closed accepted graph;
+            // it did not complete an additional empty row (term.c:489-497).
+            // Keep this accepted-output receipt until the cell owner drains.
+            self.record_device_row_end();
+        }
         self.asserted_vertical_row |= completed_rows > 0;
         // term_vspace() already emitted these empty rows after resolving
         // skipvsp. They survive an output-owner return independently of

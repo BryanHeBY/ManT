@@ -40,7 +40,7 @@ impl InlineBuilder {
         start: usize,
         end: usize,
         row_origin_units: usize,
-    ) -> Option<(String, usize, usize, bool)> {
+    ) -> Option<(String, usize, i32, bool)> {
         use super::super::super::field_buffer::FieldCell;
         let state = self.execution.definition.as_ref()?;
         let declared_origin = state
@@ -78,6 +78,35 @@ impl InlineBuilder {
         } else {
             anchor.owner.clone()
         };
+        let origin = if state.column_origin_units.is_some() {
+            // Bd BODY can move left of its declared column parent. The
+            // accepted native positions remain nonnegative, but their
+            // difference is signed (mdoc_term.c:1449-1455). Subtract in
+            // basic units before rounding the relative character position;
+            // Euclidean division preserves a half-cell outdent's floor.
+            let units = i128::try_from(row_origin_units)
+                .unwrap_or(i128::MAX)
+                .saturating_sub(i128::try_from(declared_origin).unwrap_or(i128::MAX))
+                .saturating_add(i128::from(
+                    state
+                        .column_reading_origin
+                        .map_or(0, |reading| reading.correction),
+                ));
+            i32::try_from(units.saturating_add(11).div_euclid(24)).unwrap_or(if units < 0 {
+                i32::MIN
+            } else {
+                i32::MAX
+            })
+        } else {
+            // Preserve the established non-column HEAD/BODY projection.
+            i32::try_from(
+                row_origin_units
+                    .saturating_sub(declared_origin)
+                    .saturating_add(11)
+                    / 24,
+            )
+            .unwrap_or(i32::MAX)
+        };
         Some((
             owner,
             scalar,
@@ -85,10 +114,7 @@ impl InlineBuilder {
             // before applying minbl (term.c:113-116,225-228). SourceIndent
             // represents that origin; minbl is already a field separator.
             // A temporary offset can override it rather than add to it.
-            row_origin_units
-                .saturating_sub(declared_origin)
-                .saturating_add(11)
-                / 24,
+            origin,
             state.field_buffer.projection_length(graph, graph + 1) == 0,
         ))
     }

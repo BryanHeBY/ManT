@@ -95,12 +95,17 @@ pub(super) struct LogicalTableCell {
     pub(super) alignment: TableAlignment,
     pub(super) anchors: std::collections::HashMap<String, usize>,
     pub(super) completed_tail: bool,
+    pub(super) break_after: bool,
+    pub(super) empty_boundary: bool,
+    pub(super) origin_bounds: mant_ir::geometry::CellOriginBounds,
 }
 
 #[derive(Debug, Clone)]
 pub(super) struct LogicalTableRow {
     pub(super) cells: Vec<LogicalTableCell>,
     pub(super) rules: Option<Vec<TableRuleCellKind>>,
+    pub(super) completed_tail: bool,
+    pub(super) open_tail: bool,
     pub(super) layout: Arc<LogicalTableLayout>,
 }
 
@@ -108,8 +113,11 @@ pub(super) struct LogicalTableRow {
 pub(super) struct LogicalTableLayout {
     pub(super) preferred_widths: Vec<usize>,
     pub(super) force_stack: bool,
-    /// Measured declaration content widths, excluding the shared dcol gap.
-    pub(super) declared_widths: Vec<u16>,
+    /// Declared or actual-origin cells retain a provisional final row;
+    /// generic measured projection retires that row even on bounded fallback.
+    pub(super) retain_open_tail: bool,
+    /// Complete source-neutral geometry, including content-derived gaps.
+    pub(super) column_preferences: mant_ir::ColumnPreferences,
 }
 
 impl LogicalTableLayout {
@@ -128,23 +136,66 @@ impl LogicalTableLayout {
         Self {
             preferred_widths,
             force_stack: false,
-            declared_widths: Vec::new(),
+            retain_open_tail: false,
+            column_preferences: mant_ir::ColumnPreferences::default(),
         }
+    }
+
+    pub(super) fn requires_stack(&self, cells: &[LogicalTableCell]) -> bool {
+        self.force_stack
+            || (self.column_preferences.widths.is_empty()
+                && cells
+                    .iter()
+                    .take(cells.len().saturating_sub(1))
+                    .any(|cell| cell.break_after))
     }
 
     fn preferred_width(&self) -> usize {
         self.preferred_widths.iter().sum::<usize>()
-            + self.preferred_widths.len().saturating_sub(1) * 2
+            + self.preferred_widths.len().saturating_sub(1)
+                * usize::from(self.column_preferences.gap_columns)
     }
 }
 
 impl LogicalTableCell {
+    pub(super) fn has_open_tail(&self) -> bool {
+        !self.completed_tail
+            && self.lines.last().is_some_and(|line| {
+                if let Some(row) = &line.table_row {
+                    row.open_tail
+                } else {
+                    self.lines.len() > 1 && line.spans.iter().all(|span| span.content.is_empty())
+                }
+            })
+    }
+
+    fn reading_line_count(&self) -> usize {
+        self.lines
+            .len()
+            .saturating_sub(usize::from(self.has_open_tail()))
+            .max(1)
+    }
+
+    fn reading_completed_tail(&self) -> bool {
+        self.completed_tail
+            || self
+                .lines
+                .get(self.reading_line_count().saturating_sub(1))
+                .is_some_and(|line| {
+                    line.table_row.is_none()
+                        && line.spans.iter().all(|span| span.content.is_empty())
+                })
+    }
+
     pub(super) fn new(lines: Vec<LogicalLine>, alignment: Option<TableAlignment>) -> Self {
         Self {
             lines,
             alignment: alignment.unwrap_or(TableAlignment::Left),
             anchors: std::collections::HashMap::new(),
             completed_tail: false,
+            break_after: false,
+            empty_boundary: false,
+            origin_bounds: mant_ir::geometry::CellOriginBounds::default(),
         }
     }
 
@@ -287,6 +338,30 @@ impl LogicalLine {
         cells: Vec<LogicalTableCell>,
         layout: Arc<LogicalTableLayout>,
     ) -> Self {
+        let sequential =
+            layout.requires_stack(&cells) || !layout.column_preferences.widths.is_empty();
+        let completed_tail = if cells.is_empty() {
+            true
+        } else if sequential {
+            cells.last().is_some_and(|cell| cell.completed_tail)
+        } else {
+            let height = cells
+                .iter()
+                .map(LogicalTableCell::reading_line_count)
+                .max()
+                .unwrap_or(0);
+            cells
+                .iter()
+                .any(|cell| cell.reading_completed_tail() && cell.reading_line_count() == height)
+        };
+        let open_tail = !completed_tail
+            && sequential
+            && layout.retain_open_tail
+            && cells
+                .iter()
+                .rev()
+                .find(|cell| !cell.lines.is_empty())
+                .is_some_and(LogicalTableCell::has_open_tail);
         Self {
             indent,
             continuation_indent: indent,
@@ -298,6 +373,8 @@ impl LogicalLine {
             wrap_mode: WrapMode::Word,
             table_row: Some(LogicalTableRow {
                 cells,
+                completed_tail,
+                open_tail,
                 rules: None,
                 layout,
             }),
@@ -322,6 +399,8 @@ impl LogicalLine {
             wrap_mode: WrapMode::Word,
             table_row: Some(LogicalTableRow {
                 cells: Vec::new(),
+                completed_tail: false,
+                open_tail: false,
                 rules: Some(rules),
                 layout,
             }),

@@ -171,8 +171,13 @@ impl ParagraphFlow {
         formatter: &mut FormatterState,
         indent: crate::mandoc::layout::SourceIndent,
         line_request: bool,
-    ) -> (Option<Block>, bool, u16) {
-        let (mut children, empty_word_end_break, completed_vertical_rows) = self
+    ) -> (
+        Option<Block>,
+        bool,
+        u16,
+        crate::mandoc::inline::OutputRowEnd,
+    ) {
+        let (mut children, empty_word_end_break, completed_vertical_rows, closed_graph_tail) = self
             .with_inline_builder(formatter, |builder| {
                 builder.take_paragraph_segment(line_request)
             });
@@ -188,6 +193,7 @@ impl ParagraphFlow {
             }),
             empty_word_end_break,
             completed_vertical_rows,
+            closed_graph_tail,
         )
     }
 }

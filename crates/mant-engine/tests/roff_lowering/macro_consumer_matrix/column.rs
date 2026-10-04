@@ -63,7 +63,27 @@ fn declared_column_matrix_matches_the_pinned_reference() {
     matrix.finish("CW");
 }
 
-/// Mutate every table of a loaded case to the given declared widths.
+// term_ascii.c::ascii_advance and locale_advance cap a native device advance.
+const NATIVE_COLUMN_ADVANCE_LIMIT: u16 = 256;
+
+/// Keep the old native preferences explicit in handcrafted regression IR.
+fn native_column_preferences(widths: &[u16]) -> mant_ir::ColumnPreferences {
+    if widths.is_empty() {
+        return mant_ir::ColumnPreferences::default();
+    }
+    mant_ir::ColumnPreferences {
+        widths: widths.to_vec(),
+        gap_columns: match widths.len() {
+            count if count < 5 => 4,
+            5 => 3,
+            _ => 1,
+        },
+        advance_limit_columns: Some(NATIVE_COLUMN_ADVANCE_LIMIT),
+        extra_width_columns: Some(10),
+    }
+}
+
+/// Mutate every table of a loaded case, including its width-count gap rule.
 fn with_column_widths(
     mut query: mant_ir::ResolvedContent,
     widths: &[u16],
@@ -71,14 +91,20 @@ fn with_column_widths(
     use mant_ir::Block;
     let document = query.document.as_mut().expect("case document");
     for block in &mut document.blocks {
-        if let Block::Table { column_widths, .. } = block {
-            column_widths.clone_from(&widths.to_vec());
+        if let Block::Table {
+            column_preferences, ..
+        } = block
+        {
+            *column_preferences = native_column_preferences(widths);
         }
     }
     for section in &mut document.sections {
         for block in &mut section.blocks {
-            if let Block::Table { column_widths, .. } = block {
-                column_widths.clone_from(&widths.to_vec());
+            if let Block::Table {
+                column_preferences, ..
+            } = block
+            {
+                *column_preferences = native_column_preferences(widths);
             }
         }
     }
@@ -100,7 +126,7 @@ fn handcrafted_ir_extremes_validate_like_the_parsed_entry() {
     let rows = actual_rows(&output);
     assert!(
         rows.iter()
-            .all(|row| row.chars().count() <= mant_ir::geometry::MAX_COLUMN_ADVANCE + 64),
+            .all(|row| row.chars().count() <= usize::from(NATIVE_COLUMN_ADVANCE_LIMIT) + 64),
         "cw14 handcrafted IR produced unbounded rows: {rows:?}"
     );
 }
@@ -124,7 +150,7 @@ fn inbound_json_cannot_bypass_the_geometry_guard() {
     let rows = actual_rows(&output);
     assert!(
         rows.iter()
-            .all(|row| row.chars().count() <= mant_ir::geometry::MAX_COLUMN_ADVANCE + 64),
+            .all(|row| row.chars().count() <= usize::from(NATIVE_COLUMN_ADVANCE_LIMIT) + 64),
         "cw14 inbound JSON produced unbounded rows: {rows:?}"
     );
 }
@@ -205,8 +231,8 @@ fn inbound_column_widths_reject_values_outside_the_serialized_cell_range() {
         while let Some(value) = pending.pop() {
             match value {
                 serde_json::Value::Object(object) => {
-                    if let Some(widths) = object.get_mut("columnWidths") {
-                        *widths = invalid.clone();
+                    if let Some(preferences) = object.get_mut("columnPreferences") {
+                        preferences["widths"] = invalid.clone();
                         changes += 1;
                     } else {
                         pending.extend(object.values_mut());

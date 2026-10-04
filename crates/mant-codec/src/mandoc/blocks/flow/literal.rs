@@ -309,6 +309,10 @@ impl LiteralFlow {
         self.nodes.is_empty()
     }
 
+    pub(super) fn closed_graph_tail(&self) -> crate::mandoc::inline::OutputRowEnd {
+        crate::mandoc::inline::InlineBuilder::output_has_closed_graph_tail(&self.nodes)
+    }
+
     pub(super) fn adopt(
         &mut self,
         nodes: Vec<Inline>,

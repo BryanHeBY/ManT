@@ -180,6 +180,7 @@ impl BlockLowerer<'_, '_> {
         } else {
             self.state.flush_paragraph();
             let output_start = self.state.output.len();
+            let accepted_before = self.state.formatter.execution.visible_content_checkpoint();
             let spacing_enabled = self.state.spacing_enabled();
             StructuralLowerer {
                 context: self.context,
@@ -205,6 +206,8 @@ impl BlockLowerer<'_, '_> {
             }
             self.state
                 .queue_targets(structural_targets, source_span(node));
+            self.state
+                .finish_structural_output(output_start, accepted_before);
             self.state.attach_pending_to_structural_output(output_start);
         }
     }

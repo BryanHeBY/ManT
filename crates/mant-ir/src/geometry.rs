@@ -12,7 +12,7 @@ use unicode_width::UnicodeWidthStr;
 
 mod columns;
 pub use columns::{
-    ColumnFieldWidth, ColumnPiece, DeclaredColumns, MAX_COLUMN_ADVANCE, MAX_DECLARED_COLUMNS,
+    ColumnFieldWidth, ColumnPiece, DeclaredColumns, MAX_COLUMN_PADDING, MAX_DECLARED_COLUMNS,
     declared_field_width,
 };
 
@@ -20,7 +20,10 @@ mod list;
 pub use list::{list_item_spacing, list_marker, list_marker_width};
 
 mod table;
-pub use table::table_requires_origin_preserving_stack;
+pub use table::{
+    CellOriginBounds, table_cell_origin_bounds, table_column_origins_fit,
+    table_requires_origin_preserving_stack,
+};
 
 mod gaps;
 pub use gaps::has_bounded_gap;

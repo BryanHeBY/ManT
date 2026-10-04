@@ -1,6 +1,149 @@
 use super::*;
 
 #[test]
+fn author_blank_rows_separate_gap_budgets_in_actual_text_output() {
+    let blocks = [
+        Block::VerticalSpace {
+            lines: 3000,
+            source: None,
+        },
+        paragraph("\u{a0}", 0),
+        Block::VerticalSpace {
+            lines: 3000,
+            source: None,
+        },
+        paragraph("BODY", 0),
+    ];
+    assert!(!mant_ir::geometry::has_bounded_gap(&blocks));
+    let output = super::super::super::plain_renderer().render_blocks(&blocks, 0);
+    let rows = output.lines().collect::<Vec<_>>();
+    assert_eq!(rows.len(), 6002);
+    assert_eq!(rows[3000], "\u{a0}");
+    assert_eq!(rows.last(), Some(&"BODY"));
+}
+
+#[test]
+fn an_empty_closed_data_row_consumes_its_incoming_gap_in_stacked_output() {
+    for closed in [false, true] {
+        let blocks = [
+            Block::VerticalSpace {
+                lines: 3000,
+                source: None,
+            },
+            Block::Table {
+                column_preferences: mant_ir::ColumnPreferences::default(),
+                rows: vec![mant_ir::TableRow {
+                    kind: mant_ir::TableRowKind::Data,
+                    cells: vec![TableCell {
+                        break_after: closed,
+                        kind: mant_ir::TableCellKind::Text,
+                        blocks: Vec::new(),
+                        column_span: 1,
+                        row_span: 1,
+                        alignment: None,
+                    }],
+                }],
+                layout: LayoutHint {
+                    indent_columns: -1,
+                    ..LayoutHint::default()
+                },
+                source: None,
+            },
+            Block::VerticalSpace {
+                lines: 3000,
+                source: None,
+            },
+            paragraph("BODY", 0),
+        ];
+        assert!(!mant_ir::geometry::has_bounded_gap(&blocks));
+        let output = super::super::super::plain_renderer().render_blocks(&blocks, 0);
+        let rows = output.lines().collect::<Vec<_>>();
+        assert_eq!(rows.len(), 6002);
+        assert_eq!(rows.last(), Some(&"BODY"));
+    }
+}
+
+#[test]
+fn navigation_only_tables_do_not_reset_the_parent_gap_budget() {
+    let renderer = super::super::super::plain_renderer();
+    for origin in [-1, 0, 2] {
+        let mut target = paragraph("", 0);
+        let Block::Paragraph { children, .. } = &mut target else {
+            unreachable!();
+        };
+        *children = vec![Inline::anchor("target")];
+        let table = Block::Table {
+            column_preferences: mant_ir::ColumnPreferences::default(),
+            rows: vec![mant_ir::TableRow {
+                kind: mant_ir::TableRowKind::Data,
+                cells: vec![TableCell {
+                    break_after: false,
+                    kind: mant_ir::TableCellKind::Text,
+                    blocks: vec![target],
+                    column_span: 1,
+                    row_span: 1,
+                    alignment: None,
+                }],
+            }],
+            layout: LayoutHint {
+                indent_columns: origin,
+                ..LayoutHint::default()
+            },
+            source: None,
+        };
+        let blocks = [
+            Block::VerticalSpace {
+                lines: 3000,
+                source: None,
+            },
+            table,
+            Block::VerticalSpace {
+                lines: 3000,
+                source: None,
+            },
+            paragraph("BODY", 0),
+        ];
+        assert!(mant_ir::geometry::has_bounded_gap(&blocks));
+        let output = renderer.render_blocks(&blocks, 0);
+        assert_eq!(output, format!("{}BODY", "\n".repeat(4096)));
+    }
+}
+
+#[test]
+fn origin_preserving_cells_keep_leading_gaps_in_the_parent_budget() {
+    let mut body = paragraph("BODY", 3);
+    let Block::Paragraph { layout, .. } = &mut body else {
+        unreachable!();
+    };
+    layout.spacing_before_lines = 3000;
+    let table = Block::Table {
+        column_preferences: mant_ir::ColumnPreferences::default(),
+        rows: vec![mant_ir::TableRow {
+            kind: mant_ir::TableRowKind::Data,
+            cells: vec![TableCell {
+                break_after: false,
+                kind: mant_ir::TableCellKind::Text,
+                blocks: vec![body],
+                column_span: 1,
+                row_span: 1,
+                alignment: None,
+            }],
+        }],
+        layout: LayoutHint {
+            indent_columns: -2,
+            spacing_before_lines: 3000,
+            ..LayoutHint::default()
+        },
+        source: None,
+    };
+    assert!(mant_ir::geometry::has_bounded_gap(std::slice::from_ref(
+        &table
+    )));
+    let output = super::super::super::plain_renderer().render_blocks(&[table], 0);
+    assert_eq!(output, format!("{} BODY", "\n".repeat(4096)));
+}
+
+#[test]
 fn ordered_labels_and_item_spacing_keep_hard_row_origins() {
     let renderer = super::super::super::plain_renderer();
     for compact in [false, true] {
@@ -102,10 +245,11 @@ fn subtree_translation_is_applied_once_at_each_visible_leaf() {
                     source: None,
                 },
                 Block::Table {
-                    column_widths: Vec::new(),
+                    column_preferences: mant_ir::ColumnPreferences::default(),
                     rows: vec![mant_ir::TableRow {
                         kind: mant_ir::TableRowKind::Data,
                         cells: vec![TableCell {
+                            break_after: false,
                             kind: mant_ir::TableCellKind::Text,
                             blocks: vec![paragraph("CELL", 1)],
                             column_span: 1,

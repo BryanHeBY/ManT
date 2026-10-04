@@ -914,15 +914,9 @@
             "description": "Block-capable table.",
             "type": "object",
             "properties": {
-              "columnWidths": {
-                "description": "Measured declaration content widths in display cells, excluding\nthe inter-column gap. These are preferred field origins, not fixed\nviewport widths. The producer resolves source escapes using its\nreading device. Empty selects content-derived table layout.\nConsumers share bounded 4/3/1-cell gap placement and preserve every\nactual cell when declarations and cells have different lengths.",
-                "type": "array",
-                "items": {
-                  "type": "integer",
-                  "format": "uint16",
-                  "maximum": 65535,
-                  "minimum": 0
-                }
+              "columnPreferences": {
+                "description": "Preferred column geometry, independent of source macro rules.",
+                "$ref": "#/$defs/ColumnPreferences"
               },
               "layout": {
                 "description": "Source-derived indentation and vertical spacing.",
@@ -1106,6 +1100,50 @@
             ]
           }
         ]
+      },
+      "ColumnPreferences": {
+        "description": "Source-neutral preferences for measured table columns.",
+        "type": "object",
+        "properties": {
+          "advanceLimitColumns": {
+            "description": "Optional maximum advance toward a preferred field origin. Zero disables\nthat advance; absence leaves it unrestricted by the source device.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0
+          },
+          "extraWidthColumns": {
+            "description": "Optional capacity of fields beyond the declared widths. These fields\nshare the end of all declarations as their preferred origin.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0
+          },
+          "gapColumns": {
+            "description": "Whitespace between columns, excluding any renderer's structural glyph.",
+            "type": "integer",
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0
+          },
+          "widths": {
+            "description": "Preferred content widths in display cells. Empty uses measured content.",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0
+            }
+          }
+        },
+        "additionalProperties": false
       },
       "DeclarationGroup": {
         "description": "A recovered run of consecutive declarations in one definition list.\n\nEarlier members have no readable description; the final member supplies\nthe group's context. This never asserts that the members are aliases or\nthat every sentence applies to every member. The half-open item coordinates\nbelong to the exact containing list, not a durable or cross-document ID.",
@@ -3292,6 +3330,10 @@
               "$ref": "#/$defs/Block"
             }
           },
+          "breakAfter": {
+            "description": "Close the current physical data row after this cell, before the next.\nThe row can be occupied by an earlier cell or already exist as an empty\nstructural row. This adds neither body scalars nor an additional row.",
+            "type": "boolean"
+          },
           "columnSpan": {
             "description": "Number of logical columns occupied by the cell.",
             "type": "integer",
@@ -3967,15 +4009,9 @@
             "description": "Block-capable table.",
             "type": "object",
             "properties": {
-              "columnWidths": {
-                "description": "Measured declaration content widths in display cells, excluding\nthe inter-column gap. These are preferred field origins, not fixed\nviewport widths. The producer resolves source escapes using its\nreading device. Empty selects content-derived table layout.\nConsumers share bounded 4/3/1-cell gap placement and preserve every\nactual cell when declarations and cells have different lengths.",
-                "type": "array",
-                "items": {
-                  "type": "integer",
-                  "format": "uint16",
-                  "maximum": 65535,
-                  "minimum": 0
-                }
+              "columnPreferences": {
+                "description": "Preferred column geometry, independent of source macro rules.",
+                "$ref": "#/$defs/ColumnPreferences"
               },
               "layout": {
                 "description": "Source-derived indentation and vertical spacing.",
@@ -4159,6 +4195,50 @@
             ]
           }
         ]
+      },
+      "ColumnPreferences": {
+        "description": "Source-neutral preferences for measured table columns.",
+        "type": "object",
+        "properties": {
+          "advanceLimitColumns": {
+            "description": "Optional maximum advance toward a preferred field origin. Zero disables\nthat advance; absence leaves it unrestricted by the source device.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0
+          },
+          "extraWidthColumns": {
+            "description": "Optional capacity of fields beyond the declared widths. These fields\nshare the end of all declarations as their preferred origin.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0
+          },
+          "gapColumns": {
+            "description": "Whitespace between columns, excluding any renderer's structural glyph.",
+            "type": "integer",
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0
+          },
+          "widths": {
+            "description": "Preferred content widths in display cells. Empty uses measured content.",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0
+            }
+          }
+        },
+        "additionalProperties": false
       },
       "ContentBlockStep": {
         "description": "A checked transition through block arrays and their containing items/cells.",
@@ -7173,6 +7253,10 @@
               "$ref": "#/$defs/Block"
             }
           },
+          "breakAfter": {
+            "description": "Close the current physical data row after this cell, before the next.\nThe row can be occupied by an earlier cell or already exist as an empty\nstructural row. This adds neither body scalars nor an additional row.",
+            "type": "boolean"
+          },
           "columnSpan": {
             "description": "Number of logical columns occupied by the cell.",
             "type": "integer",
@@ -10090,15 +10174,9 @@
             "description": "Block-capable table.",
             "type": "object",
             "properties": {
-              "columnWidths": {
-                "description": "Measured declaration content widths in display cells, excluding\nthe inter-column gap. These are preferred field origins, not fixed\nviewport widths. The producer resolves source escapes using its\nreading device. Empty selects content-derived table layout.\nConsumers share bounded 4/3/1-cell gap placement and preserve every\nactual cell when declarations and cells have different lengths.",
-                "type": "array",
-                "items": {
-                  "type": "integer",
-                  "format": "uint16",
-                  "maximum": 65535,
-                  "minimum": 0
-                }
+              "columnPreferences": {
+                "description": "Preferred column geometry, independent of source macro rules.",
+                "$ref": "#/$defs/ColumnPreferences"
               },
               "layout": {
                 "description": "Source-derived indentation and vertical spacing.",
@@ -10282,6 +10360,50 @@
             ]
           }
         ]
+      },
+      "ColumnPreferences": {
+        "description": "Source-neutral preferences for measured table columns.",
+        "type": "object",
+        "properties": {
+          "advanceLimitColumns": {
+            "description": "Optional maximum advance toward a preferred field origin. Zero disables\nthat advance; absence leaves it unrestricted by the source device.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0
+          },
+          "extraWidthColumns": {
+            "description": "Optional capacity of fields beyond the declared widths. These fields\nshare the end of all declarations as their preferred origin.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0
+          },
+          "gapColumns": {
+            "description": "Whitespace between columns, excluding any renderer's structural glyph.",
+            "type": "integer",
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0
+          },
+          "widths": {
+            "description": "Preferred content widths in display cells. Empty uses measured content.",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0
+            }
+          }
+        },
+        "additionalProperties": false
       },
       "DeclarationGroup": {
         "description": "A recovered run of consecutive declarations in one definition list.\n\nEarlier members have no readable description; the final member supplies\nthe group's context. This never asserts that the members are aliases or\nthat every sentence applies to every member. The half-open item coordinates\nbelong to the exact containing list, not a durable or cross-document ID.",
@@ -12244,6 +12366,10 @@
               "$ref": "#/$defs/Block"
             }
           },
+          "breakAfter": {
+            "description": "Close the current physical data row after this cell, before the next.\nThe row can be occupied by an earlier cell or already exist as an empty\nstructural row. This adds neither body scalars nor an additional row.",
+            "type": "boolean"
+          },
           "columnSpan": {
             "description": "Number of logical columns occupied by the cell.",
             "type": "integer",
@@ -13547,15 +13673,9 @@
             "description": "Block-capable table.",
             "type": "object",
             "properties": {
-              "columnWidths": {
-                "description": "Measured declaration content widths in display cells, excluding\nthe inter-column gap. These are preferred field origins, not fixed\nviewport widths. The producer resolves source escapes using its\nreading device. Empty selects content-derived table layout.\nConsumers share bounded 4/3/1-cell gap placement and preserve every\nactual cell when declarations and cells have different lengths.",
-                "type": "array",
-                "items": {
-                  "type": "integer",
-                  "format": "uint16",
-                  "maximum": 65535,
-                  "minimum": 0
-                }
+              "columnPreferences": {
+                "description": "Preferred column geometry, independent of source macro rules.",
+                "$ref": "#/$defs/ColumnPreferences"
               },
               "layout": {
                 "description": "Source-derived indentation and vertical spacing.",
@@ -13739,6 +13859,50 @@
             ]
           }
         ]
+      },
+      "ColumnPreferences": {
+        "description": "Source-neutral preferences for measured table columns.",
+        "type": "object",
+        "properties": {
+          "advanceLimitColumns": {
+            "description": "Optional maximum advance toward a preferred field origin. Zero disables\nthat advance; absence leaves it unrestricted by the source device.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0
+          },
+          "extraWidthColumns": {
+            "description": "Optional capacity of fields beyond the declared widths. These fields\nshare the end of all declarations as their preferred origin.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0
+          },
+          "gapColumns": {
+            "description": "Whitespace between columns, excluding any renderer's structural glyph.",
+            "type": "integer",
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0
+          },
+          "widths": {
+            "description": "Preferred content widths in display cells. Empty uses measured content.",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0
+            }
+          }
+        },
+        "additionalProperties": false
       },
       "ContentBlockStep": {
         "description": "A checked transition through block arrays and their containing items/cells.",
@@ -17920,6 +18084,10 @@
             "items": {
               "$ref": "#/$defs/Block"
             }
+          },
+          "breakAfter": {
+            "description": "Close the current physical data row after this cell, before the next.\nThe row can be occupied by an earlier cell or already exist as an empty\nstructural row. This adds neither body scalars nor an additional row.",
+            "type": "boolean"
           },
           "columnSpan": {
             "description": "Number of logical columns occupied by the cell.",

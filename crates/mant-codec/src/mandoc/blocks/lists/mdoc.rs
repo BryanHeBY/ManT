@@ -543,7 +543,19 @@ fn lower_mdoc_column_list(
             u16::try_from(crate::mandoc::roff_escape::width_sample(declared)).unwrap_or(u16::MAX)
         })
         .collect();
-    let origins = mant_ir::geometry::DeclaredColumns::new(&column_widths);
+    // Pinned mdoc_term.c::termp_it_pre chooses source device preferences.
+    let gap = match column_widths.len() {
+        n if n < 5 => 4,
+        5 => 3,
+        _ => 1,
+    };
+    let column_preferences = mant_ir::ColumnPreferences {
+        widths: column_widths,
+        gap_columns: gap,
+        advance_limit_columns: Some(256),
+        extra_width_columns: Some(10),
+    };
+    let origins = mant_ir::geometry::DeclaredColumns::new(&column_preferences);
     formatter.execution.enter_column_output_scope();
     let rows = items
         .into_iter()
@@ -564,22 +576,15 @@ fn lower_mdoc_column_list(
                 .iter()
                 .filter(|part| part.kind == NodeKind::Body && part.scope_end.is_none())
                 .collect::<Vec<_>>();
-            let gap = match column_widths.len() {
-                n if n < 5 => 4,
-                5 => 3,
-                _ => 1,
-            };
             let mut cells = bodies
                 .iter()
                 .enumerate()
                 .map(|(index, body)| {
-                    let width = column_widths
-                        .get(index)
-                        .copied()
-                        .unwrap_or(10)
-                        .saturating_add(gap);
+                    let width = column_preferences.widths.get(index).map_or(10, |width| {
+                        width.saturating_add(column_preferences.gap_columns)
+                    });
                     let origin = origins.as_ref().map_or(0, |columns| columns.start(index));
-                    let blocks = lower_scope(
+                    let (blocks, break_after) = super::super::lower_scope_with_boundary(
                         &body.children,
                         context,
                         paragraph_distance,
@@ -606,6 +611,7 @@ fn lower_mdoc_column_list(
                         column_span: 1,
                         row_span: 1,
                         alignment: Some(AstTableAlignment::Left),
+                        break_after,
                     }
                 })
                 .collect::<Vec<_>>();
@@ -619,7 +625,7 @@ fn lower_mdoc_column_list(
         .collect();
     formatter.execution.exit_column_output_scope();
     Block::Table {
-        column_widths,
+        column_preferences,
         rows,
         layout: layout(indent_columns),
         source: source_span(node),
@@ -639,6 +645,7 @@ fn attach_column_item_targets(
     attach_item_targets(&mut blocks, item, layout(indent.content_origin()));
     if !blocks.is_empty() {
         cells.push(AstTableCell {
+            break_after: false,
             kind: mant_ir::TableCellKind::Text,
             blocks,
             column_span: 1,
@@ -712,6 +719,7 @@ fn append_list_targets(
                 rows.push(TableRow {
                     kind: mant_ir::TableRowKind::Data,
                     cells: vec![AstTableCell {
+                        break_after: false,
                         kind: mant_ir::TableCellKind::Text,
                         blocks: Vec::new(),
                         column_span: 1,

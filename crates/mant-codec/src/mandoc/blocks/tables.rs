@@ -111,6 +111,7 @@ pub(super) fn append_table_row(
                     }]
                 };
                 AstTableCell {
+                    break_after: false,
                     kind: table_cell_kind(cell.kind),
                     blocks,
                     column_span: cell.column_span,
@@ -130,7 +131,7 @@ pub(super) fn append_table_row(
         rows.push(row);
     } else {
         output.push(Block::Table {
-            column_widths: Vec::new(),
+            column_preferences: mant_ir::ColumnPreferences::default(),
             rows: vec![row],
             layout: layout(indent_columns),
             source: source_span(node),

@@ -257,9 +257,16 @@ impl super::super::InlineExecutionState {
     /// native page floor (mdoc_term.c:1449-1455). No projected width is read.
     pub(in crate::mandoc) fn add_native_display_offset_units(&mut self, units: i32) {
         if let Some(definition) = &mut self.definition {
+            let previous_units = definition.field_offset_units;
             definition.field_offset_units = definition
                 .field_offset_units
                 .saturating_add_signed(isize::try_from(units).unwrap_or_default());
+            if let Some(reading) = &mut definition.column_reading_origin {
+                let delta = i128::try_from(definition.field_offset_units)
+                    .unwrap_or(i128::MAX)
+                    .saturating_sub(i128::try_from(previous_units).unwrap_or(i128::MAX));
+                reading.apply(units, delta);
+            }
             definition.hang_row.field_offset =
                 definition.field_offset_units.saturating_add(11) / 24;
         }
@@ -302,6 +309,7 @@ impl super::super::InlineExecutionState {
                 indent_columns: definition.row.indent_columns,
                 field_offset: definition.hang_row.field_offset,
                 field_offset_units: definition.field_offset_units,
+                column_reading_origin: definition.column_reading_origin,
                 margin_override: definition.margin_override,
             })
     }
@@ -316,6 +324,7 @@ impl super::super::InlineExecutionState {
             definition.row.indent_columns = checkpoint.indent_columns;
             definition.hang_row.field_offset = checkpoint.field_offset;
             definition.field_offset_units = checkpoint.field_offset_units;
+            definition.column_reading_origin = checkpoint.column_reading_origin;
             definition.margin_override = checkpoint.margin_override;
         }
     }

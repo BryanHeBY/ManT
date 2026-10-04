@@ -45,7 +45,7 @@ impl InlineBuilder {
     pub(in crate::mandoc) fn take_paragraph_segment(
         &mut self,
         line_request: bool,
-    ) -> (Vec<Inline>, bool, u16) {
+    ) -> (Vec<Inline>, bool, u16, super::OutputRowEnd) {
         // term_newln() consumes first, then the output owner accounts for
         // every row in its receipt (term.c:143-146,220,250-253). Doing this
         // in finish_nodes() is too late: the block row count is already
@@ -100,6 +100,10 @@ impl InlineBuilder {
         let mut completed_vertical_rows = executed_tail_rows
             .saturating_add(u16::from(requested_invisible_row))
             .saturating_add(trailing_invisible_rows.saturating_sub(executed_tail_rows));
+        // The accepted tail's executed close survives transferring completed
+        // request rows to their gap owner. Read before retiring those private
+        // receipts; an empty IR drain cannot reopen term_vspace's endline.
+        let closed_graph_tail = self.closed_graph_tail();
         if completed_vertical_rows > 0 {
             // term_vspace() has already emitted these rows. Remove only their
             // trailing inline projection, including a later invisible word
@@ -148,7 +152,12 @@ impl InlineBuilder {
             });
         }
         self.execution.reset_paragraph_segment(armed);
-        (children, empty_word_end_break, completed_vertical_rows)
+        (
+            children,
+            empty_word_end_break,
+            completed_vertical_rows,
+            closed_graph_tail,
+        )
     }
 
     /// Finish one native formatter line and return a bare `\\z` request only
@@ -391,7 +400,7 @@ impl InlineBuilder {
             self.execution.flush_unit_anchors.clear();
             self.execution.flush_unit_output_start = 0;
         }
-        if !super::projection::trailing_device_row_end_receipt(&self.nodes) {
+        if !super::projection::trailing_device_row_end_receipt(&self.nodes).is_closed() {
             trim_output_terminators(&mut self.nodes);
         }
         let _ = retired_rejected_row;

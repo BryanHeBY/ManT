@@ -7,6 +7,7 @@ pub(super) fn navigation_table(widths: &[u16], origin: i32, cells: Vec<Vec<Block
             cells: cells
                 .into_iter()
                 .map(|blocks| TableCell {
+                    break_after: false,
                     blocks,
                     kind: mant_ir::TableCellKind::Text,
                     column_span: 1,
@@ -15,7 +16,7 @@ pub(super) fn navigation_table(widths: &[u16], origin: i32, cells: Vec<Vec<Block
                 })
                 .collect(),
         }],
-        column_widths: widths.to_vec(),
+        column_preferences: declared_preferences(widths),
         layout: LayoutHint {
             indent_columns: origin,
             ..Default::default()
@@ -56,12 +57,13 @@ pub(super) fn plain_list(blocks: Vec<Block>, indent: i32) -> Block {
 
 pub(super) fn declared_column_table(widths: &[u16], cells: &[&str]) -> Block {
     Block::Table {
-        column_widths: widths.to_vec(),
+        column_preferences: declared_preferences(widths),
         rows: vec![mant_ir::TableRow {
             kind: mant_ir::TableRowKind::Data,
             cells: cells
                 .iter()
                 .map(|text| TableCell {
+                    break_after: false,
                     kind: mant_ir::TableCellKind::Text,
                     blocks: vec![paragraph(text, 0)],
                     column_span: 1,
@@ -72,5 +74,21 @@ pub(super) fn declared_column_table(widths: &[u16], cells: &[&str]) -> Block {
         }],
         layout: LayoutHint::default(),
         source: None,
+    }
+}
+
+fn declared_preferences(widths: &[u16]) -> mant_ir::ColumnPreferences {
+    if widths.is_empty() {
+        return mant_ir::ColumnPreferences::default();
+    }
+    mant_ir::ColumnPreferences {
+        widths: widths.to_vec(),
+        gap_columns: match widths.len() {
+            n if n < 5 => 4,
+            5 => 3,
+            _ => 1,
+        },
+        advance_limit_columns: Some(256),
+        extra_width_columns: Some(10),
     }
 }

@@ -41,7 +41,7 @@ struct NativeFieldSweep {
     printed_row: Option<usize>,
     emission: NativeFieldEmission,
     separator_retention: Option<usize>,
-    row_origins: Vec<(String, usize, usize, bool)>,
+    row_origins: Vec<(String, usize, i32, bool)>,
     field_padding: Vec<(String, usize, usize, bool)>,
     unprojected_origin_units: usize,
     /// Outcome of the last pass-loop endline (term.c:217) of this flush.
@@ -177,7 +177,7 @@ pub(in crate::mandoc) struct NativeFieldDevice {
     /// Stable source-word positions of actually printed new rows. The
     /// projector consumes these only after native acceptance, never at a
     /// tentative word append or from its visible IR width.
-    pub(super) row_origins: Vec<(String, usize, usize, bool)>,
+    pub(super) row_origins: Vec<(String, usize, i32, bool)>,
     /// Same-row device padding at stable source-word scalar positions.
     /// Only a real accepted print determines these cells, after node geometry
     /// restoration; already materialized field padding is subtracted.

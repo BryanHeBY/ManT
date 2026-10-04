@@ -561,6 +561,7 @@ fn ordinary_heading_omits_hints_while_fenced_table_projection_retains_them() {
         rows: vec![TableRow {
             kind: mant_ir::TableRowKind::Data,
             cells: vec![TableCell {
+                break_after: false,
                 kind: mant_ir::TableCellKind::Text,
                 blocks: vec![Block::Paragraph {
                     children: vec![Inline::Text {
@@ -575,7 +576,7 @@ fn ordinary_heading_omits_hints_while_fenced_table_projection_retains_them() {
                 alignment: None,
             }],
         }],
-        column_widths: vec![],
+        column_preferences: mant_ir::ColumnPreferences::default(),
         layout: LayoutHint::default(),
         source: None,
     };
@@ -631,6 +632,7 @@ fn flattened_fenced_table_preserves_author_row_edges_and_explicit_hint_spaces() 
         rows: vec![TableRow {
             kind: mant_ir::TableRowKind::Data,
             cells: vec![TableCell {
+                break_after: false,
                 kind: mant_ir::TableCellKind::Text,
                 column_span: 1,
                 row_span: 1,
@@ -645,7 +647,7 @@ fn flattened_fenced_table_preserves_author_row_edges_and_explicit_hint_spaces() 
                 }],
             }],
         }],
-        column_widths: vec![],
+        column_preferences: mant_ir::ColumnPreferences::default(),
         layout: LayoutHint::default(),
         source: None,
     };
