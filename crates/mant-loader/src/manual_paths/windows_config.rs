@@ -915,10 +915,11 @@ mod tests {
         )
         .expect("write configuration fragment");
 
-        let discovery = super::load(
+        let discovery = super::load_personal(
             &fixture.join("man.conf"),
             &environment,
             &[fixture.join("BIN PATH")],
+            true,
         );
         assert_eq!(
             discovery.roots,
