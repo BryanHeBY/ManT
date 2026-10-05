@@ -8,8 +8,9 @@ use mant_ir::{
 use pulldown_cmark::{Event, Parser, Tag, TagEnd};
 
 use super::{
-    ArtifactBuilder, MarkdownFragmentOptions, MarkdownNode, MarkdownOptions, blocks, inline,
-    render_addressable_markdown, render_blocks_fragment, render_located_blocks_fragment,
+    MarkdownFragmentOptions, MarkdownNode, MarkdownOptions, blocks, inline,
+    render_addressable_markdown, render_blocks_fragment, render_heading_fragment,
+    render_inline_content_fragment, render_inline_fragment, render_located_blocks_fragment,
     render_markdown, render_markdown_artifact, render_markdown_with_options,
     render_sections_fragment, semantic,
 };
