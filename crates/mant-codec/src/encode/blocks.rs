@@ -41,7 +41,8 @@ pub(crate) fn render_located_blocks(
     options: MarkdownOptions,
     locations: Option<&dyn MarkdownInlineProjection>,
 ) -> Vec<String> {
-    assembly::finish_boundaries(mapped_sequence(blocks, options, locations, false))
+    mapped_blocks(blocks, options, locations, false)
+        .nonempty()
         .into_iter()
         .map(|block| block.text)
         .collect()
@@ -86,10 +87,9 @@ fn mapped_blocks(
     locations: Option<&dyn MarkdownInlineProjection>,
     track: bool,
 ) -> MappedText {
-    MappedText::join(
-        assembly::finish_boundaries(mapped_sequence(blocks, options, locations, track)),
-        "\n\n",
-    )
+    assembly::join(assembly::finish_boundaries(mapped_sequence(
+        blocks, options, locations, track,
+    )))
 }
 
 fn mapped_sequence(
@@ -205,7 +205,8 @@ fn render_phrasing(
     let root = InlineRoot::project(content, locations);
     let mut rendered = MappedText::from(render_roots(std::iter::once(&root), options))
         .syntax_site(BlockSyntax::Phrasing)
-        .tail_grammar(BlockSyntax::Phrasing, root.open_row);
+        .tail_grammar(BlockSyntax::Phrasing, root.open_row)
+        .hard_rows(root.hard_rows);
     rendered.contribution.rows = root.has_output;
     rendered
 }
@@ -268,7 +269,7 @@ fn render_list(
                     blocks.insert(1, domain.into());
                 }
             }
-            let mut content = MappedText::join(blocks, "\n\n");
+            let mut content = assembly::join(blocks);
             content.contribution.before |= mant_ir::geometry::list_item_spacing(
                 item.layout.spacing_before_lines,
                 index,
@@ -354,10 +355,7 @@ fn join_definition_items(
             .max(u16::from(
                 output.contribution.after || item.contribution.before,
             ));
-        output
-            .text
-            .push_str(&"\n".repeat(usize::from(blank_lines) + 1));
-        output.append(item);
+        assembly::append_item(&mut output, item, blank_lines);
     }
     Some(output)
 }

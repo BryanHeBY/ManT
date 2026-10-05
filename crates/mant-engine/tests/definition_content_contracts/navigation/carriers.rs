@@ -334,7 +334,11 @@ fn entirely_zero_outer_carrier_omits_its_marker_before_root_footer() {
                 };
                 let start = plain.find(last).unwrap() + last.len();
                 let end = plain.find(TAIL).unwrap();
-                assert_eq!(plain[start..end].matches('\n').count(), 2, "{plain}");
+                // A fence closes its block without requesting source spacing.
+                // Sibling paragraphs and exiting a list still need a blank
+                // syntax line; the navigation-only carrier contributes none.
+                let rows = if footer == Body::Literal { 1 } else { 2 };
+                assert_eq!(plain[start..end].matches('\n').count(), rows, "{plain}");
             }
             assert_eq!(restored, original);
         }

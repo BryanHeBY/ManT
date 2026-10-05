@@ -42,10 +42,22 @@ pub(super) fn render_inline_segments(segments: &[&[Inline]], options: MarkdownOp
 
 /// Encode borrowed node selections without changing their source roots or
 /// splitting the delimiter context at invisible metadata fragments.
+#[cfg(test)]
 pub(super) fn render_inline_node_refs(nodes: &[&Inline], options: MarkdownOptions) -> String {
     render_inline_rows(
         &render_inline_raw_nodes(nodes.iter().copied(), options, false),
         false,
+    )
+}
+
+/// A block root must be interruptible by the following fence, list or rule.
+/// The newline entity carries the actual leading hard row without opening
+/// an HTML block that would consume the following structural syntax.
+pub(super) fn render_inline_block_refs(nodes: &[&Inline], options: MarkdownOptions) -> String {
+    render_inline_rows_with_origin(
+        &render_inline_raw_nodes(nodes.iter().copied(), options, false),
+        false,
+        true,
     )
 }
 
@@ -73,6 +85,10 @@ fn render_inline_content_segments(
 }
 
 fn render_inline_rows(raw: &str, manual_links: bool) -> String {
+    render_inline_rows_with_origin(raw, manual_links, false)
+}
+
+fn render_inline_rows_with_origin(raw: &str, manual_links: bool, interruptible: bool) -> String {
     let mut lines = raw.split('\n').map(protect_author_row_edges).peekable();
     let mut output = String::with_capacity(raw.len());
     let mut index = 0;
@@ -97,7 +113,9 @@ fn render_inline_rows(raw: &str, manual_links: bool) -> String {
             // At a block's first line the tag is an HTML block, not phrasing.
             // Reserve one exact spelling for the reader's narrow hard-row
             // block contract; ordinary raw HTML keeps its source policy.
-            output.push_str(if index == 0 && line.is_empty() && !manual_links {
+            output.push_str(if index == 0 && line.is_empty() && interruptible {
+                "&#10;\n"
+            } else if index == 0 && line.is_empty() && !manual_links {
                 "<br />\n"
             } else {
                 "<br>\n"

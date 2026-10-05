@@ -1,5 +1,5 @@
 //! Borrow projected owner roots into one phrasing context and group HEAD rows.
-use super::super::super::inline::{link_destination, render_inline_node_refs};
+use super::super::super::inline::{link_destination, render_inline_block_refs};
 use super::super::super::{MarkdownInlineProjection, MarkdownOptions};
 use super::super::project_inline;
 use mant_ir::{DefinitionTerm, Inline, InlineContentRef};
@@ -9,6 +9,7 @@ pub(in crate::encode::blocks) struct InlineRoot<'a> {
     nodes: Cow<'a, [Inline]>,
     pub(in crate::encode::blocks) has_output: bool,
     pub(in crate::encode::blocks) open_row: bool,
+    pub(in crate::encode::blocks) hard_rows: bool,
 }
 
 impl<'a> InlineRoot<'a> {
@@ -19,10 +20,12 @@ impl<'a> InlineRoot<'a> {
         let nodes = project_inline(content.content, locations);
         let has_output = has_body_scalar(&nodes);
         let open_row = mant_ir::last_visible_character(&nodes) == Some('\n');
+        let hard_rows = has_output && only_hard_rows(&nodes);
         Self {
             nodes,
             has_output,
             open_row,
+            hard_rows,
         }
     }
 
@@ -70,7 +73,19 @@ pub(in crate::encode::blocks) fn render_roots<'a>(
     for root in roots {
         root.append_nodes(&mut nodes, options);
     }
-    render_inline_node_refs(&nodes, options)
+    render_inline_block_refs(&nodes, options)
+}
+
+fn only_hard_rows(nodes: &[Inline]) -> bool {
+    nodes.iter().all(|node| match node {
+        Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. } => {
+            value.chars().all(|character| character == '\n')
+        }
+        Inline::Strong { children }
+        | Inline::Emphasis { children }
+        | Inline::Link { children, .. } => only_hard_rows(children),
+        Inline::LineBreak {} | Inline::Anchor { .. } => true,
+    })
 }
 
 fn has_body_scalar(nodes: &[Inline]) -> bool {

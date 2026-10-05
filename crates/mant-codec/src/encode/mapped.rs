@@ -14,6 +14,8 @@ pub(super) struct MappedText {
     pub(super) contribution: Contribution,
     pub(super) syntax: BlockSyntax,
     pub(super) tail: TailSyntax,
+    /// The first source root consists entirely of executed hard rows.
+    pub(super) hard_rows: bool,
 }
 
 /// Last physical leaf's framing, carried through containers rather than
@@ -23,6 +25,10 @@ pub(super) struct TailSyntax {
     pub(super) grammar: BlockSyntax,
     pub(super) columns: usize,
     pub(super) open_row: bool,
+    pub(super) hard_rows: bool,
+    /// A final definition term owns its tail until the next physical boundary.
+    /// Paragraph closing alone must not discard that row before a successor.
+    pub(super) term_tail: bool,
 }
 
 /// Source contribution and exported grammar are independent from navigation.
@@ -74,6 +80,8 @@ pub(super) struct NavigationSite {
     tail: usize,
     block: bool,
     continuation_columns: usize,
+    /// Navigation inserted a syntax line before this structural receiver.
+    preamble: bool,
 }
 
 impl From<String> for MappedText {
@@ -89,6 +97,7 @@ impl From<String> for MappedText {
             },
             syntax: BlockSyntax::Phrasing,
             tail: TailSyntax::default(),
+            hard_rows: false,
         }
     }
 }
@@ -106,6 +115,7 @@ impl MappedText {
         self.contribution.append(other.contribution);
         if offset == 0 {
             self.syntax = other.syntax;
+            self.hard_rows = other.hard_rows;
         }
         if self.navigation.is_none() {
             self.navigation = other.navigation.map(|mut site| {
@@ -161,6 +171,7 @@ impl MappedText {
             tail: 0,
             block: syntax != BlockSyntax::Phrasing,
             continuation_columns: 0,
+            preamble: false,
         });
         self
     }
@@ -169,6 +180,19 @@ impl MappedText {
         self.tail.grammar = grammar;
         self.tail.open_row = open_row;
         self
+    }
+
+    pub(super) fn hard_rows(mut self, only_breaks: bool) -> Self {
+        self.hard_rows = only_breaks;
+        self.tail.hard_rows = only_breaks;
+        self
+    }
+
+    /// Block navigation has its own syntax line before the actual receiver.
+    /// It may join preceding phrasing without a soft-break separator cell.
+    pub(super) fn has_navigation_preamble(&self) -> bool {
+        self.navigation
+            .is_some_and(|site| site.preamble && site.offset == 0)
     }
 
     pub(super) fn attach_navigation(&mut self, navigation: &str) {
@@ -217,6 +241,7 @@ impl MappedText {
         self.navigation = Some(NavigationSite {
             tail: site.tail + navigation.len(),
             block: false,
+            preamble: site.preamble || site.block,
             ..site
         });
         offset
@@ -314,6 +339,7 @@ impl MappedText {
                 columns: self.tail.columns.saturating_add(marker.chars().count()),
                 ..self.tail
             },
+            hard_rows: false,
         })
     }
 }

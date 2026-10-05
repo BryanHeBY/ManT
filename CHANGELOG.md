@@ -90,6 +90,11 @@ that crate was not published for that change.
 
 ### mant-ir, mant-protocol, mant-codec, mant-loader, mant-query, mant-render, mant-engine and mant 0.12.0
 
+- Resolve adjacent Markdown block seams from exported syntax, authored hard
+  rows and explicit spacing. Fences, rules and nested list/definition content
+  no longer gain blank rows on repeated import/export. Leading hard rows use
+  an interruptible newline entity; artifacts and detached fragments share the
+  same assembly while retaining links, original owners and search byte ranges.
 - Classify Markdown fragments by authored rows, retained positive spacing and
   actual block syntax independently of navigation. Root, section and nested
   navigation cannot turn thematic rules into Setext headings, create empty

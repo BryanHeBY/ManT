@@ -429,8 +429,10 @@ duplicate definitions follow the ordinary CommonMark parser rules. A bare
 `<br>` block, attributed `br`, script, other HTML, or a mixed HTML block keeps
 its original source; this rule does not enable HTML rendering or activation.
 
-Export uses the canonical first-line spelling only when its paragraph begins
-with an empty hard row. Other edge or consecutive breaks keep the standard
+Block export spells an empty first hard row as the newline entity `&#10;`.
+It carries the same row while allowing a following fence, list or rule to
+start a separate block. Detached inline fragments retain the canonical
+first-line spelling above. Other edge or consecutive breaks keep the standard
 inline spelling. No visible or zero-width sentinel is inserted. Code content
 with hard rows is emitted as separate code spans around those row boundaries,
 because CommonMark normalizes line endings inside one code span to spaces.
@@ -446,6 +448,18 @@ headings use their existing Setext form for supported interior breaks. An
 empty first heading row is outside the Markdown heading round-trip subset;
 IR JSON retains its complete inline structure. Block quotes remain preserved
 unsupported source rather than becoming ordinary paragraphs.
+
+Adjacent blocks use the separation required by their actual Markdown syntax,
+not an unconditional blank source line. Completed hard rows and resolved
+positive paragraph spacing remain distinct contributions; neither is added
+again merely because another block follows. Paragraph separation, list scope
+exits and ordered markers that cannot interrupt a paragraph still retain their
+required framing. The same assembly applies to complete artifacts and detached
+block fragments, including nested list and definition content. Exported hard
+row markers remain stable through repeated import/export cycles.
+Definition term tails retain their completed rows when a later body or an
+explicit gap consumes that boundary. An open terminal delimiter by itself
+does not create a completed empty row.
 
 The reader and visible-search projection share this canonical event grammar.
 Event ranges continue to address the original Markdown bytes, including

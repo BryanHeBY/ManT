@@ -118,7 +118,10 @@ fn zero_link_term_after_hard_head_keeps_open_tail_and_independent_terms() {
                     assert_hard_rows(&imported, tail, multiple);
                     assert_eq!(
                         actual.matches("<br>").count(),
-                        if multiple { 2 } else { 1 },
+                        // Separate literal BODY retains the last term row
+                        // which ordinary Paragraph closing would otherwise
+                        // consume. The extra delimiter represents that row.
+                        1 + usize::from(multiple) + usize::from(matches!(tail, BodyTail::Literal)),
                         "{actual}"
                     );
                     let last_head = if multiple { SECOND_HEAD } else { NAME };

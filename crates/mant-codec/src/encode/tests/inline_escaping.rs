@@ -77,7 +77,9 @@ fn preserves_leading_consecutive_and_trailing_hard_breaks() {
 
     let markdown = render_markdown(&query);
     assert!(
-        markdown.contains("<br />\nbefore<br>\n<br>\nafter<br>"),
+        // The leading entity is ordinary phrasing, so an adjacent structural
+        // block can interrupt it without manufacturing an HTML-block gap.
+        markdown.contains("&#10;\nbefore<br>\n<br>\nafter<br>"),
         "{markdown}"
     );
     let decoded = parse_content(&markdown, None).unwrap();

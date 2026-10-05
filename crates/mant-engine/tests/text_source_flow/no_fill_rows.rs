@@ -19,6 +19,13 @@ fn native_rows(text: &str) -> Vec<&str> {
 }
 
 fn verify_portable_literal(query: &ResolvedContent, literal: &str, source: &str) {
+    let mut query = query.clone();
+    for _ in 0..2 {
+        query = verify_portable_cycle(&query, literal, source);
+    }
+}
+
+fn verify_portable_cycle(query: &ResolvedContent, literal: &str, source: &str) -> ResolvedContent {
     let markdown = mant_codec::encode::render_markdown(query);
     assert!(
         markdown.contains(&format!("```\n{literal}\n```")),
@@ -40,17 +47,19 @@ fn verify_portable_literal(query: &ResolvedContent, literal: &str, source: &str)
     else {
         panic!("literal then one following paragraph expected: {source}\n{json}");
     };
-    // encode::blocks::mapped_blocks joins constructs with a blank source
-    // line. markdown::layout preserves that fence-to-paragraph gap and
-    // removes only the fence framing newline, not literal row delimiters.
+    // All seven exact sources were replayed against registered CVS before
+    // this assertion: roff_term.c::roff_term_pre_br (.fi) calls term_newln,
+    // not term_vspace. A fence only needs a syntax newline before NEXT;
+    // exporting it must not add a resolved gap or trim literal delimiters.
     assert_eq!(inline_plain_text(children), literal, "{source}");
     assert_eq!(inline_plain_text(next), "NEXT", "{source}");
-    assert_eq!(layout.spacing_before_lines, 1, "{source}");
+    assert_eq!(layout.spacing_before_lines, 0, "{source}");
     assert_eq!(
         description(&mant_render::render_query_man(&portable)),
-        format!("{literal}\n\nNEXT"),
+        format!("{literal}\nNEXT"),
         "{source}"
     );
+    portable
 }
 
 #[test]

@@ -9,7 +9,7 @@ use mant_ir::{Block, DefinitionBodyRef, DefinitionItem, EntryOwner, InlineConten
 use super::super::inline::block_prefix_escape_position;
 use super::super::mapped::{BlockSyntax, MappedText};
 use super::super::{MarkdownInlineProjection, MarkdownOptions};
-use super::{join_definition_items, render_block};
+use super::{assembly, join_definition_items, render_block};
 
 pub(super) fn render_definition_list(
     items: &[DefinitionItem],
@@ -141,6 +141,7 @@ fn definition_body<'a>(
             );
             let has_output = projected.has_output;
             let open_row = projected.open_row;
+            let hard_rows = projected.hard_rows;
             destinations.push(projected);
             markers = None;
             if !has_output {
@@ -149,7 +150,8 @@ fn definition_body<'a>(
             let rendered = render_roots(destinations.iter(), options);
             let mut rendered = MappedText::from(rendered)
                 .syntax_site(BlockSyntax::Phrasing)
-                .tail_grammar(BlockSyntax::Phrasing, open_row);
+                .tail_grammar(BlockSyntax::Phrasing, open_row)
+                .hard_rows(hard_rows);
             rendered.contribution.before = std::mem::take(&mut body.pending_space);
             if body.blocks.is_empty() {
                 body.first_prose = Some(std::mem::take(&mut destinations));
@@ -233,13 +235,17 @@ struct DefinitionContent {
 
 fn mapped_terms(terms: Vec<(Vec<usize>, String)>, roots: &[InlineRoot<'_>]) -> MappedText {
     let terms = terms.into_iter().map(|(indices, text)| {
-        let open_row = indices
+        let last = indices
             .iter()
             .rev()
             .map(|&index| &roots[index])
-            .find(|root| root.has_output)
-            .is_some_and(|root| root.open_row);
-        MappedText::from(text).tail_grammar(BlockSyntax::Phrasing, open_row)
+            .find(|root| root.has_output);
+        MappedText::from(text)
+            .tail_grammar(
+                BlockSyntax::Phrasing,
+                last.is_some_and(|root| root.open_row),
+            )
+            .hard_rows(last.is_some_and(|root| root.hard_rows))
     });
     MappedText::join(terms, "  \n")
 }
@@ -287,6 +293,7 @@ fn definition_content(
             .iter()
             .chain(indices.iter().map(|&index| &head.roots[index]))
             .chain(prose.iter());
+        let hard_rows = roots.clone().all(|root| !root.has_output || root.hard_rows);
         *term = render_roots(roots, options);
         let open_row = prose
             .iter()
@@ -295,13 +302,18 @@ fn definition_content(
             .is_some_and(|root| root.open_row);
         body.blocks.remove(0);
         body.first_prose = None;
+        let single_term = terms.len() == 1;
         let mut head = mapped_terms(terms, &head.roots);
         head.tail.open_row = open_row;
-        let tail = MappedText::join(body.blocks, "\n\n");
+        if single_term {
+            head.hard_rows = hard_rows;
+        }
+        head.tail.hard_rows = hard_rows;
+        let tail = assembly::join(body.blocks);
         let content = if tail.text.is_empty() {
             head
         } else {
-            MappedText::join([head, tail], "\n\n")
+            assembly::join([head, tail])
         };
         let mut content = content.syntax_site(BlockSyntax::Phrasing);
         content.contribution.after |= body.pending_space;
@@ -317,7 +329,11 @@ fn definition_content(
         mapped_terms(terms, &head.roots)
     };
     let first_syntax = body.blocks.first().map(|block| block.syntax);
-    let description = MappedText::join(body.blocks, "\n\n");
+    let description = assembly::join(body.blocks);
+    // Separate term tails and Paragraph provisional tails have different
+    // closing rules. Let the actual next syntax (or positive EOF boundary)
+    // complete this row once. Shared prose still occupies the original tail.
+    head.tail.term_tail = has_terms && head.tail.open_row && !shared_prose;
     if !has_terms && body.leading_space && !description.text.is_empty() {
         // An empty list marker followed by a blank line cannot retain a
         // two-column-indented BODY. Encode the already requested blank row
@@ -331,24 +347,16 @@ fn definition_content(
             // syntax without fabricating a label row or a word separator.
             MappedText::join([head, description], "")
         }
-        (false, false) => {
-            let separator = if body.leading_space
-                || matches!(first_syntax, Some(BlockSyntax::List { needs_blank: true }))
-            {
-                "\n\n"
-            } else if first_syntax == Some(BlockSyntax::Phrasing) {
-                if body.first_prose.is_some() && shared_prose {
-                    " "
-                } else {
-                    "  \n"
-                }
+        (false, false) if !body.leading_space && first_syntax == Some(BlockSyntax::Phrasing) => {
+            if body.first_prose.is_some() && shared_prose {
+                MappedText::join([head, description], " ")
             } else {
-                // Fences, nested lists and display equations need their own
-                // block; they never share the term's inline coding context.
-                "\n"
-            };
-            MappedText::join([head, description], separator)
+                assembly::hard_row(&mut head);
+                head.append(description);
+                head
+            }
         }
+        (false, false) => assembly::join([head, description]),
         (false, true) => head,
         (true, false) => description,
         (true, true) => MappedText::default().syntax_site(BlockSyntax::Phrasing),

@@ -41,6 +41,8 @@ pub fn render_inline_content_fragment(
 }
 
 /// Encode detached blocks without semantic declaration metadata.
+/// Adjacent roots may share a fragment to retain their required hard-row seam.
+/// Returned fragments can be joined with a blank Markdown source line.
 #[must_use]
 pub fn render_blocks_fragment(blocks: &[Block], options: MarkdownFragmentOptions) -> Vec<String> {
     super::blocks::render_blocks(blocks, options.document_options())

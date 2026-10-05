@@ -172,11 +172,11 @@ fn assert_explicit_rows(value: &ResolvedContent, case: Case, markdown: &str) {
     if case.body == Body::Paragraph && case.head.has_word() {
         let head = plain.find(NAME).unwrap() + NAME.len();
         let body = plain.find(BODY).unwrap();
-        // Positive source spacing is one completed blank row in prose
-        // readback (markdown/layout.rs::normalize_blocks). Closing its HEAD
-        // paragraph retires a provisional empty tail; it is not another blank.
+        // A Definition term owns its trailing row; a positive source gap is
+        // separate from it. Ordinary Paragraph's provisional-tail close cannot
+        // discard that term row merely because BODY needs paragraph framing.
         let breaks = if case.spacing > 0 {
-            2
+            2 + usize::from(case.head == Head::Hard)
         } else if case.relation == HeadBodyRelation::Separate {
             1 + usize::from(case.head == Head::Hard)
         } else {

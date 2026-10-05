@@ -261,7 +261,13 @@ fn assert_rows(
     let end = plain.find(after).unwrap();
     assert_eq!(
         plain[start..end].matches('\n').count(),
-        2,
+        // These BODY neighbors have no positive gap. A closed fence needs
+        // one syntax newline; only the outer list's scope exit needs two.
+        if matches!(sequence, Sequence::Trailing) {
+            2
+        } else {
+            1
+        },
         "{sequence:?}: {plain}"
     );
 }
