@@ -22,22 +22,16 @@ fn injected_windows_discovery_uses_only_its_config_and_environment() {
         platform: ManualPathPlatform::Windows,
         mant_config: Some(&config),
     };
-    let result = super::host_default_manual_roots(&context);
+    let result = super::mant_configured_manual_roots(&context);
     assert_eq!(result.diagnostics.len(), 0);
-    assert_eq!(
-        result.roots,
-        [
-            PathBuf::from(r"C:\isolated\manuals"),
-            PathBuf::from(r"C:\isolated\roaming").join("ManT/man")
-        ]
-    );
+    assert_eq!(result.roots, [PathBuf::from(r"C:\isolated\manuals")]);
     let absent = super::DiscoveryContext {
         mant_config: None,
         ..context
     };
     assert_eq!(
         super::host_default_manual_roots(&absent).roots,
-        [PathBuf::from(r"C:\isolated\roaming").join("ManT/man")]
+        Vec::<PathBuf>::new()
     );
     fs::remove_dir_all(root).unwrap();
 }
@@ -183,8 +177,9 @@ fn windows_supplemental_roots_prefer_mant_data_before_profile_compatibility() {
     assert_eq!(
         supplemental_manual_roots_for(&environment, ManualPathPlatform::Windows),
         vec![
-            data_root.join("ManT").join("man"),
-            profile.join(".local/share/man")
+            profile.join(".local/share/man"),
+            profile.join(".local/man"),
+            profile.join("man")
         ]
     );
 }
@@ -251,7 +246,7 @@ fn windows_supplemental_roots_do_not_require_a_profile_fallback() {
 
     assert_eq!(
         supplemental_manual_roots_for(&environment, ManualPathPlatform::Windows),
-        vec![data_root.join("ManT").join("man")]
+        Vec::<PathBuf>::new()
     );
 }
 
@@ -300,4 +295,68 @@ fn bsd_config_keeps_only_path_related_directives() {
 
 fn temporary_root(label: &str) -> PathBuf {
     std::env::temp_dir().join(format!("mant-manual-paths-{label}-{}", std::process::id()))
+}
+
+#[cfg(unix)]
+#[test]
+fn explicit_toml_roots_keep_personal_fallback_until_discovery_is_disabled() {
+    let root = temporary_root("toml-personal-fallback");
+    let config = root.join("config");
+    fs::create_dir_all(&config).unwrap();
+    let explicit = root.join("explicit");
+    let fallback = root.join("fallback");
+    fs::write(
+        config.join("man.conf"),
+        format!("MANPATH {}\n", fallback.display()),
+    )
+    .unwrap();
+    let environment = HashMap::from([
+        ("HOME".into(), root.clone().into_os_string()),
+        ("MANT_CONFIG_HOME".into(), config.clone().into_os_string()),
+        ("MANT_DATA_HOME".into(), root.join("data").into_os_string()),
+    ]);
+    for discover in [true, false] {
+        fs::write(
+            config.join("mant.toml"),
+            format!(
+                "[man]\npaths = ['{}']\ndiscover = {discover}\n",
+                explicit.display()
+            ),
+        )
+        .unwrap();
+        let result =
+            super::inspect_manual_roots_from_environment(&environment, ManualPathPlatform::Linux);
+        assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+        assert_eq!(result.roots.first(), Some(&explicit));
+        if discover {
+            assert_eq!(result.roots.get(1), Some(&fallback));
+            assert!(result.roots.contains(&root.join("data/man")));
+        } else {
+            assert_eq!(result.roots.as_slice(), std::slice::from_ref(&explicit));
+        }
+    }
+    fs::write(config.join("mant.toml"), "[man]\npaths = []\n").unwrap();
+    let result =
+        super::inspect_manual_roots_from_environment(&environment, ManualPathPlatform::Linux);
+    assert_eq!(result.roots.first(), Some(&fallback));
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn complete_environment_manual_overrides_skip_invalid_toml() {
+    let root = temporary_root("inactive-toml");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("mant.toml"), "[invalid").unwrap();
+    for variable in ["MANT_MANPATH", "MANPATH"] {
+        let environment = HashMap::from([
+            ("MANT_CONFIG_HOME".into(), root.clone().into_os_string()),
+            (variable.into(), "/isolated/manuals".into()),
+        ]);
+        let result =
+            super::inspect_manual_roots_from_environment(&environment, ManualPathPlatform::Linux);
+        assert_eq!(result.diagnostics, []);
+        assert_eq!(result.roots, [PathBuf::from("/isolated/manuals")]);
+    }
+    fs::remove_dir_all(root).unwrap();
 }

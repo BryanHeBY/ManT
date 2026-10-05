@@ -40,6 +40,24 @@ enum SourceMetadataLocation {
 
 impl SourceMetadata {
     #[cfg(feature = "update")]
+    pub(crate) fn relocate_configuration(
+        &mut self,
+        name: &str,
+        old: &ConfiguredSource,
+        new: &ConfiguredSource,
+    ) {
+        if !self.matches(name, old, &source_fingerprint(old)) {
+            return;
+        }
+        if let SourceLocation::Git { repo, branch } = &new.location {
+            self.location = SourceMetadataLocation::Git {
+                repo: repo.clone(),
+                branch: branch.clone(),
+            };
+            self.config_fingerprint = source_fingerprint(new);
+        }
+    }
+    #[cfg(feature = "update")]
     pub(crate) fn git(
         source: &str,
         repo: &str,

@@ -280,8 +280,9 @@ MANT_MANPATH="$PWD/project-man" mant widget --manual
 The same index works on Linux with glibc, macOS, and Windows. On Unix it reads
 the host's man-path configuration (man-db, mandoc, or macOS `man.conf`) before
 using conservative fallbacks; macOS also follows its active Xcode or Command
-Line Tools tree. Windows automatically checks `%APPDATA%\ManT\man`, and can
-add persistent roots through `%APPDATA%\ManT\man.conf`; that file supports
+Line Tools tree. All three platforms use the same Unix-like ManT directories,
+including `~/.local/share/mant/man`, and can add persistent roots through
+`~/.config/mant/mant.toml` or the lower-priority `~/.config/mant/man.conf`; the latter supports
 direct roots, bounded fragments, PATH mappings, mandatory roots, and
 single-pass `%NAME%` expansion. Logical queries
 accept `mant 1 git`, `mant 'git(1)'`, `mant git --man-section 1`, and the
@@ -415,6 +416,7 @@ layered on `mant-sources`, not part of document reads or MCP.
 ## Documentation
 
 - [Installation methods and platform requirements](docs/installation.md)
+- [Cross-platform configuration and directory rules](docs/configuration.md)
 - [mant(1) command manual](docs/manuals/mant.md)
 - [Document source configuration and updates](docs/sources.md)
 - [mant-protocol(5) structured integration contract](docs/manuals/mant-protocol.md)

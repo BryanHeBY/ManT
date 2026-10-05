@@ -86,7 +86,7 @@ function Add-UserPath([string]$Directory) {
     }
 
     $NewUserPath = if ($UserPath) {
-        "$($UserPath.TrimEnd(';'));$Directory"
+        "$Directory;$($UserPath.TrimEnd(';'))"
     } else {
         $Directory
     }
@@ -97,7 +97,7 @@ function Add-UserPath([string]$Directory) {
 function Add-ProcessPath([string]$Directory) {
     $Entries = @($env:Path -split ';' | Where-Object { $_ })
     if (-not ($Entries | Where-Object { Test-PathEntry $_ $Directory })) {
-        $env:Path = "$env:Path;$Directory"
+        $env:Path = "$Directory;$env:Path"
     }
 }
 
@@ -114,10 +114,15 @@ function Remove-PathEntry([string]$Directory) {
     $env:Path = $ProcessEntries -join ';'
 }
 
+function Test-AbsolutePath([string]$Path) {
+    return $Path -and [IO.Path]::IsPathRooted($Path) -and ($Path -match '^[A-Za-z]:[\\/]' -or $Path -match '^[\\/]{2}[^\\/]+[\\/][^\\/]+')
+}
+
 function Validate-AbsolutePath([string]$Path, [string]$Label) {
-    if (-not $Path -or -not [IO.Path]::IsPathRooted($Path)) {
+    if (-not (Test-AbsolutePath $Path)) {
         Fail "$Label must be an absolute path"
     }
+    if ($Path -match '[\x00-\x1f\x7f]') { Fail "$Label contains a control character" }
 }
 
 function Get-InstalledVersion([string]$Binary) {
@@ -155,6 +160,8 @@ function Write-Receipt(
         binary = $Binary
         manuals = @($Manuals)
         pathAdded = $PathAdded
+        layout = $(if ($InstalledVersion -match '^0\.([0-9]|10|11)\.') { "legacy" } else { "unix-v1" })
+        dataBinding = $DataBinding
     } | ConvertTo-Json | Set-Content $TemporaryReceipt -Encoding UTF8
     Move-Item $TemporaryReceipt $Path -Force
 }
@@ -169,9 +176,14 @@ if ($Uninstall -and $Update) {
 if (-not [Environment]::Is64BitOperatingSystem) {
     Fail "public Windows releases require a 64-bit host"
 }
-if (-not $env:LOCALAPPDATA) {
-    Fail "LOCALAPPDATA is required"
-}
+$MantUserHome = if (Test-AbsolutePath $env:HOME) { $env:HOME } else { $env:USERPROFILE }
+Validate-AbsolutePath $MantUserHome "user home"
+$DefaultInstallDir = Join-Path $MantUserHome ".local\bin"
+$StateBase = if (Test-AbsolutePath $env:XDG_STATE_HOME) { $env:XDG_STATE_HOME } else { Join-Path $MantUserHome ".local\state" }
+Validate-AbsolutePath $StateBase "installer state directory"
+$LegacyRoot = if ($env:APPDATA) { Join-Path $env:APPDATA "ManT" } else { $null }
+$LegacyInstallDir = if ($env:LOCALAPPDATA) { Join-Path $env:LOCALAPPDATA "Programs\ManT\bin" } else { $null }
+$ExplicitDataDir = [bool]($DataDir -or $env:MANT_DATA_DIR)
 
 # Windows PowerShell 5.1 can otherwise negotiate an obsolete TLS version.
 if ($PSVersionTable.PSEdition -eq "Desktop") {
@@ -180,11 +192,16 @@ if ($PSVersionTable.PSEdition -eq "Desktop") {
 
 $Repository = "BryanHeBY/ManT"
 $GitHub = "https://github.com/$Repository"
-$ReceiptPath = Join-Path $env:LOCALAPPDATA "ManT\install-receipt.json"
+$ReceiptPath = Join-Path $StateBase "mant\install-receipt.json"
+$ReceiptReadPath = $ReceiptPath
+if (-not (Test-Path -LiteralPath $ReceiptPath) -and $env:LOCALAPPDATA) {
+    $LegacyReceipt = Join-Path $env:LOCALAPPDATA "ManT\install-receipt.json"
+    if (Test-Path -LiteralPath $LegacyReceipt -PathType Leaf) { $ReceiptReadPath = $LegacyReceipt }
+}
 $Receipt = $null
-if (Test-Path -PathType Leaf $ReceiptPath) {
+if (Test-Path -LiteralPath $ReceiptReadPath -PathType Leaf) {
     try {
-        $Receipt = Get-Content $ReceiptPath -Raw | ConvertFrom-Json
+        $Receipt = Get-Content -LiteralPath $ReceiptReadPath -Raw | ConvertFrom-Json
     } catch {
         Fail "could not read installer receipt: $($_.Exception.Message)"
     }
@@ -233,11 +250,11 @@ if ($Uninstall) {
             $Removed = $true
         }
     }
-    if ($Receipt.pathAdded) {
+    if ($Receipt.pathAdded -and -not (Test-PathEntry $Receipt.installDir $DefaultInstallDir)) {
         Remove-PathEntry $Receipt.installDir
         Write-Host "Removed $($Receipt.installDir) from user PATH"
     }
-    Remove-Item $ReceiptPath -Force
+    Remove-Item -LiteralPath $ReceiptReadPath -Force
 
     if ($Removed) {
         Write-Host "Uninstalled ManT $($Receipt.version)"
@@ -253,10 +270,10 @@ if (-not $Version) {
 if (-not $InstallDir) {
     $InstallDir = if ($env:MANT_INSTALL_DIR) {
         $env:MANT_INSTALL_DIR
-    } elseif ($Receipt) {
+    } elseif ($Receipt -and -not (Test-PathEntry $Receipt.installDir $LegacyInstallDir)) {
         $Receipt.installDir
     } else {
-        Join-Path $env:LOCALAPPDATA "Programs\ManT\bin"
+        $DefaultInstallDir
     }
 }
 if (-not $DataDir) {
@@ -265,14 +282,14 @@ if (-not $DataDir) {
     } elseif ($Receipt) {
         $Receipt.dataDir
     } else {
-        if (-not $env:APPDATA) {
-            Fail "APPDATA is required"
-        }
-        Join-Path $env:APPDATA "ManT\documents"
+        $DataBase = if ($env:MANT_DATA_HOME) { $env:MANT_DATA_HOME } elseif (Test-AbsolutePath $env:XDG_DATA_HOME) { Join-Path $env:XDG_DATA_HOME "mant" } else { Join-Path $MantUserHome ".local\share\mant" }
+        Join-Path $DataBase "documents"
     }
 }
 Validate-AbsolutePath $InstallDir "install directory"
 Validate-AbsolutePath $DataDir "data directory"
+$LegacyDocuments = if ($LegacyRoot) { Join-Path $LegacyRoot "documents" } else { $null }
+$DataBinding = if (-not $ExplicitDataDir -and (-not $Receipt -or $Receipt.dataBinding -eq "runtime" -or (Test-PathEntry $Receipt.dataDir $LegacyDocuments))) { "runtime" } else { "custom" }
 
 if ($Version) {
     $Tag = if ($Version.StartsWith("v")) { $Version } else { "v$Version" }
@@ -293,6 +310,34 @@ $Archive = "mant-$Version-$Target.zip"
 $ReleaseUrl = "$GitHub/releases/download/$Tag"
 $BinaryPath = Join-Path $InstallDir "mant.exe"
 $CurrentVersion = Get-InstalledVersion $BinaryPath
+if (-not $CurrentVersion -and $Receipt) { $CurrentVersion = Get-InstalledVersion $Receipt.binary }
+
+function Resolve-ReleaseLayout([string]$LayoutBinary) {
+    if ($Version -match '^0\.([0-9]|10|11)\.') {
+        if (-not $ExplicitDataDir -and -not $Receipt -and $LegacyRoot) { return (Join-Path $LegacyRoot "documents") }
+        return $DataDir
+    }
+    if ($LegacyRoot -and (-not $Receipt -or $Receipt.layout -ne "unix-v1")) {
+        & $LayoutBinary --installer-migrate $LegacyRoot | Out-Null
+        if ($LASTEXITCODE -ne 0) { Fail "storage migration failed; the previous binary and original data were retained" }
+    }
+    $RuntimeDocuments = & $LayoutBinary --installer-paths documents
+    if ($LASTEXITCODE -ne 0) { Fail "could not resolve the new runtime document directory" }
+    Validate-AbsolutePath $RuntimeDocuments "runtime document directory"
+    $LegacyDocuments = if ($LegacyRoot) { Join-Path $LegacyRoot "documents" } else { $null }
+    if ($DataBinding -eq "runtime") { return $RuntimeDocuments }
+    if (-not (Test-PathEntry $DataDir $RuntimeDocuments)) { Write-Warning "custom manual destination $DataDir differs from runtime $RuntimeDocuments; configure document discovery accordingly" }
+    return $DataDir
+}
+function Get-RetainedManuals {
+    @($ReceiptManuals | ForEach-Object {
+        $Name = Split-Path -Leaf $_
+        if ($Name -in $BundledManuals -and (Test-PathEntry $_ (Join-Path $Receipt.dataDir $Name))) {
+            $Relocated = Join-Path $DataDir $Name
+            if (Test-Path -LiteralPath $Relocated -PathType Leaf) { $Relocated }
+        }
+    })
+}
 $ReceiptManuals = if ($Receipt -and $Receipt.PSObject.Properties.Name -contains "manuals") {
     @($Receipt.manuals)
 } elseif ($Receipt -and $Receipt.manual) {
@@ -311,7 +356,13 @@ $MissingManuals = @($ManualNames | Where-Object {
     -not (Test-Path -PathType Leaf (Join-Path $DataDir $_))
 })
 $ManualReady = $NoManual -or $MissingManuals.Count -eq 0
-$PathAdded = [bool]($Receipt -and $Receipt.pathAdded)
+$PathAdded = [bool]($Receipt -and $Receipt.pathAdded -and (Test-PathEntry $Receipt.installDir $InstallDir))
+
+if ($CurrentVersion -eq $Version -and (Test-Path -LiteralPath $BinaryPath -PathType Leaf)) {
+    $DataDir = Resolve-ReleaseLayout $BinaryPath
+    $OwnedManuals = if (-not $NoManual) { @($ManualNames | ForEach-Object { Join-Path $DataDir $_ }) } else { @(Get-RetainedManuals) }
+    $ManualReady = $NoManual -or @($ManualNames | Where-Object { -not (Test-Path -LiteralPath (Join-Path $DataDir $_) -PathType Leaf) }).Count -eq 0
+}
 
 if (-not $Force -and $CurrentVersion -eq $Version -and $ManualReady) {
     Write-Receipt $ReceiptPath $Version $InstallDir $DataDir $BinaryPath $OwnedManuals $PathAdded
@@ -367,8 +418,11 @@ try {
         Fail "$Archive does not contain the ManT manuals"
     }
 
+    foreach ($ManualName in $ManualNames) {
+        if (-not $NoManual -and -not (Test-Path -LiteralPath (Join-Path $ManualDirectory $ManualName) -PathType Leaf)) { Fail "manual bundle is missing $ManualName" }
+    }
+    $DataDir = Resolve-ReleaseLayout $Binary
     New-Item $InstallDir -ItemType Directory -Force | Out-Null
-    Copy-Item $Binary $BinaryPath -Force
     if (-not $NoManual) {
         New-Item $DataDir -ItemType Directory -Force | Out-Null
         $OwnedManuals = @()
@@ -382,9 +436,23 @@ try {
             $OwnedManuals += $ManualPath
         }
     } else {
-        $OwnedManuals = @($OwnedManuals | Where-Object { Test-Path -PathType Leaf $_ })
+        $OwnedManuals = @(Get-RetainedManuals)
     }
-    Write-Receipt $ReceiptPath $Version $InstallDir $DataDir $BinaryPath $OwnedManuals $PathAdded
+    $StagedBinary = Join-Path $InstallDir ".mant-install-$PID.exe"
+    Copy-Item -LiteralPath $Binary -Destination $StagedBinary -Force
+    $PreviousBinary = Join-Path $Temporary "previous-binary.exe"
+    if (Test-Path -LiteralPath $BinaryPath -PathType Leaf) { Copy-Item -LiteralPath $BinaryPath -Destination $PreviousBinary }
+    Move-Item -LiteralPath $StagedBinary -Destination $BinaryPath -Force
+    try {
+        Write-Receipt $ReceiptPath $Version $InstallDir $DataDir $BinaryPath $OwnedManuals $PathAdded
+    } catch {
+        if (Test-Path -LiteralPath $PreviousBinary -PathType Leaf) { Copy-Item -LiteralPath $PreviousBinary -Destination $BinaryPath -Force }
+        else { Remove-Item -LiteralPath $BinaryPath -Force }
+        throw
+    }
+    if (-not $NoModifyPath -and $Receipt -and $Receipt.pathAdded -and (Test-PathEntry $Receipt.installDir $LegacyInstallDir) -and -not (Test-PathEntry $Receipt.installDir $InstallDir)) {
+        Remove-PathEntry $Receipt.installDir
+    }
     if (-not $NoModifyPath) {
         try {
             if (Add-UserPath $InstallDir) {

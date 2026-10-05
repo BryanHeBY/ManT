@@ -63,6 +63,8 @@ impl HostPlatform {
 /// Offline cache discovery or page-read failure.
 #[derive(Debug)]
 pub enum TldrCacheError {
+    /// Shared directory or `mant.toml` configuration is invalid.
+    Configuration(mant_sources::SourceConfigError),
     /// The build target has no defined cache convention.
     UnsupportedPlatform,
     /// A Unix-like cache path requires `HOME`, but none is available.
@@ -88,6 +90,7 @@ pub enum TldrCacheError {
 impl fmt::Display for TldrCacheError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::Configuration(error) => error.fmt(formatter),
             Self::UnsupportedPlatform => {
                 formatter.write_str("tldr cache lookup is unsupported on this platform")
             }
@@ -118,6 +121,7 @@ impl fmt::Display for TldrCacheError {
 impl Error for TldrCacheError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
+            Self::Configuration(error) => Some(error),
             Self::Read { source, .. } => Some(source),
             Self::Parse { source, .. } => Some(source),
             Self::UnsupportedPlatform | Self::MissingHomeDirectory | Self::MissingLocalAppData => {
@@ -131,8 +135,8 @@ impl Error for TldrCacheError {
 ///
 /// # Errors
 ///
-/// Returns a platform-specific location error when neither an explicit
-/// override nor the native cache base (`HOME` or `LOCALAPPDATA`) is available.
+/// Reports invalid shared settings or an unavailable Unix-like cache base.
+/// Windows uses `HOME`/`USERPROFILE`, not an application-owned `AppData` cache.
 pub fn get_tldr_cache_dir(
     environment: &BTreeMap<String, String>,
     platform: HostPlatform,
@@ -140,26 +144,19 @@ pub fn get_tldr_cache_dir(
     if let Some(path) = environment_value(environment, "MANT_TLDR_DIR") {
         return Ok(PathBuf::from(path));
     }
-    match platform {
-        HostPlatform::Linux => {
-            let home = home_dir(environment)?;
-            Ok(
-                environment_value(environment, "XDG_CACHE_HOME").map_or_else(
-                    || home.join(".cache").join("mant").join("tldr-pages"),
-                    |cache| PathBuf::from(cache).join("mant").join("tldr-pages"),
-                ),
-            )
-        }
-        HostPlatform::Macos => Ok(home_dir(environment)?
-            .join("Library")
-            .join("Caches")
-            .join("ManT")
-            .join("tldr-pages")),
-        HostPlatform::Windows => Ok(local_app_data(environment)?
-            .join("ManT")
-            .join("cache")
-            .join("tldr-pages")),
-    }
+    let environment = environment
+        .iter()
+        .map(|(key, value)| (key.clone().into(), value.clone().into()))
+        .collect();
+    let settings = mant_sources::settings::Settings::from_environment(
+        &environment,
+        platform == HostPlatform::Windows,
+    )
+    .map_err(TldrCacheError::Configuration)?;
+    Ok(settings
+        .cache_home()
+        .map_err(TldrCacheError::Configuration)?
+        .join("tldr-pages"))
 }
 
 /// Return known installed-client cache roots in priority order.
@@ -172,13 +169,16 @@ pub fn get_system_tldr_cache_dirs(
     platform: HostPlatform,
 ) -> Result<Vec<PathBuf>, TldrCacheError> {
     if platform == HostPlatform::Windows {
-        let local = local_app_data(environment)?;
+        let local = local_app_data(environment).ok();
         let roaming = environment_value(environment, "APPDATA").map(PathBuf::from);
-        let mut candidates = vec![
-            local.join("tldr"),
-            local.join("tlrc"),
-            local.join("tealdeer").join("tldr-pages"),
-        ];
+        let mut candidates = Vec::new();
+        if let Some(local) = local {
+            candidates.extend([
+                local.join("tldr"),
+                local.join("tlrc"),
+                local.join("tealdeer").join("tldr-pages"),
+            ]);
+        }
         if let Some(roaming) = roaming {
             candidates.push(roaming.join("tldr"));
             candidates.push(roaming.join("tlrc"));
@@ -247,7 +247,13 @@ pub fn get_tldr_read_cache_dirs(
     if !tldr_installed {
         return Ok(vec![private_cache]);
     }
-    let mut caches = get_system_tldr_cache_dirs(environment, platform)?;
+    let mut caches = match get_system_tldr_cache_dirs(environment, platform) {
+        Ok(caches) => caches,
+        Err(TldrCacheError::MissingHomeDirectory | TldrCacheError::MissingLocalAppData) => {
+            Vec::new()
+        }
+        Err(error) => return Err(error),
+    };
     caches.push(private_cache);
     Ok(deduplicate_paths(caches))
 }
@@ -415,6 +421,7 @@ fn home_dir(environment: &BTreeMap<String, String>) -> Result<PathBuf, TldrCache
 
 fn optional_home_dir(environment: &BTreeMap<String, String>) -> Option<PathBuf> {
     environment_value(environment, "HOME")
+        .filter(|home| !home.is_empty())
         .or_else(|| environment_value(environment, "USERPROFILE"))
         .filter(|home| !home.is_empty())
         .map(PathBuf::from)
@@ -511,7 +518,7 @@ mod tests {
         );
         assert_eq!(
             get_tldr_cache_dir(&environment, HostPlatform::Macos).expect("cache dir"),
-            PathBuf::from("/home/test/Library/Caches/ManT/tldr-pages")
+            PathBuf::from("/cache/mant/tldr-pages")
         );
         assert_eq!(
             get_system_tldr_cache_dirs(&environment, HostPlatform::Linux).expect("system caches"),
@@ -551,7 +558,7 @@ mod tests {
     }
 
     #[test]
-    fn windows_uses_local_application_data_for_private_and_client_caches() {
+    fn windows_uses_portable_private_cache_and_native_client_compatibility() {
         let environment = env(&[
             ("LOCALAPPDATA", r"C:\Users\test\AppData\Local"),
             ("APPDATA", r"C:\Users\test\AppData\Roaming"),
@@ -559,7 +566,7 @@ mod tests {
         ]);
         assert_eq!(
             get_tldr_cache_dir(&environment, HostPlatform::Windows).expect("private cache"),
-            PathBuf::from(r"C:\Users\test\AppData\Local").join("ManT/cache/tldr-pages")
+            PathBuf::from(r"C:\Users\test").join(".cache/mant/tldr-pages")
         );
         assert_eq!(
             get_system_tldr_cache_dirs(&environment, HostPlatform::Windows).expect("client caches"),
@@ -578,6 +585,30 @@ mod tests {
             &get_tldr_platforms(HostPlatform::Windows)[..2],
             ["windows", "common"]
         );
+    }
+
+    #[test]
+    fn windows_private_cache_and_profile_fallback_do_not_require_appdata() {
+        let environment = env(&[
+            ("HOME", ""),
+            ("USERPROFILE", r"C:\Users\portable"),
+            ("MANT_CACHE_HOME", r"C:\Caches\mant"),
+        ]);
+        let private = PathBuf::from(r"C:\Caches\mant").join("tldr-pages");
+        assert_eq!(
+            get_tldr_cache_dir(&environment, HostPlatform::Windows).unwrap(),
+            private
+        );
+        assert_eq!(
+            get_tldr_read_cache_dirs(&environment, HostPlatform::Windows, false)
+                .unwrap()
+                .as_slice(),
+            std::slice::from_ref(&private)
+        );
+        let with_client =
+            get_tldr_read_cache_dirs(&environment, HostPlatform::Windows, true).unwrap();
+        assert_eq!(with_client.last(), Some(&private));
+        assert!(with_client.contains(&PathBuf::from(r"C:\Users\portable").join(".tldrc/tldr")));
     }
 
     #[test]

@@ -143,8 +143,9 @@ fn explicit_tldr_queries_follow_document_source_priority() {
     ] {
         fs::create_dir_all(directory).expect("create tldr priority fixture");
     }
+    fs::create_dir_all(root.join("config")).expect("create configuration directory");
     fs::write(
-        data_root.join("sources.toml"),
+        root.join("config/sources.toml"),
         "[preferred]\nrepo = 'https://example.invalid/preferred.git'\nbranch = 'main'\npriority = 2\n\n[fallback]\nrepo = 'https://example.invalid/fallback.git'\nbranch = 'main'\npriority = -1\n",
     )
     .expect("write source configuration");

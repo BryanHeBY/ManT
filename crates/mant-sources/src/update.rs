@@ -181,12 +181,12 @@ fn unchanged_result(source: &str, revision: String, documents: u32) -> SourceUpd
     }
 }
 
-struct UpdateLock {
+pub(crate) struct UpdateLock {
     path: PathBuf,
 }
 
 impl UpdateLock {
-    fn acquire(sources: &Path) -> Result<Self, SourceConfigError> {
+    pub(crate) fn acquire(sources: &Path) -> Result<Self, SourceConfigError> {
         let path = sources.join(".update.lock");
         fs::OpenOptions::new()
             .write(true)

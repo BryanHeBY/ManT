@@ -12,6 +12,7 @@ mod error;
 #[cfg(feature = "tui")]
 mod external;
 mod host;
+mod installation;
 mod json_boundary;
 #[cfg(feature = "mcp")]
 mod mcp;
@@ -41,6 +42,9 @@ pub fn run(
     output: &mut dyn Write,
     diagnostics: &mut dyn Write,
 ) -> u8 {
+    if let Some(status) = installation::run(arguments, output, diagnostics) {
+        return status;
+    }
     run_with_host(
         arguments,
         input,

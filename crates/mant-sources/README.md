@@ -9,6 +9,15 @@ Use the default feature set in readers and services that should never acquire
 remote content. Enable `update` only in a host that intentionally owns local
 mutation, process execution, and network policy.
 
+Linux, macOS and Windows share Unix-like storage defaults. The read-only
+`settings::Settings` resolver loads optional `~/.config/mant/mant.toml`;
+`sources.toml` also belongs to that configuration directory. Persistent
+documents and snapshots default to `~/.local/share/mant`, while disposable
+caches default to `~/.cache/mant`. `MANT_*_HOME`, TOML data/cache paths and
+XDG bases can relocate these directories without creating them. Relative
+local Git locations retain their data-root base. See the online
+[configuration guide](https://github.com/BryanHeBY/ManT/blob/main/docs/configuration.md).
+
 ## Feature boundary
 
 | Capability | Default | `update` feature |

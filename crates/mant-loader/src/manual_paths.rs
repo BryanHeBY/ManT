@@ -90,37 +90,91 @@ pub fn discover_manual_roots() -> Vec<PathBuf> {
 #[must_use]
 pub fn inspect_manual_roots() -> ManualRootDiscovery {
     let environment = env::vars_os().collect::<HashMap<_, _>>();
-    if environment_value(&environment, "MANT_MANPATH").is_some() {
+    inspect_manual_roots_from_environment(&environment, host_platform())
+}
+
+fn inspect_manual_roots_from_environment(
+    environment: &HashMap<OsString, OsString>,
+    platform: ManualPathPlatform,
+) -> ManualRootDiscovery {
+    if environment_value_for(environment, "MANT_MANPATH", platform).is_some() {
         return ManualRootDiscovery {
-            roots: discover_manual_roots_from(&environment, Vec::new()),
+            roots: discover_manual_roots_from_for(environment, Vec::new(), platform),
             diagnostics: Vec::new(),
         };
     }
-    if environment_value(&environment, "MANPATH")
+    if environment_value_for(environment, "MANPATH", platform)
         .is_some_and(|value| env::split_paths(value).all(|path| !path.as_os_str().is_empty()))
     {
         return ManualRootDiscovery {
-            roots: discover_manual_roots_from(&environment, Vec::new()),
+            roots: discover_manual_roots_from_for(environment, Vec::new(), platform),
             diagnostics: Vec::new(),
         };
     }
 
-    let platform = host_platform();
-    let mant_config = (platform == ManualPathPlatform::Windows)
-        .then(|| {
-            mant_sources::document_paths()
-                .ok()
-                .map(|paths| paths.root.join("man.conf"))
-        })
-        .flatten();
+    let settings = match mant_sources::settings::Settings::from_environment(
+        &environment
+            .iter()
+            .map(|(key, value)| (key.clone(), value.clone()))
+            .collect(),
+        platform == ManualPathPlatform::Windows,
+    ) {
+        Ok(settings) => settings,
+        Err(error) => {
+            return ManualRootDiscovery {
+                roots: Vec::new(),
+                diagnostics: vec![ManualPathDiagnostic {
+                    config_path: PathBuf::from("mant.toml"),
+                    line: None,
+                    message: error.to_string(),
+                }],
+            };
+        }
+    };
+    let mut defaults = match settings.manual_paths() {
+        Ok(roots) => ManualRootDiscovery {
+            roots,
+            diagnostics: Vec::new(),
+        },
+        Err(error) => {
+            return ManualRootDiscovery {
+                roots: Vec::new(),
+                diagnostics: vec![ManualPathDiagnostic {
+                    config_path: settings.config_home().unwrap_or_default().join("mant.toml"),
+                    line: None,
+                    message: error.to_string(),
+                }],
+            };
+        }
+    };
+    let mant_config = settings
+        .config_home()
+        .ok()
+        .map(|root| root.join("man.conf"));
     let context = DiscoveryContext {
-        environment: &environment,
+        environment,
         platform,
         mant_config: mant_config.as_deref(),
     };
-    let defaults = host_default_manual_roots(&context);
+    if settings.discover_manuals() {
+        let personal = mant_configured_manual_roots(&context);
+        defaults.roots.extend(personal.roots);
+        defaults.diagnostics.extend(personal.diagnostics);
+        let native = host_default_manual_roots(&context);
+        defaults.roots.extend(native.roots);
+        defaults.diagnostics.extend(native.diagnostics);
+        match settings.data_home() {
+            Ok(root) => defaults.roots.push(root.join("man")),
+            Err(error) => defaults.diagnostics.push(ManualPathDiagnostic {
+                config_path: settings.config_home().unwrap_or_default().join("mant.toml"),
+                line: None,
+                message: error.to_string(),
+            }),
+        }
+    }
+    defaults.roots = deduplicate_manual_paths(defaults.roots, platform);
     ManualRootDiscovery {
-        roots: discover_manual_roots_from(&environment, defaults.roots),
+        roots: discover_manual_roots_from_for(environment, defaults.roots, platform),
         diagnostics: defaults.diagnostics,
     }
 }
@@ -132,6 +186,7 @@ pub(crate) fn discover_manual_roots_with(
     discover_manual_roots_from(environment, fallback_manual_roots(environment))
 }
 
+#[cfg(test)]
 fn discover_manual_roots_from(
     environment: &HashMap<OsString, OsString>,
     defaults: Vec<PathBuf>,
@@ -177,7 +232,7 @@ fn host_default_manual_roots(context: &DiscoveryContext<'_>) -> ManualRootDiscov
     let mut discovery = match context.platform {
         ManualPathPlatform::Linux => linux_configured_manual_roots(environment),
         ManualPathPlatform::Macos => macos_configured_manual_roots(environment),
-        ManualPathPlatform::Windows => mant_configured_manual_roots(context),
+        ManualPathPlatform::Windows => ManualRootDiscovery::default(),
         ManualPathPlatform::OtherUnix => mandoc_configured_manual_roots(Path::new("/etc/man.conf")),
     };
     if discovery.roots.is_empty() {
@@ -276,32 +331,42 @@ fn supplemental_manual_roots_for(
     platform: ManualPathPlatform,
 ) -> Vec<PathBuf> {
     let mut roots = Vec::new();
-    if platform == ManualPathPlatform::Windows {
-        if let Some(data_root) =
-            environment_value_for(environment, "APPDATA", platform).map(PathBuf::from)
-        {
-            roots.push(data_root.join("ManT").join("man"));
+    let absolute = |path: &PathBuf| {
+        if platform == ManualPathPlatform::Windows {
+            windows_config::is_absolute_windows_path(path.as_os_str())
+        } else {
+            path.is_absolute()
         }
-        if let Some(profile) =
-            environment_value_for(environment, "USERPROFILE", platform).map(PathBuf::from)
-        {
-            roots.push(profile.join(".local/share/man"));
-        }
-        return roots;
-    }
-
-    if let Some(home) = environment_value_for(environment, "HOME", platform).map(PathBuf::from) {
+    };
+    let home = environment_value_for(environment, "HOME", platform)
+        .map(PathBuf::from)
+        .filter(absolute)
+        .or_else(|| {
+            (platform == ManualPathPlatform::Windows)
+                .then(|| {
+                    environment_value_for(environment, "USERPROFILE", platform)
+                        .map(PathBuf::from)
+                        .filter(absolute)
+                })
+                .flatten()
+        });
+    if let Some(home) = home {
         roots.push(home.join(".local/share/man"));
         roots.push(home.join(".local/man"));
         roots.push(home.join("man"));
     }
-    if let Some(data_home) =
-        environment_value_for(environment, "XDG_DATA_HOME", platform).map(PathBuf::from)
+    if let Some(data_home) = environment_value_for(environment, "XDG_DATA_HOME", platform)
+        .map(PathBuf::from)
+        .filter(absolute)
     {
         roots.push(data_home.join("man"));
     }
     if let Some(data_dirs) = environment_value_for(environment, "XDG_DATA_DIRS", platform) {
-        roots.extend(env::split_paths(data_dirs).map(|root| root.join("man")));
+        roots.extend(
+            env::split_paths(data_dirs)
+                .filter(absolute)
+                .map(|root| root.join("man")),
+        );
     }
     roots
 }
@@ -325,7 +390,12 @@ fn mant_configured_manual_roots(context: &DiscoveryContext<'_>) -> ManualRootDis
                 environment_value_for(context.environment, "PATH", context.platform)
                     .map(|value| env::split_paths(value).collect::<Vec<_>>())
                     .unwrap_or_default();
-            windows_config::load(path, context.environment, &executable_paths)
+            windows_config::load_personal(
+                path,
+                context.environment,
+                &executable_paths,
+                context.platform == ManualPathPlatform::Windows,
+            )
         })
         .unwrap_or_default()
 }

@@ -3,15 +3,13 @@
 use std::{
     collections::BTreeMap,
     env,
-    ffi::{OsStr, OsString},
+    ffi::OsString,
     fmt, io,
     path::{Component, Path, PathBuf},
 };
 
 use serde::Deserialize;
 
-const APPLICATION_DIR_LINUX: &str = "mant";
-const APPLICATION_DIR_OTHER: &str = "ManT";
 const CONFIG_FILE: &str = "sources.toml";
 const DOCUMENTS_DIR: &str = "documents";
 const SOURCES_DIR: &str = "sources";
@@ -23,7 +21,7 @@ const MAX_CONFIG_BYTES: u64 = 1024 * 1024;
 pub struct DocumentPaths {
     /// Platform-native application data root.
     pub root: PathBuf,
-    /// Path to `sources.toml`.
+    /// Path to `sources.toml` under the separate configuration root.
     pub config: PathBuf,
     /// Root of user-authored Markdown documents.
     pub documents: PathBuf,
@@ -141,7 +139,7 @@ impl std::error::Error for SourceConfigError {}
 ///
 /// # Errors
 ///
-/// Returns an error when no absolute platform user-data root can be derived.
+/// Returns an error for invalid settings or unavailable absolute data/configuration roots.
 pub fn document_paths() -> Result<DocumentPaths, SourceConfigError> {
     let environment = env::vars_os().collect::<BTreeMap<_, _>>();
     document_paths_with(&environment)
@@ -151,7 +149,7 @@ pub fn document_paths() -> Result<DocumentPaths, SourceConfigError> {
 ///
 /// # Errors
 ///
-/// Returns an error when the data root, TOML syntax, or any source field is
+/// Returns an error when application directories, TOML syntax, or any source field is
 /// invalid.
 pub fn load_source_config() -> Result<(DocumentPaths, SourceConfig), SourceConfigError> {
     let paths = document_paths()?;
@@ -170,48 +168,15 @@ const fn default_source_priority() -> i32 {
 fn document_paths_with(
     environment: &BTreeMap<OsString, OsString>,
 ) -> Result<DocumentPaths, SourceConfigError> {
-    let root = if cfg!(windows) {
-        absolute_environment_path(environment, "APPDATA")
-            .map(|path| path.join(APPLICATION_DIR_OTHER))
-    } else if cfg!(target_os = "macos") {
-        absolute_environment_path(environment, "HOME").map(|path| {
-            path.join("Library/Application Support")
-                .join(APPLICATION_DIR_OTHER)
-        })
-    } else {
-        absolute_environment_path(environment, "XDG_DATA_HOME")
-            .or_else(|| {
-                absolute_environment_path(environment, "HOME").map(|path| path.join(".local/share"))
-            })
-            .map(|path| path.join(APPLICATION_DIR_LINUX))
-    }
-    .ok_or_else(|| {
-        SourceConfigError::new(
-            "could not determine the user data directory; set HOME, XDG_DATA_HOME, or APPDATA",
-        )
-    })?;
+    let settings = crate::settings::Settings::from_environment(environment, cfg!(windows))?;
+    let root = settings.data_home()?;
 
     Ok(DocumentPaths {
-        config: root.join(CONFIG_FILE),
+        config: settings.config_home()?.join(CONFIG_FILE),
         sources: root.join(SOURCES_DIR),
         documents: root.join(DOCUMENTS_DIR),
         root,
     })
-}
-
-fn absolute_environment_path(
-    environment: &BTreeMap<OsString, OsString>,
-    name: &str,
-) -> Option<PathBuf> {
-    let value = environment.get(OsStr::new(name));
-    #[cfg(windows)]
-    let value = value.or_else(|| {
-        environment
-            .iter()
-            .find(|(candidate, _)| candidate.to_string_lossy().eq_ignore_ascii_case(name))
-            .map(|(_, value)| value)
-    });
-    value.map(PathBuf::from).filter(|path| path.is_absolute())
 }
 
 pub(crate) fn load_source_config_from(path: &Path) -> Result<SourceConfig, SourceConfigError> {
@@ -225,8 +190,15 @@ pub(crate) fn load_source_config_from(path: &Path) -> Result<SourceConfig, Sourc
             )));
         }
     };
+    parse_source_config(&text, path)
+}
+
+pub(crate) fn parse_source_config(
+    text: &str,
+    path: &Path,
+) -> Result<SourceConfig, SourceConfigError> {
     let declarations =
-        toml::from_str::<BTreeMap<String, SourceDeclaration>>(&text).map_err(|error| {
+        toml::from_str::<BTreeMap<String, SourceDeclaration>>(text).map_err(|error| {
             SourceConfigError::new(format!("invalid '{}': {error}", path.display()))
         })?;
     let mut sources = BTreeMap::new();
@@ -545,9 +517,13 @@ priority = -1
             OsString::from("XDG_DATA_HOME"),
             OsString::from("/data/user"),
         );
+        environment.insert(
+            OsString::from("XDG_CONFIG_HOME"),
+            OsString::from("/config/user"),
+        );
         let paths = document_paths_with(&environment).expect("paths");
         assert_eq!(paths.root, Path::new("/data/user/mant"));
-        assert_eq!(paths.config, Path::new("/data/user/mant/sources.toml"));
+        assert_eq!(paths.config, Path::new("/config/user/mant/sources.toml"));
         assert_eq!(paths.documents, Path::new("/data/user/mant/documents"));
         assert_eq!(paths.sources, Path::new("/data/user/mant/sources"));
     }

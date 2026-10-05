@@ -15,6 +15,12 @@ pub(crate) fn read_file_utf8(
     read_utf8(file, limit, label)
 }
 
+/// Bound regular binary files using the same nonblocking/link gate as configuration.
+#[cfg(feature = "update")]
+pub(crate) fn read_file_bytes(path: &Path, limit: u64, label: &str) -> io::Result<Vec<u8>> {
+    read_bytes(open_regular_file(path, limit, false)?, limit, label)
+}
+
 fn open_regular_file(path: &Path, limit: u64, allow_links: bool) -> io::Result<fs::File> {
     let metadata = if allow_links {
         fs::metadata(path)?

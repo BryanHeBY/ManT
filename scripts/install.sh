@@ -108,36 +108,46 @@ require awk
 require grep
 require uname
 [ -n "${HOME:-}" ] || fail "HOME is required"
+installer_data_base="$HOME/.local/share"
+installer_state_base="$HOME/.local/state"
+case ${XDG_DATA_HOME:-} in /*) installer_data_base=$XDG_DATA_HOME ;; esac
+case ${XDG_STATE_HOME:-} in /*) installer_state_base=$XDG_STATE_HOME ;; esac
 
 case $(uname -s) in
   Linux)
     host=linux
     default_install_dir="$HOME/.local/bin"
-    default_data_dir="${XDG_DATA_HOME:-$HOME/.local/share}/mant/documents"
-    state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/mant"
+    default_data_dir="$installer_data_base/mant/documents"
+    state_dir="$installer_state_base/mant"
+    legacy_root="$installer_data_base/mant"
     ;;
   Darwin)
     host=macos
     default_install_dir="$HOME/.local/bin"
-    default_data_dir="$HOME/Library/Application Support/ManT/documents"
-    state_dir="$HOME/Library/Application Support/ManT"
+    default_data_dir="$installer_data_base/mant/documents"
+    state_dir="$installer_state_base/mant"
+    legacy_root="$HOME/Library/Application Support/ManT"
     ;;
   *) fail "operating system '$(uname -s)' is not supported by this installer" ;;
 esac
 
 receipt="$state_dir/install-receipt"
+receipt_read_path=$receipt
+if [ "$host" = macos ] && [ ! -f "$receipt" ] && [ -f "$legacy_root/install-receipt" ]; then
+  receipt_read_path="$legacy_root/install-receipt"
+fi
 
 receipt_value() {
   awk -v key="$1" 'index($0, key "\t") == 1 {
     print substr($0, length(key) + 2)
     exit
-  }' "$receipt"
+  }' "$receipt_read_path"
 }
 
 receipt_values() {
   awk -v key="$1" 'index($0, key "\t") == 1 {
     print substr($0, length(key) + 2)
-  }' "$receipt"
+  }' "$receipt_read_path"
 }
 
 validate_path() {
@@ -156,7 +166,10 @@ receipt_data_dir=
 receipt_binary=
 receipt_manuals=
 receipt_version=
-if [ -f "$receipt" ]; then
+receipt_layout=
+receipt_data_binding=
+data_binding=custom
+if [ -f "$receipt_read_path" ]; then
   [ "$(receipt_value schema)" = "$RECEIPT_SCHEMA" ] \
     || fail "installer receipt has an unsupported schema"
   receipt_install_dir=$(receipt_value install_dir)
@@ -164,6 +177,8 @@ if [ -f "$receipt" ]; then
   receipt_binary=$(receipt_value binary)
   receipt_manuals=$(receipt_values manual)
   receipt_version=$(receipt_value version)
+  receipt_layout=$(receipt_value layout)
+  receipt_data_binding=$(receipt_value data_binding)
 fi
 
 install_dir=${install_dir_override:-${receipt_install_dir:-$default_install_dir}}
@@ -171,19 +186,26 @@ data_dir=${data_dir_override:-${receipt_data_dir:-$default_data_dir}}
 validate_path "$install_dir" "install directory"
 validate_path "$data_dir" "data directory"
 binary_path="$install_dir/mant"
+validate_path "$HOME" "home directory"
+validate_path "$state_dir" "installer state directory"
 
 write_receipt() {
   installed_version=$1
   owned_manuals=$2
   require mkdir
   require mv
-  mkdir -p "$state_dir"
+  mkdir -p "$state_dir" || return 1
   receipt_temporary="$state_dir/.install-receipt.$$"
   {
     printf 'schema\t%s\n' "$RECEIPT_SCHEMA"
     printf 'version\t%s\n' "$installed_version"
+    case "$installed_version" in
+      0.[0-9].*|0.10.*|0.11.*) ;;
+      *) printf 'layout\tunix-v1\n' ;;
+    esac
     printf 'install_dir\t%s\n' "$install_dir"
     printf 'data_dir\t%s\n' "$data_dir"
+    printf 'data_binding\t%s\n' "$data_binding"
     printf 'binary\t%s\n' "$binary_path"
     saved_ifs=$IFS
     IFS='
@@ -192,13 +214,13 @@ write_receipt() {
       printf 'manual\t%s\n' "$owned_manual"
     done
     IFS=$saved_ifs
-  } > "$receipt_temporary"
-  chmod 0600 "$receipt_temporary"
-  mv "$receipt_temporary" "$receipt"
+  } > "$receipt_temporary" || return 1
+  chmod 0600 "$receipt_temporary" || return 1
+  mv "$receipt_temporary" "$receipt" || return 1
 }
 
 uninstall_owned_files() {
-  [ -f "$receipt" ] \
+  [ -f "$receipt_read_path" ] \
     || fail "no installer receipt was found; ManT was not installed by this script"
   validate_path "$receipt_binary" "receipt binary path"
   [ "$receipt_binary" = "$receipt_install_dir/mant" ] \
@@ -233,7 +255,7 @@ uninstall_owned_files() {
     fi
   done
   IFS=$saved_ifs
-  rm -f "$receipt"
+  rm -f "$receipt_read_path"
 
   if [ "$removed" = true ]; then
     printf 'Uninstalled ManT %s\n' "${receipt_version:-}"
@@ -311,6 +333,54 @@ installed_version() {
     | awk '$1 == "mant" { print $2; exit }'
 }
 
+# The verified target binary owns TOML parsing and storage migration. Neither
+# shell installer guesses TOML syntax or makes runtime discovery move files.
+prepare_layout() {
+  layout_binary=$1
+  case "$version" in
+    0.[0-9].*|0.10.*|0.11.*)
+      if [ -z "$data_dir_override" ] && [ -z "$receipt_data_dir" ]; then
+        data_dir="$legacy_root/documents"
+      fi
+      return
+      ;;
+  esac
+  if [ "$receipt_layout" != unix-v1 ]; then
+    "$layout_binary" --installer-migrate "$legacy_root" >/dev/null \
+      || fail "storage migration failed; the previous binary and original data were retained"
+  fi
+  runtime_documents=$("$layout_binary" --installer-paths documents) \
+    || fail "could not resolve the new runtime document directory"
+  if [ -z "$data_dir_override" ]; then
+    if [ "$receipt_data_binding" = runtime ] || [ -z "$receipt_data_dir" ] || [ "$receipt_data_dir" = "$legacy_root/documents" ]; then
+      data_dir=$runtime_documents
+      data_binding=runtime
+    fi
+  fi
+  validate_path "$data_dir" "data directory"
+  if [ "$data_dir" != "$runtime_documents" ]; then
+    printf 'mant installer: custom manual destination %s differs from runtime %s; configure document discovery accordingly\n' "$data_dir" "$runtime_documents" >&2
+  fi
+  if [ "$install_manual" = false ]; then
+    owned_manuals=
+    saved_ifs=$IFS
+    IFS='
+'
+    for old_manual in $receipt_manuals; do
+      case "$old_manual" in
+        "$receipt_data_dir"/mant.md|"$receipt_data_dir"/mant-ir.md|"$receipt_data_dir"/mant-markdown.md|"$receipt_data_dir"/mant-protocol.md|"$receipt_data_dir"/mant-roff.md)
+          migrated_manual="$data_dir/${old_manual##*/}"
+          if [ -f "$migrated_manual" ]; then
+            owned_manuals="${owned_manuals}${owned_manuals:+
+}$migrated_manual"
+          fi
+          ;;
+      esac
+    done
+    IFS=$saved_ifs
+  fi
+}
+
 tag=$(release_tag)
 printf '%s\n' "$tag" \
   | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$' \
@@ -347,6 +417,21 @@ if [ "$install_manual" = true ]; then
   done
 fi
 
+if [ "$current_version" = "$version" ] && [ -x "$binary_path" ]; then
+  prepare_layout "$binary_path"
+  manual_ready=true
+  if [ "$install_manual" = true ]; then
+    for manual_name in $manual_names; do
+      [ -f "$data_dir/$manual_name" ] || manual_ready=false
+    done
+    owned_manuals=
+    for manual_name in $manual_names; do
+      owned_manuals="${owned_manuals}${owned_manuals:+
+}$data_dir/$manual_name"
+    done
+  fi
+fi
+
 if [ "$force" = false ] \
   && [ "$current_version" = "$version" ] \
   && [ "$manual_ready" = true ]; then
@@ -361,8 +446,13 @@ trap 'rm -rf "$temporary"' EXIT HUP INT TERM
 install_files() {
   binary=$1
   manual_dir=$2
+  if [ "$install_manual" = true ]; then
+    for manual_name in $manual_names; do
+      [ -f "$manual_dir/$manual_name" ] || fail "manual bundle is missing $manual_name"
+    done
+  fi
+  prepare_layout "$binary"
   mkdir -p "$install_dir"
-  install -m 0755 "$binary" "$binary_path"
   if [ "$install_manual" = true ]; then
     mkdir -p "$data_dir"
     owned_manuals=
@@ -387,7 +477,20 @@ install_files() {
     IFS=$saved_ifs
     owned_manuals=$retained_manuals
   fi
-  write_receipt "$version" "$owned_manuals"
+  install -m 0755 "$binary" "$install_dir/.mant-install.$$"
+  if [ -f "$binary_path" ]; then
+    cp -p "$binary_path" "$temporary/previous-binary"
+  fi
+  mv "$install_dir/.mant-install.$$" "$binary_path"
+  if ! write_receipt "$version" "$owned_manuals"; then
+    if [ -f "$temporary/previous-binary" ]; then
+      install -m 0755 "$temporary/previous-binary" "$install_dir/.mant-restore.$$"
+      mv "$install_dir/.mant-restore.$$" "$binary_path"
+    else
+      rm -f "$binary_path"
+    fi
+    fail "could not publish installer receipt; restored the previous binary"
+  fi
 
   if [ -z "$current_version" ]; then
     action=Installed

@@ -256,8 +256,9 @@ fn windows_defaults_to_mant_data_then_user_share_and_honors_manpath() {
     assert_eq!(
         discover_manual_roots_with(&environment),
         vec![
-            data_root.join("ManT").join("man"),
-            profile.join(".local/share/man")
+            profile.join(".local/share/man"),
+            profile.join(".local/man"),
+            profile.join("man")
         ]
     );
 

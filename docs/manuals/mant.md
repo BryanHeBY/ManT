@@ -162,10 +162,9 @@ hierarchical `documents` tree. Configured installed sources then compete with
 the native manual index, whose priority is `0`: positive source priorities win,
 the native manual wins a zero tie, and non-positive sources provide fallback.
 Sources within either side are ordered by descending priority and ascending
-bytewise name. The configured-source default is `1`. Linux uses
-`${XDG_DATA_HOME:-$HOME/.local/share}/mant`, macOS uses
-`~/Library/Application Support/ManT`, and Windows uses `%APPDATA%\ManT` as its
-data root. Physical filesystem paths are never inferred from positional
+bytewise name. The configured-source default is `1`. All platforms use
+`~/.local/share/mant` as the default data root, with `MANT_DATA_HOME`,
+`mant.toml`, and XDG overrides. Physical filesystem paths are never inferred from positional
 selectors; use `--input PATH` explicitly.
 
 Registered `.md` and `.markdown` files retain their extension-free relative
@@ -221,11 +220,12 @@ manual shorthand. This preserves Markdown names, dotted executable names, and
 tldr collision pages such as `command.1` without a context-dependent guess.
 Use `--input PATH` for a physical roff file.
 
-Windows automatically checks `%APPDATA%\ManT\man`, then the compatible
-`%USERPROFILE%\.local\share\man` root. It also accepts additional roots through
-`MANPATH` or `MANT_MANPATH`, and an optional ManT-owned
-`%APPDATA%\ManT\man.conf` can provide persistent roots without requiring a
-shell profile.
+All platforms accept persistent roots from `~/.config/mant/mant.toml` and
+the lower-priority `~/.config/mant/man.conf`. With `[man] discover = true`,
+explicit TOML paths precede personal `man.conf`, native and compatibility
+roots, then the configured data root's `man/` directory. `discover = false`
+uses only explicit TOML paths. `MANPATH` and `MANT_MANPATH` retain their
+environment override semantics.
 
 <!-- mant:entries role=option case=sensitive -->
 - `--man-section MAN_SECTION`: Select the full document from one exact native
@@ -334,8 +334,8 @@ budgets, including when no path matched; normal queries retain completed roots
 and skip later work. Complete environment overrides do not inspect inactive
 configuration or report its findings.
 
-Windows has no system `man(1)` convention. If present,
-`%APPDATA%\ManT\man.conf` is a ManT-owned portable configuration. Its
+Windows has no system `man(1)` convention. All three platforms may read
+`~/.config/mant/man.conf` as a lower-priority portable configuration. Its
 case-insensitive path directives are:
 
 - `MANPATH DIRECTORY` (or `manpath`) adds an unconditional root;
@@ -347,8 +347,8 @@ case-insensitive path directives are:
 
 Direct roots from the primary file come first, followed by direct roots from
 at most 256 unique one-level `MANCONFIG` fragments, mapped roots in current
-`PATH` order, mandatory roots, `%APPDATA%\ManT\man`, and finally
-`%USERPROFILE%\.local\share\man`. A fragment cannot recursively import more
+`PATH` order, and mandatory roots. Native and compatibility roots follow,
+then the configured data root's `man/` directory. A fragment cannot recursively import more
 fragments. Expansion shares a 4096-step work budget across patterns, path
 components, and enumerated directory entries, including nonmatches. Wildcard
 matching additionally shares a budget of 4 Mi comparison cells; `?` matches one
@@ -356,9 +356,9 @@ Unicode scalar. These work limits are independent of the 256 unique fragments
 that may be loaded. An incomplete pattern contributes no paths, and later
 patterns are not traversed after exhaustion. `mant --doctor` reports truncated
 discovery. Each configuration file is bounded to 1 MiB of actually read bytes;
-the Windows configuration tree is bounded to 8 MiB and 4096 input lines.
+the personal configuration tree is bounded to 8 MiB and 4096 input lines.
 Expanded paths are limited to 4096 encoded bytes. Only `MANCONFIG` expands
-wildcards in this Windows configuration;
+wildcards in this personal configuration;
 all root and map directives describe literal directories.
 Windows `MANCONFIG` wildcard components compare ASCII letters without case
 distinctions: `*.conf` also matches `10-ROOT.CONF`, and `man.?` matches `MAN.D`.
@@ -376,11 +376,11 @@ are literal path separators, single quotes have no special meaning, and only a
 line whose first non-space character is `#` is a comment. Inline comments are
 therefore not supported.
 
-Within this Windows-only file, `%NAME%` expands any defined process environment
-variable using a case-insensitive name match. Expansion is deliberately one
+Within this personal file, `%NAME%` expands any defined process environment
+variable, case-insensitively on Windows and case-sensitively on Unix. Expansion is deliberately one
 pass: text supplied by an environment value is not rescanned. Write `%%` for a
 literal percent sign. ManT does not expand `~`. An undefined variable,
-malformed quote or expansion, wrong argument count, or non-absolute Windows
+malformed quote or expansion, wrong argument count, or non-absolute native
 path omits that directive without breaking document lookup; `mant --doctor`
 reports the configuration file and line as `manuals.configuration`.
 
@@ -389,13 +389,13 @@ For example:
 ```text
 # Direct roots can contain spaces without quoting.
 manpath C:\Program Files\Git\usr\share\man
-MANCONFIG "%APPDATA%\ManT\man.d\*.conf"
+MANCONFIG "%USERPROFILE%\.config\mant\man.d\*.conf"
 MANPATH_MAP "%USERPROFILE%\scoop\shims" "%SCOOP%\apps\cmake\current\man"
 MANDATORY_MANPATH "%PROGRAMDATA%\ManT\man"
 ```
 
 These percent expansions do not apply to `MANT_MANPATH`, `MANPATH`, Unix
-configuration files, registered Markdown sources, or roff include paths.
+system configuration files, registered Markdown sources, or roff include paths.
 Windows process-environment names themselves are matched without ASCII case
 sensitivity, so preserved spellings such as `Path`, `AppData`, `UserProfile`,
 `ManPath`, and `Mant_ManPath` have their normal Windows meaning. Unix
@@ -1246,24 +1246,29 @@ no tldr page is available.
 
 ## Storage
 
-ManT keeps durable documents and source metadata separate from disposable
-caches. On Linux they live below
-`${XDG_DATA_HOME:-$HOME/.local/share}/mant`; the private tldr checkout lives
-below `${XDG_CACHE_HOME:-$HOME/.cache}/mant/tldr-pages`.
+All platforms use `~/.config/mant` for `mant.toml`, `sources.toml`, and
+personal `man.conf`; `~/.local/share/mant` for durable data; and
+`~/.cache/mant/tldr-pages` for the private tldr checkout. ManT-owned AppData
+and macOS Library defaults are no longer searched. External tldr clients
+and native OS manuals retain their platform locations.
 
-On macOS, documents live below `~/Library/Application Support/ManT` and the
-private tldr checkout lives below `~/Library/Caches/ManT/tldr-pages`.
+Configuration precedence is `MANT_CONFIG_HOME`, `XDG_CONFIG_HOME/mant`, then
+the home default. Data/cache precedence is the corresponding `MANT_*_HOME`,
+`[paths] data_home`/`cache_home` TOML field, `XDG_*_HOME/mant`, then the home
+default. ManT variables name final directories; XDG variables name shared bases.
+Empty variables are unset; relative XDG values are ignored. TOML paths expand
+`~/` or resolve relative to the configuration directory, not the working directory.
+`[man] paths = ["~/manuals"]` sets personal roots; `discover = true` retains
+lower-priority personal and native discovery even when those roots exist.
+No `config_home` field or project-local configuration search is supported.
+See the online [configuration guide](https://github.com/BryanHeBY/ManT/blob/main/docs/configuration.md).
 
-On Windows, documents live below `%APPDATA%\ManT`. ManT's private
-tldr checkout lives below `%LOCALAPPDATA%\ManT\cache\tldr-pages`. The native
-manual roots automatically include `%APPDATA%\ManT\man`, followed by the
-compatible `%USERPROFILE%\.local\share\man` fallback; an optional
-`%APPDATA%\ManT\man.conf` adds persistent native-manual roots ahead of both.
-
-`sources.toml` lives at the data root. Personal documents remain below
+`sources.toml` lives at the configuration root. Personal documents remain below
 `documents/`; installed source directories remain below `sources/`. See the online
 [document-source guide](https://github.com/BryanHeBY/ManT/blob/main/docs/sources.md)
 for the schema and update lifecycle.
+
+With defaults, personal documents live in `~/.local/share/mant/documents`.
 
 ## Environment
 
@@ -1277,9 +1282,12 @@ for the schema and update lifecycle.
   named comma- or colon-separated operating-system subtrees; `man` retains the
   native root in that expansion.
 - `MANT_TLDR_DIR`: Use one explicit tldr checkout for reads and updates.
-- `XDG_CACHE_HOME`: Relocate cache discovery and ManT's Linux fallback cache.
-- `XDG_DATA_HOME`: Relocate the user document directory from the default
-  `$HOME/.local/share/mant/documents` on Linux.
+- `MANT_CONFIG_HOME`: Select the final configuration directory on all platforms.
+- `MANT_DATA_HOME`: Select the final persistent data directory on all platforms.
+- `MANT_CACHE_HOME`: Select the final private cache directory on all platforms.
+- `XDG_CONFIG_HOME`: Select the shared configuration base, with `/mant` appended.
+- `XDG_CACHE_HOME`: Select the shared cache base and supported external tldr caches.
+- `XDG_DATA_HOME`: Select the shared data base, with `/mant` appended.
 - `XDG_DATA_DIRS`: Add installed-client tldr discovery roots; it does not add
   ManT document roots.
 - `LC_ALL`, `LC_MESSAGES`, `LANGUAGE`, `LANG`: Select localized manual sources
@@ -1293,14 +1301,10 @@ for the schema and update lifecycle.
   request it on a terminal.
 - `CLICOLOR_FORCE`: Request colour even when automatic terminal detection
   would disable it; an explicit `--color` remains authoritative.
-- `HOME`: On Unix, supply conventional document, manual, and cache locations
-  when their XDG overrides are absent.
-- `APPDATA`: Select the per-user ManT data root and its automatic `man/`
-  manual root on Windows. Variables referenced as `%NAME%` in the ManT-owned
-  Windows `man.conf` are read from the same process environment.
-- `LOCALAPPDATA`: Select ManT and installed-client cache roots on Windows.
-- `USERPROFILE`: Supply the compatible Windows manual fallback and
-  installed-client tldr cache locations.
+- `HOME`: Supply the default home on all platforms.
+- `USERPROFILE`: Supply the Windows home when an absolute `HOME` is unavailable.
+- `APPDATA`, `LOCALAPPDATA`: Locate supported external tldr clients on Windows;
+  they no longer select ManT-owned storage.
 
 ## General
 

@@ -49,9 +49,10 @@ fn document_sources_update_on_demand_and_support_explicit_selection() {
     run_git(&repository, &["commit", "-m", "initial"]);
 
     fs::create_dir_all(&data_root).expect("create application data root");
+    fs::create_dir_all(fixture_root.join("config")).expect("create configuration root");
     let repository_url = repository.to_string_lossy();
     fs::write(
-        data_root.join("sources.toml"),
+        fixture_root.join("config/sources.toml"),
         format!(
             "[team]\nrepo = {repository_url:?}\nbranch = \"main\"\npath = \"docs\"\ninclude = [\"reference\"]\npriority = 10\n"
         ),
@@ -143,7 +144,8 @@ fn document_source_pruning_is_explicit_and_preserves_personal_documents() {
     let installed = data_root.join("sources/removed");
     fs::create_dir_all(&installed).expect("create installed source fixture");
     fs::create_dir_all(&documents).expect("create personal documents fixture");
-    fs::write(data_root.join("sources.toml"), "").expect("write empty source config");
+    fs::create_dir_all(fixture_root.join("config")).expect("create configuration root");
+    fs::write(fixture_root.join("config/sources.toml"), "").expect("write empty source config");
     fs::write(
         installed.join(".mant-source.toml"),
         "version = 1\nsource = 'removed'\nrevision = 'abc123'\ndocuments = 1\n",
@@ -191,9 +193,10 @@ fn document_source_failures_keep_a_complete_json_report() {
         std::process::id()
     ));
     let data_root = registered_data_root(&fixture_root);
+    fs::create_dir_all(fixture_root.join("config")).expect("create configuration root");
     fs::create_dir_all(&data_root).expect("create application data root");
     fs::write(
-        data_root.join("sources.toml"),
+        fixture_root.join("config/sources.toml"),
         format!(
             "[broken]\nrepo = {:?}\nbranch = \"main\"\n",
             fixture_root.join("missing.git").to_string_lossy()

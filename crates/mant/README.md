@@ -206,25 +206,23 @@ On Linux, macOS, and Windows, `ManT` indexes raw, gzip, and zstd manual sources
 and parses their roff through bundled libmandoc. It does not require a system
 `man` or `mandoc` executable at runtime. A leaf manual-page symlink may point
 outside its indexed root, but directory symlinks are not traversed and every
-`.so` target must remain inside that root. Windows defaults to
-`%APPDATA%\ManT\man`, followed by the compatible
-`%USERPROFILE%\.local\share\man` fallback, and also honors configured manual
-paths. Its optional `%APPDATA%\ManT\man.conf` accepts direct and mandatory
+`.so` target must remain inside that root. All platforms use the same
+`~/.config/mant/mant.toml` and optional lower-priority
+`~/.config/mant/man.conf`. The latter accepts direct and mandatory
 roots, bounded fragments, PATH mappings, quoted paths, and one-pass `%NAME%`
 expansion; `mant --doctor` reports malformed directives without stopping
 ordinary document lookup.
 
-Reusable Markdown documents can be registered by relative path below:
-
-- Linux: `${XDG_DATA_HOME:-$HOME/.local/share}/mant/documents`
-- macOS: `~/Library/Application Support/ManT/documents`
-- Windows: `%APPDATA%\ManT\documents`
+Reusable Markdown documents can be registered below
+`~/.local/share/mant/documents` on Linux, macOS, and Windows. `MANT_*_HOME`,
+`mant.toml`, and XDG variables can relocate the applicable directories; see
+the [configuration rules](../../docs/configuration.md).
 
 Regular Markdown files are discovered recursively with their hierarchy.
 Personal `documents/` may use leaf-file symlinks to regular files, including
 external targets; directory and broken links are ignored. Managed source
-caches never follow links. Git or direct archive sources configured in sibling
-`sources.toml` can be installed with `mant --update-docs` and selected with
+caches never follow links. Git or direct archive sources configured in
+`~/.config/mant/sources.toml` can be installed with `mant --update-docs` and selected with
 `--source`. Removed source tables are reported as orphaned installed data;
 preview cleanup with `mant --prune-docs --dry-run` and apply it with
 `mant --prune-docs`. An unqualified path or unique component suffix resolves

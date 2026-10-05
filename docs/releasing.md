@@ -313,7 +313,7 @@ a repository checkout.
 Linux x64 uses the baseline target so the executable does not require AVX2.
 Windows x64 is distributed as a ZIP and contains bundled libmandoc alongside
 Markdown support. Its `manuals\*.md` files can be installed below
-`%APPDATA%\ManT\documents`.
+`~/.local/share/mant/documents`, the same default as Unix hosts.
 macOS supports Cargo installation and local source builds, but public macOS
 archives remain disabled until they can be Developer ID-signed and notarized.
 

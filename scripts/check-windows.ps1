@@ -56,7 +56,13 @@ Write-Host "`n==> test Windows installer receipt uninstall"
 $InstallerTestRoot = Join-Path ([IO.Path]::GetTempPath()) "mant-installer-$([guid]::NewGuid().ToString('N'))"
 $PreviousLocalAppData = $env:LOCALAPPDATA
 $PreviousAppData = $env:APPDATA
+$PreviousHome = $env:HOME
+$PreviousUserProfile = $env:USERPROFILE
+$PreviousStateHome = $env:XDG_STATE_HOME
 try {
+    $env:HOME = Join-Path $InstallerTestRoot "home"
+    $env:USERPROFILE = $env:HOME
+    $env:XDG_STATE_HOME = Join-Path $InstallerTestRoot "state"
     $env:LOCALAPPDATA = Join-Path $InstallerTestRoot "local"
     $env:APPDATA = Join-Path $InstallerTestRoot "roaming"
     $InstallerState = Join-Path $env:LOCALAPPDATA "ManT"
@@ -94,6 +100,9 @@ try {
 } finally {
     $env:LOCALAPPDATA = $PreviousLocalAppData
     $env:APPDATA = $PreviousAppData
+    $env:HOME = $PreviousHome
+    $env:USERPROFILE = $PreviousUserProfile
+    $env:XDG_STATE_HOME = $PreviousStateHome
     Remove-Item $InstallerTestRoot -Recurse -Force -ErrorAction SilentlyContinue
 }
 

@@ -409,16 +409,16 @@ fn workspace_crates_own_their_versions_and_use_explicit_caret_dependencies() {
 }
 
 #[test]
-fn source_consumers_require_the_integrity_patch_baseline() {
+fn source_consumers_require_the_shared_directory_baseline() {
     for (name, manifest) in [
         ("mant-loader", include_str!("../../mant-loader/Cargo.toml")),
         ("mant", include_str!("../Cargo.toml")),
     ] {
         assert!(
             manifest.lines().any(|line| {
-                line.starts_with("mant-sources = ") && line.contains("version = \"^0.9.3\"")
+                line.starts_with("mant-sources = ") && line.contains("version = \"^0.10.0\"")
             }),
-            "{name} does not require the mant-sources integrity baseline"
+            "{name} does not require the mant-sources shared directory baseline"
         );
     }
 }

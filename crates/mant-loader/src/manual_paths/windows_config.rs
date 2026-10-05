@@ -1,4 +1,4 @@
-//! ManT-owned Windows `man.conf` parsing and root materialization.
+//! Portable personal `man.conf` parsing; native system dialects remain separate.
 
 use std::{
     collections::{HashMap, HashSet},
@@ -19,6 +19,7 @@ const MAX_CONFIG_LINES: usize = 4096;
 struct ConfigBudget {
     bytes: u64,
     lines: usize,
+    windows: bool,
 }
 
 impl Default for ConfigBudget {
@@ -26,6 +27,7 @@ impl Default for ConfigBudget {
         Self {
             bytes: MAX_CONFIG_TREE_BYTES,
             lines: MAX_CONFIG_LINES,
+            windows: true,
         }
     }
 }
@@ -37,14 +39,19 @@ struct WindowsConfigPlan {
     mandatory: Vec<PathBuf>,
     include_patterns: Vec<PathBuf>,
     diagnostics: Vec<ManualPathDiagnostic>,
+    windows: bool,
 }
 
-pub(super) fn load(
+pub(super) fn load_personal(
     path: &Path,
     environment: &HashMap<OsString, OsString>,
     executable_paths: &[PathBuf],
+    windows: bool,
 ) -> ManualRootDiscovery {
-    let mut budget = ConfigBudget::default();
+    let mut budget = ConfigBudget {
+        windows,
+        ..ConfigBudget::default()
+    };
     let mut diagnostics = Vec::new();
     let Some(text) = read_config(path, &mut diagnostics, &mut budget) else {
         return ManualRootDiscovery {
@@ -53,7 +60,21 @@ pub(super) fn load(
         };
     };
     let mut plan = parse_bounded(&text, path, environment, true, &mut budget);
-    let included = collect_include_paths(&plan.include_patterns);
+    let included = collect_include_paths_with_case(
+        &plan.include_patterns,
+        |pattern, budget| {
+            expand_path_pattern_with_case(
+                pattern,
+                budget,
+                if windows {
+                    GlobCase::AsciiInsensitive
+                } else {
+                    GlobCase::Sensitive
+                },
+            )
+        },
+        windows,
+    );
     if included.candidate_truncated {
         plan.diagnostics.push(file_diagnostic(
             path,
@@ -166,7 +187,10 @@ fn parse_bounded(
     allow_includes: bool,
     budget: &mut ConfigBudget,
 ) -> WindowsConfigPlan {
-    let mut plan = WindowsConfigPlan::default();
+    let mut plan = WindowsConfigPlan {
+        windows: budget.windows,
+        ..WindowsConfigPlan::default()
+    };
     for (index, raw_line) in text.lines().enumerate() {
         if budget.lines == 0 {
             plan.diagnostics.push(line_diagnostic(
@@ -202,6 +226,7 @@ fn parse_bounded(
                 line,
                 value,
                 environment,
+                budget.windows,
             );
         } else if directive.eq_ignore_ascii_case("mandatory_manpath") {
             push_single_path(
@@ -211,6 +236,7 @@ fn parse_bounded(
                 line,
                 value,
                 environment,
+                budget.windows,
             );
         } else if directive.eq_ignore_ascii_case("manconfig") {
             if allow_includes {
@@ -221,13 +247,14 @@ fn parse_bounded(
                     line,
                     value,
                     environment,
+                    budget.windows,
                 );
             }
         } else if directive.eq_ignore_ascii_case("manpath_map") {
             match split_arguments(value, 2) {
                 Ok(arguments) => {
-                    let binary = parse_path(&arguments[0], environment);
-                    let manual = parse_path(&arguments[1], environment);
+                    let binary = parse_path(&arguments[0], environment, budget.windows);
+                    let manual = parse_path(&arguments[1], environment, budget.windows);
                     match binary.zip(manual) {
                         Some(mapping) => plan.mappings.push(mapping),
                         None => plan.diagnostics.push(line_diagnostic(
@@ -264,15 +291,25 @@ struct IncludedPaths {
     fragment_truncated: bool,
 }
 
+#[cfg(test)]
 fn collect_include_paths(patterns: &[PathBuf]) -> IncludedPaths {
     collect_include_paths_with(patterns, |pattern, budget| {
         expand_path_pattern_with_case(pattern, budget, GlobCase::AsciiInsensitive)
     })
 }
 
+#[cfg(test)]
 fn collect_include_paths_with(
     patterns: &[PathBuf],
+    expand: impl FnMut(&Path, &mut ScanBudget) -> ExpansionOutcome,
+) -> IncludedPaths {
+    collect_include_paths_with_case(patterns, expand, true)
+}
+
+fn collect_include_paths_with_case(
+    patterns: &[PathBuf],
     mut expand: impl FnMut(&Path, &mut ScanBudget) -> ExpansionOutcome,
+    windows: bool,
 ) -> IncludedPaths {
     let mut included = Vec::new();
     let mut seen = HashSet::new();
@@ -293,7 +330,11 @@ fn collect_include_paths_with(
             exhausted: pattern_truncated,
         } = expand(pattern, &mut budget);
         for included_path in expanded {
-            if !seen.insert(normalized_windows_path(&included_path)) {
+            if !seen.insert(if windows {
+                PathBuf::from(normalized_windows_path(&included_path))
+            } else {
+                included_path.clone()
+            }) {
                 continue;
             }
             if included.len() == MAX_EXPANDED_CONFIG_PATHS {
@@ -318,7 +359,11 @@ fn collect_include_paths_with(
             break;
         }
     }
-    included.sort_unstable_by_key(|path| normalized_windows_path(path));
+    if windows {
+        included.sort_unstable_by_key(|path| normalized_windows_path(path));
+    } else {
+        included.sort_unstable();
+    }
     IncludedPaths {
         paths: included,
         candidate_truncated,
@@ -333,10 +378,11 @@ fn push_single_path(
     line: usize,
     value: &str,
     environment: &HashMap<OsString, OsString>,
+    windows: bool,
 ) {
     match split_arguments(value, 1)
         .ok()
-        .and_then(|arguments| parse_path(&arguments[0], environment))
+        .and_then(|arguments| parse_path(&arguments[0], environment, windows))
     {
         Some(path) => target.push(path),
         None => diagnostics.push(line_diagnostic(
@@ -394,12 +440,31 @@ fn split_arguments(value: &str, expected: usize) -> Result<Vec<String>, &'static
     Ok(arguments)
 }
 
-fn parse_path(value: &str, environment: &HashMap<OsString, OsString>) -> Option<PathBuf> {
-    let expanded = expand_environment(value, environment)?;
-    (expanded.len() <= 4096 && is_absolute_windows_path(&expanded)).then(|| PathBuf::from(expanded))
+fn parse_path(
+    value: &str,
+    environment: &HashMap<OsString, OsString>,
+    windows: bool,
+) -> Option<PathBuf> {
+    let expanded = expand_environment_with(value, environment, windows)?;
+    (expanded.len() <= 4096
+        && if windows {
+            is_absolute_windows_path(&expanded)
+        } else {
+            Path::new(&expanded).is_absolute()
+        })
+    .then(|| PathBuf::from(expanded))
 }
 
+#[cfg(test)]
 fn expand_environment(value: &str, environment: &HashMap<OsString, OsString>) -> Option<OsString> {
+    expand_environment_with(value, environment, true)
+}
+
+fn expand_environment_with(
+    value: &str,
+    environment: &HashMap<OsString, OsString>,
+    windows: bool,
+) -> Option<OsString> {
     let mut output = OsString::new();
     let mut remaining = value;
     while let Some(start) = remaining.find('%') {
@@ -415,8 +480,15 @@ fn expand_environment(value: &str, environment: &HashMap<OsString, OsString>) ->
         if name.is_empty() {
             return None;
         }
-        let value =
-            super::environment_value_for(environment, name, super::ManualPathPlatform::Windows)?;
+        let value = super::environment_value_for(
+            environment,
+            name,
+            if windows {
+                super::ManualPathPlatform::Windows
+            } else {
+                super::ManualPathPlatform::Linux
+            },
+        )?;
         output.push(value);
         if output.len() > 4096 {
             return None;
@@ -427,7 +499,7 @@ fn expand_environment(value: &str, environment: &HashMap<OsString, OsString>) ->
     Some(output)
 }
 
-fn is_absolute_windows_path(path: &OsStr) -> bool {
+pub(super) fn is_absolute_windows_path(path: &OsStr) -> bool {
     let value = path.to_string_lossy();
     let bytes = value.as_bytes();
     bytes.get(..3).is_some_and(|prefix| {
@@ -448,13 +520,23 @@ fn materialize(plan: WindowsConfigPlan, executable_paths: &[PathBuf]) -> ManualR
         roots.extend(
             plan.mappings
                 .iter()
-                .filter(|(configured, _)| windows_paths_equivalent(configured, executable))
+                .filter(|(configured, _)| {
+                    if plan.windows {
+                        windows_paths_equivalent(configured, executable)
+                    } else {
+                        configured == executable
+                    }
+                })
                 .map(|(_, manual)| manual.clone()),
         );
     }
     roots.extend(plan.mandatory);
     ManualRootDiscovery {
-        roots: deduplicate_windows_paths(roots),
+        roots: if plan.windows {
+            deduplicate_windows_paths(roots)
+        } else {
+            crate::source::deduplicate_paths(roots)
+        },
         diagnostics: plan.diagnostics,
     }
 }
@@ -611,7 +693,11 @@ mod tests {
     #[test]
     fn configuration_tree_limits_lines_across_fragments_and_reads_actual_bytes() {
         let source = Path::new(r"C:\man.conf");
-        let mut budget = ConfigBudget { bytes: 3, lines: 2 };
+        let mut budget = ConfigBudget {
+            bytes: 3,
+            lines: 2,
+            ..ConfigBudget::default()
+        };
         let first = parse_bounded("MANPATH\n", source, &HashMap::new(), true, &mut budget);
         let second = parse_bounded(
             "MANPATH\nMANPATH\nMANPATH\n",

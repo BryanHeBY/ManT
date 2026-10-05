@@ -83,10 +83,94 @@ pub(crate) fn inspect_system() -> DoctorReport {
         ),
     );
     inspect_libmandoc(&mut builder);
+    inspect_application_settings(&mut builder);
     inspect_sources(&mut builder);
     inspect_manuals(&mut builder);
     inspect_tldr(&mut builder);
     builder.finish()
+}
+
+fn inspect_application_settings(builder: &mut DoctorBuilder) {
+    use mant_sources::settings::{DirectoryKind, Settings};
+    let settings = match Settings::load() {
+        Ok(settings) => settings,
+        Err(error) => {
+            builder.push(
+                "paths.configuration",
+                DoctorCheckStatus::Error,
+                error.to_string(),
+            );
+            return;
+        }
+    };
+    for (kind, code, path) in [
+        (
+            DirectoryKind::Config,
+            "paths.config-root",
+            settings.config_home(),
+        ),
+        (
+            DirectoryKind::Data,
+            "paths.data-location",
+            settings.data_home(),
+        ),
+        (
+            DirectoryKind::Cache,
+            "paths.cache-root",
+            settings.cache_home(),
+        ),
+    ] {
+        match path {
+            Ok(path) => {
+                let check = builder.push(code, DoctorCheckStatus::Info, path.to_string_lossy());
+                check
+                    .details
+                    .push(format!("origin={}", settings.directory_origin(kind)));
+            }
+            Err(error) => {
+                builder.push(code, DoctorCheckStatus::Error, error.to_string());
+            }
+        }
+    }
+    if let Ok(root) = settings.config_home() {
+        let path = root.join("mant.toml");
+        builder
+            .push(
+                "settings.configuration",
+                DoctorCheckStatus::Info,
+                if path.is_file() {
+                    "loaded mant.toml"
+                } else {
+                    "mant.toml is absent; using environment/default settings"
+                },
+            )
+            .subject = Some(path.to_string_lossy().into_owned());
+        let environment = std::env::vars_os().collect();
+        let home = mant_sources::settings::home(&environment, cfg!(windows));
+        let legacy = if cfg!(windows) {
+            mant_sources::settings::environment_value(&environment, "APPDATA", true)
+                .map(|path| std::path::PathBuf::from(path).join("ManT"))
+        } else if cfg!(target_os = "macos") {
+            home.map(|path| path.join("Library/Application Support/ManT"))
+        } else {
+            mant_sources::settings::environment_value(&environment, "XDG_DATA_HOME", false)
+                .map(std::path::PathBuf::from)
+                .or_else(|| home.map(|path| path.join(".local/share")))
+                .map(|path| path.join("mant"))
+        };
+        if let Some(legacy) = legacy {
+            let old = legacy.join("sources.toml");
+            if legacy != root && old.is_file() && !root.join("sources.toml").exists() {
+                let check = builder.push(
+                    "paths.legacy-configuration",
+                    DoctorCheckStatus::Warning,
+                    "legacy sources.toml exists but is not an implicit fallback",
+                );
+                check.subject = Some(old.to_string_lossy().into_owned());
+                check.remediation = Some("rerun the installer to migrate, or copy configuration explicitly before pruning sources".to_owned());
+            }
+        }
+    }
 }
 
 #[cfg(feature = "roff")]
@@ -137,7 +221,10 @@ fn inspect_sources(builder: &mut DoctorBuilder) {
                 "the ManT data root could not be derived",
             );
             check.details.push(error.to_string());
-            check.remediation = Some("set the platform user-data environment variable".to_owned());
+            check.remediation = Some(
+                "check mant.toml or set absolute MANT_CONFIG_HOME/MANT_DATA_HOME overrides"
+                    .to_owned(),
+            );
             return;
         }
     };

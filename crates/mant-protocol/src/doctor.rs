@@ -50,7 +50,7 @@ pub struct DoctorEnvironment {
     /// Platform-native `ManT` data root, when it could be derived.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub data_root: Option<String>,
-    /// Effective `sources.toml` path, when the data root is available.
+    /// Effective `sources.toml` path, when the configuration root is available.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub config_path: Option<String>,
     /// Personal Markdown root, when the data root is available.

@@ -13,6 +13,45 @@ that crate was not published for that change.
 
 ## Unreleased
 
+### mant-sources 0.10.0
+
+- Unify application configuration, data and cache directories on Linux, macOS
+  and Windows: `~/.config/mant`, `~/.local/share/mant` and `~/.cache/mant`.
+  `MANT_CONFIG_HOME`, `MANT_DATA_HOME` and `MANT_CACHE_HOME` select final
+  directories; XDG category variables supply shared bases on all three hosts.
+  AppData and macOS Library are no longer implicit ManT storage fallbacks.
+- Read optional bounded `mant.toml` with `[paths] data_home/cache_home` and
+  `[man] paths/discover`. Move `sources.toml` to the configuration directory;
+  retain the data-root base of relative local Git repository paths. Application
+  environment overrides win over TOML; TOML wins over XDG/default data and cache.
+- Add explicit installer-only legacy-storage migration, preserving originals,
+  destination configuration, relative Git identity and installed source metadata.
+  Refuse active updates, conflicting data, links/special files and oversized
+  migrations. Ordinary discovery never migrates or creates storage.
+
+### mant-loader 0.12.0
+
+- Apply shared application settings to manual discovery and the private tldr
+  cache. With `man.discover = true`, explicit TOML roots precede personal
+  `man.conf` fallback roots, host discovery and supplemental roots. Empty TOML
+  roots retain fallback; `discover = false` isolates explicit roots. Complete
+  `MANT_MANPATH`/`MANPATH` overrides retain their existing semantics.
+- Support the bounded personal `man.conf` directive subset on all platforms,
+  retaining platform-native system configuration dialects. Preserve external
+  tldr AppData/Library compatibility; missing Windows cache variables no longer
+  prevent private-cache discovery. Add a configuration error to `TldrCacheError`.
+
+### mant 0.12.0
+
+- Align one-line installer defaults, private path-resolution/migration bridges
+  and doctor diagnostics with the shared directory contract. Upgrade known old
+  default storage before activating the new binary; retain custom destinations
+  and original configuration/data. Windows binaries now default to
+  `~/.local/bin`; uninstall never removes this shared PATH entry. Internal
+  installer receipts use the Unix-like state directory on all three hosts;
+  legacy receipts remain readable for upgrade/uninstall without introducing a
+  public `MANT_STATE_HOME` option. See `docs/configuration.md` for migration rules.
+
 ### libmandoc-rs 0.12.0
 
 - Replace the Rust `Node::macro_name: Option<String>` field with

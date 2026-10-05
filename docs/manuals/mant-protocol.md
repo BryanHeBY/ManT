@@ -348,10 +348,10 @@ Installed sources configured by `sources.toml` then compete with the native
 manual index at priority `0`: positive source priorities win, the native manual
 wins a zero tie, and non-positive sources are fallbacks. Sources on either side
 use descending `priority` and ascending bytewise source-name order. Omitted
-source priorities default to `1`. Linux uses
-`${XDG_DATA_HOME:-$HOME/.local/share}/mant`, macOS uses
-`~/Library/Application Support/ManT`, and Windows uses `%APPDATA%\ManT` as the
-data root. Regular `.md` and `.markdown` files are registered recursively by
+source priorities default to `1`. All platforms use `~/.local/share/mant` as
+the default data root, with `MANT_DATA_HOME`, `mant.toml`, and XDG overrides.
+`sources.toml` belongs to the configuration root, defaulting to `~/.config/mant`.
+Regular `.md` and `.markdown` files are registered recursively by
 extension-free relative path. Personal `documents/` accepts leaf-file symlinks
 to regular files, including external targets; their link path supplies the
 identity. Directory and broken links are ignored, and managed source caches
@@ -397,14 +397,15 @@ configuration locations, falling back to mandoc `/etc/man.conf` `manpath`
 entries. macOS follows its `$PATH`, active Xcode or Command Line Tools manual
 trees, system defaults, then `/etc/man.conf` `MANPATH` plus `MANCONFIG`
 fragments; it reads the xcode-select state directly rather than spawning that
-tool. Windows has no native convention; ManT reads an optional
-`%APPDATA%\ManT\man.conf`. Its Windows-only, case-insensitive source-root
+tool. Windows has no native convention. All platforms read optional personal
+`~/.config/mant/mant.toml` and lower-priority `~/.config/mant/man.conf`.
+With `discover = true`, explicit TOML `man.paths` precedes personal `man.conf`,
+native and compatibility roots, then the configured data root's `man/` directory.
+`discover = false` keeps only TOML roots. The personal file's directive
 subset accepts `MANPATH`, bounded one-level `MANCONFIG` fragments,
 PATH-conditioned `MANPATH_MAP`, and `MANDATORY_MANPATH`; paths accept optional
 double quotes and single-pass `%NAME%` environment expansion. Direct primary
-and fragment roots precede mapped and mandatory roots, then ManT automatically
-checks `%APPDATA%\ManT\man` and the compatible
-`%USERPROFILE%\.local\share\man` fallback. Windows environment names use the
+and fragment roots precede mapped and mandatory roots. Windows environment names use the
 platform's case-insensitive semantics, and fragment expansion stops before
 traversing patterns beyond its global bound. Invalid directives are omitted;
 the native CLI exposes their local file and line through `mant --doctor`,

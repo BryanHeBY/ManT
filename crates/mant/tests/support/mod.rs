@@ -8,16 +8,6 @@ use std::{
 /// Return the registered-document directory selected by the production
 /// resolver for a test-owned home directory.
 pub fn registered_documents_dir(home: &Path) -> PathBuf {
-    if cfg!(windows) {
-        return home
-            .join("AppData")
-            .join("Roaming")
-            .join("ManT")
-            .join("documents");
-    }
-    if cfg!(target_os = "macos") {
-        return home.join("Library/Application Support/ManT/documents");
-    }
     home.join("data/mant/documents")
 }
 
@@ -28,6 +18,10 @@ pub fn registered_documents_dir(home: &Path) -> PathBuf {
 pub fn configure_registered_documents(command: &mut Command, home: &Path) {
     command
         .env("HOME", home)
+        .env("USERPROFILE", home)
+        .env("MANT_CONFIG_HOME", home.join("config"))
+        .env("MANT_DATA_HOME", home.join("data/mant"))
+        .env("MANT_CACHE_HOME", home.join("cache/mant"))
         .env("XDG_DATA_HOME", home.join("data"))
         .env("XDG_DATA_DIRS", home.join("empty-system-data"))
         .env("APPDATA", home.join("AppData").join("Roaming"))

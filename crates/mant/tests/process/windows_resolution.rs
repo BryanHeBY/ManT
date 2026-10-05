@@ -20,8 +20,9 @@ fn windows_suffix_fixture() -> PathBuf {
     fs::create_dir_all(&documents).expect("create personal documents");
     fs::create_dir_all(&alpha).expect("create alpha source");
     fs::create_dir_all(&beta).expect("create beta source");
+    fs::create_dir_all(fixture_root.join("config")).expect("create configuration directory");
     fs::write(
-        data_root.join("sources.toml"),
+        fixture_root.join("config/sources.toml"),
         "[alpha]\nrepo = \"https://example.invalid/alpha.git\"\nbranch = \"main\"\n\n[beta]\nrepo = \"https://example.invalid/beta.git\"\nbranch = \"main\"\n",
     )
     .expect("write source config");

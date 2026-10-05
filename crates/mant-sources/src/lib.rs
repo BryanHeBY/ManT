@@ -13,8 +13,11 @@ mod installed;
 #[cfg(feature = "update")]
 mod limits;
 mod metadata;
+#[cfg(feature = "update")]
+pub mod migration;
 mod registry;
 mod reports;
+pub mod settings;
 #[cfg(feature = "update")]
 mod update;
 

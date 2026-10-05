@@ -416,15 +416,17 @@ derives roots from `MANT_MANPATH`, `MANPATH`, and platform conventions, then
 indexes raw, gzip, and zstd files in traditional `man<section>/` directories
 and flat roots. Its dedicated path layer reads Linux man-db maps and mandatory
 roots (or mandoc `man.conf`), macOS PATH, active-developer, `MANPATH`, and
-`MANCONFIG` sources, and an optional ManT-owned Windows `man.conf`. That
-Windows parser materializes normalized directives in four phases: primary and
+`MANCONFIG` sources, and an optional ManT-owned `~/.config/mant/man.conf`
+on all platforms, after explicit `mant.toml` roots. That personal parser materializes normalized directives in four phases: primary and
 one-level fragment roots, current-PATH mappings, then mandatory roots. It
 expands `%NAME%` once, matches Windows environment names case-insensitively,
 stops traversing fragment patterns at the global bound, and keeps rejected or
 truncated directives as non-fatal discovery diagnostics for `mant --doctor`.
-Windows then adds `%APPDATA%\ManT\man` and the compatible
-`%USERPROFILE%\.local\share\man` fallback; Unix hosts use user, PATH-derived,
-and conventional system locations when native configuration is unavailable.
+With discovery enabled, native and compatibility roots follow, then the
+configured data root's `man/` directory. `discover = false` skips personal and
+native fallback, retaining only explicit TOML roots. Unix hosts retain user,
+PATH-derived, and conventional system locations. All platforms share Unix-like
+ManT config/data/cache defaults with environment and TOML overrides.
 No lookup spawns the host `man`, `manpath`, or `xcode-select` program.
 
 Rust owns source I/O and decompression before plain roff bytes cross the parser

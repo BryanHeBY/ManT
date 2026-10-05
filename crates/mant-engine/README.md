@@ -338,11 +338,11 @@ than reopening or reparsing the input. Indexed alias metadata is attached by
 the loader after parsing, not used to authorize codec IO.
 Native root discovery is also loader-owned Rust code: Linux reads man-db mappings or
 mandoc `man.conf`, macOS reads its PATH, active developer selection, and
-`MANPATH`/`MANCONFIG` configuration, and Windows optionally reads `ManT`'s own
-`man.conf`. The Windows subset supports direct and mandatory roots, bounded
+`MANPATH`/`MANCONFIG` configuration, and all platforms optionally read
+`~/.config/mant/man.conf`, after explicit `mant.toml` manual roots. The personal subset supports direct and mandatory roots, bounded
 one-level fragments, PATH-conditioned mappings, quoted paths, and single-pass
-`%NAME%` expansion before automatically adding `%APPDATA%\ManT\man` and the
-compatible `%USERPROFILE%\.local\share\man` fallback. Invalid directives are
+`%NAME%` expansion. With discovery enabled, native and compatibility roots
+follow, then the configured data root's `man/` directory. Invalid directives are
 omitted from queries and returned by `inspect_manual_roots` for local doctor
 reporting. Windows environment names are matched case-insensitively, and the
 fragment bound stops later pattern traversal, all without spawning a host

@@ -52,14 +52,16 @@ Public macOS archives remain disabled until they can be Developer ID-signed
 and notarized. The Unix installer therefore builds the selected release from
 crates.io on macOS, installs it to `~/.local/bin`, and registers its manuals
 from the checksummed, attested `mant-<version>-manuals.tar.gz` release asset
-under `~/Library/Application Support/ManT/documents`. This path requires Rust
+under the configured ManT data root's `documents/` directory. This build requires Rust
 1.88 or newer, Clang, and zlib to be available before running the installer.
 Releases before 0.7.0 did not publish that asset, so selecting one of them on
 macOS installs only its binary instead of downloading unverified manual files.
 
 On Windows, the PowerShell installer uses the x64 ZIP, installs `mant.exe`
-below `%LOCALAPPDATA%\Programs\ManT\bin`, adds that directory to the user
-`PATH`, and registers the manuals below `%APPDATA%\ManT\documents`.
+below `~/.local/bin`, adds that directory to the user `PATH`, and registers
+the manuals below `~/.local/share/mant/documents`, like Linux and macOS.
+All three installers ask the verified target binary to resolve `mant.toml`,
+`MANT_*_HOME`, and XDG overrides; see [configuration](configuration.md).
 
 Set `MANT_VERSION` to a release such as `MAJOR.MINOR.PATCH` to install that
 version instead of the latest. `MANT_INSTALL_DIR` and `MANT_DATA_DIR` override
@@ -95,7 +97,8 @@ The installer writes a private receipt containing only the owned binary,
 manual files, version, and installation directories. Windows also records whether
 the installer added its directory to user `PATH`. Uninstall removes only those
 exact files, never recursively deletes their parent directories, and removes
-the Windows PATH entry only when the receipt says the installer added it.
+an installer-owned dedicated Windows PATH entry only when the receipt says
+the installer added it. Shared `~/.local/bin` stays on PATH during uninstall.
 
 Uninstall on Unix:
 
@@ -109,9 +112,14 @@ Uninstall on Windows:
 & ([scriptblock]::Create((irm https://raw.githubusercontent.com/BryanHeBY/ManT/main/scripts/install.ps1))) -Uninstall
 ```
 
-The receipt lives below `${XDG_STATE_HOME:-$HOME/.local/state}/mant` on Linux,
-`~/Library/Application Support/ManT` on macOS, and `%LOCALAPPDATA%\ManT` on
-Windows. An older one-line installation without a receipt can be adopted by
+The receipt lives below `${XDG_STATE_HOME:-$HOME/.local/state}/mant` on all
+three platforms. Old macOS and Windows receipts remain readable for upgrades
+and uninstall. The first upgrade to 0.12+ copies known old default configuration
+and storage into the new layout, retaining originals. Existing target
+configuration wins; conflicting data, links, active source updates, or an
+exceeded migration budget stop installation before replacing the binary.
+Subsequent upgrades do not re-import the retained old data. Explicit custom
+binary/manual destinations remain respected. An older installation without a receipt can be adopted by
 running the current installer once before uninstalling it.
 
 ## cargo-binstall
@@ -181,7 +189,8 @@ Download `mant-<version>-windows-x64.zip` from the
 manuals:
 
 ```powershell
-$documents = Join-Path $env:APPDATA "ManT\documents"
+$mantHome = if ($env:HOME) { $env:HOME } else { $env:USERPROFILE }
+$documents = Join-Path $mantHome ".local\share\mant\documents"
 New-Item $documents -ItemType Directory -Force | Out-Null
 Copy-Item .\manuals\*.md $documents
 mant mant

@@ -64,6 +64,9 @@ def verify(name, enabled, inputs, log):
         )
 
     runtime_env = dict(environment, XDG_DATA_HOME=str(inputs), APPDATA=str(inputs),
+                       MANT_CONFIG_HOME=str(inputs / "config"),
+                       MANT_DATA_HOME=str(inputs / "mant"),
+                       MANT_CACHE_HOME=str(inputs / "cache" / "mant"),
                        HOME=str(inputs), USERPROFILE=str(inputs), LOCALAPPDATA=str(inputs),
                        XDG_CACHE_HOME=str(inputs / "cache"),
                        MANT_MANPATH=str(inputs / "man"), MANT_TLDR_DIR=str(inputs / "tldr"),

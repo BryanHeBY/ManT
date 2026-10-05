@@ -40,6 +40,13 @@ use output_policy::{TerminalCapabilities, TerminalKind, resolve_process_presenta
 /// conventional CLI execution does not require a caller-provided runtime.
 #[must_use]
 pub fn run_process(arguments: &[String]) -> u8 {
+    if let Some(status) = crate::installation::run(
+        arguments,
+        &mut io::stdout().lock(),
+        &mut io::stderr().lock(),
+    ) {
+        return status;
+    }
     let requested_color = arguments::requested_color(arguments);
     let mut command = match arguments::parse_process(arguments) {
         Ok(command) => command,

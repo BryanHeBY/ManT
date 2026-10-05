@@ -5,6 +5,9 @@ mod support;
 #[path = "process/support.rs"]
 mod process_support;
 
+#[path = "process/installation.rs"]
+mod installation;
+
 #[path = "process/command_surface.rs"]
 mod command_surface;
 

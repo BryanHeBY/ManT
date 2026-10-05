@@ -9,19 +9,19 @@ that relative hierarchy in its private lookup directory.
 
 ## Layout
 
-ManT uses one per-user data root:
-
-| Platform | Data root |
-| --- | --- |
-| Linux | `${XDG_DATA_HOME:-$HOME/.local/share}/mant` |
-| macOS | `~/Library/Application Support/ManT` |
-| Windows | `%APPDATA%\ManT` |
+Linux, macOS, and Windows share the same defaults: configuration in
+`~/.config/mant` and persistent data in `~/.local/share/mant`.
+`sources.toml` belongs to the configuration directory, not the data directory.
+See [configuration](configuration.md) for TOML and environment overrides.
 
 The layout is fixed:
 
 ```text
-mant/
-├── sources.toml
+~/.config/mant/
+├── mant.toml
+├── man.conf
+└── sources.toml
+~/.local/share/mant/
 ├── documents/
 │   ├── personal.md
 │   └── languages/

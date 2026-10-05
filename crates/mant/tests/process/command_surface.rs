@@ -158,7 +158,7 @@ fn doctor_is_offline_read_only_and_supports_stable_json() {
     );
     assert_eq!(
         report["environment"]["configPath"],
-        data_root.join("sources.toml").to_string_lossy().as_ref()
+        home.join("config/sources.toml").to_string_lossy().as_ref()
     );
     assert_eq!(
         report["environment"]["documentsRoot"],
