@@ -201,6 +201,9 @@ fn remove_owned_file(path: &Path) -> io::Result<()> {
     {
         let mut permissions = fs::metadata(path)?.permissions();
         if permissions.readonly() {
+            // This Windows-only cleanup clears the DOS read-only flag on our
+            // own copy; it never changes Unix mode bits or legacy originals.
+            #[allow(clippy::permissions_set_readonly_false)]
             permissions.set_readonly(false);
             fs::set_permissions(path, permissions)?;
         }
