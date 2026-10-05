@@ -188,6 +188,14 @@ a second parser, selector resolver, or audit oracle.
 | UI | Logical fragments carry text and anchors together. A document session owns its view, viewport and width cache; explicit switch reasons preserve search only when appropriate. Terminal acquisition/restoration remains separate from host callbacks. |
 | Native wrapper | Raw ABI views, synchronous session ownership, immediate owned transfer and optional renderer output are private boundaries. Bundle arguments retain their path allocations and borrowed source bytes for the complete call. |
 
+Document validation separates indexed identity checks from the content visitor
+and diagnostic classification. Its entry point preserves the order of source,
+identity, content and relationship findings. The codec's `encode/artifact`
+owns canonical bytes and borrowed node ranges; `encode/mapped` owns the same
+text value through navigation and prefix transforms. `encode/blocks` handles
+block syntax and assembly, while `encode/table_projection` flattens accepted
+table rows without changing their word boundaries or semantic ownership.
+
 The Markdown event cursor owns nesting accounting and original offsets. A
 separate heading identity ledger allocates destinations and remaps exact fragment
 aliases; the root/section driver preserves source order before title extraction
@@ -198,6 +206,9 @@ Developer profilers share JSON-lines framing only. Their schemas, expected
 owners, observed structure and matching policies remain independent of
 product lowering. Test modules are grouped by behavior rather than by the
 historical review that introduced them.
+Large suites register private contract groups and keep shared constructors
+and assertions in one fixture module. Moving a test retains its source,
+expected result, function name and configuration attributes.
 
 Roff structural consumers pass an explicit formatter state containing current
 and previous font selections and spacing mode. Source services do not hide
@@ -231,6 +242,15 @@ The private definition modules separate cell consumption, output retirement,
 fill-mode transitions, vertical rows and geometry checkpoints. Their methods
 operate on the same execution state. Moving a handler between these modules
 does not add a new state-transfer or restoration boundary.
+The surrounding block-flow modules separate input boundaries, column operations
+and output completion. Inline builder and execution lifecycle methods operate
+on the original owner and register structs; module boundaries do not drain,
+clone or recreate the active formatter.
+
+UI lowering keeps one `DocumentBuilder` with its pending gaps and anchors.
+Private block, inline, section, list, table and quick-reference modules add
+logical content through that builder. Styled inline projection and navigation
+inventory retain their existing separate owners in the document layer.
 
 Text table layout prepares each admitted cell once. That result carries both
 rendered rows and their visible counterparts, so width calculation and final

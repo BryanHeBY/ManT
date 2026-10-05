@@ -90,6 +90,11 @@ that crate was not published for that change.
 
 ### mant-ir, mant-protocol, mant-codec, mant-loader, mant-query, mant-render, mant-engine and mant 0.12.0
 
+- Organize document validation, Markdown artifacts and table projection, shared
+  roff flow, and TUI lowering into private modules with explicit responsibilities.
+  Group large row, table and reference test suites by contract with shared
+  fixtures. Existing execution state, public APIs and regression assertions stay
+  intact.
 - Resolve adjacent Markdown block seams from exported syntax, authored hard
   rows and explicit spacing. Fences, rules and nested list/definition content
   no longer gain blank rows on repeated import/export. Leading hard rows use
