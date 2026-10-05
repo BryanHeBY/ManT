@@ -839,8 +839,20 @@ Navigate contains backward/forward history and current-document movement.
 ### Interface
 
 - `F10`: Open the menu bar.
+- `Alt+M`, `Alt+E`, `Alt+V`, `Alt+N`, `Alt+S`, `Alt+H`: Open Manual, Edit,
+  View, Navigate, Search, or Help directly. Each title's initial is underlined.
 - `?`: Show keyboard shortcuts.
 - `q`: Quit.
+
+While a menu is open, `Left`/`Right` cycle between menus and `Up`/`Down`
+cycle between items. `M`, `E`, `V`, `N`, `S`, and `H` also switch directly
+between menus; letters are case-insensitive and only act as plain-letter
+menu shortcuts while a menu is open. `Enter` or `Space` runs the selected
+item; `Escape` or `F10` closes the menu. The status bar displays these controls.
+Opening and dismissing a menu preserves the reading position, search query
+and search cursor. Alt-letter shortcuts also work from the search field,
+but do not replace the document finder, reference chooser or keyboard-help
+window. Plain search input and outline-navigation keys retain their meaning.
 
 The View menu can hide the Outline sidebar, reset its width, switch between
 compact and fully wrapped labels, and expand or collapse the complete tree.

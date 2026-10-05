@@ -35,6 +35,12 @@ catalog, search, and cross-document interactions without serializing the IR.
 - Span-aware table columns and cell-local anchors that retain their exact
   rendered rows through independent wrapping, stacking and nested tables.
 - Keyboard, mouse, scrollbar, and resizable-pane interaction.
+- Keyboard-accessible menus with underlined title initials: `F10` opens the
+  first menu and `Alt+M/E/V/N/S/H` opens Manual/Edit/View/Navigate/Search/Help.
+  Menu-local letters or Left/Right switch menus, Up/Down selects items,
+  Enter/Space runs them and Escape/F10 returns. A contextual status hint
+  replaces the search field only while a menu is open; dismissing it preserves
+  the query and cursor. Other modal windows retain their own input routing.
 - Width-aware visual text selection plus typed requests for plain-text and
   complete-node Text/Markdown clipboard content.
 - Public `App` and `DocumentView` layers for callers embedding the frontend in

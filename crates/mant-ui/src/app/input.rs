@@ -37,16 +37,16 @@ impl App {
             self.navigate_history(false);
             return UpdateOutcome::Redraw;
         }
-        if self.search.is_open() && key.code == KeyCode::F(10) {
+        if key.code == KeyCode::F(10) {
             self.open_menu(MenuId::Manual);
+            return UpdateOutcome::Redraw;
+        }
+        if let Some(id) = MenuId::from_mnemonic_key(key, false) {
+            self.open_menu(id);
             return UpdateOutcome::Redraw;
         }
         if self.search.is_open() {
             self.handle_search_key(key);
-            return UpdateOutcome::Redraw;
-        }
-        if key.code == KeyCode::F(10) {
-            self.open_menu(MenuId::Manual);
             return UpdateOutcome::Redraw;
         }
         if (key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('f'))

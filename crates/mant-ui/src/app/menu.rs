@@ -1,9 +1,9 @@
 //! Defines the classic menu hierarchy independently from input and rendering.
 
-use crossterm::event::{KeyCode, KeyEvent, MouseButton, MouseEvent, MouseEventKind};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::{
     Frame,
-    layout::{Margin, Rect},
+    layout::{Constraint, Layout, Margin, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Clear, Paragraph},
@@ -42,6 +42,21 @@ impl MenuId {
             Self::Search => "Search",
             Self::Help => "Help",
         }
+    }
+
+    pub(super) fn from_mnemonic_key(key: KeyEvent, allow_plain: bool) -> Option<Self> {
+        // Alt+Shift permits uppercase events without admitting Ctrl/AltGr or
+        // unrelated modifier combinations. Plain letters are menu-local only.
+        let modifiers = key.modifiers - KeyModifiers::SHIFT;
+        if modifiers != KeyModifiers::ALT && !(allow_plain && modifiers.is_empty()) {
+            return None;
+        }
+        let KeyCode::Char(character) = key.code else {
+            return None;
+        };
+        Self::ALL
+            .into_iter()
+            .find(|id| id.label().starts_with(character.to_ascii_uppercase()))
     }
 
     pub(super) const fn left(self) -> u16 {
@@ -254,6 +269,11 @@ fn menu_overlay_width(id: MenuId) -> u16 {
         .max(30)
 }
 
+fn menu_overlay_left(id: MenuId, terminal_width: u16) -> u16 {
+    id.left()
+        .min(terminal_width.saturating_sub(menu_overlay_width(id)))
+}
+
 impl App {
     pub(super) fn open_menu(&mut self, id: MenuId) {
         self.overlay = Overlay::Menu { id, cursor: 0 };
@@ -301,7 +321,11 @@ impl App {
                         self.activate_menu_action(entry.action);
                     }
                 }
-                _ => {}
+                _ => {
+                    if let Some(next) = MenuId::from_mnemonic_key(key, true) {
+                        self.open_menu(next);
+                    }
+                }
             },
         }
     }
@@ -365,11 +389,12 @@ impl App {
 
         if let Overlay::Menu { id, cursor } = self.overlay {
             let entries = menu_entries(id);
+            let left = menu_overlay_left(id, self.geometry.body.width);
             let row = usize::from(mouse.row.saturating_sub(1));
             let entry = (mouse.row >= 1
                 && row < entries.len()
-                && mouse.column >= id.left()
-                && mouse.column < id.left().saturating_add(menu_overlay_width(id)))
+                && mouse.column >= left
+                && mouse.column < left.saturating_add(menu_overlay_width(id)))
             .then_some(row);
 
             return match mouse.kind {
@@ -487,20 +512,37 @@ impl App {
         };
         let spans = MenuId::ALL
             .into_iter()
-            .map(|id| {
+            .flat_map(|id| {
                 let active = open_menu == Some(id);
-                Span::styled(
-                    format!(" {} ", id.label()),
-                    if active {
-                        style.fg(theme::SELECTED_TEXT).bg(theme::SELECTED)
-                    } else {
-                        style.fg(theme::SUBTEXT_BRIGHT)
-                    },
-                )
+                let style = if active {
+                    style.fg(theme::SELECTED_TEXT).bg(theme::SELECTED)
+                } else {
+                    style.fg(theme::SUBTEXT_BRIGHT)
+                };
+                // Labels have ASCII initials. Styling, unlike inserting a
+                // marker, keeps the established tab and mouse-hit geometry.
+                let (initial, rest) = id.label().split_at(1);
+                [
+                    Span::styled(" ", style),
+                    Span::styled(initial, style.add_modifier(Modifier::UNDERLINED)),
+                    Span::styled(format!("{rest} "), style),
+                ]
             })
             .collect::<Vec<_>>();
         frame.render_widget(Paragraph::new(Line::from(spans)).style(style), area);
         self.draw_document_tabs(frame, area, style);
+    }
+
+    pub(super) fn draw_menu_hint(frame: &mut Frame<'_>, area: Rect) {
+        let full = " ←/→ menus · ↑/↓ items · Enter/Space run · Esc/F10 return";
+        let hint = if full.width() <= usize::from(area.width) {
+            full
+        } else {
+            " ←→ ↑↓ Enter Esc"
+        };
+        let style = Style::default().fg(theme::SUBTEXT_BRIGHT).bg(theme::MENU);
+        frame.render_widget(Block::default().style(style), area);
+        frame.render_widget(Paragraph::new(hint).style(style), area);
     }
 
     pub(super) fn draw_overlay(&mut self, frame: &mut Frame<'_>) {
@@ -520,9 +562,9 @@ impl App {
         let entries = menu_entries(id);
         let height = u16::try_from(entries.len()).unwrap_or_default();
         let area = Rect::new(
-            id.left().min(frame.area().width.saturating_sub(1)),
+            menu_overlay_left(id, frame.area().width),
             1,
-            menu_overlay_width(id).min(frame.area().width.saturating_sub(id.left())),
+            menu_overlay_width(id).min(frame.area().width),
             height.min(frame.area().height.saturating_sub(1)),
         );
         frame.render_widget(Clear, area);
@@ -573,8 +615,41 @@ impl App {
     }
 
     fn draw_help(frame: &mut Frame<'_>) {
+        let lines = vec![
+            Line::styled(
+                "Keyboard Shortcuts",
+                Style::default()
+                    .fg(theme::BLUE)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Line::raw("F10 / Alt+M/E/V/N/S/H  open a menu"),
+            Line::raw("M/E/V/N/S/H  switch menus while a menu is open"),
+            Line::raw("←/→ menus · ↑/↓ items · Enter/Space run"),
+            Line::raw("Esc / F10    close menu and return"),
+            Line::raw("↑/↓ or j/k  select outline node"),
+            Line::raw("←/→ or h/l  move through the outline tree"),
+            Line::raw("Enter        open reference / fold node"),
+            Line::raw("Space        fold or unfold selected node"),
+            Line::raw("Ctrl+O       find and open a document"),
+            Line::raw("top tabs     switch opened documents"),
+            Line::raw("Alt+←/→      back / forward"),
+            Line::raw("Ctrl+F or /  find in current page"),
+            Line::raw("n / N        next / previous search match"),
+            Line::raw("drag / Shift+click  select+copy / extend"),
+            Line::raw("right-click   copy selected plain text"),
+            Line::raw("y / Ctrl+Shift+C  copy selected plain text"),
+            Line::raw("Shift+Y      copy selected reference target"),
+            Line::raw("O            choose associated reference to open"),
+            Line::raw("r (chooser)  reveal occurrence source; Esc returns"),
+            Line::raw("d/u          scroll content by ten rows"),
+            Line::raw("b            toggle sidebar"),
+            Line::raw("q            quit"),
+        ];
         let width = 58.min(frame.area().width.saturating_sub(2));
-        let height = 23.min(frame.area().height);
+        let height = u16::try_from(lines.len())
+            .unwrap_or(u16::MAX)
+            .saturating_add(5)
+            .min(frame.area().height);
         if width < 4 || height < 3 {
             return;
         }
@@ -594,41 +669,16 @@ impl App {
             vertical: 1,
         });
         frame.render_widget(block, area);
+        let [body, footer] =
+            Layout::vertical([Constraint::Min(0), Constraint::Length(1)]).areas(inner);
         frame.render_widget(
-            Paragraph::new(vec![
-                Line::styled(
-                    "Keyboard Shortcuts",
-                    Style::default()
-                        .fg(theme::BLUE)
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Line::raw("↑/↓ or j/k  select outline node"),
-                Line::raw("←/→ or h/l  move through the outline tree"),
-                Line::raw("Enter        open reference / fold node"),
-                Line::raw("Space        fold or unfold selected node"),
-                Line::raw("Ctrl+O       find and open a document"),
-                Line::raw("top tabs     switch opened documents"),
-                Line::raw("Alt+←/→      back / forward"),
-                Line::raw("Ctrl+F or /  find in current page"),
-                Line::raw("n / N        next / previous search match"),
-                Line::raw("drag / Shift+click  select+copy / extend"),
-                Line::raw("right-click   copy selected plain text"),
-                Line::raw("y / Ctrl+Shift+C  copy selected plain text"),
-                Line::raw("Shift+Y      copy selected reference target"),
-                Line::raw("O            choose associated reference to open"),
-                Line::raw("r (chooser)  reveal occurrence source; Esc returns"),
-                Line::raw("d/u          scroll content by ten rows"),
-                Line::raw("b            toggle sidebar"),
-                Line::raw("F10          open menu bar"),
-                Line::raw("q            quit"),
-                Line::raw(""),
-                Line::styled(
-                    "Esc or ? closes this window",
-                    Style::default().fg(theme::SUBTEXT),
-                ),
-            ])
-            .style(Style::default().fg(theme::TEXT).bg(theme::BASE)),
-            inner,
+            Paragraph::new(lines).style(Style::default().fg(theme::TEXT).bg(theme::BASE)),
+            body,
+        );
+        frame.render_widget(
+            Paragraph::new("Esc or ? closes this window")
+                .style(Style::default().fg(theme::SUBTEXT).bg(theme::BASE)),
+            footer,
         );
     }
 }

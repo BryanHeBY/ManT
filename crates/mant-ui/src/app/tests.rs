@@ -604,6 +604,7 @@ fn clicking_a_real_git_manual_reference_requests_git_add_section_one() {
 mod entries;
 mod hierarchy_geometry;
 mod layout;
+mod menus;
 mod navigation;
 mod references;
 mod search;

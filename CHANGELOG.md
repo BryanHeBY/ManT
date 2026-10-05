@@ -415,6 +415,13 @@ that crate was not published for that change.
 
 ### mant-ui 0.12.0
 
+- Add case-insensitive `Alt+M/E/V/N/S/H` menu access and menu-local letter
+  switching alongside the existing F10 and arrow-key controls. Underline only
+  each title's initial without changing title/tab widths or colors.
+  Show contextual keyboard guidance while menus are open and expand TUI help
+  to include the controls. Preserve reading/search state on dismissal and keep
+  document-finder, reference-chooser and help input modal. Keep right-side
+  popups visible on narrow terminals with matching mouse-hit positions.
 - Scan complete preformatted blocks with dependency-free, language-neutral
   lexical rules for mixed command, source-code and configuration examples.
   Extend common keywords, keep URLs and parameter values out of comment/option

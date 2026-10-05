@@ -698,6 +698,25 @@ fn chooser_keyboard_and_footer_use_the_same_open_copy_and_reveal_actions() {
 }
 
 #[test]
+fn menu_mnemonics_do_not_replace_the_reference_chooser() {
+    let mut app = App::new(&associated_bundle());
+    app.selected = app
+        .session
+        .document
+        .navigation()
+        .iter()
+        .position(|node| node.kind == NavKind::Section)
+        .unwrap();
+    app.show_reference_chooser(super::super::references::ReferencePurpose::Open);
+    assert!(app.overlay.references().is_some());
+    for letter in "mevnsh".chars() {
+        app.handle_key(KeyEvent::new(KeyCode::Char(letter), KeyModifiers::ALT));
+        assert!(app.overlay.references().is_some());
+        assert!(app.take_open_request().is_none());
+    }
+}
+
+#[test]
 fn chooser_dismissal_or_replacement_drops_its_data_without_click_through() {
     use super::super::references::ReferencePurpose;
     for purpose in [ReferencePurpose::Open, ReferencePurpose::Copy] {

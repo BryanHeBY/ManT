@@ -130,7 +130,11 @@ after scrolling settles, the outline follows the first visible document node.
   current selection again, as does right-clicking inside the document.
   `Shift+click` or `Shift+drag` extends it, and `Escape` clears it. Holding a
   drag at the top or bottom edge scrolls the document continuously.
-- `F10` opens the menu, `?` opens help, and `q` quits.
+- `F10` opens the menu; `Alt+M/E/V/N/S/H` opens Manual, Edit, View,
+  Navigate, Search, or Help directly. Underlined initials identify these keys.
+  Inside a menu, letters or Left/Right switch menus, Up/Down select an item,
+  Enter/Space runs it, and Escape/F10 returns to reading or search.
+- `?` opens keyboard help, and `q` quits.
 
 The mouse can select and fold outline nodes, follow underlined in-page,
 cross-document, and web/email links, scroll both panes, drag scrollbars, and

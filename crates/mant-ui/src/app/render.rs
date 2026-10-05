@@ -66,7 +66,9 @@ impl App {
             }
             self.draw_content(frame, body_area);
         }
-        if self.search.is_open() {
+        if matches!(self.overlay, super::Overlay::Menu { .. }) {
+            Self::draw_menu_hint(frame, status_area);
+        } else if self.search.is_open() {
             self.draw_search(frame, status_area);
         } else {
             self.draw_status(frame, status_area);
