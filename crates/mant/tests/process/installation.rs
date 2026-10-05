@@ -224,7 +224,7 @@ fn installer_paths_resolve_toml_and_environment_without_creating_storage() {
     assert_eq!(paths["config"], config.to_str().unwrap());
     assert_eq!(
         paths["data"],
-        fixture.path().join("data/mant").to_str().unwrap()
+        fixture.path().join("data").join("mant").to_str().unwrap()
     );
     assert!(!fixture.path().join("data").exists());
     assert!(!config.join("relative-data").exists());
