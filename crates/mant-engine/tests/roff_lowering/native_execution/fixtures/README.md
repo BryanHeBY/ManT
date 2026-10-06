@@ -163,7 +163,8 @@ pristine diagnostic changes the scope to recovery safety.
 ## Upstream execution contract
 
 The primary source is the registered pristine CVS snapshot corresponding to
-`crates/libmandoc-rs/vendor/mandoc-cvs-20260927T130954Z`. `term_word()` writes
+`crates/libmandoc-rs/vendor/mandoc-cvs-20261006T140200Z`. Existing sealed
+records retain their original oracle provenance. `term_word()` writes
 separator, BREAK, zero-width NBRZW and BACKBEFORE cells in execution order.
 `term_fill()` alone decides accepted fields. `term_newln()` and `term_vspace()`
 are distinct from retiring a Rust output owner. `Xo/Xc` have no native pre/post;

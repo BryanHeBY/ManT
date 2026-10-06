@@ -63,7 +63,7 @@ fn cases() -> Vec<Case> {
     assert!(!header.expectations_from_product);
     assert_eq!(
         header.oracle_sha256,
-        "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6"
+        "6297105d1370a44fd306851ae5beab3f23492d756a682f8a0693896922249ea0"
     );
     assert_eq!(matrix.cases.len(), header.count);
     matrix.cases

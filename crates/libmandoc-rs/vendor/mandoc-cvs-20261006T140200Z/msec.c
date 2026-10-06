@@ -1,5 +1,6 @@
-/*	$Id: msec.c,v 1.16 2018/12/14 01:18:26 schwarze Exp $ */
+/* $Id: msec.c,v 1.17 2026/10/02 16:56:30 schwarze Exp $ */
 /*
+ * Copyright (c) 2026 Ingo Schwarze <schwarze@openbsd.org>
  * Copyright (c) 2009 Kristaps Dzonsons <kristaps@bsd.lv>
  *
  * Permission to use, copy, modify, and distribute this software for any
@@ -27,8 +28,26 @@
 #define LINE(x, y) \
 	if (0 == strcmp(p, x)) return(y);
 
+static const char	*a2msec_internal(const char *);
+
+
 const char *
-mandoc_a2msec(const char *p)
+mandoc_a2msec(const char *sec_full)
+{
+	const char	*vol_title;
+	char		 sec_short[2];
+
+	vol_title = a2msec_internal(sec_full);
+	if (vol_title == NULL) {
+		sec_short[0] = sec_full[0];
+		sec_short[1] = '\0';
+		vol_title = a2msec_internal(sec_short);
+	}
+	return vol_title;
+}
+
+static const char *
+a2msec_internal(const char *p)
 {
 
 #include "msec.in"

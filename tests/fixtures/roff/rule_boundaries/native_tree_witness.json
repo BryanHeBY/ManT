@@ -1,8 +1,8 @@
 {
   "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo X\n.br\na-bc\\p \\p Q\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
   "source_sha256": "14e562d8121366e1357b46e614c09d6f23752a3dc7708b231b134f98f863b0b1",
-  "oracle_identity": "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930",
-  "reference_sha256": "482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6",
+  "oracle_identity": "cvs-20261006T140200Z-linux-x86_64-gcc-16.2.1-reproducible",
+  "reference_sha256": "6297105d1370a44fd306851ae5beab3f23492d756a682f8a0693896922249ea0",
   "profiles": {
     "ascii": {
       "code": 0,

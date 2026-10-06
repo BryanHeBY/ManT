@@ -483,8 +483,8 @@ execution evidence and private FFI layout do not depend on these switches.
 Owned equation text and codec lowering share `EquationBox::normalized_text()`;
 the native renderer retains the pinned CVS equation behavior.
 
-The active libmandoc baseline is the fixed mandoc `cvs-20260927T130954Z` snapshot,
-checked out at 2026-09-27 13:09:54 UTC and recorded by a checksummed per-file
+The active libmandoc baseline is the fixed mandoc `cvs-20261006T140200Z` snapshot,
+checked out at 2026-10-06 14:02:00 UTC and recorded by a checksummed per-file
 CVS revision manifest. Remaining mutable character, diagnostic, tag,
 roff-request, formatter-tab, and HTML-ID globals are made thread-local by
 local patches; equation substitution counters are already parser-owned

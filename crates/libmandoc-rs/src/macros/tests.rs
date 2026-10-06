@@ -5,8 +5,8 @@ use crate::{Node, NodeKind, Parser};
 use std::collections::BTreeSet;
 
 fn pinned_names() -> Vec<(&'static str, &'static str)> {
-    let header = include_str!("../../vendor/mandoc-cvs-20260927T130954Z/roff.h");
-    let source = include_str!("../../vendor/mandoc-cvs-20260927T130954Z/roff.c");
+    let header = include_str!("../../vendor/mandoc-cvs-20261006T140200Z/roff.h");
+    let source = include_str!("../../vendor/mandoc-cvs-20261006T140200Z/roff.c");
     let tokens = header
         .split_once("enum\troff_tok {")
         .unwrap()
@@ -111,7 +111,7 @@ fn every_named_pinned_token_has_exactly_one_family_variant() {
 
 #[test]
 fn formatter_request_classification_tracks_the_native_node_boundary() {
-    let header = include_str!("../../vendor/mandoc-cvs-20260927T130954Z/roff.h");
+    let header = include_str!("../../vendor/mandoc-cvs-20261006T140200Z/roff.h");
     let native_range = header
         .split_once("enum\troff_tok {")
         .unwrap()

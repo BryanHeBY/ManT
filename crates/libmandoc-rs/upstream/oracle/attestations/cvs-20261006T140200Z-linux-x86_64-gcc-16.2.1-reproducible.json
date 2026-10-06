@@ -1,0 +1,76 @@
+{
+  "artifact": {
+    "sha256": "6297105d1370a44fd306851ae5beab3f23492d756a682f8a0693896922249ea0"
+  },
+  "buildEvidence": {
+    "buildRecord": {
+      "path": "target/mandoc-migration/oracle-build-cvs-20261006T140200Z-linux-x86_64-reproducible/BUILD.json",
+      "sha256": "19f36acef6a5f447e591805ecd62fb69d1952ca5e2efcfbb6f12a929151de7f1"
+    },
+    "configHeader": {
+      "path": "target/mandoc-migration/oracle-build-cvs-20261006T140200Z-linux-x86_64-reproducible/source/config.h",
+      "sha256": "395b7efbddea298440f5d59074800d55b03f9742e36f749551d9e778f6227921"
+    },
+    "configLog": {
+      "path": "target/mandoc-migration/oracle-build-cvs-20261006T140200Z-linux-x86_64-reproducible/source/config.log",
+      "sha256": "1bb3541a4b4c10728f45f6802dd3485a11575fc4719673527dc2cb58f203c9c7"
+    },
+    "configsed": {
+      "path": "target/mandoc-migration/oracle-build-cvs-20261006T140200Z-linux-x86_64-reproducible/source/config.sed",
+      "sha256": "3e8166ad3e81d4a65bede389699794f8123aecfc1d8dafbc3718cafe2be91cf7"
+    },
+    "makefileLocal": {
+      "path": "target/mandoc-migration/oracle-build-cvs-20261006T140200Z-linux-x86_64-reproducible/source/Makefile.local",
+      "sha256": "949afe35556456f7e36942b107fdf532f3eecaf3430be67b383413afc4db8c84"
+    }
+  },
+  "identity": "cvs-20261006T140200Z-linux-x86_64-gcc-16.2.1-reproducible",
+  "platform": {
+    "machine": "x86_64",
+    "system": "Linux"
+  },
+  "profiles": [
+    "ascii",
+    "html",
+    "utf8"
+  ],
+  "recipe": {
+    "buildCommand": [
+      "make",
+      "-j4",
+      "CFLAGS=-g -W -Wall -Wmissing-prototypes -Wstrict-prototypes -Wwrite-strings -Wno-unused-parameter -ffile-prefix-map={source}=/mandoc-pristine",
+      "mandoc"
+    ],
+    "configureCommand": [
+      "./configure"
+    ],
+    "file": {
+      "path": "crates/libmandoc-rs/upstream/oracle/recipe.json",
+      "sha256": "b2cf4fb96e6277362d83835991a46a4a5dbf8e70cfc3662c27b96598e79cf513"
+    }
+  },
+  "schema": "mant.mandoc-oracle-attestation/v1",
+  "source": {
+    "archive": {
+      "path": "target/mandoc-migration/freeze-cvs-20261006T140200Z/upstream-cvs-20261006T140200Z.tar.gz",
+      "sha256": "fb45264bd42e67173ca1982e3348de9235ee5ddf64ea843e22d756dc7b713705"
+    },
+    "inventory": {
+      "path": "crates/libmandoc-rs/upstream/CVS_INVENTORY.json",
+      "sha256": "3ff424019e58f9075100a3dff44a0c05adb1683acef02b9afff3bed8dcc010a8"
+    },
+    "lock": {
+      "path": "crates/libmandoc-rs/upstream/SOURCE",
+      "sha256": "7483e774991cfab520f69e366a2bf766a2aa3b9abac6b8b476d150270bf687d5"
+    },
+    "manifest": {
+      "path": "crates/libmandoc-rs/upstream/FILES",
+      "sha256": "a38f15472c577d9fb1fb62a61ba00a2c96a3c6a932b9a876de87f28bfb609b15"
+    },
+    "pristine": true
+  },
+  "toolchain": {
+    "compilerCommand": "/usr/bin/gcc",
+    "compilerVersion": "cc (GCC) 16.2.1 20260810\nCopyright (C) 2026 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE."
+  }
+}

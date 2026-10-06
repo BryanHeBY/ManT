@@ -1,42 +1,44 @@
 {
-  "archive": "upstream-cvs-20260927T130954Z.tar.gz",
-  "archiveSha256": "b1679b38a1afde6764e48a0c9682921aaf8cd746a1f150aeb75ffad0f625b7e2",
+  "archive": "upstream-cvs-20261006T140200Z.tar.gz",
+  "archiveSha256": "fb45264bd42e67173ca1982e3348de9235ee5ddf64ea843e22d756dc7b713705",
   "checkoutCommand": [
-    "/home/hby/dev/ManT/target/cvs-head-review.svmXku/usr/bin/cvs",
+    "/usr/bin/cvs",
     "-Q",
     "-d",
     ":ext:anoncvs@mandoc.bsd.lv:/cvs",
     "checkout",
     "-D",
-    "2026-09-27 13:09:54 UTC",
+    "2026-10-06 14:02:00 UTC",
     "-d",
     "<destination>",
     "mandoc"
   ],
-  "cutoff": "2026-09-27 13:09:54 UTC",
+  "cutoff": "2026-10-06 14:02:00 UTC",
   "cvsClient": "Concurrent Versions System (CVS) 1.11.23 (client/server)\n\nCopyright (C) 2006 Free Software Foundation, Inc.\n\nSenior active maintainers include Larry Jones, Derek R. Price,\nand Mark D. Baushke.  Please see the AUTHORS and README files from the CVS\ndistribution kit for a complete list of contributors and copyrights.\n\nCVS may be copied only under the terms of the GNU General Public License,\na copy of which can be found with the CVS distribution kit.\n\nSpecify the --help option for further information about CVS",
   "cvsExecutable": {
-    "path": "/home/hby/dev/ManT/target/cvs-head-review.svmXku/usr/bin/cvs",
+    "path": "/usr/bin/cvs",
     "sha256": "90ce58dee7a62f5c61a32c3d93b84b0336dca53f4442fd4f61320888cf0787bc"
   },
   "inventoryDiff": {
     "added": [],
     "contentChanged": [
-      "Makefile",
       "NEWS",
-      "out.c"
+      "TODO",
+      "mdoc_validate.c",
+      "msec.c"
     ],
     "removed": [],
     "revisionChanged": [
-      "Makefile",
       "NEWS",
-      "out.c"
+      "TODO",
+      "mdoc_validate.c",
+      "msec.c"
     ]
   },
-  "inventorySha256": "ee0aa076dc8e95da3445961d6a555e119c423e8efd76c76bf28baab72c0a2a5c",
-  "manifestSha256": "776560b1d1276cfbfedfe4ea3f39a8263c58474d1b2cb060d7c6b0dc49e5ae61",
-  "regressManifestSha256": "459ecca39e95e5aaeb8356626e2fb8aa697b9fc66b0a5a9f4b01bc0a3643c5a8",
+  "inventorySha256": "3ff424019e58f9075100a3dff44a0c05adb1683acef02b9afff3bed8dcc010a8",
+  "manifestSha256": "a38f15472c577d9fb1fb62a61ba00a2c96a3c6a932b9a876de87f28bfb609b15",
+  "regressManifestSha256": "c5d7b6b20996ba9c8f68f1fa8239825200161572eeef594e38fd174edb80a252",
   "schema": "libmandoc-rs.cvs-freeze/v1",
-  "sourceSha256": "7dace07c11410dcff62ff7dd57cea12eb0472b035bb9ff190711d47c603b39ae",
-  "version": "cvs-20260927T130954Z"
+  "sourceSha256": "7483e774991cfab520f69e366a2bf766a2aa3b9abac6b8b476d150270bf687d5",
+  "version": "cvs-20261006T140200Z"
 }

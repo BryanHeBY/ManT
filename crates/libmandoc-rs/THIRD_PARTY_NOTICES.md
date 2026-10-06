@@ -1,12 +1,12 @@
 # Third-party notices
 
-## libmandoc cvs-20260927T130954Z
+## libmandoc cvs-20261006T140200Z
 
 This crate vendors the mandoc CVS source snapshot pinned to
-2026-09-27 13:09:54 UTC. The vendored tree is preserved under
-`vendor/mandoc-cvs-20260927T130954Z/` and its upstream license inventory is
-included verbatim at both `vendor/mandoc-cvs-20260927T130954Z/LICENSE` and
-`LICENSES/mandoc-cvs-20260927T130954Z.txt`. The repository's `upstream/FILES` records
+2026-10-06 14:02:00 UTC. The vendored tree is preserved under
+`vendor/mandoc-cvs-20261006T140200Z/` and its upstream license inventory is
+included verbatim at both `vendor/mandoc-cvs-20261006T140200Z/LICENSE` and
+`LICENSES/mandoc-cvs-20261006T140200Z.txt`. The repository's `upstream/FILES` records
 SHA-256 hashes and CVS revisions for all 198 upstream files; `regress/` and CVS
 administration are excluded from this source subset.
 

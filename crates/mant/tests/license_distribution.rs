@@ -92,9 +92,9 @@ fn libmandoc_package_has_exact_notices_and_excludes_the_non_spdx_source() {
         "LICENSES/BSD-2-Clause-position-unchanged.txt",
         "LICENSES/BSD-2-Clause-soelim.txt",
         "LICENSES/BSD-3-Clause-Regents.txt",
-        "LICENSES/mandoc-cvs-20260927T130954Z.txt",
+        "LICENSES/mandoc-cvs-20261006T140200Z.txt",
         "tests/so_redirect.rs",
-        "vendor/mandoc-cvs-20260927T130954Z/LICENSE",
+        "vendor/mandoc-cvs-20261006T140200Z/LICENSE",
     ] {
         assert!(
             files.iter().any(|path| path == required),
@@ -102,8 +102,8 @@ fn libmandoc_package_has_exact_notices_and_excludes_the_non_spdx_source() {
         );
     }
     for excluded in [
-        "vendor/mandoc-cvs-20260927T130954Z/soelim.c",
-        "vendor/mandoc-cvs-20260927T130954Z/soelim.1",
+        "vendor/mandoc-cvs-20261006T140200Z/soelim.c",
+        "vendor/mandoc-cvs-20261006T140200Z/soelim.1",
     ] {
         assert!(
             !files.iter().any(|path| path == excluded),
@@ -121,8 +121,8 @@ fn vendored_license_mapping_tracks_authoritative_headers() {
     };
 
     assert_eq!(
-        read("LICENSES/mandoc-cvs-20260927T130954Z.txt"),
-        read("vendor/mandoc-cvs-20260927T130954Z/LICENSE"),
+        read("LICENSES/mandoc-cvs-20261006T140200Z.txt"),
+        read("vendor/mandoc-cvs-20261006T140200Z/LICENSE"),
         "the distributed upstream inventory must remain verbatim"
     );
     for source in [
@@ -131,19 +131,19 @@ fn vendored_license_mapping_tracks_authoritative_headers() {
         "mandoc_dbg.h",
         "mandoc_dbg_init.3",
     ] {
-        let contents = read(&format!("vendor/mandoc-cvs-20260927T130954Z/{source}"));
+        let contents = read(&format!("vendor/mandoc-cvs-20261006T140200Z/{source}"));
         assert!(contents.contains("Permission to use, copy, modify, and distribute this software"));
         assert!(contents.contains("Ingo Schwarze"));
     }
 
-    let regents = read("vendor/mandoc-cvs-20260927T130954Z/compat_err.c");
+    let regents = read("vendor/mandoc-cvs-20261006T140200Z/compat_err.c");
     assert!(regents.contains("Neither the name of the University"));
-    let netbsd = read("vendor/mandoc-cvs-20260927T130954Z/compat_stringlist.c");
+    let netbsd = read("vendor/mandoc-cvs-20261006T140200Z/compat_stringlist.c");
     assert!(netbsd.contains("The NetBSD Foundation, Inc."));
     assert!(!netbsd.contains("Neither the name"));
-    let soelim = read("vendor/mandoc-cvs-20260927T130954Z/soelim.c");
+    let soelim = read("vendor/mandoc-cvs-20261006T140200Z/soelim.c");
     assert!(soelim.contains("in this position and unchanged."));
-    let soelim_manual = read("vendor/mandoc-cvs-20260927T130954Z/soelim.1");
+    let soelim_manual = read("vendor/mandoc-cvs-20261006T140200Z/soelim.1");
     assert!(!soelim_manual.contains("position and unchanged"));
 
     let notices = read("THIRD_PARTY_NOTICES.md");

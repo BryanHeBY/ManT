@@ -1,7 +1,7 @@
 # CVS snapshot refresh: 2026-09-20
 
-This is the historical record for the previous pin. The active source refresh
-is documented in [REFRESH-20260927.md](REFRESH-20260927.md).
+This is the historical record for the previous pins. The active source refresh
+is documented in [REFRESH-20261006.md](REFRESH-20261006.md).
 
 This record describes the source-only transition from `cvs-20260911` to
 `cvs-20260920T122115Z`. It does not describe the later structured-rendering

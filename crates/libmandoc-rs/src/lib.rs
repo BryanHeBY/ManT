@@ -45,7 +45,7 @@ pub use source_bundle::{
 pub use special_character::{SpecialCharacter, special_character};
 
 /// Pinned upstream version compiled by this crate's build script.
-pub const LIBMANDOC_VERSION: &str = "cvs-20260927T130954Z";
+pub const LIBMANDOC_VERSION: &str = "cvs-20261006T140200Z";
 
 /// Private output of the FFI boundary before diagnostics become public values.
 struct RawDocument {

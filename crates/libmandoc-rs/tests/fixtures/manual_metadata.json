@@ -1,0 +1,2290 @@
+{
+  "header": {
+    "oracle": "cvs-20261006T140200Z-linux-x86_64-gcc-16.2.1-reproducible",
+    "oracleSha256": "6297105d1370a44fd306851ae5beab3f23492d756a682f8a0693896922249ea0",
+    "snapshot": "cvs-20261006T140200Z",
+    "profilesPerSource": 5,
+    "recipe": {
+      "name": "native-default",
+      "stdin": "exact source bytes encoded as UTF-8",
+      "environment": {
+        "PATH": "/usr/bin:/bin",
+        "LC_ALL": "C.UTF-8",
+        "TZ": "UTC"
+      },
+      "profiles": {
+        "ascii": [
+          "-Tascii",
+          "-Owidth=78"
+        ],
+        "utf8": [
+          "-Tutf8",
+          "-Owidth=78"
+        ],
+        "html": [
+          "-Thtml"
+        ],
+        "tree": [
+          "-Ttree"
+        ],
+        "lint": [
+          "-Tlint"
+        ]
+      },
+      "timeoutSeconds": 30
+    },
+    "recipeSha256": "34a280fb914c81ef4fced126f0352d1e5d94c9115cc6bc5d8b84ae0facef45af",
+    "expectationsFromProduct": false,
+    "derivedAfter": "2026-10-06T14:10:21.151982+00:00",
+    "diagnosticScope": "All native findings except the platform OS-policy style finding; exact raw hashes retain that finding.",
+    "normalizationSource": "mdoc_validate.c::post_bl_norm/rewrite_macro2len/post_bd and msec.c::mandoc_a2msec plus man_validate.c::post_TH/mdoc_validate.c::post_dt.",
+    "count": 21
+  },
+  "cases": [
+    {
+      "id": "metadata-man-numeric-one",
+      "family": "metadata",
+      "source": ".TH PROBE \"1\" \"October 6, 2026\" ManT\n.SH NAME\nprobe \\- source normalization probe\n.SH OPTIONS\n.TP\n.B --alpha\nBodyWord\n.SH NEXT\nAfterWord\n",
+      "sourceSha256": "38ad8c71ddddce405a85c50d1c28761b5cdc39c1312d7d122fbf4865c53b58f0",
+      "dialect": "man",
+      "section": "1",
+      "oracle": {
+        "ascii": {
+          "status": 0,
+          "stdoutSha256": "b0dbe382d7f907c74b8481113e1f845a455a1bb43370474dba1616a449cd0ce1",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutSha256": "b0dbe382d7f907c74b8481113e1f845a455a1bb43370474dba1616a449cd0ce1",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutSha256": "558a09e028301af113baea0c253a59676aa6410645f655d8c19ea5540524dfee",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutSha256": "dba38695cca7745c976437a9316bd6f665ef934b04db2dd09bab302fb9ee7e2a",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected": {
+        "metadata": {
+          "title": "PROBE",
+          "name": null,
+          "section": "1",
+          "volume": "General Commands Manual",
+          "arch": null,
+          "os": "ManT",
+          "date": "October 6, 2026",
+          "hasBody": true
+        },
+        "texts": [
+          "NAME",
+          "probe \\- source normalization probe",
+          "OPTIONS",
+          "--alpha",
+          "BodyWord",
+          "NEXT",
+          "AfterWord"
+        ],
+        "normalizedArguments": [],
+        "positionedText": [
+          {
+            "value": "--alpha",
+            "line": 6,
+            "column": 4,
+            "lineStart": false,
+            "noFill": false,
+            "insideItemHead": true,
+            "insideItemBody": false
+          },
+          {
+            "value": "BodyWord",
+            "line": 7,
+            "column": 1,
+            "lineStart": true,
+            "noFill": false,
+            "insideItemHead": false,
+            "insideItemBody": true
+          },
+          {
+            "value": "AfterWord",
+            "line": 9,
+            "column": 1,
+            "lineStart": true,
+            "noFill": false,
+            "insideItemHead": false,
+            "insideItemBody": false
+          }
+        ],
+        "diagnostics": [],
+        "nativeBodies": {
+          "ascii": "     -\b--\b-a\bal\blp\bph\bha\ba\n            BodyWord\n\n",
+          "utf8": "     -\b--\b-a\bal\blp\bph\bha\ba\n            BodyWord\n\n"
+        },
+        "nativeHtmlSection": "<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"OPTIONS\"><a class=\"permalink\" href=\"#OPTIONS\">OPTIONS</a></h2>\n<dl class=\"Bl-tag\">\n  <dt id=\"alpha\"><a class=\"permalink\" href=\"#alpha\"><b>--alpha</b></a></dt>\n  <dd>BodyWord</dd>\n</dl>\n</section>",
+        "primaryOwner": {
+          "line": 5,
+          "column": 2
+        },
+        "nativeHtmlVolume": "General Commands Manual"
+      }
+    },
+    {
+      "id": "metadata-mdoc-numeric-one",
+      "family": "metadata",
+      "source": ".Dd October 6, 2026\n.Dt PROBE \"1\"\n.Os ManT\n.Sh NAME\n.Nm probe\n.Nd source normalization probe\n.Sh OPTIONS\n.Bl -tag -width 4n\n.It Fl alpha\n.No BodyWord\n.El\n.Sh NEXT\n.No AfterWord\n",
+      "sourceSha256": "e6c3f330da50cf30864db7478c1ca2ed8f3b03d35219ff82e967b539a2a20411",
+      "dialect": "mdoc",
+      "section": "1",
+      "oracle": {
+        "ascii": {
+          "status": 0,
+          "stdoutSha256": "df7eee409e60e65139e4a2fed246c31d318c8f483ab99d413dd1089b2d1a1f17",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutSha256": "b0b32536940e069deda1e939ab8f07cc0190a42b9dbdbb6e4e1cde5ab99a3193",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutSha256": "8f2d32e87deb123133a9cd33ec633e85e1edb884e47994506d5324318de6e3cf",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutSha256": "f90848392e97269cc998c7aac7c8076316cb02c74aa601420021cfef888fa488",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 1,
+          "stdoutSha256": "ee4e5508be76a37480deabaa65b06e699da1e0deee2789e136d599b8afebdadf",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected": {
+        "metadata": {
+          "title": "PROBE",
+          "name": "probe",
+          "section": "1",
+          "volume": "General Commands Manual",
+          "arch": null,
+          "os": "ManT",
+          "date": "October 6, 2026",
+          "hasBody": true
+        },
+        "texts": [
+          "October 6, 2026",
+          "PROBE",
+          "1",
+          "ManT",
+          "NAME",
+          "probe",
+          "source normalization probe",
+          "OPTIONS",
+          "alpha",
+          "BodyWord",
+          "NEXT",
+          "AfterWord"
+        ],
+        "normalizedArguments": [
+          {
+            "macro": "Bl",
+            "line": 8,
+            "column": 2,
+            "width": "4n",
+            "offset": null,
+            "columns": [],
+            "kind": "Definition",
+            "style": "Tag",
+            "display": null,
+            "insideItemHead": false
+          }
+        ],
+        "positionedText": [
+          {
+            "value": "alpha",
+            "line": 9,
+            "column": 8,
+            "lineStart": false,
+            "noFill": false,
+            "insideItemHead": true,
+            "insideItemBody": false
+          },
+          {
+            "value": "BodyWord",
+            "line": 10,
+            "column": 5,
+            "lineStart": false,
+            "noFill": false,
+            "insideItemHead": false,
+            "insideItemBody": true
+          },
+          {
+            "value": "AfterWord",
+            "line": 13,
+            "column": 5,
+            "lineStart": false,
+            "noFill": false,
+            "insideItemHead": false,
+            "insideItemBody": false
+          }
+        ],
+        "diagnostics": [],
+        "nativeBodies": {
+          "ascii": "     -\b-a\bal\blp\bph\bha\ba\n           BodyWord\n\n",
+          "utf8": "     -\b-a\bal\blp\bph\bha\ba\n           BodyWord\n\n"
+        },
+        "nativeHtmlSection": "<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"OPTIONS\"><a class=\"permalink\" href=\"#OPTIONS\">OPTIONS</a></h2>\n<dl class=\"Bl-tag\">\n  <dt id=\"alpha\"><a class=\"permalink\" href=\"#alpha\"><code class=\"Fl\">-alpha</code></a></dt>\n  <dd><a class=\"permalink\" href=\"#BodyWord\"><span class=\"No\" id=\"BodyWord\">BodyWord</span></a></dd>\n</dl>\n</section>",
+        "primaryOwner": {
+          "line": 9,
+          "column": 2
+        },
+        "nativeHtmlVolume": "General Commands Manual"
+      }
+    },
+    {
+      "id": "metadata-man-suffix-one",
+      "family": "metadata",
+      "source": ".TH PROBE \"1m\" \"October 6, 2026\" ManT\n.SH NAME\nprobe \\- source normalization probe\n.SH OPTIONS\n.TP\n.B --alpha\nBodyWord\n.SH NEXT\nAfterWord\n",
+      "sourceSha256": "fbc052b7a3f1ebf371026f2bd0f39053ec3d0d30e1d790864191265236e4d412",
+      "dialect": "man",
+      "section": "1m",
+      "oracle": {
+        "ascii": {
+          "status": 0,
+          "stdoutSha256": "302f2efea4b0e7b33a27642be7342d5be5b9403c7d144ba72619caa1769db1a5",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutSha256": "302f2efea4b0e7b33a27642be7342d5be5b9403c7d144ba72619caa1769db1a5",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutSha256": "32867a67ec0422908c123a39e8986231cec5f34e31e12aea68ba2714c89715ec",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutSha256": "b8902138c5ad20ddda6a2c5caec9ff29c480e047122a72ce66900a8afca98a58",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected": {
+        "metadata": {
+          "title": "PROBE",
+          "name": null,
+          "section": "1m",
+          "volume": "General Commands Manual",
+          "arch": null,
+          "os": "ManT",
+          "date": "October 6, 2026",
+          "hasBody": true
+        },
+        "texts": [
+          "NAME",
+          "probe \\- source normalization probe",
+          "OPTIONS",
+          "--alpha",
+          "BodyWord",
+          "NEXT",
+          "AfterWord"
+        ],
+        "normalizedArguments": [],
+        "positionedText": [
+          {
+            "value": "--alpha",
+            "line": 6,
+            "column": 4,
+            "lineStart": false,
+            "noFill": false,
+            "insideItemHead": true,
+            "insideItemBody": false
+          },
+          {
+            "value": "BodyWord",
+            "line": 7,
+            "column": 1,
+            "lineStart": true,
+            "noFill": false,
+            "insideItemHead": false,
+            "insideItemBody": true
+          },
+          {
+            "value": "AfterWord",
+            "line": 9,
+            "column": 1,
+            "lineStart": true,
+            "noFill": false,
+            "insideItemHead": false,
+            "insideItemBody": false
+          }
+        ],
+        "diagnostics": [],
+        "nativeBodies": {
+          "ascii": "     -\b--\b-a\bal\blp\bph\bha\ba\n            BodyWord\n\n",
+          "utf8": "     -\b--\b-a\bal\blp\bph\bha\ba\n            BodyWord\n\n"
+        },
+        "nativeHtmlSection": "<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"OPTIONS\"><a class=\"permalink\" href=\"#OPTIONS\">OPTIONS</a></h2>\n<dl class=\"Bl-tag\">\n  <dt id=\"alpha\"><a class=\"permalink\" href=\"#alpha\"><b>--alpha</b></a></dt>\n  <dd>BodyWord</dd>\n</dl>\n</section>",
+        "primaryOwner": {
+          "line": 5,
+          "column": 2
+        },
+        "nativeHtmlVolume": "General Commands Manual"
+      }
+    },
+    {
+      "id": "metadata-mdoc-suffix-one",
+      "family": "metadata",
+      "source": ".Dd October 6, 2026\n.Dt PROBE \"1m\"\n.Os ManT\n.Sh NAME\n.Nm probe\n.Nd source normalization probe\n.Sh OPTIONS\n.Bl -tag -width 4n\n.It Fl alpha\n.No BodyWord\n.El\n.Sh NEXT\n.No AfterWord\n",
+      "sourceSha256": "49d2fe9a4042e9134760e965a86c75e539810a03c15a083b24d894ba439eb494",
+      "dialect": "mdoc",
+      "section": "1m",
+      "oracle": {
+        "ascii": {
+          "status": 0,
+          "stdoutSha256": "c65c2216fde2f5a587490fe6c9e7d62c0634505d7e2d0703b364282eb6873b92",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutSha256": "c0c8bdeef3e2d4f4b7d121b55245f778c4b34284c6970246207dee8dc8bbe653",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutSha256": "7566bbeef27278fd062900f9c877bc70b7dd4a1fd95c0e2769124b41a4927112",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutSha256": "299383fce0daa5e45501f0375d4c618f65a23bbf848c28557600262e8a3059e6",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 1,
+          "stdoutSha256": "ee4e5508be76a37480deabaa65b06e699da1e0deee2789e136d599b8afebdadf",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected": {
+        "metadata": {
+          "title": "PROBE",
+          "name": "probe",
+          "section": "1m",
+          "volume": "General Commands Manual",
+          "arch": null,
+          "os": "ManT",
+          "date": "October 6, 2026",
+          "hasBody": true
+        },
+        "texts": [
+          "October 6, 2026",
+          "PROBE",
+          "1m",
+          "ManT",
+          "NAME",
+          "probe",
+          "source normalization probe",
+          "OPTIONS",
+          "alpha",
+          "BodyWord",
+          "NEXT",
+          "AfterWord"
+        ],
+        "normalizedArguments": [
+          {
+            "macro": "Bl",
+            "line": 8,
+            "column": 2,
+            "width": "4n",
+            "offset": null,
+            "columns": [],
+            "kind": "Definition",
+            "style": "Tag",
+            "display": null,
+            "insideItemHead": false
+          }
+        ],
+        "positionedText": [
+          {
+            "value": "alpha",
+            "line": 9,
+            "column": 8,
+            "lineStart": false,
+            "noFill": false,
+            "insideItemHead": true,
+            "insideItemBody": false
+          },
+          {
+            "value": "BodyWord",
+            "line": 10,
+            "column": 5,
+            "lineStart": false,
+            "noFill": false,
+            "insideItemHead": false,
+            "insideItemBody": true
+          },
+          {
+            "value": "AfterWord",
+            "line": 13,
+            "column": 5,
+            "lineStart": false,
+            "noFill": false,
+            "insideItemHead": false,
+            "insideItemBody": false
+          }
+        ],
+        "diagnostics": [],
+        "nativeBodies": {
+          "ascii": "     -\b-a\bal\blp\bph\bha\ba\n           BodyWord\n\n",
+          "utf8": "     -\b-a\bal\blp\bph\bha\ba\n           BodyWord\n\n"
+        },
+        "nativeHtmlSection": "<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"OPTIONS\"><a class=\"permalink\" href=\"#OPTIONS\">OPTIONS</a></h2>\n<dl class=\"Bl-tag\">\n  <dt id=\"alpha\"><a class=\"permalink\" href=\"#alpha\"><code class=\"Fl\">-alpha</code></a></dt>\n  <dd><a class=\"permalink\" href=\"#BodyWord\"><span class=\"No\" id=\"BodyWord\">BodyWord</span></a></dd>\n</dl>\n</section>",
+        "primaryOwner": {
+          "line": 9,
+          "column": 2
+        },
+        "nativeHtmlVolume": "General Commands Manual"
+      }
+    },
+    {
+      "id": "metadata-man-numeric-three",
+      "family": "metadata",
+      "source": ".TH PROBE \"3\" \"October 6, 2026\" ManT\n.SH NAME\nprobe \\- source normalization probe\n.SH OPTIONS\n.TP\n.B --alpha\nBodyWord\n.SH NEXT\nAfterWord\n",
+      "sourceSha256": "e1849c940a1b28447d946e4e7a1377dcf85f7a0ce35ce63bc954c23417c9d481",
+      "dialect": "man",
+      "section": "3",
+      "oracle": {
+        "ascii": {
+          "status": 0,
+          "stdoutSha256": "9b23a82b2d4caa3088dd5aca32d75c190358fe0167df7977fa766994977969e0",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutSha256": "9b23a82b2d4caa3088dd5aca32d75c190358fe0167df7977fa766994977969e0",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutSha256": "2d08e75340b5e23686ca5acfedd3a6d1cb6de31b5fcaa08e48d741c60b5d72d1",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutSha256": "00d232ecda49599e536c0346a5c490d7e7ca759d1713ac70ab10636c5f8e1c03",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected": {
+        "metadata": {
+          "title": "PROBE",
+          "name": null,
+          "section": "3",
+          "volume": "Library Functions Manual",
+          "arch": null,
+          "os": "ManT",
+          "date": "October 6, 2026",
+          "hasBody": true
+        },
+        "texts": [
+          "NAME",
+          "probe \\- source normalization probe",
+          "OPTIONS",
+          "--alpha",
+          "BodyWord",
+          "NEXT",
+          "AfterWord"
+        ],
+        "normalizedArguments": [],
+        "positionedText": [
+          {
+            "value": "--alpha",
+            "line": 6,
+            "column": 4,
+            "lineStart": false,
+            "noFill": false,
+            "insideItemHead": true,
+            "insideItemBody": false
+          },
+          {
+            "value": "BodyWord",
+            "line": 7,
+            "column": 1,
+            "lineStart": true,
+            "noFill": false,
+            "insideItemHead": false,
+            "insideItemBody": true
+          },
+          {
+            "value": "AfterWord",
+            "line": 9,
+            "column": 1,
+            "lineStart": true,
+            "noFill": false,
+            "insideItemHead": false,
+            "insideItemBody": false
+          }
+        ],
+        "diagnostics": [],
+        "nativeBodies": {
+          "ascii": "     -\b--\b-a\bal\blp\bph\bha\ba\n            BodyWord\n\n",
+          "utf8": "     -\b--\b-a\bal\blp\bph\bha\ba\n            BodyWord\n\n"
+        },
+        "nativeHtmlSection": "<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"OPTIONS\"><a class=\"permalink\" href=\"#OPTIONS\">OPTIONS</a></h2>\n<dl class=\"Bl-tag\">\n  <dt id=\"alpha\"><a class=\"permalink\" href=\"#alpha\"><b>--alpha</b></a></dt>\n  <dd>BodyWord</dd>\n</dl>\n</section>",
+        "primaryOwner": {
+          "line": 5,
+          "column": 2
+        },
+        "nativeHtmlVolume": "Library Functions Manual"
+      }
+    },
+    {
+      "id": "metadata-mdoc-numeric-three",
+      "family": "metadata",
+      "source": ".Dd October 6, 2026\n.Dt PROBE \"3\"\n.Os ManT\n.Sh NAME\n.Nm probe\n.Nd source normalization probe\n.Sh OPTIONS\n.Bl -tag -width 4n\n.It Fl alpha\n.No BodyWord\n.El\n.Sh NEXT\n.No AfterWord\n",
+      "sourceSha256": "1ccd85ee6508a2fdec2e717fbf1fea5caa46e032f4569cec95285bb84237329f",
+      "dialect": "mdoc",
+      "section": "3",
+      "oracle": {
+        "ascii": {
+          "status": 0,
+          "stdoutSha256": "238937883050608aa5838c82933202e70726d75d65507a6a229a05692c76bfb3",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutSha256": "5aba16db66989b0585feeae3f1f2ad554805c5353c3006d83c512de630d5f5a0",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutSha256": "a7277e6f9513d755275591a0864adbb53f8c21e0f06df285a8094638dbb07d2c",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutSha256": "70dbb63d5187f5ac96906701c1cac0a1a3dfc57d432a7cc6718d5fba8c7351cb",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 1,
+          "stdoutSha256": "ee4e5508be76a37480deabaa65b06e699da1e0deee2789e136d599b8afebdadf",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected": {
+        "metadata": {
+          "title": "PROBE",
+          "name": "probe",
+          "section": "3",
+          "volume": "Library Functions Manual",
+          "arch": null,
+          "os": "ManT",
+          "date": "October 6, 2026",
+          "hasBody": true
+        },
+        "texts": [
+          "October 6, 2026",
+          "PROBE",
+          "3",
+          "ManT",
+          "NAME",
+          "probe",
+          "source normalization probe",
+          "OPTIONS",
+          "alpha",
+          "BodyWord",
+          "NEXT",
+          "AfterWord"
+        ],
+        "normalizedArguments": [
+          {
+            "macro": "Bl",
+            "line": 8,
+            "column": 2,
+            "width": "4n",
+            "offset": null,
+            "columns": [],
+            "kind": "Definition",
+            "style": "Tag",
+            "display": null,
+            "insideItemHead": false
+          }
+        ],
+        "positionedText": [
+          {
+            "value": "alpha",
+            "line": 9,
+            "column": 8,
+            "lineStart": false,
+            "noFill": false,
+            "insideItemHead": true,
+            "insideItemBody": false
+          },
+          {
+            "value": "BodyWord",
+            "line": 10,
+            "column": 5,
+            "lineStart": false,
+            "noFill": false,
+            "insideItemHead": false,
+            "insideItemBody": true
+          },
+          {
+            "value": "AfterWord",
+            "line": 13,
+            "column": 5,
+            "lineStart": false,
+            "noFill": false,
+            "insideItemHead": false,
+            "insideItemBody": false
+          }
+        ],
+        "diagnostics": [],
+        "nativeBodies": {
+          "ascii": "     -\b-a\bal\blp\bph\bha\ba\n           BodyWord\n\n",
+          "utf8": "     -\b-a\bal\blp\bph\bha\ba\n           BodyWord\n\n"
+        },
+        "nativeHtmlSection": "<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"OPTIONS\"><a class=\"permalink\" href=\"#OPTIONS\">OPTIONS</a></h2>\n<dl class=\"Bl-tag\">\n  <dt id=\"alpha\"><a class=\"permalink\" href=\"#alpha\"><code class=\"Fl\">-alpha</code></a></dt>\n  <dd><a class=\"permalink\" href=\"#BodyWord\"><span class=\"No\" id=\"BodyWord\">BodyWord</span></a></dd>\n</dl>\n</section>",
+        "primaryOwner": {
+          "line": 9,
+          "column": 2
+        },
+        "nativeHtmlVolume": "Library Functions Manual"
+      }
+    },
+    {
+      "id": "metadata-man-unknown-suffix-three",
+      "family": "metadata",
+      "source": ".TH PROBE \"3foo\" \"October 6, 2026\" ManT\n.SH NAME\nprobe \\- source normalization probe\n.SH OPTIONS\n.TP\n.B --alpha\nBodyWord\n.SH NEXT\nAfterWord\n",
+      "sourceSha256": "f9cd1505ad2d35dd8b4ceb77a5910cad154bf634ce2d4a0c1b3b9e2c8dc7a9d9",
+      "dialect": "man",
+      "section": "3foo",
+      "oracle": {
+        "ascii": {
+          "status": 0,
+          "stdoutSha256": "2428a2953f7f7eb779bd1fe889e0af2d4df1ba7f75e4d5eb0c0ed36752ad0ee2",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutSha256": "2428a2953f7f7eb779bd1fe889e0af2d4df1ba7f75e4d5eb0c0ed36752ad0ee2",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutSha256": "48bcfcf2da257f148f24e969d7f6ab4cc56e0644ea8e2bfb62519a7836fd2acd",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutSha256": "9023c773534fe5d183fe4cb61e212c861a3f00ba78d70fb8c527e8133f81911b",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected": {
+        "metadata": {
+          "title": "PROBE",
+          "name": null,
+          "section": "3foo",
+          "volume": "Library Functions Manual",
+          "arch": null,
+          "os": "ManT",
+          "date": "October 6, 2026",
+          "hasBody": true
+        },
+        "texts": [
+          "NAME",
+          "probe \\- source normalization probe",
+          "OPTIONS",
+          "--alpha",
+          "BodyWord",
+          "NEXT",
+          "AfterWord"
+        ],
+        "normalizedArguments": [],
+        "positionedText": [
+          {
+            "value": "--alpha",
+            "line": 6,
+            "column": 4,
+            "lineStart": false,
+            "noFill": false,
+            "insideItemHead": true,
+            "insideItemBody": false
+          },
+          {
+            "value": "BodyWord",
+            "line": 7,
+            "column": 1,
+            "lineStart": true,
+            "noFill": false,
+            "insideItemHead": false,
+            "insideItemBody": true
+          },
+          {
+            "value": "AfterWord",
+            "line": 9,
+            "column": 1,
+            "lineStart": true,
+            "noFill": false,
+            "insideItemHead": false,
+            "insideItemBody": false
+          }
+        ],
+        "diagnostics": [],
+        "nativeBodies": {
+          "ascii": "     -\b--\b-a\bal\blp\bph\bha\ba\n            BodyWord\n\n",
+          "utf8": "     -\b--\b-a\bal\blp\bph\bha\ba\n            BodyWord\n\n"
+        },
+        "nativeHtmlSection": "<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"OPTIONS\"><a class=\"permalink\" href=\"#OPTIONS\">OPTIONS</a></h2>\n<dl class=\"Bl-tag\">\n  <dt id=\"alpha\"><a class=\"permalink\" href=\"#alpha\"><b>--alpha</b></a></dt>\n  <dd>BodyWord</dd>\n</dl>\n</section>",
+        "primaryOwner": {
+          "line": 5,
+          "column": 2
+        },
+        "nativeHtmlVolume": "Library Functions Manual"
+      }
+    },
+    {
+      "id": "metadata-mdoc-unknown-suffix-three",
+      "family": "metadata",
+      "source": ".Dd October 6, 2026\n.Dt PROBE \"3foo\"\n.Os ManT\n.Sh NAME\n.Nm probe\n.Nd source normalization probe\n.Sh OPTIONS\n.Bl -tag -width 4n\n.It Fl alpha\n.No BodyWord\n.El\n.Sh NEXT\n.No AfterWord\n",
+      "sourceSha256": "8fc5e04346dd6921f6eae9a99582dcf93664b07cac7abeac9c53100a66cc29b4",
+      "dialect": "mdoc",
+      "section": "3foo",
+      "oracle": {
+        "ascii": {
+          "status": 0,
+          "stdoutSha256": "1ff8f4c4cbad232b411e10c449e7cda7a60d2cc7ae40512ea2e3d8fd94b7fc06",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutSha256": "1fc390296e52e9f89137782a9f00efcad3460fc1c3ad641e9c9d7298f0694d70",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutSha256": "59701a93f942df4753bc58ff6a795cc85f3c8c181131b33a804c8921b849bc94",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutSha256": "517c1b301c77f08ddcbebedfe986cdfe1d484f54ff2174fa9a30b40402e36327",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 1,
+          "stdoutSha256": "ee4e5508be76a37480deabaa65b06e699da1e0deee2789e136d599b8afebdadf",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected": {
+        "metadata": {
+          "title": "PROBE",
+          "name": "probe",
+          "section": "3foo",
+          "volume": "Library Functions Manual",
+          "arch": null,
+          "os": "ManT",
+          "date": "October 6, 2026",
+          "hasBody": true
+        },
+        "texts": [
+          "October 6, 2026",
+          "PROBE",
+          "3foo",
+          "ManT",
+          "NAME",
+          "probe",
+          "source normalization probe",
+          "OPTIONS",
+          "alpha",
+          "BodyWord",
+          "NEXT",
+          "AfterWord"
+        ],
+        "normalizedArguments": [
+          {
+            "macro": "Bl",
+            "line": 8,
+            "column": 2,
+            "width": "4n",
+            "offset": null,
+            "columns": [],
+            "kind": "Definition",
+            "style": "Tag",
+            "display": null,
+            "insideItemHead": false
+          }
+        ],
+        "positionedText": [
+          {
+            "value": "alpha",
+            "line": 9,
+            "column": 8,
+            "lineStart": false,
+            "noFill": false,
+            "insideItemHead": true,
+            "insideItemBody": false
+          },
+          {
+            "value": "BodyWord",
+            "line": 10,
+            "column": 5,
+            "lineStart": false,
+            "noFill": false,
+            "insideItemHead": false,
+            "insideItemBody": true
+          },
+          {
+            "value": "AfterWord",
+            "line": 13,
+            "column": 5,
+            "lineStart": false,
+            "noFill": false,
+            "insideItemHead": false,
+            "insideItemBody": false
+          }
+        ],
+        "diagnostics": [],
+        "nativeBodies": {
+          "ascii": "     -\b-a\bal\blp\bph\bha\ba\n           BodyWord\n\n",
+          "utf8": "     -\b-a\bal\blp\bph\bha\ba\n           BodyWord\n\n"
+        },
+        "nativeHtmlSection": "<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"OPTIONS\"><a class=\"permalink\" href=\"#OPTIONS\">OPTIONS</a></h2>\n<dl class=\"Bl-tag\">\n  <dt id=\"alpha\"><a class=\"permalink\" href=\"#alpha\"><code class=\"Fl\">-alpha</code></a></dt>\n  <dd><a class=\"permalink\" href=\"#BodyWord\"><span class=\"No\" id=\"BodyWord\">BodyWord</span></a></dd>\n</dl>\n</section>",
+        "primaryOwner": {
+          "line": 9,
+          "column": 2
+        },
+        "nativeHtmlVolume": "Library Functions Manual"
+      }
+    },
+    {
+      "id": "metadata-man-specific-three",
+      "family": "metadata",
+      "source": ".TH PROBE \"3p\" \"October 6, 2026\" ManT\n.SH NAME\nprobe \\- source normalization probe\n.SH OPTIONS\n.TP\n.B --alpha\nBodyWord\n.SH NEXT\nAfterWord\n",
+      "sourceSha256": "b9ab2b0c892bafaafd4384d6b1c8cdd83a6ade428fbd37022a7ccb1cc156301b",
+      "dialect": "man",
+      "section": "3p",
+      "oracle": {
+        "ascii": {
+          "status": 0,
+          "stdoutSha256": "ed884210780638c67b2bd335e6356784383b02b8239c4fddceeac1a7b04d0004",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutSha256": "ed884210780638c67b2bd335e6356784383b02b8239c4fddceeac1a7b04d0004",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutSha256": "46b06d194f77a872bdf0d20119cd7aa6c39a5fdd6612f70a9abcbc7ee1df9e24",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutSha256": "41a64cfa4f186c44e9a26082dbe89dbe96e09bdf15d0a2952f9112f48e5d63ba",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected": {
+        "metadata": {
+          "title": "PROBE",
+          "name": null,
+          "section": "3p",
+          "volume": "Perl Library Manual",
+          "arch": null,
+          "os": "ManT",
+          "date": "October 6, 2026",
+          "hasBody": true
+        },
+        "texts": [
+          "NAME",
+          "probe \\- source normalization probe",
+          "OPTIONS",
+          "--alpha",
+          "BodyWord",
+          "NEXT",
+          "AfterWord"
+        ],
+        "normalizedArguments": [],
+        "positionedText": [
+          {
+            "value": "--alpha",
+            "line": 6,
+            "column": 4,
+            "lineStart": false,
+            "noFill": false,
+            "insideItemHead": true,
+            "insideItemBody": false
+          },
+          {
+            "value": "BodyWord",
+            "line": 7,
+            "column": 1,
+            "lineStart": true,
+            "noFill": false,
+            "insideItemHead": false,
+            "insideItemBody": true
+          },
+          {
+            "value": "AfterWord",
+            "line": 9,
+            "column": 1,
+            "lineStart": true,
+            "noFill": false,
+            "insideItemHead": false,
+            "insideItemBody": false
+          }
+        ],
+        "diagnostics": [],
+        "nativeBodies": {
+          "ascii": "     -\b--\b-a\bal\blp\bph\bha\ba\n            BodyWord\n\n",
+          "utf8": "     -\b--\b-a\bal\blp\bph\bha\ba\n            BodyWord\n\n"
+        },
+        "nativeHtmlSection": "<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"OPTIONS\"><a class=\"permalink\" href=\"#OPTIONS\">OPTIONS</a></h2>\n<dl class=\"Bl-tag\">\n  <dt id=\"alpha\"><a class=\"permalink\" href=\"#alpha\"><b>--alpha</b></a></dt>\n  <dd>BodyWord</dd>\n</dl>\n</section>",
+        "primaryOwner": {
+          "line": 5,
+          "column": 2
+        },
+        "nativeHtmlVolume": "Perl Library Manual"
+      }
+    },
+    {
+      "id": "metadata-mdoc-specific-three",
+      "family": "metadata",
+      "source": ".Dd October 6, 2026\n.Dt PROBE \"3p\"\n.Os ManT\n.Sh NAME\n.Nm probe\n.Nd source normalization probe\n.Sh OPTIONS\n.Bl -tag -width 4n\n.It Fl alpha\n.No BodyWord\n.El\n.Sh NEXT\n.No AfterWord\n",
+      "sourceSha256": "454b049f131f5313acccdfe60916e9d2a60747e5bf6280696c1c0f0c073e38e6",
+      "dialect": "mdoc",
+      "section": "3p",
+      "oracle": {
+        "ascii": {
+          "status": 0,
+          "stdoutSha256": "82b515d71d06bff0428ba5a2044c090e774448848ec5c9da43b4dbc38b623170",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutSha256": "b6405efe440f752631a4848f5bfed06246e14261d33ea0b9114574c34ad8f331",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutSha256": "ad621e75c07e1fb804da7568de49faf606881db7b3b972d82017bc97d360bb79",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutSha256": "4a9e710c64536e458e330db6f0596c7ec51c3eaeb2c998d7b69aad23b50752cb",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 1,
+          "stdoutSha256": "ee4e5508be76a37480deabaa65b06e699da1e0deee2789e136d599b8afebdadf",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected": {
+        "metadata": {
+          "title": "PROBE",
+          "name": "probe",
+          "section": "3p",
+          "volume": "Perl Library Manual",
+          "arch": null,
+          "os": "ManT",
+          "date": "October 6, 2026",
+          "hasBody": true
+        },
+        "texts": [
+          "October 6, 2026",
+          "PROBE",
+          "3p",
+          "ManT",
+          "NAME",
+          "probe",
+          "source normalization probe",
+          "OPTIONS",
+          "alpha",
+          "BodyWord",
+          "NEXT",
+          "AfterWord"
+        ],
+        "normalizedArguments": [
+          {
+            "macro": "Bl",
+            "line": 8,
+            "column": 2,
+            "width": "4n",
+            "offset": null,
+            "columns": [],
+            "kind": "Definition",
+            "style": "Tag",
+            "display": null,
+            "insideItemHead": false
+          }
+        ],
+        "positionedText": [
+          {
+            "value": "alpha",
+            "line": 9,
+            "column": 8,
+            "lineStart": false,
+            "noFill": false,
+            "insideItemHead": true,
+            "insideItemBody": false
+          },
+          {
+            "value": "BodyWord",
+            "line": 10,
+            "column": 5,
+            "lineStart": false,
+            "noFill": false,
+            "insideItemHead": false,
+            "insideItemBody": true
+          },
+          {
+            "value": "AfterWord",
+            "line": 13,
+            "column": 5,
+            "lineStart": false,
+            "noFill": false,
+            "insideItemHead": false,
+            "insideItemBody": false
+          }
+        ],
+        "diagnostics": [],
+        "nativeBodies": {
+          "ascii": "     -\b-a\bal\blp\bph\bha\ba\n           BodyWord\n\n",
+          "utf8": "     -\b-a\bal\blp\bph\bha\ba\n           BodyWord\n\n"
+        },
+        "nativeHtmlSection": "<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"OPTIONS\"><a class=\"permalink\" href=\"#OPTIONS\">OPTIONS</a></h2>\n<dl class=\"Bl-tag\">\n  <dt id=\"alpha\"><a class=\"permalink\" href=\"#alpha\"><code class=\"Fl\">-alpha</code></a></dt>\n  <dd><a class=\"permalink\" href=\"#BodyWord\"><span class=\"No\" id=\"BodyWord\">BodyWord</span></a></dd>\n</dl>\n</section>",
+        "primaryOwner": {
+          "line": 9,
+          "column": 2
+        },
+        "nativeHtmlVolume": "Perl Library Manual"
+      }
+    },
+    {
+      "id": "metadata-man-invalid",
+      "family": "metadata",
+      "source": ".TH PROBE \"invalid\" \"October 6, 2026\" ManT\n.SH NAME\nprobe \\- source normalization probe\n.SH OPTIONS\n.TP\n.B --alpha\nBodyWord\n.SH NEXT\nAfterWord\n",
+      "sourceSha256": "b2f17decacfca19535952c9eb8f810cbf2bde9a7d97bec8b59e5ee982d22d22f",
+      "dialect": "man",
+      "section": "invalid",
+      "oracle": {
+        "ascii": {
+          "status": 0,
+          "stdoutSha256": "1756412137a3a76ed6648ced703830bf0bb5e83f006f864c2d36c3ab343acfbd",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutSha256": "1756412137a3a76ed6648ced703830bf0bb5e83f006f864c2d36c3ab343acfbd",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutSha256": "f745074b6b2466dfe90aa6e0ed3bb05370afaef7e7c2bccf09402c19f3192221",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutSha256": "26c46783f892281669c74cdb6d3b36d24875c9e350ab4532824635afc90f06a5",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected": {
+        "metadata": {
+          "title": "PROBE",
+          "name": null,
+          "section": "invalid",
+          "volume": null,
+          "arch": null,
+          "os": "ManT",
+          "date": "October 6, 2026",
+          "hasBody": true
+        },
+        "texts": [
+          "NAME",
+          "probe \\- source normalization probe",
+          "OPTIONS",
+          "--alpha",
+          "BodyWord",
+          "NEXT",
+          "AfterWord"
+        ],
+        "normalizedArguments": [],
+        "positionedText": [
+          {
+            "value": "--alpha",
+            "line": 6,
+            "column": 4,
+            "lineStart": false,
+            "noFill": false,
+            "insideItemHead": true,
+            "insideItemBody": false
+          },
+          {
+            "value": "BodyWord",
+            "line": 7,
+            "column": 1,
+            "lineStart": true,
+            "noFill": false,
+            "insideItemHead": false,
+            "insideItemBody": true
+          },
+          {
+            "value": "AfterWord",
+            "line": 9,
+            "column": 1,
+            "lineStart": true,
+            "noFill": false,
+            "insideItemHead": false,
+            "insideItemBody": false
+          }
+        ],
+        "diagnostics": [],
+        "nativeBodies": {
+          "ascii": "     -\b--\b-a\bal\blp\bph\bha\ba\n            BodyWord\n\n",
+          "utf8": "     -\b--\b-a\bal\blp\bph\bha\ba\n            BodyWord\n\n"
+        },
+        "nativeHtmlSection": "<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"OPTIONS\"><a class=\"permalink\" href=\"#OPTIONS\">OPTIONS</a></h2>\n<dl class=\"Bl-tag\">\n  <dt id=\"alpha\"><a class=\"permalink\" href=\"#alpha\"><b>--alpha</b></a></dt>\n  <dd>BodyWord</dd>\n</dl>\n</section>",
+        "primaryOwner": {
+          "line": 5,
+          "column": 2
+        },
+        "nativeHtmlVolume": ""
+      }
+    },
+    {
+      "id": "metadata-mdoc-invalid",
+      "family": "metadata",
+      "source": ".Dd October 6, 2026\n.Dt PROBE \"invalid\"\n.Os ManT\n.Sh NAME\n.Nm probe\n.Nd source normalization probe\n.Sh OPTIONS\n.Bl -tag -width 4n\n.It Fl alpha\n.No BodyWord\n.El\n.Sh NEXT\n.No AfterWord\n",
+      "sourceSha256": "57af9dc96b41bdec84ae63b2d25c818cc1fa57f07cba5a68f6152e897febfed0",
+      "dialect": "mdoc",
+      "section": "invalid",
+      "oracle": {
+        "ascii": {
+          "status": 0,
+          "stdoutSha256": "e1a1907517679cb5c51eb48c9f637fad00e1389f3ff4613308cc20d3b2ba9e1c",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutSha256": "72fb43e5edfd75231b1c8d2ce84fb7f2fb0d0f811633a601bcc409cc78f199b6",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutSha256": "c9d0d115e4da05e4d6e853370422e76c5198ab0a57d25a9fe04468ec08ab2c2a",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutSha256": "691a2e1897eb68cc6b66471f5acc7f4c941a54ff4fc9eca272b23bf458db0241",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 2,
+          "stdoutSha256": "93d598655c6d74eb437828d3062cc10615ae241463377e43e92444f2ece2705e",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected": {
+        "metadata": {
+          "title": "PROBE",
+          "name": "probe",
+          "section": "invalid",
+          "volume": "LOCAL",
+          "arch": null,
+          "os": "ManT",
+          "date": "October 6, 2026",
+          "hasBody": true
+        },
+        "texts": [
+          "October 6, 2026",
+          "PROBE",
+          "invalid",
+          "ManT",
+          "NAME",
+          "probe",
+          "source normalization probe",
+          "OPTIONS",
+          "alpha",
+          "BodyWord",
+          "NEXT",
+          "AfterWord"
+        ],
+        "normalizedArguments": [
+          {
+            "macro": "Bl",
+            "line": 8,
+            "column": 2,
+            "width": "4n",
+            "offset": null,
+            "columns": [],
+            "kind": "Definition",
+            "style": "Tag",
+            "display": null,
+            "insideItemHead": false
+          }
+        ],
+        "positionedText": [
+          {
+            "value": "alpha",
+            "line": 9,
+            "column": 8,
+            "lineStart": false,
+            "noFill": false,
+            "insideItemHead": true,
+            "insideItemBody": false
+          },
+          {
+            "value": "BodyWord",
+            "line": 10,
+            "column": 5,
+            "lineStart": false,
+            "noFill": false,
+            "insideItemHead": false,
+            "insideItemBody": true
+          },
+          {
+            "value": "AfterWord",
+            "line": 13,
+            "column": 5,
+            "lineStart": false,
+            "noFill": false,
+            "insideItemHead": false,
+            "insideItemBody": false
+          }
+        ],
+        "diagnostics": [
+          {
+            "level": "Warning",
+            "message": "unknown manual section: Dt ... invalid",
+            "line": 2,
+            "column": 11
+          }
+        ],
+        "nativeBodies": {
+          "ascii": "     -\b-a\bal\blp\bph\bha\ba\n           BodyWord\n\n",
+          "utf8": "     -\b-a\bal\blp\bph\bha\ba\n           BodyWord\n\n"
+        },
+        "nativeHtmlSection": "<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"OPTIONS\"><a class=\"permalink\" href=\"#OPTIONS\">OPTIONS</a></h2>\n<dl class=\"Bl-tag\">\n  <dt id=\"alpha\"><a class=\"permalink\" href=\"#alpha\"><code class=\"Fl\">-alpha</code></a></dt>\n  <dd><a class=\"permalink\" href=\"#BodyWord\"><span class=\"No\" id=\"BodyWord\">BodyWord</span></a></dd>\n</dl>\n</section>",
+        "primaryOwner": {
+          "line": 9,
+          "column": 2
+        },
+        "nativeHtmlVolume": "LOCAL"
+      }
+    },
+    {
+      "id": "metadata-man-empty",
+      "family": "metadata",
+      "source": ".TH PROBE \"\" \"October 6, 2026\" ManT\n.SH NAME\nprobe \\- source normalization probe\n.SH OPTIONS\n.TP\n.B --alpha\nBodyWord\n.SH NEXT\nAfterWord\n",
+      "sourceSha256": "f975a1d29b2173185aa8e3fba9b526d7d4346f2303651ad9558100d2f0eb8e45",
+      "dialect": "man",
+      "section": "",
+      "oracle": {
+        "ascii": {
+          "status": 0,
+          "stdoutSha256": "57cd4b301f1164b85ad22815e273785be18bd0afc581525bb7e04137e8615b02",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutSha256": "57cd4b301f1164b85ad22815e273785be18bd0afc581525bb7e04137e8615b02",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutSha256": "8514f4834cd74b4961ca9bc2501c890de65cc2c3e2853c9074732242916924b0",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutSha256": "cd1c9c66f34a9783d7ec52f26abebae10b399944b537eea8a67bb9562e822dbb",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected": {
+        "metadata": {
+          "title": "PROBE",
+          "name": null,
+          "section": "",
+          "volume": null,
+          "arch": null,
+          "os": "ManT",
+          "date": "October 6, 2026",
+          "hasBody": true
+        },
+        "texts": [
+          "NAME",
+          "probe \\- source normalization probe",
+          "OPTIONS",
+          "--alpha",
+          "BodyWord",
+          "NEXT",
+          "AfterWord"
+        ],
+        "normalizedArguments": [],
+        "positionedText": [
+          {
+            "value": "--alpha",
+            "line": 6,
+            "column": 4,
+            "lineStart": false,
+            "noFill": false,
+            "insideItemHead": true,
+            "insideItemBody": false
+          },
+          {
+            "value": "BodyWord",
+            "line": 7,
+            "column": 1,
+            "lineStart": true,
+            "noFill": false,
+            "insideItemHead": false,
+            "insideItemBody": true
+          },
+          {
+            "value": "AfterWord",
+            "line": 9,
+            "column": 1,
+            "lineStart": true,
+            "noFill": false,
+            "insideItemHead": false,
+            "insideItemBody": false
+          }
+        ],
+        "diagnostics": [],
+        "nativeBodies": {
+          "ascii": "     -\b--\b-a\bal\blp\bph\bha\ba\n            BodyWord\n\n",
+          "utf8": "     -\b--\b-a\bal\blp\bph\bha\ba\n            BodyWord\n\n"
+        },
+        "nativeHtmlSection": "<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"OPTIONS\"><a class=\"permalink\" href=\"#OPTIONS\">OPTIONS</a></h2>\n<dl class=\"Bl-tag\">\n  <dt id=\"alpha\"><a class=\"permalink\" href=\"#alpha\"><b>--alpha</b></a></dt>\n  <dd>BodyWord</dd>\n</dl>\n</section>",
+        "primaryOwner": {
+          "line": 5,
+          "column": 2
+        },
+        "nativeHtmlVolume": ""
+      }
+    },
+    {
+      "id": "metadata-mdoc-empty",
+      "family": "metadata",
+      "source": ".Dd October 6, 2026\n.Dt PROBE \"\"\n.Os ManT\n.Sh NAME\n.Nm probe\n.Nd source normalization probe\n.Sh OPTIONS\n.Bl -tag -width 4n\n.It Fl alpha\n.No BodyWord\n.El\n.Sh NEXT\n.No AfterWord\n",
+      "sourceSha256": "d3a5ceeb57a7f3b0574d525799b61552656f9003561234708a9cf2974b00524d",
+      "dialect": "mdoc",
+      "section": "",
+      "oracle": {
+        "ascii": {
+          "status": 0,
+          "stdoutSha256": "9a89835376215447e6c36728c3f730ddd097440ff442feaf7c1cf60b4e7cb7a3",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutSha256": "4a90ced82374239e9cf45bf8ae503db30680b6b360eb61d08b648f3455b52efd",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutSha256": "ff9108b263916401496fa57ac173e744cf098a2b82f0ba03b8b278ec623af69f",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutSha256": "8e8e4b97c0316f09803ff6b50e60d9693cd756725f61d4e461aec9e5bb3b56a6",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 2,
+          "stdoutSha256": "efdc79423f11e5ddbde446f1ce8f4419496bd199ac75a22da1ad316d4cbe9d12",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected": {
+        "metadata": {
+          "title": "PROBE",
+          "name": "probe",
+          "section": "",
+          "volume": "LOCAL",
+          "arch": null,
+          "os": "ManT",
+          "date": "October 6, 2026",
+          "hasBody": true
+        },
+        "texts": [
+          "October 6, 2026",
+          "PROBE",
+          "",
+          "ManT",
+          "NAME",
+          "probe",
+          "source normalization probe",
+          "OPTIONS",
+          "alpha",
+          "BodyWord",
+          "NEXT",
+          "AfterWord"
+        ],
+        "normalizedArguments": [
+          {
+            "macro": "Bl",
+            "line": 8,
+            "column": 2,
+            "width": "4n",
+            "offset": null,
+            "columns": [],
+            "kind": "Definition",
+            "style": "Tag",
+            "display": null,
+            "insideItemHead": false
+          }
+        ],
+        "positionedText": [
+          {
+            "value": "alpha",
+            "line": 9,
+            "column": 8,
+            "lineStart": false,
+            "noFill": false,
+            "insideItemHead": true,
+            "insideItemBody": false
+          },
+          {
+            "value": "BodyWord",
+            "line": 10,
+            "column": 5,
+            "lineStart": false,
+            "noFill": false,
+            "insideItemHead": false,
+            "insideItemBody": true
+          },
+          {
+            "value": "AfterWord",
+            "line": 13,
+            "column": 5,
+            "lineStart": false,
+            "noFill": false,
+            "insideItemHead": false,
+            "insideItemBody": false
+          }
+        ],
+        "diagnostics": [
+          {
+            "level": "Warning",
+            "message": "unknown manual section: Dt ...",
+            "line": 2,
+            "column": 11
+          }
+        ],
+        "nativeBodies": {
+          "ascii": "     -\b-a\bal\blp\bph\bha\ba\n           BodyWord\n\n",
+          "utf8": "     -\b-a\bal\blp\bph\bha\ba\n           BodyWord\n\n"
+        },
+        "nativeHtmlSection": "<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"OPTIONS\"><a class=\"permalink\" href=\"#OPTIONS\">OPTIONS</a></h2>\n<dl class=\"Bl-tag\">\n  <dt id=\"alpha\"><a class=\"permalink\" href=\"#alpha\"><code class=\"Fl\">-alpha</code></a></dt>\n  <dd><a class=\"permalink\" href=\"#BodyWord\"><span class=\"No\" id=\"BodyWord\">BodyWord</span></a></dd>\n</dl>\n</section>",
+        "primaryOwner": {
+          "line": 9,
+          "column": 2
+        },
+        "nativeHtmlVolume": "LOCAL"
+      }
+    },
+    {
+      "id": "metadata-man-missing",
+      "family": "metadata",
+      "source": ".TH PROBE\n.SH NAME\nprobe \\- source normalization probe\n.SH OPTIONS\n.TP\n.B --alpha\nBodyWord\n.SH NEXT\nAfterWord\n",
+      "sourceSha256": "f629fb477a66317eb158c1b40841b1a278810a2bbf32e35058f248e55a98ef3e",
+      "dialect": "man",
+      "section": null,
+      "oracle": {
+        "ascii": {
+          "status": 0,
+          "stdoutSha256": "a5266ecdf2024a0e16817311c699665b9b187899f307fde48d778b4843deca48",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutSha256": "a5266ecdf2024a0e16817311c699665b9b187899f307fde48d778b4843deca48",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutSha256": "7a5ada904098f2396c5936792593d5052c49138c16d67214d9f7fc932a1f3e04",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutSha256": "7d84d8a16c5fb6dac316be81946654582a5a5131732fcf5a943e9b3984265615",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 2,
+          "stdoutSha256": "d7d55989be642b46ab39ed80b0929282fc084435c5308cc4ab09cd22508a206a",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected": {
+        "metadata": {
+          "title": "PROBE",
+          "name": null,
+          "section": "",
+          "volume": null,
+          "arch": null,
+          "os": null,
+          "date": "",
+          "hasBody": true
+        },
+        "texts": [
+          "NAME",
+          "probe \\- source normalization probe",
+          "OPTIONS",
+          "--alpha",
+          "BodyWord",
+          "NEXT",
+          "AfterWord"
+        ],
+        "normalizedArguments": [],
+        "positionedText": [
+          {
+            "value": "--alpha",
+            "line": 6,
+            "column": 4,
+            "lineStart": false,
+            "noFill": false,
+            "insideItemHead": true,
+            "insideItemBody": false
+          },
+          {
+            "value": "BodyWord",
+            "line": 7,
+            "column": 1,
+            "lineStart": true,
+            "noFill": false,
+            "insideItemHead": false,
+            "insideItemBody": true
+          },
+          {
+            "value": "AfterWord",
+            "line": 9,
+            "column": 1,
+            "lineStart": true,
+            "noFill": false,
+            "insideItemHead": false,
+            "insideItemBody": false
+          }
+        ],
+        "diagnostics": [
+          {
+            "level": "Warning",
+            "message": "missing manual section, using \"\": TH PROBE",
+            "line": 1,
+            "column": 2
+          },
+          {
+            "level": "Warning",
+            "message": "missing date, using \"\": TH",
+            "line": 1,
+            "column": 2
+          }
+        ],
+        "nativeBodies": {
+          "ascii": "     -\b--\b-a\bal\blp\bph\bha\ba\n            BodyWord\n\n",
+          "utf8": "     -\b--\b-a\bal\blp\bph\bha\ba\n            BodyWord\n\n"
+        },
+        "nativeHtmlSection": "<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"OPTIONS\"><a class=\"permalink\" href=\"#OPTIONS\">OPTIONS</a></h2>\n<dl class=\"Bl-tag\">\n  <dt id=\"alpha\"><a class=\"permalink\" href=\"#alpha\"><b>--alpha</b></a></dt>\n  <dd>BodyWord</dd>\n</dl>\n</section>",
+        "primaryOwner": {
+          "line": 5,
+          "column": 2
+        },
+        "nativeHtmlVolume": ""
+      }
+    },
+    {
+      "id": "metadata-mdoc-missing",
+      "family": "metadata",
+      "source": ".Dd October 6, 2026\n.Dt PROBE\n.Os ManT\n.Sh NAME\n.Nm probe\n.Nd source normalization probe\n.Sh OPTIONS\n.Bl -tag -width 4n\n.It Fl alpha\n.No BodyWord\n.El\n.Sh NEXT\n.No AfterWord\n",
+      "sourceSha256": "0d50f2896ed06404bb313a40de063f9e39066d7e14ce18b66f313b0fb69a511d",
+      "dialect": "mdoc",
+      "section": null,
+      "oracle": {
+        "ascii": {
+          "status": 0,
+          "stdoutSha256": "375863b2a7f291591e42231958b4a2813a92d498105fd3d1c01b7a590ea3edeb",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutSha256": "22544ae14db76b3de5eb5cece589acc0fa6062c0f95e0ca56c588a81e229a4e1",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutSha256": "0499c18b47f67d012b310d8725cfbaa10c0e2e179e2e75ead9714b74f58ed055",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutSha256": "d28e34415fae01e385ac3ea92c944e509ecd5a98bc2caa08d6928a175e22291d",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 2,
+          "stdoutSha256": "64ed743051c8082046f91da28470b7bcb859fc6eb4f213e68153352c18f9d867",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected": {
+        "metadata": {
+          "title": "PROBE",
+          "name": "probe",
+          "section": null,
+          "volume": "LOCAL",
+          "arch": null,
+          "os": "ManT",
+          "date": "October 6, 2026",
+          "hasBody": true
+        },
+        "texts": [
+          "October 6, 2026",
+          "PROBE",
+          "ManT",
+          "NAME",
+          "probe",
+          "source normalization probe",
+          "OPTIONS",
+          "alpha",
+          "BodyWord",
+          "NEXT",
+          "AfterWord"
+        ],
+        "normalizedArguments": [
+          {
+            "macro": "Bl",
+            "line": 8,
+            "column": 2,
+            "width": "4n",
+            "offset": null,
+            "columns": [],
+            "kind": "Definition",
+            "style": "Tag",
+            "display": null,
+            "insideItemHead": false
+          }
+        ],
+        "positionedText": [
+          {
+            "value": "alpha",
+            "line": 9,
+            "column": 8,
+            "lineStart": false,
+            "noFill": false,
+            "insideItemHead": true,
+            "insideItemBody": false
+          },
+          {
+            "value": "BodyWord",
+            "line": 10,
+            "column": 5,
+            "lineStart": false,
+            "noFill": false,
+            "insideItemHead": false,
+            "insideItemBody": true
+          },
+          {
+            "value": "AfterWord",
+            "line": 13,
+            "column": 5,
+            "lineStart": false,
+            "noFill": false,
+            "insideItemHead": false,
+            "insideItemBody": false
+          }
+        ],
+        "diagnostics": [
+          {
+            "level": "Warning",
+            "message": "missing manual section, using \"\": Dt PROBE",
+            "line": 2,
+            "column": 2
+          }
+        ],
+        "nativeBodies": {
+          "ascii": "     -\b-a\bal\blp\bph\bha\ba\n           BodyWord\n\n",
+          "utf8": "     -\b-a\bal\blp\bph\bha\ba\n           BodyWord\n\n"
+        },
+        "nativeHtmlSection": "<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"OPTIONS\"><a class=\"permalink\" href=\"#OPTIONS\">OPTIONS</a></h2>\n<dl class=\"Bl-tag\">\n  <dt id=\"alpha\"><a class=\"permalink\" href=\"#alpha\"><code class=\"Fl\">-alpha</code></a></dt>\n  <dd><a class=\"permalink\" href=\"#BodyWord\"><span class=\"No\" id=\"BodyWord\">BodyWord</span></a></dd>\n</dl>\n</section>",
+        "primaryOwner": {
+          "line": 9,
+          "column": 2
+        },
+        "nativeHtmlVolume": "LOCAL"
+      }
+    },
+    {
+      "id": "metadata-man-suffix-explicit",
+      "family": "metadata",
+      "source": ".TH PROBE \"1m\" \"October 6, 2026\" ManT \"Custom Volume\"\n.SH NAME\nprobe \\- source normalization probe\n.SH OPTIONS\n.TP\n.B --alpha\nBodyWord\n.SH NEXT\nAfterWord\n",
+      "sourceSha256": "3476abb18f959b80c46e0772541e9ae5152637f33c269546103444bed8f6d1aa",
+      "dialect": "man",
+      "section": "1m",
+      "explicitVolume": "Custom Volume",
+      "oracle": {
+        "ascii": {
+          "status": 0,
+          "stdoutSha256": "6337a870f71c6eac9436a8bac9a1fa0091c4034264b1c4c4832a302fee25b23a",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutSha256": "6337a870f71c6eac9436a8bac9a1fa0091c4034264b1c4c4832a302fee25b23a",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutSha256": "6a75fb798f20eb08f90b964cd29023c771e6d35d8501815210bfcf82675417ab",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutSha256": "c437bd26abdb0bf0a2a942d426844568db24f32644d6b51acac33bf8e834474c",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected": {
+        "metadata": {
+          "title": "PROBE",
+          "name": null,
+          "section": "1m",
+          "volume": "Custom Volume",
+          "arch": null,
+          "os": "ManT",
+          "date": "October 6, 2026",
+          "hasBody": true
+        },
+        "texts": [
+          "NAME",
+          "probe \\- source normalization probe",
+          "OPTIONS",
+          "--alpha",
+          "BodyWord",
+          "NEXT",
+          "AfterWord"
+        ],
+        "normalizedArguments": [],
+        "positionedText": [
+          {
+            "value": "--alpha",
+            "line": 6,
+            "column": 4,
+            "lineStart": false,
+            "noFill": false,
+            "insideItemHead": true,
+            "insideItemBody": false
+          },
+          {
+            "value": "BodyWord",
+            "line": 7,
+            "column": 1,
+            "lineStart": true,
+            "noFill": false,
+            "insideItemHead": false,
+            "insideItemBody": true
+          },
+          {
+            "value": "AfterWord",
+            "line": 9,
+            "column": 1,
+            "lineStart": true,
+            "noFill": false,
+            "insideItemHead": false,
+            "insideItemBody": false
+          }
+        ],
+        "diagnostics": [],
+        "nativeBodies": {
+          "ascii": "     -\b--\b-a\bal\blp\bph\bha\ba\n            BodyWord\n\n",
+          "utf8": "     -\b--\b-a\bal\blp\bph\bha\ba\n            BodyWord\n\n"
+        },
+        "nativeHtmlSection": "<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"OPTIONS\"><a class=\"permalink\" href=\"#OPTIONS\">OPTIONS</a></h2>\n<dl class=\"Bl-tag\">\n  <dt id=\"alpha\"><a class=\"permalink\" href=\"#alpha\"><b>--alpha</b></a></dt>\n  <dd>BodyWord</dd>\n</dl>\n</section>",
+        "primaryOwner": {
+          "line": 5,
+          "column": 2
+        },
+        "nativeHtmlVolume": "Custom Volume"
+      }
+    },
+    {
+      "id": "metadata-man-specific-explicit",
+      "family": "metadata",
+      "source": ".TH PROBE \"3p\" \"October 6, 2026\" ManT \"Custom Volume\"\n.SH NAME\nprobe \\- source normalization probe\n.SH OPTIONS\n.TP\n.B --alpha\nBodyWord\n.SH NEXT\nAfterWord\n",
+      "sourceSha256": "d5c638479b451d792a3f69386ac3a6e5c1f311402cfa88284033b924e4c7b5fb",
+      "dialect": "man",
+      "section": "3p",
+      "explicitVolume": "Custom Volume",
+      "oracle": {
+        "ascii": {
+          "status": 0,
+          "stdoutSha256": "a42e3419fb2ff664eb9770dc9cfb489c55808f285f9693b4d3b15c8c2e00b48f",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutSha256": "a42e3419fb2ff664eb9770dc9cfb489c55808f285f9693b4d3b15c8c2e00b48f",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutSha256": "654d0acae654517a91ed01a855bc1870b8a178294d46296fd2deebdd45e01d51",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutSha256": "e7c8d0e0f49c76443bb4bd680099c3a1c36c1029bee9496bb73400992d1dfac1",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected": {
+        "metadata": {
+          "title": "PROBE",
+          "name": null,
+          "section": "3p",
+          "volume": "Custom Volume",
+          "arch": null,
+          "os": "ManT",
+          "date": "October 6, 2026",
+          "hasBody": true
+        },
+        "texts": [
+          "NAME",
+          "probe \\- source normalization probe",
+          "OPTIONS",
+          "--alpha",
+          "BodyWord",
+          "NEXT",
+          "AfterWord"
+        ],
+        "normalizedArguments": [],
+        "positionedText": [
+          {
+            "value": "--alpha",
+            "line": 6,
+            "column": 4,
+            "lineStart": false,
+            "noFill": false,
+            "insideItemHead": true,
+            "insideItemBody": false
+          },
+          {
+            "value": "BodyWord",
+            "line": 7,
+            "column": 1,
+            "lineStart": true,
+            "noFill": false,
+            "insideItemHead": false,
+            "insideItemBody": true
+          },
+          {
+            "value": "AfterWord",
+            "line": 9,
+            "column": 1,
+            "lineStart": true,
+            "noFill": false,
+            "insideItemHead": false,
+            "insideItemBody": false
+          }
+        ],
+        "diagnostics": [],
+        "nativeBodies": {
+          "ascii": "     -\b--\b-a\bal\blp\bph\bha\ba\n            BodyWord\n\n",
+          "utf8": "     -\b--\b-a\bal\blp\bph\bha\ba\n            BodyWord\n\n"
+        },
+        "nativeHtmlSection": "<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"OPTIONS\"><a class=\"permalink\" href=\"#OPTIONS\">OPTIONS</a></h2>\n<dl class=\"Bl-tag\">\n  <dt id=\"alpha\"><a class=\"permalink\" href=\"#alpha\"><b>--alpha</b></a></dt>\n  <dd>BodyWord</dd>\n</dl>\n</section>",
+        "primaryOwner": {
+          "line": 5,
+          "column": 2
+        },
+        "nativeHtmlVolume": "Custom Volume"
+      }
+    },
+    {
+      "id": "metadata-man-invalid-explicit",
+      "family": "metadata",
+      "source": ".TH PROBE \"invalid\" \"October 6, 2026\" ManT \"Custom Volume\"\n.SH NAME\nprobe \\- source normalization probe\n.SH OPTIONS\n.TP\n.B --alpha\nBodyWord\n.SH NEXT\nAfterWord\n",
+      "sourceSha256": "2c13fc928713571d2a31ccdbeac12325efd38ad86891f8c16d2967af130d7be5",
+      "dialect": "man",
+      "section": "invalid",
+      "explicitVolume": "Custom Volume",
+      "oracle": {
+        "ascii": {
+          "status": 0,
+          "stdoutSha256": "828c130d903586a20ceb1003fef7a6a096d810c02758315cbf67324a6c3316f1",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutSha256": "828c130d903586a20ceb1003fef7a6a096d810c02758315cbf67324a6c3316f1",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutSha256": "979817fc30acb58fce252a5fc3db6cf651402eaabfcc9592cb0ea1da10c82587",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutSha256": "70bc3c08b2d8a86e94d448e30675b3259b7e545e5d221cb9f15eee0abec642e1",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected": {
+        "metadata": {
+          "title": "PROBE",
+          "name": null,
+          "section": "invalid",
+          "volume": "Custom Volume",
+          "arch": null,
+          "os": "ManT",
+          "date": "October 6, 2026",
+          "hasBody": true
+        },
+        "texts": [
+          "NAME",
+          "probe \\- source normalization probe",
+          "OPTIONS",
+          "--alpha",
+          "BodyWord",
+          "NEXT",
+          "AfterWord"
+        ],
+        "normalizedArguments": [],
+        "positionedText": [
+          {
+            "value": "--alpha",
+            "line": 6,
+            "column": 4,
+            "lineStart": false,
+            "noFill": false,
+            "insideItemHead": true,
+            "insideItemBody": false
+          },
+          {
+            "value": "BodyWord",
+            "line": 7,
+            "column": 1,
+            "lineStart": true,
+            "noFill": false,
+            "insideItemHead": false,
+            "insideItemBody": true
+          },
+          {
+            "value": "AfterWord",
+            "line": 9,
+            "column": 1,
+            "lineStart": true,
+            "noFill": false,
+            "insideItemHead": false,
+            "insideItemBody": false
+          }
+        ],
+        "diagnostics": [],
+        "nativeBodies": {
+          "ascii": "     -\b--\b-a\bal\blp\bph\bha\ba\n            BodyWord\n\n",
+          "utf8": "     -\b--\b-a\bal\blp\bph\bha\ba\n            BodyWord\n\n"
+        },
+        "nativeHtmlSection": "<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"OPTIONS\"><a class=\"permalink\" href=\"#OPTIONS\">OPTIONS</a></h2>\n<dl class=\"Bl-tag\">\n  <dt id=\"alpha\"><a class=\"permalink\" href=\"#alpha\"><b>--alpha</b></a></dt>\n  <dd>BodyWord</dd>\n</dl>\n</section>",
+        "primaryOwner": {
+          "line": 5,
+          "column": 2
+        },
+        "nativeHtmlVolume": "Custom Volume"
+      }
+    },
+    {
+      "id": "metadata-man-suffix-empty-volume",
+      "family": "metadata",
+      "source": ".TH PROBE \"1m\" \"October 6, 2026\" ManT \"\"\n.SH NAME\nprobe \\- source normalization probe\n.SH OPTIONS\n.TP\n.B --alpha\nBodyWord\n.SH NEXT\nAfterWord\n",
+      "sourceSha256": "e36fa97b1bf795c681825315789b90fd4acd6efa84ee3b81fbfd919ea83f5771",
+      "dialect": "man",
+      "section": "1m",
+      "explicitVolume": "",
+      "oracle": {
+        "ascii": {
+          "status": 0,
+          "stdoutSha256": "0d7fabd1b005b5ecf26d3ac87294dd57d5239097aee48716bbd6617879f62be0",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutSha256": "0d7fabd1b005b5ecf26d3ac87294dd57d5239097aee48716bbd6617879f62be0",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutSha256": "2ac9c18161eb52bbf70793bc912555971813aae97669f9b8aa4f7bb937930608",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutSha256": "2dbb3e3a34038083664fdbf44bf92104374754acd3f90afd5a9a8b17cf2c2ca3",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected": {
+        "metadata": {
+          "title": "PROBE",
+          "name": null,
+          "section": "1m",
+          "volume": "",
+          "arch": null,
+          "os": "ManT",
+          "date": "October 6, 2026",
+          "hasBody": true
+        },
+        "texts": [
+          "NAME",
+          "probe \\- source normalization probe",
+          "OPTIONS",
+          "--alpha",
+          "BodyWord",
+          "NEXT",
+          "AfterWord"
+        ],
+        "normalizedArguments": [],
+        "positionedText": [
+          {
+            "value": "--alpha",
+            "line": 6,
+            "column": 4,
+            "lineStart": false,
+            "noFill": false,
+            "insideItemHead": true,
+            "insideItemBody": false
+          },
+          {
+            "value": "BodyWord",
+            "line": 7,
+            "column": 1,
+            "lineStart": true,
+            "noFill": false,
+            "insideItemHead": false,
+            "insideItemBody": true
+          },
+          {
+            "value": "AfterWord",
+            "line": 9,
+            "column": 1,
+            "lineStart": true,
+            "noFill": false,
+            "insideItemHead": false,
+            "insideItemBody": false
+          }
+        ],
+        "diagnostics": [],
+        "nativeBodies": {
+          "ascii": "     -\b--\b-a\bal\blp\bph\bha\ba\n            BodyWord\n\n",
+          "utf8": "     -\b--\b-a\bal\blp\bph\bha\ba\n            BodyWord\n\n"
+        },
+        "nativeHtmlSection": "<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"OPTIONS\"><a class=\"permalink\" href=\"#OPTIONS\">OPTIONS</a></h2>\n<dl class=\"Bl-tag\">\n  <dt id=\"alpha\"><a class=\"permalink\" href=\"#alpha\"><b>--alpha</b></a></dt>\n  <dd>BodyWord</dd>\n</dl>\n</section>",
+        "primaryOwner": {
+          "line": 5,
+          "column": 2
+        },
+        "nativeHtmlVolume": ""
+      }
+    },
+    {
+      "id": "metadata-mdoc-architecture-excess",
+      "family": "metadata",
+      "source": ".Dd October 6, 2026\n.Dt PROBE 3p AMD64 \"Custom Volume\"\n.Os ManT\n.Sh NAME\n.Nm probe\n.Nd source normalization probe\n.Sh OPTIONS\n.Bl -tag -width 4n\n.It Fl alpha\n.No BodyWord\n.El\n.Sh NEXT\n.No AfterWord\n",
+      "sourceSha256": "ca65a498b36721b6358744a6c0c56e8965e5666183edd03244d61806c754715e",
+      "dialect": "mdoc",
+      "section": "3p",
+      "oracle": {
+        "ascii": {
+          "status": 0,
+          "stdoutSha256": "9c737142ddcb82d3f75b3f7e43589df697560b1098607d1bc71fe5b4a1b76a11",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutSha256": "8bf0872cf680220b2309494ba12f9cbd984f120a56903c772e483c570cece22f",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutSha256": "f2949276788febfe46a01885a24e885322e6002fe846e3f94640bd28d1beb572",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutSha256": "421146063e92655b6a23b0eb3377ba66167674d8c3d32299c8fb13cc066e6dba",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 3,
+          "stdoutSha256": "b7233117be7195f16913c34b64884bf64dc9266575684b7b5824bab55f5dd6a1",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected": {
+        "metadata": {
+          "title": "PROBE",
+          "name": "probe",
+          "section": "3p",
+          "volume": "Perl Library Manual",
+          "arch": "amd64",
+          "os": "ManT",
+          "date": "October 6, 2026",
+          "hasBody": true
+        },
+        "texts": [
+          "October 6, 2026",
+          "PROBE",
+          "3p",
+          "amd64",
+          "Custom Volume",
+          "ManT",
+          "NAME",
+          "probe",
+          "source normalization probe",
+          "OPTIONS",
+          "alpha",
+          "BodyWord",
+          "NEXT",
+          "AfterWord"
+        ],
+        "normalizedArguments": [
+          {
+            "macro": "Bl",
+            "line": 8,
+            "column": 2,
+            "width": "4n",
+            "offset": null,
+            "columns": [],
+            "kind": "Definition",
+            "style": "Tag",
+            "display": null,
+            "insideItemHead": false
+          }
+        ],
+        "positionedText": [
+          {
+            "value": "alpha",
+            "line": 9,
+            "column": 8,
+            "lineStart": false,
+            "noFill": false,
+            "insideItemHead": true,
+            "insideItemBody": false
+          },
+          {
+            "value": "BodyWord",
+            "line": 10,
+            "column": 5,
+            "lineStart": false,
+            "noFill": false,
+            "insideItemHead": false,
+            "insideItemBody": true
+          },
+          {
+            "value": "AfterWord",
+            "line": 13,
+            "column": 5,
+            "lineStart": false,
+            "noFill": false,
+            "insideItemHead": false,
+            "insideItemBody": false
+          }
+        ],
+        "diagnostics": [
+          {
+            "level": "Error",
+            "message": "skipping excess arguments: Dt ... Custom Volume",
+            "line": 2,
+            "column": 20
+          }
+        ],
+        "nativeBodies": {
+          "ascii": "     -\b-a\bal\blp\bph\bha\ba\n           BodyWord\n\n",
+          "utf8": "     -\b-a\bal\blp\bph\bha\ba\n           BodyWord\n\n"
+        },
+        "nativeHtmlSection": "<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"OPTIONS\"><a class=\"permalink\" href=\"#OPTIONS\">OPTIONS</a></h2>\n<dl class=\"Bl-tag\">\n  <dt id=\"alpha\"><a class=\"permalink\" href=\"#alpha\"><code class=\"Fl\">-alpha</code></a></dt>\n  <dd><a class=\"permalink\" href=\"#BodyWord\"><span class=\"No\" id=\"BodyWord\">BodyWord</span></a></dd>\n</dl>\n</section>",
+        "primaryOwner": {
+          "line": 9,
+          "column": 2
+        },
+        "nativeHtmlVolume": "Perl Library Manual (amd64)"
+      }
+    }
+  ]
+}

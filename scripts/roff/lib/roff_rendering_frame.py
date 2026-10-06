@@ -62,7 +62,9 @@ def prepare_frame(raw: str, source: str, *, reference: bool,
         if words[0] in (".TH", ".Dt") and len(words) >= 3:
             title = words[1] + "(" + words[2] + ")"
             section = words[2]
-            volume = VOLUMES.get(section)
+            # msec.c::mandoc_a2msec checks the full spelling first (3p),
+            # then its first character (3px -> 3); keep the complete title.
+            volume = VOLUMES.get(section) or VOLUMES.get(section[:1])
             dialect = "man" if words[0] == ".TH" else "mdoc"
             if dialect == "man":
                 date = words[3] if len(words) > 3 else ""

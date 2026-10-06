@@ -14,7 +14,7 @@ import tempfile
 
 
 CRATE = Path(__file__).resolve().parents[2]
-VENDOR = CRATE / "vendor" / "mandoc-cvs-20260927T130954Z"
+VENDOR = CRATE / "vendor" / "mandoc-cvs-20261006T140200Z"
 CASES = CRATE / "src" / "tests" / "append_growth" / "cases.json"
 TRANSLATIONS = CRATE / "tests" / "fixtures" / "translation.json"
 

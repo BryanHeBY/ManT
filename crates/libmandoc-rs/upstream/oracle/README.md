@@ -61,7 +61,7 @@ Otherwise it invokes `build-oracle` and accepts only the exact registered
 attestation; it never registers a different build automatically.
 
 When the archive was also removed, pass a saved exact archive with
-`--archive /path/to/upstream-cvs-20260927T130954Z.tar.gz`, or provide a CVS
+`--archive /path/to/upstream-cvs-20261006T140200Z.tar.gz`, or provide a CVS
 client with `--cvs /path/to/cvs` (also accepted through `CVS`). The latter
 uses `freeze-cvs-snapshot` to perform two official checkouts at the locked
 UTC cutoff and verifies the complete archive and source-lock hashes. All
@@ -87,8 +87,8 @@ record and attestation retain this template so temporary names cannot change
 their hashes. Configuration and upstream source are unchanged.
 
 Two independent builds at separate output paths produced identical binaries,
-build records and all four configure evidence files. The new active identity
-is `cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930`,
+build records and all four configure evidence files. The active identity at that migration
+was `cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930`,
 with binary SHA-256
 `482cf7950a13b0aea4741d8cc7ed5e411435c7f4fcc1923c8cf29b5bf05accb6`.
 The previous identity remains historical. The reference passes ASCII, UTF-8
@@ -97,3 +97,13 @@ An isolated copy with no archive, binary or build evidence restored the same
 identity through the public restoration script using the saved exact
 archive. A different toolchain or configure result fails restoration and
 requires a separately reviewed maintainer attestation.
+
+## Active source refresh: 2026-10-06
+
+The current source lock is `cvs-20261006T140200Z`. Its active identity is
+`cvs-20261006T140200Z-linux-x86_64-gcc-16.2.1-reproducible`, with binary
+SHA-256 `6297105d1370a44fd306851ae5beab3f23492d756a682f8a0693896922249ea0`.
+Two independent builds with the unchanged recipe reproduced the binary, build
+record and all four configure evidence files. Previous identities are retained
+as historical. The refresh and fixture provenance are described in
+[REFRESH-20261006.md](../REFRESH-20261006.md).

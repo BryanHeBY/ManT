@@ -6,7 +6,7 @@ mant-roff — native man, mdoc, tbl, eqn, and roff compatibility in ManT
 
 ## Description
 
-ManT reads native manual pages through the vendored `libmandoc` `cvs-20260927T130954Z` parser, pinned to 2026-09-27 13:09:54 UTC, and lowers its validated owned syntax tree into [mant-ir(7)](mant-ir.md). The supported authoring languages are mandoc's [man(7)](https://mandoc.bsd.lv/man/man.7.html) and [mdoc(7)](https://mandoc.bsd.lv/man/mdoc.7.html), with the subset of roff requests, escapes, [tbl(7)](https://mandoc.bsd.lv/man/tbl.7.html), and [eqn(7)](https://mandoc.bsd.lv/man/eqn.7.html) that occur inside those manuals.
+ManT reads native manual pages through the vendored `libmandoc` `cvs-20261006T140200Z` parser, pinned to 2026-10-06 14:02:00 UTC, and lowers its validated owned syntax tree into [mant-ir(7)](mant-ir.md). The supported authoring languages are mandoc's [man(7)](https://mandoc.bsd.lv/man/man.7.html) and [mdoc(7)](https://mandoc.bsd.lv/man/mdoc.7.html), with the subset of roff requests, escapes, [tbl(7)](https://mandoc.bsd.lv/man/tbl.7.html), and [eqn(7)](https://mandoc.bsd.lv/man/eqn.7.html) that occur inside those manuals.
 
 ManT is a semantic manual reader, not a general troff formatter. Device geometry, page headers and footers, traps, diversions, arbitrary postprocessor commands, and print-specific typography are outside its output model.
 
@@ -853,7 +853,7 @@ Man paragraph distance depends on source predecessors, including predecessors ou
 
 Man `nf`/`fi` and `EX`/`EE` boundaries consume a pending `HP` first line even before text is emitted. If `HP` starts inside an existing no-fill region, its first physical line keeps the first-line origin and later lines use the hanging origin; `\c` continuations do not consume that boundary. This preserves significant literal rows without splitting ordinary adjacent no-fill regions unnecessarily.
 
-`TS`/`TE` and `EQ`/`EN` are handled as structured preprocessors, described below. For the distinction between requests implemented, ignored, unsupported, and insecure in the pinned upstream parser, consult the [vendored roff(7) source](https://github.com/BryanHeBY/ManT/blob/main/crates/libmandoc-rs/vendor/mandoc-cvs-20260927T130954Z/roff.7), whose exact upstream revision and hash are recorded in the repository's `crates/libmandoc-rs/upstream/FILES` manifest. The [online mandoc roff(7) reference](https://mandoc.bsd.lv/man/roff.7.html) tracks an evolving revision rather than fixing the `cvs-20260927T130954Z` contract. ManT's local patches and stricter source/include boundary are described in this manual.
+`TS`/`TE` and `EQ`/`EN` are handled as structured preprocessors, described below. For the distinction between requests implemented, ignored, unsupported, and insecure in the pinned upstream parser, consult the [vendored roff(7) source](https://github.com/BryanHeBY/ManT/blob/main/crates/libmandoc-rs/vendor/mandoc-cvs-20261006T140200Z/roff.7), whose exact upstream revision and hash are recorded in the repository's `crates/libmandoc-rs/upstream/FILES` manifest. The [online mandoc roff(7) reference](https://mandoc.bsd.lv/man/roff.7.html) tracks an evolving revision rather than fixing the `cvs-20261006T140200Z` contract. ManT's local patches and stricter source/include boundary are described in this manual.
 
 ## Escapes
 

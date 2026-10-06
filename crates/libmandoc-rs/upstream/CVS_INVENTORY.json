@@ -1,5 +1,5 @@
 {
-  "cutoff": "2026-09-27 13:09:54 UTC",
+  "cutoff": "2026-10-06 14:02:00 UTC",
   "files": {
     "INSTALL": {
       "revision": "1.24",
@@ -22,14 +22,14 @@
       "sha256": "2f690fa0cdbb28b06e020fa57b3b310552a14a968064bdd690308ea2776b3712"
     },
     "NEWS": {
-      "revision": "1.51",
+      "revision": "1.52",
       "scope": "shipping",
-      "sha256": "c1909a2077d87ef25d39369b894d1d35196e343fc4df92ee62fc2425387d8eb5"
+      "sha256": "1bb9f8663188a5ce4f7705151a58edda1896224932dea9b0ddf63a961fda1bfb"
     },
     "TODO": {
-      "revision": "1.344",
+      "revision": "1.346",
       "scope": "shipping",
-      "sha256": "cf09c2343a8cff8c178ac4dea7c00cf7503148b17f7bb73bf1fac4bcce3a5102"
+      "sha256": "695853e05678b4d254222d954a0a059f4f21898dee73926e92d658070ca962c9"
     },
     "apropos.1": {
       "revision": "1.52",
@@ -607,14 +607,14 @@
       "sha256": "dcea0f8b2eaad6d8bc1661693d3b9940f8dbc37cf31d1004706f8164eb6df89b"
     },
     "mdoc_validate.c": {
-      "revision": "1.397",
+      "revision": "1.398",
       "scope": "shipping",
-      "sha256": "1890080d40ee36607a43564aa75c5cecd9b40b27143e62ae685cb060639c0e86"
+      "sha256": "b19c42aa0314c70e25415707f5edc80ac8da3dc0f2b95bcdd0192a5e9e72ba5b"
     },
     "msec.c": {
-      "revision": "1.16",
+      "revision": "1.17",
       "scope": "shipping",
-      "sha256": "f36b1b75bf9f089ee55d3a99a6071af77d7208a8461cff26123c49654fc2e714"
+      "sha256": "60c807f4b5b0d06e5fbe8337f545288484943172035e24ce032c2a42f65381ad"
     },
     "msec.in": {
       "revision": "1.8",
@@ -2512,9 +2512,9 @@
       "sha256": "3140b9e9ca88805cce8fa59761131c9c44daaacea4eb0fb9b407e0b177e071b5"
     },
     "regress/man/TH/Makefile": {
-      "revision": "1.1",
+      "revision": "1.2",
       "scope": "regress",
-      "sha256": "134a1d6981112880ecabf52a144b0021851734d864bd15548056542996f9e401"
+      "sha256": "f3f330ce018a441b1c393c410ca28a3948cdfa68ed6a253112bb067c82caa0f2"
     },
     "regress/man/TH/baddate.in": {
       "revision": "1.2",
@@ -2680,6 +2680,16 @@
       "revision": "1.3",
       "scope": "regress",
       "sha256": "bf4652c66ee3cf0d30ca12834e5740b353a5560c96cad1d7de95c9d37791029c"
+    },
+    "regress/man/TH/secsuffix.in": {
+      "revision": "1.1",
+      "scope": "regress",
+      "sha256": "e487377e04f04f311451d3e7ce44c3cb39a5afa851a9338f702443716455a144"
+    },
+    "regress/man/TH/secsuffix.out_ascii": {
+      "revision": "1.1",
+      "scope": "regress",
+      "sha256": "95db40b72caeea4c57f6dc6c53787a352d74f70e003d3836a9ea49e43bd90401"
     },
     "regress/man/TH/sixargs.in": {
       "revision": "1.2",
@@ -3527,34 +3537,34 @@
       "sha256": "84bcc4093e3dfd30a18a5d64e83725388b05c88afb1429e802ff50510d9ba4bc"
     },
     "regress/mdoc/Bd/offset-empty.in": {
-      "revision": "1.2",
+      "revision": "1.3",
       "scope": "regress",
-      "sha256": "02f9b0095291ad714714587ee4fb450e96df3d3ee2bb8bec44c92105168e49e2"
+      "sha256": "ab4a53863370057234d9c9893391e64f5dc81cdae806db27d6fa8dc0082169d5"
     },
     "regress/mdoc/Bd/offset-empty.out_ascii": {
-      "revision": "1.3",
+      "revision": "1.4",
       "scope": "regress",
-      "sha256": "876ebe2bb005c9210aa066916533ee330e5c225348784809aa9fbaeedd717e75"
+      "sha256": "ee9deaaa6b319a659d961329dcadc28aff946ad87c55c81c7d021bcbdeaea01a"
     },
     "regress/mdoc/Bd/offset-empty.out_markdown": {
-      "revision": "1.3",
+      "revision": "1.4",
       "scope": "regress",
-      "sha256": "26d8e23de70e6a7310c333af00f204880034bb4571ced490ba72da0698d17682"
+      "sha256": "26048beea0aacf3dec5cd927f5a541ba5c67c4853c7664421232efb96d618bdb"
     },
     "regress/mdoc/Bd/offset-neg.in": {
-      "revision": "1.3",
+      "revision": "1.4",
       "scope": "regress",
-      "sha256": "a70eaa976b38671d58af5e5b43d3de3e1af99d7287176be500f82f5ae0b6af36"
+      "sha256": "1e6a18cf678cbbf39f5a8a3531576e3c52a3ad73b35475b80270acf4a8f2d8d1"
     },
     "regress/mdoc/Bd/offset-neg.out_ascii": {
-      "revision": "1.3",
+      "revision": "1.4",
       "scope": "regress",
-      "sha256": "1781c0627954c01b6f075228ff2e3c115cc245945eb032ca64cafb2ff9b1175f"
+      "sha256": "f7ab5302c2266f30a237317b3b0be5f426e9a4cd87e1b188ad95b76c198424cd"
     },
     "regress/mdoc/Bd/offset-neg.out_markdown": {
-      "revision": "1.3",
+      "revision": "1.4",
       "scope": "regress",
-      "sha256": "e537d198a8a123f9a764ff077d9efcc6a1ae3c15d6d5de27fd9b997740946ec7"
+      "sha256": "8568f27359b680bcb086c216f548afedfa6f5df3a0c11e0b555a291d973446dc"
     },
     "regress/mdoc/Bd/paragraph.in": {
       "revision": "1.3",
@@ -3787,9 +3797,9 @@
       "sha256": "3bd165d5662027f2a17b8e1eda11f73e29b9bd84c2dd9cb47e9f101c3fae1a6a"
     },
     "regress/mdoc/Bl/Makefile": {
-      "revision": "1.12",
+      "revision": "1.13",
       "scope": "regress",
-      "sha256": "4bcdbb8abf7866b8d33d010a3659439770e5125543ac930a3c7dd9e20dc9be73"
+      "sha256": "8ba31e9d8526d2be742725a51bccef12a175473282457af719e4c944182cadf5"
     },
     "regress/mdoc/Bl/badargs.in": {
       "revision": "1.2",
@@ -4302,19 +4312,19 @@
       "sha256": "7dcd809428410a6dff284afe1d66b2e4076110e48005c8ae0031776788c11f48"
     },
     "regress/mdoc/Bl/offset.in": {
-      "revision": "1.3",
+      "revision": "1.4",
       "scope": "regress",
-      "sha256": "ef918dc1dd95a970d80777a76a7aed76e8c20d07c226c472fc060b81d1c5687a"
+      "sha256": "184e32ce87404e6208b0d1338e4422c5db34d138078ecd96f1c853599a0cc5d6"
     },
     "regress/mdoc/Bl/offset.out_ascii": {
-      "revision": "1.4",
+      "revision": "1.5",
       "scope": "regress",
-      "sha256": "43ea8c3a689937aceec680efb1fd39651626abd4264ebe648ac6af2d3fb9fc3a"
+      "sha256": "b6da64e7b45e358c4416972338e72f16d45c7267058b637e8c0aa41d546c2ed5"
     },
     "regress/mdoc/Bl/offset.out_markdown": {
-      "revision": "1.4",
+      "revision": "1.5",
       "scope": "regress",
-      "sha256": "5ba97a78bf5cebb4103327bc0de76777d2c3508a0c64bec5794b34b1dad97b8c"
+      "sha256": "759df64f5a14de720d4404c619148adec184ff8b0fb5b22291596a5d3d768c80"
     },
     "regress/mdoc/Bl/ohang.in": {
       "revision": "1.2",
@@ -4395,6 +4405,21 @@
       "revision": "1.2",
       "scope": "regress",
       "sha256": "0c91e50e5723bf4a8b8ec6f382aba5365a6327f51db38c66a38ba78390359950"
+    },
+    "regress/mdoc/Bl/width.in": {
+      "revision": "1.1",
+      "scope": "regress",
+      "sha256": "0926ffbd5ab60e0d7b3ea93fcafb638448bec8cc32985efefdb3235208cd63d8"
+    },
+    "regress/mdoc/Bl/width.out_ascii": {
+      "revision": "1.1",
+      "scope": "regress",
+      "sha256": "57bcb126ab71eb797ceda8d7148813c3a7b9fcaee50779377243703a79c369e8"
+    },
+    "regress/mdoc/Bl/width.out_markdown": {
+      "revision": "1.1",
+      "scope": "regress",
+      "sha256": "f109be5452497535e358587f1405824b7bff8b34b8b2d9a0cede42c4ce4f1091"
     },
     "regress/mdoc/Brq/Makefile": {
       "revision": "1.4",
@@ -4872,9 +4897,9 @@
       "sha256": "a35021e8917743cc89cafebf5cc3e6037485a22e14f8396a9b15fbee3edc2e4e"
     },
     "regress/mdoc/Dt/Makefile": {
-      "revision": "1.6",
+      "revision": "1.7",
       "scope": "regress",
-      "sha256": "f0eb2ff5106a6d323bcf9d5c7826121a8d683a70fa529d099297c8bb12889f57"
+      "sha256": "c6de6d0898b6b8495672335452d154f14e912c1d34ef3d867d5edacedf122cee"
     },
     "regress/mdoc/Dt/badsec.in": {
       "revision": "1.2",
@@ -5075,6 +5100,21 @@
       "revision": "1.3",
       "scope": "regress",
       "sha256": "306d780ca1084703c4eaad1eab8e6f0cf9550e72a7c0c527193a075439d2e636"
+    },
+    "regress/mdoc/Dt/secsuffix.in": {
+      "revision": "1.1",
+      "scope": "regress",
+      "sha256": "6d7706928e2cf54ef415182ae45635469ff8256ef7d8f8bf07fb055f07bb22cd"
+    },
+    "regress/mdoc/Dt/secsuffix.out_ascii": {
+      "revision": "1.1",
+      "scope": "regress",
+      "sha256": "c54ca51fa399bcc92b31ca3aadf85d5ac35746d20ccf28441e5da1479aeb898e"
+    },
+    "regress/mdoc/Dt/secsuffix.out_markdown": {
+      "revision": "1.1",
+      "scope": "regress",
+      "sha256": "f046b4417d9f41e19dd022c7ea1b31108de1670ba9d8ce31894247ce2c896777"
     },
     "regress/mdoc/Dv/Makefile": {
       "revision": "1.4",
@@ -11202,7 +11242,7 @@
       "sha256": "56e3f9a893994a64626aae3d97b9cfd2acbdd7a10bc2543bfc6f5756d8e78ff1"
     }
   },
-  "regressCount": 2042,
+  "regressCount": 2050,
   "schema": "libmandoc-rs.cvs-inventory/v1",
   "shippingCount": 198
 }

@@ -23,6 +23,11 @@
     "cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930": {
       "path": "crates/libmandoc-rs/upstream/oracle/attestations/cvs-20260927T130954Z-linux-x86_64-gcc-16.2.1-reproducible-20260930.json",
       "sha256": "6ecd222956e62ffc5977d37a8ef08f3138c487e93bfb777e904f9cb5cb956ed1",
+      "status": "historical"
+    },
+    "cvs-20261006T140200Z-linux-x86_64-gcc-16.2.1-reproducible": {
+      "path": "crates/libmandoc-rs/upstream/oracle/attestations/cvs-20261006T140200Z-linux-x86_64-gcc-16.2.1-reproducible.json",
+      "sha256": "a3949e3cda3f057f379703f75fee06228e2edc3314baaec52b3c236a6686ff3f",
       "status": "active"
     }
   },

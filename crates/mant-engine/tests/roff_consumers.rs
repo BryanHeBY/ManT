@@ -11,7 +11,7 @@ use std::fmt::Write as _;
 #[test]
 fn lowers_the_pinned_large_mdoc_fixture_without_empty_sections() {
     let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../libmandoc-rs/vendor/mandoc-cvs-20260927T130954Z/mandoc.1");
+        .join("../libmandoc-rs/vendor/mandoc-cvs-20261006T140200Z/mandoc.1");
     // This cross-crate corpus check must actually execute in a source checkout;
     // published unit tests do not include this integration-test file.
     let document = mant_loader::parse_manual_source(&source).expect("lower vendored mandoc manual");

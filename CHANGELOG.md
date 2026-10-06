@@ -129,6 +129,12 @@ that crate was not published for that change.
 
 ### mant-ir, mant-protocol, mant-codec, mant-loader, mant-query, mant-render, mant-engine and mant 0.12.0
 
+- Refresh the pinned mandoc source to `cvs-20261006T140200Z`. List width samples
+  of the form `.macro text` use the text only; manual section suffixes can fall
+  back to the first character for volume titles while keeping the full section
+  and explicit volume precedence. Register a reproducible pristine oracle,
+  replay active field fixtures against it, retain historical fixture identities,
+  and recognize the updated native page headers in audit tools.
 - Organize document validation, Markdown artifacts and table projection, shared
   roff flow, and TUI lowering into private modules with explicit responsibilities.
   Group large row, table and reference test suites by contract with shared
