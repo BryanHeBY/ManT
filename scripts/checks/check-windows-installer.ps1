@@ -11,11 +11,20 @@ $PreviousEnvironment = @{}
 foreach ($Name in $EnvironmentNames) {
     $PreviousEnvironment[$Name] = [Environment]::GetEnvironmentVariable($Name, "Process")
 }
-$PreviousUserPath = [Environment]::GetEnvironmentVariable("Path", "User")
 $DownloadState = @{ Count = 0 }
 
 function Assert([bool]$Condition, [string]$Message) {
     if (-not $Condition) { throw $Message }
+}
+function Get-UnexpandedUserPath {
+    # Environment.GetEnvironmentVariable(User) expands REG_EXPAND_SZ against
+    # the current process. Our isolated USERPROFILE/APPDATA values change that
+    # presentation without changing the persisted PATH. Compare raw storage.
+    $Key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey("Environment", $false)
+    if ($null -eq $Key) { return $null }
+    try {
+        return $Key.GetValue("Path", $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+    } finally { $Key.Dispose() }
 }
 function Directory([string]$Path) { [IO.Directory]::CreateDirectory($Path) | Out-Null }
 function Write-Text([string]$Path, [string]$Text) {
@@ -48,6 +57,7 @@ function Install([string]$ExecutableDirectory, [string]$DocumentDirectory, [swit
 function Uninstall { & $Installer -Uninstall -NoModifyPath }
 
 try {
+    $PreviousUserPath = Get-UnexpandedUserPath
     Assert (Test-Path -LiteralPath $Binary -PathType Leaf) "missing installer-test binary: $Binary"
     $VersionOutput = & $Binary --version
     Assert ($LASTEXITCODE -eq 0 -and $VersionOutput -match '^mant\s+(\S+)') "cannot identify installer-test binary"
@@ -164,7 +174,7 @@ try {
     Assert (Test-Path -LiteralPath (Join-Path $LegacyBin "mant.exe")) "conflicting migration removed old binary"
     Assert ([IO.File]::ReadAllText((Join-Path $DefaultDocs "personal.md")) -eq "# conflicting destination`n") "conflicting migration overwrote destination data"
 
-    Assert ([Environment]::GetEnvironmentVariable("Path", "User") -ceq $PreviousUserPath) "installer suite changed persistent user PATH"
+    Assert ((Get-UnexpandedUserPath) -ceq $PreviousUserPath) "installer suite changed persistent user PATH"
     Write-Host "Windows installer lifecycle checks passed"
 } finally {
     foreach ($Name in $EnvironmentNames) {
