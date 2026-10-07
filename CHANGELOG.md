@@ -421,6 +421,8 @@ that crate was not published for that change.
 
 ### mant-ui 0.12.0
 
+- Remove dialog ellipses from Manual, Navigate and Search action labels so
+  they cannot be mistaken for clipped text. Actions and shortcuts are unchanged.
 - Add current-document Outline search with `Ctrl+G`, a Search-menu action and
   shared bottom-field editing with independent page/outline query state.
   Match complete titles, entry names/forms and existing reference labels/targets;

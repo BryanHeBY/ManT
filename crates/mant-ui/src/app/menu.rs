@@ -109,7 +109,7 @@ pub(super) enum MenuAction {
 
 const MANUAL_MENU: &[MenuEntry] = &[
     MenuEntry {
-        label: "Open Document…",
+        label: "Open Document",
         shortcut: "Ctrl+O",
         action: MenuAction::OpenDocument,
     },
@@ -173,7 +173,7 @@ const VIEW_MENU: &[MenuEntry] = &[
 
 const NAVIGATE_MENU: &[MenuEntry] = &[
     MenuEntry {
-        label: "Open Reference…",
+        label: "Open Reference",
         shortcut: "O",
         action: MenuAction::OpenReference,
     },
@@ -221,12 +221,12 @@ const NAVIGATE_MENU: &[MenuEntry] = &[
 
 const SEARCH_MENU: &[MenuEntry] = &[
     MenuEntry {
-        label: "Find in Page…",
+        label: "Find in Page",
         shortcut: "Ctrl+F / /",
         action: MenuAction::Find,
     },
     MenuEntry {
-        label: "Find in Outline…",
+        label: "Find in Outline",
         shortcut: "Ctrl+G",
         action: MenuAction::FindOutline,
     },

@@ -830,7 +830,7 @@ Closing the field removes highlighting but retains the confirmed query, so
 ### Outline Search
 
 - `Ctrl+G`: Open `Find Outline` in the same bottom search field. The Search
-  menu also exposes `Find in Outline…`; opening it shows the Outline sidebar.
+  menu also exposes `Find in Outline`; opening it shows the Outline sidebar.
 - `Enter`: Confirm the query; after confirmation, select the next matching node.
 - `Up` / `Down`: Select the previous / next confirmed matching node, wrapping
   at the ends. `n` / `Shift+N` also navigate confirmed results.

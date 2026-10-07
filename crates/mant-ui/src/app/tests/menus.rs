@@ -13,6 +13,43 @@ const MNEMONICS: [(char, MenuId); 6] = [
 ];
 
 #[test]
+fn action_labels_do_not_use_ellipses_to_indicate_further_input() {
+    use super::super::menu::menu_entries;
+
+    for id in MenuId::ALL {
+        for entry in menu_entries(id) {
+            assert!(
+                !entry.label.contains('…'),
+                "{}: {}",
+                id.label(),
+                entry.label
+            );
+            assert!(
+                !entry.label.ends_with("..."),
+                "{}: {}",
+                id.label(),
+                entry.label
+            );
+        }
+    }
+    let mut terminal = Terminal::new(TestBackend::new(100, 24)).unwrap();
+    let mut app = App::new(&navigation_bundle());
+    for (id, label) in [
+        (MenuId::Manual, "Open Document"),
+        (MenuId::Navigate, "Open Reference"),
+        (MenuId::Search, "Find in Page"),
+        (MenuId::Search, "Find in Outline"),
+    ] {
+        assert!(menu_entries(id).iter().any(|entry| entry.label == label));
+        app.open_menu(id);
+        terminal.draw(|frame| app.draw(frame)).unwrap();
+        let screen = terminal.backend().to_string();
+        assert!(screen.contains(label));
+        assert!(!screen.contains(&format!("{label}…")));
+    }
+}
+
+#[test]
 fn alt_letters_open_the_matching_menu_without_running_an_action() {
     for (letter, id) in MNEMONICS {
         for (character, modifiers) in [
