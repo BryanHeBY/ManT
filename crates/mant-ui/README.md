@@ -31,6 +31,14 @@ catalog, search, and cross-document interactions without serializing the IR.
   owner retain folding. `O` opens the reference chooser and Shift+Y copies a
   reference target (choosing first when invoked on an associated owner).
 - Confirmed full-document search with active and inactive match highlighting.
+- Current-snapshot Outline finding through `Ctrl+G` and the Search menu.
+  Complete labels, entry names/forms and inventoried reference labels/targets
+  match independently of folding and truncation; synthetic groups are context,
+  not results. Hits retain node and field ranges through grapheme-safe wrapping.
+  Shared page/outline input editing keeps separate drafts, queries and cursors;
+  visited ancestor paths are temporary and only the exit position stays revealed.
+  Search results never imply a document-open capability request. Bounded indexes
+  and result inventories disclose partial coverage instead of claiming a miss.
 - tldr quick-reference and source-document rendering through one layout model.
 - Span-aware table columns and cell-local anchors that retain their exact
   rendered rows through independent wrapping, stacking and nested tables.

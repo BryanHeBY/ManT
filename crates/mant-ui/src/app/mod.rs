@@ -10,6 +10,7 @@ mod menu;
 mod navigation;
 mod navigation_state;
 use navigation_state::{HistoryDirection, HistoryLocation, LocalTarget, NavigationState};
+mod outline_search;
 mod references;
 mod render;
 mod search;
@@ -30,6 +31,7 @@ use mant_protocol::{
 use ratatui::layout::Rect;
 use unicode_width::UnicodeWidthChar;
 
+use self::outline_search::{OutlineSearchState, SearchTarget};
 use self::{finder::FinderState, menu::MenuId, search::SearchState};
 
 use crate::{
@@ -206,6 +208,9 @@ pub struct App {
     full_outline_labels: bool,
     quit: bool,
     search: SearchState,
+    outline_search: OutlineSearchState,
+    search_target: SearchTarget,
+    last_search_target: SearchTarget,
     scope_documents: Vec<Arc<ResolvedContent>>,
     finder: FinderState,
     effects: PendingEffects,
@@ -295,6 +300,9 @@ impl App {
             full_outline_labels: false,
             quit: false,
             search: SearchState::default(),
+            outline_search: OutlineSearchState::default(),
+            search_target: SearchTarget::Page,
+            last_search_target: SearchTarget::Page,
             scope_documents,
             finder,
             effects: PendingEffects::default(),
@@ -404,6 +412,9 @@ impl App {
             Arc::downgrade(&bundle),
         );
         self.session = DocumentSession::new(bundle, view);
+        self.outline_search = OutlineSearchState::default();
+        self.search_target = SearchTarget::Page;
+        self.last_search_target = SearchTarget::Page;
         self.selected = 0;
         self.expanded = self
             .session

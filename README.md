@@ -124,7 +124,14 @@ after scrolling settles, the outline follows the first visible document node.
   order; click a tab to return to its last selected node.
 - `Alt+Left` / `Alt+Right` move backward and forward through document jumps.
 - `Ctrl+F` or `/` opens confirmed full-page search.
-- `n` and `Shift+N` select the next and previous matches.
+- `Ctrl+G` searches the current Outline's complete titles, entry names/forms
+  and document-reference labels/targets, including folded nodes. Both scopes
+  share the bottom search field but keep separate queries and editing positions.
+  Confirm with Enter, then use Up/Down or Enter to cycle results. Outline counts
+  are per node; generated `Entries`/`Doc Refs` labels are not search results.
+- `n` and `Shift+N` resume the next and previous match in the last confirmed or
+  navigated search scope. Outline finding reveals ancestor paths temporarily;
+  Escape removes highlighting and retains only the current position's path.
 - Mouse drag selects and immediately copies rendered text as plain text; a
   short confirmation appears after success. `y` or `Ctrl+Shift+C` copies the
   current selection again, as does right-clicking inside the document.

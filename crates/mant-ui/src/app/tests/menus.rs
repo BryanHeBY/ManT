@@ -154,7 +154,7 @@ fn search_keeps_plain_letters_and_resumes_at_the_retained_cursor() {
             terminal.draw(|frame| app.draw(frame)).unwrap();
             let screen = terminal.backend().to_string();
             assert!(screen.contains("←/→ menus"));
-            assert!(!screen.contains("Find: mevnsh"));
+            assert!(!screen.contains("Find Page: mevnsh"));
             app.handle_key(KeyEvent::new(dismiss, KeyModifiers::NONE));
             assert_eq!(app.search.mode, mode);
             assert_eq!(app.search.cursor, cursor);
@@ -162,7 +162,12 @@ fn search_keeps_plain_letters_and_resumes_at_the_retained_cursor() {
             app.handle_key(KeyEvent::new(KeyCode::Char('!'), KeyModifiers::NONE));
             assert_eq!(app.search.draft, "mevns!h");
             terminal.draw(|frame| app.draw(frame)).unwrap();
-            assert!(terminal.backend().to_string().contains("Find: mevns!h"));
+            assert!(
+                terminal
+                    .backend()
+                    .to_string()
+                    .contains("Find Page: mevns!h")
+            );
         }
     }
 }

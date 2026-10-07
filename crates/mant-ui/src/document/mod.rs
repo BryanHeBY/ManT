@@ -9,6 +9,7 @@ mod lower;
 mod navigation;
 use lower::DocumentBuilder;
 mod model;
+mod outline;
 mod references;
 mod search;
 mod selection;
@@ -44,6 +45,8 @@ use model::{
     StyledInlineLine, WrapMode,
 };
 
+pub(crate) use self::outline::{OutlineField, OutlineRecord};
+pub(crate) use self::search::LiteralSearch;
 pub use self::search::RenderedSearchMatch;
 #[cfg(test)]
 use self::search::{RenderedSearchFragment, RenderedSearchSourceCell};

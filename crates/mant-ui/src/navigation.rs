@@ -20,6 +20,7 @@ use mant_render::cells::{graphemes, prefix_columns, suffix_columns};
 
 use crate::{NavNode, text::sanitize_terminal_text, theme};
 
+pub(crate) mod search;
 mod tree;
 pub(crate) use tree::TreePlan;
 #[cfg(test)]

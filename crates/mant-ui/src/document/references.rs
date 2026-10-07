@@ -13,6 +13,13 @@ const MAX_RECORDS: usize = 1000;
 const MAX_PAYLOAD: usize = 1024 * 1024;
 const MAX_LABEL: usize = 4096;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum ReferenceLabelSource {
+    Authored,
+    Truncated,
+    Generated,
+}
+
 /// Operation-only identity map; pointer keys never leave this build or its IR.
 pub(super) type ReferenceOrigins = HashMap<usize, Arc<str>>;
 
@@ -23,6 +30,7 @@ pub(super) struct ReferenceRecord {
     pub(super) owner: String,
     fallback_owner: String,
     pub(super) label: String,
+    pub(super) label_source: ReferenceLabelSource,
     pub(super) target: LinkTarget,
     attachment: mant_render::ReferenceAttachment,
 }
@@ -70,14 +78,7 @@ impl ReferenceNavigation {
                     result.limited = true;
                     return ControlFlow::Break(());
                 }
-                let fallback_owner = match occurrence.location {
-                    ContentLocationRef::DocumentHeading { .. } => ROOT_ID,
-                    ContentLocationRef::SectionHeading { sections, .. }
-                    | ContentLocationRef::Content { sections, .. } => {
-                        mant_ir::resolve_content_section(document, sections)
-                            .map_or(ROOT_ID, |section| section.id.as_str())
-                    }
-                };
+                let fallback_owner = source_section_owner(document, occurrence.location);
                 let semantic_owner = occurrence
                     .semantic_owner
                     .and_then(|owner| owner.owner.facts())
@@ -107,7 +108,8 @@ impl ReferenceNavigation {
                         .saturating_sub(64)
                         / 9,
                 );
-                let Some(label) = display_label(occurrence, budget, label_limit) else {
+                let Some((label, label_source)) = display_label(occurrence, budget, label_limit)
+                else {
                     result.limited = true;
                     return ControlFlow::Break(());
                 };
@@ -134,6 +136,7 @@ impl ReferenceNavigation {
                     owner: owner.to_owned(),
                     fallback_owner: fallback_owner.to_owned(),
                     label,
+                    label_source,
                     target: occurrence.target.clone(),
                     attachment,
                 });
@@ -282,6 +285,20 @@ impl ReferenceNavigation {
                 is_last: true,
                 parent_id: None,
             });
+        }
+    }
+}
+
+fn source_section_owner<'doc>(
+    document: &'doc Document,
+    location: ContentLocationRef<'_>,
+) -> &'doc str {
+    match location {
+        ContentLocationRef::DocumentHeading { .. } => ROOT_ID,
+        ContentLocationRef::SectionHeading { sections, .. }
+        | ContentLocationRef::Content { sections, .. } => {
+            mant_ir::resolve_content_section(document, sections)
+                .map_or(ROOT_ID, |section| section.id.as_str())
         }
     }
 }
@@ -443,23 +460,33 @@ fn display_label(
     occurrence: mant_ir::LinkOccurrenceRef<'_, '_>,
     budget: &mut mant_ir::ReferenceWorkBudget,
     limit: usize,
-) -> Option<String> {
+) -> Option<(String, ReferenceLabelSource)> {
     let label =
         mant_ir::reference_label(occurrence.label, occurrence.location.depth(), budget, limit)
             .ok()?;
     if label.text.is_empty() && !label.truncated {
-        return Some(format!(
-            "{} (unlabelled)",
-            bounded_display_limit(&target_text(occurrence.target), limit)
+        return Some((
+            format!(
+                "{} (unlabelled)",
+                bounded_display_limit(&target_text(occurrence.target), limit)
+            ),
+            ReferenceLabelSource::Generated,
         ));
     }
     let normalized = label.text.replace(['\n', '\r', '\t'], " ");
     let text = crate::text::sanitize_terminal_text(&normalized);
-    Some(if label.truncated {
-        format!("{text}…")
-    } else {
-        text.into_owned()
-    })
+    Some((
+        if label.truncated {
+            format!("{text}…")
+        } else {
+            text.into_owned()
+        },
+        if label.truncated {
+            ReferenceLabelSource::Truncated
+        } else {
+            ReferenceLabelSource::Authored
+        },
+    ))
 }
 
 fn reference_node(record: &ReferenceRecord, depth: usize, is_last: bool, parent: &str) -> NavNode {

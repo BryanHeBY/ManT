@@ -421,6 +421,16 @@ that crate was not published for that change.
 
 ### mant-ui 0.12.0
 
+- Add current-document Outline search with `Ctrl+G`, a Search-menu action and
+  shared bottom-field editing with independent page/outline query state.
+  Match complete titles, entry names/forms and existing reference labels/targets;
+  exclude synthetic group labels, counts and tree chrome. Count nodes once and
+  retain logical field ranges across truncation, wrapping and resize. Highlight
+  hidden-hit context, reveal visited ancestor paths temporarily and keep the exit
+  position visible without overwriting user folds or opening linked documents.
+  Bound search text and result inventories and disclose partial coverage. Reset
+  Outline results on snapshot replacement; n/N resumes the last used confirmed
+  scope. Update keyboard help, reader documentation and the self manual.
 - Add case-insensitive `Alt+M/E/V/N/S/H` menu access and menu-local letter
   switching alongside the existing F10 and arrow-key controls. Underline only
   each title's initial without changing title/tab widths or colors.

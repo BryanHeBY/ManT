@@ -1,6 +1,7 @@
 //! Projects logical text searches back onto exact terminal cell ranges.
 
 use std::collections::{BTreeMap, HashMap};
+use std::ops::Range;
 
 use ratatui::text::{Line, Span, Text};
 
@@ -43,25 +44,20 @@ impl RenderedDocument {
     /// Search visible terminal rows without rebuilding or traversing the IR.
     #[must_use]
     pub fn search(&self, query: &str) -> Vec<RenderedSearchMatch> {
+        if query.is_empty() {
+            return Vec::new();
+        }
         // Use the same context-independent scalar transform as indexed text.
         // Whole-string lowercase has context rules (notably final sigma) that
         // differ from the per-scalar transform needed for exact cell mapping.
-        let needle = fold_for_search(query).value;
-        if needle.is_empty() {
-            return Vec::new();
-        }
+        let matcher = LiteralSearch::new(query);
         self.search_records
             .iter()
             .flat_map(|record| {
-                let folded = fold_for_search(&record.text);
-                folded
-                    .value
-                    .match_indices(&needle)
-                    .filter_map(|(start, value)| {
-                        let source_start = folded.starts[start];
-                        let source_end = folded.ends[start + value.len() - 1];
-                        search_match_for_range(record, source_start, source_end)
-                    })
+                matcher
+                    .ranges(&record.text, usize::MAX)
+                    .into_iter()
+                    .filter_map(|range| search_match_for_range(record, range.start, range.end))
                     .collect::<Vec<_>>()
             })
             .collect()
@@ -138,6 +134,32 @@ impl RenderedDocument {
             *line = highlight_line(line, &ranges, active);
         }
         text
+    }
+}
+
+/// Shared scalar-folded literal matching, with original UTF-8 byte ranges.
+/// A caller-owned limit bounds retained matches without splitting scalars.
+pub(crate) struct LiteralSearch {
+    needle: String,
+}
+
+impl LiteralSearch {
+    pub(crate) fn new(query: &str) -> Self {
+        Self {
+            needle: fold_for_search(query).value,
+        }
+    }
+    pub(crate) fn ranges(&self, text: &str, limit: usize) -> Vec<Range<usize>> {
+        if self.needle.is_empty() || limit == 0 {
+            return Vec::new();
+        }
+        let folded = fold_for_search(text);
+        folded
+            .value
+            .match_indices(&self.needle)
+            .take(limit)
+            .map(|(start, value)| folded.starts[start]..folded.ends[start + value.len() - 1])
+            .collect()
     }
 }
 

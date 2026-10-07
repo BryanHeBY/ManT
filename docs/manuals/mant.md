@@ -816,7 +816,7 @@ terminal accepted it.
 
 ### Page Search
 
-- `Ctrl+F`, `/`: Open the bottom search field.
+- `Ctrl+F`, `/`: Open the bottom `Find Page` field.
 - `Enter`: Confirm a query or select the next match.
 - `n`: Select the next confirmed match.
 - `Shift+N`: Select the previous confirmed match.
@@ -826,6 +826,53 @@ Search runs only after confirmation. Matches stay highlighted while the field
 is open, and the active match uses a stronger background and moves into view.
 Closing the field removes highlighting but retains the confirmed query, so
 `n`, `Shift+N`, and the Search menu can resume navigation without rerunning it.
+
+### Outline Search
+
+- `Ctrl+G`: Open `Find Outline` in the same bottom search field. The Search
+  menu also exposes `Find in Outline…`; opening it shows the Outline sidebar.
+- `Enter`: Confirm the query; after confirmation, select the next matching node.
+- `Up` / `Down`: Select the previous / next confirmed matching node, wrapping
+  at the ends. `n` / `Shift+N` also navigate confirmed results.
+- `Escape`: Close the field, remove highlighting and retain the current position.
+
+Outline search is a case-insensitive literal search of the current document,
+not a filter of visible rows and not a search of the document catalog. It
+includes complete section titles, entry names/aliases and declarations, and
+the labels and targets of references already inventoried for the Outline.
+Associated heading/entry references match their existing owner node; ordinary
+reference occurrences remain distinct. Selecting a result reveals its source,
+never opens a referenced document or URI. Explicit reference activation is
+still required after leaving search.
+
+Generated `Entries` and `Doc Refs` groups, repeated-target summary groups,
+counts, tree guides and limited-inventory notices do not participate in
+matching. An authored heading named `Entries` remains searchable. Each node
+counts once even when several fields or text occurrences match. The result
+order follows the unchanged Outline tree, including folded descendants.
+
+The current match displays its full label and any matching target/alternate
+label context; other matches show a compact excerpt containing a hit.
+Ordinary and active hits use the same accents as page search. Reflow, sidebar
+width and Full Outline Labels do not change the logical results; the selected
+matching row is kept in view even inside a long wrapped label.
+
+Only visited results' ancestor paths are temporarily revealed. Matching a
+parent does not expand its entire subtree. User-owned folding is kept separate;
+closing search removes other temporary paths but keeps the current selection's
+ancestors visible. Explicit fold actions still work during search.
+
+`Ctrl+F` and `Ctrl+G` switch scopes without discarding either editor's draft,
+confirmed query or cursor. Closing a field retains its confirmed query and
+active result. `n`, `Shift+N` and Search-menu next/previous actions resume the
+last confirmed or explicitly navigated search scope. Changing documents clears
+the current-document Outline index/results rather than reusing stale node IDs.
+
+The reference inventory does not include every external or page-local link.
+Search uses bounded existing fields: a 4 MiB text index, 64 KiB per field,
+4,096 matching nodes and 32,768 retained text ranges. The bottom bar marks
+results `partial` when those bounds or reference-inventory limits apply;
+unindexed content is not treated as a verified miss.
 
 ### Document Finder
 

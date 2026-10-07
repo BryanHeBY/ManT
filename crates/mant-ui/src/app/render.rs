@@ -68,7 +68,7 @@ impl App {
         }
         if matches!(self.overlay, super::Overlay::Menu { .. }) {
             Self::draw_menu_hint(frame, status_area);
-        } else if self.search.is_open() {
+        } else if self.search_is_open() {
             self.draw_search(frame, status_area);
         } else {
             self.draw_status(frame, status_area);
@@ -142,53 +142,53 @@ impl App {
             outline_label_area,
         );
 
+        let search_reflow = self.outline_search.input.is_open()
+            && self.geometry.navigation.width != navigation_area.width;
         self.geometry.navigation = navigation_area;
         let visible = self.visible_navigation_indices();
         let height = usize::from(navigation_area.height);
-        let tree = navigation::TreePlan::new(self.session.document.navigation());
-        // Build against the scrollbar-bearing width first. If those rows fit,
-        // the full-width layout cannot overflow and no gutter is necessary.
-        // When they do overflow, every label is laid out one column earlier so
-        // the scrollbar never replaces its final cell (or half of a wide one).
-        let gutter_width = navigation_area.width.saturating_sub(1);
-        let gutter_rows = navigation::rows_with_references(
-            &tree,
-            &visible,
-            self.selected,
-            &self.expanded,
-            self.full_outline_labels,
-            usize::from(gutter_width),
-            self.session.document.reference_badges(),
-        );
-        let rows = if gutter_rows.len() > height {
-            gutter_rows
-        } else {
-            navigation::rows_with_references(
-                &tree,
-                &visible,
-                self.selected,
-                &self.expanded,
-                self.full_outline_labels,
-                usize::from(navigation_area.width),
-                self.session.document.reference_badges(),
-            )
-        };
+        let rows = self.outline_rows(&visible, navigation_area.width, height);
         let row_count = rows.len();
         let maximum = row_count.saturating_sub(height);
         self.navigation_scroll = self.navigation_scroll.min(maximum);
         let request = self
             .navigation_viewport_request
             .take()
-            .filter(|request| request.node_index() == self.selected);
+            .filter(|request| request.node_index() == self.selected)
+            .or_else(|| {
+                search_reflow.then_some(super::NavigationViewportRequest::Reveal {
+                    node_index: self.selected,
+                })
+            });
+        let search_row = if self.outline_search.input.is_open() {
+            rows.iter().position(|row| {
+                row.node_index == self.selected
+                    && row
+                        .line
+                        .spans
+                        .iter()
+                        .any(|span| span.style.bg == Some(theme::SEARCH_ACTIVE))
+            })
+        } else {
+            None
+        };
         if let Some((request, range)) =
             request.zip(navigation::node_row_range(&rows, self.selected))
         {
             match request {
                 super::NavigationViewportRequest::Reveal { .. } => {
-                    self.keep_selected_navigation_visible(range, height);
+                    if let Some(row) = search_row {
+                        self.keep_selected_navigation_visible(row..row.saturating_add(1), height);
+                    } else {
+                        self.keep_selected_navigation_visible(range, height);
+                    }
                 }
                 super::NavigationViewportRequest::PreserveRow { row, .. } => {
-                    self.keep_selected_navigation_at_row(range, height, row, maximum);
+                    if let Some(row) = search_row {
+                        self.keep_selected_navigation_visible(row..row.saturating_add(1), height);
+                    } else {
+                        self.keep_selected_navigation_at_row(range, height, row, maximum);
+                    }
                 }
             }
         }
@@ -202,12 +202,58 @@ impl App {
             .into_iter()
             .map(|row| row.line)
             .collect::<Vec<_>>();
-
         frame.render_widget(
             Paragraph::new(Text::from(lines)).style(theme::style(theme::StyleRole::OutlineSurface)),
             navigation_area,
         );
         self.draw_navigation_scrollbar(frame, navigation_area, row_count, height);
+    }
+
+    pub(super) fn outline_rows(
+        &self,
+        visible: &[usize],
+        width: u16,
+        height: usize,
+    ) -> Vec<navigation::NavigationRow> {
+        let tree = navigation::TreePlan::new(self.session.document.navigation());
+        let expanded = self.effective_expanded();
+        let presentation = navigation::search::OutlinePresentation::new(
+            if self.outline_search.input.is_open() {
+                &self.outline_search.matches
+            } else {
+                &[]
+            },
+            self.outline_search.active_match,
+        );
+        // Build against the scrollbar-bearing width first. If those rows fit,
+        // the full-width layout cannot overflow and no gutter is necessary.
+        // When they do overflow, every label is laid out one column earlier so
+        // the scrollbar never replaces its final cell (or half of a wide one).
+        let gutter_width = width.saturating_sub(1);
+        let labels = navigation::search::OutlineLabels {
+            selected: self.selected,
+            full: self.full_outline_labels,
+        };
+        let gutter_rows = presentation.rows(
+            &tree,
+            visible,
+            labels,
+            &expanded,
+            usize::from(gutter_width),
+            self.session.document.reference_badges(),
+        );
+        if gutter_rows.len() > height {
+            gutter_rows
+        } else {
+            presentation.rows(
+                &tree,
+                visible,
+                labels,
+                &expanded,
+                usize::from(width),
+                self.session.document.reference_badges(),
+            )
+        }
     }
 
     fn draw_navigation_header(&self, frame: &mut Frame<'_>, area: Rect) {
@@ -306,7 +352,11 @@ impl App {
             .rendered_cache
             .entry(render_width)
             .or_insert_with(|| self.session.document.render(render_width));
-        if !self.search.query.is_empty() && self.search.render_width != render_width {
+        if (self.search.is_open()
+            || self.last_search_target == super::outline_search::SearchTarget::Page)
+            && !self.search.query.is_empty()
+            && self.search.render_width != render_width
+        {
             self.refresh_search(render_width);
         }
         let rendered = &self.session.rendered_cache[&render_width];
@@ -425,16 +475,26 @@ impl App {
     }
 
     fn draw_search(&self, frame: &mut Frame<'_>, area: Rect) {
+        let input = self.active_search_input();
+        let outline = self.search_target == super::outline_search::SearchTarget::Outline;
+        let (count, active) = if outline {
+            (
+                self.outline_search.matches.len(),
+                self.outline_search.active_match,
+            )
+        } else {
+            (self.search.scope_matches.len(), self.search.active_match)
+        };
         let style = Style::default().bg(theme::MENU);
         frame.render_widget(Block::default().style(style), area);
-        let (before_cursor, after_cursor) = self.search.draft.split_at(self.search.cursor);
+        let (before_cursor, after_cursor) = input.draft.split_at(input.cursor);
         let cursor_character = after_cursor.chars().next();
         let cursor_bytes = cursor_character.map_or(0, char::len_utf8);
         let after_cursor = &after_cursor[cursor_bytes..];
-        let prompt = format!(" Find: {}", self.search.draft);
+        let prompt = format!("{}{}", self.search_prompt(), input.draft);
         frame.render_widget(
             Paragraph::new(Line::from(vec![
-                Span::styled(" Find: ", style.fg(theme::YELLOW)),
+                Span::styled(self.search_prompt(), style.fg(theme::YELLOW)),
                 Span::styled(
                     before_cursor.to_owned(),
                     style.fg(theme::TEXT).bg(theme::SURFACE),
@@ -450,23 +510,28 @@ impl App {
             ])),
             area,
         );
-        let suffix = if !self.search.is_editing() && !self.search.query.is_empty() {
-            if self.search.scope_matches.is_empty() {
-                " No matches · Edit query · Esc close ".to_owned()
+        let mut suffix = if !input.is_editing() && !input.query.is_empty() {
+            if count == 0 {
+                if outline && self.outline_search.limited {
+                    " No indexed matches · Esc close ".to_owned()
+                } else {
+                    " No matches · Edit query · Esc close ".to_owned()
+                }
             } else {
                 format!(
-                    " {}/{} · Enter next · Esc close ",
-                    self.search.active_match + 1,
-                    self.search.scope_matches.len()
+                    " {}/{}{} · Enter next · Esc close ",
+                    active + 1,
+                    count,
+                    if outline { " nodes" } else { "" }
                 )
             }
         } else {
             " Enter search · Esc cancel ".to_owned()
         };
-        let suffix_style = if self.search.scope_matches.is_empty()
-            && !self.search.is_editing()
-            && !self.search.query.is_empty()
-        {
+        if outline && self.outline_search.limited {
+            suffix.push_str("· partial ");
+        }
+        let suffix_style = if count == 0 && !input.is_editing() && !input.query.is_empty() {
             style
                 .fg(theme::BASE)
                 .bg(theme::PEACH)
@@ -478,6 +543,14 @@ impl App {
         if prompt_width + suffix.width() < usize::from(area.width) {
             frame.render_widget(
                 Paragraph::new(Span::styled(suffix, suffix_style)).alignment(Alignment::Right),
+                area,
+            );
+        } else if outline && self.outline_search.limited {
+            // Coverage disclosure must not disappear behind a long query.
+            frame.render_widget(
+                Paragraph::new(" partial ")
+                    .alignment(Alignment::Right)
+                    .style(suffix_style),
                 area,
             );
         }

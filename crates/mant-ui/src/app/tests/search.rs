@@ -46,7 +46,7 @@ fn clicking_the_search_field_moves_its_unicode_aware_cursor() {
 
     app.handle_mouse(MouseEvent {
         kind: MouseEventKind::Down(MouseButton::Left),
-        column: app.geometry.status.x + 8,
+        column: app.geometry.status.x + 13,
         row: app.geometry.status.y,
         modifiers: KeyModifiers::NONE,
     });
@@ -154,6 +154,7 @@ fn search_menu_actions_keep_confirmed_results_available() {
     for _ in 0..4 {
         app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
     }
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));

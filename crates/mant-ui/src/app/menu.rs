@@ -101,6 +101,7 @@ pub(super) enum MenuAction {
     First,
     Last,
     Find,
+    FindOutline,
     FindNext,
     FindPrevious,
     Help,
@@ -223,6 +224,11 @@ const SEARCH_MENU: &[MenuEntry] = &[
         label: "Find in Page…",
         shortcut: "Ctrl+F / /",
         action: MenuAction::Find,
+    },
+    MenuEntry {
+        label: "Find in Outline…",
+        shortcut: "Ctrl+G",
+        action: MenuAction::FindOutline,
     },
     MenuEntry {
         label: "Find Next",
@@ -469,6 +475,7 @@ impl App {
             MenuAction::CollapseAll => {
                 let row = self.selected_navigation_viewport_row();
                 self.expanded.clear();
+                self.outline_search.revealed.clear();
                 self.select_nearest_visible_ancestor();
                 self.preserve_selected_navigation_row(row);
             }
@@ -479,8 +486,9 @@ impl App {
             MenuAction::First => self.select_edge(false),
             MenuAction::Last => self.select_edge(true),
             MenuAction::Find => self.open_search(),
-            MenuAction::FindNext => self.select_search_relative(1),
-            MenuAction::FindPrevious => self.select_search_relative(-1),
+            MenuAction::FindOutline => self.open_outline_search(),
+            MenuAction::FindNext => self.select_last_search_relative(1),
+            MenuAction::FindPrevious => self.select_last_search_relative(-1),
             MenuAction::Help => {
                 self.close_search();
                 self.overlay = Overlay::Help;
@@ -634,7 +642,8 @@ impl App {
             Line::raw("top tabs     switch opened documents"),
             Line::raw("Alt+←/→      back / forward"),
             Line::raw("Ctrl+F or /  find in current page"),
-            Line::raw("n / N        next / previous search match"),
+            Line::raw("Ctrl+G       find outline titles, entries and links"),
+            Line::raw("n / N        next / previous in last search scope"),
             Line::raw("drag / Shift+click  select+copy / extend"),
             Line::raw("right-click   copy selected plain text"),
             Line::raw("y / Ctrl+Shift+C  copy selected plain text"),

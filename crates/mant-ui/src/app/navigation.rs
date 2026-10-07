@@ -189,20 +189,26 @@ impl App {
         true
     }
 
-    fn expand_navigation_ancestors(&mut self, index: usize) {
-        let mut parent = self.session.document.navigation()[index]
-            .parent_id
-            .as_deref();
-        while let Some(parent_id) = parent {
-            self.expanded.insert(parent_id.to_owned());
-            parent = self
-                .session
-                .document
-                .navigation()
-                .iter()
-                .find(|item| item.id == parent_id)
-                .and_then(|item| item.parent_id.as_deref());
+    pub(super) fn expand_navigation_ancestors(&mut self, index: usize) {
+        self.expanded.extend(self.navigation_ancestors(index));
+    }
+
+    pub(super) fn navigation_ancestors(&self, index: usize) -> Vec<String> {
+        let nodes = self.session.document.navigation();
+        let mut parent = nodes.get(index).and_then(|node| node.parent_id.as_deref());
+        let mut ancestors = Vec::new();
+        let mut visited = HashSet::new();
+        while let Some(id) = parent {
+            if !visited.insert(id) {
+                break;
+            }
+            let Some(node) = nodes.iter().find(|node| node.id == id) else {
+                break;
+            };
+            ancestors.push(id.to_owned());
+            parent = node.parent_id.as_deref();
         }
+        ancestors
     }
 
     pub(super) fn scroll_content(&mut self, delta: isize) {
@@ -274,7 +280,7 @@ impl App {
         let mut indices = Vec::new();
         for (index, item) in self.session.document.navigation().iter().enumerate() {
             let visible = item.parent_id.as_ref().is_none_or(|parent| {
-                visible_ids.contains(parent) && self.expanded.contains(parent)
+                visible_ids.contains(parent) && self.navigation_is_expanded(parent)
             });
             if visible {
                 visible_ids.insert(item.id.clone());
@@ -329,8 +335,12 @@ impl App {
         if !item.has_children {
             return;
         }
-        if !self.expanded.remove(&item.id) {
-            self.expanded.insert(item.id.clone());
+        let id = item.id.clone();
+        if self.navigation_is_expanded(&id) {
+            self.expanded.remove(&id);
+            self.outline_search.revealed.remove(&id);
+        } else {
+            self.expanded.insert(id);
         }
     }
 
@@ -338,7 +348,10 @@ impl App {
         let Some(item) = self.session.document.navigation().get(self.selected) else {
             return;
         };
-        if item.has_children && self.expanded.remove(&item.id) {
+        if item.has_children && self.navigation_is_expanded(&item.id) {
+            let id = item.id.clone();
+            self.expanded.remove(&id);
+            self.outline_search.revealed.remove(&id);
             return;
         }
         let Some(parent_id) = item.parent_id.as_deref() else {
@@ -363,7 +376,8 @@ impl App {
         if !item.has_children {
             return;
         }
-        if self.expanded.insert(item.id.clone()) {
+        if !self.navigation_is_expanded(&item.id) {
+            self.expanded.insert(item.id.clone());
             return;
         }
         let parent_id = item.id.clone();

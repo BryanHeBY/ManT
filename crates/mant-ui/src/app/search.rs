@@ -3,7 +3,10 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use unicode_width::UnicodeWidthChar;
 
-use std::sync::Arc;
+use std::{
+    ops::{Deref, DerefMut},
+    sync::Arc,
+};
 
 use super::App;
 use crate::RenderedSearchMatch;
@@ -23,39 +26,44 @@ pub(super) enum SearchMode {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum SearchCommand {
     None,
+    Close,
     Confirm,
     Next,
     Previous,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub(super) struct SearchState {
-    pub(super) mode: SearchMode,
-    pub(super) draft: String,
-    pub(super) cursor: usize,
-    pub(super) query: String,
+    input: SearchInput,
     pub(super) matches: Vec<RenderedSearchMatch>,
     pub(super) scope_matches: Vec<ScopedRenderedSearchMatch>,
     pub(super) active_match: usize,
     pub(super) render_width: u16,
 }
 
-impl Default for SearchState {
+/// Common input editor; each search surface owns its own query and cursor.
+#[derive(Debug, Clone)]
+pub(super) struct SearchInput {
+    resume_mode: Option<SearchMode>,
+    pub(super) mode: SearchMode,
+    pub(super) draft: String,
+    pub(super) cursor: usize,
+    pub(super) query: String,
+}
+
+impl Default for SearchInput {
     fn default() -> Self {
         Self {
+            resume_mode: None,
             mode: SearchMode::Closed,
             draft: String::new(),
             cursor: 0,
             query: String::new(),
-            matches: Vec::new(),
-            scope_matches: Vec::new(),
-            active_match: 0,
-            render_width: 0,
         }
     }
 }
 
-impl SearchState {
+impl SearchInput {
     pub(super) const fn is_open(&self) -> bool {
         self.mode.is_open()
     }
@@ -65,26 +73,36 @@ impl SearchState {
     }
 
     pub(super) fn open(&mut self) {
+        if let Some(mode) = self.resume_mode.take() {
+            self.mode = mode;
+            return;
+        }
         self.mode = SearchMode::Open { editing: false };
         self.draft.clone_from(&self.query);
         self.cursor = self.draft.len();
     }
 
     pub(super) fn close(&mut self) {
+        self.resume_mode = None;
         self.mode = SearchMode::Closed;
         self.draft.clear();
         self.cursor = 0;
-        self.matches.clear();
-        self.render_width = 0;
+    }
+
+    pub(super) fn suspend(&mut self) {
+        if self.is_open() {
+            self.resume_mode = Some(self.mode);
+            self.mode = SearchMode::Closed;
+        }
     }
 
     pub(super) fn move_cursor_to_column(&mut self, column: usize) {
         self.cursor = cursor_byte_at_column(&self.draft, column);
     }
 
-    pub(super) fn handle_key(&mut self, key: KeyEvent) -> SearchCommand {
+    pub(super) fn handle_key(&mut self, key: KeyEvent, has_matches: bool) -> SearchCommand {
         match key.code {
-            KeyCode::Esc => self.close(),
+            KeyCode::Esc => return SearchCommand::Close,
             KeyCode::Enter => {
                 if !self.is_editing() && self.draft == self.query {
                     return SearchCommand::Next;
@@ -94,9 +112,7 @@ impl SearchState {
                 return SearchCommand::Confirm;
             }
             KeyCode::Char('n' | 'N')
-                if !self.is_editing()
-                    && self.draft == self.query
-                    && !self.scope_matches.is_empty() =>
+                if !self.is_editing() && self.draft == self.query && has_matches =>
             {
                 return if key.code == KeyCode::Char('N')
                     || key.modifiers.contains(KeyModifiers::SHIFT)
@@ -154,6 +170,33 @@ impl SearchState {
     }
 }
 
+// Preserve the page editor's field access while keeping result ownership out
+// of the shared input model. Outline search uses SearchInput directly.
+impl Deref for SearchState {
+    type Target = SearchInput;
+    fn deref(&self) -> &Self::Target {
+        &self.input
+    }
+}
+impl DerefMut for SearchState {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.input
+    }
+}
+
+impl SearchState {
+    pub(super) fn suspend(&mut self) {
+        self.input.suspend();
+        self.matches.clear();
+        self.render_width = 0;
+    }
+    pub(super) fn close(&mut self) {
+        self.input.close();
+        self.matches.clear();
+        self.render_width = 0;
+    }
+}
+
 impl SearchMode {
     const fn is_open(self) -> bool {
         matches!(self, Self::Open { .. })
@@ -166,23 +209,45 @@ impl SearchMode {
 
 impl App {
     pub(super) fn open_search(&mut self) {
+        if self.search_target == super::outline_search::SearchTarget::Page && self.search.is_open()
+        {
+            return;
+        }
+        self.finish_outline_search(true);
+        self.search_target = super::outline_search::SearchTarget::Page;
         self.search.open();
         self.sync_current_search_matches();
     }
 
     pub(super) fn close_search(&mut self) {
-        self.search.close();
+        match self.search_target {
+            super::outline_search::SearchTarget::Page => self.search.close(),
+            super::outline_search::SearchTarget::Outline => self.close_outline_search(),
+        }
     }
 
     pub(super) fn handle_search_key(&mut self, key: KeyEvent) {
-        match self.search.handle_key(key) {
+        if self.search_target == super::outline_search::SearchTarget::Outline {
+            self.handle_outline_search_key(key);
+            return;
+        }
+        let has_matches = !self.search.scope_matches.is_empty();
+        match self.search.handle_key(key, has_matches) {
             SearchCommand::None => {}
+            SearchCommand::Close => self.close_search(),
             SearchCommand::Confirm => {
+                self.last_search_target = super::outline_search::SearchTarget::Page;
                 self.refresh_search(self.geometry.content.width.max(1));
                 self.select_active_search_match();
             }
-            SearchCommand::Next => self.select_search_relative(1),
-            SearchCommand::Previous => self.select_search_relative(-1),
+            SearchCommand::Next => {
+                self.last_search_target = super::outline_search::SearchTarget::Page;
+                self.select_search_relative(1);
+            }
+            SearchCommand::Previous => {
+                self.last_search_target = super::outline_search::SearchTarget::Page;
+                self.select_search_relative(-1);
+            }
         }
     }
 
@@ -284,11 +349,11 @@ impl App {
     }
 
     pub(super) fn move_search_cursor_to(&mut self, column: u16) {
-        const SEARCH_PREFIX_WIDTH: u16 = 7;
-        let text_column = usize::from(
-            column.saturating_sub(self.geometry.status.x.saturating_add(SEARCH_PREFIX_WIDTH)),
-        );
-        self.search.move_cursor_to_column(text_column);
+        let prefix_width = u16::try_from(self.search_prompt().len()).unwrap_or(u16::MAX);
+        let text_column =
+            usize::from(column.saturating_sub(self.geometry.status.x.saturating_add(prefix_width)));
+        self.active_search_input_mut()
+            .move_cursor_to_column(text_column);
     }
 }
 

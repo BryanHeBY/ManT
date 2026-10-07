@@ -45,7 +45,15 @@ impl App {
             self.open_menu(id);
             return UpdateOutcome::Redraw;
         }
-        if self.search.is_open() {
+        if key.modifiers == KeyModifiers::CONTROL && matches!(key.code, KeyCode::Char('g' | 'G')) {
+            self.open_outline_search();
+            return UpdateOutcome::Redraw;
+        }
+        if key.modifiers == KeyModifiers::CONTROL && matches!(key.code, KeyCode::Char('f' | 'F')) {
+            self.open_search();
+            return UpdateOutcome::Redraw;
+        }
+        if self.search_is_open() {
             self.handle_search_key(key);
             return UpdateOutcome::Redraw;
         }
@@ -65,10 +73,10 @@ impl App {
         match key.code {
             KeyCode::Char('q' | 'Q') => self.quit = true,
             KeyCode::Char('n') if key.modifiers.contains(KeyModifiers::SHIFT) => {
-                self.select_search_relative(-1);
+                self.select_last_search_relative(-1);
             }
-            KeyCode::Char('n') => self.select_search_relative(1),
-            KeyCode::Char('N') => self.select_search_relative(-1),
+            KeyCode::Char('n') => self.select_last_search_relative(1),
+            KeyCode::Char('N') => self.select_last_search_relative(-1),
             KeyCode::Char('j') | KeyCode::Down => self.select_relative(1),
             KeyCode::Char('k') | KeyCode::Up => self.select_relative(-1),
             KeyCode::Char('h') | KeyCode::Left => self.collapse_or_select_parent(),
@@ -126,7 +134,7 @@ impl App {
                 UpdateOutcome::Redraw
             }
             MouseEventKind::Down(MouseButton::Left)
-                if self.search.is_open()
+                if self.search_is_open()
                     && self
                         .geometry
                         .status

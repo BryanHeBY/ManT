@@ -606,6 +606,7 @@ mod hierarchy_geometry;
 mod layout;
 mod menus;
 mod navigation;
+mod outline_search;
 mod references;
 mod search;
 mod snapshots;
