@@ -37,13 +37,44 @@ apt_get=(
   -o Dpkg::Use-Pty=0
 )
 
-timeout --signal=TERM --kill-after=10s 90s "${apt_get[@]}" update
-timeout --signal=TERM --kill-after=10s 90s "${apt_get[@]}" install \
-  --yes \
-  --no-install-recommends \
-  build-essential \
-  cvs \
-  zlib1g-dev
+install_native_packages() {
+  timeout --signal=TERM --kill-after=10s 90s "${apt_get[@]}" "$@" update &&
+    timeout --signal=TERM --kill-after=10s 90s "${apt_get[@]}" "$@" install \
+      --yes --no-install-recommends build-essential cvs zlib1g-dev
+}
+
+if ! install_native_packages; then
+  # A mirror-list source can keep selecting a stalled Azure HTTP endpoint even
+  # after APT retries. Scope the fallback to these commands: do not rewrite the
+  # runner's /etc sources, and retain Ubuntu archive signature verification.
+  native_id=$(awk -F= '$1 == "ID" { gsub(/"/, "", $2); print $2 }' /etc/os-release)
+  native_codename=$(awk -F= '$1 == "VERSION_CODENAME" { gsub(/"/, "", $2); print $2 }' /etc/os-release)
+  if [[ $native_id != ubuntu || ! $native_codename =~ ^[a-z][a-z0-9]*$ ]]; then
+    echo "native dependency installation failed; no safe Ubuntu mirror fallback is available" >&2
+    exit 1
+  fi
+  case $(dpkg --print-architecture) in
+    amd64|i386)
+      native_archive=https://archive.ubuntu.com/ubuntu
+      native_security=https://security.ubuntu.com/ubuntu
+      ;;
+    arm64|armhf)
+      native_archive=https://ports.ubuntu.com/ubuntu-ports
+      native_security=$native_archive
+      ;;
+    *) echo "no checked Ubuntu archive fallback for this architecture" >&2; exit 1 ;;
+  esac
+  native_sources="$probe_dir/ubuntu.list"
+  for native_suite in "$native_codename" "$native_codename-updates"; do
+    printf 'deb [signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] %s %s main universe\n' \
+      "$native_archive" "$native_suite"
+  done > "$native_sources"
+  printf 'deb [signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] %s %s-security main universe\n' \
+    "$native_security" "$native_codename" >> "$native_sources"
+  echo "retrying native dependencies with Ubuntu official HTTPS archives" >&2
+  install_native_packages \
+    -o "Dir::Etc::sourcelist=$native_sources" -o "Dir::Etc::sourceparts=-"
+fi
 
 if ! native_dependencies_available; then
   echo "installed packages did not provide a working C toolchain and zlib" >&2

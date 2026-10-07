@@ -66,6 +66,8 @@ run "test repository tool entrypoints" \
   python3 -m unittest scripts.roff.tests.test_tool_entrypoints
 run "test tagged release tool paths" \
   python3 -m unittest scripts.release.tests.test_source_tool_paths
+run "test bounded native dependency mirror fallback" \
+  python3 -m unittest scripts.ci.tests.test_native_dependencies
 run "test paired measurement scopes and statistics" \
   python3 -m unittest scripts.dev.performance.tests
 run "check roff fidelity audit" python3 -m scripts.roff.audit.audit_roff_fidelity --self-check
