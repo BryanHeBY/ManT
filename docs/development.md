@@ -124,6 +124,11 @@ On Windows, run the native product boundary from PowerShell:
 
 It tests `libmandoc-rs`, `mant-ir`, `mant-protocol`, `mant-sources`, `mant-codec`, `mant-loader`, `mant-query`, `mant-render`, `mant-engine`, `mant-ui`, and `mant`,
 including the shared roff fixture suites.
+The Windows boundary also runs `scripts/checks/check-windows-installer.ps1`
+against the built product and locally checksummed ZIP assets. It covers fresh
+installation, same-version shortcuts, executable/document relocation, legacy
+migration and literal-path uninstall without network requests or persistent
+user PATH writes.
 
 The product crates are workspace `default-members`, so a bare `cargo build`,
 `cargo test`, or `cargo clippy` works on Windows. Both platform verification

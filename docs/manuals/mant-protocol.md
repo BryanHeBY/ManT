@@ -870,7 +870,7 @@ canonical machine-facing half-open UTF-8 range with zero-based `start` and
 
 Section depth comes from the tree, not a stored heading-level integer.
 
-Document and section headings carry authoritative `heading.content` inlines rather than a plain section `title`. Optional `Document.heading` preserves an extracted Markdown H1; native bibliographic titles remain in `meta.title`. Outline/excerpt `displayTitle` is a derived plain label, not a second IR fact. A document-root excerpt includes its optional heading and root blocks, so a title-only document remains readable. The unreleased v0.12 shape rejects obsolete section `title` fields instead of silently dropping links.
+Document and section headings carry authoritative `heading.content` inlines rather than a plain section `title`. Optional `Document.heading` preserves an extracted Markdown H1; native bibliographic titles remain in `meta.title`. Outline/excerpt `displayTitle` is a derived plain label, not a second IR fact. A document-root excerpt includes its optional heading and root blocks, so a title-only document remains readable. The v0.12 shape rejects obsolete section `title` fields instead of silently dropping links.
 Section and explicit anchor IDs share one namespace within a document.
 
 ### Block Variants
@@ -1081,11 +1081,11 @@ Markdown may simplify the numeric vertical distance to one blank line.
 Missing/empty layout uses the default; null layout is
 rejected. `layout.spacingBeforeLines` missing/null inherits list compactness;
 explicit zero is retained. The item-level hints are distinct from block-level
-indentation and spacing. The unreleased v0.12 contract uses this relation
+indentation and spacing. The v0.12 contract uses this relation
 in place of the former string relations and `layout.inlineTerm`. The retired
 `layout.headBodyRelation` and shared `headBodyRelation.bodyAlignment` are
 rejected, including mixed old/current objects. All retired forms, unknown
-fields and duplicate fields are rejected without a version bump.
+fields and duplicate fields are rejected by the closed v0.12 contract.
 
 Rejected pre-convergence shapes: item `identity`, facts' flat `role` or semantic
 `aliases`, and item-level `inlineTerm` / `spacingBeforeLines`. They are rejected
@@ -1190,8 +1190,8 @@ BSD lifecycle prose or hide accepted `Lk` URI suffixes. Search coordinates and
 TUI activation ranges refer to the same accepted body; Markdown byte ranges
 still address the exact artifact chosen for that query scope. The retired
 `portable-display` type is rejected, including when nested in otherwise valid
-styles or links. Current variants reject a legacy `display` field. This updates
-the unreleased v0.12 contract in place without a version increase.
+styles or links. Current variants reject a legacy `display` field. These rules
+are part of the v0.12 contract.
 
 Every `link.target` is tagged by `kind`: `external { uri }`,
 `email { address }`, `document { name, fragment? }`,
@@ -1822,7 +1822,7 @@ Selection kinds are:
   the block's layout and compactness; an ordered list starts at the selected
   item's original ordinal, including when earlier siblings are omitted.
 
-The unreleased v0.12 entry payload is a block, not the former standalone
+The v0.12 entry payload is a block, not the former standalone
 definition item. Read shared facts from its sole list item's `entry` or native
 definition's `entry`. In-process consumers can use `Block::entry_owner()`;
 renderers consume the original block instead of converting ordinary items into

@@ -112,6 +112,9 @@ Invoke-Native -Label "test tagged release tool paths" -Program "python" `
     -Arguments @("-m", "unittest", "scripts.release.tests.test_source_tool_paths")
 Invoke-Native -Label "test portable Rust packages" -Program "cargo" `
     -Arguments (@("test", "--locked") + $Packages)
+Write-Host "`n==> test isolated Windows installer lifecycle"
+& (Join-Path $Root "scripts/checks/check-windows-installer.ps1") `
+    -Binary (Join-Path $Root "target/debug/mant.exe")
 Invoke-Native -Label "test optional libmandoc features" -Program "cargo" `
     -Arguments @("test", "--locked", "--package", "libmandoc-rs", "--all-features")
 Invoke-Native -Label "test isolated native compatibility combinations" -Program "python" `

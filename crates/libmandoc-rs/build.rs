@@ -229,9 +229,25 @@ fn compile_native_archive(
             .flag("/wd4146")
             .flag("/wd4200")
             .flag("/wd4244")
-            .flag("/wd4267")
-            .files(upstream_sources);
+            .flag("/wd4267");
+        let (validation_sources, other_sources): (Vec<_>, Vec<_>) =
+            upstream_sources.iter().partition(|source| {
+                source
+                    .file_name()
+                    .is_some_and(|name| name == "mdoc_validate.c")
+            });
+        let mut validation_build = upstream_build.clone();
+        upstream_build.files(other_sources);
         let mut objects = upstream_build.compile_intermediates();
+
+        // In the pinned CVS rewrite_macro2len(), width is assigned on every
+        // path that leaves cp NULL. The other returning path uses the non-NULL
+        // result of mandoc_strdup(), which terminates on allocation failure.
+        // MSVC does not prove that correlation and reports C4701 at the final
+        // width read. Keep this exception on that upstream translation unit;
+        // all other source files retain their uninitialized-variable checks.
+        validation_build.flag("/wd4701").files(validation_sources);
+        objects.extend(validation_build.compile_intermediates());
 
         let mut owned_build = build;
         owned_build.files(owned_sources);

@@ -370,7 +370,9 @@ prepare_layout() {
       case "$old_manual" in
         "$receipt_data_dir"/mant.md|"$receipt_data_dir"/mant-ir.md|"$receipt_data_dir"/mant-markdown.md|"$receipt_data_dir"/mant-protocol.md|"$receipt_data_dir"/mant-roff.md)
           migrated_manual="$data_dir/${old_manual##*/}"
-          if [ -f "$migrated_manual" ]; then
+          # Names at a new destination do not prove installer ownership.
+          # The migration bridge copies data without an ownership manifest.
+          if [ "$migrated_manual" = "$old_manual" ] && [ -f "$old_manual" ]; then
             owned_manuals="${owned_manuals}${owned_manuals:+
 }$migrated_manual"
           fi

@@ -114,6 +114,8 @@ Internal receipts use `${XDG_STATE_HOME:-~/.local/state}/mant` on all platforms,
 with legacy macOS/Windows receipts readable for upgrades and uninstall. No
 `MANT_STATE_HOME` option is introduced. Uninstall removes only receipt-owned
 files, never user data or the shared `~/.local/bin` PATH entry.
+With manual installation disabled, changing the document destination does not
+claim same-named files there as installer-owned, even after storage migration.
 
 `mant --doctor` reports effective category paths, their origins, the general and
 source configuration locations, active manual findings and legacy source

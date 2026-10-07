@@ -13,6 +13,16 @@ that crate was not published for that change.
 
 ## Unreleased
 
+## 0.12.0 - 2026-10-08
+
+This release publishes `mant-ir`, `mant-protocol`, `mant-codec`, `mant-loader`,
+`mant-query`, `mant-render`, `mant-engine`, `mant-ui`, `mant`, and `libmandoc-rs`
+at `0.12.0`, and independently publishes `mant-sources` at `0.10.0`.
+The development notes below describe changes consolidated into the final
+v0.12 contracts; intermediate unpublished forms are not compatibility baselines.
+Published v0.11 and earlier schema snapshots remain unchanged. See the curated
+GitHub Release for product highlights and user-facing migration instructions.
+
 ### mant-sources 0.10.0
 
 - Unify application configuration, data and cache directories on Linux, macOS
@@ -43,6 +53,12 @@ that crate was not published for that change.
 
 ### mant 0.12.0
 
+- Retain only proven same-destination manual ownership with manual installation
+  disabled on both installers. Windows same-version shortcuts require a working
+  binary at the selected destination; old receipt versions are display-only.
+  Use literal Windows file paths and normalize separators and dot components
+  for directory/receipt/PATH comparisons. Cover install, relocation, upgrade
+  and uninstall in an isolated Windows regression suite.
 - Align one-line installer defaults, private path-resolution/migration bridges
   and doctor diagnostics with the shared directory contract. Upgrade known old
   default storage before activating the new binary; retain custom destinations
@@ -54,6 +70,10 @@ that crate was not published for that change.
 
 ### libmandoc-rs 0.12.0
 
+- Scope the MSVC C4701 false-positive exception to pinned upstream
+  `mdoc_validate.c`: `rewrite_macro2len()` reads its numeric width only on
+  branches that initialized it. Other upstream files and all owned shims
+  retain their existing strict uninitialized-variable checks.
 - Exclude generated Python bytecode and cache directories from the published
   test source set, including when explicit package includes override Git ignores.
 - Replace the Rust `Node::macro_name: Option<String>` field with
@@ -215,7 +235,7 @@ that crate was not published for that change.
   explanation, search, scope, and catalog contract family to `v0.12`. Published
   `v0.11` golden contracts remain checked in and unchanged. All affected Rust
   crates use `0.12.0` and `^0.12.0` internal dependencies; `mant-sources`
-  remains independently versioned at `0.9.3`.
+  advances independently to `0.10.0` for the storage/configuration changes.
 - Separate `DefinitionItem.head_body_relation` / `headBodyRelation` from
   `DefinitionLayout.body_alignment` / `bodyAlignment`. The closed relation
   defaults to `{"type":"separate"}`; `shared` contains only `wordBoundary`

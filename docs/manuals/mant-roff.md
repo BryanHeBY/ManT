@@ -946,7 +946,7 @@ and no advance limit or extra-field width. Empty widths use content-derived
 layout, consuming the gap while retaining any supplied advance/extra-field
 constraints for declared-field layout only. Explicit zero constraints remain
 distinct from absence in IR and JSON. The retired `columnWidths` wire field is
-rejected in unreleased v0.12 rather than silently discarded.
+rejected in v0.12 rather than silently discarded.
 Plain and ANSI output use the same measurement before decoration. Successive
 cells continue after the preceding cell's last physical row; they are never
 zipped by local line number. A full field moves the following cell to a new

@@ -369,7 +369,7 @@ source-neutral IR; ordinary Markdown links do not acquire roff-generated text.
 Entry forms and name-binding paths address the final accepted inline tree.
 A selected partial name keeps its style and destination ancestry without
 expanding into the complete label. The retired `portable-display` wire shape
-and `display` fields on current variants are rejected by the unreleased v0.12
+and `display` fields on current variants are rejected by the v0.12
 contract.
 
 Links use a closed `LinkTarget` union rather than stringly typed URLs:

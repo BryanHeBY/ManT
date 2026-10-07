@@ -71,7 +71,12 @@ function Normalize-PathEntry([string]$Path) {
     if (-not $Path) {
         return ""
     }
-    return $Path.Trim().TrimEnd('\')
+    $Entry = $Path.Trim().Replace('/', '\')
+    if (Test-AbsolutePath $Entry) {
+        try { $Entry = [IO.Path]::GetFullPath($Entry) }
+        catch { return $Entry.TrimEnd('\') }
+    }
+    return $Entry.TrimEnd('\')
 }
 
 function Test-PathEntry([string]$Left, [string]$Right) {
@@ -126,7 +131,7 @@ function Validate-AbsolutePath([string]$Path, [string]$Label) {
 }
 
 function Get-InstalledVersion([string]$Binary) {
-    if (-not (Test-Path -PathType Leaf $Binary)) {
+    if (-not (Test-Path -LiteralPath $Binary -PathType Leaf)) {
         return $null
     }
     try {
@@ -150,7 +155,7 @@ function Write-Receipt(
     [bool]$PathAdded
 ) {
     $ReceiptDirectory = Split-Path -Parent $Path
-    New-Item $ReceiptDirectory -ItemType Directory -Force | Out-Null
+    [IO.Directory]::CreateDirectory($ReceiptDirectory) | Out-Null
     $TemporaryReceipt = "$Path.$PID.tmp"
     [ordered]@{
         schema = $ReceiptSchema
@@ -162,8 +167,8 @@ function Write-Receipt(
         pathAdded = $PathAdded
         layout = $(if ($InstalledVersion -match '^0\.([0-9]|10|11)\.') { "legacy" } else { "unix-v1" })
         dataBinding = $DataBinding
-    } | ConvertTo-Json | Set-Content $TemporaryReceipt -Encoding UTF8
-    Move-Item $TemporaryReceipt $Path -Force
+    } | ConvertTo-Json | Set-Content -LiteralPath $TemporaryReceipt -Encoding UTF8
+    Move-Item -LiteralPath $TemporaryReceipt -Destination $Path -Force
 }
 
 if ($Help) {
@@ -238,14 +243,14 @@ if ($Uninstall) {
     }
 
     $Removed = $false
-    if (Test-Path -PathType Leaf $Receipt.binary) {
-        Remove-Item $Receipt.binary -Force
+    if (Test-Path -LiteralPath $Receipt.binary -PathType Leaf) {
+        Remove-Item -LiteralPath $Receipt.binary -Force
         Write-Host "Removed $($Receipt.binary)"
         $Removed = $true
     }
     foreach ($ReceiptManual in $ReceiptManuals) {
-        if (Test-Path -PathType Leaf $ReceiptManual) {
-            Remove-Item $ReceiptManual -Force
+        if (Test-Path -LiteralPath $ReceiptManual -PathType Leaf) {
+            Remove-Item -LiteralPath $ReceiptManual -Force
             Write-Host "Removed $ReceiptManual"
             $Removed = $true
         }
@@ -309,7 +314,8 @@ $Target = "windows-x64"
 $Archive = "mant-$Version-$Target.zip"
 $ReleaseUrl = "$GitHub/releases/download/$Tag"
 $BinaryPath = Join-Path $InstallDir "mant.exe"
-$CurrentVersion = Get-InstalledVersion $BinaryPath
+$TargetVersion = Get-InstalledVersion $BinaryPath
+$CurrentVersion = $TargetVersion
 if (-not $CurrentVersion -and $Receipt) { $CurrentVersion = Get-InstalledVersion $Receipt.binary }
 
 function Resolve-ReleaseLayout([string]$LayoutBinary) {
@@ -330,6 +336,9 @@ function Resolve-ReleaseLayout([string]$LayoutBinary) {
     return $DataDir
 }
 function Get-RetainedManuals {
+    # A same-named file at a different destination is not proof of ownership.
+    # Migration preserves originals but does not return a copy-ownership receipt.
+    if (-not $Receipt -or -not (Test-PathEntry $Receipt.dataDir $DataDir)) { return @() }
     @($ReceiptManuals | ForEach-Object {
         $Name = Split-Path -Leaf $_
         if ($Name -in $BundledManuals -and (Test-PathEntry $_ (Join-Path $Receipt.dataDir $Name))) {
@@ -353,18 +362,18 @@ $OwnedManuals = if (-not $NoManual) {
     @()
 }
 $MissingManuals = @($ManualNames | Where-Object {
-    -not (Test-Path -PathType Leaf (Join-Path $DataDir $_))
+    -not (Test-Path -LiteralPath (Join-Path $DataDir $_) -PathType Leaf)
 })
 $ManualReady = $NoManual -or $MissingManuals.Count -eq 0
 $PathAdded = [bool]($Receipt -and $Receipt.pathAdded -and (Test-PathEntry $Receipt.installDir $InstallDir))
 
-if ($CurrentVersion -eq $Version -and (Test-Path -LiteralPath $BinaryPath -PathType Leaf)) {
+if ($TargetVersion -eq $Version) {
     $DataDir = Resolve-ReleaseLayout $BinaryPath
     $OwnedManuals = if (-not $NoManual) { @($ManualNames | ForEach-Object { Join-Path $DataDir $_ }) } else { @(Get-RetainedManuals) }
     $ManualReady = $NoManual -or @($ManualNames | Where-Object { -not (Test-Path -LiteralPath (Join-Path $DataDir $_) -PathType Leaf) }).Count -eq 0
 }
 
-if (-not $Force -and $CurrentVersion -eq $Version -and $ManualReady) {
+if (-not $Force -and $TargetVersion -eq $Version -and $ManualReady) {
     Write-Receipt $ReceiptPath $Version $InstallDir $DataDir $BinaryPath $OwnedManuals $PathAdded
     if (-not $NoModifyPath) {
         try {
@@ -383,38 +392,38 @@ if (-not $Force -and $CurrentVersion -eq $Version -and $ManualReady) {
 
 $Temporary = Join-Path ([IO.Path]::GetTempPath()) "mant-install-$([guid]::NewGuid().ToString('N'))"
 try {
-    New-Item $Temporary -ItemType Directory -Force | Out-Null
+    [IO.Directory]::CreateDirectory($Temporary) | Out-Null
     $ArchivePath = Join-Path $Temporary $Archive
     $ChecksumsPath = Join-Path $Temporary "SHA256SUMS"
     Invoke-WebRequest -UseBasicParsing -Uri "$ReleaseUrl/$Archive" -OutFile $ArchivePath
     Invoke-WebRequest -UseBasicParsing -Uri "$ReleaseUrl/SHA256SUMS" -OutFile $ChecksumsPath
 
-    $ChecksumText = Get-Content $ChecksumsPath -Raw
+    $ChecksumText = Get-Content -LiteralPath $ChecksumsPath -Raw
     $ChecksumPattern = "(?m)^([0-9a-fA-F]{64})\s+\*?$([regex]::Escape($Archive))\r?$"
     $ChecksumMatch = [regex]::Match($ChecksumText, $ChecksumPattern)
     if (-not $ChecksumMatch.Success) {
         Fail "SHA256SUMS does not contain $Archive"
     }
     $Expected = $ChecksumMatch.Groups[1].Value
-    $Actual = (Get-FileHash $ArchivePath -Algorithm SHA256).Hash
+    $Actual = (Get-FileHash -LiteralPath $ArchivePath -Algorithm SHA256).Hash
     if ($Actual -ine $Expected) {
         Fail "SHA-256 verification failed for $Archive"
     }
     Assert-GitHubAttestation $ArchivePath
 
     $Expanded = Join-Path $Temporary "expanded"
-    Expand-Archive -Path $ArchivePath -DestinationPath $Expanded
+    Expand-Archive -LiteralPath $ArchivePath -DestinationPath $Expanded
     $Package = Join-Path $Expanded "mant-$Version-$Target"
     $Binary = Join-Path $Package "mant.exe"
-    if (-not (Test-Path -PathType Leaf $Binary)) {
+    if (-not (Test-Path -LiteralPath $Binary -PathType Leaf)) {
         Fail "$Archive does not contain mant.exe"
     }
     $ManualDirectory = Join-Path $Package "manuals"
-    if (-not (Test-Path -PathType Leaf (Join-Path $ManualDirectory "manifest.txt"))) {
+    if (-not (Test-Path -LiteralPath (Join-Path $ManualDirectory "manifest.txt") -PathType Leaf)) {
         $ManualDirectory = $Package
         $ManualNames = @("mant.md")
     }
-    if (-not (Test-Path -PathType Leaf (Join-Path $ManualDirectory "mant.md"))) {
+    if (-not (Test-Path -LiteralPath (Join-Path $ManualDirectory "mant.md") -PathType Leaf)) {
         Fail "$Archive does not contain the ManT manuals"
     }
 
@@ -422,17 +431,17 @@ try {
         if (-not $NoManual -and -not (Test-Path -LiteralPath (Join-Path $ManualDirectory $ManualName) -PathType Leaf)) { Fail "manual bundle is missing $ManualName" }
     }
     $DataDir = Resolve-ReleaseLayout $Binary
-    New-Item $InstallDir -ItemType Directory -Force | Out-Null
+    [IO.Directory]::CreateDirectory($InstallDir) | Out-Null
     if (-not $NoManual) {
-        New-Item $DataDir -ItemType Directory -Force | Out-Null
+        [IO.Directory]::CreateDirectory($DataDir) | Out-Null
         $OwnedManuals = @()
         foreach ($ManualName in $ManualNames) {
             $Manual = Join-Path $ManualDirectory $ManualName
-            if (-not (Test-Path -PathType Leaf $Manual)) {
+            if (-not (Test-Path -LiteralPath $Manual -PathType Leaf)) {
                 Fail "manual bundle is missing $ManualName"
             }
             $ManualPath = Join-Path $DataDir $ManualName
-            Copy-Item $Manual $ManualPath -Force
+            Copy-Item -LiteralPath $Manual -Destination $ManualPath -Force
             $OwnedManuals += $ManualPath
         }
     } else {
@@ -489,6 +498,6 @@ try {
         Write-Host "Run: mant mant"
     }
 } finally {
-    Remove-Item $Temporary -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $Temporary -Recurse -Force -ErrorAction SilentlyContinue
 }
 }

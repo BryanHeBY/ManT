@@ -249,8 +249,7 @@ input-budget error. Its complete Error finding receives
 stopped, even when the safe partial AST retains the rejected syntax as literal
 words. The code does not raise the native limits or replace fatal parse errors.
 It is available to both parser and optional renderer reports, including Serde.
-This updates the unpublished v0.12
-diagnostic contract without changing the version.
+These classifications are part of the v0.12 diagnostic contract.
 
 A separate native construction guard stops input dispatch after a syntax
 node exceeds 512 parent levels, before end-of-document validation. Such input
@@ -297,7 +296,7 @@ With `serde`, the existing `macro_name` JSON property remains a string.
 Deserializing it follows the same canonical AST policy; serialize the specific
 family enum separately when preserving either duplicate preprocessing identity.
 This replaces the Rust `Node.macro_name: Option<String>` field with
-`Node.macro_token: Option<MacroToken>` in the unpublished v0.12 API.
+`Node.macro_token: Option<MacroToken>` in the v0.12 API.
 
 Enable the default-off `render` feature to use `Renderer`. `RenderFormat::Ascii`
 produces portable 7-bit terminal text with traditional backspace overstrikes,
@@ -666,7 +665,10 @@ configuration.
 warnings to errors on every supported compiler. MSVC keeps an explicit
 five-warning baseline for the pinned upstream sources (`C4100`, `C4146`, `C4200`,
 `C4244`, and `C4267`). `C4200` covers its four C99 flexible-array members,
-which MSVC diagnoses as an extension even in C11 mode. ManT-owned shim and
+which MSVC diagnoses as an extension even in C11 mode. Only `mdoc_validate.c`
+also suppresses `C4701`: MSVC cannot correlate the initialized numeric-width
+branches with the NULL/non-NULL text pointer in pinned `rewrite_macro2len()`.
+Other upstream files retain this check. ManT-owned shim and
 compatibility sources promote every baseline family back to errors. This is
 opt-in rather than a downstream default so new compiler diagnostics do not
 make an existing crate release fail to build for consumers.

@@ -244,7 +244,7 @@ fn one_line_installers_follow_the_published_release_contract() {
         windows.contains(r#"Invoke-WebRequest -UseBasicParsing -Uri "$ReleaseUrl/SHA256SUMS""#)
     );
     assert!(windows.contains(r#"$BundledManuals = @("mant.md", "mant-ir.md", "mant-markdown.md", "mant-protocol.md", "mant-roff.md")"#));
-    assert!(windows.contains(r"Copy-Item $Manual $ManualPath -Force"));
+    assert!(windows.contains(r"Copy-Item -LiteralPath $Manual -Destination $ManualPath -Force"));
     assert!(windows.contains(r#"$ReceiptSchema = "mant.install/v1""#));
     assert!(windows.contains("if ($Uninstall)"));
     assert!(windows.contains("ManT $Version is already up to date."));

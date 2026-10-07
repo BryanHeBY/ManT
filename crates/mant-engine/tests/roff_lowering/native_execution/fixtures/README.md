@@ -175,5 +175,5 @@ that display register can otherwise consume a byte of the stateful HTML href.
 The immutable authored identity contract does not inherit that display state.
 Both original HTML output and isolated destination evidence are retained.
 
-The unpublished schema remains v0.12. Fixtures do not authorize a version bump
+The schema remains v0.12. Fixtures do not authorize a version bump
 or a new renderer backend.

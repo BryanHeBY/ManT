@@ -141,7 +141,7 @@ mod unix_upgrade {
     }
 
     #[test]
-    fn upgrade_migrates_once_rebases_no_manual_ownership_and_preserves_originals() {
+    fn upgrade_migrates_once_without_guessing_no_manual_ownership_and_preserves_originals() {
         let fixture = ReleaseFixture::new();
         let first = fixture.run(&["--no-manual"]);
         assert!(
@@ -155,10 +155,8 @@ mod unix_upgrade {
         assert!(root.join(".local/share/mant/documents/user.md").is_file());
         let receipt = fs::read_to_string(root.join(".local/state/mant/install-receipt")).unwrap();
         assert!(receipt.contains("layout\tunix-v1"));
-        assert!(receipt.contains(&format!(
-            "manual\t{}/current-data/documents/mant.md",
-            root.display()
-        )));
+        assert!(!receipt.lines().any(|line| line.starts_with("manual\t")));
+        assert!(root.join("current-data/documents/mant.md").is_file());
         fs::write(
             root.join("current-data/documents/user.md"),
             "# Edited after upgrade\n",
@@ -173,6 +171,39 @@ mod unix_upgrade {
         assert_eq!(
             fs::read_to_string(root.join("current-data/documents/user.md")).unwrap(),
             "# Edited after upgrade\n"
+        );
+    }
+
+    #[test]
+    fn no_manual_custom_destination_does_not_claim_or_uninstall_user_manuals() {
+        let fixture = ReleaseFixture::new();
+        let documents = fixture.root.path().join("custom-documents");
+        fs::create_dir(&documents).unwrap();
+        let user_manual = documents.join("mant.md");
+        fs::write(&user_manual, "# User-authored mant manual\n").unwrap();
+        let output = fixture.run(&["--no-manual", "--data-dir", documents.to_str().unwrap()]);
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let receipt = fs::read_to_string(
+            fixture
+                .root
+                .path()
+                .join(".local/state/mant/install-receipt"),
+        )
+        .unwrap();
+        assert!(!receipt.lines().any(|line| line.starts_with("manual\t")));
+        let output = fixture.run(&["--uninstall"]);
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(
+            fs::read_to_string(user_manual).unwrap(),
+            "# User-authored mant manual\n"
         );
     }
 
