@@ -211,7 +211,9 @@ cat "$template" > "$report"
                     ["pwsh", "-NoProfile", "-NonInteractive", "-Command",
                      workflow_command("Package Windows release archive")],
                     cwd=directory, env={**os.environ, "MANT_RELEASE_TAG": "v0.11.0"},
-                    capture_output=True, text=True, timeout=10, check=False,
+                    # A cold .NET/PowerShell startup on a busy hosted runner
+                    # can exceed ten seconds before the tiny script executes.
+                    capture_output=True, text=True, timeout=30, check=False,
                 )
                 self.assertEqual(result.returncode, 0, result.stderr)
                 expected = "current" if "current" in layout else "legacy"

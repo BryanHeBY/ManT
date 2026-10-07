@@ -163,7 +163,9 @@ function Write-Receipt(
         installDir = $ExecutableDirectory
         dataDir = $DocumentDirectory
         binary = $Binary
-        manuals = @($Manuals)
+        # Empty output from a PowerShell if/function can bind as $null, not
+        # an empty array. Never serialize a phantom null ownership entry.
+        manuals = @($Manuals | Where-Object { $_ })
         pathAdded = $PathAdded
         layout = $(if ($InstalledVersion -match '^0\.([0-9]|10|11)\.') { "legacy" } else { "unix-v1" })
         dataBinding = $DataBinding

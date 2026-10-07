@@ -56,6 +56,7 @@ GitHub Release for product highlights and user-facing migration instructions.
 - Retain only proven same-destination manual ownership with manual installation
   disabled on both installers. Windows same-version shortcuts require a working
   binary at the selected destination; old receipt versions are display-only.
+  Serialize empty Windows ownership inventories as `[]`, never `[null]`.
   Use literal Windows file paths and normalize separators and dot components
   for directory/receipt/PATH comparisons. Cover install, relocation, upgrade
   and uninstall in an isolated Windows regression suite.

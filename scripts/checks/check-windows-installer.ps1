@@ -76,6 +76,14 @@ try {
     Assert (Test-PathEntry '\\server\share\docs' '//server/share/./docs/') "UNC paths differ"
     Assert (-not (Test-PathEntry 'C:\Users\test\.local\bin' 'C:\Users\test\.local\other')) "distinct directories compare equal"
 
+    Select-Home "no-manual-first"
+    $Bin = Join-Path $env:HOME "bin"
+    $Docs = Join-Path $env:HOME "documents"
+    Install $Bin $Docs -NoManual
+    Assert (@((Read-Receipt).manuals).Count -eq 0) "initial no-manual receipt contains phantom ownership"
+    Uninstall
+    Assert (-not (Test-Path -LiteralPath (Join-Path $Bin "mant.exe"))) "initial no-manual installation could not uninstall"
+
     Select-Home "normal"
     $Bin = Join-Path $env:HOME "bin"
     $Docs = Join-Path $env:HOME "documents"
