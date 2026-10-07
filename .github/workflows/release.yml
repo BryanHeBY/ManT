@@ -51,6 +51,16 @@ jobs:
       package: ${{ steps.release.outputs.package }}
 
     steps:
+      - name: Validate manual publication ref
+        if: github.event_name == 'workflow_dispatch' && inputs.publish_crates
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" != "refs/tags/$RELEASE_TAG" ]]; then
+            echo "manual crates publication must run from the selected release tag, not a branch or different tag" >&2
+            echo "use --ref $RELEASE_TAG with tag=$RELEASE_TAG, or rerun the original tag job" >&2
+            exit 1
+          fi
+
       - name: Check out the release tag
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

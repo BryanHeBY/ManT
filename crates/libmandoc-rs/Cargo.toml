@@ -21,6 +21,8 @@ include = [
   "/shim/**",
   "/src/**",
   "/tests/**",
+  "!/tests/**/__pycache__/**",
+  "!/tests/**/*.py[cod]",
   "/vendor/mandoc-cvs-20261006T140200Z/**",
   "!/vendor/mandoc-cvs-20261006T140200Z/soelim.c",
   "!/vendor/mandoc-cvs-20261006T140200Z/soelim.1",

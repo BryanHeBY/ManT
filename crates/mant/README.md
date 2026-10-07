@@ -1,16 +1,5 @@
 # mant
 
-Explanation reports retain separate owners, readable kinds and source coordinates.
-Plain output leaves original lines unframed; Markdown quotes them. Complete
-displayed definitions suppress duplicate Forms per record, while omitted bodies
-keep Forms and truly isolated empty declarations have a distinct notice.
-Consecutive native heads can instead carry explicitly recovered group context,
-with the original description provider and no inferred alias equivalence. Reports
-are for reading; JSON supplies the machine boundary. Environment names use a
-separate color family from headings and ordinary variables, without making color
-a semantic guarantee. The static pager restores styles on actual soft-wrap rows
-and resizes from logical source text rather than inserting hard newlines.
-
 `mant` is `ManT`'s local-first documentation command. It turns native man/mdoc
 pages and Markdown libraries into one catalog exposed as an interactive TUI,
 a deterministic structured CLI, and a read-only stdio MCP server. Every
@@ -78,6 +67,24 @@ success notice confirms that handoff started, not that a browser accepted it.
 Redirected output stays deterministic instead of emitting terminal control
 sequences.
 
+`F10` opens the menu; `Alt+M/E/V/N/S/H` opens Manual, Edit, View, Navigate,
+Search or Help directly, with underlined initials identifying the keys.
+Within menus, letters or Left/Right switch menus, Up/Down selects an item,
+Enter/Space runs it and Escape/F10 returns. `?` displays keyboard help.
+macOS Option-key reporting depends on the terminal profile: Apple Terminal
+offers **Use Option as Meta key**, while iTerm2 offers **Esc+** for the chosen
+Option key. F10 followed by a letter or arrow remains the non-Alt path.
+
+`Ctrl+F` or `/` finds page text; `Ctrl+G` finds current-document Outline titles,
+entry names/forms and inventoried reference labels/targets, including folded
+nodes. Both use the bottom field but retain separate drafts, queries and cursors.
+Confirm with Enter, then use Up/Down or Enter to cycle matches. `n`/`Shift+N`
+resumes the last confirmed search scope. Outline results count nodes once,
+exclude generated grouping labels and keep logical results stable through
+resize. Visited ancestors are temporarily revealed; Escape retains only the
+exit position's required path. Search never opens linked documents itself.
+Bounded index or reference coverage is disclosed as `partial`.
+
 Visual selections copy automatically, while the Edit menu can copy a complete
 semantic node as deterministic text or structurally complete `CommonMark`. Local
 sessions prefer the native clipboard and fall back to write-only OSC 52. WSL,
@@ -104,6 +111,17 @@ mant --find git --format json
 ```
 
 ## Structured queries for agents and scripts
+
+Explanation reports retain separate owners, readable kinds and source coordinates.
+Plain output leaves original lines unframed; Markdown quotes them. Complete
+displayed definitions suppress duplicate Forms per record, while omitted bodies
+keep Forms and truly isolated empty declarations have a distinct notice.
+Consecutive native heads can instead carry explicitly recovered group context,
+with the original description provider and no inferred alias equivalence. Reports
+are for reading; JSON supplies the machine boundary. Environment names use a
+separate color family from headings and ordinary variables, without making color
+a semantic guarantee. The static pager restores styles on actual soft-wrap rows
+and resizes from logical source text rather than inserting hard newlines.
 
 Discover the document before selecting only the content that matters:
 
@@ -216,7 +234,7 @@ ordinary document lookup.
 Reusable Markdown documents can be registered below
 `~/.local/share/mant/documents` on Linux, macOS, and Windows. `MANT_*_HOME`,
 `mant.toml`, and XDG variables can relocate the applicable directories; see
-the [configuration rules](../../docs/configuration.md).
+the [configuration rules](https://github.com/BryanHeBY/ManT/blob/main/docs/configuration.md).
 
 Regular Markdown files are discovered recursively with their hierarchy.
 Personal `documents/` may use leaf-file symlinks to regular files, including

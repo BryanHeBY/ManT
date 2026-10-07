@@ -628,8 +628,10 @@ scripts/dev/update-reader-screenshot.sh
 ```
 
 The script builds the release executable, registers the repository's ManT
-manual in an isolated XDG hierarchy, opens it in a fixed Xvfb/xterm surface,
-activates View → Expand All, and captures the result. It requires Xvfb, xterm,
+manual in an isolated XDG hierarchy, explicitly overrides higher-priority
+`MANT_*_HOME` variables, opens it in a fixed Xvfb/xterm surface, activates
+View → Expand All, and captures the result. Caller configuration therefore
+cannot redirect its document/config/cache roots. It requires Xvfb, xterm,
 xdotool, Fontconfig, and ImageMagick; the pinned JetBrains Mono files and their
 OFL-1.1 license live under `docs/assets/fonts/`. The script pins its font,
 geometry, terminal settings, and interaction sequence. The rendering tools

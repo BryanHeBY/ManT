@@ -907,6 +907,14 @@ The Navigate and Search menus expose the same operations as their shortcuts.
 The Edit menu exposes visual plain-text copy and complete-node Text/Markdown
 copy. Terminal setup is restored on normal exit, errors, and Rust panics.
 
+On macOS, Option-key reporting depends on the terminal profile, not on whether
+the keyboard has a key labelled Alt. In Apple Terminal, enable
+[Use Option as Meta key](https://support.apple.com/guide/terminal/trmlkbrd/mac);
+in iTerm2, set the chosen Option key to
+[Esc+](https://iterm2.com/documentation-preferences-profiles-keys.html).
+`F10` followed by a menu letter or arrow is the alternative that does not
+require Alt reporting. These profile settings are not modified by ManT.
+
 ## Document Selection
 
 <!-- mant:entries role=option case=sensitive -->

@@ -36,4 +36,4 @@ The `tldr` module supplies pure quick-reference layout and semantic span roles. 
 
 The default feature set is empty. Normal/build dependencies do not include the loader, query engine, native parser, source updater or terminal backends. A full application may independently enable native parsing in its codec dependency; that feature unification is not needed by this crate.
 
-This crate is Apache-2.0 licensed. See [the workspace architecture](https://github.com/BryanHeBY/ManT/blob/dev/docs/architecture/native-engine.md) for the complete ownership graph.
+This crate is Apache-2.0 licensed. See [the workspace architecture](https://github.com/BryanHeBY/ManT/blob/main/docs/architecture/native-engine.md) for the complete ownership graph.

@@ -113,6 +113,28 @@ fn libmandoc_package_has_exact_notices_and_excludes_the_non_spdx_source() {
 }
 
 #[test]
+fn native_package_excludes_python_bytecode_even_with_explicit_test_includes() {
+    let manifest = include_str!("../../libmandoc-rs/Cargo.toml");
+    assert!(manifest.contains("!/tests/**/__pycache__/**"));
+    assert!(manifest.contains("!/tests/**/*.py[cod]"));
+    for path in package_files("libmandoc-rs") {
+        assert!(
+            !path.split('/').any(|part| part == "__pycache__"),
+            "unexpected cache: {path}"
+        );
+        let bytecode = Path::new(&path)
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .is_some_and(|extension| {
+                ["pyc", "pyo", "pyd"]
+                    .iter()
+                    .any(|suffix| extension.eq_ignore_ascii_case(suffix))
+            });
+        assert!(!bytecode, "unexpected bytecode: {path}");
+    }
+}
+
+#[test]
 fn vendored_license_mapping_tracks_authoritative_headers() {
     let root = workspace_root().join("crates/libmandoc-rs");
     let read = |relative: &str| {

@@ -563,6 +563,75 @@ fn cli_capability_matrix_runs_on_every_product_platform() {
     );
 }
 
+#[test]
+fn screenshot_capture_isolates_application_overrides_and_keeps_pinned_geometry() {
+    let script = include_str!("../../../scripts/dev/update-reader-screenshot.sh");
+    for setting in [
+        "\"HOME=$screenshot_home\"",
+        "\"MANT_CONFIG_HOME=$config_home/mant\"",
+        "\"MANT_DATA_HOME=$data_home/mant\"",
+        "\"MANT_CACHE_HOME=$cache_home/mant\"",
+        "\"XDG_DATA_HOME=$data_home\"",
+        "\"XDG_CONFIG_HOME=$config_home\"",
+        "\"XDG_CACHE_HOME=$cache_home\"",
+        "\"FONTCONFIG_FILE=$font_dir/fonts.conf\"",
+    ] {
+        assert!(
+            script.contains(setting),
+            "missing screenshot isolation: {setting}"
+        );
+    }
+    assert!(script.contains("-geometry 135x51"));
+    assert!(script.contains("F10 Right Right Down Down Down Return"));
+}
+
+#[test]
+fn publication_dispatch_ref_is_validated_before_release_checkout() {
+    let workflow = include_str!("../../../.github/workflows/release.yml");
+    let check = workflow
+        .find("- name: Validate manual publication ref")
+        .unwrap();
+    let checkout = workflow.find("- name: Check out the release tag").unwrap();
+    assert!(check < checkout);
+    assert!(
+        workflow.contains("if: github.event_name == 'workflow_dispatch' && inputs.publish_crates")
+    );
+    assert!(workflow.contains("\"$GITHUB_REF\" != \"refs/tags/$RELEASE_TAG\""));
+}
+
+#[test]
+fn crate_readmes_do_not_link_to_checkout_only_docs_or_the_development_branch() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    for package in [
+        "mant-ir",
+        "mant-protocol",
+        "libmandoc-rs",
+        "mant-sources",
+        "mant-codec",
+        "mant-loader",
+        "mant-query",
+        "mant-render",
+        "mant-engine",
+        "mant-ui",
+        "mant",
+    ] {
+        let readme =
+            std::fs::read_to_string(root.join("crates").join(package).join("README.md")).unwrap();
+        for forbidden in [
+            "](../../docs/",
+            "](../docs/",
+            "](upstream/",
+            "](patches/",
+            "/blob/dev/",
+        ] {
+            assert!(
+                !readme.contains(forbidden),
+                "{package} README has non-release link {forbidden}"
+            );
+        }
+    }
+}
+
 #[cfg(unix)]
 #[test]
 fn publication_tags_are_validated_before_registry_authentication() {

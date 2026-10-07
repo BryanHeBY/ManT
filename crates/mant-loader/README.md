@@ -47,6 +47,18 @@ assert!(content.document.is_some());
 # Ok::<(), Box<dyn std::error::Error>>(())
 ```
 
+## Configuration
+
+Linux, macOS and Windows share `~/.config/mant`, `~/.local/share/mant` and
+`~/.cache/mant` for application configuration, persistent data and private cache.
+`MANT_CONFIG_HOME`, `MANT_DATA_HOME` and `MANT_CACHE_HOME` select final directories;
+XDG category variables supply shared bases. Optional `mant.toml` supplies data,
+cache and manual roots. With `man.discover = true`, explicit roots precede
+personal `man.conf`, native discovery and supplemental roots; `false` isolates
+explicit roots. Complete `MANT_MANPATH`/`MANPATH` overrides retain precedence.
+The resolver is read-only and does not silently migrate old storage.
+See [configuration and migration](https://github.com/BryanHeBY/ManT/blob/main/docs/configuration.md).
+
 ## Boundaries
 
 - Registered documents and native manuals retain deterministic source priority,
@@ -65,7 +77,7 @@ assert!(content.document.is_some());
   program. Cache updates and host process execution belong to the application.
 
 The source, configuration and metadata safety contracts are documented in
-[the architecture](https://github.com/BryanHeBY/ManT/blob/dev/docs/architecture/native-engine.md)
-and [sources guide](https://github.com/BryanHeBY/ManT/blob/dev/docs/sources.md).
+[the architecture](https://github.com/BryanHeBY/ManT/blob/main/docs/architecture/native-engine.md)
+and [sources guide](https://github.com/BryanHeBY/ManT/blob/main/docs/sources.md).
 ManT-authored code is Apache-2.0; optional native parsing remains in the
 separately licensed and attributed `libmandoc-rs` package.

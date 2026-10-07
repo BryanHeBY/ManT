@@ -66,6 +66,6 @@ the same borrowed source snapshot. This format dependency does not enable
 native parsing or report rendering. Reference destination checks inspect
 typed logical addresses and already supplied content only; they perform no IO.
 
-See the [protocol manual](https://github.com/BryanHeBY/ManT/blob/dev/docs/manuals/mant-protocol.md)
-for process contracts and the [IR manual](https://github.com/BryanHeBY/ManT/blob/dev/docs/manuals/mant-ir.md)
+See the [protocol manual](https://github.com/BryanHeBY/ManT/blob/main/docs/manuals/mant-protocol.md)
+for process contracts and the [IR manual](https://github.com/BryanHeBY/ManT/blob/main/docs/manuals/mant-ir.md)
 for authoritative content ownership. The crate is Apache-2.0 licensed.

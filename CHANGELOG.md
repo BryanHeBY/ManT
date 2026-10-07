@@ -54,6 +54,8 @@ that crate was not published for that change.
 
 ### libmandoc-rs 0.12.0
 
+- Exclude generated Python bytecode and cache directories from the published
+  test source set, including when explicit package includes override Git ignores.
 - Replace the Rust `Node::macro_name: Option<String>` field with
   `Node::macro_token: Option<MacroToken>`. Typed `RoffMacro`, `ManMacro`, and
   `MdocMacro` identities cover the pinned named-token inventory; only unknown

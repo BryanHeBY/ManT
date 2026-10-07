@@ -135,7 +135,7 @@ with rendered text even when table cells flatten for portable Markdown.
 ### Native source interpretation
 
 `mant-codec` owns native lowering, Markdown parsing, semantic annotation and
-portable document encoding. Its [native ownership map](https://github.com/BryanHeBY/ManT/blob/dev/crates/mant-codec/README.md#native-lowering-ownership)
+portable document encoding. Its [native ownership map](https://github.com/BryanHeBY/ManT/blob/main/crates/mant-codec/README.md#native-lowering-ownership)
 documents formatter state, source geometry, target retention and transactional
 table recovery. `mant-loader` prepares inputs; the engine composes queries over
 that one implementation through `mant-query`; it does not reinterpret source

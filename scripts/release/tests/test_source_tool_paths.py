@@ -62,6 +62,23 @@ def case_collisions(paths):
 
 
 class SourceToolPathTests(unittest.TestCase):
+    @unittest.skipUnless(BASH, "manual ref validation requires a usable Bash")
+    def test_manual_publication_requires_the_selected_tag_ref(self):
+        command = workflow_command("Validate manual publication ref")
+        for workflow_ref, release_tag, expected in [
+            ("refs/heads/main", "v0.12.0", 1),
+            ("refs/tags/v0.11.0", "v0.12.0", 1),
+            ("refs/tags/v0.12.0", "v0.12.0", 0),
+            ("refs/tags/mant-ui-v0.12.0", "mant-ui-v0.12.0", 0),
+        ]:
+            with self.subTest(workflow_ref=workflow_ref, release_tag=release_tag):
+                environment = dict(os.environ, GITHUB_REF=workflow_ref,
+                                   RELEASE_TAG=release_tag)
+                result = subprocess.run([BASH, "-c", command], env=environment,
+                                        capture_output=True, text=True,
+                                        timeout=10, check=False)
+                self.assertEqual(result.returncode, expected, result.stderr)
+
     def test_case_collisions_include_directories_and_files(self):
         self.assertEqual(
             case_collisions(["LICENSES/CC-BY.txt", "licenses/about.hbs"]),

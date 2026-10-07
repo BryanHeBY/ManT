@@ -83,12 +83,12 @@ cleanup() {
 }
 trap cleanup EXIT HUP INT TERM
 
-home="$temporary/home"
+screenshot_home="$temporary/home"
 data_home="$temporary/data"
 cache_home="$temporary/cache"
 config_home="$temporary/config"
 mkdir -p \
-  "$home" \
+  "$screenshot_home" \
   "$data_home/mant/documents" \
   "$cache_home" \
   "$config_home" \
@@ -97,7 +97,10 @@ mkdir -p \
 install -m 0644 docs/manuals/mant.md "$data_home/mant/documents/mant.md"
 
 runtime_environment=(
-  "HOME=$home"
+  "HOME=$screenshot_home"
+  "MANT_CONFIG_HOME=$config_home/mant"
+  "MANT_DATA_HOME=$data_home/mant"
+  "MANT_CACHE_HOME=$cache_home/mant"
   "XDG_DATA_HOME=$data_home"
   "XDG_CACHE_HOME=$cache_home"
   "XDG_CONFIG_HOME=$config_home"

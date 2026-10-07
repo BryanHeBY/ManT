@@ -85,7 +85,7 @@ the published `src/**` source set. Packaged unit tests remain self-contained.
 Target and topology audits complement these exact text/font/line assertions;
 a clean target ledger alone does not establish rendering fidelity.
 
-The authoritative format contracts are [mant-markdown(7)](https://github.com/BryanHeBY/ManT/blob/dev/docs/manuals/mant-markdown.md), [mant-roff(7)](https://github.com/BryanHeBY/ManT/blob/dev/docs/manuals/mant-roff.md), and [mant-ir(7)](https://github.com/BryanHeBY/ManT/blob/dev/docs/manuals/mant-ir.md).
+The authoritative format contracts are [mant-markdown(7)](https://github.com/BryanHeBY/ManT/blob/main/docs/manuals/mant-markdown.md), [mant-roff(7)](https://github.com/BryanHeBY/ManT/blob/main/docs/manuals/mant-roff.md), and [mant-ir(7)](https://github.com/BryanHeBY/ManT/blob/main/docs/manuals/mant-ir.md).
 
 The private roff field buffer in
 `src/mandoc/inline/flow/field_buffer.rs` and the native field device

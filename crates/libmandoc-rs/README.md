@@ -11,7 +11,7 @@ checkouts at one explicit UTC cutoff, records the complete shipping and
 `regress/` inventories, and emits a deterministic candidate archive below the
 repository `target/` directory without changing the active vendor. Independent
 behavior audits additionally require a registered pristine oracle attestation;
-see [`upstream/oracle/README.md`](upstream/oracle/README.md).
+see [the oracle guide](https://github.com/BryanHeBY/ManT/blob/main/crates/libmandoc-rs/upstream/oracle/README.md).
 
 ## What this crate provides
 
@@ -474,7 +474,7 @@ The checked-in vendor tree is the pinned pristine source subset plus the
 32 ordered patches in `patches/series`. The stack follows build prerequisites,
 parser safety, embedding, execution evidence, compatibility, rendering, and
 allocation performance. Patch numbers identify this stack, not Cargo features.
-See [`patches/README.md`](patches/README.md) for dependencies and the previous
+See [the patch guide](https://github.com/BryanHeBY/ManT/blob/main/crates/libmandoc-rs/patches/README.md) for dependencies and the previous
 number mapping. `Historical-Replaces` headers refer to older superseded stacks;
 they never refer to a patch number in the current series.
 

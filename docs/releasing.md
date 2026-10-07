@@ -92,6 +92,85 @@ integrators must act.
    read their scripts and documentation from `main`, so do not publish a tag
    that is ahead of the default branch.
 
+### Final readiness checkpoint
+
+Preparation does not publish anything. Keep `Unreleased` and explicitly pending
+compatibility notes until the maintainer freezes the release date; then archive
+the selected crate entries and remove present-tense development-status wording
+from their READMEs and manuals without rewriting historical changelog entries.
+Do not regenerate an unchanged schema snapshot as part of release housekeeping.
+
+- Check the eleven candidate versions against crates.io, not merely local tags.
+  Inspect package-visible changes against each crate's own last published tag,
+  including README and manifest changes. Product versions and component versions
+  may differ; every internal minimum must resolve to a published dependency by
+  the time its dependent is uploaded. Refresh/check the workspace, fuzz and
+  independent-consumer lockfiles whenever those requirements change.
+- Inspect `cargo package --list` after running tests, when generated caches may
+  exist. Explicit Cargo `include` patterns can include files ignored by Git;
+  Python bytecode, cache directories and local evidence must not ship. Do not
+  delete user files or use `--allow-dirty` to conceal an unexpected source set.
+- Regenerate the screenshot only after the final self manual and UI changes.
+  The script isolates both XDG and `MANT_*_HOME` paths; visually confirm the
+  menu initials, outline, code accents and complete synopsis on the captured
+  frame. A new file timestamp is not evidence that the image reflects the UI.
+- Validate README Rust examples, package license notices, absolute HTTPS links
+  from crate READMEs, self-manual option coverage and embedded CLI help. Source
+  files outside the crate cannot be linked with checkout-relative paths in its
+  published README/rustdoc. Keep user instructions on the default branch.
+- Finish the broad maintainer-run roff audit and normal local gate; keep raw
+  evidence under `target/`, with source identities and commands in the release
+  preparation commit/discussion. Reference deviations and pending reviews are
+  not automatically passing release evidence.
+
+Push the final preparation commit to `dev` and follow its exact SHA until the
+aggregate CI gate is green. Sync that same commit to `main` where possible;
+the main workflow can reuse complete `dev` checks only for an identical SHA.
+A squash or merge producing a different SHA needs its own full CI. On a clean,
+updated `main` checkout, confirm the remote branch and recorded checks before
+creating the version-matching tag:
+
+```sh
+git status --short
+git rev-parse HEAD
+gh api repos/BryanHeBY/ManT/branches/main --jq '.commit.sha'
+GITHUB_REPOSITORY=BryanHeBY/ManT bash scripts/ci/find-successful-ci.sh "$(git rev-parse HEAD)"
+```
+
+The verifier accepts only complete successful **push** runs with supply-chain,
+Linux, macOS, Windows, MSRV and coverage jobs for the exact SHA. A reused main
+run with skipped full jobs is not independently sufficient; the original full
+`dev` run is the evidence. A tag does not start those tests itself.
+
+After the tag build, the draft Release and crates.io approval are parallel
+branches. A complete draft therefore does not prove that crates publication
+finished. Confirm every selected registry version and smoke-test the registry
+distribution before making the draft public. Existing crate names do not need
+the historical first-publication bootstrap; still verify their Trusted Publisher
+and the protected `crates-io` Environment settings.
+
+The tag-only environment policy also applies to manually dispatched workflows.
+If `publish_crates` is enabled, select that same release tag as the workflow ref,
+not `main` or a different tag; verification rejects the mismatch before building.
+For example, after the tag exists and its source CI is green:
+
+```sh
+gh workflow run release.yml --repo BryanHeBY/ManT --ref vMAJOR.MINOR.PATCH \
+  -f tag=vMAJOR.MINOR.PATCH -F publish_crates=true
+```
+
+An artifact-only retry may run the repaired workflow on `main` with
+`publish_crates=false`. To resume partial crates publication, prefer rerunning
+the original failed tag job; it retains the permitted ref and skips versions
+already uploaded. Neither retry moves a tag or bypasses environment approval.
+
+For curated notes, follow the recent product-release structure: short outcome
+summary, Highlights, explicit Breaking changes/migrations, independent crate
+versions, Install or update, artifact verification, and a previous-tag compare
+link. For a storage/protocol change, include old and new paths/contracts and
+both installer and manual/Cargo migration instructions. Generated commit notes
+alone are not the final user-facing release notes.
+
 ## Configure crates.io publication
 
 The crates.io packages form one dependency graph. `mant-ui` first entered
@@ -286,13 +365,15 @@ depends on the published `mant` crate. A manually dispatched product release
 rebuilds a named tag and draft but publishes no crates by default and can create
 the draft only when that tag has no existing GitHub Release. A manually
 dispatched package tag likewise publishes nothing unless `publish_crates` is
-enabled. For a failed tag workflow that published no crate, enable that input;
+enabled. For a failed tag workflow that published no crate, enable that input
+only when dispatching from the selected release tag;
 the protected `crates-io` Environment still requires approval. Leave it
 disabled for artifact-only product rebuilds. If publication partially
 succeeded, rerun the original failed job so the release script can detect and
 skip versions already present on crates.io. Manual retries always use the
 immutable tag's product tree. CI verification, native builds and SBOM
-finalization use the separate trusted workflow revision on `main`.
+finalization use the separate selected workflow revision: `main` for an
+artifact-only repair, or the matching tag revision for publication.
 Packaging and publication tools come from the tag itself; the workflow selects
 their organized paths when present and their former root paths for older tags.
 Automation fixes can therefore recover older tags without changing their
