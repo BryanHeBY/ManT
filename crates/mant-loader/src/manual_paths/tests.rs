@@ -315,11 +315,18 @@ fn explicit_toml_roots_keep_personal_fallback_until_discovery_is_disabled() {
         ("MANT_CONFIG_HOME".into(), config.clone().into_os_string()),
         ("MANT_DATA_HOME".into(), root.join("data").into_os_string()),
     ]);
-    for discover in [true, false] {
+    for (inherit, discover) in [
+        ("", true),
+        ("", false),
+        ("inherit_paths = true\n", true),
+        ("inherit_paths = true\n", false),
+        ("inherit_paths = false\n", true),
+        ("inherit_paths = false\n", false),
+    ] {
         fs::write(
             config.join("mant.toml"),
             format!(
-                "[man]\npaths = ['{}']\ndiscover = {discover}\n",
+                "[man]\npaths = ['{}']\n{inherit}discover = {discover}\n",
                 explicit.display()
             ),
         )

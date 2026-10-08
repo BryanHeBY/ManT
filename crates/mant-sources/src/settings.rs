@@ -37,7 +37,7 @@ pub enum DirectoryKind {
 #[serde(default, deny_unknown_fields)]
 struct Declaration {
     paths: Paths,
-    man: Manuals,
+    man: Option<Manuals>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -47,20 +47,13 @@ struct Paths {
     cache_home: Option<String>,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 struct Manuals {
-    paths: Vec<String>,
-    discover: bool,
-}
-
-impl Default for Manuals {
-    fn default() -> Self {
-        Self {
-            paths: Vec::new(),
-            discover: true,
-        }
-    }
+    // Keep omission distinct from explicit values; apply defaults at resolution.
+    paths: Option<Vec<String>>,
+    inherit_paths: Option<bool>,
+    discover: Option<bool>,
 }
 
 impl Settings {
@@ -208,16 +201,39 @@ impl Settings {
     pub fn manual_paths(&self) -> Result<Vec<PathBuf>, SourceConfigError> {
         self.declaration
             .man
-            .paths
+            .as_ref()
+            .and_then(|man| man.paths.as_deref())
+            .unwrap_or_default()
             .iter()
             .map(|value| self.resolve_path(value))
             .collect()
     }
 
+    /// Whether explicit manual paths may inherit lower-priority configuration paths.
+    /// Defaults to true. Only one application configuration is currently loaded,
+    /// so this setting does not change today's manual discovery or storage roots.
+    #[must_use]
+    pub const fn inherit_manual_paths(&self) -> bool {
+        match &self.declaration.man {
+            Some(man) => match man.inherit_paths {
+                Some(value) => value,
+                None => true,
+            },
+            None => true,
+        }
+    }
+
     /// Whether personal `man.conf`, host roots and supplemental roots are discovered.
+    /// Defaults to true, independently of explicit-path inheritance.
     #[must_use]
     pub const fn discover_manuals(&self) -> bool {
-        self.declaration.man.discover
+        match &self.declaration.man {
+            Some(man) => match man.discover {
+                Some(value) => value,
+                None => true,
+            },
+            None => true,
+        }
     }
 
     /// Expand a TOML path and resolve relative results against its configuration file.

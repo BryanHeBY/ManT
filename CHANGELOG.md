@@ -15,6 +15,10 @@ that crate was not published for that change.
 
 ### mant-sources 0.10.1
 
+- Accept optional `[man] inherit_paths`, independently of `discover`, with both
+  flags defaulting to true. Preserve omitted declarations separately from
+  explicit values without changing the current single-file discovery behavior
+  or introducing system-level application configuration.
 - Share bounded, read-only configuration path expansion across `mant.toml`
   and personal `man.conf`: authored `~`, `~/`, `~\`, `%NAME%` and `%%` use one
   implementation. Insert environment values only once without shell evaluation,

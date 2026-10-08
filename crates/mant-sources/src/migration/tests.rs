@@ -55,6 +55,36 @@ fn copies_configuration_and_documents_preserves_originals_and_is_repeatable() {
 }
 
 #[test]
+fn manual_flags_survive_import_without_rewriting_configuration() {
+    for inherit in [true, false] {
+        let fixture = Fixture::new();
+        let text =
+            format!("[man]\npaths = ['~/manuals']\ninherit_paths = {inherit}\ndiscover = false\n");
+        fs::write(fixture.old.join("mant.toml"), &text).unwrap();
+        let settings = migrate_with(&fixture.old, fixture.settings.clone()).unwrap();
+        assert_eq!(settings.inherit_manual_paths(), inherit);
+        assert!(!settings.discover_manuals());
+        assert_eq!(
+            settings.manual_paths().unwrap(),
+            [fixture.root.join("manuals")]
+        );
+        let config = settings.config_home().unwrap().join("mant.toml");
+        assert_eq!(fs::read_to_string(&config).unwrap(), text);
+        assert_eq!(
+            fs::read_to_string(fixture.old.join("mant.toml")).unwrap(),
+            text
+        );
+        let reloaded = Settings::from_environment(
+            &BTreeMap::from([("HOME".into(), fixture.root.clone().into_os_string())]),
+            cfg!(windows),
+        )
+        .unwrap();
+        assert_eq!(reloaded.inherit_manual_paths(), inherit);
+        assert!(!reloaded.discover_manuals());
+    }
+}
+
+#[test]
 fn existing_configuration_wins_and_data_conflicts_leave_old_installation_intact() {
     let fixture = Fixture::new();
     let config = fixture.settings.config_home().unwrap();

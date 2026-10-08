@@ -19,6 +19,8 @@ local Git locations retain their data-root base. TOML paths and personal
 `man.conf` share single-pass `~`/`%NAME%` expansion (`%%` is a literal percent),
 without shell evaluation or rewriting configuration. See the online
 [configuration guide](https://github.com/BryanHeBY/ManT/blob/main/docs/configuration.md).
+Manual-path inheritance and discovery are independent settings, both defaulting
+to true; only one application configuration is currently loaded.
 
 ## Feature boundary
 

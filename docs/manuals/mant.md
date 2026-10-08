@@ -1334,6 +1334,8 @@ Empty variables are unset; relative XDG values are ignored. TOML paths expand
 `~/` or resolve relative to the configuration directory, not the working directory.
 `[man] paths = ["~/manuals"]` sets personal roots; `discover = true` retains
 lower-priority personal and native discovery even when those roots exist.
+`inherit_paths` also defaults to `true`; it controls explicit-path inheritance,
+not discovery, and has no effect while only one `mant.toml` is loaded.
 No `config_home` field or project-local configuration search is supported.
 See the online [configuration guide](https://github.com/BryanHeBY/ManT/blob/main/docs/configuration.md).
 

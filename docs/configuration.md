@@ -93,6 +93,13 @@ and searches include fallback content. Empty or absent `paths` retain this chain
 `discover = false` uses only explicit TOML roots, skipping personal `man.conf`,
 host configuration and supplemental roots.
 
+The next patch after 0.12.0 also accepts `man.inherit_paths`; both it and
+`man.discover` default to `true`.
+`inherit_paths` controls inheritance of explicit paths from lower-priority
+application configuration, independently of discovery. Only one `mant.toml`
+is currently loaded, so changing it does not affect the current root sequence
+or enable system-level application configuration.
+
 Personal `man.conf` accepts the same bounded subset on all platforms:
 `manpath`/`MANPATH`, `MANPATH_MAP`, `MANDATORY_MANPATH` and one-level `MANCONFIG`
 fragments. Roots must be absolute after the shared `~`/`%NAME%` expansion;

@@ -1,5 +1,6 @@
 use super::*;
 use std::{
+    fmt::Write as _,
     fs,
     sync::atomic::{AtomicU64, Ordering},
 };
@@ -47,8 +48,71 @@ fn portable_defaults_and_no_write_side_effects() {
             fixture.0.join(".cache/mant")
         );
         assert!(settings.discover_manuals());
+        assert!(settings.inherit_manual_paths());
         assert!(!settings.data_home().unwrap().exists());
         assert!(!settings.cache_home().unwrap().exists());
+    }
+}
+
+#[test]
+fn manual_declarations_preserve_omission_and_explicit_empty_paths() {
+    for text in ["", "[paths]\n", "[paths]\ndata_home = 'data'\n"] {
+        let declaration: Declaration = toml::from_str(text).unwrap();
+        assert!(declaration.man.is_none());
+    }
+    let declaration: Declaration = toml::from_str("[man]\n").unwrap();
+    let man = declaration.man.unwrap();
+    assert!(man.paths.is_none());
+    assert!(man.inherit_paths.is_none());
+    assert!(man.discover.is_none());
+
+    let declaration: Declaration =
+        toml::from_str("[man]\npaths = []\ninherit_paths = true\ndiscover = false\n").unwrap();
+    let man = declaration.man.unwrap();
+    assert_eq!(man.paths, Some(Vec::new()));
+    assert_eq!(man.inherit_paths, Some(true));
+    assert_eq!(man.discover, Some(false));
+}
+
+#[test]
+fn manual_flags_default_to_true_and_remain_independent() {
+    let fixture = Fixture::new();
+    let environment = fixture.environment();
+    for inherit in [None, Some(true), Some(false)] {
+        for discover in [None, Some(true), Some(false)] {
+            let mut text = "[man]\npaths = ['~/manuals']\n".to_owned();
+            if let Some(value) = inherit {
+                writeln!(text, "inherit_paths = {value}").unwrap();
+            }
+            if let Some(value) = discover {
+                writeln!(text, "discover = {value}").unwrap();
+            }
+            fixture.configure(&text);
+            let settings = Settings::from_environment(&environment, cfg!(windows)).unwrap();
+            assert_eq!(settings.inherit_manual_paths(), inherit.unwrap_or(true));
+            assert_eq!(settings.discover_manuals(), discover.unwrap_or(true));
+            assert_eq!(
+                settings.manual_paths().unwrap(),
+                [fixture.0.join("manuals")]
+            );
+            let man = settings.declaration.man.as_ref().unwrap();
+            assert_eq!(man.inherit_paths, inherit);
+            assert_eq!(man.discover, discover);
+            assert_eq!(
+                fs::read_to_string(fixture.0.join(".config/mant/mant.toml")).unwrap(),
+                text
+            );
+            assert!(!fixture.0.join("manuals").exists());
+            assert!(!settings.data_home().unwrap().exists());
+            assert!(!settings.cache_home().unwrap().exists());
+        }
+    }
+    for text in ["", "[man]\n", "[man]\npaths = []\n"] {
+        fixture.configure(text);
+        let settings = Settings::from_environment(&environment, cfg!(windows)).unwrap();
+        assert!(settings.inherit_manual_paths());
+        assert!(settings.discover_manuals());
+        assert_eq!(settings.manual_paths().unwrap(), [] as [PathBuf; 0]);
     }
 }
 
@@ -147,6 +211,8 @@ fn invalid_configuration_does_not_silently_fall_back() {
     for text in [
         "[paths]\nconfig_home = '~/elsewhere'",
         "[man]\ndiscover = 'yes'",
+        "[man]\ninherit_paths = 'yes'",
+        "[man]\ninherit_paths = 1",
         "[other]",
     ] {
         fixture.configure(text);
