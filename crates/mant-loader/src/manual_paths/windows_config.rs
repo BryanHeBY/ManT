@@ -12,6 +12,23 @@ use super::{
     MAX_MANUAL_PATH_CONFIG_BYTES, ManualPathDiagnostic, ManualRootDiscovery, ScanBudget,
     expansion::{GlobCase, expand_path_pattern_with_case},
 };
+use mant_sources::settings::{
+    WindowsPathKey, is_absolute_configuration_path, is_relative_configuration_path,
+    windows_path_key,
+};
+
+#[derive(Eq, Hash, Ord, PartialEq, PartialOrd)]
+enum ConfigPathKey {
+    Windows(WindowsPathKey),
+    Native(PathBuf),
+}
+
+fn config_path_key(path: &Path, windows: bool) -> ConfigPathKey {
+    if windows && let Some(key) = windows_path_key(path) {
+        return ConfigPathKey::Windows(key);
+    }
+    ConfigPathKey::Native(path.to_owned())
+}
 
 const MAX_CONFIG_TREE_BYTES: u64 = 8 * 1024 * 1024;
 const MAX_CONFIG_LINES: usize = 4096;
@@ -334,11 +351,7 @@ fn collect_include_paths_with_case(
             exhausted: pattern_truncated,
         } = expand(pattern, &mut budget);
         for included_path in expanded {
-            if !seen.insert(if windows {
-                PathBuf::from(normalized_windows_path(&included_path))
-            } else {
-                included_path.clone()
-            }) {
+            if !seen.insert(config_path_key(&included_path, windows)) {
                 continue;
             }
             if included.len() == MAX_EXPANDED_CONFIG_PATHS {
@@ -364,7 +377,7 @@ fn collect_include_paths_with_case(
         }
     }
     if windows {
-        included.sort_unstable_by_key(|path| normalized_windows_path(path));
+        included.sort_unstable_by_key(|path| config_path_key(path, true));
     } else {
         included.sort_unstable();
     }
@@ -451,26 +464,11 @@ fn parse_path(
 ) -> Option<PathBuf> {
     let expanded =
         mant_sources::settings::expand_configuration_path(value, environment, windows).ok()?;
-    if windows {
-        is_absolute_windows_path(expanded.as_os_str())
-    } else {
-        expanded.is_absolute()
-    }
-    .then_some(expanded)
+    is_absolute_configuration_path(&expanded, windows).then_some(expanded)
 }
 
 pub(super) fn is_absolute_windows_path(path: &OsStr) -> bool {
-    let value = path.to_string_lossy();
-    let bytes = value.as_bytes();
-    bytes.get(..3).is_some_and(|prefix| {
-        prefix[0].is_ascii_alphabetic() && prefix[1] == b':' && is_separator(prefix[2])
-    }) || bytes
-        .get(..2)
-        .is_some_and(|prefix| is_separator(prefix[0]) && is_separator(prefix[1]))
-}
-
-const fn is_separator(byte: u8) -> bool {
-    byte == b'\\' || byte == b'/'
+    is_absolute_configuration_path(Path::new(path), true)
 }
 
 fn materialize(plan: WindowsConfigPlan, executable_paths: &[PathBuf]) -> ManualRootDiscovery {
@@ -502,28 +500,27 @@ fn materialize(plan: WindowsConfigPlan, executable_paths: &[PathBuf]) -> ManualR
 }
 
 fn windows_paths_equivalent(left: &Path, right: &Path) -> bool {
-    normalized_windows_path(left) == normalized_windows_path(right)
+    if [left, right].iter().any(|path| {
+        !is_absolute_configuration_path(path, true) && !is_relative_configuration_path(path, true)
+    }) {
+        return false;
+    }
+    let left_key = windows_path_key(left);
+    (left_key.is_some() && left_key == windows_path_key(right))
         || fs::canonicalize(left)
             .ok()
             .zip(fs::canonicalize(right).ok())
             .is_some_and(|(left, right)| {
-                normalized_windows_path(&left) == normalized_windows_path(&right)
+                let left_key = windows_path_key(&left);
+                left_key.is_some() && left_key == windows_path_key(&right)
             })
-}
-
-fn normalized_windows_path(path: &Path) -> String {
-    path.as_os_str()
-        .to_string_lossy()
-        .replace('/', "\\")
-        .trim_end_matches('\\')
-        .to_ascii_lowercase()
 }
 
 pub(super) fn deduplicate_windows_paths(paths: Vec<PathBuf>) -> Vec<PathBuf> {
     let mut seen = HashSet::new();
     paths
         .into_iter()
-        .filter(|path| seen.insert(normalized_windows_path(path)))
+        .filter(|path| seen.insert(config_path_key(path, true)))
         .collect()
 }
 
@@ -537,10 +534,94 @@ mod tests {
     };
 
     use super::{
-        ConfigBudget, collect_include_paths_with, materialize, parse, parse_bounded, read_config,
-        split_arguments,
+        ConfigBudget, collect_include_paths_with, deduplicate_windows_paths, materialize, parse,
+        parse_bounded, read_config, split_arguments, windows_paths_equivalent,
     };
     use crate::manual_paths::{MAX_EXPANDED_CONFIG_CANDIDATES, MAX_EXPANDED_CONFIG_PATHS};
+
+    #[test]
+    fn windows_directives_reject_incomplete_roots_and_device_namespaces() {
+        let environment = HashMap::new();
+        for value in [
+            r"C:manuals",
+            r"\manuals",
+            "/manuals",
+            r"\\server",
+            r"\\server\",
+            r"\\.\pipe\mant",
+            r"\\?\C:/manuals",
+        ] {
+            let text = format!(
+                "manpath \"{value}\"\nMANDATORY_MANPATH \"{value}\"\nMANCONFIG \"{value}\"\nMANPATH_MAP C:\\bin \"{value}\"\n"
+            );
+            let plan = parse(&text, Path::new("man.conf"), &environment, true);
+            assert_eq!(plan.roots, [] as [PathBuf; 0]);
+            assert_eq!(plan.mandatory, [] as [PathBuf; 0]);
+            assert_eq!(plan.include_patterns, [] as [PathBuf; 0]);
+            assert_eq!(plan.mappings, [] as [(PathBuf, PathBuf); 0]);
+            assert_eq!(plan.diagnostics.len(), 4, "{value}");
+        }
+        for value in [
+            r"\\?\C:\manuals",
+            r"\\?\UNC\server\share\manuals",
+            "//server/share/manuals",
+        ] {
+            let plan = parse(
+                &format!("manpath \"{value}\"\n"),
+                Path::new("man.conf"),
+                &environment,
+                true,
+            );
+            assert_eq!(plan.roots, [PathBuf::from(value)]);
+            assert_eq!(plan.diagnostics, []);
+        }
+    }
+
+    #[test]
+    fn windows_maps_and_deduplication_preserve_roots_and_namespace_boundaries() {
+        assert!(windows_paths_equivalent(
+            Path::new(r"C:\bin"),
+            Path::new("c:/other/../bin/")
+        ));
+        assert!(!windows_paths_equivalent(
+            Path::new(r"C:\"),
+            Path::new("C:")
+        ));
+        assert!(!windows_paths_equivalent(
+            Path::new(r"C:\bin"),
+            Path::new(" C:/bin")
+        ));
+        let roots = deduplicate_windows_paths(
+            [
+                r"C:\",
+                "c:/./",
+                r"\\server\share",
+                "//server/share/",
+                r"C:\docs",
+                "c:/other/../docs/",
+                r"\\?\C:\docs",
+            ]
+            .map(PathBuf::from)
+            .to_vec(),
+        );
+        assert_eq!(
+            roots,
+            [r"C:\", r"\\server\share", r"C:\docs", r"\\?\C:\docs"].map(PathBuf::from)
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_maps_retain_ordinary_relative_path_environment_entries() {
+        assert!(windows_paths_equivalent(
+            &std::env::current_dir().unwrap(),
+            Path::new(".")
+        ));
+        assert!(!windows_paths_equivalent(
+            &std::env::current_dir().unwrap(),
+            Path::new("C:")
+        ));
+    }
 
     #[test]
     fn single_paths_preserve_spaces_and_accept_one_optional_double_quote_pair() {

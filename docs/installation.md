@@ -201,6 +201,12 @@ terms.
 
 ### Windows
 
+Directory overrides accept ordinary absolute disk paths with `/` or `\`, and
+complete UNC paths. Drive-relative/root-relative paths and incomplete UNC or
+device namespaces are rejected. Extended disk/UNC paths retain backslashes and
+do not accept `.`/`..` components. Installer comparisons preserve roots and path
+whitespace; they do not infer ownership of same-named files at another location.
+
 Download `mant-<version>-windows-x64.zip` from the
 [latest release](https://github.com/BryanHeBY/ManT/releases/latest), extract
 `mant.exe` into a directory on `PATH`, and optionally register the bundled

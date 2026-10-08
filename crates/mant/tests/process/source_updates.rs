@@ -7,6 +7,110 @@ fn plain_document_heading(value: &serde_json::Value) -> &serde_json::Value {
     &value["document"]["heading"]["content"][0]["value"]
 }
 
+#[test]
+fn changing_data_root_isolates_source_reads_updates_and_pruning() {
+    let root =
+        std::env::temp_dir().join(format!("mant-single-source-store-{}", std::process::id()));
+    let repository = root.join("repository");
+    fs::create_dir_all(&repository).unwrap();
+    fs::write(
+        repository.join("single-store-tool.md"),
+        "# Single store tool\n",
+    )
+    .unwrap();
+    run_git(&repository, &["init", "--initial-branch=main"]);
+    run_git(&repository, &["config", "user.name", "ManT Test"]);
+    run_git(
+        &repository,
+        &["config", "user.email", "mant-test@example.invalid"],
+    );
+    run_git(&repository, &["add", "."]);
+    run_git(&repository, &["commit", "-m", "initial"]);
+    fs::create_dir_all(root.join("config")).unwrap();
+    let config = root.join("config/sources.toml");
+    fs::write(
+        &config,
+        format!(
+            "[team]\nrepo = {:?}\nbranch = 'main'\n",
+            repository.to_str().unwrap()
+        ),
+    )
+    .unwrap();
+    let old_store = registered_data_root(&root).join("sources/team");
+    let first = run_with_registered_documents(&root, &["--update-docs", "--compact"]);
+    assert!(first.status.success(), "{first:?}");
+    let old_metadata = fs::read(old_store.join(".mant-source.toml")).unwrap();
+    let old_document = fs::read(old_store.join("single-store-tool.md")).unwrap();
+    let documents = registered_documents_dir(&root);
+    fs::create_dir_all(&documents).unwrap();
+    fs::write(
+        documents.join("old-store-personal.md"),
+        "# Old personal document\n",
+    )
+    .unwrap();
+
+    let selected = root.join("selected-data");
+    let run = |arguments: &[&str]| {
+        let mut command = Command::new(executable());
+        configure_registered_documents(&mut command, &root);
+        command
+            .env("MANT_DATA_HOME", &selected)
+            .args(arguments)
+            .output()
+            .unwrap()
+    };
+    let missing = run(&[
+        "single-store-tool",
+        "--source",
+        "team",
+        "--format",
+        "json",
+        "--compact",
+    ]);
+    assert!(!missing.status.success(), "{missing:?}");
+    assert!(String::from_utf8_lossy(&missing.stderr).contains("not installed"));
+    let missing = run(&["old-store-personal", "--format", "json", "--compact"]);
+    assert!(!missing.status.success(), "{missing:?}");
+    assert!(!selected.exists());
+
+    let updated = run(&["--update-docs", "--compact"]);
+    assert!(updated.status.success(), "{updated:?}");
+    let selected_store = selected.join("sources/team");
+    assert!(selected_store.join("single-store-tool.md").is_file());
+    let query = run(&[
+        "single-store-tool",
+        "--source",
+        "team",
+        "--format",
+        "json",
+        "--compact",
+    ]);
+    assert!(query.status.success(), "{query:?}");
+    let response: serde_json::Value = serde_json::from_slice(&query.stdout).unwrap();
+    let path = response["document"]["source"]["path"].as_str().unwrap();
+    assert_eq!(
+        fs::canonicalize(path).unwrap(),
+        fs::canonicalize(selected_store.join("single-store-tool.md")).unwrap()
+    );
+
+    fs::write(&config, "").unwrap();
+    let pruned = run(&["--prune-docs", "--compact"]);
+    assert!(pruned.status.success(), "{pruned:?}");
+    assert!(!selected_store.exists());
+    assert_eq!(
+        fs::read(old_store.join(".mant-source.toml")).unwrap(),
+        old_metadata
+    );
+    assert_eq!(
+        fs::read(old_store.join("single-store-tool.md")).unwrap(),
+        old_document
+    );
+    assert!(documents.join("old-store-personal.md").is_file());
+    assert!(!old_store.parent().unwrap().join(".update.lock").exists());
+    assert!(!selected.join("sources/.update.lock").exists());
+    fs::remove_dir_all(root).unwrap();
+}
+
 #[cfg(feature = "update")]
 fn run_git(directory: &std::path::Path, arguments: &[&str]) {
     let output = Command::new("git")

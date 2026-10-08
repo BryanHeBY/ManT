@@ -15,6 +15,11 @@ pub(crate) fn deduplicate_paths(paths: impl IntoIterator<Item = PathBuf>) -> Vec
     paths
         .into_iter()
         .filter(|path| !path.as_os_str().is_empty())
+        .filter(|path| {
+            !cfg!(windows)
+                || mant_sources::settings::is_absolute_configuration_path(path, true)
+                || mant_sources::settings::is_relative_configuration_path(path, true)
+        })
         .filter_map(|path| {
             if path.is_absolute() {
                 Some(path)

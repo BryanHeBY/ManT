@@ -1,0 +1,45 @@
+# Shared Rust/PowerShell lexical cases. Fields are literal, tab-separated paths.
+absolute	true	C:\manuals
+absolute	true	C:/manuals
+absolute	true	C:\
+absolute	true	//server/share
+absolute	true	\\server\share\manuals
+absolute	true	\\服务器\共享\文档
+absolute	true	\\?\C:\manuals
+absolute	true	\\?\UNC\server\share\manuals
+absolute	false	
+absolute	false	C:
+absolute	false	C:manuals
+absolute	false	/manuals
+absolute	false	\manuals
+absolute	false	manuals/example
+absolute	false	\\
+absolute	false	//
+absolute	false	\\server
+absolute	false	\\server\
+absolute	false	\\server\\share
+absolute	false	//?/C:/manuals
+absolute	false	\\.\PhysicalDrive0
+absolute	false	\\?\pipe\mant
+absolute	false	\\?\UNC\server
+absolute	false	\\?\C:/manuals
+absolute	false	\\?\C:\manuals\..\other
+equal	true	C:\Users\test\.local\bin	c:/Users/test/.local/./x/../bin/
+equal	true	\\server\share\docs	//server/share/./docs/
+equal	true	C:\	c:/./
+equal	true	C:\..\..\docs	c:/docs
+equal	true	\\server\share\	//server/share
+equal	true	\\server\share\..\docs	//server/share/docs
+equal	true	C:\文档\示例	c:/文档/示例/
+equal	true	\\?\C:\manuals	\\?\c:\manuals\
+equal	false	C:\	C:
+equal	false	C:\bin	C:bin
+equal	false	C:\bin	C:\other
+equal	false	C:\bin	D:\bin
+equal	false	C:\bin	\\?\C:\bin
+equal	false	C:\bin	 C:\bin
+equal	false	C:\bin 	C:\bin
+equal	false	\\server\share\docs	\\server\other\docs
+equal	false	\\?\C:\bin	\\?\C:\x\..\bin
+equal	false	\\?\C:\\bin	\\?\C:\bin
+equal	false	\\?\C:\a\\bin	\\?\C:\a\bin

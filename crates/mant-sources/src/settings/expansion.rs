@@ -7,7 +7,7 @@ use std::{
     path::PathBuf,
 };
 
-const MAX_PATH_BYTES: usize = 4096;
+use super::path::MAX_PATH_BYTES;
 
 /// Expand an authored configuration path without resolving relative paths.
 ///

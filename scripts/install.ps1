@@ -67,20 +67,57 @@ MANT_VERSION, MANT_INSTALL_DIR, and MANT_DATA_DIR provide the same overrides.
 "@
 }
 
+function Get-AbsolutePathRoot([string]$Path) {
+    # Keep this lexical contract aligned with mant-sources/settings/path.rs.
+    # No current drive, working directory, environment expansion or filesystem I/O.
+    if (-not $Path -or [Text.Encoding]::UTF8.GetByteCount($Path) -gt 4096 -or
+        @($Path.ToCharArray() | Where-Object { [char]::IsControl($_) }).Count) { return $null }
+    if ($Path.StartsWith('\\?\', [StringComparison]::Ordinal)) {
+        if ($Path.Contains('/') -or @($Path.Split([char]92) | Where-Object { $_ -eq '.' -or $_ -eq '..' }).Count) { return $null }
+        if ($Path -cmatch '^\\\\\?\\[A-Za-z]:\\') { return $Matches[0] }
+        if ($Path -cmatch '^\\\\\?\\UNC\\([^\\]+)\\([^\\]+)(?=\\|$)' -and
+            $Matches[1] -notin @('.', '..', '?') -and $Matches[2] -notin @('.', '..', '?')) { return $Matches[0] }
+        return $null
+    }
+    if ($Path -match '^[A-Za-z]:[\\/]') { return $Matches[0] }
+    if ($Path -match '^[\\/]{2}([^\\/]+)[\\/]([^\\/]+)(?=[\\/]|$)' -and
+        $Matches[1] -notin @('.', '..', '?') -and $Matches[2] -notin @('.', '..', '?')) { return $Matches[0] }
+    return $null
+}
+
 function Normalize-PathEntry([string]$Path) {
-    if (-not $Path) {
-        return ""
+    $Root = Get-AbsolutePathRoot $Path
+    if (-not $Root) { return $null }
+    $RootLength = $Root.Length
+    if ($Path.StartsWith('\\?\', [StringComparison]::Ordinal)) {
+        # Extended paths keep their literal namespace and internal separators.
+        $Normalized = $Path.TrimEnd('\')
+        $MinimumRoot = $Root.TrimEnd('\') + '\'
+        if ($Normalized.Length -lt $MinimumRoot.Length) { $Normalized = $MinimumRoot }
+    } else {
+        $Root = $Root.Replace('/', '\').TrimEnd('\') + '\'
+        $Components = [Collections.Generic.List[string]]::new()
+        foreach ($Component in $Path.Substring($RootLength).Split([char[]]@([char]92, [char]47))) {
+            if (-not $Component -or $Component -eq '.') { continue }
+            if ($Component -eq '..') {
+                if ($Components.Count) { $Components.RemoveAt($Components.Count - 1) }
+            } else { $Components.Add($Component) }
+        }
+        $Normalized = $Root + ($Components -join '\')
     }
-    $Entry = $Path.Trim().Replace('/', '\')
-    if (Test-AbsolutePath $Entry) {
-        try { $Entry = [IO.Path]::GetFullPath($Entry) }
-        catch { return $Entry.TrimEnd('\') }
+    # Match Rust's conservative ASCII case policy without trimming path names.
+    $Characters = $Normalized.ToCharArray()
+    for ($Index = 0; $Index -lt $Characters.Length; $Index++) {
+        $Code = [int]$Characters[$Index]
+        if ($Code -ge 65 -and $Code -le 90) { $Characters[$Index] = [char]($Code + 32) }
     }
-    return $Entry.TrimEnd('\')
+    return -join $Characters
 }
 
 function Test-PathEntry([string]$Left, [string]$Right) {
-    return (Normalize-PathEntry $Left) -ieq (Normalize-PathEntry $Right)
+    $LeftKey = Normalize-PathEntry $Left
+    $RightKey = Normalize-PathEntry $Right
+    return $null -ne $LeftKey -and $null -ne $RightKey -and $LeftKey -ceq $RightKey
 }
 
 function Add-UserPath([string]$Directory) {
@@ -120,7 +157,7 @@ function Remove-PathEntry([string]$Directory) {
 }
 
 function Test-AbsolutePath([string]$Path) {
-    return $Path -and [IO.Path]::IsPathRooted($Path) -and ($Path -match '^[A-Za-z]:[\\/]' -or $Path -match '^[\\/]{2}[^\\/]+[\\/][^\\/]+')
+    return $null -ne (Get-AbsolutePathRoot $Path)
 }
 
 function Validate-AbsolutePath([string]$Path, [string]$Label) {

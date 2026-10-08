@@ -294,6 +294,22 @@ fn invalid_requests_fail_before_lookup() {
 
 #[cfg(windows)]
 #[test]
+fn explicit_manual_roots_do_not_use_implicit_drive_context() {
+    let roots = deduplicate_paths(
+        [
+            "C:manuals",
+            "/manuals",
+            r"\manuals",
+            r"\\server",
+            r"\\.\pipe\mant",
+        ]
+        .map(PathBuf::from),
+    );
+    assert_eq!(roots, [] as [PathBuf; 0]);
+}
+
+#[cfg(windows)]
+#[test]
 fn windows_manual_names_are_ascii_case_insensitive() {
     let index = ManualIndex {
         roots: vec![PathBuf::from(r"C:\man")],

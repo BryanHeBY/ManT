@@ -46,6 +46,16 @@ class InstallerGuidanceTests(unittest.TestCase):
             self.assertEqual(list(root.iterdir()), [])
 
     @unittest.skipUnless(shutil.which("pwsh"), "PowerShell notice execution")
+    def test_windows_path_helpers_match_the_shared_rust_cases(self):
+        result = subprocess.run(
+            ["pwsh", "-NoProfile", "-NonInteractive", "-File",
+             str(ROOT / "scripts/checks/check-windows-paths.ps1")],
+            cwd=ROOT, text=True, capture_output=True, timeout=30, check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Shared Windows path contract passed.", result.stdout)
+
+    @unittest.skipUnless(shutil.which("pwsh"), "PowerShell notice execution")
     def test_windows_notice_only_prints_without_creating_state(self):
         command = '''
 $ErrorActionPreference = "Stop"

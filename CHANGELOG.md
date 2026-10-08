@@ -15,6 +15,11 @@ that crate was not published for that change.
 
 ### mant-sources 0.10.1
 
+- Share bounded Windows directory classification and native-byte comparison
+  keys. Accept ordinary slash/backslash disk and complete UNC paths, preserve
+  supported extended namespaces, and reject drive/root-relative paths,
+  incomplete UNC and other device namespaces. Include configuration-directory
+  and default/XDG suffixes in the final path bound without filesystem probing.
 - Accept optional `[man] inherit_paths`, independently of `discover`, with both
   flags defaulting to true. Preserve omitted declarations separately from
   explicit values without changing the current single-file discovery behavior
@@ -29,6 +34,10 @@ that crate was not published for that change.
 
 ### mant-loader 0.12.1
 
+- Use shared Windows validation and comparison for personal directives, path
+  maps, fragment deduplication and final roots. Preserve disk/UNC roots, do not
+  lossily merge native names, and prevent ambiguous Windows roots from reaching
+  the manual index while retaining ordinary cwd-relative environment roots.
 - Apply the shared expansion to every personal `man.conf` root, map and
   one-level `MANCONFIG` path. Retain absolute-root validation, bounded fragment
   globbing and per-line diagnostics; native system configuration dialects and
@@ -40,6 +49,15 @@ that crate was not published for that change.
 - Require the updated loader/source minimum versions so fresh registry
   resolutions cannot select a pre-expansion implementation. Public wire
   contracts and frozen v0.12 schema snapshots are unchanged.
+
+### mant 0.12.1
+
+- Align Windows installer directory validation and comparison with the shared
+  runtime fixtures. Preserve roots, path whitespace and extended namespace
+  semantics; never equate `C:\` with `C:` or accept incomplete/device paths.
+  Run pure helper checks on PowerShell hosts and retain isolated native Windows
+  lifecycle coverage. Keep single-root storage, receipt ownership and PATH
+  mutation boundaries unchanged.
 
 ### Installer guidance (no crate publication)
 

@@ -1337,6 +1337,11 @@ lower-priority personal and native discovery even when those roots exist.
 `inherit_paths` also defaults to `true`; it controls explicit-path inheritance,
 not discovery, and has no effect while only one `mant.toml` is loaded.
 No `config_home` field or project-local configuration search is supported.
+Windows accepts ordinary disk paths with either separator and complete UNC
+paths; drive-relative `C:manuals`, root-relative `/manuals` or `\manuals`, and
+incomplete UNC/device paths are rejected. Extended disk/UNC paths require their
+native backslashes without `.`/`..`. Each data/cache category selects one root;
+source reads, updates and pruning do not fall back to other stores.
 See the online [configuration guide](https://github.com/BryanHeBY/ManT/blob/main/docs/configuration.md).
 
 `sources.toml` lives at the configuration root. Personal documents remain below

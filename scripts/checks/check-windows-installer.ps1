@@ -77,7 +77,7 @@ try {
     $Tokens = $null; $Errors = $null
     $Ast = [Management.Automation.Language.Parser]::ParseFile($Installer, [ref]$Tokens, [ref]$Errors)
     Assert ($Errors.Count -eq 0) "installer syntax errors"
-    foreach ($FunctionName in @("Test-AbsolutePath", "Normalize-PathEntry", "Test-PathEntry")) {
+    foreach ($FunctionName in @("Get-AbsolutePathRoot", "Test-AbsolutePath", "Normalize-PathEntry", "Test-PathEntry")) {
         $Definition = $Ast.Find({ param($Node) $Node -is [Management.Automation.Language.FunctionDefinitionAst] -and $Node.Name -eq $FunctionName }, $true)
         Assert ($null -ne $Definition) "missing path helper $FunctionName"
         . ([scriptblock]::Create($Definition.Extent.Text))

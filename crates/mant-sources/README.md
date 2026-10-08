@@ -21,6 +21,9 @@ without shell evaluation or rewriting configuration. See the online
 [configuration guide](https://github.com/BryanHeBY/ManT/blob/main/docs/configuration.md).
 Manual-path inheritance and discovery are independent settings, both defaulting
 to true; only one application configuration is currently loaded.
+Windows directory classification and lexical comparison are shared with manual
+discovery; fully qualified disk/UNC roots remain distinct from drive-relative
+paths and device namespaces. Native encoded path bytes are preserved.
 
 ## Feature boundary
 

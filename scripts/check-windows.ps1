@@ -53,6 +53,7 @@ if ($InstallerErrors.Count -ne 0) {
 }
 
 Write-Host "`n==> test Windows installer receipt uninstall"
+& (Join-Path $Root "scripts/checks/check-windows-paths.ps1")
 $InstallerTestRoot = Join-Path ([IO.Path]::GetTempPath()) "mant-installer-$([guid]::NewGuid().ToString('N'))"
 $PreviousLocalAppData = $env:LOCALAPPDATA
 $PreviousAppData = $env:APPDATA

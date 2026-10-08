@@ -59,6 +59,8 @@ evaluation. With `man.discover = true`, explicit roots precede
 personal `man.conf`, native discovery and supplemental roots; `false` isolates
 explicit roots. Complete `MANT_MANPATH`/`MANPATH` overrides retain precedence.
 The resolver is read-only and does not silently migrate old storage.
+Windows roots use the shared fully qualified path policy; lexical comparison
+retains disk/UNC roots, native bytes and extended namespace boundaries.
 See [configuration and migration](https://github.com/BryanHeBY/ManT/blob/main/docs/configuration.md).
 
 ## Boundaries

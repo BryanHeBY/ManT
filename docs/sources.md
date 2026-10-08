@@ -13,6 +13,9 @@ Linux, macOS, and Windows share the same defaults: configuration in
 `~/.config/mant` and persistent data in `~/.local/share/mant`.
 `sources.toml` belongs to the configuration directory, not the data directory.
 See [configuration](configuration.md) for TOML and environment overrides.
+There is one active data root: source reads, updates, locks and pruning all use
+its `sources/` store. A missing source is not borrowed from an old/default store;
+changing `data_home` does not migrate or clean that other store.
 
 The layout is fixed:
 

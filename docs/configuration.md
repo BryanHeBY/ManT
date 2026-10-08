@@ -25,6 +25,10 @@ bases. Empty directory-category variables are unset. Invalid relative ManT overr
 relative XDG values are ignored. No category implicitly searches old AppData or
 macOS Library storage, merges files from different directories, or jumps back
 to the default directory after an override selects a missing file.
+Data and cache each select one active directory. Documents, installed sources,
+source-update locks and pruning use only the active data root; switching roots
+does not search or clean the previous store. External tldr-client discovery is
+separate from the single ManT-owned cache directory.
 
 ```toml
 # ~/.config/mant/mant.toml
@@ -42,7 +46,7 @@ use the same path expansion: leading `~`, `~/` or `~\` selects the shared home;
 `%NAME%` inserts a defined, nonempty process variable and `%%` is a literal `%`.
 Windows names match ASCII case-insensitively; Unix names match exactly.
 Inserted values are not rescanned, even if they contain `~` or `%NAME%`.
-Authored and expanded paths are bounded to 4096 encoded bytes; missing variables,
+Authored, expanded and finally resolved paths are bounded to 4096 encoded bytes; missing variables,
 malformed expressions and control characters are errors. Relative TOML paths
 use the directory containing `mant.toml`, not the current directory.
 Windows can use literal TOML strings such as `data_home = 'D:\ManT Data'`.
@@ -51,6 +55,19 @@ include directive or project-local configuration discovery.
 Unknown fields, malformed TOML and unreadable configuration are diagnosed.
 Configuration reads are bounded to regular UTF-8 files of at most 1 MiB;
 regular-file symlinks are supported, but special files cannot block discovery.
+
+On Windows, ordinary disk paths accept `/` and `\`, including `C:/manuals`;
+UNC paths require both server and share, such as `//server/share/manuals`.
+`C:manuals`, `/manuals` and `\manuals` are not ordinary relative paths and are
+rejected rather than resolved through the current drive. Extended disk/UNC
+paths (`\\?\C:\manuals`, `\\?\UNC\server\share\manuals`) keep their namespace
+and require backslashes without `.`/`..` components; other device namespaces
+are not directory configuration. These checks also apply to category overrides
+and home selection. Unix path interiors retain literal backslashes and their
+native parent/symlink semantics.
+Ordinary Windows manual-root comparisons normalize separators, ASCII case and
+dot components while retaining disk/UNC roots. Comparison keys do not rewrite
+paths or establish file ownership, and never require a directory to exist.
 
 For example, these Windows configurations use the same expansion rules:
 

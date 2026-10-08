@@ -12,6 +12,11 @@ use std::{
 
 mod expansion;
 pub use expansion::expand_configuration_path;
+mod path;
+pub use path::{
+    WindowsPathKey, is_absolute_configuration_path, is_relative_configuration_path,
+    windows_path_key,
+};
 
 /// One invocation's environment, configuration and effective application paths.
 #[derive(Clone, Debug)]
@@ -242,11 +247,7 @@ impl Settings {
     /// Reports invalid expansion or unavailable home/configuration roots.
     pub fn resolve_path(&self, value: &str) -> Result<PathBuf, SourceConfigError> {
         let path = expand_configuration_path(value, &self.environment, self.windows)?;
-        if absolute(&path, self.windows) {
-            Ok(path)
-        } else {
-            Ok(self.config_home()?.join(path))
-        }
+        path::resolve(&path, self.config_home.as_deref(), self.windows)
     }
 }
 
@@ -320,24 +321,15 @@ fn category(
         .map(PathBuf::from)
         .filter(|path| absolute(path, windows))
     {
-        return Ok(Some(path.join("mant")));
+        return Ok(Some(path::resolve(&path.join("mant"), None, windows)?));
     }
-    Ok(home(environment, windows).map(|root| root.join(default).join("mant")))
+    home(environment, windows)
+        .map(|root| path::resolve(&root.join(default).join("mant"), None, windows))
+        .transpose()
 }
 
 fn absolute(path: &Path, windows: bool) -> bool {
-    let value = path.as_os_str().to_string_lossy();
-    if windows {
-        path.is_absolute()
-            || value.as_bytes().get(..3).is_some_and(|prefix| {
-                prefix[0].is_ascii_alphabetic()
-                    && prefix[1] == b':'
-                    && matches!(prefix[2], b'/' | b'\\')
-            })
-            || value.starts_with("\\\\")
-    } else {
-        path.is_absolute() || value.starts_with('/')
-    }
+    is_absolute_configuration_path(path, windows)
 }
 
 #[cfg(test)]

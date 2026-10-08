@@ -6,6 +6,59 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::process::Stdio;
 
+#[test]
+fn directory_bridge_rejects_implicit_drive_paths_and_accepts_relative_separators() {
+    let root = std::env::temp_dir().join(format!(
+        "mant-windows-directory-bridge-{}",
+        std::process::id()
+    ));
+    let config = root.join("config");
+    fs::create_dir_all(&config).unwrap();
+    let run = || {
+        let mut command = Command::new(executable());
+        configure_registered_documents(&mut command, &root);
+        command
+            .env_remove("MANT_DATA_HOME")
+            .args(["--installer-paths", "data"])
+            .output()
+            .unwrap()
+    };
+    for path in [
+        r"C:manuals",
+        r"\manuals",
+        "/manuals",
+        r"\\server",
+        r"\\.\pipe\mant",
+    ] {
+        fs::write(
+            config.join("mant.toml"),
+            format!("[paths]\ndata_home = {path:?}\n"),
+        )
+        .unwrap();
+        let output = run();
+        assert_eq!(output.status.code(), Some(1), "{path}: {output:?}");
+        assert_eq!(output.stdout, [] as [u8; 0]);
+        assert!(String::from_utf8_lossy(&output.stderr).contains("configuration path"));
+    }
+    let expected = config.join("relative/data");
+    for path in ["relative/data", r"relative\data"] {
+        fs::write(
+            config.join("mant.toml"),
+            format!("[paths]\ndata_home = {path:?}\n"),
+        )
+        .unwrap();
+        let output = run();
+        assert!(output.status.success(), "{output:?}");
+        let resolved = PathBuf::from(String::from_utf8(output.stdout).unwrap().trim());
+        assert_eq!(
+            mant_sources::settings::windows_path_key(&resolved),
+            mant_sources::settings::windows_path_key(&expected)
+        );
+        assert!(!expected.exists());
+    }
+    fs::remove_dir_all(root).unwrap();
+}
+
 #[cfg(windows)]
 fn windows_suffix_fixture() -> PathBuf {
     let fixture_root = std::env::temp_dir().join(format!(

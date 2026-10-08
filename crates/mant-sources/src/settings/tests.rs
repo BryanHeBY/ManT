@@ -33,8 +33,8 @@ impl Drop for Fixture {
 #[test]
 fn portable_defaults_and_no_write_side_effects() {
     let fixture = Fixture::new();
-    for windows in [false, true] {
-        let settings = Settings::from_environment(&fixture.environment(), windows).unwrap();
+    {
+        let settings = Settings::from_environment(&fixture.environment(), cfg!(windows)).unwrap();
         assert_eq!(
             settings.config_home().unwrap(),
             fixture.0.join(".config/mant")
@@ -125,13 +125,13 @@ fn overrides_take_precedence_without_an_extra_application_component() {
         "XDG_DATA_HOME".into(),
         fixture.0.join("xdg-data").into_os_string(),
     );
-    let settings = Settings::from_environment(&environment, false).unwrap();
+    let settings = Settings::from_environment(&environment, cfg!(windows)).unwrap();
     assert_eq!(settings.data_home().unwrap(), fixture.0.join("configured"));
     environment.insert(
         "MANT_DATA_HOME".into(),
         fixture.0.join("explicit").into_os_string(),
     );
-    let settings = Settings::from_environment(&environment, false).unwrap();
+    let settings = Settings::from_environment(&environment, cfg!(windows)).unwrap();
     assert_eq!(settings.data_home().unwrap(), fixture.0.join("explicit"));
     assert_eq!(
         settings.cache_home().unwrap(),
@@ -139,6 +139,7 @@ fn overrides_take_precedence_without_an_extra_application_component() {
     );
 }
 
+#[cfg(windows)]
 #[test]
 fn windows_names_and_userprofile_fallback() {
     let fixture = Fixture::new();
@@ -161,7 +162,7 @@ fn windows_names_and_userprofile_fallback() {
 fn paths_use_configuration_directory_not_current_directory() {
     let fixture = Fixture::new();
     fixture.configure("[paths]\ndata_home = '../../data'\n[man]\npaths = ['~/manuals', 'local manuals']\ndiscover = false\n");
-    let settings = Settings::from_environment(&fixture.environment(), false).unwrap();
+    let settings = Settings::from_environment(&fixture.environment(), cfg!(windows)).unwrap();
     assert_eq!(
         settings.data_home().unwrap(),
         fixture.0.join(".config/mant/../../data")
@@ -177,6 +178,107 @@ fn paths_use_configuration_directory_not_current_directory() {
 }
 
 #[test]
+fn windows_categories_and_expanded_fields_reject_ambiguous_paths() {
+    let mut settings = Settings {
+        environment: BTreeMap::from([
+            ("HOME".into(), r"C:\Users\Test".into()),
+            ("USERPROFILE".into(), r"D:\Users\Fallback".into()),
+        ]),
+        windows: true,
+        config_home: Some(r"C:\config\mant".into()),
+        declaration: Declaration::default(),
+    };
+    for value in [
+        r"C:manuals",
+        r"\manuals",
+        "/manuals",
+        r"\\server",
+        r"\\.\pipe\mant",
+    ] {
+        settings.environment.insert("BAD".into(), value.into());
+        assert!(settings.resolve_path("%BAD%").is_err(), "{value}");
+        settings.declaration.paths.data_home = Some("%BAD%".to_owned());
+        assert!(settings.data_home().is_err(), "{value}");
+        settings.declaration.paths.data_home = None;
+        settings.declaration.paths.cache_home = Some("%BAD%".to_owned());
+        assert!(settings.cache_home().is_err(), "{value}");
+        settings.declaration.paths.cache_home = None;
+        settings.declaration.man = Some(Manuals {
+            paths: Some(vec!["%BAD%".to_owned()]),
+            ..Manuals::default()
+        });
+        assert!(settings.manual_paths().is_err(), "{value}");
+        for kind in ["CONFIG", "DATA", "CACHE"] {
+            let name = format!("MANT_{kind}_HOME");
+            settings
+                .environment
+                .insert(name.clone().into(), value.into());
+            assert!(category(&settings.environment, true, kind, None, ".cache").is_err());
+            settings.environment.remove(OsStr::new(&name));
+        }
+        settings
+            .environment
+            .insert("XDG_DATA_HOME".into(), value.into());
+        assert_eq!(
+            settings.data_home().unwrap(),
+            Path::new(r"C:\Users\Test").join(".local/share/mant")
+        );
+        settings.environment.insert("HOME".into(), value.into());
+        assert_eq!(
+            home(&settings.environment, true),
+            Some(r"D:\Users\Fallback".into())
+        );
+        settings
+            .environment
+            .insert("HOME".into(), r"C:\Users\Test".into());
+    }
+}
+
+#[test]
+fn directory_suffixes_do_not_escape_the_final_path_bound() {
+    let environment = BTreeMap::from([("HOME".into(), format!("C:/{}", "x".repeat(4089)).into())]);
+    assert!(category(&environment, true, "DATA", None, ".local/share").is_err());
+    let environment = BTreeMap::from([(
+        "XDG_CACHE_HOME".into(),
+        format!("C:/{}", "x".repeat(4090)).into(),
+    )]);
+    assert!(category(&environment, true, "CACHE", None, ".cache").is_err());
+}
+
+#[test]
+fn selected_storage_roots_do_not_fall_back_to_populated_defaults() {
+    let fixture = Fixture::new();
+    let environment = fixture.environment();
+    let defaults = Settings::from_environment(&environment, cfg!(windows)).unwrap();
+    for root in [
+        defaults.data_home().unwrap(),
+        defaults.cache_home().unwrap(),
+    ] {
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("old-content"), "retained").unwrap();
+    }
+    fixture.configure("[paths]\ndata_home = 'selected-data'\ncache_home = 'selected-cache'\n");
+    let selected = Settings::from_environment(&environment, cfg!(windows)).unwrap();
+    let config = selected.config_home().unwrap();
+    assert_eq!(selected.data_home().unwrap(), config.join("selected-data"));
+    assert_eq!(
+        selected.cache_home().unwrap(),
+        config.join("selected-cache")
+    );
+    assert!(!selected.data_home().unwrap().exists());
+    assert!(!selected.cache_home().unwrap().exists());
+    for root in [
+        defaults.data_home().unwrap(),
+        defaults.cache_home().unwrap(),
+    ] {
+        assert_eq!(
+            fs::read_to_string(root.join("old-content")).unwrap(),
+            "retained"
+        );
+    }
+}
+
+#[test]
 fn toml_path_fields_share_expansion_and_read_only_resolution() {
     let fixture = Fixture::new();
     fixture.configure("[paths]\ndata_home = '%ROOT%/data'\ncache_home = '~/cache/100%%'\n[man]\npaths = ['~', '%ROOT%/manuals', '%RELATIVE%']\n");
@@ -184,8 +286,8 @@ fn toml_path_fields_share_expansion_and_read_only_resolution() {
     let mut environment = fixture.environment();
     environment.insert("ROOT".into(), fixture.0.clone().into_os_string());
     environment.insert("RELATIVE".into(), "local manuals".into());
-    for windows in [false, true] {
-        let settings = Settings::from_environment(&environment, windows).unwrap();
+    {
+        let settings = Settings::from_environment(&environment, cfg!(windows)).unwrap();
         assert_eq!(settings.data_home().unwrap(), fixture.0.join("data"));
         assert_eq!(settings.cache_home().unwrap(), fixture.0.join("cache/100%"));
         assert_eq!(
@@ -216,7 +318,7 @@ fn invalid_configuration_does_not_silently_fall_back() {
         "[other]",
     ] {
         fixture.configure(text);
-        assert!(Settings::from_environment(&fixture.environment(), false).is_err());
+        assert!(Settings::from_environment(&fixture.environment(), cfg!(windows)).is_err());
     }
 }
 
@@ -237,12 +339,12 @@ fn explicit_directories_work_without_home_and_relative_overrides_fail() {
             fixture.0.join("cache").into_os_string(),
         ),
     ]);
-    let settings = Settings::from_environment(&environment, false).unwrap();
+    let settings = Settings::from_environment(&environment, cfg!(windows)).unwrap();
     assert_eq!(settings.data_home().unwrap(), fixture.0.join("data"));
     assert_eq!(settings.cache_home().unwrap(), fixture.0.join("cache"));
     environment.insert("MANT_DATA_HOME".into(), "relative".into());
     assert!(
-        Settings::from_environment(&environment, false)
+        Settings::from_environment(&environment, cfg!(windows))
             .unwrap()
             .data_home()
             .is_err()
