@@ -2,6 +2,108 @@
 use super::*;
 use std::sync::Arc;
 
+fn large_navigation_bundle() -> ResolvedContent {
+    // Authored normalized IR tests navigation work, not roff parser behavior.
+    let mut bundle = manual_bundle("large", "1");
+    let document = bundle.document.as_mut().unwrap();
+    document.source.format = SourceFormat::Markdown;
+    document.sections[0].id = "name".into();
+    document.sections[0].heading = "NAME".into();
+    document.sections[0].fragment_aliases = vec!["name-alias".into()];
+    document.sections[0].children.clear();
+    document.sections[0].blocks = vec![AstBlock::Paragraph {
+        inline_layout: mant_ir::InlineLayout::default(),
+        // Empty text nodes keep rendering cheap but still require complete IR
+        // traversal: a duplicate target may occur after any skipped text node.
+        children: vec![
+            Inline::Text {
+                value: String::new()
+            };
+            260_000
+        ],
+        layout: LayoutHint::default(),
+        source: None,
+    }];
+    bundle
+}
+
+#[test]
+fn large_document_fragments_restore_tabs_and_history_without_default_scan_failure() {
+    let large = large_navigation_bundle();
+    let document = large.document.as_ref().unwrap();
+    let old_budget = mant_ir::scan_navigation_scope(
+        document,
+        mant_ir::ReferenceScope::Document,
+        mant_ir::ReferenceScanLimits::default(),
+        mant_ir::NavigationScanOptions {
+            links: mant_ir::ReferenceLinkFilter::NONE,
+            targets: true,
+            entry_sets: false,
+        },
+        |_, _| std::ops::ControlFlow::Continue(()),
+    );
+    assert!(
+        !old_budget.complete(),
+        "fixture must exceed the previous verification budget"
+    );
+    let mut app = App::new(&manual_bundle("source", "1"));
+    app.request_open(large.address.clone().unwrap(), Some("name-alias".into()));
+    let request = app.take_open_request().unwrap();
+    app.complete_open(&large, request);
+    assert_eq!(app.session.current_bundle.label, "large");
+    assert!(app.jump_to_anchor("name"));
+    open_manual(&mut app, "other", "1");
+    app.activate_document_tab(1);
+    let request = app.take_open_request().unwrap();
+    assert_eq!(request.target.id(), Some("name"));
+    app.complete_open(&large, request);
+    assert_eq!(app.navigation.active_tab(), 1);
+    assert!(app.notice.is_none());
+    app.navigate_history(true);
+    let request = app.take_open_request().unwrap();
+    app.complete_open(&manual_bundle("other", "1"), request);
+    app.navigate_history(false);
+    let request = app.take_open_request().unwrap();
+    app.complete_open(&large, request);
+    assert_eq!(app.session.current_bundle.label, "large");
+    assert!(app.notice.is_none());
+}
+
+#[test]
+fn large_document_late_duplicates_are_not_first_match_navigation() {
+    let mut large = large_navigation_bundle();
+    let document = large.document.as_mut().unwrap();
+    let mut duplicate = document.sections[0].clone();
+    duplicate.blocks.clear();
+    document.sections.push(duplicate);
+    let mut app = App::new(&large);
+    for fragment in ["name", "name-alias"] {
+        assert!(!app.jump_to_anchor(fragment));
+        assert!(app.notice.as_ref().unwrap().contains("Ambiguous"));
+    }
+}
+
+#[test]
+fn an_entry_and_its_own_inline_anchor_are_one_destination() {
+    let mut bundle = navigation_bundle();
+    let AstBlock::DefinitionList { items, .. } =
+        &mut bundle.document.as_mut().unwrap().sections[0].blocks[0]
+    else {
+        panic!("definition fixture");
+    };
+    items[0].terms[0].content.insert(
+        0,
+        Inline::Anchor {
+            id: "help-option".into(),
+            fragment_aliases: Vec::new(),
+            owner_source: None,
+        },
+    );
+    let mut app = App::new(&bundle);
+    assert!(app.jump_to_anchor("help-option"));
+    assert!(app.notice.is_none());
+}
+
 #[test]
 fn unqualified_manual_link_preserves_manual_only_intent_for_the_host() {
     let mut bundle = navigation_bundle();

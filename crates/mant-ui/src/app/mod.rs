@@ -369,13 +369,13 @@ impl App {
         target: LocalTarget,
         direction: HistoryDirection,
     ) {
+        let candidate = DocumentView::new(&bundle);
         if let LocalTarget::Fragment(target) = &target
-            && let Err(message) = validate_fragment(&bundle, target)
+            && let Err(message) = candidate.validate_fragment(target)
         {
             self.report_open_error(message);
             return;
         }
-        let candidate = DocumentView::new(&bundle);
         if let Some(id) = target.id()
             && ((matches!(target, LocalTarget::ReferenceOccurrence(_))
                 && candidate.reference_target(id).is_none())
@@ -591,7 +591,7 @@ impl App {
                     );
                     return;
                 }
-            } else if let Err(message) = validate_fragment(&self.session.current_bundle, target) {
+            } else if let Err(message) = self.session.document.validate_fragment(target) {
                 self.report_notice(message);
                 return;
             }
@@ -679,85 +679,6 @@ impl App {
         .flatten()
         .map(|deadline| deadline.saturating_duration_since(now))
         .min()
-    }
-}
-
-/// Validate against the candidate snapshot before changing any navigation state.
-/// The shared target stream merges an entry's own anchor with its item, while
-/// two independent owners remain ambiguous even when their spelling is equal.
-fn validate_fragment(bundle: &ResolvedContent, fragment: &str) -> Result<(), String> {
-    use mant_ir::{
-        NavigationEvent, NavigationScanOptions, ReferenceLinkFilter, ReferenceScanLimits,
-        ReferenceScope, scan_navigation_scope,
-    };
-    use std::ops::ControlFlow;
-    let tldr = fragment == "tldr" && bundle.tldr.is_some();
-    let Some(document) = bundle.document.as_ref() else {
-        return if tldr {
-            Ok(())
-        } else {
-            Err(format!("No outline node matches #{fragment}"))
-        };
-    };
-    let mut found: Option<mant_ir::ContentReveal> = None;
-    let mut ambiguous = false;
-    let mut position_limited = false;
-    let report = scan_navigation_scope(
-        document,
-        ReferenceScope::Document,
-        ReferenceScanLimits::default(),
-        NavigationScanOptions {
-            links: ReferenceLinkFilter::NONE,
-            targets: true,
-            entry_sets: false,
-        },
-        |event, budget| {
-            if let NavigationEvent::Target(target) = event
-                && (target.id.as_str() == fragment
-                    || target
-                        .aliases
-                        .iter()
-                        .any(|alias| alias.as_str() == fragment))
-            {
-                if tldr {
-                    ambiguous = true;
-                    return ControlFlow::Break(());
-                }
-                if budget
-                    .consume(
-                        target.reveal.depth(),
-                        target.reveal.depth().saturating_mul(3),
-                        0,
-                    )
-                    .is_err()
-                {
-                    return ControlFlow::Break(());
-                }
-                if let Some(previous) = found.as_ref() {
-                    if previous.as_ref() != target.reveal {
-                        ambiguous = true;
-                        return ControlFlow::Break(());
-                    }
-                } else if let Some(reveal) = target.reveal.to_owned() {
-                    found = Some(reveal);
-                } else {
-                    position_limited = true;
-                    return ControlFlow::Break(());
-                }
-            }
-            ControlFlow::Continue(())
-        },
-    );
-    if ambiguous {
-        Err(format!("Ambiguous local target #{fragment}"))
-    } else if position_limited || !report.complete() {
-        Err(format!(
-            "Local target #{fragment} was not verified within the navigation budget"
-        ))
-    } else if found.is_none() && !tldr {
-        Err(format!("No outline node matches #{fragment}"))
-    } else {
-        Ok(())
     }
 }
 

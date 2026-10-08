@@ -13,6 +13,7 @@ mod outline;
 mod references;
 mod search;
 mod selection;
+mod targets;
 mod wrap;
 
 use std::{collections::HashMap, sync::Arc};
@@ -127,6 +128,7 @@ pub struct DocumentView {
     lines: Vec<LogicalLine>,
     navigation: Vec<NavNode>,
     anchors: HashMap<String, usize>,
+    targets: Arc<targets::TargetIndex>,
     references: Vec<references::ReferenceRecord>,
     associated_references: HashMap<String, Vec<usize>>,
     reference_badges: HashMap<String, String>,
@@ -159,6 +161,10 @@ struct RenderedLinkRegion {
 }
 
 impl DocumentView {
+    pub(crate) fn validate_fragment(&self, fragment: &str) -> Result<(), String> {
+        self.targets.validate(fragment, self.has_tldr)
+    }
+
     pub(crate) fn reference_badges(&self) -> &HashMap<String, String> {
         &self.reference_badges
     }
@@ -312,6 +318,7 @@ impl DocumentView {
             lines: built.content.lines,
             navigation: built.navigation,
             anchors: built.content.anchors,
+            targets: Arc::new(targets::TargetIndex::build(bundle.document.as_ref())),
             references: references.records,
             associated_references: references.associated,
             reference_badges,

@@ -223,6 +223,14 @@ must be resolved with manual-only policy, without inventing section 1 or falling
 back to a Markdown document. A destination fragment is validated against the
 actual returned IR before changing the displayed page, tab or history. Missing,
 ambiguous or budget-unverifiable targets leave the source view intact.
+Each immutable view caches a target-verification index built by the shared IR
+walker, so local jumps and same-snapshot history reuse the result. A new host
+snapshot builds a new index. Target verification allows up to 1,000,000 work
+steps, 32 MiB of inspected/retained payload charges, 32,768 distinct target keys
+and 16 MiB of retained payload (including conservative allocation overhead).
+Only a complete scan can verify uniqueness; canonical IDs and aliases belonging
+to independent owners remain ambiguous, including collisions with the synthetic
+`tldr` target. These limits do not enlarge the separate reference inventory.
 
 Reference groups retain distinct source occurrences and full typed targets,
 including fragments; repeated destinations are grouped without merging their

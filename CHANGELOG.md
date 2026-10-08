@@ -13,6 +13,15 @@ that crate was not published for that change.
 
 ## Unreleased
 
+### mant-ui
+
+- Cache bounded fragment verification per immutable document view instead of
+  rescanning the full IR on every local jump or history restoration. Use the
+  existing one-million-step hard ceiling for target-index construction so large
+  manuals such as `ffmpeg-all` can restore saved tab locations. Keep independent
+  reference-inventory limits, duplicate/alias checks and transactional rejection
+  of incomplete or ambiguous destinations; rebuilt snapshots are revalidated.
+
 ## 0.12.1 - 2026-10-08
 
 This release publishes `mant`, `mant-loader`, `mant-engine` and `mant-ui` at

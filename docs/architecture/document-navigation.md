@@ -150,6 +150,13 @@ Copy content copies local source content; copy reference copies its target.
 On a reference row, Shift+Y copies the target. Resolved catalog addresses are
 opened exactly, without falling back to another source or a suffix match.
 Back/forward and resize use content positions, never screen-row identities.
+The TUI verifies fragments with a bounded, complete target index attached to
+each immutable document view. Local jumps and same-snapshot history reuse that
+index; a host reload builds a new one before committing the destination page,
+tab or history. The target-index construction uses the shared walker's existing
+hard step ceiling, independently of reference-inventory limits. An early match
+does not establish uniqueness: incomplete scans and independent duplicate
+owners remain rejected.
 
 The interactive host opens manual links and manual catalog addresses with the
 loader's `ManualWithTldr` policy. It requires the native target, bypasses registered

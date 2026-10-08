@@ -154,7 +154,7 @@ impl App {
     }
 
     pub(super) fn jump_to_anchor(&mut self, target: &str) -> bool {
-        if let Err(message) = super::validate_fragment(&self.session.current_bundle, target) {
+        if let Err(message) = self.session.document.validate_fragment(target) {
             self.report_open_error(message);
             return false;
         }
