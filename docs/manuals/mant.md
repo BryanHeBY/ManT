@@ -231,6 +231,14 @@ Personal `mant.toml` and `man.conf` paths share leading `~`, `~/`, `~\`,
 `%NAME%` and literal `%%` expansion. Variables are inserted once, not recursively
 interpreted or passed to a shell. Relative TOML paths use their configuration
 directory; personal `man.conf` paths must be absolute after expansion.
+These are ManT configuration rules on all three platforms, including Linux:
+`%DOC_ROOT%/tools` inserts the process variable and `/srv/100%%/manuals` names
+`/srv/100%/manuals`. Unix variable names are case-sensitive. Literal percent
+signs must be doubled even in TOML literal strings. `$VAR`/`${VAR}` are not
+expanded. `MANT_*_HOME` and XDG category values are literal paths, not another
+expansion pass; for example, a shell expands `$HOME` in
+`export MANT_DATA_HOME="$HOME/data"` before ManT reads the value. Source URLs
+and local Git repository strings do not use this configuration expansion.
 
 <!-- mant:entries role=option case=sensitive -->
 - `--man-section MAN_SECTION`: Select the full document from one exact native

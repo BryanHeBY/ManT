@@ -13,6 +13,15 @@ that crate was not published for that change.
 
 ## Unreleased
 
+## 0.12.1 - 2026-10-08
+
+This release publishes `mant`, `mant-loader`, `mant-engine` and `mant-ui` at
+`0.12.1`, and `mant-sources` at `0.10.1`. The remaining six crates retain their
+published `0.12.0` versions. Native v0.12 wire contracts and frozen snapshots
+are unchanged. Users upgrading from before 0.12 should also read the
+[0.12.0 release notes](https://github.com/BryanHeBY/ManT/releases/tag/v0.12.0)
+for storage migration and client compatibility.
+
 ### mant-sources 0.10.1
 
 - Share bounded Windows directory classification and native-byte comparison
@@ -30,7 +39,9 @@ that crate was not published for that change.
   globbing or recursively expanding inserted tilde/percent text. Preserve native
   path bytes, use host environment-name case rules, and reject missing/empty
   variables, malformed expansions, control characters and paths exceeding
-  4096 encoded bytes. Escape literal percent signs as `%%` in TOML paths.
+  4096 encoded bytes. Escape literal percent signs as `%%` in authored paths on
+  all three platforms, including TOML literal strings. Directory-category
+  environment values and `sources.toml` locations are not expanded again.
 
 ### mant-loader 0.12.1
 
@@ -44,7 +55,7 @@ that crate was not published for that change.
   environment directory/list overrides remain unchanged. TOML relative paths
   still resolve against their configuration directory.
 
-### mant-engine, mant-ui and mant 0.12.1
+### mant-engine and mant-ui 0.12.1
 
 - Require the updated loader/source minimum versions so fresh registry
   resolutions cannot select a pre-expansion implementation. Public wire
@@ -52,6 +63,8 @@ that crate was not published for that change.
 
 ### mant 0.12.1
 
+- Require the updated source, loader, engine and UI minimum versions without
+  changing native v0.12 wire contracts.
 - Align Windows installer directory validation and comparison with the shared
   runtime fixtures. Preserve roots, path whitespace and extended namespace
   semantics; never equate `C:\` with `C:` or accept incomplete/device paths.
@@ -59,7 +72,7 @@ that crate was not published for that change.
   lifecycle coverage. Keep single-root storage, receipt ownership and PATH
   mutation boundaries unchanged.
 
-### Installer guidance (no crate publication)
+### Installer scripts (outside crate source sets)
 
 - Retain the existing minimal state-directory install receipt; print its path
   and explain optional legacy-file cleanup after successful installation and

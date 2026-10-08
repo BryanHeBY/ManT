@@ -44,6 +44,9 @@ discover = true
 TOML paths name final directories. Both `mant.toml` and personal `man.conf`
 use the same path expansion: leading `~`, `~/` or `~\` selects the shared home;
 `%NAME%` inserts a defined, nonempty process variable and `%%` is a literal `%`.
+This is ManT configuration syntax on Linux, macOS and Windows, not shell syntax.
+Literal percent signs in authored paths must be doubled on all three platforms;
+TOML literal strings do not disable ManT's expansion.
 Windows names match ASCII case-insensitively; Unix names match exactly.
 Inserted values are not rescanned, even if they contain `~` or `%NAME%`.
 Authored, expanded and finally resolved paths are bounded to 4096 encoded bytes; missing variables,
@@ -55,6 +58,24 @@ include directive or project-local configuration discovery.
 Unknown fields, malformed TOML and unreadable configuration are diagnosed.
 Configuration reads are bounded to regular UTF-8 files of at most 1 MiB;
 regular-file symlinks are supported, but special files cannot block discovery.
+
+For example, on Linux with `HOME=/home/alice` and `DOC_ROOT=/srv/manuals`:
+
+| Authored path | Expanded path |
+| --- | --- |
+| `~/manuals` | `/home/alice/manuals` |
+| `%DOC_ROOT%/tools` | `/srv/manuals/tools` |
+| `/srv/100%%/manuals` | `/srv/100%/manuals` |
+
+`%doc_root%` does not match `DOC_ROOT` on Unix. `$HOME/manuals` is not expanded;
+in TOML it is a literal relative path below the configuration directory.
+Expansion is limited to TOML `paths.data_home`, `paths.cache_home`, `man.paths`
+and personal `man.conf` path arguments. It does not apply to source URLs or
+local Git repository strings in `sources.toml`.
+Directory-category environment values such as `MANT_DATA_HOME` and
+`XDG_DATA_HOME` are already paths and are not expanded again. For example,
+`export MANT_DATA_HOME="$HOME/data"` lets the shell supply an absolute path;
+passing the literal `$HOME/data` or `~/data` is not an absolute override.
 
 On Windows, ordinary disk paths accept `/` and `\`, including `C:/manuals`;
 UNC paths require both server and share, such as `//server/share/manuals`.
@@ -83,7 +104,7 @@ manpath "~/scoop/apps/cmake/current/man"
 manpath "%USERPROFILE%\manuals"
 ```
 
-This shared expansion is available in the next patch release (after 0.12.0).
+This shared expansion is available since 0.12.1.
 Version 0.12.0 supports home expansion only in TOML and percent expansion only
 in personal `man.conf`.
 
@@ -110,7 +131,7 @@ and searches include fallback content. Empty or absent `paths` retain this chain
 `discover = false` uses only explicit TOML roots, skipping personal `man.conf`,
 host configuration and supplemental roots.
 
-The next patch after 0.12.0 also accepts `man.inherit_paths`; both it and
+Version 0.12.1 also accepts `man.inherit_paths`; both it and
 `man.discover` default to `true`.
 `inherit_paths` controls inheritance of explicit paths from lower-priority
 application configuration, independently of discovery. Only one `mant.toml`
