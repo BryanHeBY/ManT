@@ -13,6 +13,15 @@ that crate was not published for that change.
 
 ## Unreleased
 
+### Installer guidance (no crate publication)
+
+- Retain the existing minimal state-directory install receipt; print its path
+  and explain optional legacy-file cleanup after successful installation and
+  already-current checks. Keep ownership, migration and PATH behavior unchanged.
+  Document that active receipts/directories, external tldr caches and still-used
+  configuration/source paths must be retained; directory overrides are not
+  rewritten. Do not introduce separate migration logs or cleanup-status files.
+
 ## 0.12.0 - 2026-10-08
 
 This release publishes `mant-ir`, `mant-protocol`, `mant-codec`, `mant-loader`,

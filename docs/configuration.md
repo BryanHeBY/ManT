@@ -117,6 +117,26 @@ files, never user data or the shared `~/.local/bin` PATH entry.
 With manual installation disabled, changing the document destination does not
 claim same-named files there as installer-owned, even after storage migration.
 
+The minimal installer receipt is persistent installation metadata, not user
+configuration or disposable cache. Unix stores a tab-separated
+`install-receipt`; Windows stores `install-receipt.json`. It records the installed
+version, selected binary/manual locations, owned files and migration/binding
+markers; Windows also records installer-added PATH ownership. Keep the current
+receipt for subsequent upgrades and safe uninstall. No separate migration log
+or cleanup-status file is written.
+
+Migration does not automatically remove original configuration/data, old caches,
+old-location receipts or binaries left at a different installation location.
+After checking `mant --doctor`, document discovery and the configuration,
+optionally remove only obsolete ManT-specific files that no setting or source
+still references. Do not remove the active receipt, shared/active directories
+or external tldr clients' caches; on Linux the old data root may also be the
+current data root. Directory environment overrides remain unchanged. Do not
+unset `HOME`, `USERPROFILE`, `APPDATA` or shared XDG directory variables to clean
+old ManT storage. Review obsolete ManT overrides and manually added PATH entries
+yourself; Windows may adjust only installer-owned PATH entries as described in
+the installation guide. Cleanup is optional, not an upgrade prerequisite.
+
 `mant --doctor` reports effective category paths, their origins, the general and
 source configuration locations, active manual findings and legacy source
 configuration awaiting migration. Its existing `configPath` field continues

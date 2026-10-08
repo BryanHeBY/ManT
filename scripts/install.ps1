@@ -173,6 +173,15 @@ function Write-Receipt(
     Move-Item -LiteralPath $TemporaryReceipt -Destination $Path -Force
 }
 
+function Show-InstallationNotes {
+    Write-Host "  receipt:    $ReceiptPath"
+    Write-Host "Keep this receipt for future upgrades and safe uninstall."
+    Write-Host "Legacy copies, relocated binaries, old receipts and caches are not automatically removed."
+    Write-Host "After mant --doctor and checking your documents/configuration, optionally remove only unused ManT-specific files."
+    Write-Host "Keep active/shared directories, external tldr caches and system-wide directory variables."
+    Write-Host "ManT directory overrides are not rewritten; review obsolete ManT overrides and manually-added PATH entries yourself."
+}
+
 if ($Help) {
     Show-Usage
     return
@@ -389,6 +398,7 @@ if (-not $Force -and $TargetVersion -eq $Version -and $ManualReady) {
         }
     }
     Write-Host "ManT $Version is already up to date."
+    Show-InstallationNotes
     return
 }
 
@@ -492,6 +502,7 @@ try {
     if ($OwnedManuals.Count) {
         Write-Host "  manuals:    $DataDir"
     }
+    Show-InstallationNotes
     if ($NoModifyPath) {
         Write-Host ""
         Write-Host "Add $InstallDir to PATH, then run: mant mant"

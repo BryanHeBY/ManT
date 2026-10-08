@@ -110,6 +110,8 @@ Invoke-Native -Label "check Rust formatting" -Program "cargo" `
     -Arguments @("fmt", "--all", "--check")
 Invoke-Native -Label "test tagged release tool paths" -Program "python" `
     -Arguments @("-m", "unittest", "scripts.release.tests.test_source_tool_paths")
+Invoke-Native -Label "test installer receipt and cleanup guidance" -Program "python" `
+    -Arguments @("-m", "unittest", "scripts.release.tests.test_installer_guidance")
 Invoke-Native -Label "test portable Rust packages" -Program "cargo" `
     -Arguments (@("test", "--locked") + $Packages)
 Write-Host "`n==> test isolated Windows installer lifecycle"

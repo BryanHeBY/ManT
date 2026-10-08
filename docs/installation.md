@@ -122,6 +122,24 @@ Subsequent upgrades do not re-import the retained old data. Explicit custom
 binary/manual destinations remain respected. An older installation without a receipt can be adopted by
 running the current installer once before uninstalling it.
 
+The state file is one minimal installation receipt, not a configuration file or
+cache: Unix writes `install-receipt` (tab-separated text), and Windows writes
+`install-receipt.json`. It also retains migration completion and custom/runtime
+document binding. Keep the active receipt for safe uninstall and future upgrades;
+there is no separate migration log or cleanup-status file. Successful installs
+and already-current checks print its location and optional cleanup guidance.
+
+Original configuration/data, old caches, old-location receipts and binaries
+left at a different installation location are not automatically removed. After
+`mant --doctor`, checking document discovery and confirming that no configuration,
+source or environment override still references them, you may manually remove
+obsolete ManT-specific files. Never delete shared/active directories or external
+tldr caches. Directory overrides are not rewritten; review outdated custom
+ManT overrides and manually added PATH entries yourself. Do not unset `HOME`,
+`USERPROFILE`, `APPDATA` or shared XDG directory variables to clean old ManT
+storage. Windows may still adjust receipt-owned PATH entries as documented above.
+Cleanup is optional.
+
 ## cargo-binstall
 
 [`cargo-binstall`](https://github.com/cargo-bins/cargo-binstall) uses ManT's

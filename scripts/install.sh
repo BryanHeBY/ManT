@@ -219,6 +219,16 @@ write_receipt() {
   mv "$receipt_temporary" "$receipt" || return 1
 }
 
+print_install_notes() {
+  printf '  receipt:    %s\n' "$receipt"
+  printf '%s\n' \
+    'Keep this receipt for future upgrades and safe uninstall.' \
+    'Legacy copies, relocated binaries, old receipts and caches are not automatically removed.' \
+    'After mant --doctor and checking your documents/configuration, optionally remove only unused ManT-specific files.' \
+    'Keep active/shared directories, external tldr caches and system-wide directory variables.' \
+    'ManT directory overrides are not rewritten; review obsolete ManT overrides and manually-added PATH entries yourself.'
+}
+
 uninstall_owned_files() {
   [ -f "$receipt_read_path" ] \
     || fail "no installer receipt was found; ManT was not installed by this script"
@@ -439,6 +449,7 @@ if [ "$force" = false ] \
   && [ "$manual_ready" = true ]; then
   write_receipt "$version" "$owned_manuals"
   printf 'ManT %s is already up to date.\n' "$version"
+  print_install_notes
   exit 0
 fi
 
@@ -509,6 +520,7 @@ install_files() {
   if [ -n "$owned_manuals" ]; then
     printf '  manuals:    %s\n' "$data_dir"
   fi
+  print_install_notes
   case ":${PATH:-}:" in
     *":$install_dir:"*) ;;
     *) printf '\nAdd %s to PATH, then run: mant mant\n' "$install_dir" ;;
