@@ -53,7 +53,9 @@ Linux, macOS and Windows share `~/.config/mant`, `~/.local/share/mant` and
 `~/.cache/mant` for application configuration, persistent data and private cache.
 `MANT_CONFIG_HOME`, `MANT_DATA_HOME` and `MANT_CACHE_HOME` select final directories;
 XDG category variables supply shared bases. Optional `mant.toml` supplies data,
-cache and manual roots. With `man.discover = true`, explicit roots precede
+cache and manual roots. Personal TOML and `man.conf` paths share bounded
+single-pass `~`/`%NAME%` expansion, with `%%` for a literal percent and no shell
+evaluation. With `man.discover = true`, explicit roots precede
 personal `man.conf`, native discovery and supplemental roots; `false` isolates
 explicit roots. Complete `MANT_MANPATH`/`MANPATH` overrides retain precedence.
 The resolver is read-only and does not silently migrate old storage.

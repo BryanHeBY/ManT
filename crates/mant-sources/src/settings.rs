@@ -10,6 +10,9 @@ use std::{
     path::{Path, PathBuf},
 };
 
+mod expansion;
+pub use expansion::expand_configuration_path;
+
 /// One invocation's environment, configuration and effective application paths.
 #[derive(Clone, Debug)]
 pub struct Settings {
@@ -217,25 +220,12 @@ impl Settings {
         self.declaration.man.discover
     }
 
-    /// Interpret a TOML path relative to its configuration file, with `~/` support.
+    /// Expand a TOML path and resolve relative results against its configuration file.
     ///
     /// # Errors
-    /// Reports empty/control-containing paths or unavailable home/configuration roots.
+    /// Reports invalid expansion or unavailable home/configuration roots.
     pub fn resolve_path(&self, value: &str) -> Result<PathBuf, SourceConfigError> {
-        if value.is_empty() || value.chars().any(char::is_control) {
-            return Err(SourceConfigError::new(
-                "configuration paths must be nonempty and contain no control characters",
-            ));
-        }
-        if let Some(rest) = value
-            .strip_prefix("~/")
-            .or_else(|| value.strip_prefix("~\\"))
-        {
-            return home(&self.environment, self.windows)
-                .map(|root| root.join(rest))
-                .ok_or_else(|| missing("home", "HOME or USERPROFILE"));
-        }
-        let path = PathBuf::from(value);
+        let path = expand_configuration_path(value, &self.environment, self.windows)?;
         if absolute(&path, self.windows) {
             Ok(path)
         } else {

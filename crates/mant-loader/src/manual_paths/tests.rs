@@ -360,3 +360,39 @@ fn complete_environment_manual_overrides_skip_invalid_toml() {
     }
     fs::remove_dir_all(root).unwrap();
 }
+
+#[cfg(unix)]
+#[test]
+fn personal_expansion_survives_loading_fragments_and_toml_fallback() {
+    let root = temporary_root("shared-personal-expansion");
+    let config = root.join("config");
+    fs::create_dir_all(config.join("man.d")).unwrap();
+    let toml = "[man]\npaths = ['~/explicit']\ndiscover = true\n";
+    let personal = "manpath \"%HOME%/fallback\"\nMANCONFIG \"~/%FRAGMENTS%/*.conf\"\n";
+    fs::write(config.join("mant.toml"), toml).unwrap();
+    fs::write(config.join("man.conf"), personal).unwrap();
+    fs::write(
+        config.join("man.d/one.conf"),
+        "MANDATORY_MANPATH \"~/fragment/100%%\"\n",
+    )
+    .unwrap();
+    let environment = HashMap::from([
+        ("HOME".into(), root.clone().into_os_string()),
+        ("MANT_CONFIG_HOME".into(), config.clone().into_os_string()),
+        ("FRAGMENTS".into(), "config/man.d".into()),
+    ]);
+    let result =
+        super::inspect_manual_roots_from_environment(&environment, ManualPathPlatform::Linux);
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_eq!(result.roots.first(), Some(&root.join("explicit")));
+    assert_eq!(result.roots.get(1), Some(&root.join("fallback")));
+    assert!(result.roots.contains(&root.join("fragment/100%")));
+    assert_eq!(fs::read_to_string(config.join("mant.toml")).unwrap(), toml);
+    assert_eq!(
+        fs::read_to_string(config.join("man.conf")).unwrap(),
+        personal
+    );
+    assert!(!root.join("explicit").exists());
+    assert!(!root.join("fallback").exists());
+    fs::remove_dir_all(root).unwrap();
+}

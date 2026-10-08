@@ -13,6 +13,30 @@ that crate was not published for that change.
 
 ## Unreleased
 
+### mant-sources 0.10.1
+
+- Share bounded, read-only configuration path expansion across `mant.toml`
+  and personal `man.conf`: authored `~`, `~/`, `~\`, `%NAME%` and `%%` use one
+  implementation. Insert environment values only once without shell evaluation,
+  globbing or recursively expanding inserted tilde/percent text. Preserve native
+  path bytes, use host environment-name case rules, and reject missing/empty
+  variables, malformed expansions, control characters and paths exceeding
+  4096 encoded bytes. Escape literal percent signs as `%%` in TOML paths.
+
+### mant-loader 0.12.1
+
+- Apply the shared expansion to every personal `man.conf` root, map and
+  one-level `MANCONFIG` path. Retain absolute-root validation, bounded fragment
+  globbing and per-line diagnostics; native system configuration dialects and
+  environment directory/list overrides remain unchanged. TOML relative paths
+  still resolve against their configuration directory.
+
+### mant-engine, mant-ui and mant 0.12.1
+
+- Require the updated loader/source minimum versions so fresh registry
+  resolutions cannot select a pre-expansion implementation. Public wire
+  contracts and frozen v0.12 schema snapshots are unchanged.
+
 ### Installer guidance (no crate publication)
 
 - Retain the existing minimal state-directory install receipt; print its path

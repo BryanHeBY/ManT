@@ -15,7 +15,9 @@ Linux, macOS and Windows share Unix-like storage defaults. The read-only
 documents and snapshots default to `~/.local/share/mant`, while disposable
 caches default to `~/.cache/mant`. `MANT_*_HOME`, TOML data/cache paths and
 XDG bases can relocate these directories without creating them. Relative
-local Git locations retain their data-root base. See the online
+local Git locations retain their data-root base. TOML paths and personal
+`man.conf` share single-pass `~`/`%NAME%` expansion (`%%` is a literal percent),
+without shell evaluation or rewriting configuration. See the online
 [configuration guide](https://github.com/BryanHeBY/ManT/blob/main/docs/configuration.md).
 
 ## Feature boundary

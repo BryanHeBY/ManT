@@ -1,7 +1,7 @@
 //! Portable personal `man.conf` parsing; native system dialects remain separate.
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     ffi::{OsStr, OsString},
     fs, io,
     path::{Path, PathBuf},
@@ -187,6 +187,10 @@ fn parse_bounded(
     allow_includes: bool,
     budget: &mut ConfigBudget,
 ) -> WindowsConfigPlan {
+    let environment = environment
+        .iter()
+        .map(|(name, value)| (name.clone(), value.clone()))
+        .collect::<BTreeMap<_, _>>();
     let mut plan = WindowsConfigPlan {
         windows: budget.windows,
         ..WindowsConfigPlan::default()
@@ -225,7 +229,7 @@ fn parse_bounded(
                 source,
                 line,
                 value,
-                environment,
+                &environment,
                 budget.windows,
             );
         } else if directive.eq_ignore_ascii_case("mandatory_manpath") {
@@ -235,7 +239,7 @@ fn parse_bounded(
                 source,
                 line,
                 value,
-                environment,
+                &environment,
                 budget.windows,
             );
         } else if directive.eq_ignore_ascii_case("manconfig") {
@@ -246,15 +250,15 @@ fn parse_bounded(
                     source,
                     line,
                     value,
-                    environment,
+                    &environment,
                     budget.windows,
                 );
             }
         } else if directive.eq_ignore_ascii_case("manpath_map") {
             match split_arguments(value, 2) {
                 Ok(arguments) => {
-                    let binary = parse_path(&arguments[0], environment, budget.windows);
-                    let manual = parse_path(&arguments[1], environment, budget.windows);
+                    let binary = parse_path(&arguments[0], &environment, budget.windows);
+                    let manual = parse_path(&arguments[1], &environment, budget.windows);
                     match binary.zip(manual) {
                         Some(mapping) => plan.mappings.push(mapping),
                         None => plan.diagnostics.push(line_diagnostic(
@@ -377,7 +381,7 @@ fn push_single_path(
     source: &Path,
     line: usize,
     value: &str,
-    environment: &HashMap<OsString, OsString>,
+    environment: &BTreeMap<OsString, OsString>,
     windows: bool,
 ) {
     match split_arguments(value, 1)
@@ -388,7 +392,7 @@ fn push_single_path(
         None => diagnostics.push(line_diagnostic(
             source,
             line,
-            "path contains invalid quoting, an undefined variable, or is not absolute",
+            "path contains invalid quoting/expansion, unavailable home/variable, or is not absolute",
         )),
     }
 }
@@ -442,61 +446,17 @@ fn split_arguments(value: &str, expected: usize) -> Result<Vec<String>, &'static
 
 fn parse_path(
     value: &str,
-    environment: &HashMap<OsString, OsString>,
+    environment: &BTreeMap<OsString, OsString>,
     windows: bool,
 ) -> Option<PathBuf> {
-    let expanded = expand_environment_with(value, environment, windows)?;
-    (expanded.len() <= 4096
-        && if windows {
-            is_absolute_windows_path(&expanded)
-        } else {
-            Path::new(&expanded).is_absolute()
-        })
-    .then(|| PathBuf::from(expanded))
-}
-
-#[cfg(test)]
-fn expand_environment(value: &str, environment: &HashMap<OsString, OsString>) -> Option<OsString> {
-    expand_environment_with(value, environment, true)
-}
-
-fn expand_environment_with(
-    value: &str,
-    environment: &HashMap<OsString, OsString>,
-    windows: bool,
-) -> Option<OsString> {
-    let mut output = OsString::new();
-    let mut remaining = value;
-    while let Some(start) = remaining.find('%') {
-        output.push(&remaining[..start]);
-        remaining = &remaining[start + 1..];
-        if let Some(literal) = remaining.strip_prefix('%') {
-            output.push("%");
-            remaining = literal;
-            continue;
-        }
-        let end = remaining.find('%')?;
-        let name = &remaining[..end];
-        if name.is_empty() {
-            return None;
-        }
-        let value = super::environment_value_for(
-            environment,
-            name,
-            if windows {
-                super::ManualPathPlatform::Windows
-            } else {
-                super::ManualPathPlatform::Linux
-            },
-        )?;
-        output.push(value);
-        if output.len() > 4096 {
-            return None;
-        }
-        remaining = &remaining[end + 1..];
+    let expanded =
+        mant_sources::settings::expand_configuration_path(value, environment, windows).ok()?;
+    if windows {
+        is_absolute_windows_path(expanded.as_os_str())
+    } else {
+        expanded.is_absolute()
     }
-    output.push(remaining);
-    Some(output)
+    .then_some(expanded)
 }
 
 pub(super) fn is_absolute_windows_path(path: &OsStr) -> bool {
@@ -577,8 +537,8 @@ mod tests {
     };
 
     use super::{
-        ConfigBudget, collect_include_paths_with, expand_environment, materialize, parse,
-        parse_bounded, read_config, split_arguments,
+        ConfigBudget, collect_include_paths_with, materialize, parse, parse_bounded, read_config,
+        split_arguments,
     };
     use crate::manual_paths::{MAX_EXPANDED_CONFIG_CANDIDATES, MAX_EXPANDED_CONFIG_PATHS};
 
@@ -624,6 +584,86 @@ mod tests {
             ]
         );
         assert_eq!(plan.diagnostics.len(), 1);
+    }
+
+    #[test]
+    fn personal_toml_and_man_conf_use_identical_authored_expansion() {
+        use std::collections::BTreeMap;
+        for windows in [false, true] {
+            let home = if windows {
+                r"C:\Users\Alice"
+            } else {
+                "/home/alice"
+            };
+            let environment = HashMap::from([
+                (OsString::from("HOME"), OsString::from(home)),
+                (OsString::from("ROOT"), OsString::from(home)),
+                (OsString::from("LITERAL"), OsString::from("%ROOT%")),
+            ]);
+            let settings_environment = environment
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect::<BTreeMap<_, _>>();
+            let settings =
+                mant_sources::settings::Settings::from_environment(&settings_environment, windows)
+                    .unwrap();
+            for value in [
+                "~",
+                "~/manuals",
+                r"~\manuals",
+                "%ROOT%/manuals",
+                "~/%LITERAL%/100%%",
+            ] {
+                let plan = parse_bounded(
+                    &format!("manpath \"{value}\"\n"),
+                    Path::new("man.conf"),
+                    &environment,
+                    true,
+                    &mut ConfigBudget {
+                        windows,
+                        ..ConfigBudget::default()
+                    },
+                );
+                assert!(
+                    plan.diagnostics.is_empty(),
+                    "{value}: {:?}",
+                    plan.diagnostics
+                );
+                assert_eq!(
+                    plan.roots,
+                    [settings.resolve_path(value).unwrap()],
+                    "{value}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn home_expansion_applies_to_maps_mandatory_roots_and_fragments() {
+        let environment = HashMap::from([("UserProfile".into(), r"C:\Users\Alice".into())]);
+        let plan = parse(
+            "MANPATH_MAP \"~/bin\" \"~/manuals\"\nMANDATORY_MANPATH ~\nMANCONFIG \"~\\man.d\\*.conf\"\n",
+            Path::new(r"C:\config\man.conf"),
+            &environment,
+            true,
+        );
+        let home = PathBuf::from(r"C:\Users\Alice");
+        assert_eq!(plan.diagnostics, []);
+        assert_eq!(plan.mappings, [(home.join("bin"), home.join("manuals"))]);
+        assert_eq!(plan.mandatory.as_slice(), std::slice::from_ref(&home));
+        assert_eq!(plan.include_patterns, [home.join(r"man.d\*.conf")]);
+    }
+
+    #[test]
+    fn malformed_home_and_variables_are_diagnosed_without_relative_fallback() {
+        let plan = parse(
+            "manpath ~/missing-home\nmanpath %MISSING%\\man\nmanpath C:\\bad%\nmanpath relative\n",
+            Path::new(r"C:\config\man.conf"),
+            &HashMap::new(),
+            true,
+        );
+        assert_eq!(plan.roots, [] as [PathBuf; 0]);
+        assert_eq!(plan.diagnostics.len(), 4);
     }
 
     #[test]
@@ -727,8 +767,16 @@ mod tests {
             (OsString::from("PATH"), OsString::from(r"C:\exact")),
         ]);
         assert_eq!(
-            expand_environment("%PATH%", &environment),
-            Some(OsString::from(r"C:\exact"))
+            mant_sources::settings::expand_configuration_path(
+                "%PATH%",
+                &environment
+                    .iter()
+                    .map(|(k, v)| (k.clone(), v.clone()))
+                    .collect(),
+                true,
+            )
+            .unwrap(),
+            PathBuf::from(r"C:\exact")
         );
         let plan = parse(
             "manpath C:\\tools\\*\\man\nMANDATORY_MANPATH C:\\required\\?\n",

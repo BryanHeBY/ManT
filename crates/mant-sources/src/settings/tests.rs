@@ -113,6 +113,35 @@ fn paths_use_configuration_directory_not_current_directory() {
 }
 
 #[test]
+fn toml_path_fields_share_expansion_and_read_only_resolution() {
+    let fixture = Fixture::new();
+    fixture.configure("[paths]\ndata_home = '%ROOT%/data'\ncache_home = '~/cache/100%%'\n[man]\npaths = ['~', '%ROOT%/manuals', '%RELATIVE%']\n");
+    let before = fs::read(fixture.0.join(".config/mant/mant.toml")).unwrap();
+    let mut environment = fixture.environment();
+    environment.insert("ROOT".into(), fixture.0.clone().into_os_string());
+    environment.insert("RELATIVE".into(), "local manuals".into());
+    for windows in [false, true] {
+        let settings = Settings::from_environment(&environment, windows).unwrap();
+        assert_eq!(settings.data_home().unwrap(), fixture.0.join("data"));
+        assert_eq!(settings.cache_home().unwrap(), fixture.0.join("cache/100%"));
+        assert_eq!(
+            settings.manual_paths().unwrap(),
+            [
+                fixture.0.clone(),
+                fixture.0.join("manuals"),
+                fixture.0.join(".config/mant/local manuals"),
+            ]
+        );
+        assert!(!settings.data_home().unwrap().exists());
+        assert!(!settings.cache_home().unwrap().exists());
+    }
+    assert_eq!(
+        fs::read(fixture.0.join(".config/mant/mant.toml")).unwrap(),
+        before
+    );
+}
+
+#[test]
 fn invalid_configuration_does_not_silently_fall_back() {
     let fixture = Fixture::new();
     for text in [

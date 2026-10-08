@@ -409,16 +409,16 @@ fn workspace_crates_own_their_versions_and_use_explicit_caret_dependencies() {
 }
 
 #[test]
-fn source_consumers_require_the_shared_directory_baseline() {
+fn source_consumers_require_the_shared_configuration_expansion_baseline() {
     for (name, manifest) in [
         ("mant-loader", include_str!("../../mant-loader/Cargo.toml")),
         ("mant", include_str!("../Cargo.toml")),
     ] {
         assert!(
             manifest.lines().any(|line| {
-                line.starts_with("mant-sources = ") && line.contains("version = \"^0.10.0\"")
+                line.starts_with("mant-sources = ") && line.contains("version = \"^0.10.1\"")
             }),
-            "{name} does not require the mant-sources shared directory baseline"
+            "{name} does not require the mant-sources shared configuration expansion baseline"
         );
     }
 }

@@ -37,14 +37,38 @@ paths = ["~/manuals", "local manuals"]
 discover = true
 ```
 
-TOML paths name final directories. `~/` expands the selected home; relative
-paths use the directory containing `mant.toml`, not the current directory.
+TOML paths name final directories. Both `mant.toml` and personal `man.conf`
+use the same path expansion: leading `~`, `~/` or `~\` selects the shared home;
+`%NAME%` inserts a defined, nonempty process variable and `%%` is a literal `%`.
+Windows names match ASCII case-insensitively; Unix names match exactly.
+Inserted values are not rescanned, even if they contain `~` or `%NAME%`.
+Authored and expanded paths are bounded to 4096 encoded bytes; missing variables,
+malformed expressions and control characters are errors. Relative TOML paths
+use the directory containing `mant.toml`, not the current directory.
 Windows can use literal TOML strings such as `data_home = 'D:\ManT Data'`.
-There is no `config_home` setting, shell evaluation, arbitrary environment
-interpolation, include directive or project-local configuration discovery.
+There is no `config_home` setting, shell evaluation, `$VAR`/`${VAR}` expansion,
+include directive or project-local configuration discovery.
 Unknown fields, malformed TOML and unreadable configuration are diagnosed.
 Configuration reads are bounded to regular UTF-8 files of at most 1 MiB;
 regular-file symlinks are supported, but special files cannot block discovery.
+
+For example, these Windows configurations use the same expansion rules:
+
+```toml
+# ~/.config/mant/mant.toml
+[man]
+paths = ["~/scoop/apps/cmake/current/man", '%USERPROFILE%\manuals']
+```
+
+```text
+# ~/.config/mant/man.conf
+manpath "~/scoop/apps/cmake/current/man"
+manpath "%USERPROFILE%\manuals"
+```
+
+This shared expansion is available in the next patch release (after 0.12.0).
+Version 0.12.0 supports home expansion only in TOML and percent expansion only
+in personal `man.conf`.
 
 `sources.toml` remains a separate source declaration file under the configuration
 root. Its **local Git repo paths still use the data root as their relative base**;
@@ -71,10 +95,12 @@ host configuration and supplemental roots.
 
 Personal `man.conf` accepts the same bounded subset on all platforms:
 `manpath`/`MANPATH`, `MANPATH_MAP`, `MANDATORY_MANPATH` and one-level `MANCONFIG`
-fragments. Roots are absolute literal paths; only `MANCONFIG` expands globs.
+fragments. Roots must be absolute after the shared `~`/`%NAME%` expansion;
+only `MANCONFIG` expands globs.
 Double quotes delimit paths containing spaces; backslashes are literal.
-`%NAME%` expands process variables once (`%%` is a literal percent), without
-executing a shell. Variable names and glob case policy follow the native host.
+Variable names and glob case policy follow the native host. The personal
+configuration remains best-effort: invalid expansion is diagnosed per directive,
+while invalid active TOML settings return a configuration error.
 Invalid entries are omitted and reported by doctor. System man-db and BSD/mandoc
 files retain their native dialects and ordering, independently of this personal
 configuration. macOS developer/manual discovery is not removed.

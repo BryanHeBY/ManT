@@ -227,6 +227,11 @@ roots, then the configured data root's `man/` directory. `discover = false`
 uses only explicit TOML paths. `MANPATH` and `MANT_MANPATH` retain their
 environment override semantics.
 
+Personal `mant.toml` and `man.conf` paths share leading `~`, `~/`, `~\`,
+`%NAME%` and literal `%%` expansion. Variables are inserted once, not recursively
+interpreted or passed to a shell. Relative TOML paths use their configuration
+directory; personal `man.conf` paths must be absolute after expansion.
+
 <!-- mant:entries role=option case=sensitive -->
 - `--man-section MAN_SECTION`: Select the full document from one exact native
   manual category such as `1` or `3p`. In an ordinary combined query, a selected
@@ -357,7 +362,7 @@ that may be loaded. An incomplete pattern contributes no paths, and later
 patterns are not traversed after exhaustion. `mant --doctor` reports truncated
 discovery. Each configuration file is bounded to 1 MiB of actually read bytes;
 the personal configuration tree is bounded to 8 MiB and 4096 input lines.
-Expanded paths are limited to 4096 encoded bytes. Only `MANCONFIG` expands
+Authored and expanded paths are limited to 4096 encoded bytes. Only `MANCONFIG` expands
 wildcards in this personal configuration;
 all root and map directives describe literal directories.
 Windows `MANCONFIG` wildcard components compare ASCII letters without case
@@ -379,7 +384,9 @@ therefore not supported.
 Within this personal file, `%NAME%` expands any defined process environment
 variable, case-insensitively on Windows and case-sensitively on Unix. Expansion is deliberately one
 pass: text supplied by an environment value is not rescanned. Write `%%` for a
-literal percent sign. ManT does not expand `~`. An undefined variable,
+literal percent sign. Leading `~`, `~/` and `~\` use an absolute `HOME`, or
+an absolute `USERPROFILE` fallback on Windows, just like `mant.toml`.
+An undefined or empty variable, unavailable home,
 malformed quote or expansion, wrong argument count, or non-absolute native
 path omits that directive without breaking document lookup; `mant --doctor`
 reports the configuration file and line as `manuals.configuration`.
@@ -394,7 +401,7 @@ MANPATH_MAP "%USERPROFILE%\scoop\shims" "%SCOOP%\apps\cmake\current\man"
 MANDATORY_MANPATH "%PROGRAMDATA%\ManT\man"
 ```
 
-These percent expansions do not apply to `MANT_MANPATH`, `MANPATH`, Unix
+These configuration expansions do not apply to `MANT_MANPATH`, `MANPATH`, Unix
 system configuration files, registered Markdown sources, or roff include paths.
 Windows process-environment names themselves are matched without ASCII case
 sensitivity, so preserved spellings such as `Path`, `AppData`, `UserProfile`,

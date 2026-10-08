@@ -1,6 +1,6 @@
 [package]
 name = "mant-engine"
-version = "0.12.0"
+version = "0.12.1"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -32,7 +32,7 @@ roff = ["mant-loader/roff"]
 
 [dependencies]
 mant-ir = { path = "../mant-ir", version = "^0.12.0" }
-mant-loader = { path = "../mant-loader", version = "^0.12.0", default-features = false }
+mant-loader = { path = "../mant-loader", version = "^0.12.1", default-features = false }
 mant-query = { path = "../mant-query", version = "^0.12.0", default-features = false }
 mant-protocol = { path = "../mant-protocol", version = "^0.12.0" }
 
