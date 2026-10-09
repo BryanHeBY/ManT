@@ -13,6 +13,18 @@ that crate was not published for that change.
 
 ## Unreleased
 
+### Verification tooling (outside crate source sets)
+
+- Bound one-shot verification disk use by disabling incremental compilation and
+  defaulting Rust dev/test debug information to line tables while respecting
+  explicit debug preferences. Preserve ordinary development/release profiles
+  and restore the Windows caller's environment. Include CI defaults in cache
+  keys before restoration.
+- Clean packaged-source workspace debug artifacts, generated archives and
+  scratch sources on success, failure and ordinary interruption while reusing
+  third-party caches. Preserve release artifacts and the locked mandoc oracle;
+  retain actual archive-source tests rather than substituting checkout binaries.
+
 ### mant-ui
 
 - Cache bounded fragment verification per immutable document view instead of

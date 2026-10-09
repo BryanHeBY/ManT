@@ -531,7 +531,11 @@ fn packaged_and_windows_checks_include_extracted_package_test_surfaces() {
 #[test]
 fn cli_capability_matrix_runs_on_every_product_platform() {
     let unix = include_str!("../../../scripts/check.sh").replace("\r\n", "\n");
-    let windows = include_str!("../../../scripts/check-windows.ps1").replace("\r\n", "\n");
+    let windows = include_str!("../../../scripts/check-windows.ps1")
+        .lines()
+        .map(str::trim_start)
+        .collect::<Vec<_>>()
+        .join("\n");
     let ci = include_str!("../../../.github/workflows/ci.yml").replace("\r\n", "\n");
     assert!(unix.contains("python3 -m scripts.checks.check_cli_features"));
     assert!(
@@ -542,7 +546,7 @@ fn cli_capability_matrix_runs_on_every_product_platform() {
                 .unwrap()
     );
     assert!(windows.contains(
-        "-Program \"python\" `\n    -Arguments @(\"-m\", \"scripts.checks.check_cli_features\")"
+        "-Program \"python\" `\n-Arguments @(\"-m\", \"scripts.checks.check_cli_features\")"
     ));
     let mac = ci
         .split_once("  macos-native:")

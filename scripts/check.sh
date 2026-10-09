@@ -6,6 +6,7 @@ set -euo pipefail
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$ROOT"
 export LIBMANDOC_RS_DENY_WARNINGS=1
+source "$ROOT/scripts/checks/build-environment.sh"
 
 profile=release
 if (( $# > 0 )); then
@@ -66,6 +67,8 @@ run "test repository tool entrypoints" \
   python3 -m unittest scripts.roff.tests.test_tool_entrypoints
 run "test tagged release tool paths" \
   python3 -m unittest scripts.release.tests.test_source_tool_paths
+run "test verification cache and scratch cleanup" \
+  python3 -m unittest scripts.checks.tests.test_build_artifacts
 run "test installer receipt and cleanup guidance" \
   python3 -m unittest scripts.release.tests.test_installer_guidance
 run "test bounded native dependency mirror fallback" \

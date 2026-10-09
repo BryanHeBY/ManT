@@ -35,3 +35,16 @@
   registry identity. Restoration must pass preflight for ASCII, UTF-8
   and HTML even when the destination already exists; do not reconstruct
   the oracle from patched vendor sources or improvise a rebuild.
+
+## Temporary files and build artifacts
+
+- Remove task-owned temporary files, including `/tmp` diagnostics, as soon as
+  they are no longer needed. Scripts must clean their own scratch directories
+  on success, failure and ordinary interruption; never sweep unrelated files.
+- Keep one-shot verification caches bounded. Reuse third-party build products,
+  but clean disposable packaged-source workspace artifacts before deleting
+  their source snapshot. Do not replace packaged-source validation with tests
+  of checkout binaries.
+- Never delete the entire `target/` tree as routine cleanup. Preserve the pinned
+  mandoc reference, locked pristine archive and requested audit evidence; limit
+  cleanup to validated, reproducible build outputs.

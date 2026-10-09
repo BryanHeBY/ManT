@@ -5,6 +5,7 @@ set -euo pipefail
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 cd "$ROOT"
+source "$ROOT/scripts/checks/build-environment.sh"
 
 cargo build --locked --package libmandoc-rs --all-features
 TARGET_DIR=$(cargo metadata --format-version=1 --no-deps \

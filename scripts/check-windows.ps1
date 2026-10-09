@@ -26,126 +26,136 @@ function Invoke-Native {
 $Root = Split-Path -Parent $PSScriptRoot
 Set-Location $Root
 $env:LIBMANDOC_RS_DENY_WARNINGS = "1"
-$Packages = @(
-    "--package", "libmandoc-rs",
-    "--package", "mant-ir",
-    "--package", "mant-protocol",
-    "--package", "mant-sources",
-    "--package", "mant-codec",
-    "--package", "mant-loader",
-    "--package", "mant-query",
-    "--package", "mant-render",
-    "--package", "mant-engine",
-    "--package", "mant-ui",
-    "--package", "mant"
-)
-
-$InstallerTokens = $null
-$InstallerErrors = $null
-Write-Host "`n==> check Windows installer syntax"
-[Management.Automation.Language.Parser]::ParseFile(
-    (Join-Path $Root "scripts/install.ps1"),
-    [ref]$InstallerTokens,
-    [ref]$InstallerErrors
-) | Out-Null
-if ($InstallerErrors.Count -ne 0) {
-    throw "Windows installer syntax check failed: $($InstallerErrors -join '; ')"
+# Verification settings are scoped to this invocation, including failure paths.
+$BuildEnvironmentDefaults = [ordered]@{
+    CARGO_INCREMENTAL = "0"
+    CARGO_PROFILE_DEV_DEBUG = "line-tables-only"
+    CARGO_PROFILE_TEST_DEBUG = "line-tables-only"
 }
-
-Write-Host "`n==> test Windows installer receipt uninstall"
-& (Join-Path $Root "scripts/checks/check-windows-paths.ps1")
-$InstallerTestRoot = Join-Path ([IO.Path]::GetTempPath()) "mant-installer-$([guid]::NewGuid().ToString('N'))"
-$PreviousLocalAppData = $env:LOCALAPPDATA
-$PreviousAppData = $env:APPDATA
-$PreviousHome = $env:HOME
-$PreviousUserProfile = $env:USERPROFILE
-$PreviousStateHome = $env:XDG_STATE_HOME
+$PreviousBuildEnvironment = @{}
 try {
-    $env:HOME = Join-Path $InstallerTestRoot "home"
-    $env:USERPROFILE = $env:HOME
-    $env:XDG_STATE_HOME = Join-Path $InstallerTestRoot "state"
-    $env:LOCALAPPDATA = Join-Path $InstallerTestRoot "local"
-    $env:APPDATA = Join-Path $InstallerTestRoot "roaming"
-    $InstallerState = Join-Path $env:LOCALAPPDATA "ManT"
-    $InstallerBin = Join-Path $InstallerTestRoot "bin"
-    $InstallerDocuments = Join-Path $InstallerTestRoot "documents"
-    New-Item $InstallerState -ItemType Directory -Force | Out-Null
-    New-Item $InstallerBin -ItemType Directory -Force | Out-Null
-    New-Item $InstallerDocuments -ItemType Directory -Force | Out-Null
-    $InstallerBinary = Join-Path $InstallerBin "mant.exe"
-    $InstallerManuals = @(
-        (Join-Path $InstallerDocuments "mant.md"),
-        (Join-Path $InstallerDocuments "mant-ir.md")
+    foreach ($Name in $BuildEnvironmentDefaults.Keys) {
+        $PreviousBuildEnvironment[$Name] = [Environment]::GetEnvironmentVariable($Name, "Process")
+        if ($Name -eq "CARGO_INCREMENTAL" -or $null -eq $PreviousBuildEnvironment[$Name]) {
+            [Environment]::SetEnvironmentVariable($Name, $BuildEnvironmentDefaults[$Name], "Process")
+        }
+    }
+    $Packages = @(
+        "--package", "libmandoc-rs",
+        "--package", "mant-ir",
+        "--package", "mant-protocol",
+        "--package", "mant-sources",
+        "--package", "mant-codec",
+        "--package", "mant-loader",
+        "--package", "mant-query",
+        "--package", "mant-render",
+        "--package", "mant-engine",
+        "--package", "mant-ui",
+        "--package", "mant"
     )
-    $UserDocument = Join-Path $InstallerDocuments "user.md"
-    New-Item $InstallerBinary -ItemType File | Out-Null
-    $InstallerManuals | ForEach-Object { New-Item $_ -ItemType File | Out-Null }
-    New-Item $UserDocument -ItemType File | Out-Null
-    [ordered]@{
-        schema = "mant.install/v1"
-        version = "0.7.0"
-        installDir = $InstallerBin
-        dataDir = $InstallerDocuments
-        binary = $InstallerBinary
-        manuals = $InstallerManuals
-        pathAdded = $false
-    } | ConvertTo-Json | Set-Content (Join-Path $InstallerState "install-receipt.json") -Encoding UTF8
 
-    & (Join-Path $Root "scripts/install.ps1") -Uninstall
-    if ((Test-Path $InstallerBinary) -or ($InstallerManuals | Where-Object { Test-Path $_ })) {
-        throw "Windows uninstaller retained an installer-owned file"
+    $InstallerTokens = $null
+    $InstallerErrors = $null
+    Write-Host "`n==> check Windows installer syntax"
+    [Management.Automation.Language.Parser]::ParseFile(
+        (Join-Path $Root "scripts/install.ps1"),
+        [ref]$InstallerTokens,
+        [ref]$InstallerErrors
+    ) | Out-Null
+    if ($InstallerErrors.Count -ne 0) {
+        throw "Windows installer syntax check failed: $($InstallerErrors -join '; ')"
     }
-    if (-not (Test-Path $UserDocument) -or -not (Test-Path $InstallerDocuments)) {
-        throw "Windows uninstaller removed a user-owned path"
-    }
-} finally {
-    $env:LOCALAPPDATA = $PreviousLocalAppData
-    $env:APPDATA = $PreviousAppData
-    $env:HOME = $PreviousHome
-    $env:USERPROFILE = $PreviousUserProfile
-    $env:XDG_STATE_HOME = $PreviousStateHome
-    Remove-Item $InstallerTestRoot -Recurse -Force -ErrorAction SilentlyContinue
-}
 
-Invoke-Native -Label "check Rust formatting" -Program "cargo" `
-    -Arguments @("fmt", "--all", "--check")
-Invoke-Native -Label "test tagged release tool paths" -Program "python" `
-    -Arguments @("-m", "unittest", "scripts.release.tests.test_source_tool_paths")
-Invoke-Native -Label "test installer receipt and cleanup guidance" -Program "python" `
-    -Arguments @("-m", "unittest", "scripts.release.tests.test_installer_guidance")
-Invoke-Native -Label "test portable Rust packages" -Program "cargo" `
-    -Arguments (@("test", "--locked") + $Packages)
-Write-Host "`n==> test isolated Windows installer lifecycle"
-& (Join-Path $Root "scripts/checks/check-windows-installer.ps1") `
-    -Binary (Join-Path $Root "target/debug/mant.exe")
-Invoke-Native -Label "test optional libmandoc features" -Program "cargo" `
-    -Arguments @("test", "--locked", "--package", "libmandoc-rs", "--all-features")
-Invoke-Native -Label "test isolated native compatibility combinations" -Program "python" `
-    -Arguments @("-m", "scripts.checks.check_libmandoc_features")
-Invoke-Native -Label "test real terminal-cell geometry probe" -Program "cargo" `
-    -Arguments @("test", "--locked", "--package", "mant-ui", "--example", "geometry_audit")
-foreach ($BoundaryPackage in @("mant-codec", "mant-loader")) {
-    Invoke-Native -Label "test Markdown-only $BoundaryPackage" -Program "cargo" `
-        -Arguments @("test", "--locked", "--package", $BoundaryPackage, "--no-default-features")
-    Invoke-Native -Label "test native $BoundaryPackage" -Program "cargo" `
-        -Arguments @("test", "--locked", "--package", $BoundaryPackage, "--no-default-features", "--features", "roff")
-}
-$PreviousCargoIncremental = [Environment]::GetEnvironmentVariable("CARGO_INCREMENTAL", "Process")
-try {
-    # A fresh Clippy build is the verification boundary. Incremental lint
-    # artifacts have previously hidden a new warning until CI rebuilt cleanly.
-    $env:CARGO_INCREMENTAL = "0"
+    Write-Host "`n==> test Windows installer receipt uninstall"
+    & (Join-Path $Root "scripts/checks/check-windows-paths.ps1")
+    $InstallerTestRoot = Join-Path ([IO.Path]::GetTempPath()) "mant-installer-$([guid]::NewGuid().ToString('N'))"
+    $PreviousLocalAppData = $env:LOCALAPPDATA
+    $PreviousAppData = $env:APPDATA
+    $PreviousHome = $env:HOME
+    $PreviousUserProfile = $env:USERPROFILE
+    $PreviousStateHome = $env:XDG_STATE_HOME
+    try {
+        $env:HOME = Join-Path $InstallerTestRoot "home"
+        $env:USERPROFILE = $env:HOME
+        $env:XDG_STATE_HOME = Join-Path $InstallerTestRoot "state"
+        $env:LOCALAPPDATA = Join-Path $InstallerTestRoot "local"
+        $env:APPDATA = Join-Path $InstallerTestRoot "roaming"
+        $InstallerState = Join-Path $env:LOCALAPPDATA "ManT"
+        $InstallerBin = Join-Path $InstallerTestRoot "bin"
+        $InstallerDocuments = Join-Path $InstallerTestRoot "documents"
+        New-Item $InstallerState -ItemType Directory -Force | Out-Null
+        New-Item $InstallerBin -ItemType Directory -Force | Out-Null
+        New-Item $InstallerDocuments -ItemType Directory -Force | Out-Null
+        $InstallerBinary = Join-Path $InstallerBin "mant.exe"
+        $InstallerManuals = @(
+            (Join-Path $InstallerDocuments "mant.md"),
+            (Join-Path $InstallerDocuments "mant-ir.md")
+        )
+        $UserDocument = Join-Path $InstallerDocuments "user.md"
+        New-Item $InstallerBinary -ItemType File | Out-Null
+        $InstallerManuals | ForEach-Object { New-Item $_ -ItemType File | Out-Null }
+        New-Item $UserDocument -ItemType File | Out-Null
+        [ordered]@{
+            schema = "mant.install/v1"
+            version = "0.7.0"
+            installDir = $InstallerBin
+            dataDir = $InstallerDocuments
+            binary = $InstallerBinary
+            manuals = $InstallerManuals
+            pathAdded = $false
+        } | ConvertTo-Json | Set-Content (Join-Path $InstallerState "install-receipt.json") -Encoding UTF8
+
+        & (Join-Path $Root "scripts/install.ps1") -Uninstall
+        if ((Test-Path $InstallerBinary) -or ($InstallerManuals | Where-Object { Test-Path $_ })) {
+            throw "Windows uninstaller retained an installer-owned file"
+        }
+        if (-not (Test-Path $UserDocument) -or -not (Test-Path $InstallerDocuments)) {
+            throw "Windows uninstaller removed a user-owned path"
+        }
+    } finally {
+        $env:LOCALAPPDATA = $PreviousLocalAppData
+        $env:APPDATA = $PreviousAppData
+        $env:HOME = $PreviousHome
+        $env:USERPROFILE = $PreviousUserProfile
+        $env:XDG_STATE_HOME = $PreviousStateHome
+        Remove-Item $InstallerTestRoot -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    Invoke-Native -Label "check Rust formatting" -Program "cargo" `
+        -Arguments @("fmt", "--all", "--check")
+    Invoke-Native -Label "test tagged release tool paths" -Program "python" `
+        -Arguments @("-m", "unittest", "scripts.release.tests.test_source_tool_paths")
+    Invoke-Native -Label "test verification cache and scratch cleanup" -Program "python" `
+        -Arguments @("-m", "unittest", "scripts.checks.tests.test_build_artifacts")
+    Invoke-Native -Label "test installer receipt and cleanup guidance" -Program "python" `
+        -Arguments @("-m", "unittest", "scripts.release.tests.test_installer_guidance")
+    Invoke-Native -Label "test portable Rust packages" -Program "cargo" `
+        -Arguments (@("test", "--locked") + $Packages)
+    Write-Host "`n==> test isolated Windows installer lifecycle"
+    & (Join-Path $Root "scripts/checks/check-windows-installer.ps1") `
+        -Binary (Join-Path $Root "target/debug/mant.exe")
+    Invoke-Native -Label "test optional libmandoc features" -Program "cargo" `
+        -Arguments @("test", "--locked", "--package", "libmandoc-rs", "--all-features")
+    Invoke-Native -Label "test isolated native compatibility combinations" -Program "python" `
+        -Arguments @("-m", "scripts.checks.check_libmandoc_features")
+    Invoke-Native -Label "test real terminal-cell geometry probe" -Program "cargo" `
+        -Arguments @("test", "--locked", "--package", "mant-ui", "--example", "geometry_audit")
+    foreach ($BoundaryPackage in @("mant-codec", "mant-loader")) {
+        Invoke-Native -Label "test Markdown-only $BoundaryPackage" -Program "cargo" `
+            -Arguments @("test", "--locked", "--package", $BoundaryPackage, "--no-default-features")
+        Invoke-Native -Label "test native $BoundaryPackage" -Program "cargo" `
+            -Arguments @("test", "--locked", "--package", $BoundaryPackage, "--no-default-features", "--features", "roff")
+    }
+    # The whole one-shot gate disables incremental compilation, including Clippy.
     Invoke-Native -Label "lint portable Rust packages" -Program "cargo" `
         -Arguments (@("clippy", "--locked") + $Packages + @("--all-targets", "--all-features", "--", "-D", "warnings"))
+    Invoke-Native -Label "check isolated CLI capability combinations" -Program "python" `
+        -Arguments @("-m", "scripts.checks.check_cli_features")
+    & (Join-Path $Root "scripts/build/build-and-smoke.ps1") -BuildProfile $BuildProfile
+
+    Write-Host "`nWindows verification succeeded"
 } finally {
-    if ($null -eq $PreviousCargoIncremental) {
-        Remove-Item Env:CARGO_INCREMENTAL -ErrorAction SilentlyContinue
-    } else {
-        $env:CARGO_INCREMENTAL = $PreviousCargoIncremental
+    foreach ($Name in $PreviousBuildEnvironment.Keys) {
+        [Environment]::SetEnvironmentVariable($Name, $PreviousBuildEnvironment[$Name], "Process")
     }
 }
-Invoke-Native -Label "check isolated CLI capability combinations" -Program "python" `
-    -Arguments @("-m", "scripts.checks.check_cli_features")
-& (Join-Path $Root "scripts/build/build-and-smoke.ps1") -BuildProfile $BuildProfile
-
-Write-Host "`nWindows verification succeeded"

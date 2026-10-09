@@ -22,6 +22,10 @@ concurrency:
 env:
   LIBMANDOC_RS_DENY_WARNINGS: "1"
   RUST_MSRV: 1.88.0
+  # Include the verification profile in dependency-cache keys before restore.
+  CARGO_INCREMENTAL: "0"
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
+  CARGO_PROFILE_TEST_DEBUG: line-tables-only
 
 jobs:
   scope:

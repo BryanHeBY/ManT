@@ -4,6 +4,7 @@
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+source "$ROOT/scripts/checks/build-environment.sh"
 MANIFEST="$ROOT/tests/consumers/codec-markdown/Cargo.toml"
 # Keep all build products in the repository, including this independent fixture.
 export CARGO_TARGET_DIR="$ROOT/target"

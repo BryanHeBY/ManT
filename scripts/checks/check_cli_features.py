@@ -7,6 +7,11 @@ from pathlib import Path
 import subprocess
 import tempfile
 
+if __package__:
+    from .build_environment import verification_environment
+else:
+    from build_environment import verification_environment
+
 
 ROOT = Path(__file__).resolve().parents[2]
 FEATURES = {"roff", "tui", "pager", "mcp", "update"}
@@ -25,7 +30,8 @@ def verify(name, enabled, inputs, log):
         flags += ["--all-features"]
     elif enabled and name != "default":
         flags += ["--features", ",".join(sorted(enabled))]
-    environment = dict(os.environ, CARGO_TARGET_DIR=str(ROOT / "target"))
+    environment = verification_environment()
+    environment["CARGO_TARGET_DIR"] = str(ROOT / "target")
     command = ["cargo", "build", "--locked", "--package", "mant", *flags,
                "--message-format=json-render-diagnostics"]
     build = subprocess.run(command, cwd=ROOT, env=environment, stdout=subprocess.PIPE,

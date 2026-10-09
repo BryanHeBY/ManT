@@ -4,6 +4,7 @@
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+source "$ROOT/scripts/checks/build-environment.sh"
 MANIFEST="$ROOT/tests/consumers/query-ir/Cargo.toml"
 export CARGO_TARGET_DIR="$ROOT/target"
 

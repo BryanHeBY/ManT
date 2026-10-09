@@ -137,6 +137,39 @@ They also run that package with `--all-features`, as does native macOS CI, so
 its default-off reference renderers and Serde contract execute on every
 supported target without enabling unrelated workspace maintenance features.
 
+### Verification disk usage and cleanup
+
+The one-shot verification scripts disable Cargo incremental compilation and
+default dev/test Rust debug information to `line-tables-only`. Backtrace file and
+line information remains available; explicit `CARGO_PROFILE_DEV_DEBUG` and
+`CARGO_PROFILE_TEST_DEBUG` preferences are respected. For example, set them to
+`2` when full Rust debugger information is needed. These settings are scoped to
+verification subprocesses (and restored by the Windows gate); ordinary
+`cargo build` profiles and release settings are unchanged. CI declares the same
+defaults before dependency-cache restoration so profile changes participate in
+cache keys.
+
+Packaged-source verification must compile the extracted archives: checkout
+binaries cannot prove that published files, manifests and tests are complete.
+It reuses the repository's third-party Cargo cache while fresh snapshot paths
+force dirty same-version package sources to be checked. On success, failure or
+ordinary interruption, the packaged gate runs `cargo clean --profile dev` with
+an explicit list of the eleven workspace packages before deleting the scratch
+source tree and generated archives. Shared dependencies, release outputs,
+pre-existing package archives and `target/mandoc-migration/` are retained.
+Packaging output (including Cargo's staging copies) stays inside the gate's
+scratch tree, not the shared cache. Cargo may also remove checkout debug
+artifacts for those same packages; the full gate's final build recreates the
+requested executable. Do not run this gate concurrently with another Cargo
+build. Cleanup failures are reported, not silently treated as a passing gate.
+
+Keep task-owned `/tmp` files and disposable target snapshots inside a scoped
+temporary-directory context or exit/finally cleanup. Abrupt termination such as
+SIGKILL cannot run cleanup handlers. Never sweep unrelated temporary files or
+delete the entire `target/` tree for routine cleanup: it also contains the fixed
+mandoc oracle, locked archive and potentially requested audit evidence. Those
+are not ordinary Cargo cache artifacts.
+
 The default `mant-codec` feature set is independently checked by
 `scripts/checks/check-codec-consumer.sh`. Its separate consumer workspace exercises
 the public Markdown/tldr/encoding APIs and rejects enabled native, protocol,

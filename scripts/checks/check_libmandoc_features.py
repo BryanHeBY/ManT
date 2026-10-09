@@ -6,6 +6,11 @@ import itertools
 from pathlib import Path
 import subprocess
 
+if __package__:
+    from .build_environment import verification_environment
+else:
+    from build_environment import verification_environment
+
 
 ROOT = Path(__file__).resolve().parents[2]
 COMPATIBILITY = ("compat-pandoc", "compat-libbsd", "compat-gnu-eqn")
@@ -38,7 +43,7 @@ def main():
         for target in (["--test", "compatibility"],
                        ["--lib", "matches_the_native_abi"]):
             subprocess.run([*command, *target, "--quiet"], cwd=ROOT,
-                           check=True, timeout=180)
+                           env=verification_environment(), check=True, timeout=180)
 
 
 if __name__ == "__main__":
