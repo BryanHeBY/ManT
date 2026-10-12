@@ -27,8 +27,22 @@ that crate was not published for that change.
 
 ### mant-ui
 
+- Keep command-synopsis context across more-indented, signature-only hard rows
+  after explicit option-group evidence, without leaking it across blank lines,
+  unindented rows or executable/code syntax. Recognize closed option candidates
+  independently of a preceding command while retaining real pipeline, logical
+  operator, quote, escape and substitution distinctions. Use more distinct
+  mauve-purple delimiters/choices and blue operators for both entry and code
+  roles; preserve independently customizable roles and the bounded scan limits.
+- Accent validated parameter, command and configuration-key forms with independent
+  entry delimiter/operator/choice-separator theme roles. Align hardcoded defaults
+  with code accents, protect bound names and quoted/escaped/URL text, and leave
+  prose and generic terms unchanged. Cache source-bound accents for body and
+  complete outline labels; preserve them through wrapping, middle truncation,
+  reference badges and search, with interaction overlays applied last. Keep
+  bounded neutral fallback and unchanged IR, copy text and navigation identities.
 - Accent structural parentheses, brackets, braces and synopsis candidate
-  markers in lavender, with a separate operator role for pipes, redirects and
+  markers in mauve purple, with a separate blue operator role for pipes, redirects and
   other lexical operators. Retain both option alternatives and original
   placeholder markers; keep quoted, commented, escaped and URL content protected.
 - Track bounded nested shell parameter, command, arithmetic and process

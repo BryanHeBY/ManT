@@ -215,7 +215,8 @@ impl App {
         width: u16,
         height: usize,
     ) -> Vec<navigation::NavigationRow> {
-        let tree = navigation::TreePlan::new(self.session.document.navigation());
+        let tree = navigation::TreePlan::new(self.session.document.navigation())
+            .with_entry_labels(self.session.document.entry_labels());
         let expanded = self.effective_expanded();
         let presentation = navigation::search::OutlinePresentation::new(
             if self.outline_search.input.is_open() {

@@ -99,6 +99,22 @@ color only at validated name bindings; identical prose and list markers do not
 inherit it. Source bold/italic/code styling and link underlines compose with
 that color. Code-token accents do not overwrite semantic name roles.
 
+Parameter, command and configuration-key signatures also accent matched
+`[]`, `<>`, `()` and `{}` delimiters in mauve purple (`#CBA6F7`), `=` in blue
+(`#89B4FA`), and single choice separators inside brackets/braces in purple. Independent
+`EntryDelimiter`, `EntryOperator` and `EntrySeparator` theme roles share the
+code palette's defaults without coupling future customization. Only validated
+authored form slices are scanned, not descriptions or ordinary terms; symbols
+inside bound names (such as `operator[]`), quotes, escapes and URLs remain
+protected. Value words retain their source styling rather than acquiring an
+inferred type. Missing/invalid form references and signatures above 64 KiB
+stay undecorated; scans above 64 nested contexts fall back without changing text.
+The body and complete outline labels share the cached source-bound accents.
+Compact name-only labels remain unchanged; form-label accents retain their
+original coordinates through grapheme-safe wrapping, middle truncation and
+reference badges. Selection and search overlays compose last. No public IR
+schema, text, copy/search content or navigation identity is changed.
+
 Preformatted blocks use dependency-free, language-neutral lexical accents.
 Manual displays can mix commands, source code, configuration and synopsis
 notation, so no language is guessed or forced. The shared rules highlight
@@ -111,11 +127,18 @@ builtin or unquoted option/placeholder evidence use the same peach as tldr
 commands; unclassified identifiers stay neutral. Option names use the same
 green as semantic parameter entries, independently of teal headings.
 Unquoted `()`, `[]`, `{}`, Git-style choice separators and synopsis `<values>`
-delimiters use lavender. Open and close markers share one role, not rainbow
-nesting colors. Operators, pipes and redirects have a separate non-bold mauve
+delimiters use mauve purple. Open and close markers share one role, not rainbow
+nesting colors. Operators, real pipelines and redirects have a separate non-bold blue
 role. Angle placeholders require command/option context, rather than treating
 C++ template brackets or redirection operators as editable values. Paths and
 qualified names stop before structural brackets; URLs remain opaque atoms.
+Closed, unquoted `[-p | --paginate]` candidates supply their own option evidence.
+A command heading with explicit option groups can retain placeholder context on
+more-indented, signature-only continuation rows, including a final
+`<command> [<args>]`. Blank lines, unindented rows and executable/code syntax
+end that scope. Candidate pipes do not override `||`, `|&`, shell tests or pipes
+inside command/arithmetic substitutions; this does not make arbitrary blocks
+shell programs or require a language tag.
 `${...}`, `$(...)`, `$((...))` and process substitutions retain nested quote
 contexts and symmetric delimiter accents. Dollar/variable names stay pink,
 parameter modifiers use the operator role and fallback words use string style.

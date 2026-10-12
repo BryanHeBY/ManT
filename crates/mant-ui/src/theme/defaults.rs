@@ -62,6 +62,9 @@ const fn entries(theme: &mut Theme) {
     theme.set_style(Role::Variable, Style::new().fg(PINK));
     theme.set_style(Role::Value, Style::new().fg(BLUE));
     theme.set_style(Role::Term, Style::new().fg(TEXT));
+    theme.set_style(Role::EntryDelimiter, Style::new().fg(MAUVE));
+    theme.set_style(Role::EntryOperator, Style::new().fg(BLUE));
+    theme.set_style(Role::EntrySeparator, Style::new().fg(MAUVE));
 }
 
 const fn outline(theme: &mut Theme) {
@@ -99,8 +102,8 @@ const fn code(theme: &mut Theme) {
     theme.set_style(Role::CodeVariable, Style::new().fg(PINK));
     theme.set_style(Role::CodePrompt, Style::new().fg(SUBTEXT));
     theme.set_style(Role::CodePlaceholder, Style::new().fg(TEXT));
-    theme.set_style(Role::CodeDelimiter, Style::new().fg(LAVENDER));
-    theme.set_style(Role::CodeOperator, Style::new().fg(MAUVE));
+    theme.set_style(Role::CodeDelimiter, Style::new().fg(MAUVE));
+    theme.set_style(Role::CodeOperator, Style::new().fg(BLUE));
     theme.set_style(Role::CodeNumber, Style::new().fg(YELLOW));
     theme.set_style(
         Role::CodeKeyword,

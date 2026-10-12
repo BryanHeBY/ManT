@@ -159,7 +159,7 @@ fn nested_link_breaks_preserve_row_origins_and_reference_locations() {
         },
         Style::default(),
         None,
-        &[],
+        crate::document::entries::InlineStyles::default(),
         false,
         &HashMap::default(),
     );

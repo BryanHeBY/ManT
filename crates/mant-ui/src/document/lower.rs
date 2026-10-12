@@ -8,7 +8,7 @@ mod sections;
 mod table;
 mod tldr;
 pub(super) struct DocumentBuilder<'a> {
-    pub(super) entry_styles: Arc<mant_render::EntryStyleMap<'a>>,
+    pub(super) entry_styles: Arc<super::entries::EntryStyles<'a>>,
     pub(super) label: String,
     pub(super) address: Option<DocumentAddress>,
     pub(super) lines: Vec<LogicalLine>,

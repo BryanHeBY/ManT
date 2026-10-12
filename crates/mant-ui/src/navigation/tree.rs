@@ -13,6 +13,7 @@ struct Branch {
 
 pub(crate) struct TreePlan<'a> {
     pub(super) nodes: &'a [NavNode],
+    entry_labels: Option<&'a crate::entry::EntryLabels>,
     branches: Vec<Branch>,
 }
 
@@ -61,7 +62,29 @@ impl<'a> TreePlan<'a> {
             }
             ancestors.push(index);
         }
-        Self { nodes, branches }
+        Self {
+            nodes,
+            branches,
+            entry_labels: None,
+        }
+    }
+
+    pub(crate) fn with_entry_labels(mut self, labels: &'a crate::entry::EntryLabels) -> Self {
+        self.entry_labels = Some(labels);
+        self
+    }
+
+    pub(super) fn label_styles(
+        &self,
+        index: usize,
+        text: &str,
+    ) -> Option<&crate::entry::LabelStyles> {
+        if !matches!(self.nodes[index].kind, NavKind::Entry(_)) {
+            return None;
+        }
+        self.entry_labels?
+            .get(&self.nodes[index].id)
+            .filter(|label| label.text == text)
     }
 
     #[cfg(test)]

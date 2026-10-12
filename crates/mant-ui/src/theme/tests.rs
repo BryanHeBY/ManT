@@ -75,8 +75,8 @@ fn code_commands_options_and_synopsis_markers_follow_semantic_roles() {
         style(StyleRole::CodeCommand).fg,
         style(StyleRole::TldrCommand).fg
     );
-    assert_eq!(style(StyleRole::CodeDelimiter).fg, Some(LAVENDER));
-    assert_eq!(style(StyleRole::CodeOperator).fg, Some(MAUVE));
+    assert_eq!(style(StyleRole::CodeDelimiter).fg, Some(MAUVE));
+    assert_eq!(style(StyleRole::CodeOperator).fg, Some(BLUE));
     assert!(
         !style(StyleRole::CodeOperator)
             .add_modifier
@@ -89,6 +89,39 @@ fn code_commands_options_and_synopsis_markers_follow_semantic_roles() {
     assert_eq!(
         style(StyleRole::CodePlaceholder).fg,
         style(StyleRole::Text).fg
+    );
+}
+
+#[test]
+fn entry_structure_roles_align_by_default_but_customize_independently() {
+    for (entry, code) in [
+        (StyleRole::EntryDelimiter, StyleRole::CodeDelimiter),
+        (StyleRole::EntryOperator, StyleRole::CodeOperator),
+        (StyleRole::EntrySeparator, StyleRole::CodeDelimiter),
+    ] {
+        assert_eq!(style(entry), style(code));
+    }
+    let mut custom = DEFAULT_THEME.clone();
+    let delimiter = Style::new().fg(Color::Red).add_modifier(Modifier::ITALIC);
+    custom.set_style(StyleRole::EntryDelimiter, delimiter);
+    assert_eq!(custom.style(StyleRole::EntryDelimiter), delimiter);
+    assert_eq!(
+        custom.style(StyleRole::CodeDelimiter),
+        style(StyleRole::CodeDelimiter)
+    );
+    assert_eq!(
+        custom.style(StyleRole::Parameter),
+        style(StyleRole::Parameter)
+    );
+    let accent = custom
+        .navigation_style(NavKind::Entry(EntryKind::Command), false)
+        .patch(delimiter);
+    let selected = custom.navigation_overlay(accent, NavKind::Entry(EntryKind::Command), true);
+    assert_eq!(selected.fg, Some(SELECTED_TEXT));
+    assert!(
+        selected
+            .add_modifier
+            .contains(Modifier::ITALIC | Modifier::BOLD)
     );
 }
 
@@ -130,7 +163,7 @@ fn code_style_sets_resolve_the_same_semantics_through_custom_theme_values() {
     }
     assert_eq!(
         DEFAULT_THEME.style(StyleRole::CodeDelimiter).fg,
-        Some(LAVENDER)
+        Some(MAUVE)
     );
 }
 

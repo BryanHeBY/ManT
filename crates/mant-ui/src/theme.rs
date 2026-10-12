@@ -110,7 +110,7 @@ impl Theme {
         self.navigation_overlay(style, kind, selected)
     }
 
-    fn navigation_overlay(&self, style: Style, kind: NavKind, selected: bool) -> Style {
+    pub(crate) fn navigation_overlay(&self, style: Style, kind: NavKind, selected: bool) -> Style {
         if selected {
             self.interact(
                 style,

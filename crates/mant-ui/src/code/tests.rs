@@ -118,6 +118,70 @@ fn brackets_candidates_and_operators_have_distinct_semantic_roles() {
 }
 
 #[test]
+fn independent_option_candidates_do_not_need_prior_command_evidence() {
+    check(
+        "[-p | --paginate | -P | --no-pager] [--output=<path>]",
+        &[
+            ("|", Some(StyleRole::CodeDelimiter)),
+            ("<path>", Some(StyleRole::CodeDelimiter)),
+            ("path", Some(StyleRole::CodePlaceholder)),
+            ("--paginate", Some(StyleRole::CodeOption)),
+        ],
+    );
+    for source in [
+        "[[ a | b ]]",
+        "[ -x file | -y file ]",
+        "[--foo |& cat]",
+        "echo \\[--foo|--bar\\]",
+        "int value[] = { [-x | -y] };",
+        "tool [--run $(printf '%s' x | cat)]",
+        "tool [--run $((1 | 2))]",
+    ] {
+        check(source, &[("|", Some(StyleRole::CodeOperator))]);
+    }
+    check(
+        "tool [--first || --second]",
+        &[("||", Some(StyleRole::CodeOperator))],
+    );
+}
+
+#[test]
+fn closed_synopsis_groups_keep_context_only_on_signature_continuations() {
+    check(
+        "$ tool [-p | --paginate]\n    <prompt-args>",
+        &[
+            ("$", Some(StyleRole::CodePrompt)),
+            ("<prompt-args>", Some(StyleRole::CodeDelimiter)),
+        ],
+    );
+    let source = "git [-v | --version] [-C <path>]\n    [-p | --paginate]\n    [--git-dir=<repo>]\n    <command> [<args>]\n\n    <detached>\ntemplate <typename T>\n";
+    check(
+        source,
+        &[
+            ("| --paginate", Some(StyleRole::CodeDelimiter)),
+            ("<repo>", Some(StyleRole::CodeDelimiter)),
+            ("<command>", Some(StyleRole::CodeDelimiter)),
+            ("command", Some(StyleRole::CodePlaceholder)),
+            ("<args>", Some(StyleRole::CodeDelimiter)),
+            ("<detached>", Some(StyleRole::CodeOperator)),
+            ("<typename", Some(StyleRole::CodeOperator)),
+        ],
+    );
+    for source in [
+        "git [-v]\n<same-indent>",
+        "\tgit [-v]\n    <mixed-indent>",
+        "git [-v]\n    printf '%s' x\n    <after-command>",
+        "git [-v]\n    cat < input | grep x\n    <after-pipeline>",
+        "git [-v]\n    # comment\n    <after-comment>",
+        "/*\ngit [-v]\n*/\n    <after-comment>",
+        "\"\ngit [-v]\n\"\n    <after-quote>",
+    ] {
+        let needle = source.lines().last().unwrap().trim();
+        check(source, &[(needle, Some(StyleRole::CodeOperator))]);
+    }
+}
+
+#[test]
 fn dollar_markers_and_expansion_delimiters_are_independent_and_symmetric() {
     check(
         "echo ${10} $((count-1)) $(echo /* //path)",

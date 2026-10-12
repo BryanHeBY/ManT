@@ -30,12 +30,25 @@ pub(super) fn accents(value: &str) -> Vec<Accent> {
         limited: false,
     };
     let mut offset = 0;
+    let synopsis_rows = super::synopsis::rows(value);
+    let mut synopsis_index = 0;
     let mut command_line = false;
     let mut row_end = 0;
     while offset < value.len() && !scanner.limited {
         if offset >= row_end {
-            // Only synopsis candidates carry command evidence across hard rows.
+            // Unclosed candidates retain their context. Closed groups only
+            // carry evidence into validated, indented synopsis continuations.
             command_line &= scanner.optional > 0;
+            while synopsis_rows
+                .get(synopsis_index)
+                .is_some_and(|row| row.end <= offset)
+            {
+                synopsis_index += 1;
+            }
+            command_line |= scanner.frames.is_empty()
+                && synopsis_rows
+                    .get(synopsis_index)
+                    .is_some_and(|row| row.contains(&offset));
             row_end = value[offset..]
                 .find('\n')
                 .map_or(value.len(), |end| offset + end + 1);
@@ -171,7 +184,10 @@ impl Scanner<'_> {
             self.consume_head();
         } else if matches!(first, '(' | '[' | '{') {
             let optional = first == '['
-                && *command_line
+                && matches!(mode, Mode::Normal)
+                && (*command_line
+                    || (self.frames.is_empty() || self.optional_context())
+                        && super::synopsis::candidate(rest))
                 && !rest.starts_with("[[")
                 && !value[..offset].ends_with('[')
                 && (boundary(value, offset) || self.optional > 0);
@@ -187,7 +203,11 @@ impl Scanner<'_> {
         } else if matches!(first, ')' | ']' | '}') {
             self.close(first);
             role = Some(StyleRole::CodeDelimiter);
-        } else if first == '|' && self.optional > 0 && !rest.starts_with("||") {
+        } else if first == '|'
+            && self.optional_context()
+            && !rest.starts_with("||")
+            && !rest.starts_with("|&")
+        {
             role = Some(StyleRole::CodeDelimiter);
         } else if !parameter
             && !matches!(mode, Mode::Arithmetic)
@@ -217,6 +237,13 @@ impl Scanner<'_> {
                 Frame::Quote(_) => Some(Mode::Normal),
             })
             .unwrap_or(Mode::Normal)
+    }
+
+    fn optional_context(&self) -> bool {
+        matches!(
+            self.frames.last(),
+            Some(Frame::Group { optional: true, .. })
+        )
     }
 
     fn push_frame(&mut self, frame: Frame) {

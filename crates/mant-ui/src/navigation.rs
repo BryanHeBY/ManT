@@ -86,6 +86,7 @@ pub(crate) fn rows_with_references(
                 full_labels,
                 width,
                 &prefixes,
+                plan,
             );
             let Some(badge) = badges.get(&node.id) else {
                 return lines;
@@ -102,7 +103,7 @@ pub(crate) fn rows_with_references(
                 first[0].style,
             );
             let continuation = Span::styled(prefixes.continuation, prefix.style);
-            let style = first[1].style;
+            let style = theme::navigation_style(node.kind, *index == selected);
             let available = width
                 .saturating_sub(prefix.width().max(continuation.width()))
                 .max(1);
@@ -115,10 +116,20 @@ pub(crate) fn rows_with_references(
             let expanded_label = *index == selected || full_labels;
             let (title, badge) = reference_title_parts(&title, &badge, available, expanded_label);
             let link_style = theme::navigation_reference_style(node.kind, *index == selected);
+            let original = sanitize_terminal_text(if expanded_label {
+                node.full_title.as_deref().unwrap_or(&node.title)
+            } else {
+                &node.title
+            });
+            let label = plan.label_styles(*index, &original);
+            let mut parts = label_spans(&title, label, node.kind, *index == selected);
+            parts.push(Span::styled(badge, link_style));
             let mut current = vec![prefix.clone()];
             let mut used = 0;
             lines.clear();
-            for (text, role) in [(title, style), (badge, link_style)] {
+            for part in parts {
+                let text = part.content;
+                let role = part.style;
                 let mut run = String::new();
                 // Ratatui segments each Span independently. Keep contiguous
                 // style runs intact and break only at the same grapheme
@@ -158,21 +169,22 @@ fn reference_title_parts(
     badge: &str,
     available: usize,
     expanded: bool,
-) -> (String, String) {
+) -> (Vec<LabelPiece>, String) {
     if expanded {
-        return (title.to_owned(), format!(" {badge}"));
+        return (vec![LabelPiece::source(title, 0)], format!(" {badge}"));
     }
     // Once a deep tree leaves fewer than three cells there is no room for
     // owner + separator + reference marker. Preserve the explicit capability,
     // not a second compact row containing only an invisible separator.
     if available < 3 {
-        return (String::new(), prefix_columns(badge, available).to_owned());
+        return (Vec::new(), prefix_columns(badge, available).to_owned());
     }
-    let title = truncate_middle(
+    let title = truncate_label(
         title,
         available.saturating_sub((badge.width() + 1).min(available / 2) + 1),
     );
-    let badge = prefix_columns(badge, available.saturating_sub(title.width() + 1));
+    let used = title.iter().map(|piece| piece.text.width()).sum::<usize>();
+    let badge = prefix_columns(badge, available.saturating_sub(used + 1));
     (title, format!(" {badge}"))
 }
 
@@ -223,6 +235,7 @@ fn planned_node_lines(
         full_labels,
         width,
         &prefixes,
+        plan,
     )
 }
 
@@ -233,6 +246,7 @@ fn node_lines_with_prefixes(
     full_labels: bool,
     width: usize,
     prefixes: &tree::Prefixes,
+    plan: &TreePlan<'_>,
 ) -> Vec<NavigationRow> {
     if width == 0 {
         return vec![NavigationRow {
@@ -249,6 +263,7 @@ fn node_lines_with_prefixes(
     } else {
         &node.title
     });
+    let label = plan.label_styles(node_index, &title);
     let first_title_width = width.saturating_sub(prefix.width()).max(1);
     let wrapped_title_width = width
         .saturating_sub(prefix.width().max(continuation_prefix.width()))
@@ -256,7 +271,7 @@ fn node_lines_with_prefixes(
     let titles = if selected || full_labels {
         wrap_to_width(&title, wrapped_title_width)
     } else {
-        vec![truncate_middle(&title, first_title_width)]
+        vec![truncate_label(&title, first_title_width)]
     };
 
     titles
@@ -268,14 +283,16 @@ fn node_lines_with_prefixes(
             } else {
                 continuation_prefix.clone()
             };
-            let title = if title.width() > width.saturating_sub(line_prefix.width()) {
+            let title_width = title.iter().map(|piece| piece.text.width()).sum::<usize>();
+            let title = if title_width > width.saturating_sub(line_prefix.width()) {
                 // Only chrome substitutes a grapheme wider than its whole cell
                 // budget; the original document/search text is unchanged.
-                "�".to_owned()
+                vec![LabelPiece::generated("�")]
             } else {
                 title
             };
-            let used = line_prefix.width() + title.width();
+            let used =
+                line_prefix.width() + title.iter().map(|piece| piece.text.width()).sum::<usize>();
             let prefix_role = if selected {
                 if line_index == 0 {
                     theme::StyleRole::TreeFocus
@@ -285,25 +302,24 @@ fn node_lines_with_prefixes(
             } else {
                 theme::StyleRole::TreeGuide
             };
+            let mut spans = vec![Span::styled(
+                line_prefix,
+                Style {
+                    bg: style.bg,
+                    ..theme::style(prefix_role)
+                },
+            )];
+            spans.extend(label_spans(&title, label, node.kind, selected));
+            spans.push(Span::styled(
+                " ".repeat(width.saturating_sub(used)),
+                Style {
+                    bg: style.bg,
+                    ..Style::default()
+                },
+            ));
             NavigationRow {
                 node_index,
-                line: Line::from(vec![
-                    Span::styled(
-                        line_prefix,
-                        Style {
-                            bg: style.bg,
-                            ..theme::style(prefix_role)
-                        },
-                    ),
-                    Span::styled(title, style),
-                    Span::styled(
-                        " ".repeat(width.saturating_sub(used)),
-                        Style {
-                            bg: style.bg,
-                            ..Style::default()
-                        },
-                    ),
-                ]),
+                line: Line::from(spans),
             }
         })
         .collect()
@@ -316,12 +332,86 @@ fn bounded_tree_prefix(prefix: &str, width: usize) -> String {
 }
 
 pub(crate) fn truncate_middle(value: &str, width: usize) -> String {
+    truncate_label(value, width)
+        .into_iter()
+        .map(|piece| piece.text)
+        .collect()
+}
+
+/// Source byte offsets survive wrapping/truncation; generated chrome has none.
+struct LabelPiece {
+    text: String,
+    byte: Option<usize>,
+}
+
+impl LabelPiece {
+    fn source(text: &str, byte: usize) -> Self {
+        Self {
+            text: text.to_owned(),
+            byte: Some(byte),
+        }
+    }
+    fn generated(text: &str) -> Self {
+        Self {
+            text: text.to_owned(),
+            byte: None,
+        }
+    }
+}
+
+fn label_spans(
+    pieces: &[LabelPiece],
+    label: Option<&crate::entry::LabelStyles>,
+    kind: crate::NavKind,
+    selected: bool,
+) -> Vec<Span<'static>> {
+    if label.is_none() {
+        return vec![Span::styled(
+            pieces
+                .iter()
+                .map(|piece| piece.text.as_str())
+                .collect::<String>(),
+            theme::navigation_style(kind, selected),
+        )];
+    }
+    let base = theme::navigation_style(kind, false);
+    let mut spans: Vec<Span<'static>> = Vec::new();
+    for piece in pieces {
+        let mut byte = piece.byte;
+        for glyph in graphemes(&piece.text) {
+            let style = label
+                .and_then(|label| byte.and_then(|byte| label.role_at(byte)))
+                .map_or(base, |role| base.patch(theme::style(role)));
+            let style = theme::DEFAULT_THEME.navigation_overlay(style, kind, selected);
+            if let Some(last) = spans.last_mut()
+                && last.style == style
+            {
+                last.content.to_mut().push_str(glyph.text());
+            } else {
+                spans.push(Span::styled(glyph.text().to_owned(), style));
+            }
+            byte = byte.map(|byte| byte + glyph.text().len());
+        }
+    }
+    // Empty labels still retain the ordinary label slot for existing chrome.
+    if spans.is_empty() {
+        spans.push(Span::styled(
+            String::new(),
+            theme::navigation_style(kind, selected),
+        ));
+    }
+    spans
+}
+
+fn truncate_label(value: &str, width: usize) -> Vec<LabelPiece> {
     if value.width() <= width {
-        return value.to_owned();
+        return vec![LabelPiece::source(value, 0)];
     }
     let marker_width = TRUNCATION_MARKER.width();
     if width <= marker_width {
-        return TRUNCATION_MARKER.chars().take(width).collect();
+        return vec![LabelPiece::generated(
+            &TRUNCATION_MARKER.chars().take(width).collect::<String>(),
+        )];
     }
 
     // Manual outlines often contain many headings with the same opening words,
@@ -330,31 +420,46 @@ pub(crate) fn truncate_middle(value: &str, width: usize) -> String {
     let remaining = width - marker_width;
     let prefix_width = remaining / 3;
     let suffix_width = remaining - prefix_width;
-    format!(
-        "{}{}{}",
-        prefix_columns(value, prefix_width),
-        TRUNCATION_MARKER,
-        suffix_columns(value, suffix_width)
-    )
+    let suffix = suffix_columns(value, suffix_width);
+    vec![
+        LabelPiece::source(prefix_columns(value, prefix_width), 0),
+        LabelPiece::generated(TRUNCATION_MARKER),
+        LabelPiece::source(suffix, value.len() - suffix.len()),
+    ]
 }
 
-fn wrap_to_width(value: &str, width: usize) -> Vec<String> {
+fn wrap_to_width(value: &str, width: usize) -> Vec<Vec<LabelPiece>> {
     if value.width() <= width {
-        return vec![value.to_owned()];
+        return vec![vec![LabelPiece::source(value, 0)]];
     }
     let mut lines = Vec::new();
-    let mut current = String::new();
+    let mut current = Vec::new();
+    let mut used = 0;
+    let mut byte = 0;
     for word in value.split_whitespace() {
+        // split_whitespace removes/normalizes spaces, but no name/text search
+        // is needed to keep the source coordinates of each real word.
+        while value[byte..]
+            .chars()
+            .next()
+            .is_some_and(char::is_whitespace)
+        {
+            byte += value[byte..].chars().next().expect("whitespace").len_utf8();
+        }
+        let word_byte = byte;
+        byte += word.len();
         let separator = usize::from(!current.is_empty());
-        if current.width() + separator + word.width() <= width {
+        if used + separator + word.width() <= width {
             if separator == 1 {
-                current.push(' ');
+                current.push(LabelPiece::generated(" "));
             }
-            current.push_str(word);
+            current.push(LabelPiece::source(word, word_byte));
+            used += separator + word.width();
             continue;
         }
         if !current.is_empty() {
             lines.push(std::mem::take(&mut current));
+            used = 0;
         }
         let mut remaining = word;
         while remaining.width() > width {
@@ -364,19 +469,28 @@ fn wrap_to_width(value: &str, width: usize) -> Vec<String> {
                     break;
                 };
                 remaining = &remaining[grapheme.text().len()..];
-                lines.push("�".to_owned());
+                lines.push(vec![LabelPiece::generated("�")]);
                 continue;
             }
-            lines.push(remaining[..split].to_owned());
+            lines.push(vec![LabelPiece::source(
+                &remaining[..split],
+                word_byte + word.len() - remaining.len(),
+            )]);
             remaining = &remaining[split..];
         }
-        current.push_str(remaining);
+        if !remaining.is_empty() {
+            current.push(LabelPiece::source(
+                remaining,
+                word_byte + word.len() - remaining.len(),
+            ));
+            used += remaining.width();
+        }
     }
     if !current.is_empty() {
         lines.push(current);
     }
     if lines.is_empty() {
-        lines.push(String::new());
+        lines.push(vec![LabelPiece::generated("")]);
     }
     lines
 }

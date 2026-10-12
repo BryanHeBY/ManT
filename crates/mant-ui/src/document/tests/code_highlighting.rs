@@ -47,7 +47,7 @@ fn code_state_crosses_authored_styles_links_anchors_and_structural_breaks() {
         },
         theme::style(theme::StyleRole::Text),
         None,
-        &names,
+        names.as_slice().into(),
         true,
         &HashMap::default(),
     );
@@ -164,7 +164,7 @@ fn long_inline_code_blocks_keep_authored_styles_on_neutral_fallback() {
         &nodes,
         theme::style(theme::StyleRole::Text),
         None,
-        &[],
+        crate::document::entries::InlineStyles::default(),
         true,
         &HashMap::default(),
     );
@@ -266,7 +266,8 @@ fn structural_accents_keep_source_markup_links_copy_and_reflow_unchanged() {
                 .lines
                 .iter()
                 .flat_map(|line| &line.spans)
-                .any(|span| span.style.fg == Some(theme::LAVENDER))
+                .any(|span| span.style.fg == Some(theme::MAUVE)
+                    && span.content.contains(['(', ')', '[', ']', '{', '}']))
         );
         let command = &rendered.search("printf")[0];
         let source_style = rendered.text.lines[command.row]
@@ -281,6 +282,45 @@ fn structural_accents_keep_source_markup_links_copy_and_reflow_unchanged() {
         assert_eq!(view.render(width).text, rendered.text);
     }
     assert_eq!(content, before);
+}
+
+#[test]
+fn native_multiline_synopsis_uses_the_same_structure_palette_as_entry_forms() {
+    // Run this exact input with the pinned oracle before writing assertions.
+    // CVS man_term.c print_man_node keeps NODE_NOFILL/NODE_LINE hard rows;
+    // term.c term_word retains literal markers. UI accents change no text.
+    let source = b".TH SYNOPSIS 1\n.SH SYNOPSIS\n.nf\ngit [-v | --version] [-C <path>]\n    [-p | --paginate | -P | --no-pager]\n    [--git-dir=<path>]\n    <command> [<args>]\n.fi\n.SH OPTIONS\n.TP\n.B --git-dir=<path>\nSelect the repository.\n";
+    let content = mant_loader::load_roff_bytes(source).unwrap();
+    let view = DocumentView::new(&content);
+    let rendered = view.render(120);
+    for (needle, symbol, color) in [
+        ("[-p | --paginate | -P | --no-pager]", '|', theme::MAUVE),
+        ("<command> [<args>]", '<', theme::MAUVE),
+        ("[--git-dir=<path>]", '=', theme::BLUE),
+        ("--git-dir=<path>", '>', theme::MAUVE),
+    ] {
+        for hit in rendered.search(needle) {
+            let line = &rendered.text.lines[hit.row];
+            let mut byte = 0;
+            let visible = line.to_string();
+            let at = visible.find(needle).unwrap() + needle.find(symbol).unwrap();
+            let styled = line
+                .spans
+                .iter()
+                .find(|span| {
+                    let contains = (byte..byte + span.content.len()).contains(&at);
+                    byte += span.content.len();
+                    contains
+                })
+                .unwrap();
+            assert_eq!(styled.style.fg, Some(color), "{visible}");
+        }
+    }
+    for width in [12, 40, 120] {
+        let rendered = view.render(width);
+        assert_eq!(rendered.search("<command> [<args>]").len(), 1);
+        assert_eq!(rendered.text, view.render(width).text);
+    }
 }
 
 #[test]

@@ -188,8 +188,19 @@ impl<'a> OutlinePresentation<'a> {
             theme::InteractionRole::SearchMatch
         };
         let mut runs = Vec::new();
+        let decoration = LabelDecoration {
+            label: plan.label_styles(hit.node_index, &hit.label),
+            kind: node.kind,
+            selected,
+        };
         if selected || full_labels {
-            runs = complete_labels(hit, node.kind == NavKind::Reference, style, role);
+            runs = complete_labels(
+                hit,
+                node.kind == NavKind::Reference,
+                style,
+                role,
+                decoration,
+            );
         } else if let Some(field) = hit.fields.first() {
             runs.push(compact_context(
                 field,
@@ -197,6 +208,7 @@ impl<'a> OutlinePresentation<'a> {
                 available,
                 style,
                 role,
+                decoration,
             ));
         }
         if let Some(badge) = badges.get(&node.id)
@@ -225,6 +237,7 @@ fn complete_labels(
     reference: bool,
     style: Style,
     role: theme::InteractionRole,
+    decoration: LabelDecoration<'_>,
 ) -> Vec<Vec<(String, Style)>> {
     let label_ranges = hit
         .fields
@@ -241,6 +254,7 @@ fn complete_labels(
         style,
         role,
         0..hit.label.len(),
+        decoration,
     ));
     let mut runs = vec![main];
     for field in &hit.fields {
@@ -257,6 +271,7 @@ fn complete_labels(
             style,
             role,
             0..field.field.text.len(),
+            decoration.for_text(&field.field.text),
         ));
         runs.push(run);
     }
@@ -269,6 +284,7 @@ fn compact_context(
     available: usize,
     style: Style,
     role: theme::InteractionRole,
+    decoration: LabelDecoration<'_>,
 ) -> Vec<(String, Style)> {
     let budget = if field.field.target || reference {
         available.saturating_sub(2).max(1)
@@ -308,6 +324,7 @@ fn compact_context(
         style,
         role,
         range.clone(),
+        decoration.for_text(&field.field.text),
     ));
     if trailing {
         run.push(("…".to_owned(), style));
@@ -354,6 +371,7 @@ fn styled_graphemes(
     style: Style,
     role: theme::InteractionRole,
     slice: Range<usize>,
+    decoration: LabelDecoration<'_>,
 ) -> Vec<(String, Style)> {
     let mut byte = slice.start;
     let mut range_index = ranges.partition_point(|range| range.end <= byte);
@@ -369,6 +387,7 @@ fn styled_graphemes(
             let matched = ranges
                 .get(range_index)
                 .is_some_and(|range| range.start < end && range.end > byte);
+            let style = decoration.style_at(byte, style);
             byte = end;
             (
                 glyph.text().to_owned(),
@@ -380,6 +399,31 @@ fn styled_graphemes(
             )
         })
         .collect()
+}
+
+#[derive(Clone, Copy)]
+struct LabelDecoration<'a> {
+    label: Option<&'a crate::entry::LabelStyles>,
+    kind: NavKind,
+    selected: bool,
+}
+
+impl LabelDecoration<'_> {
+    fn for_text(self, text: &str) -> Self {
+        Self {
+            label: self.label.filter(|label| label.text == text),
+            ..self
+        }
+    }
+
+    fn style_at(self, byte: usize, base: Style) -> Style {
+        self.label
+            .and_then(|label| label.role_at(byte))
+            .map_or(base, |role| {
+                let style = theme::navigation_style(self.kind, false).patch(theme::style(role));
+                theme::DEFAULT_THEME.navigation_overlay(style, self.kind, self.selected)
+            })
+    }
 }
 
 fn wrap_runs(

@@ -13,6 +13,7 @@ use crate::theme::{CodeStyles, StyleRole};
 mod command;
 mod keywords;
 mod scan;
+mod synopsis;
 
 pub(crate) const MAX_BLOCK_BYTES: usize = 64 * 1024;
 

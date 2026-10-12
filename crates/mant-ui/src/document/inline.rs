@@ -85,7 +85,7 @@ pub(super) fn styled_display_inline_lines(
         nodes,
         style,
         current_address,
-        names,
+        names.into(),
         code,
         &std::collections::HashMap::default(),
     )
@@ -95,12 +95,12 @@ pub(super) fn styled_reference_inline_lines(
     nodes: &[Inline],
     style: Style,
     current_address: Option<&DocumentAddress>,
-    names: &[mant_render::InlineNameRange],
+    decorations: super::entries::InlineStyles<'_>,
     code: bool,
     origins: &super::references::ReferenceOrigins,
 ) -> Vec<StyledInlineLine> {
     let mut lines = vec![StyledInlineLine::default()];
-    append_inline(nodes, style, current_address, names, code, &mut lines);
+    append_inline(nodes, style, current_address, decorations, code, &mut lines);
     if !origins.is_empty() {
         reference_marks(nodes, origins, &mut lines, &mut 0, &mut 0);
     }
@@ -114,7 +114,7 @@ pub(super) fn styled_reference_content_lines(
     content: mant_ir::InlineContentRef<'_>,
     style: Style,
     current_address: Option<&DocumentAddress>,
-    names: &[mant_render::InlineNameRange],
+    decorations: super::entries::InlineStyles<'_>,
     code: bool,
     origins: &super::references::ReferenceOrigins,
 ) -> Vec<StyledInlineLine> {
@@ -122,7 +122,7 @@ pub(super) fn styled_reference_content_lines(
         content.content,
         style,
         current_address,
-        names,
+        decorations,
         code,
         origins,
     );
@@ -228,7 +228,7 @@ fn append_inline(
     nodes: &[Inline],
     style: Style,
     current_address: Option<&DocumentAddress>,
-    names: &[mant_render::InlineNameRange],
+    decorations: super::entries::InlineStyles<'_>,
     code: bool,
     lines: &mut Vec<StyledInlineLine>,
 ) {
@@ -250,7 +250,8 @@ fn append_inline(
     } else {
         None
     };
-    mant_render::visit_inline_text(nodes, names, |source, target, text| {
+    let mut entry = crate::entry::AccentCursor::new(decorations.accents);
+    mant_render::visit_inline_text(nodes, decorations.names, |source, target, text| {
         let first_line = lines.len() - 1;
         let first_scalar = spans_scalars(&lines[first_line].spans);
         if let Some(code) = &mut code {
@@ -267,14 +268,22 @@ fn append_inline(
                 ..source
             };
             for span in code.spans(text, base, theme::DEFAULT_THEME.code_styles()) {
-                append_text(
+                for decorated in entry.spans(
                     &span.content,
                     theme::inline_style(span.style, authored),
-                    lines,
-                );
+                    &theme::DEFAULT_THEME,
+                ) {
+                    append_text(&decorated.content, decorated.style, lines);
+                }
             }
         } else {
-            append_text(text, theme::inline_style(style, source), lines);
+            for span in entry.spans(
+                text,
+                theme::inline_style(style, source),
+                &theme::DEFAULT_THEME,
+            ) {
+                append_text(&span.content, span.style, lines);
+            }
         }
         if let Some(target) = target.and_then(|target| local_link_target(target, current_address)) {
             record_link(lines, first_line, first_scalar, &target);

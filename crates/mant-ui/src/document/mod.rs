@@ -4,6 +4,7 @@
 //! section navigation, scroll synchronization, links, and future search ranges
 //! can all address the exact rows that Ratatui renders.
 
+mod entries;
 mod inline;
 mod lower;
 mod navigation;
@@ -69,6 +70,18 @@ fn source_kind_label(document: &mant_ir::Document) -> &'static str {
     }
 }
 
+fn terminal_label(bundle: &ResolvedContent) -> String {
+    bundle.document.as_ref().map_or_else(
+        || bundle.label.clone(),
+        |document| {
+            document.meta.manual_section.as_ref().map_or_else(
+                || bundle.label.clone(),
+                |section| format!("{}({section})", bundle.label),
+            )
+        },
+    )
+}
+
 /// One addressable node displayed in the outline sidebar.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NavNode {
@@ -127,6 +140,7 @@ pub struct DocumentView {
     content_complete: bool,
     lines: Vec<LogicalLine>,
     navigation: Vec<NavNode>,
+    entry_labels: crate::entry::EntryLabels,
     anchors: HashMap<String, usize>,
     targets: Arc<targets::TargetIndex>,
     references: Vec<references::ReferenceRecord>,
@@ -232,15 +246,7 @@ impl DocumentView {
             .document
             .as_ref()
             .map_or(0, |document| document.sections.len());
-        let terminal_label = bundle.document.as_ref().map_or_else(
-            || bundle.label.clone(),
-            |document| {
-                document.meta.manual_section.as_ref().map_or_else(
-                    || bundle.label.clone(),
-                    |section| format!("{}({section})", bundle.label),
-                )
-            },
-        );
+        let terminal_label = terminal_label(bundle);
         let section_count = bundle
             .document
             .as_ref()
@@ -259,7 +265,7 @@ impl DocumentView {
         if let Some(document) = &bundle.document {
             let semantic_index = SemanticIndex::build(document);
             references.check_source_owners(document, &semantic_index);
-            builder.entry_styles = Arc::new(mant_render::EntryStyleMap::for_document(document));
+            builder.entry_styles = Arc::new(entries::EntryStyles::for_document(document));
             if document.heading.is_some()
                 || !document.blocks.is_empty()
                 || !document.fragment_aliases.is_empty()
@@ -300,6 +306,7 @@ impl DocumentView {
             }
         }
 
+        let entry_labels = builder.entry_styles.labels.clone();
         let mut built = builder.finish();
         references.append_navigation(&mut built.navigation);
         let reference_badges = references.badges();
@@ -317,6 +324,7 @@ impl DocumentView {
                 .is_none_or(|document| mant_ir::content_complete(&document.diagnostics)),
             lines: built.content.lines,
             navigation: built.navigation,
+            entry_labels,
             anchors: built.content.anchors,
             targets: Arc::new(targets::TargetIndex::build(bundle.document.as_ref())),
             references: references.records,
@@ -330,6 +338,10 @@ impl DocumentView {
     #[must_use]
     pub fn label(&self) -> &str {
         &self.label
+    }
+
+    pub(crate) const fn entry_labels(&self) -> &crate::entry::EntryLabels {
+        &self.entry_labels
     }
 
     /// Label used in terminal chrome, including the resolved manual section.

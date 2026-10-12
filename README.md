@@ -115,6 +115,9 @@ aliases by default; the selected row shows its complete authored form, and
 **View → Full Outline Labels** wraps all visible labels when that detail is
 useful. Selecting a node places its target at the top of the content pane;
 after scrolling settles, the outline follows the first visible document node.
+Parameter, command and configuration-key signatures accent structural brackets,
+assignment signs and candidate separators in both the body and complete Outline
+labels, while keeping name colors, original text and source emphasis intact.
 
 - `j` / `k` or arrow keys move through visible nodes.
 - `h` / `l` collapse and expand branches.

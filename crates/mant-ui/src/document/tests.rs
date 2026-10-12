@@ -469,6 +469,7 @@ mod control_row_relations;
 mod definition_relations;
 mod empty_word_columns;
 mod entries;
+mod entry_highlighting;
 mod grapheme_geometry;
 mod hanging_owners;
 mod headings;

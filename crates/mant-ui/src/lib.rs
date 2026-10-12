@@ -5,6 +5,7 @@ mod app;
 mod clipboard;
 mod code;
 mod document;
+mod entry;
 mod layout;
 mod navigation;
 mod reader;
