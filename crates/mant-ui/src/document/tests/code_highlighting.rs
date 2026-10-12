@@ -205,6 +205,85 @@ fn ordinary_inline_code_does_not_select_a_block_grammar() {
 }
 
 #[test]
+fn structural_accents_keep_source_markup_links_copy_and_reflow_unchanged() {
+    // Authored normalized IR tests presentation without changing roff execution.
+    let label = "变量e\u{301}👩‍💻";
+    let mut content = bundle();
+    content.document.as_mut().unwrap().sections[0].blocks = vec![Block::Preformatted {
+        children: vec![
+            text("echo \"$("),
+            Inline::Strong {
+                children: vec![text("printf")],
+            },
+            text(" '%s' \"${"),
+            Inline::anchor("variable-anchor"),
+            Inline::Link {
+                target: mant_ir::LinkTarget::Section {
+                    id: "target".into(),
+                },
+                title: None,
+                children: vec![text(label)],
+            },
+            text(":-fallback}\")\" [--foo|--bar]"),
+        ],
+        inline_layout: mant_ir::InlineLayout::default(),
+        language: None,
+        layout: LayoutHint::default(),
+        source: None,
+    }];
+    let before = content.clone();
+    let view = DocumentView::new(&content);
+    for width in [12, 24, 80, 12] {
+        let rendered = view.render(width);
+        let hit = &rendered.search(label)[0];
+        assert_eq!(
+            rendered.link_target_at(hit.row, hit.start_column),
+            Some(&LinkTarget::Section("target".into()))
+        );
+        let (row, column) = hit
+            .additional_fragments
+            .last()
+            .map_or((hit.row, hit.end_column), |fragment| {
+                (fragment.row, fragment.end_column)
+            });
+        let copied = rendered.selected_text(RenderedSelection {
+            anchor: TextPosition {
+                row: hit.row,
+                column: hit.start_column,
+            },
+            focus: TextPosition {
+                row,
+                column: column - 1,
+            },
+        });
+        assert_eq!(
+            copied.lines().map(str::trim_start).collect::<String>(),
+            label
+        );
+        assert!(
+            rendered
+                .text
+                .lines
+                .iter()
+                .flat_map(|line| &line.spans)
+                .any(|span| span.style.fg == Some(theme::LAVENDER))
+        );
+        let command = &rendered.search("printf")[0];
+        let source_style = rendered.text.lines[command.row]
+            .spans
+            .iter()
+            .find(|span| {
+                span.content.contains('p') && span.style.add_modifier.contains(Modifier::BOLD)
+            })
+            .expect("authored command emphasis");
+        assert_eq!(source_style.style.fg, Some(theme::STRONG));
+        assert!(rendered.anchor_row("variable-anchor").is_some());
+        assert_eq!(view.render(width).text, rendered.text);
+    }
+    assert_eq!(content, before);
+}
+
+#[test]
 fn native_fixed_width_font_supplies_a_base_without_erasing_code_accents() {
     // Run this exact input with the pristine reference before the assertions.
     // man_term.c::print_man_node() preserves no-fill rows; roff_term.c's

@@ -266,7 +266,7 @@ fn append_inline(
                 code: false,
                 ..source
             };
-            for span in code.spans(text, base) {
+            for span in code.spans(text, base, theme::DEFAULT_THEME.code_styles()) {
                 append_text(
                     &span.content,
                     theme::inline_style(span.style, authored),

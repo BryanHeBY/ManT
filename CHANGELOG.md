@@ -27,6 +27,21 @@ that crate was not published for that change.
 
 ### mant-ui
 
+- Accent structural parentheses, brackets, braces and synopsis candidate
+  markers in lavender, with a separate operator role for pipes, redirects and
+  other lexical operators. Retain both option alternatives and original
+  placeholder markers; keep quoted, commented, escaped and URL content protected.
+- Track bounded nested shell parameter, command, arithmetic and process
+  substitutions so opening/closing delimiters compose consistently with variable
+  names, modifiers, fallback words and nested quotes. Keep the complete-block
+  64 KiB limit and neutral fallback above 64 contexts without modifying IR,
+  authored text, layout or the separate TLDR presentation.
+- Resolve cached lexical roles through a borrowed code-style set in the shared
+  theme rather than scanner-owned colors. Defaults remain hardcoded and
+  customizable internally; semantic scan tests are independent of palette
+  assertions. Source markup, validated names and interaction overlays retain
+  precedence over lexical accents.
+
 - Cache bounded fragment verification per immutable document view instead of
   rescanning the full IR on every local jump or history restoration. Use the
   existing one-million-step hard ceiling for target-index construction so large

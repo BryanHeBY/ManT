@@ -103,26 +103,40 @@ Preformatted blocks use dependency-free, language-neutral lexical accents.
 Manual displays can mix commands, source code, configuration and synopsis
 notation, so no language is guessed or forced. The shared rules highlight
 common keywords/builtins, strings, comments, numbers, option names and shell
-variables/expansion openers. A leading shell `$` prompt is subdued; escaped
+variables and bounded expansion contexts. A leading shell `$` prompt is subdued;
+escaped
 dollars and dollars inside single quotes stay literal. URLs, paths and
 compound names are not keyword/comment evidence. Command heads with prompt,
 builtin or unquoted option/placeholder evidence use the same peach as tldr
 commands; unclassified identifiers stay neutral. Option names use the same
 green as semantic parameter entries, independently of teal headings.
-Git-style `[]`, choice separators and synopsis `<values>` delimiters use
-bright gray, distinct from subdued comments. Angle placeholders require
-command/option context, rather than treating C++ template brackets as synopsis.
+Unquoted `()`, `[]`, `{}`, Git-style choice separators and synopsis `<values>`
+delimiters use lavender. Open and close markers share one role, not rainbow
+nesting colors. Operators, pipes and redirects have a separate non-bold mauve
+role. Angle placeholders require command/option context, rather than treating
+C++ template brackets or redirection operators as editable values. Paths and
+qualified names stop before structural brackets; URLs remain opaque atoms.
+`${...}`, `$(...)`, `$((...))` and process substitutions retain nested quote
+contexts and symmetric delimiter accents. Dollar/variable names stay pink,
+parameter modifiers use the operator role and fallback words use string style.
 Like tldr presentation,
 `{{values}}` and `<values>` retain neutral text, but every marker and option
-alternative remains unchanged; the tldr parser's rewriting is not reused.
+alternative remains unchanged; explicit `{{[-c|--create]}}` candidates retain
+both option accents and structural markers. The tldr parser's rewriting is not
+reused.
 These are best-effort visual cues, not a full shell or programming grammar.
 Language tags are metadata, not grammar selectors or highlighter opt-outs;
 `text` synopses use the same cues. Ordinary inline code and the separate tldr
 view are unchanged.
 Quotes and block comments span original inline pieces and hard rows. Accents
-map to private theme roles beneath authored emphasis, links and validated
+store byte ranges and semantic roles, not colors. A borrowed `CodeStyles` set
+resolves those roles through the same `Theme` as other UI content, beneath
+authored emphasis, links and validated
 names; code fonts inside displays supply the neutral base, not a final color
-override. Blocks exceeding 64 KiB fall back as a whole without changing text.
+override. Blocks exceeding 64 KiB or 64 nested contexts fall back as a whole
+without changing text. Incomplete and mismatched snippets do not produce syntax
+errors or invented characters. Theme values remain hardcoded; no code palette
+configuration or runtime selector is exposed.
 Accents are prepared during document construction, never during resize/search.
 
 Outline and body adapters request semantic styles from the private `theme`

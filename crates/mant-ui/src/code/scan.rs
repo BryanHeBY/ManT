@@ -2,72 +2,140 @@
 
 use super::{Accent, StyleRole};
 
+pub(super) const MAX_CONTEXT_DEPTH: usize = 64;
+
+#[derive(Clone, Copy)]
+enum Frame {
+    Quote(char),
+    Group { close: char, optional: bool },
+    Parameter { operand: bool, name_seen: bool },
+    Command { head: bool },
+    Arithmetic,
+}
+
+#[derive(Clone, Copy)]
+enum Mode {
+    Normal,
+    Parameter { operand: bool },
+    Command { head: bool },
+    Arithmetic,
+}
+
 pub(super) fn accents(value: &str) -> Vec<Accent> {
     let mut scanner = Scanner {
         value,
         accents: Vec::new(),
+        frames: Vec::new(),
+        optional: 0,
+        limited: false,
     };
     let mut offset = 0;
-    let mut brackets = 0_usize;
     let mut command_line = false;
     let mut row_end = 0;
-    while offset < value.len() {
+    while offset < value.len() && !scanner.limited {
         if offset >= row_end {
-            // Git synopses can continue an optional group over hard rows.
-            command_line &= brackets > 0;
+            // Only synopsis candidates carry command evidence across hard rows.
+            command_line &= scanner.optional > 0;
             row_end = value[offset..]
                 .find('\n')
                 .map_or(value.len(), |end| offset + end + 1);
         }
+        offset = scanner
+            .protected(offset, command_line)
+            .unwrap_or_else(|| scanner.token(offset, &mut command_line));
+    }
+    if scanner.limited {
+        Vec::new()
+    } else {
+        scanner.accents
+    }
+}
+
+struct Scanner<'a> {
+    value: &'a str,
+    accents: Vec<Accent>,
+    frames: Vec<Frame>,
+    optional: usize,
+    limited: bool,
+}
+
+impl Scanner<'_> {
+    /// Quotes, comments, escapes and explicit markup own their bytes before
+    /// ordinary token classification can interpret structural punctuation.
+    fn protected(&mut self, offset: usize, command_line: bool) -> Option<usize> {
+        if let Some(Frame::Quote(quote)) = self.frames.last().copied() {
+            return Some(self.quoted_step(offset, quote));
+        }
+        let value = self.value;
         let rest = &value[offset..];
         let first = rest.chars().next().expect("remaining text");
+        let parameter = matches!(self.mode(), Mode::Parameter { .. });
+        let shell = matches!(self.mode(), Mode::Command { .. } | Mode::Arithmetic);
         let mut end = offset + first.len_utf8();
         let mut role = None;
         if first == '\\' {
-            // Escaped markers and quotes stay literal, without rewriting them.
+            // Literal escapes do not become structural punctuation.
             end += value[end..].chars().next().map_or(0, char::len_utf8);
         } else if matches!(first, '\'' | '"' | '`') {
-            offset = scanner.quoted(offset, first);
-            continue;
-        } else if rest.starts_with("/*") && boundary(value, offset) {
+            self.push_frame(Frame::Quote(first));
+            role = Some(StyleRole::CodeString);
+        } else if !parameter && !shell && rest.starts_with("/*") && boundary(value, offset) {
             end = rest
                 .find("*/")
                 .map_or(value.len(), |close| offset + close + 2);
             role = Some(StyleRole::CodeComment);
-        } else if rest.starts_with("//") && boundary(value, offset)
-            || first == ';'
-                && line_start(value, offset)
-                && !rest[1..]
-                    .split('\n')
-                    .next()
-                    .unwrap_or_default()
-                    .trim()
-                    .is_empty()
+        } else if !parameter
+            && !shell
+            && (rest.starts_with("//") && boundary(value, offset)
+                || first == ';'
+                    && line_start(value, offset)
+                    && !rest[1..]
+                        .split('\n')
+                        .next()
+                        .unwrap_or_default()
+                        .trim()
+                        .is_empty())
         {
             end = offset + rest.find('\n').unwrap_or(rest.len());
             role = Some(StyleRole::CodeComment);
-        } else if first == '#' && boundary(value, offset) {
-            if line_start(value, offset)
-                && let Some(end) = scanner.directive(offset)
+        } else if !parameter && first == '#' && boundary(value, offset) {
+            if !shell
+                && line_start(value, offset)
+                && let Some(end) = self.directive(offset)
             {
-                offset = end;
-                continue;
+                return Some(end);
             }
             end = offset + rest.find('\n').unwrap_or(rest.len());
             role = Some(StyleRole::CodeComment);
         } else if let Some(length) = placeholder(rest) {
-            scanner.placeholder(offset, length, 2);
-            offset += length;
-            continue;
+            self.placeholder(offset, length, 2);
+            return Some(offset + length);
         } else if first == '<'
             && command_line
             && boundary(value, offset)
             && let Some(length) = angle_placeholder(rest)
         {
-            scanner.placeholder(offset, length, 1);
-            offset += length;
-            continue;
-        } else if first == '$'
+            self.placeholder(offset, length, 1);
+            return Some(offset + length);
+        } else {
+            return self.expansion(offset, false);
+        }
+        if let Some(role) = role {
+            self.push(offset..end, role);
+        }
+        Some(end)
+    }
+
+    /// Classify one unprotected token; every branch advances unchanged UTF-8.
+    fn token(&mut self, offset: usize, command_line: &mut bool) -> usize {
+        let value = self.value;
+        let rest = &value[offset..];
+        let first = rest.chars().next().expect("remaining text");
+        let mode = self.mode();
+        let parameter = matches!(mode, Mode::Parameter { .. });
+        let mut end = offset + first.len_utf8();
+        let mut role = None;
+        if first == '$'
             && line_start(value, offset)
             && rest[1..].chars().next().is_none_or(char::is_whitespace)
         {
@@ -75,62 +143,214 @@ pub(super) fn accents(value: &str) -> Vec<Accent> {
         } else if let Some(length) = variable(rest) {
             end = offset + length;
             role = Some(StyleRole::CodeVariable);
-        } else if let Some(length) = option(value, offset) {
+        } else if !parameter && let Some(length) = option(value, offset) {
             end = offset + length;
             role = Some(StyleRole::CodeOption);
-            command_line = true;
-        } else if first.is_ascii_digit() && boundary(value, offset) {
+            *command_line = true;
+        } else if first.is_ascii_digit()
+            && matches!(
+                self.frames.last(),
+                Some(Frame::Parameter {
+                    name_seen: false,
+                    ..
+                })
+            )
+        {
+            end = offset + number(rest);
+            role = Some(StyleRole::CodeVariable);
+            self.consume_head();
+        } else if first.is_ascii_digit()
+            && (boundary(value, offset)
+                || matches!(mode, Mode::Arithmetic | Mode::Parameter { operand: true }))
+        {
             end = offset + number(rest);
             role = Some(StyleRole::CodeNumber);
         } else if first.is_alphabetic() || first == '_' {
-            (end, role) = scanner.word(offset);
-            command_line |= role == Some(StyleRole::CodeCommand);
-        } else if matches!(first, '[' | ']') || first == '|' && brackets > 0 {
-            brackets = if first == '[' {
-                brackets + 1
-            } else if first == ']' {
-                brackets.saturating_sub(1)
-            } else {
-                brackets
-            };
+            (end, role) = self.word(offset, mode);
+            *command_line |= role == Some(StyleRole::CodeCommand);
+            self.consume_head();
+        } else if matches!(first, '(' | '[' | '{') {
+            let optional = first == '['
+                && *command_line
+                && !rest.starts_with("[[")
+                && !value[..offset].ends_with('[')
+                && (boundary(value, offset) || self.optional > 0);
+            self.push_frame(Frame::Group {
+                close: match first {
+                    '(' => ')',
+                    '[' => ']',
+                    _ => '}',
+                },
+                optional,
+            });
             role = Some(StyleRole::CodeDelimiter);
+        } else if matches!(first, ')' | ']' | '}') {
+            self.close(first);
+            role = Some(StyleRole::CodeDelimiter);
+        } else if first == '|' && self.optional > 0 && !rest.starts_with("||") {
+            role = Some(StyleRole::CodeDelimiter);
+        } else if !parameter
+            && !matches!(mode, Mode::Arithmetic)
+            && let Some(length) = path_atom(rest)
+        {
+            end = offset + length;
+        } else if let Some(length) = operator(value, offset, parameter) {
+            end = offset + length;
+            role = Some(StyleRole::CodeOperator);
+            self.operator(&value[offset..end]);
         }
         if let Some(role) = role {
-            scanner.push(offset..end, role);
+            self.push(offset..end, role);
         }
-        offset = end;
+        end
     }
-    scanner.accents
-}
 
-struct Scanner<'a> {
-    value: &'a str,
-    accents: Vec<Accent>,
-}
+    fn mode(&self) -> Mode {
+        self.frames
+            .iter()
+            .rev()
+            .find_map(|frame| match frame {
+                Frame::Group { .. } => None,
+                Frame::Parameter { operand, .. } => Some(Mode::Parameter { operand: *operand }),
+                Frame::Command { head } => Some(Mode::Command { head: *head }),
+                Frame::Arithmetic => Some(Mode::Arithmetic),
+                Frame::Quote(_) => Some(Mode::Normal),
+            })
+            .unwrap_or(Mode::Normal)
+    }
 
-impl Scanner<'_> {
-    fn word(&self, offset: usize) -> (usize, Option<StyleRole>) {
-        let value = self.value;
-        let mut end = offset + take_while(&value[offset..], |c| c.is_alphanumeric() || c == '_');
-        // Consume paths/URLs/compound names as opaque atoms. A hyphenated
-        // command head may still qualify, but paths never supply keywords.
-        let compound = value[end..].starts_with(['/', '.', '-'])
-            || value[end..].starts_with("://")
-            || value[end..].starts_with("::");
-        if compound {
-            end += take_while(&value[end..], |c| {
-                !c.is_whitespace() && !matches!(c, '\'' | '"' | '`' | ';' | ')' | ']' | '}')
+    fn push_frame(&mut self, frame: Frame) {
+        if self.frames.len() == MAX_CONTEXT_DEPTH {
+            self.limited = true;
+            return;
+        }
+        if matches!(frame, Frame::Group { optional: true, .. }) {
+            self.optional += 1;
+        }
+        self.frames.push(frame);
+    }
+
+    fn close(&mut self, close: char) {
+        let matches = self.frames.last().is_some_and(|frame| match frame {
+            Frame::Group {
+                close: expected, ..
+            } => *expected == close,
+            Frame::Parameter { .. } => close == '}',
+            Frame::Command { .. } | Frame::Arithmetic => close == ')',
+            Frame::Quote(_) => false,
+        });
+        if matches && matches!(self.frames.pop(), Some(Frame::Group { optional: true, .. })) {
+            self.optional -= 1;
+        }
+    }
+
+    fn consume_head(&mut self) {
+        for frame in self.frames.iter_mut().rev() {
+            match frame {
+                Frame::Group { .. } => {}
+                Frame::Command { head } => {
+                    *head = false;
+                    break;
+                }
+                Frame::Parameter { name_seen, .. } => {
+                    *name_seen = true;
+                    break;
+                }
+                Frame::Quote(_) | Frame::Arithmetic => break,
+            }
+        }
+    }
+
+    fn operator(&mut self, operator: &str) {
+        for frame in self.frames.iter_mut().rev() {
+            match frame {
+                Frame::Group { .. } => {}
+                Frame::Parameter { operand, name_seen } => {
+                    if *name_seen {
+                        *operand = true;
+                    }
+                    break;
+                }
+                Frame::Command { head } => {
+                    if matches!(operator, "|" | "|&" | "&&" | "||" | ";") {
+                        *head = true;
+                    }
+                    break;
+                }
+                Frame::Quote(_) | Frame::Arithmetic => break,
+            }
+        }
+    }
+
+    fn expansion(&mut self, offset: usize, quoted: bool) -> Option<usize> {
+        let rest = &self.value[offset..];
+        let (marker, open, frame) = if rest.starts_with("${") {
+            (
+                StyleRole::CodeVariable,
+                1,
+                Frame::Parameter {
+                    operand: false,
+                    name_seen: false,
+                },
+            )
+        } else if rest.starts_with("$(") {
+            let arithmetic = rest.starts_with("$((");
+            (
+                StyleRole::CodeVariable,
+                if arithmetic { 2 } else { 1 },
+                if arithmetic {
+                    Frame::Arithmetic
+                } else {
+                    Frame::Command { head: true }
+                },
+            )
+        } else if !quoted && (rest.starts_with("<(") || rest.starts_with(">(")) {
+            (StyleRole::CodeOperator, 1, Frame::Command { head: true })
+        } else {
+            return None;
+        };
+        self.push(offset..offset + 1, marker);
+        self.push(offset + 1..offset + 1 + open, StyleRole::CodeDelimiter);
+        self.push_frame(frame);
+        if open == 2 {
+            self.push_frame(Frame::Group {
+                close: ')',
+                optional: false,
             });
         }
-        let role = if super::command::head(value, offset, end) {
-            Some(StyleRole::CodeCommand)
-        } else if !compound
-            && boundary(value, offset)
-            && super::keywords::contains(&value[offset..end])
-        {
-            Some(StyleRole::CodeKeyword)
-        } else {
-            None
+        Some(offset + 1 + open)
+    }
+
+    fn word(&self, offset: usize, mode: Mode) -> (usize, Option<StyleRole>) {
+        let value = self.value;
+        let mut end = offset + take_while(&value[offset..], |c| c.is_alphanumeric() || c == '_');
+        let url = value[end..].starts_with("://");
+        let compound =
+            value[end..].starts_with(['/', '.', '-']) || url || value[end..].starts_with("::");
+        if compound && !matches!(mode, Mode::Parameter { .. } | Mode::Arithmetic) {
+            end += take_while(&value[end..], |c| {
+                !c.is_whitespace()
+                    && !matches!(c, '\'' | '"' | '`' | ';')
+                    && (url
+                        || !matches!(c, '(' | ')' | '[' | ']' | '{' | '}' | '<' | '>' | '|' | '&'))
+            });
+        }
+        let role = match mode {
+            Mode::Arithmetic | Mode::Parameter { operand: false } => Some(StyleRole::CodeVariable),
+            Mode::Parameter { operand: true } => Some(StyleRole::CodeString),
+            _ if matches!(mode, Mode::Command { head: true })
+                && super::command::expansion_head(&value[offset..end])
+                || super::command::head(value, offset, end) =>
+            {
+                Some(StyleRole::CodeCommand)
+            }
+            _ if !compound
+                && boundary(value, offset)
+                && super::keywords::contains(&value[offset..end]) =>
+            {
+                Some(StyleRole::CodeKeyword)
+            }
+            _ => None,
         };
         (end, role)
     }
@@ -166,63 +386,147 @@ impl Scanner<'_> {
     }
 
     fn placeholder(&mut self, offset: usize, length: usize, delimiters: usize) {
-        // Like tldr presentation, replaceable values are less emphasized than
-        // command syntax. Unlike parse_tldr_command(), retain every marker and
-        // both alternatives in {{[-c|--create]}}; never rewrite authored text.
         self.push(offset..offset + delimiters, StyleRole::CodeDelimiter);
-        let mut start = offset + delimiters;
+        let start = offset + delimiters;
         let end = offset + length - delimiters;
-        if delimiters == 1 {
-            // Synopsis choices such as <PATH|-> retain their value text, with
-            // only the choice separator taking the bracket/marker accent.
-            for (index, _) in self.value[start..end].match_indices('|') {
-                let choice = offset + delimiters + index;
-                self.push(start..choice, StyleRole::CodePlaceholder);
-                self.push(choice..choice + 1, StyleRole::CodeDelimiter);
-                start = choice + 1;
+        let choices = delimiters == 2
+            && self.value[start..end].starts_with('[')
+            && self.value[start..end].ends_with(']')
+            && self.value[start..end].contains('|');
+        if choices {
+            self.push(start..start + 1, StyleRole::CodeDelimiter);
+            let mut cursor = start + 1;
+            while cursor < end - 1 {
+                if let Some(length) = option(self.value, cursor) {
+                    self.push(cursor..cursor + length, StyleRole::CodeOption);
+                    cursor += length;
+                } else {
+                    let c = self.value[cursor..]
+                        .chars()
+                        .next()
+                        .expect("choice character");
+                    self.push(
+                        cursor..cursor + c.len_utf8(),
+                        if c == '|' {
+                            StyleRole::CodeDelimiter
+                        } else {
+                            StyleRole::CodePlaceholder
+                        },
+                    );
+                    cursor += c.len_utf8();
+                }
             }
+            self.push(end - 1..end, StyleRole::CodeDelimiter);
+        } else {
+            let mut cursor = start;
+            for (index, _) in self.value[start..end].match_indices('|') {
+                if delimiters == 1 {
+                    let choice = start + index;
+                    self.push(cursor..choice, StyleRole::CodePlaceholder);
+                    self.push(choice..choice + 1, StyleRole::CodeDelimiter);
+                    cursor = choice + 1;
+                }
+            }
+            self.push(cursor..end, StyleRole::CodePlaceholder);
         }
-        self.push(start..end, StyleRole::CodePlaceholder);
-        self.push(
-            offset + length - delimiters..offset + length,
-            StyleRole::CodeDelimiter,
-        );
+        self.push(end..offset + length, StyleRole::CodeDelimiter);
     }
 
-    fn quoted(&mut self, start: usize, quote: char) -> usize {
-        let mut offset = start + 1;
-        let mut chunk = start;
-        while offset < self.value.len() {
-            let rest = &self.value[offset..];
-            let first = rest.chars().next().expect("remaining quote text");
-            if first == '\\' {
-                offset += 1;
-                offset += self.value[offset..]
-                    .chars()
-                    .next()
-                    .map_or(0, char::len_utf8);
-            } else if first == quote {
-                offset += 1;
-                break;
-            } else if quote != '\''
-                && let Some(length) = variable(rest)
-            {
-                self.push(chunk..offset, StyleRole::CodeString);
+    fn quoted_step(&mut self, offset: usize, quote: char) -> usize {
+        let rest = &self.value[offset..];
+        let first = rest.chars().next().expect("quoted character");
+        let mut end = offset + first.len_utf8();
+        if first == '\\' {
+            end += self.value[end..].chars().next().map_or(0, char::len_utf8);
+        } else if first == quote {
+            self.frames.pop();
+        } else if quote != '\'' {
+            if let Some(end) = self.expansion(offset, true) {
+                return end;
+            }
+            if let Some(length) = variable(rest) {
                 self.push(offset..offset + length, StyleRole::CodeVariable);
-                offset += length;
-                chunk = offset;
-            } else if let Some(length) = placeholder(rest) {
-                self.push(chunk..offset, StyleRole::CodeString);
-                self.placeholder(offset, length, 2);
-                offset += length;
-                chunk = offset;
-            } else {
-                offset += first.len_utf8();
+                return offset + length;
             }
         }
-        self.push(chunk..offset, StyleRole::CodeString);
-        offset
+        if let Some(length) = placeholder(rest) {
+            self.placeholder(offset, length, 2);
+            return offset + length;
+        }
+        self.push(offset..end, StyleRole::CodeString);
+        end
     }
+}
+
+fn path_atom(value: &str) -> Option<usize> {
+    (value.starts_with("./")
+        || value.starts_with("//")
+        || value.starts_with("../")
+        || value.starts_with('/')
+            && value[1..].starts_with(|c: char| c.is_alphanumeric() || c == '_'))
+    .then(|| {
+        take_while(value, |c| {
+            !c.is_whitespace()
+                && !matches!(
+                    c,
+                    '\'' | '"'
+                        | '`'
+                        | '('
+                        | ')'
+                        | '['
+                        | ']'
+                        | '{'
+                        | '}'
+                        | '<'
+                        | '>'
+                        | '|'
+                        | '&'
+                        | ';'
+                )
+        })
+    })
+}
+
+fn operator(value: &str, offset: usize, parameter: bool) -> Option<usize> {
+    let rest = &value[offset..];
+    let first = rest.chars().next()?;
+    if first == '-'
+        && boundary(value, offset)
+        && rest[1..].starts_with(|c: char| c.is_ascii_digit())
+    {
+        return None;
+    }
+    if !(matches!(
+        first,
+        '|' | '&'
+            | '<'
+            | '>'
+            | '+'
+            | '-'
+            | '*'
+            | '/'
+            | '%'
+            | '='
+            | '!'
+            | '^'
+            | '~'
+            | ':'
+            | ','
+            | ';'
+            | '?'
+    ) || parameter && first == '#')
+    {
+        return None;
+    }
+    Some(
+        [
+            "<<<", "<<-", "&&", "||", "|&", ">>", "<<", "<>", ">|", ">&", "<&", "==", "!=", "<=",
+            ">=", "+=", "-=", "*=", "/=", "%=", ":-", ":=", ":?", ":+",
+        ]
+        .into_iter()
+        .find(|operator| rest.starts_with(operator))
+        .map_or(1, str::len),
+    )
 }
 
 fn boundary(value: &str, offset: usize) -> bool {
@@ -287,16 +591,6 @@ pub(super) fn angle_placeholder(value: &str) -> Option<usize> {
 
 fn variable(value: &str) -> Option<usize> {
     let rest = value.strip_prefix('$')?;
-    if rest.starts_with('(') {
-        // Accent the expansion opener, not the entire command/arithmetic body.
-        return Some(if rest.starts_with("((") { 3 } else { 2 });
-    }
-    if let Some(braced) = rest.strip_prefix('{') {
-        // Do not repeatedly search an unterminated/nested expansion's tail.
-        // Inner expansions can still receive their own independent accent.
-        let end = braced.find(['{', '}', '\n', '\r'])? + 1;
-        return rest[end..].starts_with('}').then_some(end + 2);
-    }
     let first = rest.chars().next()?;
     if first.is_ascii_alphabetic() || first == '_' {
         Some(1 + take_while(rest, |c| c.is_ascii_alphanumeric() || c == '_'))

@@ -75,7 +75,13 @@ fn code_commands_options_and_synopsis_markers_follow_semantic_roles() {
         style(StyleRole::CodeCommand).fg,
         style(StyleRole::TldrCommand).fg
     );
-    assert_eq!(style(StyleRole::CodeDelimiter).fg, Some(SUBTEXT_BRIGHT));
+    assert_eq!(style(StyleRole::CodeDelimiter).fg, Some(LAVENDER));
+    assert_eq!(style(StyleRole::CodeOperator).fg, Some(MAUVE));
+    assert!(
+        !style(StyleRole::CodeOperator)
+            .add_modifier
+            .contains(Modifier::BOLD)
+    );
     assert_ne!(
         style(StyleRole::CodeDelimiter).fg,
         style(StyleRole::CodeComment).fg
@@ -83,6 +89,48 @@ fn code_commands_options_and_synopsis_markers_follow_semantic_roles() {
     assert_eq!(
         style(StyleRole::CodePlaceholder).fg,
         style(StyleRole::Text).fg
+    );
+}
+
+#[test]
+fn code_style_sets_resolve_the_same_semantics_through_custom_theme_values() {
+    let source = "git [--output=<path>] $(echo ${name})";
+    let mut theme = DEFAULT_THEME.clone();
+    let delimiter = Style::new().fg(Color::Red).add_modifier(Modifier::ITALIC);
+    let option = Style::new().fg(Color::Yellow);
+    theme.set_style(StyleRole::CodeDelimiter, delimiter);
+    theme.set_style(StyleRole::CodeOption, option);
+    let styles = theme.code_styles();
+    assert_eq!(styles.style(StyleRole::CodeDelimiter), delimiter);
+    assert_eq!(styles.style(StyleRole::CodeOption), option);
+    assert_eq!(
+        styles.style(StyleRole::CodeCommand),
+        DEFAULT_THEME.style(StyleRole::CodeCommand)
+    );
+    let base = Style::new().bg(SURFACE).add_modifier(Modifier::UNDERLINED);
+    let mut code = crate::code::CodeHighlights::new(source);
+    let spans = code.spans(source, base, styles);
+    assert_eq!(
+        spans
+            .iter()
+            .map(|span| span.content.as_ref())
+            .collect::<String>(),
+        source
+    );
+    for span in &spans {
+        assert_eq!(span.style.bg, Some(SURFACE));
+        assert!(span.style.add_modifier.contains(Modifier::UNDERLINED));
+        if span.content.contains('[') || span.content.contains(')') {
+            assert_eq!(span.style.fg, Some(Color::Red));
+            assert!(span.style.add_modifier.contains(Modifier::ITALIC));
+        }
+        if span.content == "--output" {
+            assert_eq!(span.style.fg, Some(Color::Yellow));
+        }
+    }
+    assert_eq!(
+        DEFAULT_THEME.style(StyleRole::CodeDelimiter).fg,
+        Some(LAVENDER)
     );
 }
 

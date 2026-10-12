@@ -25,7 +25,23 @@ pub(crate) struct Theme {
     interactions: [Style; InteractionRole::COUNT],
 }
 
+/// Borrow the code style set from the same semantic theme as other UI roles.
+/// This view carries no separate palette or mutable global theme state.
+#[derive(Clone, Copy)]
+pub(crate) struct CodeStyles<'theme>(&'theme Theme);
+
+impl CodeStyles<'_> {
+    pub(crate) fn style(self, role: StyleRole) -> Style {
+        debug_assert!(role.is_code());
+        self.0.style(role)
+    }
+}
+
 impl Theme {
+    pub(crate) const fn code_styles(&self) -> CodeStyles<'_> {
+        CodeStyles(self)
+    }
+
     const fn empty() -> Self {
         Self {
             styles: [Style::new(); StyleRole::COUNT],

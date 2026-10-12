@@ -43,6 +43,7 @@ pub(crate) enum StyleRole {
     CodePrompt,
     CodePlaceholder,
     CodeDelimiter,
+    CodeOperator,
     CodeNumber,
     CodeKeyword,
     TreeGuide,
@@ -57,6 +58,24 @@ pub(crate) enum StyleRole {
 
 impl StyleRole {
     pub(super) const COUNT: usize = Self::TldrOutlineSurface as usize + 1;
+
+    pub(super) const fn is_code(self) -> bool {
+        matches!(
+            self,
+            Self::CodeComment
+                | Self::CodeString
+                | Self::CodeCommand
+                | Self::CodeOption
+                | Self::CodeVariable
+                | Self::CodePrompt
+                | Self::CodePlaceholder
+                | Self::CodeDelimiter
+                | Self::CodeOperator
+                | Self::CodeNumber
+                | Self::CodeKeyword
+                | Self::CodeSurface
+        )
+    }
 
     pub(crate) const fn for_entry(kind: EntryKind) -> Self {
         match mant_render::entry_tone(kind) {

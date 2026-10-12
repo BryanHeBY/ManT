@@ -8,7 +8,7 @@ use std::ops::Range;
 
 use ratatui::{style::Style, text::Span};
 
-use crate::theme::{self, StyleRole};
+use crate::theme::{CodeStyles, StyleRole};
 
 mod command;
 mod keywords;
@@ -16,6 +16,7 @@ mod scan;
 
 pub(crate) const MAX_BLOCK_BYTES: usize = 64 * 1024;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct Accent {
     bytes: Range<usize>,
     role: StyleRole,
@@ -44,7 +45,12 @@ impl CodeHighlights {
     }
 
     /// `text` must be the next unchanged piece of the original block.
-    pub(crate) fn spans(&mut self, text: &str, base: Style) -> Vec<Span<'static>> {
+    pub(crate) fn spans(
+        &mut self,
+        text: &str,
+        base: Style,
+        styles: CodeStyles<'_>,
+    ) -> Vec<Span<'static>> {
         let end = self.offset + text.len();
         let mut spans = Vec::new();
         while self.offset < end {
@@ -61,7 +67,7 @@ impl CodeHighlights {
                 } else {
                     (
                         end.min(accent.bytes.end),
-                        base.patch(theme::style(accent.role)),
+                        base.patch(styles.style(accent.role)),
                     )
                 }
             });

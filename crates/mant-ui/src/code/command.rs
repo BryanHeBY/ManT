@@ -4,11 +4,7 @@ use super::{keywords, scan};
 
 pub(super) fn head(value: &str, start: usize, end: usize) -> bool {
     let word = &value[start..end];
-    if !word
-        .chars()
-        .all(|c| c.is_alphanumeric() || matches!(c, '_' | '-' | '.'))
-        || keywords::contains(word) && !builtin(word)
-    {
+    if !expansion_head(word) {
         return false;
     }
     let prefix = value[..start].trim_end_matches([' ', '\t']);
@@ -32,6 +28,13 @@ pub(super) fn head(value: &str, start: usize, end: usize) -> bool {
         return true;
     }
     evidence(tail)
+}
+
+/// An explicit command substitution supplies evidence even for a bare head.
+pub(super) fn expansion_head(word: &str) -> bool {
+    word.chars()
+        .all(|c| c.is_alphanumeric() || matches!(c, '_' | '-' | '.'))
+        && (!keywords::contains(word) || builtin(word))
 }
 
 fn builtin(word: &str) -> bool {

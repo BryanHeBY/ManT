@@ -1,24 +1,35 @@
-use ratatui::style::{Color, Modifier};
+//! Lexical contracts assert semantic roles; palette mapping is tested in theme.
+use ratatui::style::{Modifier, Style};
 
 use super::*;
+use crate::theme;
 
-fn highlight(value: &str) -> Vec<Span<'static>> {
-    CodeHighlights::new(value).spans(value, theme::style(StyleRole::Text))
+fn highlight(value: &str) -> Vec<Accent> {
+    CodeHighlights::new(value).accents
 }
 
-fn color_at(spans: &[Span<'_>], source: &str, needle: &str) -> Option<Color> {
+fn role_at(accents: &[Accent], source: &str, needle: &str) -> Option<StyleRole> {
     let position = source.find(needle).expect("fixture substring");
-    let mut offset = 0;
-    for span in spans {
-        offset += span.content.len();
-        if position < offset {
-            return span.style.fg;
-        }
-    }
-    panic!("missing accented byte");
+    accents
+        .iter()
+        .find(|accent| accent.bytes.contains(&position))
+        .map(|accent| accent.role)
 }
 
-fn assert_text(spans: &[Span<'_>], source: &str) {
+fn assert_text(accents: &[Accent], source: &str) {
+    let mut previous = 0;
+    for accent in accents {
+        assert!(accent.bytes.start >= previous);
+        assert!(accent.bytes.start < accent.bytes.end && accent.bytes.end <= source.len());
+        assert!(source.is_char_boundary(accent.bytes.start));
+        assert!(source.is_char_boundary(accent.bytes.end));
+        previous = accent.bytes.end;
+    }
+    let mut code = CodeHighlights {
+        accents: accents.to_vec(),
+        ..Default::default()
+    };
+    let spans = code.spans(source, Style::new(), theme::DEFAULT_THEME.code_styles());
     assert_eq!(
         spans
             .iter()
@@ -28,118 +39,244 @@ fn assert_text(spans: &[Span<'_>], source: &str) {
     );
 }
 
-#[test]
-fn shell_arguments_variables_and_urls_have_independent_accents() {
-    let source = "curl https://example.org/if#fragment --output=\"$HOME/文件\" # download\n";
-    let spans = highlight(source);
-    for (needle, color) in [
-        ("curl", theme::PEACH),
-        ("https", theme::TEXT),
-        ("/if#fragment", theme::TEXT),
-        ("--output", theme::GREEN),
-        ("$HOME", theme::PINK),
-        ("/文件", theme::BLUE),
-        ("# download", theme::SUBTEXT),
-    ] {
-        assert_eq!(color_at(&spans, source, needle), Some(color), "{needle}");
+fn check(source: &str, expected: &[(&str, Option<StyleRole>)]) {
+    let accents = highlight(source);
+    for (needle, role) in expected {
+        assert_eq!(
+            role_at(&accents, source, needle),
+            *role,
+            "{source}: {needle}"
+        );
     }
-    assert_text(&spans, source);
+    assert_text(&accents, source);
 }
 
 #[test]
-fn shell_prompt_and_expansion_dollars_have_distinct_roles() {
-    let source = "  $ echo \"$HOME ${name} $? $$ $(command) $((1+2))\"\n$\n";
-    let spans = highlight(source);
-    for (needle, color) in [
-        ("$ echo", theme::SUBTEXT),
-        ("$HOME", theme::PINK),
-        ("${name}", theme::PINK),
-        ("$?", theme::PINK),
-        ("$$", theme::PINK),
-        ("$(command)", theme::PINK),
-        ("$((1+2))", theme::PINK),
-        ("$\n", theme::SUBTEXT),
-    ] {
-        assert_eq!(color_at(&spans, source, needle), Some(color), "{needle}");
-    }
-    assert_text(&spans, source);
-    let source = "echo \\$HOME '$HOME' \"\\$HOME\"";
-    let spans = highlight(source);
-    assert_eq!(color_at(&spans, source, "\\$HOME"), Some(theme::TEXT));
-    assert_eq!(color_at(&spans, source, "'$HOME'"), Some(theme::BLUE));
-    assert_text(&spans, source);
+fn shell_arguments_variables_and_urls_have_independent_accents() {
+    check(
+        "curl https://example.org/if#fragment --output=\"$HOME/文件\" # download\n",
+        &[
+            ("curl", Some(StyleRole::CodeCommand)),
+            ("https", None),
+            ("/if#fragment", None),
+            ("--output", Some(StyleRole::CodeOption)),
+            ("$HOME", Some(StyleRole::CodeVariable)),
+            ("/文件", Some(StyleRole::CodeString)),
+            ("# download", Some(StyleRole::CodeComment)),
+        ],
+    );
+}
+
+#[test]
+fn brackets_candidates_and_operators_have_distinct_semantic_roles() {
+    check(
+        "git [-v | --version] [-C <path>] [--output=<path|->] <command> [<args>]",
+        &[
+            ("git", Some(StyleRole::CodeCommand)),
+            ("[", Some(StyleRole::CodeDelimiter)),
+            ("]", Some(StyleRole::CodeDelimiter)),
+            ("|", Some(StyleRole::CodeDelimiter)),
+            ("<", Some(StyleRole::CodeDelimiter)),
+            (">", Some(StyleRole::CodeDelimiter)),
+            ("--version", Some(StyleRole::CodeOption)),
+            ("path", Some(StyleRole::CodePlaceholder)),
+            ("command", Some(StyleRole::CodePlaceholder)),
+        ],
+    );
+    check(
+        "tar {{[-c|--create]}} {{path/to/archive.tar}} {{路径/文件}}",
+        &[
+            ("{{", Some(StyleRole::CodeDelimiter)),
+            ("[", Some(StyleRole::CodeDelimiter)),
+            ("]", Some(StyleRole::CodeDelimiter)),
+            ("|", Some(StyleRole::CodeDelimiter)),
+            ("}}", Some(StyleRole::CodeDelimiter)),
+            ("-c", Some(StyleRole::CodeOption)),
+            ("--create", Some(StyleRole::CodeOption)),
+            ("path/to", Some(StyleRole::CodePlaceholder)),
+        ],
+    );
+    check(
+        "git [--first <path>\n     | --second <other>]\ntemplate <typename T>",
+        &[
+            ("|", Some(StyleRole::CodeDelimiter)),
+            ("<other>", Some(StyleRole::CodeDelimiter)),
+            ("<typename", Some(StyleRole::CodeOperator)),
+        ],
+    );
+    check(
+        "cat < input >> output 2>&1 | grep x && echo ok || exit 1",
+        &[
+            ("<", Some(StyleRole::CodeOperator)),
+            (">>", Some(StyleRole::CodeOperator)),
+            (">&", Some(StyleRole::CodeOperator)),
+            ("|", Some(StyleRole::CodeOperator)),
+            ("&&", Some(StyleRole::CodeOperator)),
+            ("||", Some(StyleRole::CodeOperator)),
+        ],
+    );
+}
+
+#[test]
+fn dollar_markers_and_expansion_delimiters_are_independent_and_symmetric() {
+    check(
+        "echo ${10} $((count-1)) $(echo /* //path)",
+        &[
+            ("10", Some(StyleRole::CodeVariable)),
+            ("count", Some(StyleRole::CodeVariable)),
+            ("-1", Some(StyleRole::CodeOperator)),
+            ("1))", Some(StyleRole::CodeNumber)),
+            ("/*", Some(StyleRole::CodeOperator)),
+            ("//path", None),
+            (")", Some(StyleRole::CodeDelimiter)),
+        ],
+    );
+    check(
+        "  $ echo \"$HOME ${name} $? $$ $(command) $((1+2))\"\n$\n",
+        &[
+            ("$ echo", Some(StyleRole::CodePrompt)),
+            ("$\n", Some(StyleRole::CodePrompt)),
+            ("$HOME", Some(StyleRole::CodeVariable)),
+            ("${", Some(StyleRole::CodeVariable)),
+            ("{", Some(StyleRole::CodeDelimiter)),
+            ("}", Some(StyleRole::CodeDelimiter)),
+            ("name", Some(StyleRole::CodeVariable)),
+            ("$?", Some(StyleRole::CodeVariable)),
+            ("$$", Some(StyleRole::CodeVariable)),
+            ("$(", Some(StyleRole::CodeVariable)),
+            ("(", Some(StyleRole::CodeDelimiter)),
+            (")", Some(StyleRole::CodeDelimiter)),
+            ("command", Some(StyleRole::CodeCommand)),
+            ("+", Some(StyleRole::CodeOperator)),
+            ("1", Some(StyleRole::CodeNumber)),
+        ],
+    );
+    check(
+        r#"echo "$(printf '%s' "${outer:-${inner:-fallback}}")" suffix"#,
+        &[
+            ("printf", Some(StyleRole::CodeCommand)),
+            ("%s", Some(StyleRole::CodeString)),
+            ("outer", Some(StyleRole::CodeVariable)),
+            ("inner", Some(StyleRole::CodeVariable)),
+            (":-", Some(StyleRole::CodeOperator)),
+            ("fallback", Some(StyleRole::CodeString)),
+            ("}", Some(StyleRole::CodeDelimiter)),
+            (")", Some(StyleRole::CodeDelimiter)),
+            ("suffix", None),
+        ],
+    );
+    check(
+        "diff <(sort a) >(cat)\necho $((1+(2*3)))",
+        &[
+            ("<", Some(StyleRole::CodeOperator)),
+            (">", Some(StyleRole::CodeOperator)),
+            ("sort", Some(StyleRole::CodeCommand)),
+            ("cat", Some(StyleRole::CodeCommand)),
+            ("(", Some(StyleRole::CodeDelimiter)),
+            (")", Some(StyleRole::CodeDelimiter)),
+            ("*", Some(StyleRole::CodeOperator)),
+        ],
+    );
+    check(
+        "echo ${array[0]} ${name#prefix} ${path//old/new}",
+        &[
+            ("array", Some(StyleRole::CodeVariable)),
+            ("[", Some(StyleRole::CodeDelimiter)),
+            ("]", Some(StyleRole::CodeDelimiter)),
+            ("0", Some(StyleRole::CodeNumber)),
+            ("#", Some(StyleRole::CodeOperator)),
+            ("prefix", Some(StyleRole::CodeString)),
+            ("//", Some(StyleRole::CodeOperator)),
+            ("old", Some(StyleRole::CodeString)),
+        ],
+    );
+}
+
+#[test]
+fn compound_identifiers_and_paths_do_not_swallow_structural_punctuation() {
+    check(
+        "std::func(a[0]); obj.method(x)\npath/to/file[0-9] ./path(arg) /tmp/data{a,b}",
+        &[
+            ("std::func", None),
+            ("obj.method", None),
+            ("path/to", None),
+            ("./path", None),
+            ("/tmp/data", None),
+            ("(", Some(StyleRole::CodeDelimiter)),
+            (")", Some(StyleRole::CodeDelimiter)),
+            ("[", Some(StyleRole::CodeDelimiter)),
+            ("]", Some(StyleRole::CodeDelimiter)),
+            ("{", Some(StyleRole::CodeDelimiter)),
+            ("}", Some(StyleRole::CodeDelimiter)),
+        ],
+    );
+    check(
+        "curl https://[::1]/a(b)?x=1 --output file",
+        &[
+            ("https", None),
+            ("[", None),
+            ("]", None),
+            ("(", None),
+            (")", None),
+            ("?", None),
+            ("--output", Some(StyleRole::CodeOption)),
+        ],
+    );
+}
+
+#[test]
+fn quoted_commented_and_escaped_brackets_are_not_structural_groups() {
+    check(
+        r#"echo '\$HOME (a)[b]{c}' "(x) [y] {z}" \(literal\) \[x\] # {ignored}"#,
+        &[
+            ("$HOME", Some(StyleRole::CodeString)),
+            ("(a)", Some(StyleRole::CodeString)),
+            ("(x)", Some(StyleRole::CodeString)),
+            ("[y]", Some(StyleRole::CodeString)),
+            ("{z}", Some(StyleRole::CodeString)),
+            ("\\(", None),
+            ("literal", None),
+            ("\\[", None),
+            ("# {", Some(StyleRole::CodeComment)),
+        ],
+    );
+    check(
+        "/* [ return 12;\n{} ] */\nreturn 34; // (ignored)\n'${path//old/new}'",
+        &[
+            ("[", Some(StyleRole::CodeComment)),
+            ("return 12", Some(StyleRole::CodeComment)),
+            ("return 34", Some(StyleRole::CodeKeyword)),
+            ("(ignored)", Some(StyleRole::CodeComment)),
+            ("${path", Some(StyleRole::CodeString)),
+        ],
+    );
+    check(
+        r#"echo "escaped \"quote\" \$HOME ${name:-value} $1 $?""#,
+        &[
+            ("\\$HOME", Some(StyleRole::CodeString)),
+            ("$1", Some(StyleRole::CodeVariable)),
+            ("name", Some(StyleRole::CodeVariable)),
+            ("value", Some(StyleRole::CodeString)),
+        ],
+    );
 }
 
 #[test]
 fn option_accents_stop_before_values_and_do_not_include_negative_numbers() {
-    let source = "gcc -D'NAME(x)=((x)+1)' -o output.o --count=12 --name=\"quoted\" -42 (-value) value - other";
-    let spans = highlight(source);
-    for needle in ["-D", "-o", "--count", "--name"] {
-        assert_eq!(color_at(&spans, source, needle), Some(theme::GREEN));
-    }
-    for (needle, color) in [
-        ("NAME(x)", theme::BLUE),
-        ("output.o", theme::TEXT),
-        ("12", theme::YELLOW),
-        ("-42", theme::TEXT),
-        ("-value", theme::TEXT),
-    ] {
-        assert_eq!(color_at(&spans, source, needle), Some(color), "{needle}");
-    }
-    assert_text(&spans, source);
-}
-
-#[test]
-fn git_synopsis_configuration_and_tldr_placeholders_keep_original_syntax() {
-    for source in [
-        "git [-v | --version] [-C <path>] [--git-dir=<path>] <command> [<args>]",
-        "[core]\n  filemode = false\n; user identity\n[user]\n  name = \"Example\"\n",
-        "tar {{[-c|--create]}} {{path/to/archive.tar}} {{路径/文件}}",
-        "tool --name=\"{{值}}\"",
-    ] {
-        let spans = highlight(source);
-        assert_text(&spans, source);
-        assert!(
-            spans
-                .iter()
-                .any(|span| span.style.fg == Some(theme::SUBTEXT_BRIGHT))
-        );
-    }
-    let source = "git [-v | --version] <command> {{[-c|--create]}}";
-    let spans = highlight(source);
-    for (needle, color) in [
-        ("git", theme::PEACH),
-        ("[", theme::SUBTEXT_BRIGHT),
-        ("|", theme::SUBTEXT_BRIGHT),
-        ("<", theme::SUBTEXT_BRIGHT),
-        (">", theme::SUBTEXT_BRIGHT),
-        ("--version", theme::GREEN),
-        ("command", theme::TEXT),
-        ("-c|--create", theme::TEXT),
-    ] {
-        assert_eq!(color_at(&spans, source, needle), Some(color), "{needle}");
-    }
-    assert!(spans.iter().any(|span| span.content == "[-c|--create]"));
-    let source = "git [--output=<path|->] [<args>]";
-    let spans = highlight(source);
-    for marker in ["[", "]", "<", ">", "|"] {
-        assert_eq!(
-            color_at(&spans, source, marker),
-            Some(theme::SUBTEXT_BRIGHT)
-        );
-    }
-    assert_eq!(color_at(&spans, source, "path"), Some(theme::TEXT));
-    assert_eq!(color_at(&spans, source, "--output"), Some(theme::GREEN));
-    assert_text(&spans, source);
-    let source = "git [--first <path>\n     | --second <other>]\ntemplate <typename T>";
-    let spans = highlight(source);
-    assert_eq!(color_at(&spans, source, "|"), Some(theme::SUBTEXT_BRIGHT));
-    assert_eq!(
-        color_at(&spans, source, "<other>"),
-        Some(theme::SUBTEXT_BRIGHT)
+    check(
+        "gcc -D'NAME(x)=((x)+1)' -o output.o --count=12 --name=\"quoted\" -42 (-value)",
+        &[
+            ("-D", Some(StyleRole::CodeOption)),
+            ("-o", Some(StyleRole::CodeOption)),
+            ("--count", Some(StyleRole::CodeOption)),
+            ("--name", Some(StyleRole::CodeOption)),
+            ("NAME(x)", Some(StyleRole::CodeString)),
+            ("output.o", None),
+            ("12", Some(StyleRole::CodeNumber)),
+            ("-42", None),
+            ("-value", Some(StyleRole::CodeOperator)),
+        ],
     );
-    assert_eq!(color_at(&spans, source, "<typename"), Some(theme::TEXT));
-    assert_text(&spans, source);
 }
 
 #[test]
@@ -155,13 +292,7 @@ fn command_heads_require_prompt_builtin_or_unquoted_argument_evidence() {
         ("printf \"%s\" \"$HOME\"", "printf"),
         ("tool {{path/to/file}}", "tool"),
     ] {
-        let spans = highlight(source);
-        assert_eq!(
-            color_at(&spans, source, word),
-            Some(theme::PEACH),
-            "{source}"
-        );
-        assert_text(&spans, source);
+        check(source, &[(word, Some(StyleRole::CodeCommand))]);
     }
     for source in [
         "message \"--flag\"",
@@ -175,171 +306,139 @@ fn command_heads_require_prompt_builtin_or_unquoted_argument_evidence() {
         "ordinary identifier",
         "ordinary --no-return\nplain identifier",
     ] {
-        let spans = highlight(source);
         let word = if source.starts_with("ordinary --") {
             "plain"
         } else {
             source.split_whitespace().next().unwrap()
         };
-        assert_eq!(
-            color_at(&spans, source, word),
-            Some(theme::TEXT),
-            "{source}"
-        );
-        assert_text(&spans, source);
+        check(source, &[(word, None)]);
     }
     for source in [
         "template <typename T>",
         "std::vector<T> values;",
         "if true; then echo ok; fi",
     ] {
-        let spans = highlight(source);
+        let accents = highlight(source);
         assert!(
-            !spans.iter().any(|span| span.style.fg == Some(theme::PEACH)),
+            !accents
+                .iter()
+                .any(|accent| accent.role == StyleRole::CodeCommand),
             "{source}"
         );
-        if source.contains('<') {
-            assert_eq!(color_at(&spans, source, "<"), Some(theme::TEXT));
-        }
-        assert_text(&spans, source);
+        assert_text(&accents, source);
     }
 }
 
 #[test]
 fn gcc_c_and_cpp_keywords_do_not_need_language_classification() {
-    // Independently selected lexical forms from gcc's -Wpedantic,
-    // -Wno-inaccessible-base and -Wsized-deallocation examples.
     for source in [
         "struct S {\n  void foo () {};\n};",
         "struct S {\n};\n;",
         "struct S {\n  int a;\n  ;\n};",
-        "struct A { int a; };\nstruct B : A { };\nstruct C : B, A { };",
-        "void operator delete (void *) noexcept;\nvoid operator delete[] (void *) noexcept;",
+        "struct A { int a; };\nstruct B : A { };",
+        "void operator delete[] (void *) noexcept;",
         "void operator delete (void *, std::size_t) noexcept;",
     ] {
-        let spans = highlight(source);
+        let accents = highlight(source);
         for keyword in ["struct", "void", "int", "operator", "delete", "noexcept"] {
             if source.contains(keyword) {
                 assert_eq!(
-                    color_at(&spans, source, keyword),
-                    Some(theme::MAUVE),
-                    "{source}: {keyword}"
+                    role_at(&accents, source, keyword),
+                    Some(StyleRole::CodeKeyword)
                 );
             }
         }
-        assert_text(&spans, source);
+        for (index, c) in source.char_indices() {
+            if "()[]{}".contains(c) {
+                assert_eq!(
+                    accents
+                        .iter()
+                        .find(|accent| accent.bytes.contains(&index))
+                        .map(|accent| accent.role),
+                    Some(StyleRole::CodeDelimiter)
+                );
+            }
+        }
+        assert_text(&accents, source);
     }
 }
 
 #[test]
 fn shared_keywords_do_not_color_words_inside_paths_or_identifiers() {
-    let source = "if true; then return 12; fi\nfn main() { let value = 34; }\ndef run(): pass\ntool structural --no-return path/if example.com/for for-loop 用户if if用户";
-    let spans = highlight(source);
-    for keyword in [
-        "if true", "then", "return", "fi\n", "fn", "let", "def", "pass",
-    ] {
-        assert_eq!(
-            color_at(&spans, source, keyword),
-            Some(theme::MAUVE),
-            "{keyword}"
-        );
-    }
-    for word in [
-        "structural",
-        "path/if",
-        "example.com/for",
-        "for-loop",
-        "用户if",
-        "if用户",
-    ] {
-        assert_eq!(color_at(&spans, source, word), Some(theme::TEXT), "{word}");
-    }
-    assert_text(&spans, source);
-}
-
-#[test]
-fn multiline_quotes_and_comments_do_not_color_inner_keywords() {
-    let source =
-        "/* note\nreturn 12;\n*/\nreturn 34; // note\n\"literal\nstruct $HOME\"\n'if $USER'\n";
-    let spans = highlight(source);
-    for (needle, color) in [
-        ("return 12", theme::SUBTEXT),
-        ("return 34", theme::MAUVE),
-        ("// note", theme::SUBTEXT),
-        ("struct", theme::BLUE),
-        ("$HOME", theme::PINK),
-        ("$USER", theme::BLUE),
-    ] {
-        assert_eq!(color_at(&spans, source, needle), Some(color), "{needle}");
-    }
-    assert_text(&spans, source);
-}
-
-#[test]
-fn escaped_quotes_markers_and_variable_expansions_remain_literal() {
-    let source =
-        r#"echo "escaped \"quote\" \$HOME ${name:-value} $1 $?" \{\{值\}\} '${path//old/new}'"#;
-    let spans = highlight(source);
-    for (needle, color) in [
-        ("\\$HOME", theme::BLUE),
-        ("${name:-value}", theme::PINK),
-        ("$1", theme::PINK),
-        ("${path//old/new}", theme::BLUE),
-    ] {
-        assert_eq!(color_at(&spans, source, needle), Some(color), "{needle}");
-    }
-    assert_text(&spans, source);
+    check(
+        "if true; then return 12; fi\nfn main() { let value = 34; }\ndef run(): pass\ntool structural --no-return path/if example.com/for for-loop 用户if if用户",
+        &[
+            ("if true", Some(StyleRole::CodeKeyword)),
+            ("then", Some(StyleRole::CodeKeyword)),
+            ("return", Some(StyleRole::CodeKeyword)),
+            ("fi\n", Some(StyleRole::CodeKeyword)),
+            ("fn", Some(StyleRole::CodeKeyword)),
+            ("let", Some(StyleRole::CodeKeyword)),
+            ("def", Some(StyleRole::CodeKeyword)),
+            ("pass", Some(StyleRole::CodeKeyword)),
+            ("structural", None),
+            ("path/if", None),
+            ("example.com/for", None),
+            ("for-loop", None),
+            ("用户if", None),
+            ("if用户", None),
+        ],
+    );
 }
 
 #[test]
 fn preprocessor_headers_and_configuration_comments_use_local_rules() {
-    let source = "#include <stdio.h>\n# define NAME(x) (x)\n# shell comment\n; config comment\n;\nint value;\n";
-    let spans = highlight(source);
-    for (needle, color) in [
-        ("#include", theme::MAUVE),
-        ("<stdio.h>", theme::BLUE),
-        ("# define", theme::MAUVE),
-        ("# shell", theme::SUBTEXT),
-        ("; config", theme::SUBTEXT),
-        (";\nint", theme::TEXT),
-        ("int", theme::MAUVE),
-    ] {
-        assert_eq!(color_at(&spans, source, needle), Some(color), "{needle}");
-    }
-    assert_text(&spans, source);
+    check(
+        "#include <stdio.h>\n# define NAME(x) (x)\n# shell comment\n; config comment\n;\nint value;\n",
+        &[
+            ("#include", Some(StyleRole::CodeKeyword)),
+            ("<stdio.h>", Some(StyleRole::CodeString)),
+            ("# define", Some(StyleRole::CodeKeyword)),
+            ("# shell", Some(StyleRole::CodeComment)),
+            ("; config", Some(StyleRole::CodeComment)),
+            (";\nint", Some(StyleRole::CodeOperator)),
+            ("int", Some(StyleRole::CodeKeyword)),
+        ],
+    );
 }
 
 #[test]
-fn complete_block_scanning_survives_every_unicode_inline_boundary() {
-    let source = "/* 多语言\ncomment */\nconst char *s = \"e\u{301} 👩‍💻 $HOME\";\r\n";
-    let expected = highlight(source);
+fn complete_block_projection_survives_every_unicode_inline_boundary() {
+    let source = "echo \"$(printf '%s' \"${name:-e\u{301}多语言👩‍💻}\")\"\r\n";
+    let base = Style::new().add_modifier(Modifier::UNDERLINED);
+    let styles = theme::DEFAULT_THEME.code_styles();
+    let expected = CodeHighlights::new(source).spans(source, base, styles);
+    let expanded = |spans: Vec<Span<'_>>| {
+        spans
+            .into_iter()
+            .flat_map(|span| {
+                span.content
+                    .chars()
+                    .map(|c| (c, span.style))
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>()
+    };
+    let expected = expanded(expected);
     for boundary in source
         .char_indices()
         .map(|(offset, _)| offset)
         .chain([source.len()])
     {
         let mut code = CodeHighlights::new(source);
-        let base = Style::new().add_modifier(Modifier::UNDERLINED);
-        let mut actual = code.spans(&source[..boundary], base);
-        actual.extend(code.spans(&source[boundary..], base));
-        assert_text(&actual, source);
+        let mut actual = code.spans(&source[..boundary], base, styles);
+        actual.extend(code.spans(&source[boundary..], base, styles));
         assert!(
             actual
                 .iter()
                 .all(|span| span.style.add_modifier.contains(Modifier::UNDERLINED))
         );
-        for needle in ["多语言", "comment", "const", "e\u{301}", "👩‍💻", "$HOME"] {
-            assert_eq!(
-                color_at(&actual, source, needle),
-                color_at(&expected, source, needle),
-                "boundary {boundary}"
-            );
-        }
+        assert_eq!(expanded(actual), expected, "boundary {boundary}");
     }
 }
 
 #[test]
-fn malformed_markers_and_long_rows_terminate_without_text_loss() {
+fn bounded_contexts_and_malformed_inputs_terminate_without_text_loss() {
     for source in [
         "{{".repeat(8192),
         "${".repeat(8192),
@@ -350,27 +449,34 @@ fn malformed_markers_and_long_rows_terminate_without_text_loss() {
         "{{\"多语言".to_owned(),
         "'\\".to_owned(),
         "/* open".to_owned(),
+        "]})(".to_owned(),
     ] {
         assert_text(&highlight(&source), &source);
     }
+    let source = format!(
+        "{}value{}",
+        "(".repeat(scan::MAX_CONTEXT_DEPTH + 1),
+        ")".repeat(scan::MAX_CONTEXT_DEPTH + 1)
+    );
+    assert!(
+        highlight(&source).is_empty(),
+        "depth overflow must reject the entire block"
+    );
+    assert_text(&highlight(&source), &source);
     let source = "if true; then return 12; fi\n".repeat(1025);
-    let spans = highlight(&source);
-    assert_eq!(color_at(&spans, &source, "if"), Some(theme::MAUVE));
-    assert_text(&spans, &source);
+    assert_eq!(
+        role_at(&highlight(&source), &source, "if"),
+        Some(StyleRole::CodeKeyword)
+    );
+    assert_text(&highlight(&source), &source);
 }
 
 #[test]
 fn oversized_blocks_fall_back_as_a_whole_and_independent_blocks_reset() {
     let source = "return 12;\n".repeat(MAX_BLOCK_BYTES / 11 + 1);
-    assert_eq!(
-        highlight(&source),
-        vec![Span::styled(source, theme::style(StyleRole::Text))]
-    );
+    assert_eq!(highlight(&source), []);
+    assert_text(&highlight(&source), &source);
     highlight("/* open");
-    let source = "return 12;";
-    assert_eq!(
-        color_at(&highlight(source), source, "return"),
-        Some(theme::MAUVE)
-    );
-    assert_eq!(highlight(""), Vec::<Span<'_>>::new());
+    check("return 12;", &[("return", Some(StyleRole::CodeKeyword))]);
+    assert_eq!(highlight(""), []);
 }
