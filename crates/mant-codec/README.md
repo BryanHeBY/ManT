@@ -37,6 +37,13 @@ existing report performs no second parse. `encode::MarkdownFragmentOptions`
 deliberately excludes semantic declaration metadata because detached fragments
 have not passed whole-document representability checks.
 
+TLDR `More information:` metadata retains the destination of one explicit
+`CommonMark` autolink or Markdown link, not its label or surrounding sentence
+punctuation. Dots authored inside the destination remain part of the URL and
+stay inside the autolink when re-encoded. Bare URL metadata is not heuristically
+trimmed; ambiguous multi-link lines retain the display fallback. Host activation
+allowlists still belong to the reader, not this codec.
+
 ## Native lowering ownership
 
 Native lowering internals live under `src/mandoc/`, behind the optional `roff`

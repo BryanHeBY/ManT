@@ -13,6 +13,14 @@ that crate was not published for that change.
 
 ## Unreleased
 
+### mant-codec
+
+- Preserve the actual destination of a single TLDR `More information:` link
+  before flattening presentation markup. Exclude surrounding sentence punctuation
+  from browser targets, retain meaningful terminal dots and URL spelling, and
+  keep those dots inside re-encoded Markdown links. Leave ambiguous/bare metadata
+  fallbacks and reader activation safeguards intact; no IR schema change.
+
 ### Verification tooling (outside crate source sets)
 
 - Bound one-shot verification disk use by disabling incremental compilation and

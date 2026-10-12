@@ -123,12 +123,13 @@ pub fn parse_tldr_page(
         }
 
         if let Some(quote) = trimmed.strip_prefix('>') {
-            let quote = flatten_markdown(quote);
+            let authored = quote.trim();
+            let quote = flatten_markdown(authored);
             if let Some(value) = strip_prefix_ascii_case(&quote, "More information:") {
                 flush_description_paragraph(&mut pending_page_description, &mut description);
                 let value = value.trim();
                 if !value.is_empty() {
-                    more_information = Some(value.to_owned());
+                    more_information = Some(information_target(authored, value));
                 }
             } else if quote.is_empty() {
                 flush_description_paragraph(&mut pending_page_description, &mut description);
@@ -272,6 +273,36 @@ fn strip_prefix_ascii_case<'a>(value: &'a str, prefix: &str) -> Option<&'a str> 
         .then(|| &value[prefix.len()..])
 }
 
+/// Keep the destination boundary before presentation flattening loses `<...>`
+/// or `[label](...)`. Punctuation outside a link is not part of its URI; a dot
+/// inside its destination is. Ambiguous multi-link metadata keeps the existing
+/// display fallback instead of inventing a single activation target.
+fn information_target(authored: &str, fallback: &str) -> String {
+    use pulldown_cmark::{Event, Parser, Tag};
+
+    let mut links = Parser::new(authored).filter_map(|event| match event {
+        Event::Start(Tag::Link { dest_url, .. }) if !dest_url.is_empty() => Some(dest_url),
+        _ => None,
+    });
+    if let Some(destination) = links.next()
+        && links.next().is_none()
+        && !destination.chars().any(char::is_control)
+    {
+        return destination.into_string();
+    }
+    // Bare URI metadata has no explicit punctuation boundary. Do not guess
+    // whether its final dot is prose, or strip URI underscores as emphasis.
+    if let Some(value) = strip_prefix_ascii_case(authored, "More information:") {
+        let value = value.trim();
+        if (value.starts_with("http://") || value.starts_with("https://"))
+            && !value.chars().any(char::is_whitespace)
+        {
+            return value.to_owned();
+        }
+    }
+    fallback.to_owned()
+}
+
 fn flatten_markdown(value: &str) -> String {
     let mut flattened = flatten_links(value);
     for marker in ["**", "__", "*", "_"] {
@@ -395,7 +426,7 @@ mod tests {
         assert_eq!(page.description, ["Archiving utility."]);
         assert_eq!(
             page.more_information.as_deref(),
-            Some("https://www.gnu.org/software/tar.")
+            Some("https://www.gnu.org/software/tar")
         );
         assert_eq!(page.examples.len(), 2);
         assert_eq!(
@@ -425,6 +456,82 @@ mod tests {
                 },
             ]
         );
+    }
+
+    #[test]
+    fn information_links_keep_the_destination_not_sentence_punctuation_or_label() {
+        for (source, expected) in [
+            (
+                "<https://git-scm.com/docs/git-add>.",
+                "https://git-scm.com/docs/git-add",
+            ),
+            (
+                "<https://example.test/path.>.",
+                "https://example.test/path.",
+            ),
+            (
+                "<https://example.test/path?q=a&b=c#section>!",
+                "https://example.test/path?q=a&b=c#section",
+            ),
+            (
+                "[Official documentation](https://example.test/a_(b) \"Title\").",
+                "https://example.test/a_(b)",
+            ),
+            (
+                "[Read more](https://example.test/a_b_c).",
+                "https://example.test/a_b_c",
+            ),
+            ("https://example.test/a_b_c.", "https://example.test/a_b_c."),
+        ] {
+            let page = parse_tldr_page(
+                &format!("# probe\n> More information: {source}\n"),
+                location(),
+            )
+            .unwrap();
+            assert_eq!(page.more_information.as_deref(), Some(expected), "{source}");
+            let encoded = crate::encode::render_tldr(&page).join("\n\n");
+            assert!(
+                encoded.contains(&format!("**More information:** <{expected}>")),
+                "{encoded}"
+            );
+            let links = pulldown_cmark::Parser::new(&encoded)
+                .filter_map(|event| match event {
+                    pulldown_cmark::Event::Start(pulldown_cmark::Tag::Link {
+                        dest_url, ..
+                    }) => Some(dest_url.into_string()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(links, [expected], "{source}");
+        }
+    }
+
+    #[test]
+    fn formatted_prefixes_and_ambiguous_or_unsafe_metadata_keep_safe_boundaries() {
+        let page = parse_tldr_page(
+            "# probe\n> **mOrE iNfOrMaTiOn:** [Docs](https://example.test/path).\n",
+            location(),
+        )
+        .unwrap();
+        assert_eq!(
+            page.more_information.as_deref(),
+            Some("https://example.test/path")
+        );
+        let page = parse_tldr_page(
+            "# probe\n> More information: <https://first.test> and <https://second.test>.\n",
+            location(),
+        )
+        .unwrap();
+        assert_eq!(
+            page.more_information.as_deref(),
+            Some("https://first.test and https://second.test.")
+        );
+        let page = parse_tldr_page(
+            "# probe\n> More information: <https://example.test/&#27;[2J>.\n",
+            location(),
+        )
+        .unwrap();
+        assert!(!page.more_information.unwrap().chars().any(char::is_control));
     }
 
     #[test]
@@ -472,7 +579,7 @@ mod tests {
         );
         assert_eq!(
             page.more_information.as_deref(),
-            Some("https://example.test/demo.")
+            Some("https://example.test/demo")
         );
         assert_eq!(
             page.examples[0].description,

@@ -74,7 +74,8 @@ fn renders_tldr_before_manual_and_resolves_placeholders() {
     assert!(markdown.find("## TLDR") < markdown.find("## NAME"));
     assert!(markdown.contains("```sh\nls --all\n```"));
     assert!(!markdown.contains("{{[-a|--all]}}"));
-    assert!(markdown.contains("**More information:** <https://example.com/manual_page.html>."));
+    // Normalized URL data may itself end in a dot; it stays inside the link.
+    assert!(markdown.contains("**More information:** <https://example.com/manual_page.html.>"));
     assert!(markdown.contains("*tldr-pages · CC BY 4.0 · common · en*"));
     assert!(markdown.contains("\n\n---\n\n## NAME"));
     assert!(!markdown.contains("<a "));

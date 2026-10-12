@@ -48,6 +48,63 @@ fn clicking_safe_tldr_more_information_reaches_the_host() {
 }
 
 #[test]
+fn repeated_tldr_link_clicks_use_the_parsed_destination_without_prose_punctuation() {
+    for (authored, expected) in [
+        (
+            "<https://git-scm.com/docs/git-add>.",
+            "https://git-scm.com/docs/git-add",
+        ),
+        (
+            "<https://example.test/path.>.",
+            "https://example.test/path.",
+        ),
+        (
+            "[Official docs](https://example.test/a_(b)).",
+            "https://example.test/a_(b)",
+        ),
+    ] {
+        let page = mant_codec::parse_tldr_page(
+            &format!("# demo\n> More information: {authored}\n"),
+            mant_codec::TldrPageLocation {
+                platform: "common".into(),
+                language: "en".into(),
+                source_path: "demo.md".into(),
+            },
+        )
+        .unwrap();
+        for width in [72, 110] {
+            let mut bundle = tldr_bundle();
+            bundle.tldr = Some(page.clone());
+            let mut terminal = Terminal::new(TestBackend::new(width, 18)).unwrap();
+            let mut app = App::new(&bundle);
+            terminal.draw(|frame| app.draw(frame)).unwrap();
+            let region =
+                &app.session.rendered_cache[&app.geometry.content.width].search(expected)[0];
+            let (column, row) = (region.start_column, region.row);
+            for _ in 0..3 {
+                click_document_cell(&mut app, column, row);
+                assert_eq!(
+                    app.take_external_request()
+                        .as_ref()
+                        .map(crate::ExternalUri::as_str),
+                    Some(expected)
+                );
+                assert_eq!(
+                    app.session
+                        .current_bundle
+                        .tldr
+                        .as_ref()
+                        .unwrap()
+                        .more_information
+                        .as_deref(),
+                    Some(expected)
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn document_finder_filters_live_and_emits_an_exact_address() {
     let mut app = App::with_catalog(&navigation_bundle(), document_catalog());
     app.handle_key(KeyEvent::new(KeyCode::Char('p'), KeyModifiers::CONTROL));

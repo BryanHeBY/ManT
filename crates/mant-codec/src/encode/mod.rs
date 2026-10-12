@@ -140,13 +140,11 @@ pub fn render_tldr(page: &TldrDocument) -> Vec<String> {
 
 fn render_more_information(value: &str) -> String {
     let value = value.trim();
-    if value.starts_with("http://") || value.starts_with("https://") {
-        let (url, punctuation) = value
-            .strip_suffix('.')
-            .map_or((value, ""), |url| (url, "."));
-        if !url.chars().any(char::is_whitespace) && !url.contains(['<', '>']) {
-            return format!("**More information:** <{url}>{punctuation}");
-        }
+    if (value.starts_with("http://") || value.starts_with("https://"))
+        && !value.chars().any(char::is_whitespace)
+        && !value.contains(['<', '>'])
+    {
+        return format!("**More information:** <{value}>");
     }
     format!("**More information:** {}", escape_text(value))
 }
