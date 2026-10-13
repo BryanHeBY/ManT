@@ -16,6 +16,49 @@
 use super::{FieldBuffer, FieldCell};
 
 #[test]
+fn breakpoint_retreat_cannot_revoke_a_glyph_from_an_earlier_pass() {
+    // Exact X\zY\p\:Z source first ran on the new pristine five profiles:
+    // XY belongs to pass one, Z to pass two. encode1() keeps BACKBEFORE and
+    // writes '\b' after ASCII_BREAK; term_fill() already accepts XY before
+    // that cell. Only its projection ownership ends, not the native retreat.
+    use super::FieldWrite;
+    let mut buffer = FieldBuffer::default();
+    buffer.apply_writes(&[
+        FieldWrite::Cell(FieldCell::Graph {
+            text: 'X',
+            width: 1,
+        }),
+        FieldWrite::ArmBackafter,
+        FieldWrite::Cell(FieldCell::Graph {
+            text: 'Y',
+            width: 1,
+        }),
+        FieldWrite::Cell(FieldCell::BreakMarker),
+        FieldWrite::Cell(FieldCell::Breakpoint),
+        FieldWrite::Cell(FieldCell::Graph {
+            text: 'Z',
+            width: 1,
+        }),
+    ]);
+    let first = buffer.fill_pass(78).expect("XY accepted before breakpoint");
+    assert_eq!(buffer.projection_length(0, first.end), 2);
+    buffer.advance_past(first.end);
+    let second = buffer.fill_pass(78).expect("Z accepted after breakpoint");
+    assert_eq!(buffer.projection_length(first.end, second.end), 1);
+    assert!(matches!(
+        buffer.cells(),
+        [
+            FieldCell::Graph { text: 'X', .. },
+            FieldCell::Graph { text: 'Y', .. },
+            FieldCell::BreakMarker,
+            FieldCell::Breakpoint,
+            FieldCell::Backline,
+            FieldCell::Graph { text: 'Z', .. },
+        ]
+    ));
+}
+
+#[test]
 fn final_scan_copies_native_facts_without_output_ownership_history() {
     let mut source = FieldBuffer::default();
     for _ in 0..8192 {

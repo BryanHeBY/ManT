@@ -255,18 +255,15 @@ fn diagnostic_xo_spelling_is_not_an_explicit_definition_head_scope() {
 
 #[test]
 fn colon_breakpoint_wraps_the_head_row_like_the_reference() {
-    // Fixed CVS -Tutf8: `\:` buffers ASCII_NBRZW on this device (chars.c:53
-    // unicode column 0; term.c:631-632), a zero-width graph that can never
-    // break a pass (term.c:340-349) and never prints (term.c:397). Every
-    // operand therefore stays one row and BODY concatenates, however long
-    // the tail: the wrapping shapes below are the ascii-device column
-    // (ASCII_BREAK byte, term.c:287-300), kept for the -Tascii switch in
-    // FieldCell::Breakpoint. All five rows verified against the pinned
-    // reference: `X YYYYYZBODY` … `X YYYZBODY`.
+    // Exact sources reran on the new pristine ASCII/UTF8/HTML/tree/lint
+    // reference before these assertions changed. term_word() now buffers
+    // ASCII_BREAK on both devices (term.c:619-621), so term_fill():287-302
+    // records a zero-width break candidate. Width overflow can wrap at it;
+    // shorter tails still fit and do not acquire a public hard break.
     for (words, expected_rows) in [
-        (r"YYYYY\:Z", 1),
-        (r"YYYY\:ZZ", 1),
-        (r"Y\:ZZZZ", 1),
+        (r"YYYYY\:Z", 2),
+        (r"YYYY\:ZZ", 2),
+        (r"Y\:ZZZZ", 2),
         (r"YY\:ZZ", 1),
         (r"YYY\:Z", 1),
     ] {

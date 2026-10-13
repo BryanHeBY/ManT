@@ -1,6 +1,6 @@
 {
-  "archive": "upstream-cvs-20261006T140200Z.tar.gz",
-  "archiveSha256": "fb45264bd42e67173ca1982e3348de9235ee5ddf64ea843e22d756dc7b713705",
+  "archive": "upstream-cvs-20261013T025419Z.tar.gz",
+  "archiveSha256": "a93848bf2676390002e2dff84e507dfd0952bc20eed66927c526c989fb17f077",
   "checkoutCommand": [
     "/usr/bin/cvs",
     "-Q",
@@ -8,12 +8,12 @@
     ":ext:anoncvs@mandoc.bsd.lv:/cvs",
     "checkout",
     "-D",
-    "2026-10-06 14:02:00 UTC",
+    "2026-10-13 02:54:19 UTC",
     "-d",
     "<destination>",
     "mandoc"
   ],
-  "cutoff": "2026-10-06 14:02:00 UTC",
+  "cutoff": "2026-10-13 02:54:19 UTC",
   "cvsClient": "Concurrent Versions System (CVS) 1.11.23 (client/server)\n\nCopyright (C) 2006 Free Software Foundation, Inc.\n\nSenior active maintainers include Larry Jones, Derek R. Price,\nand Mark D. Baushke.  Please see the AUTHORS and README files from the CVS\ndistribution kit for a complete list of contributors and copyrights.\n\nCVS may be copied only under the terms of the GNU General Public License,\na copy of which can be found with the CVS distribution kit.\n\nSpecify the --help option for further information about CVS",
   "cvsExecutable": {
     "path": "/usr/bin/cvs",
@@ -22,23 +22,47 @@
   "inventoryDiff": {
     "added": [],
     "contentChanged": [
+      "Makefile",
       "NEWS",
       "TODO",
-      "mdoc_validate.c",
-      "msec.c"
+      "chars.c",
+      "configure",
+      "configure.local.example",
+      "main.c",
+      "mandoc.1",
+      "mandoc.h",
+      "mandoc_msg.c",
+      "mandocdb.c",
+      "mdoc_macro.c",
+      "mdoc_markdown.c",
+      "roff_escape.c",
+      "term.c"
     ],
-    "removed": [],
+    "removed": [
+      "test-sandbox_init.c"
+    ],
     "revisionChanged": [
+      "Makefile",
       "NEWS",
       "TODO",
-      "mdoc_validate.c",
-      "msec.c"
+      "chars.c",
+      "configure",
+      "configure.local.example",
+      "main.c",
+      "mandoc.1",
+      "mandoc.h",
+      "mandoc_msg.c",
+      "mandocdb.c",
+      "mdoc_macro.c",
+      "mdoc_markdown.c",
+      "roff_escape.c",
+      "term.c"
     ]
   },
-  "inventorySha256": "3ff424019e58f9075100a3dff44a0c05adb1683acef02b9afff3bed8dcc010a8",
-  "manifestSha256": "a38f15472c577d9fb1fb62a61ba00a2c96a3c6a932b9a876de87f28bfb609b15",
-  "regressManifestSha256": "c5d7b6b20996ba9c8f68f1fa8239825200161572eeef594e38fd174edb80a252",
+  "inventorySha256": "391835f4c6ed467e4470f75502073e026438c73e1b8ca8bbbbc7d5d70d1df388",
+  "manifestSha256": "e0303c48b4a88ffc1290f06924ead4d88676c3b66774f785990c4b085d116648",
+  "regressManifestSha256": "3eef9c647e74cdab672e2f99ade791fecd3213bbce0334f7e4b3330084cce34e",
   "schema": "libmandoc-rs.cvs-freeze/v1",
-  "sourceSha256": "7483e774991cfab520f69e366a2bf766a2aa3b9abac6b8b476d150270bf687d5",
-  "version": "cvs-20261006T140200Z"
+  "sourceSha256": "72bbbff809145d41d75a01febe92f9afe3b782decf91410133ab03fb3ab0c9f9",
+  "version": "cvs-20261013T025419Z"
 }

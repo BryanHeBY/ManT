@@ -237,7 +237,7 @@ impl InlineBuilder {
         word_first_cell: usize,
     ) -> WordPassProjection {
         let anchor_count = anchors.len();
-        let mut inside_splits = Vec::new();
+        let mut inside_splits: BTreeMap<String, Vec<usize>> = BTreeMap::new();
         let mut closes_before = 0;
         let mut leading_cells = 0;
         let starts_earlier_owner = anchor_count > 0
@@ -246,6 +246,13 @@ impl InlineBuilder {
                     if id.as_str().starts_with(super::INTERNAL_FIELD_WORD)
                         && id.as_str() != anchors[anchor_count - 1].owner)
             });
+        // Borrowed output need not precede this pass: a projected glyph's
+        // held cells can follow its breakpoint. Recover their exact native
+        // interval only when such a prefix exists, searching recent owners
+        // backwards rather than scanning the growing anchor history per word.
+        let borrowed = starts_earlier_owner
+            .then(|| BorrowedPrefix::capture(incoming, buffer, anchors, word_first_cell))
+            .flatten();
         if anchor_count > 0 && !buffer.word_scan_deferred() && buffer.has_pending_break_markers() {
             let word_end = buffer.cells().len();
             let mut first_pass = !buffer.has_committed_pass();
@@ -294,7 +301,27 @@ impl InlineBuilder {
                         // event at the current word's stable owner, not before
                         // the entire Rust fragment (term.c:901-927).
                         if starts_earlier_owner {
-                            inside_splits.push(0);
+                            if let Some(prefix) = &borrowed {
+                                let offset = prefix.offset(buffer, boundary);
+                                if offset == 0 {
+                                    // Every borrowed scalar follows this
+                                    // native boundary. Earlier empty words
+                                    // may already have projected its pending
+                                    // blanks into nodes: let the same row
+                                    // close transfer those cells once.
+                                    closes_before += 1;
+                                } else {
+                                    inside_splits
+                                        .entry(prefix.owner.clone())
+                                        .or_default()
+                                        .push(offset);
+                                }
+                            } else {
+                                inside_splits
+                                    .entry(anchors[anchor_count - 1].owner.clone())
+                                    .or_default()
+                                    .push(0);
+                            }
                         } else {
                             closes_before += 1;
                         }
@@ -303,12 +330,23 @@ impl InlineBuilder {
                     // non-blank byte (term.c:205-207). A NODE_LINE TABREF
                     // stops that sweep, leaving this word's real separator
                     // at the new row origin even after an empty operand.
-                    leading_cells = buffer.projection_length(
-                        boundary.max(anchors[anchor_count - 1].start),
-                        word_first_cell,
-                    );
+                    leading_cells = if let Some(prefix) = &borrowed
+                        && prefix.offset(buffer, boundary) == 0
+                    {
+                        buffer
+                            .projection_length(boundary, word_first_cell)
+                            .saturating_sub(prefix.count)
+                    } else {
+                        buffer.projection_length(
+                            boundary.max(anchors[anchor_count - 1].start),
+                            word_first_cell,
+                        )
+                    };
                 } else if boundary < word_end && !represented_in_ir {
-                    inside_splits.push(scalar_offset);
+                    inside_splits
+                        .entry(anchors[anchor_count - 1].owner.clone())
+                        .or_default()
+                        .push(scalar_offset);
                 }
                 if boundary >= word_end {
                     break;
@@ -316,14 +354,7 @@ impl InlineBuilder {
                 first_pass = false;
             }
         }
-        let split_word = (!inside_splits.is_empty()).then(|| {
-            let owner = &anchors[anchor_count - 1].owner;
-            let mut projection_nodes = incoming.to_vec();
-            let starts_owned = projection_nodes.first().is_some_and(|node| matches!(node, Inline::Anchor { id, .. } if id.as_str().starts_with(super::INTERNAL_FIELD_WORD)));
-            if !starts_owned { projection_nodes.insert(0, Inline::anchor(owner.clone())); }
-            let boundaries = BTreeMap::from([(owner.clone(), inside_splits)]);
-            split_native_field_passes(&projection_nodes, &boundaries)
-        });
+        let split_word = split_recorded_word(incoming, anchors.last(), &inside_splits);
         WordPassProjection {
             closes_before,
             leading_cells,
@@ -332,4 +363,97 @@ impl InlineBuilder {
             prints_padding: false,
         }
     }
+}
+
+struct BorrowedPrefix {
+    owner: String,
+    content: usize,
+    emitted: usize,
+    count: usize,
+}
+
+impl BorrowedPrefix {
+    fn capture(
+        incoming: &[Inline],
+        buffer: &super::super::field_buffer::FieldBuffer,
+        anchors: &[super::super::NativeWordAnchor],
+        word_first_cell: usize,
+    ) -> Option<Self> {
+        let Inline::Anchor { id, .. } = incoming.first()? else {
+            return None;
+        };
+        let index = anchors[..anchors.len() - 1]
+            .iter()
+            .rposition(|anchor| anchor.owner == id.as_str())?;
+        let content = anchors[index].content;
+        let end = anchors[index + 1].start.min(word_first_cell);
+        let count = borrowed_prefix_scalars(incoming, id.as_str());
+        let emitted = buffer.projection_length(content, end).saturating_sub(count);
+        Some(Self {
+            owner: id.as_str().to_owned(),
+            content,
+            emitted,
+            count,
+        })
+    }
+
+    fn offset(&self, buffer: &super::super::field_buffer::FieldBuffer, boundary: usize) -> usize {
+        buffer
+            .projection_length(self.content, boundary)
+            .saturating_sub(self.emitted)
+            .min(self.count)
+    }
+}
+
+fn split_recorded_word(
+    incoming: &[Inline],
+    anchor: Option<&super::super::NativeWordAnchor>,
+    boundaries: &BTreeMap<String, Vec<usize>>,
+) -> Option<Vec<Inline>> {
+    if boundaries.is_empty() {
+        return None;
+    }
+    let owner = &anchor?.owner;
+    let mut nodes = incoming.to_vec();
+    let starts_owned = nodes.first().is_some_and(|node| {
+        matches!(node,
+        Inline::Anchor { id, .. } if id.as_str().starts_with(super::INTERNAL_FIELD_WORD))
+    });
+    if !starts_owned {
+        nodes.insert(0, Inline::anchor(owner.clone()));
+    }
+    Some(split_native_field_passes(&nodes, boundaries))
+}
+
+fn borrowed_prefix_scalars(nodes: &[Inline], owner: &str) -> usize {
+    fn count(nodes: &[Inline], owner: &str, scalars: &mut usize) -> bool {
+        for node in nodes {
+            match node {
+                Inline::Anchor { id, .. }
+                    if id.as_str().starts_with(super::INTERNAL_FIELD_WORD) =>
+                {
+                    if id.as_str() != owner {
+                        return false;
+                    }
+                }
+                Inline::Text { value }
+                | Inline::Code { value }
+                | Inline::Equation { value, .. } => {
+                    *scalars += value.chars().count();
+                }
+                Inline::Strong { children }
+                | Inline::Emphasis { children }
+                | Inline::Link { children, .. } => {
+                    if !count(children, owner, scalars) {
+                        return false;
+                    }
+                }
+                Inline::Anchor { .. } | Inline::LineBreak { .. } => {}
+            }
+        }
+        true
+    }
+    let mut scalars = 0;
+    count(nodes, owner, &mut scalars);
+    scalars
 }

@@ -1,7 +1,7 @@
 //! Fixed-CVS contracts for quoted escape-argument delimiters.
 //!
 //! Every expectation here was cross-checked against the pinned pristine
-//! CVS mandoc (`roff_escape.c` 1.17, `term.c` `term_word()`) rendered with
+//! CVS mandoc (`roff_escape.c` 1.18, `term.c` `term_word()`) rendered with
 //! `-Tutf8 -Owidth=78` over one-probe documents: the delimiter syntax, not
 //! its displayed character, decides how an argument ends
 //! (roff_escape.c:278-314 decides, :342-380 scans), a rejected delimiter
@@ -10,6 +10,8 @@
 //! `Aow` families keep an unclosed payload (:343-351).
 
 use super::{decode, visible_text};
+
+mod character_delimiters;
 
 /// The RR05 main case: `\o` delimited by the complete `\(aq` escape.
 #[test]
@@ -28,7 +30,8 @@ fn literal_and_escaped_delimiters_are_distinct_syntaxes() {
     for source in [r"\o'XY'Z", r"\o|XY|Z", r"\o!XY!Z"] {
         assert_eq!(visible_text(source), "YZ", "{source}");
     }
-    // An escaped delimiter is identified by its trigger: `\(aq`, `\[aq]`,
+    // An escaped SPECIAL delimiter is identified by its complete spelling:
+    // `\(aq`, `\[aq]`,
     // `\e` (displayed backslash) and the UNDEF spelling `\q` all delimit,
     // each with its own ending rule.
     assert_eq!(visible_text(r"\o\(aqXY\(aqZ"), "YZ");
@@ -41,13 +44,14 @@ fn literal_and_escaped_delimiters_are_distinct_syntaxes() {
     assert_eq!(visible_text(r"\o\\XY\\"), "Y\\");
 }
 
-/// Visually different delimiters share an ending rule when their trigger
-/// matches, and visually equal ones do not when it differs.
+/// SPECIAL delimiters compare their complete spelling, not just the trigger
+/// or the displayed glyph.
 #[test]
-fn closing_matches_on_the_trigger_not_the_displayed_character() {
-    // `\(dq` displays a double quote but closes like `\(aq`: both are
-    // `(`-triggered (roff_escape.c:363-365 compares buf[snam]).
-    assert_eq!(visible_text(r"\o\(aqXY\(dqZ"), "YZ");
+fn special_closing_requires_the_complete_spelling() {
+    // CVS roff_escape.c 1.18 compares snam..send with dnam..iarg: dq no
+    // longer closes aq despite the matching `(` trigger. The unclosed
+    // overstrike retains all scanned payload and its final visible cell Z.
+    assert_eq!(visible_text(r"\o\(aqXY\(dqZ"), "Z");
     // `\[dq]` displays the same double quote but is `[`-triggered, so it
     // does not close a `(`-triggered argument: the input stays unclosed
     // and `\o` keeps its scanned payload.
@@ -197,7 +201,7 @@ fn malformed_named_delimiters_preserve_the_unconsumed_suffix() {
         (r"A\o\[aq]X\[ a Z", "AXa Z"),
         (r"A\o\[aq]X\[ a] Z", "AXa] Z"),
         (r"A\o\[ a Z", "AZ"),
-        (r"A\o\[ a]XY\[aq]Z", "AYZ"),
+        (r"A\o\[ a]XY\[aq]Z", "AZ"),
         (r"A\o\[ ]", "A]"),
     ] {
         assert_eq!(visible_text(source), expected, "{source}");

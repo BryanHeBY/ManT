@@ -215,10 +215,10 @@ class ConsumerFixtureContractTests(unittest.TestCase):
                          (460, 12))
         self.assertFalse(header["expectations_from_product"])
         # This active cohort was replayed against all five pristine profiles
-        # at the 2026-10-06 refresh; the historical cohorts above keep their
+        # at the 2026-10-13 refresh; the historical cohorts above keep their
         # original seals. No source, row or status expectation changed.
         self.assertEqual(header["oracle_sha256"],
-                         "6297105d1370a44fd306851ae5beab3f23492d756a682f8a0693896922249ea0")
+                         "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e")
         self.assertEqual(len(fixture["cases"]), 472)
         self.assertEqual(len({case["id"] for case in fixture["cases"]}), 472)
         self.assertEqual(len({case["source"] for case in fixture["cases"]}), 472)
@@ -241,6 +241,43 @@ class ConsumerFixtureContractTests(unittest.TestCase):
                               {"asserted", "uncovered-bold-combining-backspace"})
         self.assertEqual(sum(case["row_observation"] == "asserted"
                              for case in fixture["cases"]), 460)
+
+    def test_current_breakpoint_supplement_binds_exact_sources_and_distinct_windows(self):
+        fixture = json.loads((FIXTURE_ROOT / "oracle_migrations/breakpoints.json").read_text())
+        header, cases = fixture["header"], fixture["cases"]
+        self.assertEqual((header["count"], header["profilesPerSource"]), (11, 5))
+        self.assertFalse(header["expectationsFromProduct"])
+        self.assertEqual(header["oracleIdentity"],
+                         "cvs-20261013T025419Z-linux-x86_64-gcc-16.2.1-reproducible")
+        self.assertEqual(header["oracleSha256"],
+                         "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e")
+        self.assertEqual(len({(case["cohort"], case["name"]) for case in cases}), 11)
+        self.assertEqual(len({case["sourceSha256"] for case in cases}), 11)
+        acceptance = json.loads((FIXTURE_ROOT / "native_execution/fixtures/"
+                                 "native_acceptance_rows/cases.json").read_text())
+        for case in cases:
+            with self.subTest(case=case["name"]):
+                self.assertEqual(hashlib.sha256(case["source"].encode()).hexdigest(),
+                                 case["sourceSha256"])
+                self.assertEqual(set(case["profiles"]), {"ascii", "utf8", "html", "tree", "lint"})
+                for name, profile in case["profiles"].items():
+                    self.assertEqual(profile["code"], 2 if name == "lint" and case["cohort"] == "escape" else 0)
+                    self.assertRegex(profile["stdout_sha256"], r"^[0-9a-f]{64}$")
+                    self.assertRegex(profile["stderr_sha256"], r"^[0-9a-f]{64}$")
+                if case["cohort"] == "hang":
+                    self.assertIsNone(case["historicalMatrixRows"])
+                    continue
+                directory = "escape_matrix" if case["cohort"] == "escape" else "shared_execution_matrix"
+                path = FIXTURE_ROOT / directory / "cases" / case["name"]
+                self.assertEqual(path.with_suffix(".1").read_text(), case["source"])
+                self.assertEqual(path.with_suffix(".expected").read_text().splitlines(),
+                                 case["historicalMatrixRows"])
+                if case["cohort"] == "shared":
+                    prior = next(item for item in acceptance if item["name"] == case["name"])
+                    self.assertEqual(prior["source"], case["source"])
+                    self.assertEqual(prior["rows"], case["historicalBodyRows"])
+                    self.assertIn("DESCRIPTION", case["matrixRows"])
+                    self.assertNotIn("DESCRIPTION", case["bodyRows"])
 
     def test_reading_rows_retain_native_buffered_initial_separators(self):
         # The ten exact sources ran all five pristine profiles before this

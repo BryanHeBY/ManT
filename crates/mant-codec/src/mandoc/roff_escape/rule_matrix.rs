@@ -3,7 +3,8 @@
 //! Gold is recorded before assertions by `record_escape_rule_matrix.py`.
 //! CVS `roff_escape.c` classifies standard IGNORE arguments as known syntax,
 //! advances the fixed size quote before scanning, and matches escaped
-//! delimiters on trigger identity rather than displayed glyph.
+//! SPECIAL delimiters by their complete spelling; non-SPECIAL closers keep
+//! the trigger rule. Neither rule compares the displayed glyph.
 
 use mant_ir::{
     Block, Inline,

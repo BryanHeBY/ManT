@@ -55,6 +55,9 @@ mod link_seams;
 #[path = "roff_lowering/table_definitions.rs"]
 mod table_definitions;
 
+#[path = "roff_lowering/oracle_migrations.rs"]
+mod oracle_migrations;
+
 #[path = "roff_lowering/native_execution/mod.rs"]
 mod native_execution;
 

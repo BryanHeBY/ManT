@@ -1,4 +1,4 @@
-$Id: NEWS,v 1.52 2026/10/03 14:29:52 schwarze Exp $
+$Id: NEWS,v 1.54 2026/10/12 02:39:33 schwarze Exp $
 
 This file lists the most important changes in the mandoc.bsd.lv distribution.
 
@@ -37,8 +37,11 @@ Changes in the upcoming version 1.15.1, to be released in 2026
    that even the maintainer of the man-db package dislikes
  * man(7): stop supporting the obsolete -O mdoc command line option,
    which no longer provided any functionality
+ * remove support for macOS sandbox_init(3) because it is no longer
+   supported on macOS SDK >= 27 and macOS provides no replacement
     --- RELIABILITY BUGFIXES ---
  * mdoc(7) .Bl -column: avoid NULL pointer access with .EQ without .It
+ * mdoc(7) .It: do not fail assert(3) on .It in no-fill mode in -T html
  * mdoc(7) .Tg: avoid segfault triggered by .Tg inside some blocks
  * mdoc(7) .Tg: avoid assert(3) on a node both implicitly and implicitly tagged
  * man(7): do not fail an assertion on sequences of multiple macros
@@ -116,6 +119,7 @@ Changes in the upcoming version 1.15.1, to be released in 2026
  * roff(7): do not leak 64 bytes of memory when calling a user-defined macro
  * roff(7): parse escape sequences left-to-right rather than right-to-left,
    to correctly handle multiple self-modifying expansions on one line
+ * roff(7): make the \: escape sequence work in -T utf8 output mode
  * roff(7) -T ps, pdf: reduce horizontal movement of \h to the correct amount
  * roff(7): support arbitrary argument delimiters for \C (special characters)
  * roff(7): reset .ll (line length) before the page footer, like in groff
@@ -150,6 +154,8 @@ Changes in the upcoming version 1.15.1, to be released in 2026
  * Anton Lindqvist (OpenBSD) for three bug reports
  * Jan Stary for two bug reports and a documentation improvement
  * Paul de Weerd (OpenBSD) for two bug reports
+ * Kristaps Dzonsons (bsd.lv) for a bug report
+   and for advice regarding sandbox_init(3) on macOS
  * Alexander Bluhm (OpenBSD) for a bug report and
    for access to an arm64 machine for debugging
  * Alexander Ziaee (FreeBSD) for a portability bug report,

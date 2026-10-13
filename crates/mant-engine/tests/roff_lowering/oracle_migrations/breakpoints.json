@@ -1,0 +1,655 @@
+{
+  "header": {
+    "count": 11,
+    "profilesPerSource": 5,
+    "expectationsFromProduct": false,
+    "oracleIdentity": "cvs-20261013T025419Z-linux-x86_64-gcc-16.2.1-reproducible",
+    "oracleSha256": "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e",
+    "rule": "term.c::term_word buffers ASCII_BREAK for colon on both devices; term_fill treats it as a zero-width breakable blank, not NBRZW graph, and rejects a first pass with nbr=0."
+  },
+  "cases": [
+    {
+      "cohort": "escape",
+      "name": "r3_bs3",
+      "source": ".Dd 2026-09-30\n.Dt x 1\n.Os\n.Sh S\n.Bl -tag -width 4n\n.It X\n.No \"\\p\\: Y\"\n.El\n.No Tail\n",
+      "sourceSha256": "923b1a043101589753e0fb41cce5506dfdd127ecedc13a299eb9a1cfbd59092e",
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "ed0cd467f0064584e69cec71156aa9ca09262c5a2465d68d0150b3f4f1dd1bc2",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "ed0cd467f0064584e69cec71156aa9ca09262c5a2465d68d0150b3f4f1dd1bc2",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "6d379051d5ed54faddeeddc0ca1aeff81180c66a8a63ecec432f6ae99c79b130",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "69953a7fe3f8e1bec752e1033a0dbcf2ad9991d77d9e10e9328c29cfa042205c",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "b00949c455f57a75124af919bdf388090121df9d396b2c7376729e118c5909f1",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "matrixRows": [
+        "S",
+        "X",
+        "Tail"
+      ],
+      "historicalMatrixRows": [
+        "S",
+        "X",
+        "Y",
+        "Tail"
+      ]
+    },
+    {
+      "cohort": "escape",
+      "name": "r3_bs5",
+      "source": ".Dd 2026-09-30\n.Dt x 1\n.Os\n.Sh S\n.Bl -tag -width 4n\n.It X\n.No \"\\p\\:X\"\n.El\n.No Tail\n",
+      "sourceSha256": "26f35970128b7dfafc59df52689a72394c37710f3a43b4223fa0808e5fa3c8d2",
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "ed0cd467f0064584e69cec71156aa9ca09262c5a2465d68d0150b3f4f1dd1bc2",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "ed0cd467f0064584e69cec71156aa9ca09262c5a2465d68d0150b3f4f1dd1bc2",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "9752e8da7b8442fb0fc76e97691950b3b96124eb3a2a3399ca427b594aa1b019",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "d7ecaacbf445803ba19496e85778ea4f5d7377d7ff9bab6a086ab3dabc5c3278",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "b00949c455f57a75124af919bdf388090121df9d396b2c7376729e118c5909f1",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "matrixRows": [
+        "S",
+        "X",
+        "Tail"
+      ],
+      "historicalMatrixRows": [
+        "S",
+        "X X",
+        "Tail"
+      ]
+    },
+    {
+      "cohort": "escape",
+      "name": "r3_p3_colon",
+      "source": ".Dd 2026-09-30\n.Dt x 1\n.Os\n.Sh S\n.Bl -hang -width 4n\n.It Xo\n.No \"\\p\\:X\"\n.Xc\n.No BodyWord\n.El\n",
+      "sourceSha256": "0c63f68719de3adeb7f2caf41a58dfb79f6f6f33ed4a0ebbaf22aa4299569de8",
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "4fdbac3072a434fce6a444403ce49edbf955c80d2f21706411ee3942b64511c5",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "4fdbac3072a434fce6a444403ce49edbf955c80d2f21706411ee3942b64511c5",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "0384012fdddef0e41b2c9c7730f9697309d7ff1f74dda18b3452a3177643189a",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "7ce3ed2ec84cedc5e2380448ab7642fd7fad45181cafaab913cc8d8950832d52",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "b00949c455f57a75124af919bdf388090121df9d396b2c7376729e118c5909f1",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "matrixRows": [
+        "S",
+        "BodyWord"
+      ],
+      "historicalMatrixRows": [
+        "S",
+        "X BodyWord"
+      ]
+    },
+    {
+      "cohort": "shared",
+      "name": "a10_hang",
+      "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo\n.No \"\\p\\:Y\"\n.No \"Tail\"\n.Xc\n.No BodyWord\n.El\n.br\n.No After\n.Sh NEXT\n.No END\n",
+      "sourceSha256": "6ef1a87894d3de7d7fdcc576182d6f18ee30ee4f6e48682758a748400e5434b0",
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "0d9316dcda04dded20188b04224cf9425482830f6a6b0097fb0c2437574bdd2c",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "0cd3bdf2d92d80aaf5eaadc5e6449cc0b210ef066864d22a68b1540b39d91e49",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "7ada7500bea23c1648b8fb5c1caaf5444637fc0a7fb33e9eaa8b6d8f6d6dd71d",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "3527613e527418777abe98350ba18eef3b1291632468c3d9f239ef49faeb8450",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "matrixRows": [
+        "NAME",
+        "test – probe",
+        "",
+        "DESCRIPTION",
+        "BodyWord",
+        "After",
+        "",
+        "NEXT",
+        "END"
+      ],
+      "historicalMatrixRows": [
+        "NAME",
+        "test – probe",
+        "",
+        "DESCRIPTION",
+        "Y",
+        "Tail BodyWord",
+        "After",
+        "",
+        "NEXT",
+        "END"
+      ],
+      "bodyRows": [
+        "BodyWord",
+        "After",
+        ""
+      ],
+      "historicalBodyRows": [
+        "Y",
+        "Tail BodyWord",
+        "After",
+        ""
+      ]
+    },
+    {
+      "cohort": "shared",
+      "name": "a10_inset",
+      "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -inset\n.It Xo\n.No \"\\p\\:Y\"\n.No \"Tail\"\n.Xc\n.No BodyWord\n.El\n.br\n.No After\n.Sh NEXT\n.No END\n",
+      "sourceSha256": "453b1c29262867b7f563994ebe9288fdf51d246d4e4811c5a918a9b4c8e398ee",
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "7c0159bfb799cd7899f562176c813313ea41b79baaabec4e082a9b01a6cb3029",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "f630bec8dc7b75d813be27ce306c60edb66a7d63f2d702e3fb556542b42265d7",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "eafd7dc6e98b0e8af5f7321d07b8e8fa89a9791584494b14f8ae3d8b6fead3c6",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "e2f063b360100754d7f1b6390e1723e4af0fbd93963b1f2163330c896d201782",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "matrixRows": [
+        "NAME",
+        "test – probe",
+        "",
+        "DESCRIPTION",
+        "",
+        "After",
+        "",
+        "NEXT",
+        "END"
+      ],
+      "historicalMatrixRows": [
+        "NAME",
+        "test – probe",
+        "",
+        "DESCRIPTION",
+        "Y",
+        "Tail BodyWord",
+        "After",
+        "",
+        "NEXT",
+        "END"
+      ],
+      "bodyRows": [
+        "",
+        "After",
+        ""
+      ],
+      "historicalBodyRows": [
+        "Y",
+        "Tail BodyWord",
+        "After",
+        ""
+      ]
+    },
+    {
+      "cohort": "shared",
+      "name": "a10_nf",
+      "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.No \"\\p\\:Y\"\n.No \"Tail\"\n.br\n.No After\n.Sh NEXT\n.No END\n",
+      "sourceSha256": "de88d376f5c5037c37fb46fd1cd672aa9c9ef7077d1af49cecdc69cc8b701f0c",
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "6b6b0b7f8069e93adad9039734b736b37d8fac8caa1415f6445f93d31ec1b31c",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "f3a234e5dac26640748e069ece47e64a531e373ac093abb661e75d8898467c11",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "be965e62e1ab360c0d9f0eeaf033f6a9899cbbaf6f60eebc680b2dbd362d5f71",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "8f1042266ab55a29ef4981a6ac1a7a92a63e27421eb2664976a2cae3cb9a3fe5",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "matrixRows": [
+        "NAME",
+        "test – probe",
+        "",
+        "DESCRIPTION",
+        "",
+        "Tail",
+        "After",
+        "",
+        "NEXT",
+        "END"
+      ],
+      "historicalMatrixRows": [
+        "NAME",
+        "test – probe",
+        "",
+        "DESCRIPTION",
+        "Y",
+        "Tail",
+        "After",
+        "",
+        "NEXT",
+        "END"
+      ],
+      "bodyRows": [
+        "",
+        "Tail",
+        "After",
+        ""
+      ],
+      "historicalBodyRows": [
+        "Y",
+        "Tail",
+        "After",
+        ""
+      ]
+    },
+    {
+      "cohort": "shared",
+      "name": "a10_no",
+      "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\p\\:Y\"\n.No \"Tail\"\n.br\n.No After\n.Sh NEXT\n.No END\n",
+      "sourceSha256": "58de669269fabcf5d61d8db5dadbbc18aedf36856d9e30caae6d45ae811f104f",
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "7c0159bfb799cd7899f562176c813313ea41b79baaabec4e082a9b01a6cb3029",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "f630bec8dc7b75d813be27ce306c60edb66a7d63f2d702e3fb556542b42265d7",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "9fe1eec8ef60e6fd40c95a5c027ac264c9ab245c821c05b7bb3ca0a5a1beb7c6",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "255daadf8103443cbebc1a29817919d0dd7ff91797916d9c7fa5ead67cd93976",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "matrixRows": [
+        "NAME",
+        "test – probe",
+        "",
+        "DESCRIPTION",
+        "",
+        "After",
+        "",
+        "NEXT",
+        "END"
+      ],
+      "historicalMatrixRows": [
+        "NAME",
+        "test – probe",
+        "",
+        "DESCRIPTION",
+        "Y",
+        "Tail",
+        "After",
+        "",
+        "NEXT",
+        "END"
+      ],
+      "bodyRows": [
+        "",
+        "After",
+        ""
+      ],
+      "historicalBodyRows": [
+        "Y",
+        "Tail",
+        "After",
+        ""
+      ]
+    },
+    {
+      "cohort": "shared",
+      "name": "a10_same",
+      "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.No \"\\p\\:Y\" No \"Tail\"\n.br\n.No After\n.Sh NEXT\n.No END\n",
+      "sourceSha256": "b0de2f3900b6f4b11f2b3c81b16479adf84fd69caa4cc5aacb00c8a4275a26ca",
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "7c0159bfb799cd7899f562176c813313ea41b79baaabec4e082a9b01a6cb3029",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "f630bec8dc7b75d813be27ce306c60edb66a7d63f2d702e3fb556542b42265d7",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "9fe1eec8ef60e6fd40c95a5c027ac264c9ab245c821c05b7bb3ca0a5a1beb7c6",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "39284f4ad2448e05786176ede282cb3ec21c21a6815cbf14ae8f9d8e61533c7f",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "matrixRows": [
+        "NAME",
+        "test – probe",
+        "",
+        "DESCRIPTION",
+        "",
+        "After",
+        "",
+        "NEXT",
+        "END"
+      ],
+      "historicalMatrixRows": [
+        "NAME",
+        "test – probe",
+        "",
+        "DESCRIPTION",
+        "Y",
+        "Tail",
+        "After",
+        "",
+        "NEXT",
+        "END"
+      ],
+      "bodyRows": [
+        "",
+        "After",
+        ""
+      ],
+      "historicalBodyRows": [
+        "Y",
+        "Tail",
+        "After",
+        ""
+      ]
+    },
+    {
+      "cohort": "shared",
+      "name": "a10_tag",
+      "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It Xo\n.No \"\\p\\:Y\"\n.No \"Tail\"\n.Xc\n.No BodyWord\n.El\n.br\n.No After\n.Sh NEXT\n.No END\n",
+      "sourceSha256": "cd9a383d6f339e73df6302d7f82d72e32a52ac64a38e30f04d70453535b108ff",
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "0d9316dcda04dded20188b04224cf9425482830f6a6b0097fb0c2437574bdd2c",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "0cd3bdf2d92d80aaf5eaadc5e6449cc0b210ef066864d22a68b1540b39d91e49",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "cd5c307ef5626be54bd17e775d99c19b3886884e5504b1f78de75f0130f9fda3",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "0e64c61887f47b91917be4e263a62e7370fc693dee82cf3e3ef6d7303659a05e",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "matrixRows": [
+        "NAME",
+        "test – probe",
+        "",
+        "DESCRIPTION",
+        "BodyWord",
+        "After",
+        "",
+        "NEXT",
+        "END"
+      ],
+      "historicalMatrixRows": [
+        "NAME",
+        "test – probe",
+        "",
+        "DESCRIPTION",
+        "Y",
+        "Tail",
+        "BodyWord",
+        "After",
+        "",
+        "NEXT",
+        "END"
+      ],
+      "bodyRows": [
+        "BodyWord",
+        "After",
+        ""
+      ],
+      "historicalBodyRows": [
+        "Y",
+        "Tail",
+        "BodyWord",
+        "After",
+        ""
+      ]
+    },
+    {
+      "cohort": "shared",
+      "name": "a10_text",
+      "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n\\p\\:Y\nTail\n.br\n.No After\n.Sh NEXT\n.No END\n",
+      "sourceSha256": "fc1ff33aadbaf3508c85b1df78d0d9bf62542a94ecc87f8daa261720832ea887",
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "7c0159bfb799cd7899f562176c813313ea41b79baaabec4e082a9b01a6cb3029",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "f630bec8dc7b75d813be27ce306c60edb66a7d63f2d702e3fb556542b42265d7",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "8211a24d2e9b7cff54ba9c2dca1119a56b6970a82e5aa3323c4016cebf35975e",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "1dfbba159c56b2f33db0715632d315ff04da03774bc923e36d1c3ccf587370c7",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "matrixRows": [
+        "NAME",
+        "test – probe",
+        "",
+        "DESCRIPTION",
+        "",
+        "After",
+        "",
+        "NEXT",
+        "END"
+      ],
+      "historicalMatrixRows": [
+        "NAME",
+        "test – probe",
+        "",
+        "DESCRIPTION",
+        "Y",
+        "Tail",
+        "After",
+        "",
+        "NEXT",
+        "END"
+      ],
+      "bodyRows": [
+        "",
+        "After",
+        ""
+      ],
+      "historicalBodyRows": [
+        "Y",
+        "Tail",
+        "After",
+        ""
+      ]
+    },
+    {
+      "cohort": "hang",
+      "name": "wrapped-colon",
+      "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo X\n.br\n.No YYYYY\\:Z\n.Xc\n.No BODY\n.El\n",
+      "sourceSha256": "de4390b1ab093d3af84c8b806f36676275f2f745cceb8d20c9d561e926a8a12b",
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "28ebd456049cc01d8fe8a5c1259b2305416b61af5bd758d5eb439c35899c4f3d",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "a0626cdfebff47568c5c0a0d8d08d96b24271286e2712ea995621439d34971f2",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "866de5e5439a13438a3908bce7431a5ce8989ca924d978cf538a094e2b9a7e03",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "52cdf4ec4fcfb328286f6c9c14253cba32d78be1084018f5369a1fffd36e7d75",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "matrixRows": [
+        "NAME",
+        "test – probe",
+        "",
+        "DESCRIPTION",
+        "X YYYYY",
+        "Z     BODY"
+      ],
+      "historicalMatrixRows": null
+    }
+  ]
+}

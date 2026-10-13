@@ -168,19 +168,19 @@ fn a_wrapping_hang_field_keeps_only_the_proven_body_word_boundary() {
             "{field}: {lowered:?}"
         );
     }
-    // Exact fixed CVS -Tascii/-Tutf8/-Tlint probe: ASCII wraps at the
-    // invisible \: breakpoint, whereas UTF-8 keeps this short field on one
-    // line. The source-neutral projection cannot prove the final column and
-    // therefore preserves the BODY word boundary in either presentation.
+    // This exact source ran all five current pristine profiles first.
+    // term_word() now buffers ASCII_BREAK on both devices. term_fill()
+    // wraps at it, unlike the old UTF-8 NBRZW graph. The finite migration
+    // receipt binds the source and its exact current native row window.
     let source = ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo X\n.br\n.No YYYYY\\:Z\n.Xc\n.No BODY\n.El\n";
+    let native_rows = crate::oracle_migrations::hang_rows("wrapped-colon", source);
+    assert_eq!(native_rows, ["X YYYYY", "Z     BODY"]);
+    let native = native_terminal(source);
+    assert!(native.contains("X YYYYY\n     Z     BODY"), "{native:?}");
     let lowered = lowered_terminal(source);
-    // Fixed CVS -Tutf8: `\:` buffers ASCII_NBRZW here (chars.c:53, term.c
-    // 631-632) — a zero-width graph that never breaks a pass (term.c
-    // 340-349), so the field stays one row and BODY concatenates:
-    // `X YYYYYZBODY`. The two-row wrap is the ascii-device column
-    // (ASCII_BREAK, term.c:287-300), preserved for a -Tascii switch in
-    // FieldCell::Breakpoint.
-    assert!(lowered.contains("X YYYYYZBODY"), "{lowered:?}");
+    // Responsive layout may reduce the five-column device gap; the real
+    // row boundary and a positive final HEAD/BODY word boundary survive.
+    assert!(lowered.contains("X YYYYY\nZ BODY"), "{lowered:?}");
     // Exact fixed CVS -Tascii/-Tutf8/-Tlint: roff.c::post_hyph() marks
     // this source hyphen ASCII_HYPH, and term.c::term_fill() wraps after it.
     // It is ordinary text in the AST, so the gap proof must see that marker

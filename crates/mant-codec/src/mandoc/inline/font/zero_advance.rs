@@ -24,7 +24,14 @@ pub(in crate::mandoc) struct ZeroAdvanceState {
     /// the last-byte rule (term.c:901-908), which single one dies. Order
     /// matters: `\zA <TAB>X` prints `A X` while `\zA<TAB> X` keeps the
     /// tab geometry and drops the blank.
-    held: Vec<char>,
+    held: Vec<HeldCell>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct HeldCell {
+    character: char,
+    owner: Option<u64>,
+    recovery_offset: usize,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -40,6 +47,40 @@ struct OwnedGlyph {
 struct PendingOutputOwner {
     pending_at_entry: bool,
     emitted_before_owner: bool,
+}
+
+#[derive(Clone, Copy, Default)]
+pub(in crate::mandoc) enum PrefixMeasure {
+    #[default]
+    Glyphs,
+    Cells,
+}
+
+impl PrefixMeasure {
+    pub(in crate::mandoc) fn includes(self, character: char) -> bool {
+        matches!(self, Self::Cells) || !character.is_whitespace()
+    }
+
+    pub(in crate::mandoc) fn count(self, node: &Inline) -> usize {
+        match node {
+            Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. } => {
+                value
+                    .chars()
+                    .filter(|&character| self.includes(character))
+                    .count()
+            }
+            Inline::Strong { children }
+            | Inline::Emphasis { children }
+            | Inline::Link { children, .. } => children.iter().map(|node| self.count(node)).sum(),
+            Inline::Anchor { .. } | Inline::LineBreak { .. } => 0,
+        }
+    }
+}
+
+pub(in crate::mandoc) struct PendingPrefix {
+    pub(in crate::mandoc) count: usize,
+    pub(in crate::mandoc) originals: Vec<Inline>,
+    pub(in crate::mandoc) measure: PrefixMeasure,
 }
 
 impl ZeroAdvanceState {
@@ -197,7 +238,35 @@ impl ZeroAdvanceState {
     /// arrives: the next graph's retreat lands on the marker's own blank,
     /// so the held bytes survive and print after the settled glyph.
     pub(super) fn take_held(&mut self) -> String {
-        self.held.drain(..).collect()
+        self.held.drain(..).map(|cell| cell.character).collect()
+    }
+
+    fn hold(&mut self, character: char) {
+        self.held.push(HeldCell {
+            character,
+            owner: self.native_word_owner,
+            recovery_offset: self.machine.deferred_projection().len(),
+        });
+    }
+
+    fn projected_prefix(&self) -> Vec<OwnedGlyph> {
+        let recoveries = self.machine.deferred_projection();
+        let mut output = Vec::with_capacity(self.held.len() + recoveries.len());
+        let mut recovery = 0;
+        for cell in &self.held {
+            let end = cell.recovery_offset.min(recoveries.len());
+            output.extend_from_slice(&recoveries[recovery..end]);
+            recovery = end;
+            output.push(OwnedGlyph {
+                value: Inline::Text {
+                    value: cell.character.to_string(),
+                },
+                owner: cell.owner,
+                link_continuation: false,
+            });
+        }
+        output.extend_from_slice(&recoveries[recovery..]);
+        output
     }
 
     pub(in crate::mandoc) fn take_armed(&mut self) -> bool {
@@ -211,20 +280,43 @@ impl ZeroAdvanceState {
     pub(in crate::mandoc) fn resolve_at_word_boundary(&mut self) -> Option<Vec<Inline>> {
         self.fragment_started_pending = false;
         self.resolved_preexisting = false;
+        if self.machine.has_projected_pending() {
+            // These cells follow the already-projected glyph's breakpoint.
+            // Returning them as an earlier-row suffix would let the next
+            // accepted pass trim them before emitting its newline. Defer
+            // their real old-word ownership into the next word's stream,
+            // where the shared native pass splitter places the boundary.
+            let prefix = self.projected_prefix();
+            self.machine.take_pending();
+            self.held.clear();
+            if !prefix.is_empty() {
+                self.note_pending_emitted();
+            }
+            for glyph in prefix {
+                self.machine.defer_projection(glyph);
+            }
+            // BACKBEFORE consumed the actual incoming word separator even
+            // though this branch emits no immediate glyph. Some(empty)
+            // conveys that consumed boundary, without an empty IR node.
+            return Some(Vec::new());
+        }
         // term_word() buffers its separator independently of BACKAFTER.
         // A later encode1() retreats over that blank, so the earlier
         // BACKBEFORE glyph survives even when another \z armed the next
         // graph (term.c:573-589,901-927). Keep the arm for that graph.
-        let mut glyph = self.take_pending()?;
+        // A pass may already own the glyph while BACKBEFORE still owns
+        // these held bytes. The next automatic separator is retreated, not
+        // the older authored blanks, even when no glyph remains to drain.
+        let mut glyph = self.take_pending().unwrap_or_default();
         if !self.held.is_empty() {
             // The held bytes behind the glyph survive the boundary: the
             // next word's automatic separator is the cell its retreat
             // consumes (term.c:901-908), so the word joins directly
             // after the survivors instead of after a fresh blank.
-            let survivors = self.held.drain(..).collect::<String>();
+            let survivors = self.take_held();
             glyph.push(Inline::Text { value: survivors });
         }
-        Some(glyph)
+        (!glyph.is_empty()).then_some(glyph)
     }
 
     /// A pending zero-advance glyph is visible formatter state even before a
@@ -261,6 +353,30 @@ impl ZeroAdvanceState {
     /// later wrapper's projected node cannot establish that ownership.
     pub(in crate::mandoc) fn pending_projection(&self) -> Option<Inline> {
         self.machine.pending_ref().map(|glyph| glyph.value.clone())
+    }
+
+    pub(in crate::mandoc) fn pending_output_prefix(&self) -> PendingPrefix {
+        if self.machine.has_projected_pending() {
+            let originals: Vec<_> = self
+                .projected_prefix()
+                .into_iter()
+                .map(|glyph| glyph.value)
+                .collect();
+            PendingPrefix {
+                count: originals
+                    .iter()
+                    .map(|node| PrefixMeasure::Cells.count(node))
+                    .sum(),
+                originals,
+                measure: PrefixMeasure::Cells,
+            }
+        } else {
+            PendingPrefix {
+                count: self.pending_visible_characters(),
+                originals: self.pending_projection().into_iter().collect(),
+                measure: PrefixMeasure::Glyphs,
+            }
+        }
     }
 
     pub(in crate::mandoc) fn pending_native_owner(&self) -> Option<u64> {
@@ -342,7 +458,7 @@ impl ZeroAdvanceState {
     /// blanks, and the graph itself follows as ordinary output.
     fn settle_pending_before_graph(&mut self, output: &mut Vec<Inline>) {
         self.held.pop();
-        let survivors = self.held.drain(..).collect::<String>();
+        let survivors = self.take_held();
         if let Some(glyph) = self.take_pending() {
             output.extend(glyph);
         }
@@ -395,7 +511,7 @@ impl ZeroAdvanceState {
                     // glyph until the next graph's retreat decides, by
                     // the last-byte rule (term.c:901-908), which single
                     // held byte dies.
-                    self.held.push(character);
+                    self.hold(character);
                     continue;
                 }
                 if !self.held.is_empty() {
@@ -474,7 +590,7 @@ impl ZeroAdvanceState {
                     // (term.c:901-908), which single held byte dies.  A
                     // `\p` marker between the two redirects the retreat
                     // onto the marker's own blank, and these survive.
-                    self.held.push(character);
+                    self.hold(character);
                     continue;
                 }
                 if !self.held.is_empty() {
@@ -484,7 +600,7 @@ impl ZeroAdvanceState {
                     // this graph's encode1() tail (term.c:924-926), so the
                     // graph itself may become the next deferred target.
                     self.held.pop();
-                    let survivors = self.held.drain(..).collect::<String>();
+                    let survivors = self.take_held();
                     self.flush(output, buffer, font, link);
                     if !survivors.is_empty() {
                         self.flush_recoveries(output, buffer, font, link);
@@ -558,7 +674,7 @@ impl ZeroAdvanceState {
             // like an ordinary graph: the pending glyph settles before the
             // surviving held bytes instead of being replaced.
             self.held.pop();
-            let survivors = self.held.drain(..).collect::<String>();
+            let survivors = self.take_held();
             self.flush(output, buffer, font, link);
             if !survivors.is_empty() {
                 self.flush_recoveries(output, buffer, font, link);
@@ -612,6 +728,31 @@ impl ZeroAdvanceState {
                 self.resolved_preexisting = true;
             }
             output.extend(glyph);
+        }
+    }
+
+    /// A pending marker followed by `ASCII_BREAK` assigns the old glyph to
+    /// its earlier pass, while `encode1()` still owes the next BACKBEFORE
+    /// retreat. Do not use an authored empty glyph to represent that state.
+    pub(super) fn commit_pending_projection(
+        &mut self,
+        output: &mut Vec<Inline>,
+        buffer: &mut String,
+        font: Font,
+        link: Option<&str>,
+    ) {
+        flush_segment(output, buffer, font, link);
+        if let Some(glyph) = self.machine.commit_pending_projection() {
+            // Recoveries before this breakpoint have just been projected;
+            // older held cells precede every recovery in the new suffix.
+            for cell in &mut self.held {
+                cell.recovery_offset = 0;
+            }
+            self.note_pending_emitted();
+            if self.fragment_started_pending {
+                self.resolved_preexisting = true;
+            }
+            output.extend(self.project_owned(glyph));
         }
     }
 

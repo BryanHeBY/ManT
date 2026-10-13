@@ -18,6 +18,14 @@ renames, header resets and fallback behavior. Expected TEXT leaves and five
 reference profile receipts live in `fixtures/string_lookup.json`. Diagnosed
 inputs remain explicit negative controls rather than valid-input claims.
 
+`display_fill_modes.rs` checks implicit and explicit display closure against
+eighteen independently captured sources, including owned no-fill flags,
+HEAD/BODY provenance, JSON and native renderer output. `horizontal_lines.rs`
+checks eleven native drawing sources with literal, escaped and Unicode
+delimiters and custom glyphs. Their exact pristine profile receipts and gold
+live in `fixtures/display_modes.json` and `fixtures/horizontal_lines.json`;
+optional renderer and serde assertions remain feature-gated.
+
 The vendor synchronization script separately verifies that `vendor/` is the
 exact result of applying `patches/series` to the pinned upstream snapshot. It
 does not run parser fixtures.

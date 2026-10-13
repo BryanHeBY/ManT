@@ -182,8 +182,9 @@ fn final_hang_field_reestablishes_body_word_gap() {
 
 #[test]
 fn final_hang_field_only_consumes_a_proven_body_gap() {
-    // All exact fields passed fixed CVS -Tutf8 (the `YYYYY\:Z` entry sits on
-    // the device fork: ascii wraps at ASCII_BREAK and proves gap 1, chars.c:53).
+    // All seven exact fields reran on the new fixed CVS five profiles before
+    // updating this contract. term_word() now writes ASCII_BREAK on both
+    // devices, so YYYYY\:Z wraps and leaves a real BODY gap.
     // term.c::term_fill() may break a field at ordinary spaces after .br;
     // cumulative field width is not the final native row column. An
     // indivisible last word spanning the BODY origin still proves no gap.
@@ -191,10 +192,7 @@ fn final_hang_field_only_consumes_a_proven_body_gap() {
         ("AA BB CC", 1),
         ("YYYYY Z", 1),
         ("YYYYY ZZZZZZZZ", 0),
-        // Fixed CVS -Tutf8: `\:` is an unbreakable zero-width graph here
-        // (chars.c:53), so the operand never wraps and BODY concatenates
-        // on the head row: no gap is proven.
-        (r"YYYYY\:Z", 0),
+        (r"YYYYY\:Z", 1),
         (r"YYY\:Z", 0),
         (r"YYY\pZ", 0),
         (r"A BBBBBB\zC", 0),

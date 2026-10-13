@@ -1,0 +1,1380 @@
+{
+  "header": {
+    "count": 18,
+    "profilesPerSource": 5,
+    "expectationsFromProduct": false,
+    "oracleIdentity": "cvs-20261013T025419Z-linux-x86_64-gcc-16.2.1-reproducible",
+    "oracleSha256": "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e",
+    "executionRule": "mdoc_macro.c::rew_pending restores ROFF_NOFILL from Bd BLOCK NODE_NOFILL before subsequent It children; Ed restoration remains in blk_exp_close."
+  },
+  "cases": [
+    {
+      "id": "filled-literal-implicit",
+      "source": ".Dd October 13, 2026\n.Dt FLOW 1\n.Os ManT\n.Sh NAME\n.Nm flow\n.Nd display mode recovery probe\n.Sh DESCRIPTION\n.Bl -tag -width 5n -compact\n.Bd -literal -compact\n.It Key\n.No BodyAlpha\n.No BodyBeta\n.Ed\n.El\n.Sh NEXT\n.No AfterAlpha\n.No AfterBeta\n",
+      "entry": "filled",
+      "display": "literal",
+      "close": "implicit",
+      "sourceSha256": "77d0486ea2bd3fc2260815713a7bc2fb0b624ffba40d6987182b4e85ba12c25f",
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "17b6339e0d74a5d96d1586fb9a2d184a1f3c0c9afcdf97b3aaf89498c835d07e",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "5d369acfb64d7730f4358ba37563bf1dc366a4f6bda57acaa3eaaa056eb57768",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "b4c5d6802ac6256205bed14e769ab2c36adc90d0ce21fcd0564c6a1e75a7f45b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "e2f2a097112f53d847fd0698a0e6a78bcf60fb7b17e9d90a27f428f434e117bc",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 3,
+          "stdout_sha256": "bee69bc2a102d92f2bd4f98b8676c32aedcfd03765f72e7b799ecfd5edff69ae",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected": {
+        "positionedText": [
+          {
+            "label": "BodyAlpha",
+            "line": 11,
+            "column": 5,
+            "line_start": false,
+            "no_fill": false,
+            "owner": "It BODY"
+          },
+          {
+            "label": "BodyBeta",
+            "line": 12,
+            "column": 5,
+            "line_start": false,
+            "no_fill": false,
+            "owner": "It BODY"
+          },
+          {
+            "label": "AfterAlpha",
+            "line": 16,
+            "column": 5,
+            "line_start": false,
+            "no_fill": false,
+            "owner": null
+          },
+          {
+            "label": "AfterBeta",
+            "line": 17,
+            "column": 5,
+            "line_start": false,
+            "no_fill": false,
+            "owner": null
+          }
+        ],
+        "nativeBodies": {
+          "ascii": "     Key    BodyAlpha BodyBeta\n\n",
+          "utf8": "     Key    BodyAlpha BodyBeta\n\n"
+        },
+        "nativeHtmlSection": "<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"DESCRIPTION\"><a class=\"permalink\" href=\"#DESCRIPTION\">DESCRIPTION</a></h2>\n<div class=\"Bd Li\"></div>\n<dl class=\"Bl-tag Bl-compact\">\n  <dt id=\"BodyAlpha\">Key</dt>\n  <dd><a class=\"permalink\" href=\"#BodyAlpha\"><span class=\"No\">BodyAlpha</span></a>\n      <span class=\"No\">BodyBeta</span></dd>\n</dl>\n</section>"
+      }
+    },
+    {
+      "id": "filled-literal-explicit",
+      "source": ".Dd October 13, 2026\n.Dt FLOW 1\n.Os ManT\n.Sh NAME\n.Nm flow\n.Nd display mode recovery probe\n.Sh DESCRIPTION\n.Bl -tag -width 5n -compact\n.Bd -literal -compact\n.Ed\n.It Key\n.No BodyAlpha\n.No BodyBeta\n.El\n.Sh NEXT\n.No AfterAlpha\n.No AfterBeta\n",
+      "entry": "filled",
+      "display": "literal",
+      "close": "explicit",
+      "sourceSha256": "e00efd639d0f272073adf64397ceb32975e71406ba93ae67208bbc7913c04274",
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "17b6339e0d74a5d96d1586fb9a2d184a1f3c0c9afcdf97b3aaf89498c835d07e",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "5d369acfb64d7730f4358ba37563bf1dc366a4f6bda57acaa3eaaa056eb57768",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "b4c5d6802ac6256205bed14e769ab2c36adc90d0ce21fcd0564c6a1e75a7f45b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "8d4cf1a85fb5be56ffdffd0faa9a66c79e364d9fd74b2354c2556106ad78f588",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "c8fe0fe1c6b02469086302f78e10a4bc0436ef7e9d5a5a5bbcbeead8d6d5f019",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected": {
+        "positionedText": [
+          {
+            "label": "BodyAlpha",
+            "line": 12,
+            "column": 5,
+            "line_start": false,
+            "no_fill": false,
+            "owner": "It BODY"
+          },
+          {
+            "label": "BodyBeta",
+            "line": 13,
+            "column": 5,
+            "line_start": false,
+            "no_fill": false,
+            "owner": "It BODY"
+          },
+          {
+            "label": "AfterAlpha",
+            "line": 16,
+            "column": 5,
+            "line_start": false,
+            "no_fill": false,
+            "owner": null
+          },
+          {
+            "label": "AfterBeta",
+            "line": 17,
+            "column": 5,
+            "line_start": false,
+            "no_fill": false,
+            "owner": null
+          }
+        ],
+        "nativeBodies": {
+          "ascii": "     Key    BodyAlpha BodyBeta\n\n",
+          "utf8": "     Key    BodyAlpha BodyBeta\n\n"
+        },
+        "nativeHtmlSection": "<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"DESCRIPTION\"><a class=\"permalink\" href=\"#DESCRIPTION\">DESCRIPTION</a></h2>\n<div class=\"Bd Li\"></div>\n<dl class=\"Bl-tag Bl-compact\">\n  <dt id=\"BodyAlpha\">Key</dt>\n  <dd><a class=\"permalink\" href=\"#BodyAlpha\"><span class=\"No\">BodyAlpha</span></a>\n      <span class=\"No\">BodyBeta</span></dd>\n</dl>\n</section>"
+      }
+    },
+    {
+      "id": "filled-unfilled-implicit",
+      "source": ".Dd October 13, 2026\n.Dt FLOW 1\n.Os ManT\n.Sh NAME\n.Nm flow\n.Nd display mode recovery probe\n.Sh DESCRIPTION\n.Bl -tag -width 5n -compact\n.Bd -unfilled -compact\n.It Key\n.No BodyAlpha\n.No BodyBeta\n.Ed\n.El\n.Sh NEXT\n.No AfterAlpha\n.No AfterBeta\n",
+      "entry": "filled",
+      "display": "unfilled",
+      "close": "implicit",
+      "sourceSha256": "d23681747455858589da07fe50de340c00d299d2196789393e4aef4f31190009",
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "17b6339e0d74a5d96d1586fb9a2d184a1f3c0c9afcdf97b3aaf89498c835d07e",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "5d369acfb64d7730f4358ba37563bf1dc366a4f6bda57acaa3eaaa056eb57768",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "8ef36436edc26bbb8b1065e2bc04acc4266b2a6230c419130e0d57e6740d82a8",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "4325beadf8582c5a64f3d750e4dc51a5342225e2daecd9e97275015ecd97d133",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 3,
+          "stdout_sha256": "bee69bc2a102d92f2bd4f98b8676c32aedcfd03765f72e7b799ecfd5edff69ae",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected": {
+        "positionedText": [
+          {
+            "label": "BodyAlpha",
+            "line": 11,
+            "column": 5,
+            "line_start": false,
+            "no_fill": false,
+            "owner": "It BODY"
+          },
+          {
+            "label": "BodyBeta",
+            "line": 12,
+            "column": 5,
+            "line_start": false,
+            "no_fill": false,
+            "owner": "It BODY"
+          },
+          {
+            "label": "AfterAlpha",
+            "line": 16,
+            "column": 5,
+            "line_start": false,
+            "no_fill": false,
+            "owner": null
+          },
+          {
+            "label": "AfterBeta",
+            "line": 17,
+            "column": 5,
+            "line_start": false,
+            "no_fill": false,
+            "owner": null
+          }
+        ],
+        "nativeBodies": {
+          "ascii": "     Key    BodyAlpha BodyBeta\n\n",
+          "utf8": "     Key    BodyAlpha BodyBeta\n\n"
+        },
+        "nativeHtmlSection": "<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"DESCRIPTION\"><a class=\"permalink\" href=\"#DESCRIPTION\">DESCRIPTION</a></h2>\n<div class=\"Bd\"></div>\n<dl class=\"Bl-tag Bl-compact\">\n  <dt id=\"BodyAlpha\">Key</dt>\n  <dd><a class=\"permalink\" href=\"#BodyAlpha\"><span class=\"No\">BodyAlpha</span></a>\n      <span class=\"No\">BodyBeta</span></dd>\n</dl>\n</section>"
+      }
+    },
+    {
+      "id": "filled-unfilled-explicit",
+      "source": ".Dd October 13, 2026\n.Dt FLOW 1\n.Os ManT\n.Sh NAME\n.Nm flow\n.Nd display mode recovery probe\n.Sh DESCRIPTION\n.Bl -tag -width 5n -compact\n.Bd -unfilled -compact\n.Ed\n.It Key\n.No BodyAlpha\n.No BodyBeta\n.El\n.Sh NEXT\n.No AfterAlpha\n.No AfterBeta\n",
+      "entry": "filled",
+      "display": "unfilled",
+      "close": "explicit",
+      "sourceSha256": "e798c6b0cc3c5fa4d9ad665a5a1343e0c676479d08cc5c56d50ae187ef60c33b",
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "17b6339e0d74a5d96d1586fb9a2d184a1f3c0c9afcdf97b3aaf89498c835d07e",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "5d369acfb64d7730f4358ba37563bf1dc366a4f6bda57acaa3eaaa056eb57768",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "8ef36436edc26bbb8b1065e2bc04acc4266b2a6230c419130e0d57e6740d82a8",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "7397620f07fc3896bb8d483bdba7a39d811aec4568b7bed6180d18b0c492de70",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "c8fe0fe1c6b02469086302f78e10a4bc0436ef7e9d5a5a5bbcbeead8d6d5f019",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected": {
+        "positionedText": [
+          {
+            "label": "BodyAlpha",
+            "line": 12,
+            "column": 5,
+            "line_start": false,
+            "no_fill": false,
+            "owner": "It BODY"
+          },
+          {
+            "label": "BodyBeta",
+            "line": 13,
+            "column": 5,
+            "line_start": false,
+            "no_fill": false,
+            "owner": "It BODY"
+          },
+          {
+            "label": "AfterAlpha",
+            "line": 16,
+            "column": 5,
+            "line_start": false,
+            "no_fill": false,
+            "owner": null
+          },
+          {
+            "label": "AfterBeta",
+            "line": 17,
+            "column": 5,
+            "line_start": false,
+            "no_fill": false,
+            "owner": null
+          }
+        ],
+        "nativeBodies": {
+          "ascii": "     Key    BodyAlpha BodyBeta\n\n",
+          "utf8": "     Key    BodyAlpha BodyBeta\n\n"
+        },
+        "nativeHtmlSection": "<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"DESCRIPTION\"><a class=\"permalink\" href=\"#DESCRIPTION\">DESCRIPTION</a></h2>\n<div class=\"Bd\"></div>\n<dl class=\"Bl-tag Bl-compact\">\n  <dt id=\"BodyAlpha\">Key</dt>\n  <dd><a class=\"permalink\" href=\"#BodyAlpha\"><span class=\"No\">BodyAlpha</span></a>\n      <span class=\"No\">BodyBeta</span></dd>\n</dl>\n</section>"
+      }
+    },
+    {
+      "id": "filled-filled-implicit",
+      "source": ".Dd October 13, 2026\n.Dt FLOW 1\n.Os ManT\n.Sh NAME\n.Nm flow\n.Nd display mode recovery probe\n.Sh DESCRIPTION\n.Bl -tag -width 5n -compact\n.Bd -filled -compact\n.It Key\n.No BodyAlpha\n.No BodyBeta\n.Ed\n.El\n.Sh NEXT\n.No AfterAlpha\n.No AfterBeta\n",
+      "entry": "filled",
+      "display": "filled",
+      "close": "implicit",
+      "sourceSha256": "5ac97ced441b0cbfcc242a161c65e92ed5a3b98157b106d28aa499e81ba51c2e",
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "17b6339e0d74a5d96d1586fb9a2d184a1f3c0c9afcdf97b3aaf89498c835d07e",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "5d369acfb64d7730f4358ba37563bf1dc366a4f6bda57acaa3eaaa056eb57768",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "8ef36436edc26bbb8b1065e2bc04acc4266b2a6230c419130e0d57e6740d82a8",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "8bdc617d8bd95306395ad1e75fe618749f0406015d7b9ae82a6636c93a61b1af",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 3,
+          "stdout_sha256": "bee69bc2a102d92f2bd4f98b8676c32aedcfd03765f72e7b799ecfd5edff69ae",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected": {
+        "positionedText": [
+          {
+            "label": "BodyAlpha",
+            "line": 11,
+            "column": 5,
+            "line_start": false,
+            "no_fill": false,
+            "owner": "It BODY"
+          },
+          {
+            "label": "BodyBeta",
+            "line": 12,
+            "column": 5,
+            "line_start": false,
+            "no_fill": false,
+            "owner": "It BODY"
+          },
+          {
+            "label": "AfterAlpha",
+            "line": 16,
+            "column": 5,
+            "line_start": false,
+            "no_fill": false,
+            "owner": null
+          },
+          {
+            "label": "AfterBeta",
+            "line": 17,
+            "column": 5,
+            "line_start": false,
+            "no_fill": false,
+            "owner": null
+          }
+        ],
+        "nativeBodies": {
+          "ascii": "     Key    BodyAlpha BodyBeta\n\n",
+          "utf8": "     Key    BodyAlpha BodyBeta\n\n"
+        },
+        "nativeHtmlSection": "<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"DESCRIPTION\"><a class=\"permalink\" href=\"#DESCRIPTION\">DESCRIPTION</a></h2>\n<div class=\"Bd\"></div>\n<dl class=\"Bl-tag Bl-compact\">\n  <dt id=\"BodyAlpha\">Key</dt>\n  <dd><a class=\"permalink\" href=\"#BodyAlpha\"><span class=\"No\">BodyAlpha</span></a>\n      <span class=\"No\">BodyBeta</span></dd>\n</dl>\n</section>"
+      }
+    },
+    {
+      "id": "filled-filled-explicit",
+      "source": ".Dd October 13, 2026\n.Dt FLOW 1\n.Os ManT\n.Sh NAME\n.Nm flow\n.Nd display mode recovery probe\n.Sh DESCRIPTION\n.Bl -tag -width 5n -compact\n.Bd -filled -compact\n.Ed\n.It Key\n.No BodyAlpha\n.No BodyBeta\n.El\n.Sh NEXT\n.No AfterAlpha\n.No AfterBeta\n",
+      "entry": "filled",
+      "display": "filled",
+      "close": "explicit",
+      "sourceSha256": "12588ad9f05affaa4ae16d4106bd34daf583473b601c77098e6a22b98886319c",
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "17b6339e0d74a5d96d1586fb9a2d184a1f3c0c9afcdf97b3aaf89498c835d07e",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "5d369acfb64d7730f4358ba37563bf1dc366a4f6bda57acaa3eaaa056eb57768",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "8ef36436edc26bbb8b1065e2bc04acc4266b2a6230c419130e0d57e6740d82a8",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "2c8c8e9ae51b4e4a3ab37f18cc7f5931bc4746ce8d50ae810374f691bc00f07b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "c8fe0fe1c6b02469086302f78e10a4bc0436ef7e9d5a5a5bbcbeead8d6d5f019",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected": {
+        "positionedText": [
+          {
+            "label": "BodyAlpha",
+            "line": 12,
+            "column": 5,
+            "line_start": false,
+            "no_fill": false,
+            "owner": "It BODY"
+          },
+          {
+            "label": "BodyBeta",
+            "line": 13,
+            "column": 5,
+            "line_start": false,
+            "no_fill": false,
+            "owner": "It BODY"
+          },
+          {
+            "label": "AfterAlpha",
+            "line": 16,
+            "column": 5,
+            "line_start": false,
+            "no_fill": false,
+            "owner": null
+          },
+          {
+            "label": "AfterBeta",
+            "line": 17,
+            "column": 5,
+            "line_start": false,
+            "no_fill": false,
+            "owner": null
+          }
+        ],
+        "nativeBodies": {
+          "ascii": "     Key    BodyAlpha BodyBeta\n\n",
+          "utf8": "     Key    BodyAlpha BodyBeta\n\n"
+        },
+        "nativeHtmlSection": "<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"DESCRIPTION\"><a class=\"permalink\" href=\"#DESCRIPTION\">DESCRIPTION</a></h2>\n<div class=\"Bd\"></div>\n<dl class=\"Bl-tag Bl-compact\">\n  <dt id=\"BodyAlpha\">Key</dt>\n  <dd><a class=\"permalink\" href=\"#BodyAlpha\"><span class=\"No\">BodyAlpha</span></a>\n      <span class=\"No\">BodyBeta</span></dd>\n</dl>\n</section>"
+      }
+    },
+    {
+      "id": "filled-ragged-implicit",
+      "source": ".Dd October 13, 2026\n.Dt FLOW 1\n.Os ManT\n.Sh NAME\n.Nm flow\n.Nd display mode recovery probe\n.Sh DESCRIPTION\n.Bl -tag -width 5n -compact\n.Bd -ragged -compact\n.It Key\n.No BodyAlpha\n.No BodyBeta\n.Ed\n.El\n.Sh NEXT\n.No AfterAlpha\n.No AfterBeta\n",
+      "entry": "filled",
+      "display": "ragged",
+      "close": "implicit",
+      "sourceSha256": "0d917f51a09e56c96d824e2610a27364d7c5a0afaf8416a5011f92dda747fdd8",
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "17b6339e0d74a5d96d1586fb9a2d184a1f3c0c9afcdf97b3aaf89498c835d07e",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "5d369acfb64d7730f4358ba37563bf1dc366a4f6bda57acaa3eaaa056eb57768",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "8ef36436edc26bbb8b1065e2bc04acc4266b2a6230c419130e0d57e6740d82a8",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "0d17ae40a9bdb77cddf5db1c4c448df019881a3256d9cb360f4b0f4a9de6a7e8",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 3,
+          "stdout_sha256": "bee69bc2a102d92f2bd4f98b8676c32aedcfd03765f72e7b799ecfd5edff69ae",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected": {
+        "positionedText": [
+          {
+            "label": "BodyAlpha",
+            "line": 11,
+            "column": 5,
+            "line_start": false,
+            "no_fill": false,
+            "owner": "It BODY"
+          },
+          {
+            "label": "BodyBeta",
+            "line": 12,
+            "column": 5,
+            "line_start": false,
+            "no_fill": false,
+            "owner": "It BODY"
+          },
+          {
+            "label": "AfterAlpha",
+            "line": 16,
+            "column": 5,
+            "line_start": false,
+            "no_fill": false,
+            "owner": null
+          },
+          {
+            "label": "AfterBeta",
+            "line": 17,
+            "column": 5,
+            "line_start": false,
+            "no_fill": false,
+            "owner": null
+          }
+        ],
+        "nativeBodies": {
+          "ascii": "     Key    BodyAlpha BodyBeta\n\n",
+          "utf8": "     Key    BodyAlpha BodyBeta\n\n"
+        },
+        "nativeHtmlSection": "<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"DESCRIPTION\"><a class=\"permalink\" href=\"#DESCRIPTION\">DESCRIPTION</a></h2>\n<div class=\"Bd\"></div>\n<dl class=\"Bl-tag Bl-compact\">\n  <dt id=\"BodyAlpha\">Key</dt>\n  <dd><a class=\"permalink\" href=\"#BodyAlpha\"><span class=\"No\">BodyAlpha</span></a>\n      <span class=\"No\">BodyBeta</span></dd>\n</dl>\n</section>"
+      }
+    },
+    {
+      "id": "filled-ragged-explicit",
+      "source": ".Dd October 13, 2026\n.Dt FLOW 1\n.Os ManT\n.Sh NAME\n.Nm flow\n.Nd display mode recovery probe\n.Sh DESCRIPTION\n.Bl -tag -width 5n -compact\n.Bd -ragged -compact\n.Ed\n.It Key\n.No BodyAlpha\n.No BodyBeta\n.El\n.Sh NEXT\n.No AfterAlpha\n.No AfterBeta\n",
+      "entry": "filled",
+      "display": "ragged",
+      "close": "explicit",
+      "sourceSha256": "90776279ce702878e4da0aecd5d24e91c7cd4c189a896c0dadb7295d68b89526",
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "17b6339e0d74a5d96d1586fb9a2d184a1f3c0c9afcdf97b3aaf89498c835d07e",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "5d369acfb64d7730f4358ba37563bf1dc366a4f6bda57acaa3eaaa056eb57768",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "8ef36436edc26bbb8b1065e2bc04acc4266b2a6230c419130e0d57e6740d82a8",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "d8baf56aad8637b29c567590b0f013255fde56e3fffe94d38cbb6d0b7806a89f",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "c8fe0fe1c6b02469086302f78e10a4bc0436ef7e9d5a5a5bbcbeead8d6d5f019",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected": {
+        "positionedText": [
+          {
+            "label": "BodyAlpha",
+            "line": 12,
+            "column": 5,
+            "line_start": false,
+            "no_fill": false,
+            "owner": "It BODY"
+          },
+          {
+            "label": "BodyBeta",
+            "line": 13,
+            "column": 5,
+            "line_start": false,
+            "no_fill": false,
+            "owner": "It BODY"
+          },
+          {
+            "label": "AfterAlpha",
+            "line": 16,
+            "column": 5,
+            "line_start": false,
+            "no_fill": false,
+            "owner": null
+          },
+          {
+            "label": "AfterBeta",
+            "line": 17,
+            "column": 5,
+            "line_start": false,
+            "no_fill": false,
+            "owner": null
+          }
+        ],
+        "nativeBodies": {
+          "ascii": "     Key    BodyAlpha BodyBeta\n\n",
+          "utf8": "     Key    BodyAlpha BodyBeta\n\n"
+        },
+        "nativeHtmlSection": "<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"DESCRIPTION\"><a class=\"permalink\" href=\"#DESCRIPTION\">DESCRIPTION</a></h2>\n<div class=\"Bd\"></div>\n<dl class=\"Bl-tag Bl-compact\">\n  <dt id=\"BodyAlpha\">Key</dt>\n  <dd><a class=\"permalink\" href=\"#BodyAlpha\"><span class=\"No\">BodyAlpha</span></a>\n      <span class=\"No\">BodyBeta</span></dd>\n</dl>\n</section>"
+      }
+    },
+    {
+      "id": "no-fill-literal-implicit",
+      "source": ".Dd October 13, 2026\n.Dt FLOW 1\n.Os ManT\n.Sh NAME\n.Nm flow\n.Nd display mode recovery probe\n.Sh DESCRIPTION\n.nf\n.Bl -tag -width 5n -compact\n.Bd -literal -compact\n.It Key\n.No BodyAlpha\n.No BodyBeta\n.Ed\n.El\n.Sh NEXT\n.No AfterAlpha\n.No AfterBeta\n",
+      "entry": "no-fill",
+      "display": "literal",
+      "close": "implicit",
+      "sourceSha256": "d5e961c0e50d305d82d3bf8127e0ef59a5bc9454d29bfbcf0054019546ceb412",
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "c10083c6bdeaa070a41c6c1bc6b0886888d4abfa59d5f4d01e7bf369c7318d63",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "bf219aab9e5c509bdbc5903715ebe5f4087f44092e6b61f2ec7cdfdda24447fc",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "2fca774852ceec0a1d66397dd67f3b90dd92abe24441382deb445aebd98d52f8",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "6e58f1f7f189525a571abc44d5a49f13ee361acd909cda91530401a5399765a5",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 3,
+          "stdout_sha256": "b32a352e0e8bee66d54e1c878ceb0d9078b6d7ea3679a817a83786833242f1d6",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected": {
+        "positionedText": [
+          {
+            "label": "BodyAlpha",
+            "line": 12,
+            "column": 5,
+            "line_start": false,
+            "no_fill": true,
+            "owner": "It BODY"
+          },
+          {
+            "label": "BodyBeta",
+            "line": 13,
+            "column": 5,
+            "line_start": false,
+            "no_fill": true,
+            "owner": "It BODY"
+          },
+          {
+            "label": "AfterAlpha",
+            "line": 17,
+            "column": 5,
+            "line_start": false,
+            "no_fill": false,
+            "owner": null
+          },
+          {
+            "label": "AfterBeta",
+            "line": 18,
+            "column": 5,
+            "line_start": false,
+            "no_fill": false,
+            "owner": null
+          }
+        ],
+        "nativeBodies": {
+          "ascii": "     Key\n            BodyAlpha\n            BodyBeta\n\n",
+          "utf8": "     Key\n            BodyAlpha\n            BodyBeta\n\n"
+        },
+        "nativeHtmlSection": "<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"DESCRIPTION\"><a class=\"permalink\" href=\"#DESCRIPTION\">DESCRIPTION</a></h2>\n<pre></pre>\n<div class=\"Bd Li\"></div>\n<dl class=\"Bl-tag Bl-compact\">\n  <dt id=\"BodyAlpha\">Key</dt>\n  <dd>\n    <a class=\"permalink\" href=\"#BodyAlpha\"><span class=\"No\">BodyAlpha</span></a>\n    <span class=\"No\">BodyBeta</span></dd>\n</dl>\n</section>"
+      }
+    },
+    {
+      "id": "no-fill-literal-explicit",
+      "source": ".Dd October 13, 2026\n.Dt FLOW 1\n.Os ManT\n.Sh NAME\n.Nm flow\n.Nd display mode recovery probe\n.Sh DESCRIPTION\n.nf\n.Bl -tag -width 5n -compact\n.Bd -literal -compact\n.Ed\n.It Key\n.No BodyAlpha\n.No BodyBeta\n.El\n.Sh NEXT\n.No AfterAlpha\n.No AfterBeta\n",
+      "entry": "no-fill",
+      "display": "literal",
+      "close": "explicit",
+      "sourceSha256": "64328a7dad5ee307c394da082a15bb64476dde992985c0b7fc60e4da8f0f7d24",
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "c10083c6bdeaa070a41c6c1bc6b0886888d4abfa59d5f4d01e7bf369c7318d63",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "bf219aab9e5c509bdbc5903715ebe5f4087f44092e6b61f2ec7cdfdda24447fc",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "2fca774852ceec0a1d66397dd67f3b90dd92abe24441382deb445aebd98d52f8",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "992972a3a97d4fe49178a0f4596da9de3d896e7845e485c781ad21b0b1abfb1d",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "52ab6a04cf5bac36ccc4611cb73bd59289b17a27d43cdff65cce54f83c6d971b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected": {
+        "positionedText": [
+          {
+            "label": "BodyAlpha",
+            "line": 13,
+            "column": 5,
+            "line_start": false,
+            "no_fill": true,
+            "owner": "It BODY"
+          },
+          {
+            "label": "BodyBeta",
+            "line": 14,
+            "column": 5,
+            "line_start": false,
+            "no_fill": true,
+            "owner": "It BODY"
+          },
+          {
+            "label": "AfterAlpha",
+            "line": 17,
+            "column": 5,
+            "line_start": false,
+            "no_fill": false,
+            "owner": null
+          },
+          {
+            "label": "AfterBeta",
+            "line": 18,
+            "column": 5,
+            "line_start": false,
+            "no_fill": false,
+            "owner": null
+          }
+        ],
+        "nativeBodies": {
+          "ascii": "     Key\n            BodyAlpha\n            BodyBeta\n\n",
+          "utf8": "     Key\n            BodyAlpha\n            BodyBeta\n\n"
+        },
+        "nativeHtmlSection": "<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"DESCRIPTION\"><a class=\"permalink\" href=\"#DESCRIPTION\">DESCRIPTION</a></h2>\n<pre></pre>\n<div class=\"Bd Li\"></div>\n<dl class=\"Bl-tag Bl-compact\">\n  <dt id=\"BodyAlpha\">Key</dt>\n  <dd>\n    <a class=\"permalink\" href=\"#BodyAlpha\"><span class=\"No\">BodyAlpha</span></a>\n    <span class=\"No\">BodyBeta</span></dd>\n</dl>\n</section>"
+      }
+    },
+    {
+      "id": "no-fill-unfilled-implicit",
+      "source": ".Dd October 13, 2026\n.Dt FLOW 1\n.Os ManT\n.Sh NAME\n.Nm flow\n.Nd display mode recovery probe\n.Sh DESCRIPTION\n.nf\n.Bl -tag -width 5n -compact\n.Bd -unfilled -compact\n.It Key\n.No BodyAlpha\n.No BodyBeta\n.Ed\n.El\n.Sh NEXT\n.No AfterAlpha\n.No AfterBeta\n",
+      "entry": "no-fill",
+      "display": "unfilled",
+      "close": "implicit",
+      "sourceSha256": "8a9edf0c0a86992041375d0ff9cbc34e900bd0385384e3bce0655e89c64465ca",
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "c10083c6bdeaa070a41c6c1bc6b0886888d4abfa59d5f4d01e7bf369c7318d63",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "bf219aab9e5c509bdbc5903715ebe5f4087f44092e6b61f2ec7cdfdda24447fc",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "3e220aa517cc3b5101bec34340218ac4ca9b316297ef41d87f38eb5e4aba70d3",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "6af3a391227e5c64706fbb872e6c6c259b51981102b4fbfd9dc744f8a9e7f97d",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 3,
+          "stdout_sha256": "b32a352e0e8bee66d54e1c878ceb0d9078b6d7ea3679a817a83786833242f1d6",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected": {
+        "positionedText": [
+          {
+            "label": "BodyAlpha",
+            "line": 12,
+            "column": 5,
+            "line_start": false,
+            "no_fill": true,
+            "owner": "It BODY"
+          },
+          {
+            "label": "BodyBeta",
+            "line": 13,
+            "column": 5,
+            "line_start": false,
+            "no_fill": true,
+            "owner": "It BODY"
+          },
+          {
+            "label": "AfterAlpha",
+            "line": 17,
+            "column": 5,
+            "line_start": false,
+            "no_fill": false,
+            "owner": null
+          },
+          {
+            "label": "AfterBeta",
+            "line": 18,
+            "column": 5,
+            "line_start": false,
+            "no_fill": false,
+            "owner": null
+          }
+        ],
+        "nativeBodies": {
+          "ascii": "     Key\n            BodyAlpha\n            BodyBeta\n\n",
+          "utf8": "     Key\n            BodyAlpha\n            BodyBeta\n\n"
+        },
+        "nativeHtmlSection": "<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"DESCRIPTION\"><a class=\"permalink\" href=\"#DESCRIPTION\">DESCRIPTION</a></h2>\n<pre></pre>\n<div class=\"Bd\"></div>\n<dl class=\"Bl-tag Bl-compact\">\n  <dt id=\"BodyAlpha\">Key</dt>\n  <dd>\n    <a class=\"permalink\" href=\"#BodyAlpha\"><span class=\"No\">BodyAlpha</span></a>\n    <span class=\"No\">BodyBeta</span></dd>\n</dl>\n</section>"
+      }
+    },
+    {
+      "id": "no-fill-unfilled-explicit",
+      "source": ".Dd October 13, 2026\n.Dt FLOW 1\n.Os ManT\n.Sh NAME\n.Nm flow\n.Nd display mode recovery probe\n.Sh DESCRIPTION\n.nf\n.Bl -tag -width 5n -compact\n.Bd -unfilled -compact\n.Ed\n.It Key\n.No BodyAlpha\n.No BodyBeta\n.El\n.Sh NEXT\n.No AfterAlpha\n.No AfterBeta\n",
+      "entry": "no-fill",
+      "display": "unfilled",
+      "close": "explicit",
+      "sourceSha256": "c55c8bb854445ba1f604555a8942a7ad3377404b383fcab0779c7c89df5d144a",
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "c10083c6bdeaa070a41c6c1bc6b0886888d4abfa59d5f4d01e7bf369c7318d63",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "bf219aab9e5c509bdbc5903715ebe5f4087f44092e6b61f2ec7cdfdda24447fc",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "3e220aa517cc3b5101bec34340218ac4ca9b316297ef41d87f38eb5e4aba70d3",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "8f2c6b92375876231b2ef635a8a5a4bd5550e7c8b6438ad6d4902b63662a297e",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "52ab6a04cf5bac36ccc4611cb73bd59289b17a27d43cdff65cce54f83c6d971b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected": {
+        "positionedText": [
+          {
+            "label": "BodyAlpha",
+            "line": 13,
+            "column": 5,
+            "line_start": false,
+            "no_fill": true,
+            "owner": "It BODY"
+          },
+          {
+            "label": "BodyBeta",
+            "line": 14,
+            "column": 5,
+            "line_start": false,
+            "no_fill": true,
+            "owner": "It BODY"
+          },
+          {
+            "label": "AfterAlpha",
+            "line": 17,
+            "column": 5,
+            "line_start": false,
+            "no_fill": false,
+            "owner": null
+          },
+          {
+            "label": "AfterBeta",
+            "line": 18,
+            "column": 5,
+            "line_start": false,
+            "no_fill": false,
+            "owner": null
+          }
+        ],
+        "nativeBodies": {
+          "ascii": "     Key\n            BodyAlpha\n            BodyBeta\n\n",
+          "utf8": "     Key\n            BodyAlpha\n            BodyBeta\n\n"
+        },
+        "nativeHtmlSection": "<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"DESCRIPTION\"><a class=\"permalink\" href=\"#DESCRIPTION\">DESCRIPTION</a></h2>\n<pre></pre>\n<div class=\"Bd\"></div>\n<dl class=\"Bl-tag Bl-compact\">\n  <dt id=\"BodyAlpha\">Key</dt>\n  <dd>\n    <a class=\"permalink\" href=\"#BodyAlpha\"><span class=\"No\">BodyAlpha</span></a>\n    <span class=\"No\">BodyBeta</span></dd>\n</dl>\n</section>"
+      }
+    },
+    {
+      "id": "no-fill-filled-implicit",
+      "source": ".Dd October 13, 2026\n.Dt FLOW 1\n.Os ManT\n.Sh NAME\n.Nm flow\n.Nd display mode recovery probe\n.Sh DESCRIPTION\n.nf\n.Bl -tag -width 5n -compact\n.Bd -filled -compact\n.It Key\n.No BodyAlpha\n.No BodyBeta\n.Ed\n.El\n.Sh NEXT\n.No AfterAlpha\n.No AfterBeta\n",
+      "entry": "no-fill",
+      "display": "filled",
+      "close": "implicit",
+      "sourceSha256": "1307aa26334832ac9cf4c3bb343d40715d77c300b53e4e5d36325995d2555455",
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "c10083c6bdeaa070a41c6c1bc6b0886888d4abfa59d5f4d01e7bf369c7318d63",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "bf219aab9e5c509bdbc5903715ebe5f4087f44092e6b61f2ec7cdfdda24447fc",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "3e220aa517cc3b5101bec34340218ac4ca9b316297ef41d87f38eb5e4aba70d3",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "a047fb6cb8d0bdf828b079dad9cab85894ac5ba3df7955e8c5b4e7c4b9fbb1b7",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 3,
+          "stdout_sha256": "b32a352e0e8bee66d54e1c878ceb0d9078b6d7ea3679a817a83786833242f1d6",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected": {
+        "positionedText": [
+          {
+            "label": "BodyAlpha",
+            "line": 12,
+            "column": 5,
+            "line_start": false,
+            "no_fill": true,
+            "owner": "It BODY"
+          },
+          {
+            "label": "BodyBeta",
+            "line": 13,
+            "column": 5,
+            "line_start": false,
+            "no_fill": true,
+            "owner": "It BODY"
+          },
+          {
+            "label": "AfterAlpha",
+            "line": 17,
+            "column": 5,
+            "line_start": false,
+            "no_fill": false,
+            "owner": null
+          },
+          {
+            "label": "AfterBeta",
+            "line": 18,
+            "column": 5,
+            "line_start": false,
+            "no_fill": false,
+            "owner": null
+          }
+        ],
+        "nativeBodies": {
+          "ascii": "     Key\n            BodyAlpha\n            BodyBeta\n\n",
+          "utf8": "     Key\n            BodyAlpha\n            BodyBeta\n\n"
+        },
+        "nativeHtmlSection": "<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"DESCRIPTION\"><a class=\"permalink\" href=\"#DESCRIPTION\">DESCRIPTION</a></h2>\n<pre></pre>\n<div class=\"Bd\"></div>\n<dl class=\"Bl-tag Bl-compact\">\n  <dt id=\"BodyAlpha\">Key</dt>\n  <dd>\n    <a class=\"permalink\" href=\"#BodyAlpha\"><span class=\"No\">BodyAlpha</span></a>\n    <span class=\"No\">BodyBeta</span></dd>\n</dl>\n</section>"
+      }
+    },
+    {
+      "id": "no-fill-filled-explicit",
+      "source": ".Dd October 13, 2026\n.Dt FLOW 1\n.Os ManT\n.Sh NAME\n.Nm flow\n.Nd display mode recovery probe\n.Sh DESCRIPTION\n.nf\n.Bl -tag -width 5n -compact\n.Bd -filled -compact\n.Ed\n.It Key\n.No BodyAlpha\n.No BodyBeta\n.El\n.Sh NEXT\n.No AfterAlpha\n.No AfterBeta\n",
+      "entry": "no-fill",
+      "display": "filled",
+      "close": "explicit",
+      "sourceSha256": "f9f15d3fc27ef90d85b1f151f8d3c4ff5c8964fc3cc6589de42b21754da91356",
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "c10083c6bdeaa070a41c6c1bc6b0886888d4abfa59d5f4d01e7bf369c7318d63",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "bf219aab9e5c509bdbc5903715ebe5f4087f44092e6b61f2ec7cdfdda24447fc",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "3e220aa517cc3b5101bec34340218ac4ca9b316297ef41d87f38eb5e4aba70d3",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "0b78fc06146035ef88cff20fa346cee757566d52f36c88862c7b5e9a1a259e30",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "52ab6a04cf5bac36ccc4611cb73bd59289b17a27d43cdff65cce54f83c6d971b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected": {
+        "positionedText": [
+          {
+            "label": "BodyAlpha",
+            "line": 13,
+            "column": 5,
+            "line_start": false,
+            "no_fill": true,
+            "owner": "It BODY"
+          },
+          {
+            "label": "BodyBeta",
+            "line": 14,
+            "column": 5,
+            "line_start": false,
+            "no_fill": true,
+            "owner": "It BODY"
+          },
+          {
+            "label": "AfterAlpha",
+            "line": 17,
+            "column": 5,
+            "line_start": false,
+            "no_fill": false,
+            "owner": null
+          },
+          {
+            "label": "AfterBeta",
+            "line": 18,
+            "column": 5,
+            "line_start": false,
+            "no_fill": false,
+            "owner": null
+          }
+        ],
+        "nativeBodies": {
+          "ascii": "     Key\n            BodyAlpha\n            BodyBeta\n\n",
+          "utf8": "     Key\n            BodyAlpha\n            BodyBeta\n\n"
+        },
+        "nativeHtmlSection": "<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"DESCRIPTION\"><a class=\"permalink\" href=\"#DESCRIPTION\">DESCRIPTION</a></h2>\n<pre></pre>\n<div class=\"Bd\"></div>\n<dl class=\"Bl-tag Bl-compact\">\n  <dt id=\"BodyAlpha\">Key</dt>\n  <dd>\n    <a class=\"permalink\" href=\"#BodyAlpha\"><span class=\"No\">BodyAlpha</span></a>\n    <span class=\"No\">BodyBeta</span></dd>\n</dl>\n</section>"
+      }
+    },
+    {
+      "id": "no-fill-ragged-implicit",
+      "source": ".Dd October 13, 2026\n.Dt FLOW 1\n.Os ManT\n.Sh NAME\n.Nm flow\n.Nd display mode recovery probe\n.Sh DESCRIPTION\n.nf\n.Bl -tag -width 5n -compact\n.Bd -ragged -compact\n.It Key\n.No BodyAlpha\n.No BodyBeta\n.Ed\n.El\n.Sh NEXT\n.No AfterAlpha\n.No AfterBeta\n",
+      "entry": "no-fill",
+      "display": "ragged",
+      "close": "implicit",
+      "sourceSha256": "fff527652c862914d6c0be668c9f698af5822d7b4f1668c5b737ad5dbff3caf5",
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "c10083c6bdeaa070a41c6c1bc6b0886888d4abfa59d5f4d01e7bf369c7318d63",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "bf219aab9e5c509bdbc5903715ebe5f4087f44092e6b61f2ec7cdfdda24447fc",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "3e220aa517cc3b5101bec34340218ac4ca9b316297ef41d87f38eb5e4aba70d3",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "e37c0afd07d190b3030f753a94ceea272ee498505a74236daea8afa17e0832f3",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 3,
+          "stdout_sha256": "b32a352e0e8bee66d54e1c878ceb0d9078b6d7ea3679a817a83786833242f1d6",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected": {
+        "positionedText": [
+          {
+            "label": "BodyAlpha",
+            "line": 12,
+            "column": 5,
+            "line_start": false,
+            "no_fill": true,
+            "owner": "It BODY"
+          },
+          {
+            "label": "BodyBeta",
+            "line": 13,
+            "column": 5,
+            "line_start": false,
+            "no_fill": true,
+            "owner": "It BODY"
+          },
+          {
+            "label": "AfterAlpha",
+            "line": 17,
+            "column": 5,
+            "line_start": false,
+            "no_fill": false,
+            "owner": null
+          },
+          {
+            "label": "AfterBeta",
+            "line": 18,
+            "column": 5,
+            "line_start": false,
+            "no_fill": false,
+            "owner": null
+          }
+        ],
+        "nativeBodies": {
+          "ascii": "     Key\n            BodyAlpha\n            BodyBeta\n\n",
+          "utf8": "     Key\n            BodyAlpha\n            BodyBeta\n\n"
+        },
+        "nativeHtmlSection": "<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"DESCRIPTION\"><a class=\"permalink\" href=\"#DESCRIPTION\">DESCRIPTION</a></h2>\n<pre></pre>\n<div class=\"Bd\"></div>\n<dl class=\"Bl-tag Bl-compact\">\n  <dt id=\"BodyAlpha\">Key</dt>\n  <dd>\n    <a class=\"permalink\" href=\"#BodyAlpha\"><span class=\"No\">BodyAlpha</span></a>\n    <span class=\"No\">BodyBeta</span></dd>\n</dl>\n</section>"
+      }
+    },
+    {
+      "id": "no-fill-ragged-explicit",
+      "source": ".Dd October 13, 2026\n.Dt FLOW 1\n.Os ManT\n.Sh NAME\n.Nm flow\n.Nd display mode recovery probe\n.Sh DESCRIPTION\n.nf\n.Bl -tag -width 5n -compact\n.Bd -ragged -compact\n.Ed\n.It Key\n.No BodyAlpha\n.No BodyBeta\n.El\n.Sh NEXT\n.No AfterAlpha\n.No AfterBeta\n",
+      "entry": "no-fill",
+      "display": "ragged",
+      "close": "explicit",
+      "sourceSha256": "14ec457da83de3b7bbbdf4fcd72621e3355ff971831af0720b41db14d6a4a56a",
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "c10083c6bdeaa070a41c6c1bc6b0886888d4abfa59d5f4d01e7bf369c7318d63",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "bf219aab9e5c509bdbc5903715ebe5f4087f44092e6b61f2ec7cdfdda24447fc",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "3e220aa517cc3b5101bec34340218ac4ca9b316297ef41d87f38eb5e4aba70d3",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "aa3fbe1d2e5f3909fca6f7dd1194dd248155cf0434262739330953f9141d16ca",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "52ab6a04cf5bac36ccc4611cb73bd59289b17a27d43cdff65cce54f83c6d971b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected": {
+        "positionedText": [
+          {
+            "label": "BodyAlpha",
+            "line": 13,
+            "column": 5,
+            "line_start": false,
+            "no_fill": true,
+            "owner": "It BODY"
+          },
+          {
+            "label": "BodyBeta",
+            "line": 14,
+            "column": 5,
+            "line_start": false,
+            "no_fill": true,
+            "owner": "It BODY"
+          },
+          {
+            "label": "AfterAlpha",
+            "line": 17,
+            "column": 5,
+            "line_start": false,
+            "no_fill": false,
+            "owner": null
+          },
+          {
+            "label": "AfterBeta",
+            "line": 18,
+            "column": 5,
+            "line_start": false,
+            "no_fill": false,
+            "owner": null
+          }
+        ],
+        "nativeBodies": {
+          "ascii": "     Key\n            BodyAlpha\n            BodyBeta\n\n",
+          "utf8": "     Key\n            BodyAlpha\n            BodyBeta\n\n"
+        },
+        "nativeHtmlSection": "<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"DESCRIPTION\"><a class=\"permalink\" href=\"#DESCRIPTION\">DESCRIPTION</a></h2>\n<pre></pre>\n<div class=\"Bd\"></div>\n<dl class=\"Bl-tag Bl-compact\">\n  <dt id=\"BodyAlpha\">Key</dt>\n  <dd>\n    <a class=\"permalink\" href=\"#BodyAlpha\"><span class=\"No\">BodyAlpha</span></a>\n    <span class=\"No\">BodyBeta</span></dd>\n</dl>\n</section>"
+      }
+    },
+    {
+      "id": "override-nf",
+      "entry": "filled",
+      "display": "literal",
+      "close": "implicit",
+      "source": ".Dd October 13, 2026\n.Dt FLOW 1\n.Os ManT\n.Sh NAME\n.Nm flow\n.Nd display mode recovery probe\n.Sh DESCRIPTION\n.Bl -tag -width 5n -compact\n.Bd -literal -compact\n.It Key\n.nf\n.No BodyAlpha\n.No BodyBeta\n.Ed\n.El\n.Sh NEXT\n.No AfterAlpha\n.No AfterBeta\n",
+      "sourceSha256": "b5706b1bbb18d682e8d1f063eb53f2721fcad9c95fb4e8898dfcbbd51e2f901b",
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "c10083c6bdeaa070a41c6c1bc6b0886888d4abfa59d5f4d01e7bf369c7318d63",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "bf219aab9e5c509bdbc5903715ebe5f4087f44092e6b61f2ec7cdfdda24447fc",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "2579f2b49186898129619bac1a21ff55d2c270436e97221e9303c11a8234fed0",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "f434376deff8c79b286c23e7adf4833508f763c0a73eadeb536d01d72a59818e",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 3,
+          "stdout_sha256": "6dbb7d2e7543d039b2ae9e05ee267cb5cbef7b4dff179302e8cc50d7e77ee5c6",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected": {
+        "positionedText": [
+          {
+            "label": "BodyAlpha",
+            "line": 12,
+            "column": 5,
+            "line_start": false,
+            "no_fill": true,
+            "owner": "It BODY"
+          },
+          {
+            "label": "BodyBeta",
+            "line": 13,
+            "column": 5,
+            "line_start": false,
+            "no_fill": true,
+            "owner": "It BODY"
+          },
+          {
+            "label": "AfterAlpha",
+            "line": 17,
+            "column": 5,
+            "line_start": false,
+            "no_fill": false,
+            "owner": null
+          },
+          {
+            "label": "AfterBeta",
+            "line": 18,
+            "column": 5,
+            "line_start": false,
+            "no_fill": false,
+            "owner": null
+          }
+        ],
+        "nativeBodies": {
+          "ascii": "     Key\n            BodyAlpha\n            BodyBeta\n\n",
+          "utf8": "     Key\n            BodyAlpha\n            BodyBeta\n\n"
+        },
+        "nativeHtmlSection": "<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"DESCRIPTION\"><a class=\"permalink\" href=\"#DESCRIPTION\">DESCRIPTION</a></h2>\n<div class=\"Bd Li\"></div>\n<dl class=\"Bl-tag Bl-compact\">\n  <dt>Key</dt>\n  <dd>\n    <pre><span class=\"No\">BodyAlpha</span>\n<span class=\"No\">BodyBeta</span></pre>\n  </dd>\n</dl>\n</section>"
+      }
+    },
+    {
+      "id": "override-fi",
+      "entry": "filled",
+      "display": "literal",
+      "close": "implicit",
+      "source": ".Dd October 13, 2026\n.Dt FLOW 1\n.Os ManT\n.Sh NAME\n.Nm flow\n.Nd display mode recovery probe\n.Sh DESCRIPTION\n.Bl -tag -width 5n -compact\n.Bd -literal -compact\n.It Key\n.fi\n.No BodyAlpha\n.No BodyBeta\n.Ed\n.El\n.Sh NEXT\n.No AfterAlpha\n.No AfterBeta\n",
+      "sourceSha256": "3e36766e16603f72267366571ee05e58405d40189d15481d3ccfdd90b153e780",
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "0b7e6e3f289206f5bdbf5b02c4ae442c4babbc66276a91cfd6765b58e4008fd6",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "81bb6bc6e7f028cfafda9fbefec262be43105c9a5951ff8a857ebd71bed8b229",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "3f8a2645f09eb1fcba4092d5bc3cd0954a10d51396009859a8ece6c879b6bfd5",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "f931b41c988aa6b082080f2c78f2bf96cc5fe759fd1d6664da5e2d0c09d61345",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 3,
+          "stdout_sha256": "00ba572619710e8e5428576a6228acd8e583ea66df04473a75ef3ed323672869",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected": {
+        "positionedText": [
+          {
+            "label": "BodyAlpha",
+            "line": 12,
+            "column": 5,
+            "line_start": false,
+            "no_fill": false,
+            "owner": "It BODY"
+          },
+          {
+            "label": "BodyBeta",
+            "line": 13,
+            "column": 5,
+            "line_start": false,
+            "no_fill": false,
+            "owner": "It BODY"
+          },
+          {
+            "label": "AfterAlpha",
+            "line": 17,
+            "column": 5,
+            "line_start": false,
+            "no_fill": false,
+            "owner": null
+          },
+          {
+            "label": "AfterBeta",
+            "line": 18,
+            "column": 5,
+            "line_start": false,
+            "no_fill": false,
+            "owner": null
+          }
+        ],
+        "nativeBodies": {
+          "ascii": "     Key\n            BodyAlpha BodyBeta\n\n",
+          "utf8": "     Key\n            BodyAlpha BodyBeta\n\n"
+        },
+        "nativeHtmlSection": "<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"DESCRIPTION\"><a class=\"permalink\" href=\"#DESCRIPTION\">DESCRIPTION</a></h2>\n<div class=\"Bd Li\"></div>\n<dl class=\"Bl-tag Bl-compact\">\n  <dt>Key</dt>\n  <dd>\n    <br/>\n    <span class=\"No\">BodyAlpha</span> <span class=\"No\">BodyBeta</span></dd>\n</dl>\n</section>"
+      }
+    }
+  ]
+}

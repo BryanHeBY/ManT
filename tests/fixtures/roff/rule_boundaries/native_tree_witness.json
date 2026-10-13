@@ -1,8 +1,8 @@
 {
   "source": ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo X\n.br\na-bc\\p \\p Q\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
   "source_sha256": "14e562d8121366e1357b46e614c09d6f23752a3dc7708b231b134f98f863b0b1",
-  "oracle_identity": "cvs-20261006T140200Z-linux-x86_64-gcc-16.2.1-reproducible",
-  "reference_sha256": "6297105d1370a44fd306851ae5beab3f23492d756a682f8a0693896922249ea0",
+  "oracle_identity": "cvs-20261013T025419Z-linux-x86_64-gcc-16.2.1-reproducible",
+  "reference_sha256": "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e",
   "profiles": {
     "ascii": {
       "code": 0,
@@ -12,7 +12,7 @@
     },
     "utf8": {
       "code": 0,
-      "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt \u2013 probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     X a-bc\n           BODY\n\nN\bNE\bEX\bXT\bT\n     END\n\nLinux 6.18.40.1-microsoft-standard-WSL2\n                                October 2, 2026                        TEST(1)\n",
+      "stdout": "TEST(1)                     General Commands Manual                    TEST(1)\n\nN\bNA\bAM\bME\bE\n     t\bte\bes\bst\bt – probe\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     X a-bc\n           BODY\n\nN\bNE\bEX\bXT\bT\n     END\n\nLinux 6.18.40.1-microsoft-standard-WSL2\n                                October 2, 2026                        TEST(1)\n",
       "stderr": "",
       "stdout_sha256": "d50d306801f06d5cdae162a6700f73f9680d55a6490fa990112f5d47fa6a3846"
     },

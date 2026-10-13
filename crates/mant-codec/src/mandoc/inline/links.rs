@@ -200,7 +200,7 @@ fn append_external_link(
     append: impl FnOnce(&mut InlineBuilder),
 ) {
     let checkpoint = builder.begin_output_checkpoint();
-    let pending_visible = builder.zero_advance.pending_visible_characters();
+    let pending = builder.zero_advance.pending_output_prefix();
     let previous_owner = builder.zero_advance.pending_native_owner();
     builder.zero_advance.begin_output_owner();
     append(builder);
@@ -211,16 +211,19 @@ fn append_external_link(
         true, // This operand always emits its own typed Link below.
     );
     let mut previous_glyph = if previous_glyph_emitted {
-        pending_visible
+        pending.count
     } else {
         0
     };
     builder.wrap_output_since(checkpoint, |children| {
         let (mut output, children) = split_boundary_prefix(children);
+        previous_glyph = previous_glyph
+            .saturating_sub(output.iter().map(|node| pending.measure.count(node)).sum());
         // CVS term_word()/encode1() may print an earlier operand's cached
         // glyph while this address executes. Its source ownership survives
         // that delay: annotation cannot move it into the address hit range.
-        let (prior, children) = split_visible_prefix(children, &mut previous_glyph);
+        let (prior, children) =
+            split_visible_prefix(children, &mut previous_glyph, pending.measure);
         output.extend(prior);
         output.push(Inline::Link {
             target: external_link_target(address.to_owned(), email),
@@ -234,7 +237,11 @@ fn append_external_link(
 /// Separate an already-receipted preceding glyph while retaining its styles
 /// and zero-width markers. This changes output ownership only; it executes no
 /// formatter boundary and does not settle another pending source glyph.
-fn split_visible_prefix(nodes: Vec<Inline>, remaining: &mut usize) -> (Vec<Inline>, Vec<Inline>) {
+fn split_visible_prefix(
+    nodes: Vec<Inline>,
+    remaining: &mut usize,
+    measure: super::PrefixMeasure,
+) -> (Vec<Inline>, Vec<Inline>) {
     let mut prefix = Vec::new();
     let mut suffix = Vec::new();
     for node in nodes {
@@ -244,13 +251,13 @@ fn split_visible_prefix(nodes: Vec<Inline>, remaining: &mut usize) -> (Vec<Inlin
         }
         match node {
             Inline::Text { value } => {
-                split_text_prefix(&value, remaining, false, &mut prefix, &mut suffix);
+                split_text_prefix(&value, remaining, false, &mut prefix, &mut suffix, measure);
             }
             Inline::Code { value } => {
-                split_text_prefix(&value, remaining, true, &mut prefix, &mut suffix);
+                split_text_prefix(&value, remaining, true, &mut prefix, &mut suffix, measure);
             }
             Inline::Strong { children } => {
-                let (before, after) = split_visible_prefix(children, remaining);
+                let (before, after) = split_visible_prefix(children, remaining, measure);
                 if !before.is_empty() {
                     prefix.push(Inline::Strong { children: before });
                 }
@@ -259,7 +266,7 @@ fn split_visible_prefix(nodes: Vec<Inline>, remaining: &mut usize) -> (Vec<Inlin
                 }
             }
             Inline::Emphasis { children } => {
-                let (before, after) = split_visible_prefix(children, remaining);
+                let (before, after) = split_visible_prefix(children, remaining, measure);
                 if !before.is_empty() {
                     prefix.push(Inline::Emphasis { children: before });
                 }
@@ -272,7 +279,7 @@ fn split_visible_prefix(nodes: Vec<Inline>, remaining: &mut usize) -> (Vec<Inlin
                 title,
                 children,
             } => {
-                let (before, after) = split_visible_prefix(children, remaining);
+                let (before, after) = split_visible_prefix(children, remaining, measure);
                 if !before.is_empty() {
                     prefix.push(Inline::Link {
                         target: target.clone(),
@@ -305,11 +312,12 @@ fn split_text_prefix(
     code: bool,
     prefix: &mut Vec<Inline>,
     suffix: &mut Vec<Inline>,
+    measure: super::PrefixMeasure,
 ) {
     let split = value
         .char_indices()
         .find_map(|(index, ch)| {
-            if !ch.is_whitespace() {
+            if measure.includes(ch) {
                 *remaining -= 1;
             }
             (*remaining == 0).then_some(index + ch.len_utf8())
@@ -473,6 +481,15 @@ fn link_identity_text(source: &str) -> String {
                 }
             }
             RoffInlineEvent::ZeroAdvance => skip_next_glyph = true,
+            RoffInlineEvent::Breakpoint => {
+                // html.c::print_encode() uses chars.c's positive U+200B for
+                // direct \:, while term_word() buffers ASCII_BREAK. Keep
+                // the HTML destination independent of visible terminal text.
+                if !skip_next_glyph {
+                    identity.push('\u{200b}');
+                }
+                skip_next_glyph = false;
+            }
             // CVS HTML_SKIPCHAR survives font changes, but every other
             // formatter escape consumes the pending skip before a later
             // address glyph. In particular, `\\z\\c` must not delete the
@@ -576,7 +593,7 @@ pub(in crate::mandoc) fn append_man_link(
         }
     };
     let checkpoint = builder.begin_output_checkpoint();
-    let pending_visible = builder.zero_advance.pending_visible_characters();
+    let pending = builder.zero_advance.pending_output_prefix();
     builder.zero_advance.begin_output_owner();
     append_man_link_body(builder, body, default_name, no_fill);
     // BODY post resets font before BLOCK post executes its first word. That
@@ -585,7 +602,7 @@ pub(in crate::mandoc) fn append_man_link(
     builder.font.select(Font::Regular);
     builder.prepare_generated_word();
     let mut previous_glyph = if builder.zero_advance.end_output_owner() {
-        pending_visible
+        pending.count
     } else {
         0
     };
@@ -593,7 +610,10 @@ pub(in crate::mandoc) fn append_man_link(
     if !target.is_empty() && !head_is_label {
         builder.wrap_output_since(checkpoint, |children| {
             let (mut output, children) = split_boundary_prefix(children);
-            let (prior, children) = split_visible_prefix(children, &mut previous_glyph);
+            previous_glyph = previous_glyph
+                .saturating_sub(output.iter().map(|node| pending.measure.count(node)).sum());
+            let (prior, children) =
+                split_visible_prefix(children, &mut previous_glyph, pending.measure);
             output.extend(prior);
             output.push(Inline::Link {
                 target: link_target.clone(),

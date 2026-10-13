@@ -1,5 +1,5 @@
 {
-  "cutoff": "2026-10-06 14:02:00 UTC",
+  "cutoff": "2026-10-13 02:54:19 UTC",
   "files": {
     "INSTALL": {
       "revision": "1.24",
@@ -12,9 +12,9 @@
       "sha256": "59ee959daf199bb971048abc9d3c82eef19a622b615f2252c42490ad3110790d"
     },
     "Makefile": {
-      "revision": "1.550",
+      "revision": "1.551",
       "scope": "shipping",
-      "sha256": "c42f513116946d152cf6fabb6da9add55b5f7b0f0f9308b1bec945cb4c300ca5"
+      "sha256": "c3491a0e2fa843f3fdb5d38f317f5df83c8708a0e85b9ea25105ba1dbd2f681e"
     },
     "Makefile.depend": {
       "revision": "1.52",
@@ -22,14 +22,14 @@
       "sha256": "2f690fa0cdbb28b06e020fa57b3b310552a14a968064bdd690308ea2776b3712"
     },
     "NEWS": {
-      "revision": "1.52",
+      "revision": "1.54",
       "scope": "shipping",
-      "sha256": "1bb9f8663188a5ce4f7705151a58edda1896224932dea9b0ddf63a961fda1bfb"
+      "sha256": "b1e39f3b0e7ef0a00d7d53634a7c0559412bbe403737d367514d0fd043355eba"
     },
     "TODO": {
-      "revision": "1.346",
+      "revision": "1.347",
       "scope": "shipping",
-      "sha256": "695853e05678b4d254222d954a0a059f4f21898dee73926e92d658070ca962c9"
+      "sha256": "9e03d0b55d1b42c06d076fb1f06288dac6fb9ac4fe750be297c798363eedeff6"
     },
     "apropos.1": {
       "revision": "1.52",
@@ -67,9 +67,9 @@
       "sha256": "43fc1ab298021093de355e3494a0db30f4062fa1056b239c7c7e46fe455550fb"
     },
     "chars.c": {
-      "revision": "1.81",
+      "revision": "1.82",
       "scope": "shipping",
-      "sha256": "a9613291d3095f48c918166d2112d8ccd6ae54075be7b0f1650150176ca9a9bf"
+      "sha256": "df52beb31a55e564f696b435d289633faa22ba9ff99d8c74dc06f3f112b2081b"
     },
     "compat_err.c": {
       "revision": "1.5",
@@ -182,14 +182,14 @@
       "sha256": "034caeb2e17dc09c9dc6e2d731ed3f3a9c743bc424d07a3b0c44f3decfeefb3f"
     },
     "configure": {
-      "revision": "1.91",
+      "revision": "1.92",
       "scope": "shipping",
-      "sha256": "2112df8b32033ff15c07709c175d8603043b3ea5ca3847ab3defa2f1239afa0d"
+      "sha256": "934662d9dadba5b305a3c9a483cc369dc530044e97d157335d04b2fc1919cf20"
     },
     "configure.local.example": {
-      "revision": "1.51",
+      "revision": "1.52",
       "scope": "shipping",
-      "sha256": "6911efe83c44040fa8cc7b7518f7ac1822a75813e3af731360d8559116956b1d"
+      "sha256": "edcc968ccb4e87b70a228e6c7290e6b7f75eafcfccaa16ef5205aa96f51b2647"
     },
     "dba.c": {
       "revision": "1.11",
@@ -327,9 +327,9 @@
       "sha256": "f25590bde4ee00a3a2c24c1d155e51eec3f41d72b0486c8a13f13150706c9cf1"
     },
     "main.c": {
-      "revision": "1.371",
+      "revision": "1.372",
       "scope": "shipping",
-      "sha256": "242cd7fd3c5eb6f5fc5c81c20ee4558a2094e412814734a53b8cda1de4e0b7b5"
+      "sha256": "717f2ad268aea680af50260a19b121aa64c606e0cec7dd9888a7a53ffd03f433"
     },
     "main.h": {
       "revision": "1.30",
@@ -407,9 +407,9 @@
       "sha256": "0ab0b9f6f57ac0cb0be395bec92210f289bda18f492a8e85fa96a82354c2b427"
     },
     "mandoc.1": {
-      "revision": "1.276",
+      "revision": "1.278",
       "scope": "shipping",
-      "sha256": "aa3b7650fe613f426f5b91bcbe873b6134595128e808800a29ec9c6184464aeb"
+      "sha256": "8920c503ab7d9e120a4b15b0b46a3ef7402f2c08106b0dfaa9f72b1dfda1bed0"
     },
     "mandoc.3": {
       "revision": "1.46",
@@ -432,9 +432,9 @@
       "sha256": "81db92f475030adaa45d3b257f563071a8bffcff108ec8df71dddcdaa55e8d8b"
     },
     "mandoc.h": {
-      "revision": "1.284",
+      "revision": "1.285",
       "scope": "shipping",
-      "sha256": "c3548356cd894486bb7098e91e8e5d51b0ebe247cf138fdc58415a77985edd25"
+      "sha256": "ad0bec5d85938347fd7800f2b415a41ff1fb38735929a86c42604896596c807a"
     },
     "mandoc_aux.c": {
       "revision": "1.12",
@@ -487,9 +487,9 @@
       "sha256": "4a824915684d49751f89d85cfeb3cb20c147165286e382d926231b4aef3b5aef"
     },
     "mandoc_msg.c": {
-      "revision": "1.22",
+      "revision": "1.23",
       "scope": "shipping",
-      "sha256": "6cd85ae717b4fbfa5fbc94fa3c2c7d53a9e176b3ec71e4f8af2d20e2986a9297"
+      "sha256": "3cfcd13dffb4c47950ee8662a581598b89cd9f6de80bbb5cf4888079d5d2c94b"
     },
     "mandoc_ohash.c": {
       "revision": "1.3",
@@ -527,9 +527,9 @@
       "sha256": "014742901ef1112bdadb8b29cc4f1c2372f76cc4b948480c641725b0cdbcbf6e"
     },
     "mandocdb.c": {
-      "revision": "1.279",
+      "revision": "1.280",
       "scope": "shipping",
-      "sha256": "ca14a7ef393cc131831cefb1381ef98855494d1841a35f6ff63a7732e71f6380"
+      "sha256": "a802ae545861fa8da1adfbe6e8a731091870b06157cd2c1095911a255c46c3e9"
     },
     "manpath.c": {
       "revision": "1.49",
@@ -582,9 +582,9 @@
       "sha256": "cbcd782b0797475e1e98945b0dc615f664894e3b1f432b2509fdd4a7d9f120db"
     },
     "mdoc_macro.c": {
-      "revision": "1.237",
+      "revision": "1.238",
       "scope": "shipping",
-      "sha256": "9846d265432bd424ac3ee1c16649b052640ce3c64ac6efa91587ff272d278a29"
+      "sha256": "426d7f4903a93f119c2e4fdc9bf65c8165f1b1b31a1255d26e1b4414ba06527c"
     },
     "mdoc_man.c": {
       "revision": "1.141",
@@ -592,9 +592,9 @@
       "sha256": "e2d50c4273546eb5fbe90b487b79dae5372eaf7b4f8f436f5cce43dcfdfd7d73"
     },
     "mdoc_markdown.c": {
-      "revision": "1.40",
+      "revision": "1.41",
       "scope": "shipping",
-      "sha256": "b319e08fd6f46eaae216414cc3db8135fcf86dcef6f5b2a2dfe6e85deea25659"
+      "sha256": "1c916899361bf26a0589e33411fa6643495a3f71e5f06455df48768777920613"
     },
     "mdoc_state.c": {
       "revision": "1.19",
@@ -807,19 +807,29 @@
       "sha256": "9fc80203fce94510ef61682cb278ce10dfed312988f9062de84f7f15a74032a8"
     },
     "regress/char/space/Makefile": {
-      "revision": "1.3",
+      "revision": "1.5",
       "scope": "regress",
-      "sha256": "5d8e803531f23b4a52262aa1e982a77e4e0dff7c9cdb621ec4a7f2fe6742c580"
+      "sha256": "6b8e2c42cecb830d67482f66b05ce9479802bacb9dbe53764a6611979e29aa7a"
     },
     "regress/char/space/break.in": {
-      "revision": "1.2",
-      "scope": "regress",
-      "sha256": "ea5e60b05f258a020d5607f23d64faf243fa3e003a8d0b79a915f1339ec63f07"
-    },
-    "regress/char/space/break.out_ascii": {
       "revision": "1.3",
       "scope": "regress",
-      "sha256": "520175f2708b8a2499564fc14909ac74b3f8c1f11076bd8bf25c29f17c111a60"
+      "sha256": "c229740383bc97eb55796d52991a0c3781e1bfd48464a77a8f52bff3c49016d1"
+    },
+    "regress/char/space/break.out_ascii": {
+      "revision": "1.4",
+      "scope": "regress",
+      "sha256": "21bbd5d1c0f9ab9a0ad22a7c87fc5b3a7218f2d2a68ed16001607ebe35373c50"
+    },
+    "regress/char/space/break.out_html": {
+      "revision": "1.1",
+      "scope": "regress",
+      "sha256": "857552e35bc851941826212c760a302a39b38a6a4eb3a63face8dc891f4d084f"
+    },
+    "regress/char/space/break.out_utf8": {
+      "revision": "1.2",
+      "scope": "regress",
+      "sha256": "87900d160c66273435f91e543e62ddbc3f9c84813dfac4b87fea4fa197383ba9"
     },
     "regress/char/space/eos-man.in": {
       "revision": "1.2",
@@ -3797,9 +3807,34 @@
       "sha256": "3bd165d5662027f2a17b8e1eda11f73e29b9bd84c2dd9cb47e9f101c3fae1a6a"
     },
     "regress/mdoc/Bl/Makefile": {
-      "revision": "1.13",
+      "revision": "1.14",
       "scope": "regress",
-      "sha256": "8ba31e9d8526d2be742725a51bccef12a175473282457af719e4c944182cadf5"
+      "sha256": "85cd1731868e9cb9df1b40d9de3069696eee9e447a85937fec279765095707d5"
+    },
+    "regress/mdoc/Bl/badBd.in": {
+      "revision": "1.1",
+      "scope": "regress",
+      "sha256": "cecc51738728ff93f3459b9702fa490f0cbe6c5f5d922684c3826fdf706f37d5"
+    },
+    "regress/mdoc/Bl/badBd.out_ascii": {
+      "revision": "1.1",
+      "scope": "regress",
+      "sha256": "ad6f7efb39bd6103a484c9b8d5770b23bc1a1c05243a23a74e1b90fba72b61b8"
+    },
+    "regress/mdoc/Bl/badBd.out_html": {
+      "revision": "1.1",
+      "scope": "regress",
+      "sha256": "e6ac6f67e5d6466194cb517a851c5c62a58bf61e3b4d17a7d010bc4f2454c112"
+    },
+    "regress/mdoc/Bl/badBd.out_lint": {
+      "revision": "1.1",
+      "scope": "regress",
+      "sha256": "dc4e3f83f0360703902828b9af3390c2f042ff8607956bc9a12c85099a9d2565"
+    },
+    "regress/mdoc/Bl/badBd.out_markdown": {
+      "revision": "1.1",
+      "scope": "regress",
+      "sha256": "95b8208cbae6f6593c2c81b07ddf717f43b6dd919e8f16d32be4fb84486c13c6"
     },
     "regress/mdoc/Bl/badargs.in": {
       "revision": "1.2",
@@ -8657,9 +8692,9 @@
       "sha256": "4fb5b67e7ccc7bc5bb1844b84b05128243ef00fadcd3da02e1faaf7afbb11bdb"
     },
     "regress/regress.pl": {
-      "revision": "1.17",
+      "revision": "1.18",
       "scope": "regress",
-      "sha256": "b60525bdb3c8ac6017e9f8caa2df5a3f6487fe463fb81628a412e14104eec2ce"
+      "sha256": "e8f9b01698fef54367469a377407112575d7e85003feec7326a51b8e1e8cb1a7"
     },
     "regress/regress.pl.1": {
       "revision": "1.5",
@@ -9367,19 +9402,19 @@
       "sha256": "586c54256c7971ae804f75e2508df8a621af5b76dc36590d11016d980fcd56fb"
     },
     "regress/roff/esc/l.in": {
-      "revision": "1.4",
-      "scope": "regress",
-      "sha256": "5b1c2130e21c14aa3b5fcd85b580b42d04039c33e427d2beea93f109fb8e1eca"
-    },
-    "regress/roff/esc/l.out_ascii": {
       "revision": "1.5",
       "scope": "regress",
-      "sha256": "713c14be92218d7778e3239b10584c70e8baf740d1b562d9d5c3c7bf11462efb"
+      "sha256": "9860837b0f7f6d7245870b6f08ad806c21b97d22ad01724c7634cf3f37c49308"
     },
-    "regress/roff/esc/l.out_lint": {
+    "regress/roff/esc/l.out_ascii": {
       "revision": "1.6",
       "scope": "regress",
-      "sha256": "7f9386bd34e54b6b2cb96ba0d45a8885468d6b2f85ff40aabd1dc6f939ce021a"
+      "sha256": "a8cf8bb220e24aadd9ab58285cbefb1c2be0a638821dc1da12be71082d4d2f5d"
+    },
+    "regress/roff/esc/l.out_lint": {
+      "revision": "1.7",
+      "scope": "regress",
+      "sha256": "49525d0c7fcb65e65daa1e45339b4850a84f04c0588cd8c4c45e8fc1f9bacd9c"
     },
     "regress/roff/esc/multi.in": {
       "revision": "1.2",
@@ -10912,9 +10947,9 @@
       "sha256": "c08f82ee6bd03ea4b9157780f1797b0094e8a5c04ebc325e5bf03e85466e10dc"
     },
     "roff_escape.c": {
-      "revision": "1.17",
+      "revision": "1.18",
       "scope": "shipping",
-      "sha256": "96570e73142b7ff8f4fbedd1bf9d1023e12e4eb24416f29f44c3b9691cbc0bdc"
+      "sha256": "231396c7e4fcae3ecc62896bf35e46ea255cbe9733d0c8be2ea492e676edd07e"
     },
     "roff_html.c": {
       "revision": "1.21",
@@ -11017,9 +11052,9 @@
       "sha256": "3a6d61a577680d62bdd7eff817b428ee27c37ffaaed46b21b41d5666a34d309b"
     },
     "term.c": {
-      "revision": "1.295",
+      "revision": "1.297",
       "scope": "shipping",
-      "sha256": "9517a9c29c2693dc75f13a071e09b80d009d04c232dd99f20e2757e7539ee595"
+      "sha256": "0a2d4f93bdff763ddfb2caa6044bb3fbc4b27aa9a18defe677fa29714bb1e559"
     },
     "term.h": {
       "revision": "1.140",
@@ -11176,11 +11211,6 @@
       "scope": "shipping",
       "sha256": "00f6b05dd28e53c4cad226e1f0f75b79f685ddcb9115313e2cbb7d9a5482012f"
     },
-    "test-sandbox_init.c": {
-      "revision": "1.3",
-      "scope": "shipping",
-      "sha256": "cb1a538c2a36415e1bac719d8889b4501ce87ca430ded5eac4a9f1285a0728ea"
-    },
     "test-strcasestr.c": {
       "revision": "1.4",
       "scope": "shipping",
@@ -11242,7 +11272,7 @@
       "sha256": "56e3f9a893994a64626aae3d97b9cfd2acbdd7a10bc2543bfc6f5756d8e78ff1"
     }
   },
-  "regressCount": 2050,
+  "regressCount": 2057,
   "schema": "libmandoc-rs.cvs-inventory/v1",
-  "shippingCount": 198
+  "shippingCount": 197
 }

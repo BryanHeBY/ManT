@@ -105,7 +105,7 @@ Bound callable mdoc recursion and native tree construction, rejecting unsafe val
   * This is called at the end of parsing.  It must traverse up the tree,
   * closing out open [implicit] scopes.  Obviously, open explicit scopes
   * are errors.
-@@ -531,7 +569,7 @@
+@@ -538,7 +576,7 @@
  		if (tok != TOKEN_NONE &&
  		    mdoc_macro(tok)->fp == in_line_eoln)
  			rew_elem(mdoc, tok);
@@ -114,7 +114,7 @@ Bound callable mdoc recursion and native tree construction, rejecting unsafe val
  		if (tok == TOKEN_NONE)
  			append_delims(mdoc, line, pos, buf);
  		return 1;
-@@ -746,7 +784,7 @@
+@@ -753,7 +791,7 @@
  		if (n != NULL)
  			rew_last(mdoc, n);
  		mdoc->flags &= ~MDOC_NEWLINE;
@@ -123,7 +123,7 @@ Bound callable mdoc recursion and native tree construction, rejecting unsafe val
  		break;
  	}
  
-@@ -852,8 +890,7 @@
+@@ -859,8 +897,7 @@
  				mandoc_msg(MANDOCERR_MACRO_EMPTY,
  				    line, ppos, "%s", roff_name[tok]);
  			}
@@ -133,7 +133,7 @@ Bound callable mdoc recursion and native tree construction, rejecting unsafe val
  			if (nl)
  				append_delims(mdoc, line, pos, buf);
  			if (ac == ARGS_ALLOC)
-@@ -1458,8 +1495,7 @@
+@@ -1465,8 +1502,7 @@
  				rew_elem(mdoc, tok);
  				state = -2;
  			}

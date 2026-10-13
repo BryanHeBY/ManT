@@ -37,8 +37,8 @@ README identifies these modules separately from its Apache-2.0 code.
 codec's canonical Markdown artifacts with native features disabled. It does
 not contain or enable another native parser copy.
 
-`crates/libmandoc-rs/vendor/mandoc-cvs-20261006T140200Z/` is the mandoc CVS source
-snapshot pinned to 2026-10-06 14:02:00 UTC, with an ordered local patch series
+`crates/libmandoc-rs/vendor/mandoc-cvs-20261013T025419Z/` is the mandoc CVS source
+snapshot pinned to 2026-10-13 02:54:19 UTC, with an ordered local patch series
 and a checksummed 198-file upstream revision manifest. Its upstream inventory, local
 modification summary, exact exception mapping, and complete reusable terms are
 documented in

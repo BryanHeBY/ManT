@@ -14,7 +14,7 @@ Give unbuffered direct-output paths the same sentinel semantics as the normal li
  static	void		 encode(struct termp *, const char *, size_t);
  static	void		 encode1(struct termp *, int);
  static	void		 endline(struct termp *);
-@@ -828,11 +829,36 @@
+@@ -830,11 +831,36 @@
  	c->buf = mandoc_reallocarray(c->buf, c->maxcols, sizeof(*c->buf));
  }
  
@@ -52,7 +52,7 @@ Give unbuffered direct-output paths the same sentinel semantics as the normal li
  		return;
  	}
  	if (p->col + 1 >= p->tcol->maxcols)
-@@ -862,7 +888,7 @@
+@@ -864,7 +890,7 @@
  	enum termfont	  f;
  
  	if (p->flags & TERMP_NOBUF) {
@@ -61,7 +61,7 @@ Give unbuffered direct-output paths the same sentinel semantics as the normal li
  		return;
  	}
  
-@@ -908,7 +934,7 @@
+@@ -910,7 +936,7 @@
  
  	if (p->flags & TERMP_NOBUF) {
  		for (i = 0; i < sz; i++)

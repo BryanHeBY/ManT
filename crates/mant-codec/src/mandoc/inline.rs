@@ -34,7 +34,8 @@ use font::lower_man_font_scope;
 #[cfg(test)]
 use font::parse_roff_text_with_font;
 pub(super) use font::{
-    TextExecutionContext, TextExecutionPolicy, ZeroAdvanceState, parse_roff_text_with_zero_advance,
+    PrefixMeasure, TextExecutionContext, TextExecutionPolicy, ZeroAdvanceState,
+    parse_roff_text_with_zero_advance,
 };
 pub(super) use font::{lower_inline_nodes_with_font_state, parse_roff_text};
 pub(in crate::mandoc) use source_fragment::lower_source_fragment_with_formatter_state;
@@ -462,9 +463,12 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
     let occupies_literal_row = !execution.output.is_empty()
         || builder.zero_advance.has_buffered_glyph()
         || (node.flags.line_start && node.text.as_deref().is_some_and(str::is_empty))
-        || events
-            .iter()
-            .any(|event| matches!(event, RoffInlineEvent::ZeroWidthGlyph));
+        || events.iter().any(|event| {
+            matches!(
+                event,
+                RoffInlineEvent::ZeroWidthGlyph | RoffInlineEvent::Breakpoint
+            )
+        });
     if execution.joins_preceding_node {
         builder.tighten_next_boundary();
         builder.note_zero_advance_join();
@@ -588,8 +592,7 @@ pub(super) fn append_include(builder: &mut InlineBuilder, node: &Node, default_n
     // compaction, and the outer semantic checkpoint could only recover
     // plain text from the flattened value.
     let scope = builder.begin_output_checkpoint();
-    let entry_pending = builder.zero_advance.pending_visible_characters();
-    let original = builder.zero_advance.pending_projection();
+    let prefix = builder.zero_advance.pending_output_prefix();
     builder.zero_advance.begin_output_owner();
     if node.flags.synopsis_pretty && node.flags.line_start {
         // termp_in_pre()1552-1558 writes two separate words, "#include"
@@ -609,9 +612,10 @@ pub(super) fn append_include(builder: &mut InlineBuilder, node: &Node, default_n
     builder.wrap_output_since(scope, |nodes| {
         let (owned, rest) = InlineBuilder::split_delayed_glyph_prefix(
             nodes,
-            entry_pending,
+            prefix.count,
             emitted,
-            original.as_ref(),
+            &prefix.originals,
+            prefix.measure,
         );
         let value = plain_text(&rest);
         let mut output = owned;

@@ -104,7 +104,7 @@ mod head_word_padding {
         assert!(!matrix.header.expectations_from_product);
         assert_eq!(
             matrix.header.oracle_sha256,
-            "6297105d1370a44fd306851ae5beab3f23492d756a682f8a0693896922249ea0"
+            "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e"
         );
         assert_eq!(matrix.cases.len(), matrix.header.count);
         matrix.cases

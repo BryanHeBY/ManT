@@ -1,6 +1,6 @@
-/* $Id: mdoc_macro.c,v 1.237 2025/06/13 14:24:56 schwarze Exp $ */
+/* $Id: mdoc_macro.c,v 1.238 2026/10/06 20:48:18 schwarze Exp $ */
 /*
- * Copyright (c) 2010, 2012-2021 Ingo Schwarze <schwarze@openbsd.org>
+ * Copyright (c) 2010,2012-2020,2025,2026 Ingo Schwarze <schwarze@openbsd.org>
  * Copyright (c) 2008-2012 Kristaps Dzonsons <kristaps@bsd.lv>
  *
  * Permission to use, copy, modify, and distribute this software for any
@@ -341,6 +341,13 @@ rew_pending(struct roff_man *mdoc, const struct roff_node *n)
 					mdoc->flags &= ~ROFF_NONOFILL;
 				break;
 			case ROFFT_BLOCK:
+				if (n->tok != MDOC_Bd)
+					break;
+				/* Restore fill mode that was set before. */
+				if (n->flags & NODE_NOFILL)
+					mdoc->flags |= ROFF_NOFILL;
+				else
+					mdoc->flags &= ~ROFF_NOFILL;
 				break;
 			default:
 				return;

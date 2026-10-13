@@ -1,4 +1,4 @@
-# $Id: configure.local.example,v 1.51 2026/09/16 02:20:08 schwarze Exp $
+# $Id: configure.local.example,v 1.52 2026/10/12 02:39:33 schwarze Exp $
 #
 # Copyright (c) 2014-2022,2026 Ingo Schwarze <schwarze@openbsd.org>
 #
@@ -403,7 +403,6 @@ HAVE_RECALLOCARRAY=0
 HAVE_RECVMSG=0
 HAVE_REWB_BSD=0
 HAVE_REWB_SYSV=0
-HAVE_SANDBOX_INIT=0
 HAVE_STRCASESTR=0
 HAVE_STRINGLIST=0
 HAVE_STRLCAT=0

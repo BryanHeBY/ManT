@@ -1,4 +1,4 @@
-/* $Id: chars.c,v 1.81 2022/06/26 20:33:43 schwarze Exp $ */
+/* $Id: chars.c,v 1.82 2026/10/07 17:06:55 schwarze Exp $ */
 /*
  * Copyright (c) 2009, 2010, 2011 Kristaps Dzonsons <kristaps@bsd.lv>
  * Copyright (c) 2011, 2014, 2015, 2017, 2018, 2020
@@ -50,7 +50,7 @@ static struct ln lines[] = {
 	{ " ",			ascii_nbrsp,	0x00a0	},
 	{ "~",			ascii_nbrsp,	0x00a0	},
 	{ "0",			ascii_nbrsp,	0x00a0	},
-	{ ":",			ascii_break,	0	},
+	{ ":",			ascii_break,	0x200b	},
 
 	/* Lines. */
 	{ "ba",			"|",		0x007c	},

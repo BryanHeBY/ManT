@@ -55,6 +55,25 @@ fn keeps_no_space_distinct_from_generic_presentation_state() {
 }
 
 #[test]
+fn optional_breakpoints_remain_distinct_from_invisible_graphs_and_unicode() {
+    // Exact complete native inputs ran first. term_word() writes ':' as
+    // ASCII_BREAK before choosing a device; roff_escape.c rejects one-byte
+    // bracketed/quoted ':' while ESCAPE_UNICODE still encodes its scalar.
+    assert_eq!(decode(r"\:"), [RoffInlineEvent::Breakpoint]);
+    assert_eq!(decode(r"\&"), [RoffInlineEvent::ZeroWidthGlyph]);
+    assert_eq!(visible_text(r"X\[:]Y"), "XY");
+    assert_eq!(visible_text(r"X\C':'Y"), "XY");
+    assert_eq!(
+        decode(r"X\[u200B]Y"),
+        [
+            RoffInlineEvent::Text("X".into()),
+            RoffInlineEvent::Glyph("\u{200b}".into()),
+            RoffInlineEvent::Text("Y".into()),
+        ]
+    );
+}
+
+#[test]
 fn recognizes_constant_width_and_pandoc_verbatim_font_families() {
     assert_eq!(
         decode(r"\f[C]code\f[V]verbatim\f[VB]bold\f[VI]italic\f[R]"),

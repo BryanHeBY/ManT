@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# $Id: configure,v 1.91 2026/09/17 13:40:37 schwarze Exp $
+# $Id: configure,v 1.92 2026/10/12 02:39:33 schwarze Exp $
 #
 # Copyright (c) 2014-2021, 2026 Ingo Schwarze <schwarze@openbsd.org>
 #
@@ -87,7 +87,6 @@ HAVE_RECALLOCARRAY=
 HAVE_RECVMSG=
 HAVE_REWB_BSD=
 HAVE_REWB_SYSV=
-HAVE_SANDBOX_INIT=
 HAVE_STRCASESTR=
 HAVE_STRINGLIST=
 HAVE_STRLCAT=
@@ -334,7 +333,6 @@ runtest ntohl		NTOHL		|| true
 runtest O_DIRECTORY	O_DIRECTORY	|| true
 runtest PATH_MAX	PATH_MAX	|| true
 runtest pledge		PLEDGE		|| true
-runtest sandbox_init	SANDBOX_INIT	|| true
 runtest progname	PROGNAME	|| true
 runtest reallocarray	REALLOCARRAY	"" -D_OPENBSD_SOURCE || true
 runtest recallocarray	RECALLOCARRAY	"" -D_OPENBSD_SOURCE || true
@@ -519,7 +517,6 @@ cat << __HEREDOC__
 #define HAVE_RECALLOCARRAY ${HAVE_RECALLOCARRAY}
 #define HAVE_REWB_BSD ${HAVE_REWB_BSD}
 #define HAVE_REWB_SYSV ${HAVE_REWB_SYSV}
-#define HAVE_SANDBOX_INIT ${HAVE_SANDBOX_INIT}
 #define HAVE_STRCASESTR ${HAVE_STRCASESTR}
 #define HAVE_STRINGLIST ${HAVE_STRINGLIST}
 #define HAVE_STRLCAT ${HAVE_STRLCAT}

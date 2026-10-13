@@ -107,11 +107,20 @@ fn load_case(name: &str) -> (mant_ir::ResolvedContent, Vec<String>) {
     let source = std::fs::read_to_string(&source_path).unwrap_or_else(|error| {
         panic!("{name}: read case source: {error}");
     });
-    let expected = std::fs::read_to_string(format!("{CASES}/{name}.expected"))
+    let expected: Vec<String> = std::fs::read_to_string(format!("{CASES}/{name}.expected"))
         .unwrap_or_else(|error| panic!("{name}: read snapshot: {error}"))
         .lines()
         .map(str::to_owned)
         .collect();
+    let expected = crate::oracle_migrations::expected_rows(
+        "shared",
+        name,
+        &source,
+        &expected,
+        crate::oracle_migrations::Window::Matrix,
+    )
+    .unwrap_or(&expected)
+    .to_vec();
     let query = mant_loader::load_roff_bytes(source.as_bytes())
         .unwrap_or_else(|error| panic!("{name}: lower case: {error}"));
     (query, expected)

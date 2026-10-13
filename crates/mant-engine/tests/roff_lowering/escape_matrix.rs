@@ -2,7 +2,8 @@
 //!
 //! Native escape regression corpus: native write receipts (`\z` BACKBEFORE retreat
 //! over a word separator, term.c:901-908), single-device UTF-8 escape
-//! semantics (`\:` buffers `ASCII_NBRZW`, chars.c:53 with term.c:631-632;
+//! semantics (historical `\:` buffered `ASCII_NBRZW`; a source-bound
+//! 2026-10-13 supplement selects the new two-device `ASCII_BREAK` rule;
 //! `\!`/`\?`/`\r` leave no footprint, roff_escape.c:156-160), the `\p`
 //! pass rejections (term.c:143-146 with 233-237), and the generated run-in
 //! cell overstrike order (term.c:901-908 through encode1(U+00A0)).
@@ -250,12 +251,20 @@ fn escape_matrix_rows_match_the_pinned_utf8_reference() {
         });
         let expected_rows: Vec<String> = expected.lines().map(str::to_owned).collect();
         let source = std::fs::read_to_string(&source_path).expect("read case source");
+        let expected_rows = crate::oracle_migrations::expected_rows(
+            "escape",
+            &name,
+            &source,
+            &expected_rows,
+            crate::oracle_migrations::Window::Matrix,
+        )
+        .unwrap_or(&expected_rows);
         let query = mant_loader::load_roff_bytes(source.as_bytes())
             .unwrap_or_else(|error| panic!("{name}: lower case: {error}"));
         let rendered = mant_render::render_query_man(&query);
         let actual = normalize_mant(&rendered);
         total += 1;
-        if actual != expected_rows {
+        if actual.as_slice() != expected_rows {
             let mut report = format!("{name}\n");
             for (index, (actual_row, expected_row)) in
                 actual.iter().zip(expected_rows.iter()).enumerate()

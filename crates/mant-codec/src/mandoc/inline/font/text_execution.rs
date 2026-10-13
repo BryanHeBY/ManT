@@ -389,6 +389,7 @@ impl WordExecution {
                 self.text_state.note_graph();
                 self.text_state.zero_graph_seen = true;
             }
+            RoffInlineEvent::Breakpoint => self.append_breakpoint(context),
             RoffInlineEvent::Presentation {
                 kind: crate::mandoc::roff_escape::PresentationKind::HorizontalMotion,
                 ..
@@ -402,6 +403,36 @@ impl WordExecution {
             RoffInlineEvent::Presentation { .. }
             | RoffInlineEvent::Overstrike { terminal: None, .. } => {}
         }
+    }
+
+    fn append_breakpoint(&mut self, context: &mut TextExecutionContext<'_>) {
+        // term_fill() treats ASCII_BREAK like a zero-width breakable blank,
+        // not ASCII_NBRZW: it clears graph and can stop a pending \p pass.
+        // An isolated tbl word uses the same local projection rule; live
+        // paragraph/definition fields keep acceptance with their cell sink.
+        if self.text_state.pending_word_end_break {
+            context.zero_advance.commit_pending_projection(
+                &mut self.output,
+                &mut self.buffer,
+                self.font,
+                self.link.as_deref(),
+            );
+            let state = &mut self.text_state;
+            if !context.policy.field_authoritative {
+                if state.graph_since_blank || state.graph_seen {
+                    self.output.push(Inline::line_break());
+                }
+                state.wiped |= !state.graph_since_blank;
+            }
+            state.pending_word_end_break = false;
+            state.graph_seen = false;
+            state.graph_since_break = false;
+            state.break_started_after_blank = false;
+            state.break_trailing_blanks = 0;
+        }
+        self.text_state.graph_since_blank = false;
+        self.text_state.last_breakable_blank = false;
+        self.text_state.trailing_breakable_blanks = 0;
     }
 
     fn append_glyph(&mut self, value: &str, zero_advance: &mut ZeroAdvanceState) {
@@ -553,6 +584,9 @@ fn record_native_event(
         RoffInlineEvent::ZeroWidthGlyph => {
             writes.push(FieldWrite::Cell(FieldCell::ZeroWidthGraph));
         }
+        RoffInlineEvent::Breakpoint => {
+            writes.push(FieldWrite::Cell(FieldCell::Breakpoint));
+        }
         RoffInlineEvent::EmptyDestination => {
             FieldWrite::append_literal(writes, "<>");
         }
@@ -641,6 +675,7 @@ fn trailing_breakable_spaces(events: &[RoffInlineEvent]) -> usize {
             | RoffInlineEvent::NoSpace
             | RoffInlineEvent::Presentation { .. }
             | RoffInlineEvent::ZeroWidthGlyph
+            | RoffInlineEvent::Breakpoint
             | RoffInlineEvent::LineBreak => {}
 
             RoffInlineEvent::Glyph(_)
@@ -688,6 +723,59 @@ fn promote_sphinx_manual_reference(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn isolated_words_consume_pending_markers_at_zero_width_breakpoints() {
+        // Exact man and tbl inputs first ran on the pristine five profiles.
+        // term_fill()287-305 stops at ASCII_BREAK exactly as at a blank,
+        // adding no width or glyph; nbr==0 rejects the unaccepted suffix.
+        for (source, expected) in [
+            (r"X\:Y", "XY"),
+            (r"X\p\:Y", "X\nY"),
+            (r"\p\:Y", ""),
+            (r"\zX\p\:Y", "X\nY"),
+            (r"\zY\p\: \fBZ", "Y\nZ"),
+        ] {
+            let output = parse_roff_text_with_state(source, &mut FontState::new(), false);
+            assert_eq!(
+                mant_ir::inline_plain_text(&output),
+                expected,
+                "{source}: {output:#?}"
+            );
+        }
+    }
+
+    #[test]
+    fn breakpoint_writes_do_not_claim_zero_width_graph_acceptance() {
+        // Exact X\:Y source ran first: ASCII_BREAK is an ordered buffer cell
+        // and break candidate, never the graph-class ASCII_NBRZW of \&.
+        use super::super::super::flow::field_buffer::{FieldCell, FieldWrite};
+        let mut font = FontState::new();
+        let mut zero = ZeroAdvanceState::new();
+        let execution = parse_roff_text_with_zero_advance(
+            r"X\:Y",
+            TextExecutionContext {
+                font: &mut font,
+                zero_advance: &mut zero,
+                pending_word_end_break: false,
+                policy: TextExecutionPolicy {
+                    recognize_generated_references: false,
+                    record_native_cells: true,
+                    field_authoritative: true,
+                },
+            },
+        );
+        assert!(matches!(
+            execution.native_writes.as_slice(),
+            [
+                FieldWrite::Cell(FieldCell::Graph { text: 'X', .. }),
+                FieldWrite::Cell(FieldCell::Breakpoint),
+                FieldWrite::Cell(FieldCell::Graph { text: 'Y', .. })
+            ]
+        ));
+        assert!(!execution.word_zero_graph);
+        assert_eq!(mant_ir::inline_plain_text(&execution.output), "XY");
+    }
 
     #[test]
     fn field_recording_does_not_select_another_text_executor() {

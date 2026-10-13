@@ -44,6 +44,14 @@ fn all_original_acceptance_sources_keep_their_complete_body_row_window() {
             .iter()
             .map(|row| row.as_str().unwrap().to_owned())
             .collect::<Vec<_>>();
+        let expected = crate::oracle_migrations::expected_rows(
+            "shared",
+            name,
+            source,
+            &expected,
+            crate::oracle_migrations::Window::Body,
+        )
+        .unwrap_or(&expected);
         let query = mant_loader::load_roff_bytes(source.as_bytes())
             .unwrap_or_else(|error| panic!("{name}: {error}"));
         let json = mant_render::render_query_json(&query, false).unwrap();
@@ -54,7 +62,7 @@ fn all_original_acceptance_sources_keep_their_complete_body_row_window() {
         let decoded: mant_protocol::QueryBundle = serde_json::from_str(&json).unwrap();
         let query: ResolvedContent = decoded.into();
         let actual = body_rows(&mant_render::render_query_man(&query));
-        if actual != expected {
+        if actual.as_slice() != expected {
             failures.push(format!(
                 "{name}\nsource:\n{source}\nactual: {actual:?}\nreference: {expected:?}"
             ));

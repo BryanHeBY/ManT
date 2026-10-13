@@ -306,7 +306,7 @@ fn authored_fixed_blanks_survive_run_in_scope_and_output_row_boundaries() {
     assert!(!fixture.header.expectations_from_product);
     assert_eq!(
         fixture.header.oracle_sha256,
-        "6297105d1370a44fd306851ae5beab3f23492d756a682f8a0693896922249ea0"
+        "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e"
     );
     assert_eq!(fixture.cases.len(), fixture.header.count);
     for case in fixture.cases {
@@ -408,7 +408,7 @@ fn pending_glyph_prefixes_and_rejected_suffixes_keep_their_native_owners() {
     assert!(!fixture.header.expectations_from_product);
     assert_eq!(
         fixture.header.oracle_sha256,
-        "6297105d1370a44fd306851ae5beab3f23492d756a682f8a0693896922249ea0"
+        "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e"
     );
     assert_eq!(fixture.cases.len(), fixture.header.count);
     let mut combinations = std::collections::BTreeSet::new();

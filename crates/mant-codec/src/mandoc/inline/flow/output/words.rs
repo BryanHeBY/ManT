@@ -14,7 +14,8 @@ use crate::mandoc::inline::is_formatter_word_blank;
 pub(in crate::mandoc) struct SemanticOwnerCheckpoint {
     output: super::super::OutputCheckpoint,
     pending: usize,
-    original: Option<Inline>,
+    originals: Vec<Inline>,
+    measure: crate::mandoc::inline::PrefixMeasure,
 }
 
 impl InlineBuilder {
@@ -162,14 +163,14 @@ impl InlineBuilder {
     /// annotation. The zero-advance owner ledger carries that receipt
     /// across the whole handler execution.
     pub(in crate::mandoc) fn begin_semantic_owner_checkpoint(&mut self) -> SemanticOwnerCheckpoint {
-        let pending = self.execution.zero_advance.pending_visible_characters();
-        let original = self.execution.zero_advance.pending_projection();
+        let prefix = self.execution.zero_advance.pending_output_prefix();
         self.execution.zero_advance.begin_output_owner();
         let output = self.begin_output_checkpoint();
         SemanticOwnerCheckpoint {
             output,
-            pending,
-            original,
+            pending: prefix.count,
+            originals: prefix.originals,
+            measure: prefix.measure,
         }
     }
 
@@ -181,19 +182,22 @@ impl InlineBuilder {
         &mut self,
         checkpoint: SemanticOwnerCheckpoint,
     ) {
+        let SemanticOwnerCheckpoint {
+            output,
+            pending,
+            originals,
+            measure,
+        } = checkpoint;
         let mut owned = if self.execution.zero_advance.end_output_owner() {
-            checkpoint.pending
+            pending
         } else {
             0
         };
-        let start = self.output_checkpoint_index(&checkpoint.output);
-        if owned > 0
-            && start < self.nodes.len()
-            && let Some(original) = checkpoint.original
-        {
+        let start = self.output_checkpoint_index(&output);
+        if owned > 0 && start < self.nodes.len() && !originals.is_empty() {
             let projected = self.nodes.split_off(start);
             let (owned, rest) =
-                super::split::split_owned_glyph_prefix(projected, &mut owned, &original);
+                super::split::split_owned_glyph_prefix(projected, &mut owned, &originals, measure);
             self.nodes.extend(owned);
             self.nodes.extend(rest);
         }
@@ -209,13 +213,14 @@ impl InlineBuilder {
         nodes: Vec<Inline>,
         entry_pending: usize,
         emitted: bool,
-        original: Option<&Inline>,
+        originals: &[Inline],
+        measure: crate::mandoc::inline::PrefixMeasure,
     ) -> (Vec<Inline>, Vec<Inline>) {
         let mut remaining = usize::from(emitted) * entry_pending;
-        let Some(original) = original.filter(|_| remaining > 0) else {
+        if remaining == 0 || originals.is_empty() {
             return (Vec::new(), nodes);
-        };
-        super::split::split_owned_glyph_prefix(nodes, &mut remaining, original)
+        }
+        super::split::split_owned_glyph_prefix(nodes, &mut remaining, originals, measure)
     }
 
     /// Start an ordinary formatter word after a source text node. If a prior

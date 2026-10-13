@@ -13,6 +13,20 @@ that crate was not published for that change.
 
 ## Unreleased
 
+### libmandoc-rs and mant-codec
+
+- Refresh the pinned mandoc CVS source to `cvs-20261013T025419Z`, with a new
+  independently reproduced pristine oracle. Preserve the local patch series,
+  crate versions and IR schema. Restore no-fill mode when a list item implicitly
+  closes a display; fix horizontal-rule drawing with escaped delimiters and
+  retire the upstream macOS sandbox-init probe.
+- Match the upstream complete-spelling rule for escaped special-character
+  delimiters. Treat the named `:` character as an optional zero-width breakpoint
+  on both terminal devices, distinct from a zero-width graph or explicit U+200B.
+  Preserve HTML-compatible link identity and source-owned field consumption.
+  Re-run active fixture sources before updating their oracle bindings; retain
+  historical captures under their original identities.
+
 ### Dependency maintenance
 
 - Upgrade the exactly paired MCP SDK and generated macros to `3.5.1`, retaining

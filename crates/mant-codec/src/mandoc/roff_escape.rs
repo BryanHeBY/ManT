@@ -84,6 +84,10 @@ pub(super) enum RoffInlineEvent {
     /// An invisible glyph buffered by the terminal formatter. Unlike a font
     /// selection, it occupies a literal output row without adding text.
     ZeroWidthGlyph,
+    /// The named `\\:` control writes `ASCII_BREAK` on both terminal devices.
+    /// It offers a zero-width break candidate without arming `term_fill`'s
+    /// graph flag. The catalog's U+200B belongs to HTML, not terminal prose.
+    Breakpoint,
     Font(RoffFont),
     PreviousFont,
     Link(Option<String>),
@@ -110,9 +114,18 @@ pub(super) enum RoffInlineEvent {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct ZeroAdvanceMachine<T> {
     armed: bool,
-    pending: Option<T>,
+    pending: Option<PendingGlyph<T>>,
     recoveries: Vec<T>,
     recoveries_before_pending: usize,
+}
+
+/// BACKBEFORE can survive a pass that already owns the preceding glyph.
+/// Its next retreat still consumes a buffered blank, but cannot erase that
+/// immutable projection (`term_fill()` with `encode1()`).
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum PendingGlyph<T> {
+    Buffered(T),
+    Projected,
 }
 
 impl<T> ZeroAdvanceMachine<T> {
@@ -137,13 +150,34 @@ impl<T> ZeroAdvanceMachine<T> {
         self.pending.is_some()
     }
 
+    pub(super) const fn has_projected_pending(&self) -> bool {
+        matches!(self.pending, Some(PendingGlyph::Projected))
+    }
+
+    /// A real cell already assigned to an earlier word can await the next
+    /// word's output assembly without becoming another backtracking glyph.
+    pub(super) fn defer_projection(&mut self, glyph: T) {
+        self.recoveries.push(glyph);
+        self.recoveries_before_pending = self.recoveries.len();
+    }
+
+    pub(super) fn deferred_projection(&self) -> &[T] {
+        &self.recoveries
+    }
+
     pub(super) const fn pending_ref(&self) -> Option<&T> {
-        self.pending.as_ref()
+        match &self.pending {
+            Some(PendingGlyph::Buffered(glyph)) => Some(glyph),
+            Some(PendingGlyph::Projected) | None => None,
+        }
     }
 
     /// Change projection metadata without consuming either backtracking flag.
     pub(super) fn pending_mut(&mut self) -> Option<&mut T> {
-        self.pending.as_mut()
+        match &mut self.pending {
+            Some(PendingGlyph::Buffered(glyph)) => Some(glyph),
+            Some(PendingGlyph::Projected) | None => None,
+        }
     }
 
     pub(super) fn cancel_armed(&mut self) -> bool {
@@ -156,10 +190,10 @@ impl<T> ZeroAdvanceMachine<T> {
         }
         if self.armed {
             self.armed = false;
-            self.pending = Some(glyph);
+            self.pending = Some(PendingGlyph::Buffered(glyph));
             return None;
         }
-        let replaced_pending = self.pending.take().is_some();
+        let replaced_pending = matches!(self.pending.take(), Some(PendingGlyph::Buffered(_)));
         Some((glyph, replaced_pending))
     }
 
@@ -192,8 +226,22 @@ impl<T> ZeroAdvanceMachine<T> {
         let glyph = self.pending.take()?;
         let position = self.recoveries_before_pending;
         let mut output = self.take_recoveries();
-        output.insert(position, glyph);
-        Some(output)
+        if let PendingGlyph::Buffered(glyph) = glyph {
+            output.insert(position, glyph);
+        }
+        (!output.is_empty()).then_some(output)
+    }
+
+    /// Assign the glyph to an accepted pass while retaining BACKBEFORE for
+    /// the next `encode1()` write. Projection ownership and retreat state are
+    /// independent even though they normally advance together.
+    pub(super) fn commit_pending_projection(&mut self) -> Option<Vec<T>> {
+        if !matches!(self.pending, Some(PendingGlyph::Buffered(_))) {
+            return None;
+        }
+        let output = self.take_pending();
+        self.pending = Some(PendingGlyph::Projected);
+        output
     }
 
     pub(super) fn discard_pending(&mut self) {
@@ -245,7 +293,9 @@ pub(super) fn inline_event_effect(event: &RoffInlineEvent) -> InlineEventEffect 
                 InlineEventEffect::StateOnly
             }
         }
-        RoffInlineEvent::ZeroWidthGlyph => InlineEventEffect::RowMarker,
+        RoffInlineEvent::ZeroWidthGlyph | RoffInlineEvent::Breakpoint => {
+            InlineEventEffect::RowMarker
+        }
         RoffInlineEvent::LineBreak | RoffInlineEvent::EmptyDestination => {
             InlineEventEffect::LineBoundary
         }
@@ -350,6 +400,7 @@ pub(in crate::mandoc) fn width_sample(source: &str) -> usize {
             }
             RoffInlineEvent::FallbackGlyph(_)
             | RoffInlineEvent::ZeroWidthGlyph
+            | RoffInlineEvent::Breakpoint
             | RoffInlineEvent::Font(_)
             | RoffInlineEvent::PreviousFont
             | RoffInlineEvent::Link(_)
@@ -517,6 +568,10 @@ impl Decoder {
             // displayed blank and break only at the next real word boundary.
             ' ' | '~' | '0' => self.emit(RoffInlineEvent::Glyph("\u{a0}".to_owned())),
             'p' => self.emit(RoffInlineEvent::LineBreak),
+            // term.c::term_word(), ESCAPE_SPECIAL: exactly ':' writes a
+            // breakpoint before the ASCII/UTF8 split. Unlike chars.c's HTML
+            // U+200B, this is bufferc(), not an encode1() glyph or graph.
+            ':' => self.emit(RoffInlineEvent::Breakpoint),
             // Opaque formatter state supported by mandoc_escape(3). These
             // operands must be consumed even though ManT does not render the
             // corresponding device state.
@@ -582,14 +637,9 @@ impl Decoder {
                 self.index += 2;
                 self.emit(RoffInlineEvent::EmptyDestination);
             }
-            // These requests affect formatter state or introduce zero-width
-            // hints, and `\:` buffers ASCII_NBRZW on this UTF-8 device
-            // (chars.c:53 unicode column 0; term.c:631-632): a zero-width
-            // graph, never a break point. The ASCII device's ASCII_BREAK
-            // byte (and thus FieldCell::Breakpoint) has no producer while
-            // mant is single-device UTF-8. None of these triggers is
-            // printable document content.
-            '%' | '&' | ')' | ',' | '/' | ':' | '^' | 'a' | 'd' | 't' | 'u' | '{' | '|' | '}' => {
+            // ESCAPE_IGNORE writes an invisible graph (ASCII_NBRZW), unlike
+            // the optional breakpoint above. None is printable content.
+            '%' | '&' | ')' | ',' | '/' | '^' | 'a' | 'd' | 't' | 'u' | '{' | '|' | '}' => {
                 self.emit(RoffInlineEvent::ZeroWidthGlyph);
             }
             'c' => self.emit(RoffInlineEvent::NoSpace),
@@ -752,6 +802,13 @@ impl Decoder {
     }
 
     fn push_special_character(&mut self, name: &str, syntax: NamedCharacterSyntax) {
+        // roff_escape.c's SPECIAL validation rejects one-byte named forms
+        // other than '-': \[:] and \C':' are not aliases for direct \:.
+        // The catalog now exposes U+200B for ':', but an invalid source
+        // operand must not thereby become an authored Unicode graph.
+        if name == ":" {
+            return;
+        }
         // term_strlen uses the pinned catalog and a single ESCAPE_UNICODE
         // scalar. GNU fallback/composite display spellings are not native
         // declaration glyphs and must not create a device width or consume z.

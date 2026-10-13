@@ -17,6 +17,7 @@ fn parse_manual_source(
     Ok(parse_manual_bytes(path, &fs::read(path)?)?)
 }
 
+mod breakpoint_controls;
 mod equations;
 mod equations_literals;
 mod literal_space_rows;

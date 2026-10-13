@@ -32,7 +32,6 @@
 #define HAVE_RECALLOCARRAY 0
 #define HAVE_REWB_BSD 0
 #define HAVE_REWB_SYSV 1
-#define HAVE_SANDBOX_INIT 0
 #define HAVE_STRCASESTR 1
 #define HAVE_STRINGLIST 0
 /* Ubuntu 22.04 ships glibc 2.35, before these BSD string APIs were added. */

@@ -73,8 +73,8 @@ the input hash and producer commit, and compare source-relative columns after
 removing page/UI margins. Deterministic source probes in the engine and UI tests
 pin rules independently of the installed host corpus. Native layout research
 uses the explicitly recorded reference revisions and a groff cross-check.
-The active native baseline is mandoc `cvs-20261006T140200Z`, pinned to
-2026-10-06 14:02:00 UTC in `crates/libmandoc-rs/upstream/SOURCE`; its
+The active native baseline is mandoc `cvs-20261013T025419Z`, pinned to
+2026-10-13 02:54:19 UTC in `crates/libmandoc-rs/upstream/SOURCE`; its
 `FILES` manifest records source hashes and CVS revisions. Historical audit
 results retain their original renderer identities and source hashes. The
 vendored source subset excludes upstream `regress/`; upstream test licenses

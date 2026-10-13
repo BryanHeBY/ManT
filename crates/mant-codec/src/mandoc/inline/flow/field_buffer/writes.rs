@@ -247,6 +247,16 @@ impl FieldBuffer {
                 FieldWrite::Cell(cell) => {
                     if matches!(cell, FieldCell::BreakMarker) {
                         self.last_break_marker = Some(self.cells.len());
+                    } else if matches!(cell, FieldCell::Breakpoint)
+                        && self.has_pending_break_markers()
+                    {
+                        // term_fill(): pending breakline stops at ASCII_BREAK
+                        // before the next graph. BACKBEFORE still writes its
+                        // actual backline after this cell (encode1()), but
+                        // cannot retract the glyph in the earlier output
+                        // pass. Preserve native registers and seal only that
+                        // glyph's projection ownership (X\zY\p\:Z).
+                        self.pending_projection_graph = None;
                     }
                     self.push_cell(cell.clone());
                 }

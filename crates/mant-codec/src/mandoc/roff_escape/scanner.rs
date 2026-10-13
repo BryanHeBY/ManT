@@ -5,9 +5,10 @@
 //! valid input text node must never be able to overflow the Rust call stack.
 //! That includes the quoted-argument rules of `roff_escape.c` (the
 //! `term == '\b'` families): an argument may be delimited by a complete
-//! escape — `\o\(aqXY\(aq` opens with the `\(aq` escape and closes at the
-//! next `(`-triggered escape, whatever it displays — a literal delimiter
-//! character only ends an argument that was opened literally, and `\N` ends
+//! escape — `\o\(aqXY\(aq` opens with the `\(aq` escape and requires its
+//! complete SPECIAL spelling to close. A non-SPECIAL nested escape still
+//! closes on its trigger. A literal delimiter character only ends an
+//! argument that was opened literally, and `\N` ends
 //! at its first non-digit.  If the shared native nesting budget is exceeded,
 //! consuming the remainder is conservative because no later delimiter can be
 //! proven to belong to the outer request.
@@ -71,15 +72,19 @@ fn escape_trigger_at(characters: &[char], start: usize) -> Option<(usize, char)>
 }
 
 /// How a quoted argument's terminator was written.  The syntax decides the
-/// ending rule, not the displayed character: `\(aq`, `\(dq` and `\[aq]`
-/// display differently but all open and close on their trigger.
+/// ending rule, not the displayed character. SPECIAL closers compare the
+/// whole spelling from the trigger onward, excluding copy-mode `E` prefixes.
 #[derive(Clone, Copy, PartialEq)]
 enum Term {
     /// One raw character ends the argument (CVS `escterm == 0`).
     Literal(char),
-    /// Only a nested escape with this trigger ends the argument
-    /// (CVS `escterm == 1`).
-    Escaped(char),
+    /// An escaped delimiter (CVS `dnam != 0`); retain its borrowed spelling
+    /// so a different named SPECIAL does not terminate the argument.
+    Escaped {
+        trigger: char,
+        start: usize,
+        end: usize,
+    },
     /// The opening escape ran into the end of input; nothing can close it.
     Never,
 }
@@ -167,6 +172,10 @@ struct EscapeScan<'a> {
     /// its terminator.  Consumed extent and completeness are independent:
     /// an incomplete name may still consume the whole remaining input.
     argument_complete: bool,
+    /// The last quoted argument's accepted range. A nested `\C` needs its
+    /// completed payload for CVS's SPECIAL post-processing before the outer
+    /// delimiter decides whether its spelling must match.
+    quoted_payload: Option<std::ops::Range<usize>>,
 }
 
 /// Completion is independent of extent: an incomplete operand can consume
@@ -282,6 +291,7 @@ pub(super) fn scan_argument(characters: &[char], start: usize, trigger: char) ->
         tasks: plan.task.into_iter().collect(),
         reported_scan: None,
         argument_complete: true,
+        quoted_payload: None,
     };
     let budget_exhausted = scan.run_extent();
     let completion = if budget_exhausted {
@@ -369,6 +379,7 @@ pub(super) fn scan_quoted_argument(
         }],
         reported_scan: None,
         argument_complete: true,
+        quoted_payload: None,
     };
     loop {
         if scan.tasks.len() > MAX_NESTED_ESCAPE_SCAN_DEPTH {
@@ -584,7 +595,7 @@ impl EscapeScan<'_> {
         let Some(character) = self.characters.get(self.index).copied() else {
             // Mandatory argument missing: nothing beyond the trigger is
             // consumed and the family renders nothing.
-            return Self::reported(report, QuotedOutcome::Missing);
+            return self.reported(report, QuotedOutcome::Missing);
         };
         if character == '\\' {
             // The delimiter may itself be written as an escape; classify it
@@ -601,7 +612,7 @@ impl EscapeScan<'_> {
             && REJECTED_DELIMITER_LITERALS.contains(&character)
         {
             self.index += 1;
-            return Self::reported(
+            return self.reported(
                 report,
                 QuotedOutcome::Rejected {
                     kind: EscapeKind::Error,
@@ -645,7 +656,7 @@ impl EscapeScan<'_> {
             if REJECT_LITERAL_DELIMITER_OUTERS.contains(&outer)
                 && REJECTED_DELIMITER_LITERALS.contains(&trigger)
             {
-                return Self::reported(
+                return self.reported(
                     report,
                     QuotedOutcome::Rejected {
                         kind: EscapeKind::Error,
@@ -666,15 +677,16 @@ impl EscapeScan<'_> {
             && REJECTED_DELIMITER_NAMES.contains(&trigger)
         {
             // `index` already sits at the rejected opening escape's end.
-            return Self::reported(
+            return self.reported(
                 report,
                 QuotedOutcome::Rejected {
                     kind: syntax(outer).kind,
                 },
             );
         }
-        // The payload begins past the complete opening escape; only a nested
-        // escape with the same trigger can close it.  The opening escape is
+        // The payload begins past the complete opening escape. SPECIAL
+        // closers must match this spelling; other classes keep the trigger
+        // rule (roff_escape.c 1.18, dnam/snam/send comparison). The opening is
         // proven consumed only once payload follows: CVS keeps `iend` at the
         // delimiter's backslash until the scan loop advances it.  The nested
         // scanner's end is the actual CVS `send`, including partial names;
@@ -696,7 +708,11 @@ impl EscapeScan<'_> {
         };
         self.begin_scan(
             outer,
-            Term::Escaped(trigger),
+            Term::Escaped {
+                trigger,
+                start: trigger_index,
+                end: self.index,
+            },
             self.index,
             consumed_end,
             report,
@@ -722,14 +738,14 @@ impl EscapeScan<'_> {
                 let payload =
                     keep_unclosed_payload(outer).then_some(payload_start..self.characters.len());
                 self.index = consumed_end;
-                return Self::reported(report, QuotedOutcome::Unclosed { payload });
+                return self.reported(report, QuotedOutcome::Unclosed { payload });
             };
             if let Term::Literal(delimiter) = term
                 && character == delimiter
             {
                 self.index += 1;
                 let payload = payload_start..self.index - 1;
-                return Self::reported(report, QuotedOutcome::Closed { payload });
+                return self.reported(report, QuotedOutcome::Closed { payload });
             }
             if character == '\\' {
                 if escape_trigger_at(self.characters, self.index).is_none() {
@@ -739,9 +755,9 @@ impl EscapeScan<'_> {
                     consumed_end = self.characters.len();
                     let backslash = self.index;
                     self.index = self.characters.len();
-                    if matches!(term, Term::Escaped(_)) && outer == 'N' {
+                    if matches!(term, Term::Escaped { .. }) && outer == 'N' {
                         let payload = payload_start..backslash;
-                        return Self::reported(report, QuotedOutcome::Closed { payload });
+                        return self.reported(report, QuotedOutcome::Closed { payload });
                     }
                     continue;
                 }
@@ -760,7 +776,7 @@ impl EscapeScan<'_> {
                 // roff_escape.c:369: one non-digit ends a numbered argument.
                 self.index += 1;
                 let payload = payload_start..self.index - 1;
-                return Self::reported(report, QuotedOutcome::Closed { payload });
+                return self.reported(report, QuotedOutcome::Closed { payload });
             }
             self.index += 1;
             consumed_end = self.index;
@@ -778,16 +794,28 @@ impl EscapeScan<'_> {
         report: bool,
         nested_start: usize,
     ) -> ScanStep {
-        if let (Term::Escaped(delimiter), Some((_, trigger))) =
-            (term, escape_trigger_at(self.characters, nested_start))
+        if let (
+            Term::Escaped {
+                trigger: delimiter,
+                start,
+                end,
+            },
+            Some((trigger_index, trigger)),
+        ) = (term, escape_trigger_at(self.characters, nested_start))
         {
-            // `buf[snam] == term || buf[inam] == 'N'`: an escaped-delimiter
-            // argument ends at a nested escape with the same trigger, and a
-            // numbered argument at any nested escape.  `iend = send` uses
-            // its actual consumed extent even when the name is incomplete.
-            if trigger == delimiter || outer == 'N' {
+            // CVS roff_escape.c 1.18: N ends at any nested escape; a
+            // non-SPECIAL result keeps the same-trigger rule; SPECIAL must
+            // match all of snam..send against dnam..iarg. ERROR (including a
+            // partial name) and UNICODE are not SPECIAL. Borrow source
+            // ranges rather than copying/re-scanning the opening delimiter.
+            let same_spelling =
+                self.characters[trigger_index..self.index] == self.characters[start..end];
+            if outer == 'N'
+                || (trigger == delimiter && !self.nested_is_special(trigger_index))
+                || same_spelling
+            {
                 let payload = payload_start..nested_start;
-                return Self::reported(report, QuotedOutcome::Closed { payload });
+                return self.reported(report, QuotedOutcome::Closed { payload });
             }
         }
         // The nested escape stays inside the payload; an ESCAPE_EXPAND inner
@@ -824,7 +852,61 @@ impl EscapeScan<'_> {
         ScanStep::Going
     }
 
-    fn reported(report: bool, outcome: QuotedOutcome) -> ScanStep {
+    /// Use the already consumed operand to apply only the SPECIAL class
+    /// checks needed by the delimiter rule. This is not another parse: its
+    /// extent and completion come from the same bounded task stack.
+    fn nested_is_special(&self, trigger_index: usize) -> bool {
+        let trigger = self.characters[trigger_index];
+        if syntax(trigger).kind != EscapeKind::Special {
+            return false;
+        }
+        let payload = match trigger {
+            'C' => match self.quoted_payload.clone() {
+                Some(payload) => payload,
+                None => return false,
+            },
+            '(' | '[' => {
+                let plan =
+                    argument_plan(self.characters, trigger_index + 1, syntax(trigger).argument);
+                if !self.argument_complete || plan.rejected {
+                    return false;
+                }
+                let end = self.index - usize::from(trigger == '[');
+                plan.payload..end
+            }
+            _ => return true,
+        };
+        let name = &self.characters[payload];
+        let bytes: usize = name.iter().map(|character| character.len_utf8()).sum();
+        // roff_escape.c SPECIAL post-processing: empty or invalid one-byte
+        // bracketed/quoted names become ERROR, so retain trigger recovery.
+        if bytes == 0 || (trigger != '(' && bytes == 1 && name != ['-']) {
+            return false;
+        }
+        // In this pinned roff_escape.c, charNN's numeric loop starts at
+        // iarg (including "char"), not iarg + 4. Every admitted 6/7-byte
+        // descriptor therefore exceeds 0xff and retains SPECIAL with a
+        // diagnostic. Do not classify it as NUMBERED from the comment alone.
+        if name.first() == Some(&'c') {
+            return true;
+        }
+        // A valid Unicode descriptor becomes ESCAPE_UNICODE, not SPECIAL.
+        // Invalid Unicode descriptors keep SPECIAL while reporting BADCHAR.
+        !(name.first() == Some(&'u')
+            && (5..=7).contains(&bytes)
+            && name[1..].iter().all(char::is_ascii_hexdigit)
+            && !(bytes == 7 && name[1..3] != ['1', '0'])
+            && !(bytes == 6 && name[1] == '0')
+            && !(bytes == 5
+                && name[1].eq_ignore_ascii_case(&'D')
+                && matches!(name[2], '8' | '9' | 'A'..='F' | 'a'..='f')))
+    }
+
+    fn reported(&mut self, report: bool, outcome: QuotedOutcome) -> ScanStep {
+        self.quoted_payload = match &outcome {
+            QuotedOutcome::Closed { payload } => Some(payload.clone()),
+            _ => None,
+        };
         if report {
             ScanStep::Reported(outcome)
         } else {

@@ -1,4 +1,4 @@
-# $Id: Makefile,v 1.550 2026/09/22 20:11:36 schwarze Exp $
+# $Id: Makefile,v 1.551 2026/10/12 02:39:33 schwarze Exp $
 #
 # Copyright (c) 2011, 2013-2022, 2026 Ingo Schwarze <schwarze@openbsd.org>
 # Copyright (c) 2010, 2011, 2012 Kristaps Dzonsons <kristaps@bsd.lv>
@@ -44,7 +44,6 @@ TESTSRCS	 = test-attribute.c \
 		   test-recvmsg.c \
 		   test-rewb-bsd.c \
 		   test-rewb-sysv.c \
-		   test-sandbox_init.c \
 		   test-strcasestr.c \
 		   test-stringlist.c \
 		   test-strlcat.c \

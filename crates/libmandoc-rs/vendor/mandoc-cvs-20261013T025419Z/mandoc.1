@@ -1,4 +1,4 @@
-.\" $Id: mandoc.1,v 1.276 2026/09/17 13:23:06 schwarze Exp $
+.\" $Id: mandoc.1,v 1.278 2026/10/11 23:17:47 schwarze Exp $
 .\"
 .\" Copyright (c) 2012,2014-2023,2025,2026 Ingo Schwarze <schwarze@openbsd.org>
 .\" Copyright (c) 2009, 2010, 2011 Kristaps Dzonsons <kristaps@bsd.lv>
@@ -15,7 +15,7 @@
 .\" ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 .\" OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\"
-.Dd $Mdocdate: September 17 2026 $
+.Dd $Mdocdate: October 11 2026 $
 .Dt MANDOC 1
 .Os
 .Sh NAME
@@ -226,7 +226,7 @@ reads from standard input.
 .El
 .Pp
 The options
-.Fl fhklw
+.Fl Cfhklw
 are also supported and are documented in
 .Xr man 1 .
 In
@@ -236,7 +236,7 @@ and
 mode,
 .Nm
 also supports the options
-.Fl CMmOSs
+.Fl MmOSs
 described in the
 .Xr apropos 1
 manual.
@@ -2439,6 +2439,26 @@ An input file contains the
 macro.
 This message is only generated in
 .Fl T Cm man
+output mode, where
+.Xr  eqn 7
+input is not supported.
+.It Sy "skipping tbl in -Tmarkdown mode"
+.Pq mdoc , tbl
+An input file contains the
+.Ic \&TS
+macro.
+This message is only generated in
+.Fl T Cm markdown
+output mode, where
+.Xr  tbl 7
+input is not supported.
+.It Sy "skipping eqn in -Tmarkdown mode"
+.Pq mdoc , eqn
+An input file contains the
+.Ic \&EQ
+macro.
+This message is only generated in
+.Fl T Cm markdown
 output mode, where
 .Xr  eqn 7
 input is not supported.

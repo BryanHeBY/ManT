@@ -71,11 +71,11 @@ pub(super) fn append_owned_part(
 ) {
     let marker = scope_marker(owner, part);
     builder.begin_output_scope(&marker);
-    let pending = builder.zero_advance.pending_visible_characters();
+    let pending = builder.zero_advance.pending_output_prefix();
     builder.zero_advance.begin_output_owner();
     append(builder);
     let mut previous = if builder.zero_advance.end_output_owner() {
-        pending
+        pending.count
     } else {
         0
     };
@@ -87,7 +87,9 @@ pub(super) fn append_owned_part(
         } else {
             (Vec::new(), children)
         };
-        let (prior, children) = split_visible_prefix(children, &mut previous);
+        previous =
+            previous.saturating_sub(output.iter().map(|node| pending.measure.count(node)).sum());
+        let (prior, children) = split_visible_prefix(children, &mut previous, pending.measure);
         if let Some(preceding) = preceding {
             if !prior.is_empty() {
                 output.push(placeholder(owner, preceding, address, prior));

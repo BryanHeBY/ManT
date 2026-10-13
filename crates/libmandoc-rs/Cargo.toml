@@ -23,9 +23,9 @@ include = [
   "/tests/**",
   "!/tests/**/__pycache__/**",
   "!/tests/**/*.py[cod]",
-  "/vendor/mandoc-cvs-20261006T140200Z/**",
-  "!/vendor/mandoc-cvs-20261006T140200Z/soelim.c",
-  "!/vendor/mandoc-cvs-20261006T140200Z/soelim.1",
+  "/vendor/mandoc-cvs-20261013T025419Z/**",
+  "!/vendor/mandoc-cvs-20261013T025419Z/soelim.c",
+  "!/vendor/mandoc-cvs-20261013T025419Z/soelim.1",
 ]
 publish.workspace = true
 links = "libmandoc_rs"

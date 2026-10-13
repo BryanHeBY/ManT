@@ -61,7 +61,7 @@ Otherwise it invokes `build-oracle` and accepts only the exact registered
 attestation; it never registers a different build automatically.
 
 When the archive was also removed, pass a saved exact archive with
-`--archive /path/to/upstream-cvs-20261006T140200Z.tar.gz`, or provide a CVS
+`--archive /path/to/upstream-cvs-20261013T025419Z.tar.gz`, or provide a CVS
 client with `--cvs /path/to/cvs` (also accepted through `CVS`). The latter
 uses `freeze-cvs-snapshot` to perform two official checkouts at the locked
 UTC cutoff and verifies the complete archive and source-lock hashes. All
@@ -98,12 +98,12 @@ identity through the public restoration script using the saved exact
 archive. A different toolchain or configure result fails restoration and
 requires a separately reviewed maintainer attestation.
 
-## Active source refresh: 2026-10-06
+## Active source refresh: 2026-10-13
 
-The current source lock is `cvs-20261006T140200Z`. Its active identity is
-`cvs-20261006T140200Z-linux-x86_64-gcc-16.2.1-reproducible`, with binary
-SHA-256 `6297105d1370a44fd306851ae5beab3f23492d756a682f8a0693896922249ea0`.
+The current source lock is `cvs-20261013T025419Z`. Its active identity is
+`cvs-20261013T025419Z-linux-x86_64-gcc-16.2.1-reproducible`, with binary
+SHA-256 `9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e`.
 Two independent builds with the unchanged recipe reproduced the binary, build
 record and all four configure evidence files. Previous identities are retained
 as historical. The refresh and fixture provenance are described in
-[REFRESH-20261006.md](../REFRESH-20261006.md).
+[REFRESH-20261013.md](../REFRESH-20261013.md).

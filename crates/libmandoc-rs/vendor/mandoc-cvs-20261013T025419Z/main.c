@@ -1,4 +1,4 @@
-/* $Id: main.c,v 1.371 2026/09/02 12:32:18 schwarze Exp $ */
+/* $Id: main.c,v 1.372 2026/10/12 02:39:33 schwarze Exp $ */
 /*
  * Copyright (c) 2010-2012, 2014-2021, 2025, 2026
  *               Ingo Schwarze <schwarze@openbsd.org>
@@ -37,9 +37,6 @@
 #include <glob.h>
 #include <limits.h>
 #include <paths.h>
-#if HAVE_SANDBOX_INIT
-#include <sandbox.h>
-#endif
 #include <signal.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -173,11 +170,6 @@ main(int argc, char *argv[])
 	if (strncmp(progname, "mandocdb", 8) == 0 ||
 	    strcmp(progname, BINM_MAKEWHATIS) == 0)
 		return mandocdb(argc, argv);
-
-#if HAVE_SANDBOX_INIT
-	if (sandbox_init(kSBXProfileNoInternet, SANDBOX_NAMED, NULL) == -1)
-		errx((int)MANDOCLEVEL_SYSERR, "sandbox_init");
-#endif
 
 	/* Search options. */
 

@@ -46,13 +46,12 @@ pub(in crate::mandoc) enum FieldCell {
     TabReference,
     /// `ASCII_NBRZW`: a native buffer cell and graph with zero width.
     ZeroWidthGraph,
-    /// A zero-width breakpoint `\:` on the ascii device (`ASCII_BREAK`,
+    /// A zero-width breakpoint `\:` on both devices (`ASCII_BREAK`,
     /// term.c:287-300). Shares the breakable-blank arm with no width of
     /// its own: a pass may break at it, records it as the resume candidate
-    /// after a graph, and never prints it (term.c:396-398). Unproduced
-    /// while mant is single-device UTF-8 (`\:` buffers `ASCII_NBRZW`
-    /// there, chars.c:53); preserved as the -Tascii implementation point.
-    #[expect(dead_code)]
+    /// after a graph, and never prints it (term.c:395-397). `term_word()`
+    /// writes it before the ASCII/UTF8 split (term.c:619-621), independently
+    /// of chars.c's U+200B used by HTML.
     Breakpoint,
     /// The `'\b'` `encode1()` buffers when a BACKBEFORE retreat meets a
     /// non-blank predecessor (term.c:906): fill subtracts the width of the

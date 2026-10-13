@@ -6,7 +6,7 @@ mant-roff — native man, mdoc, tbl, eqn, and roff compatibility in ManT
 
 ## Description
 
-ManT reads native manual pages through the vendored `libmandoc` `cvs-20261006T140200Z` parser, pinned to 2026-10-06 14:02:00 UTC, and lowers its validated owned syntax tree into [mant-ir(7)](mant-ir.md). The supported authoring languages are mandoc's [man(7)](https://mandoc.bsd.lv/man/man.7.html) and [mdoc(7)](https://mandoc.bsd.lv/man/mdoc.7.html), with the subset of roff requests, escapes, [tbl(7)](https://mandoc.bsd.lv/man/tbl.7.html), and [eqn(7)](https://mandoc.bsd.lv/man/eqn.7.html) that occur inside those manuals.
+ManT reads native manual pages through the vendored `libmandoc` `cvs-20261013T025419Z` parser, pinned to 2026-10-13 02:54:19 UTC, and lowers its validated owned syntax tree into [mant-ir(7)](mant-ir.md). The supported authoring languages are mandoc's [man(7)](https://mandoc.bsd.lv/man/man.7.html) and [mdoc(7)](https://mandoc.bsd.lv/man/mdoc.7.html), with the subset of roff requests, escapes, [tbl(7)](https://mandoc.bsd.lv/man/tbl.7.html), and [eqn(7)](https://mandoc.bsd.lv/man/eqn.7.html) that occur inside those manuals.
 
 ManT is a semantic manual reader, not a general troff formatter. Device geometry, page headers and footers, traps, diversions, arbitrary postprocessor commands, and print-specific typography are outside its output model.
 
@@ -118,7 +118,7 @@ a preceding negative `sp` can cancel rows requested by `PP`, `SY`, `HP`,
 generic Roman font transitions at entry and exit even without a macro post
 handler; these transitions update the previous-font register used by `\fP`.
 
-`br` inside a flow becomes an immediate inline line break. The `\p` escape instead requests a break at the next ordinary word boundary; it crosses tight `Ns` joins and non-breaking spaces, and repeated requests before that boundary are idempotent. A following `\c` can continue the current formatter word but does not cancel that pending word-end break. This `\p\c` ordering follows the pinned mandoc CVS formatter; GNU troff can diagnose or project such non-portable combinations differently. `sp` becomes explicit vertical space. Filled source lines normally join with spaces; an indented input line and no-fill input preserve line boundaries. No-fill rows follow executed AST events: executed empty-row events are retained, including leading and trailing rows, and independent `sp` requests accumulate. Skipped conditions and uncalled macro definitions do not contribute rows. Leading empty literal rows follow mandoc's terminal behavior; groff may suppress them in no-space contexts. A final unescaped `\c` suppresses the next implicit space or line break and joins the next input line directly. Word spacing and physical-line continuation remain independent: a generated or explicitly empty formatter word consumes the latter even when it adds no visible glyph.
+`br` inside a flow becomes an immediate inline line break. The `\p` escape instead requests a break at the next breakable field boundary, either ordinary word space or an optional `\:` breakpoint; it crosses tight `Ns` joins and non-breaking spaces, and repeated requests before that boundary are idempotent. A following `\c` can continue the current formatter word but does not cancel that pending word-end break. This `\p\c` ordering follows the pinned mandoc CVS formatter; GNU troff can diagnose or project such non-portable combinations differently. `sp` becomes explicit vertical space. Filled source lines normally join with spaces; an indented input line and no-fill input preserve line boundaries. No-fill rows follow executed AST events: executed empty-row events are retained, including leading and trailing rows, and independent `sp` requests accumulate. Skipped conditions and uncalled macro definitions do not contribute rows. Leading empty literal rows follow mandoc's terminal behavior; groff may suppress them in no-space contexts. A final unescaped `\c` suppresses the next implicit space or line break and joins the next input line directly. Word spacing and physical-line continuation remain independent: a generated or explicitly empty formatter word consumes the latter even when it adds no visible glyph.
 
 Inside a definition field, `\p` remains an ordered native buffer cell until
 `term_fill()` consumes its actual word separator. A preceding operand's marker
@@ -853,7 +853,7 @@ Man paragraph distance depends on source predecessors, including predecessors ou
 
 Man `nf`/`fi` and `EX`/`EE` boundaries consume a pending `HP` first line even before text is emitted. If `HP` starts inside an existing no-fill region, its first physical line keeps the first-line origin and later lines use the hanging origin; `\c` continuations do not consume that boundary. This preserves significant literal rows without splitting ordinary adjacent no-fill regions unnecessarily.
 
-`TS`/`TE` and `EQ`/`EN` are handled as structured preprocessors, described below. For the distinction between requests implemented, ignored, unsupported, and insecure in the pinned upstream parser, consult the [vendored roff(7) source](https://github.com/BryanHeBY/ManT/blob/main/crates/libmandoc-rs/vendor/mandoc-cvs-20261006T140200Z/roff.7), whose exact upstream revision and hash are recorded in the repository's `crates/libmandoc-rs/upstream/FILES` manifest. The [online mandoc roff(7) reference](https://mandoc.bsd.lv/man/roff.7.html) tracks an evolving revision rather than fixing the `cvs-20261006T140200Z` contract. ManT's local patches and stricter source/include boundary are described in this manual.
+`TS`/`TE` and `EQ`/`EN` are handled as structured preprocessors, described below. For the distinction between requests implemented, ignored, unsupported, and insecure in the pinned upstream parser, consult the [vendored roff(7) source](https://github.com/BryanHeBY/ManT/blob/main/crates/libmandoc-rs/vendor/mandoc-cvs-20261013T025419Z/roff.7), whose exact upstream revision and hash are recorded in the repository's `crates/libmandoc-rs/upstream/FILES` manifest. The [online mandoc roff(7) reference](https://mandoc.bsd.lv/man/roff.7.html) tracks an evolving revision rather than fixing the `cvs-20261013T025419Z` contract. ManT's local patches and stricter source/include boundary are described in this manual.
 
 ## Escapes
 
@@ -911,6 +911,21 @@ escaping is minimal but lossless: intraword underscores such as the one in
 Color, point size, vertical or non-literal motion, drawing, register, string, device, and postprocessor escape operands are consumed so control syntax cannot leak into prose. Their presentation effect is omitted. Overstrike `\o` is the exception: ManT retains the surviving glyph from mandoc's bounded one-cell terminal projection, including its trailing blank/tab trim, without reproducing device geometry or decoration. Link identity continues to follow the separate HTML-compatible source projection. A positive literal relative horizontal motion retains one space as a text-mode approximation, including before a `\c` line join; negative, absolute, register-based, and compound motions remain presentation-only. Known zero-width spacing and formatter controls remain zero width. An otherwise undefined one-character escape follows roff's visible-trigger fallback after terminal-control filtering.
 
 The zero-advance `\z` escape consumes complete control operands and never exposes a partial glyph spelling. Its two formatter stages—waiting for a glyph and waiting for a later glyph to overstrike the completed glyph—are retained independently across adjacent source text, style operands, inline macro arguments, and formatter-generated syntax such as `OP` brackets. An ordinary filled-word boundary consumes the latter backtracking position without adding a visible blank; real line and cell boundaries settle any remaining glyph. Following the pinned mandoc CVS formatter, a following `\c` cancels only a still-unconsumed `\z`; after a zero-advance glyph has already been produced, a trailing `\c` remains a valid source-line continuation and the next glyph may overstrike it. GNU troff diagnoses or projects some of these non-portable `\z`/`\c` combinations differently. A final literal glyph remains visible when no later glyph can overstrike it; otherwise the linear projection omits the overstruck glyph.
+
+The optional break `\:` writes a zero-width breakpoint, not a graph cell,
+on both pinned terminal devices. It contributes no visible character but
+participates in field consumption and physical-row
+execution. This differs from `\&`, which writes a zero-width graph, and from
+an explicitly authored Unicode U+200B. HTML character lookup represents the
+breakpoint as U+200B; HTML-compatible link identity follows that lookup without
+changing terminal text. This catalog entry does not make one-byte bracketed
+or quoted spellings such as `\[:]` or `\C':'` valid special-character escapes.
+
+Quoted escape delimiters retain their complete spelling. A special-character
+escape closes an escaped delimiter only when that spelling matches; other
+escape classes retain the upstream trigger-based closing rule. The numbered
+character escape keeps its separate delimiter exception. Partial and invalid
+escapes are classified by the parser result rather than their trigger alone.
 
 Unknown named characters and unsupported numbered characters retain their
 source spelling as semantic recovery. That spelling is not a formatter

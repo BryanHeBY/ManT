@@ -1,4 +1,5 @@
 use super::super::Inline;
+use crate::mandoc::inline::PrefixMeasure;
 
 /// Split a formatter word at the row boundaries its field passes decided
 /// (term.c:220 with 205-207): each boundary is a cell offset inside the
@@ -230,7 +231,8 @@ pub(super) fn advance_boundary(cell: &mut usize, next_boundary: &mut usize, boun
 pub(in crate::mandoc) fn split_owned_glyph_prefix(
     nodes: Vec<Inline>,
     remaining: &mut usize,
-    original: &Inline,
+    original: &[Inline],
+    measure: PrefixMeasure,
 ) -> (Vec<Inline>, Vec<Inline>) {
     let mut prefix = Vec::new();
     let mut suffix = Vec::new();
@@ -239,24 +241,25 @@ pub(in crate::mandoc) fn split_owned_glyph_prefix(
             suffix.push(node);
             continue;
         }
-        if node == *original {
+        if original.contains(&node) {
             // Only the glyph's cached annotation proves this is its own
             // node. A new empty-label link can also contain exactly one
             // glyph, so its visible size is never ownership evidence.
-            let owned = visible_character_count(&node);
+            let owned = measure.count(&node);
             *remaining -= owned;
             prefix.push(node);
             continue;
         }
         match node {
             Inline::Text { value } => {
-                split_value_prefix(&value, false, remaining, &mut prefix, &mut suffix);
+                split_value_prefix(&value, false, remaining, &mut prefix, &mut suffix, measure);
             }
             Inline::Code { value } => {
-                split_value_prefix(&value, true, remaining, &mut prefix, &mut suffix);
+                split_value_prefix(&value, true, remaining, &mut prefix, &mut suffix, measure);
             }
             Inline::Strong { children } => {
-                let (before, after) = split_owned_glyph_prefix(children, remaining, original);
+                let (before, after) =
+                    split_owned_glyph_prefix(children, remaining, original, measure);
                 if !before.is_empty() {
                     prefix.push(Inline::Strong { children: before });
                 }
@@ -265,7 +268,8 @@ pub(in crate::mandoc) fn split_owned_glyph_prefix(
                 }
             }
             Inline::Emphasis { children } => {
-                let (before, after) = split_owned_glyph_prefix(children, remaining, original);
+                let (before, after) =
+                    split_owned_glyph_prefix(children, remaining, original, measure);
                 if !before.is_empty() {
                     prefix.push(Inline::Emphasis { children: before });
                 }
@@ -278,7 +282,8 @@ pub(in crate::mandoc) fn split_owned_glyph_prefix(
                 title,
                 children,
             } => {
-                let (owned, after) = split_owned_glyph_prefix(children, remaining, original);
+                let (owned, after) =
+                    split_owned_glyph_prefix(children, remaining, original, measure);
                 prefix.extend(owned);
                 // A typed destination is identity data: the node survives
                 // even when every visible cell returned to its real owner.
@@ -308,11 +313,12 @@ fn split_value_prefix(
     remaining: &mut usize,
     prefix: &mut Vec<Inline>,
     suffix: &mut Vec<Inline>,
+    measure: PrefixMeasure,
 ) {
     let split = value
         .char_indices()
         .find_map(|(index, character)| {
-            if !character.is_whitespace() {
+            if measure.includes(character) {
                 *remaining -= 1;
             }
             (*remaining == 0).then_some(index + character.len_utf8())
@@ -330,21 +336,6 @@ fn split_value_prefix(
         } else {
             Inline::Text { value: tail }
         });
-    }
-}
-
-/// Non-whitespace scalar count of one node tree, matching the count the
-/// zero-advance ledger reports for a pending glyph.
-fn visible_character_count(node: &Inline) -> usize {
-    match node {
-        Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. } => value
-            .chars()
-            .filter(|character| !character.is_whitespace())
-            .count(),
-        Inline::Strong { children }
-        | Inline::Emphasis { children }
-        | Inline::Link { children, .. } => children.iter().map(visible_character_count).sum(),
-        Inline::Anchor { .. } | Inline::LineBreak { .. } => 0,
     }
 }
 

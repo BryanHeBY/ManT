@@ -102,15 +102,15 @@ overflow the C stack or repeatedly re-enter the same nesting suffix.
  			if (stype == ESCAPE_EXPAND)
  				goto out_sub;
  			iend = send;
-@@ -508,6 +560,11 @@
+@@ -513,6 +565,11 @@
+ 	default:
+ 		break;
  	}
- 	goto out;
- 
++	goto out;
++
 +out_depth:
 +	iendarg = iend = send;
 +	rval = ESCAPE_ERROR;
-+	goto out;
-+
+ 	goto out;
+ 
  out_sub:
- 	iesc = sesc;
- 	inam = snam;

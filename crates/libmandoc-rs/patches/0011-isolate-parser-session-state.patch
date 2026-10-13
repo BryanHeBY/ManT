@@ -46,7 +46,7 @@ Move remaining mutable parser globals to per-thread storage and reset session-ow
  
  #include <stdarg.h>
  #include <stdio.h>
-@@ -291,10 +292,10 @@
+@@ -293,10 +294,10 @@
  	"write",
  };
  

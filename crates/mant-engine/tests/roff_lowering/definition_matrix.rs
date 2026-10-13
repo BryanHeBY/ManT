@@ -12,11 +12,11 @@
 //! all-caps section heads like `OPTIONS` are body rows. Regenerate the
 //! expectations only with that script, never by hand.
 //!
-//! There is deliberately no `\:` case here: `\:` sits exactly on the
-//! ascii/UTF-8 device fork (chars.c:53 — `ASCII_BREAK` byte versus `NBRZW`),
-//! and this matrix is recorded `-Tascii`. The UTF-8 side of that fork and
-//! the rest of the escape semantics live in `escape_matrix`, recorded
-//! `-Tutf8` by `scripts/roff/fixtures/regen_escape_matrix.sh`.
+//! This historical matrix deliberately omitted `\:` because its original
+//! ASCII/UTF-8 devices disagreed (`ASCII_BREAK` versus `ASCII_NBRZW`). The
+//! current source writes `ASCII_BREAK` on both devices. Breakpoint behavior
+//! and explicitly bound source-transition gold live alongside `escape_matrix`;
+//! the unchanged historical ASCII recording retains its original scope.
 
 use std::fmt::Write as _;
 

@@ -15,7 +15,7 @@ pub(in crate::mandoc) use text_execution::{
     TextExecutionContext, TextExecutionPolicy, parse_roff_text_with_scan_status,
     parse_roff_text_with_state, parse_roff_text_with_zero_advance,
 };
-pub(in crate::mandoc) use zero_advance::ZeroAdvanceState;
+pub(in crate::mandoc) use zero_advance::{PrefixMeasure, ZeroAdvanceState};
 
 pub(in crate::mandoc) fn parse_roff_text(source: &str) -> Vec<Inline> {
     parse_roff_text_with_font(source, Font::Regular, true)

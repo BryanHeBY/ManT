@@ -1,4 +1,4 @@
-/* $Id: mandocdb.c,v 1.279 2026/08/28 09:52:59 schwarze Exp $ */
+/* $Id: mandocdb.c,v 1.280 2026/10/12 02:39:33 schwarze Exp $ */
 /*
  * Copyright (c) 2011-2021, 2024-2026 Ingo Schwarze <schwarze@openbsd.org>
  * Copyright (c) 2011, 2012 Kristaps Dzonsons <kristaps@bsd.lv>
@@ -37,9 +37,6 @@
 #include "compat_fts.h"
 #endif
 #include <limits.h>
-#if HAVE_SANDBOX_INIT
-#include <sandbox.h>
-#endif
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -335,13 +332,6 @@ mandocdb(int argc, char *argv[])
 	if (pledge("stdio rpath wpath cpath", NULL) == -1) {
 #endif
 		warn("pledge");
-		return (int)MANDOCLEVEL_SYSERR;
-	}
-#endif
-
-#if HAVE_SANDBOX_INIT
-	if (sandbox_init(kSBXProfileNoInternet, SANDBOX_NAMED, NULL) == -1) {
-		warnx("sandbox_init");
 		return (int)MANDOCLEVEL_SYSERR;
 	}
 #endif

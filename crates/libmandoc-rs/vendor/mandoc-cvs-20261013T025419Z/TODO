@@ -1,6 +1,6 @@
 ************************************************************************
 * Official mandoc TODO.
-* $Id: TODO,v 1.346 2026/10/03 14:29:52 schwarze Exp $
+* $Id: TODO,v 1.347 2026/10/11 21:55:07 schwarze Exp $
 ************************************************************************
 
 Many issues are annotated for difficulty as follows:
@@ -564,6 +564,16 @@ are mere guesses, and some may be wrong.
 - HTML formatting of .nf should not close and re-open <pre> on .P
   my mail to ports@ 27 Jun 2021 16:09:20 +0200
   loc **  exist **  algo *  size *  imp **
+
+- HTML generation of <p> and <pre> should be closely parallel,
+  and used mailyto switch from flow to phrasing mode;
+  also needed to fix .Bl .nf .It assertion in the HTML formatter
+  my mail to kristaps@ 10 Oct 2026 17:54:38 +0200
+  loc ***  exist ***  algo **  size **  imp ***
+
+- print human-readable rather than numerical HTML entities where possible
+  my mail to deraadt@ 7 Oct 2026 19:51:11 +0200
+  loc **  exist **  algo *  size **  imp **
 
 - tbl(7) HTML output does not implement column width specifications
   reported by Ted Bullock 11 Jan 2022 16:00:44 -0700

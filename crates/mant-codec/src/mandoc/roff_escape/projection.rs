@@ -104,6 +104,7 @@ impl PlainTextProjection {
             }
             RoffInlineEvent::Font(_)
             | RoffInlineEvent::ZeroWidthGlyph
+            | RoffInlineEvent::Breakpoint
             | RoffInlineEvent::PreviousFont
             | RoffInlineEvent::Link(_)
             | RoffInlineEvent::Overstrike { terminal: None, .. }
@@ -119,7 +120,9 @@ impl PlainTextProjection {
     }
 }
 
-/// Return only the visible characters of a roff-encoded identifier or label.
+/// Return the logical glyph spelling of a roff-encoded identifier or label.
+/// Native field acceptance and physical rows belong to the shared inline
+/// executor; optional breakpoints do not introduce Unicode into this spelling.
 pub(in crate::mandoc) fn visible_text(source: &str) -> String {
     let mut projection = PlainTextProjection::new();
     for event in decode(source) {
