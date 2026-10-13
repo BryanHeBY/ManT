@@ -107,6 +107,8 @@ run "test generated device cell card scopes" \
   python3 -m unittest scripts.roff.tests.test_rule_projection_cards
 run "test immutable roff consumer fixture bindings" \
   python3 -m unittest scripts.roff.tests.test_consumer_fixture_contract
+run "test exact roff fixture checkout across newline settings" \
+  python3 -m unittest scripts.roff.tests.test_fixture_checkout
 run "test rendering matrix mutation sensitivity" python3 -m scripts.roff.audit.check_roff_behavior_matrix --self-test
 run "test bounded rendering census" python3 -m scripts.roff.audit.audit_roff_rendering --self-test
 run "test roff audit parallelism planning" python3 -m scripts.roff.tests.test_roff_audit_common

@@ -269,7 +269,7 @@ class ConsumerFixtureContractTests(unittest.TestCase):
                     continue
                 directory = "escape_matrix" if case["cohort"] == "escape" else "shared_execution_matrix"
                 path = FIXTURE_ROOT / directory / "cases" / case["name"]
-                self.assertEqual(path.with_suffix(".1").read_text(), case["source"])
+                self.assertEqual(path.with_suffix(".1").read_bytes(), case["source"].encode())
                 self.assertEqual(path.with_suffix(".expected").read_text().splitlines(),
                                  case["historicalMatrixRows"])
                 if case["cohort"] == "shared":

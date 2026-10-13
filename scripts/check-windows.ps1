@@ -129,6 +129,8 @@ try {
         -Arguments @("-m", "unittest", "scripts.checks.tests.test_build_artifacts")
     Invoke-Native -Label "test installer receipt and cleanup guidance" -Program "python" `
         -Arguments @("-m", "unittest", "scripts.release.tests.test_installer_guidance")
+    Invoke-Native -Label "test exact roff fixture checkout across newline settings" -Program "python" `
+        -Arguments @("-m", "unittest", "scripts.roff.tests.test_fixture_checkout")
     Invoke-Native -Label "test portable Rust packages" -Program "cargo" `
         -Arguments (@("test", "--locked") + $Packages)
     Write-Host "`n==> test isolated Windows installer lifecycle"
