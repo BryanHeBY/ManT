@@ -13,6 +13,17 @@ that crate was not published for that change.
 
 ## Unreleased
 
+### Dependency maintenance
+
+- Upgrade the exactly paired MCP SDK and generated macros to `3.5.1`, retaining
+  the Rust `1.88` floor and existing feature selection. Update the locked native
+  build dependency `cc` to `1.6.0` in both workspace and fuzz graphs, and regenerate
+  the distributable Rust dependency notices. The pinned mandoc source/reference
+  and native v0.12 wire contracts remain unchanged.
+- Refresh commit-pinned workflow dependencies: install-action `2.87.26`,
+  upload-artifact `7.0.2`, download-artifact `8.0.2` and CodeQL `4.38.3`.
+  Keep existing workflow permissions, tool versions and release boundaries.
+
 ### mant-codec
 
 - Preserve the actual destination of a single TLDR `More information:` link
