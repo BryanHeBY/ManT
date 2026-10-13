@@ -1,6 +1,7 @@
 """Git checkout must preserve the exact source/profile fixture byte bindings."""
 
 import hashlib
+import itertools
 import json
 import os
 from pathlib import Path
@@ -14,19 +15,21 @@ FIXTURES = Path("crates/mant-engine/tests/roff_lowering")
 
 
 class FixtureCheckoutTests(unittest.TestCase):
-    def checkout(self, directory, files, attributes, *, autocrlf):
+    def checkout(self, directory, files, attributes, *, autocrlf, eol):
         repository = Path(directory, "repository")
         repository.mkdir()
         destination = Path(directory, "checkout")
         destination.mkdir()
         environment = dict(os.environ, GIT_CONFIG_NOSYSTEM="1",
                            GIT_CONFIG_GLOBAL=os.devnull)
-        for name in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"):
+        for name in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE",
+                     "GIT_CONFIG_COUNT", "GIT_CONFIG_PARAMETERS"):
             environment.pop(name, None)
 
         def git(*arguments):
             subprocess.run(
                 ["git", "-c", f"core.autocrlf={str(autocrlf).lower()}",
+                 "-c", f"core.eol={eol}",
                  "-c", "core.safecrlf=false", "-c", f"core.attributesFile={os.devnull}",
                  *arguments], cwd=repository, env=environment,
                 capture_output=True, check=True, timeout=30,
@@ -48,18 +51,19 @@ class FixtureCheckoutTests(unittest.TestCase):
                  if path.suffix in {".1", ".expected"}}
         self.assertTrue(files)
         # This unprotected file proves that the scratch checkout really applies
-        # autocrlf, even when this test runs on a Unix host.
+        # autocrlf/core.eol, independently of the host's native line endings.
         control = Path("unprotected.txt")
         files[control] = b"one\ntwo\n"
         migrations = json.loads(
             (ROOT / FIXTURES / "oracle_migrations/breakpoints.json").read_bytes())
-        for autocrlf in (False, True):
-            with self.subTest(autocrlf=autocrlf), tempfile.TemporaryDirectory(
+        for autocrlf, eol in itertools.product((False, True), ("lf", "crlf")):
+            with self.subTest(autocrlf=autocrlf, eol=eol), tempfile.TemporaryDirectory(
                     prefix="mant-fixture-checkout-") as directory:
                 checkout = self.checkout(directory, files, (ROOT / ".gitattributes").read_bytes(),
-                                         autocrlf=autocrlf)
+                                         autocrlf=autocrlf, eol=eol)
                 self.assertEqual((checkout / control).read_bytes(),
-                                 b"one\r\ntwo\r\n" if autocrlf else files[control])
+                                 b"one\r\ntwo\r\n" if autocrlf or eol == "crlf"
+                                 else files[control])
                 for path, content in files.items():
                     if path != control:
                         self.assertEqual((checkout / path).read_bytes(), content, str(path))
