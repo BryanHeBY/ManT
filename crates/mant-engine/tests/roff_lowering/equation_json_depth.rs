@@ -300,13 +300,13 @@ fn externally_supplied_excessive_equation_json_still_hits_recursion_guard() {
     let content = load_roff_bytes(source(&sqrt(32)).as_bytes()).unwrap();
     let mut value = serde_json::to_value(QueryBundle::from(&content)).unwrap();
     let mut expression = serde_json::json!({
-        "kind": "Text", "font": "None", "position": "None",
-        "actualArgs": 0, "text": "x", "children": []
+        "kind": "text", "font": "none", "operator": "none",
+        "text": "x", "children": []
     });
     for _ in 0..70 {
         expression = serde_json::json!({
-            "kind": "List", "font": "None", "position": "None",
-            "actualArgs": 1, "children": [expression]
+            "kind": "sequence", "font": "none", "operator": "none",
+            "children": [expression]
         });
     }
     value["document"]["sections"][0]["blocks"][0]["expression"] = expression;

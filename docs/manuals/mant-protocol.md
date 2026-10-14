@@ -939,24 +939,31 @@ column cells retain independent budgets.
 Table `columnPreferences` is a closed object containing optional reading
 preferences. `widths` defaults to `[]` and contains preferred content widths,
 excluding inter-column blanks. `gapColumns` defaults to 2. Optional
-`advanceLimitColumns` limits one positioning advance; optional `extraWidthColumns`
+`maxAlignmentPaddingColumns` limits the alignment region after the preceding
+field's content extent; optional `extraWidthColumns`
 gives the content capacity for fields beyond the declarations, excluding any
 added gap. Those fields share the preferred origin after all declared fields.
 Every number is an integer from 0 through 65535. Missing preferences and `{}` are equivalent,
 and canonical JSON omits only the complete default: empty widths, gap 2, and no
 constraints. With empty widths, content-derived layout uses the gap; nondefault
-advance and extra-field constraints are retained but apply only to declared-field
+alignment and extra-field constraints are retained but apply only to declared-field
 layout. Explicit zero is meaningful and survives serialization, including zero-valued
 optional constraints. Those two optional fields accept null as absence and omit
 it canonically; `columnPreferences`, `widths`, and `gapColumns` cannot be null.
 The preferences must be an object; positional arrays, including `[]`, are rejected.
 Unknown and duplicate fields, negative/fractional/oversized numbers, the retired
-top-level `columnWidths`, and mixed old/new shapes are rejected by JSON decoding.
+top-level `columnWidths`, `advanceLimitColumns`, and mixed old/new shapes are
+rejected by JSON decoding.
 
 For example, `"columnPreferences":{"widths":[8,1],"gapColumns":4,
-"advanceLimitColumns":256,"extraWidthColumns":10}` retains an mdoc two-column
-source preference, giving the second field a preferred origin of 12 cells.
-The producer chooses those source constraints; a generic consumer never infers
+"maxAlignmentPaddingColumns":256,"extraWidthColumns":10}` retains an mdoc
+two-column resolved preference, giving the second field a preferred origin of
+12 cells. The maximum region retains a historical native-device mapping, not
+an author-declared constraint. The next origin is the greater of the full output
+end and the content end plus the capped distance toward the preferred origin.
+Ordinary trailing spaces are excluded from the content extent, but occupy the
+region and are never clipped. Zero adds no alignment padding; absence leaves
+the region unbounded. A generic consumer never infers
 the native 4/3/1 gap or 256-cell limit from the declaration count. CLI and TUI
 share measurement and collision rules, with viewport wrapping performed before
 placement. Extreme preferences remain valid IR. The independent 4096-cell
@@ -964,21 +971,29 @@ generated-padding budget uses the source-order fallback when exceeded, retaining
 every prepared and later cell. Preferences cannot drop cells or change entry,
 link, span, or author-scalar ownership.
 
-Native equation blocks carry `expression`, a nested box tree with `kind`,
-`font`, `position`, parsed text/fences/decorations, argument counts and ordered
-children. Optional fields are omitted when absent; omitted `size` uses the
-parser default and omitted `expectedArgs` means no fixed grammar maximum.
+Equation blocks carry `expression`, a source-neutral mathematical tree with
+`kind`, `font`, `operator`, visible text/fences/decorations and ordered children.
+Kinds are `text`, `operation`, `sequence`, `group`, `pile` and `matrix`; groups
+retain operation boundaries, while sequences only order their children.
+Operators include `fraction`, `square-root`, `upper-limit`, `lower-limit`,
+`lower-upper-limits`, `superscript`, `subscript` and `subscript-superscript`,
+or `none`. All equation enums use kebab-case, including font names.
+Optional fields are omitted when absent; omitted `size` inherits presentation.
+Parser arity counters and native box names are resolved by the producer.
 `value` is the checked readable projection of that tree. The wire
 reader rejects a conflicting `value`. Inline equations use
 `{"type":"equation","value":...,"expression":...}` between neighboring
-prose nodes; their `expression` is required. Matrix children retain parsed
+prose nodes; their `expression` is required. Matrix children retain
 column order, while the readable projection visits every retained row.
 The roff producer budgets recursive JSON from each expression's final position
 inside the complete query response. Formula subtrees that exceed the remaining
 budget become readable text leaves and report
 `manual.equation-structure-depth-summarized` with `semantic-coverage`.
-`summarizedOperandGroup` retains the grouping needed by an outer operand; a
-false value is omitted. Deep surrounding lists, definitions, tables, or inline
+`operandScope: "compound"` retains an opaque operand's mathematical scope,
+independently of why its structure is unavailable; default `"atomic"` is omitted.
+The retired `expectedArgs`, `actualArgs`, `summarizedOperandGroup` and `position`
+fields are rejected by the current unreleased v0.13 family. Published v0.12
+snapshots stay frozen. Deep surrounding lists, definitions, tables, or inline
 wrappers can themselves be reduced to readable text with
 `manual.document-structure-depth-summarized`, even without an equation. A final
 query-shaped JSON parse checks the reader depth boundary; an unusual residual

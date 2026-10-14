@@ -218,11 +218,9 @@ mod tests {
         let expression = mant_ir::EquationExpression {
             kind: mant_ir::EquationKind::Text,
             font: mant_ir::EquationFont::None,
-            position: mant_ir::EquationPosition::None,
+            operator: mant_ir::EquationOperator::None,
             size: None,
-            expected_args: Some(0),
-            actual_args: 0,
-            summarized_operand_group: false,
+            operand_scope: mant_ir::EquationOperandScope::Atomic,
             text: Some("x".into()),
             left: None,
             right: None,

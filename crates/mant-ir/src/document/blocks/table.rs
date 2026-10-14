@@ -19,12 +19,18 @@ pub struct ColumnPreferences {
         skip_serializing_if = "is_default_column_gap"
     )]
     pub gap_columns: u16,
-    /// Optional maximum advance toward a preferred field origin. Zero disables
-    /// that advance; absence leaves it unrestricted by the source device.
+    /// Optional maximum alignment-padding region after the preceding field's
+    /// content extent, excluding ordinary trailing spaces from that extent.
+    /// Preserved trailing output occupies this region and is never clipped.
+    /// Zero adds no alignment padding; absence leaves this preference unbounded.
+    /// This is a resolved layout preference, not a consumer work budget.
+    /// Placement takes the greater of the full output end and the content end
+    /// plus the capped distance toward the preferred origin.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub advance_limit_columns: Option<u16>,
-    /// Optional capacity of fields beyond the declared widths. These fields
-    /// share the end of all declarations as their preferred origin.
+    pub max_alignment_padding_columns: Option<u16>,
+    /// Resolved optional content capacity of fields beyond the declared widths.
+    /// Retained content is never clipped. These fields share the end of all
+    /// declarations as their preferred origin.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extra_width_columns: Option<u16>,
 }
@@ -42,7 +48,7 @@ impl Default for ColumnPreferences {
         Self {
             widths: Vec::new(),
             gap_columns: default_column_gap(),
-            advance_limit_columns: None,
+            max_alignment_padding_columns: None,
             extra_width_columns: None,
         }
     }
@@ -109,14 +115,15 @@ pub enum TableRuleCellKind {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TableCell {
-    /// Effective native cell content after tbl layout-rule precedence.
+    /// Effective cell content after the producer resolves source rule precedence.
     #[serde(default, skip_serializing_if = "TableCellKind::is_text")]
     pub kind: TableCellKind,
     /// Block content contained in the cell.
     pub blocks: Vec<Block>,
-    /// Close the current physical data row after this cell, before the next.
+    /// The current physical data row ends after this cell, before the next.
     /// The row can be occupied by an earlier cell or already exist as an empty
     /// structural row. This adds neither body scalars nor an additional row.
+    /// This is a resolved topology fact, not a line-break instruction.
     #[serde(default, skip_serializing_if = "is_false")]
     pub break_after: bool,
     /// Number of logical columns occupied by the cell.

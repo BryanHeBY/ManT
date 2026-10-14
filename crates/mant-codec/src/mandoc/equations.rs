@@ -1,8 +1,8 @@
 //! Transfer the parsed native equation structure without replaying source.
 use libmandoc_rs::{EquationBox, EquationFont, EquationKind, EquationPosition};
 use mant_ir::{
-    EquationExpression, EquationFont as IrFont, EquationKind as IrKind,
-    EquationPosition as IrPosition,
+    EquationExpression, EquationFont as IrFont, EquationKind as IrKind, EquationOperandScope,
+    EquationOperator as IrOperator,
 };
 
 /// Transfer the bounded owned eqn tree into source-neutral IR. Fields remain
@@ -13,11 +13,28 @@ pub(super) fn expression_from_ast(box_node: &EquationBox) -> EquationExpression 
 }
 
 fn expression_from_box(box_node: &EquationBox) -> EquationExpression {
+    expression_from_box_in_row(box_node, false)
+}
+
+fn expression_from_box_in_row(box_node: &EquationBox, pile_row: bool) -> EquationExpression {
     EquationExpression {
         kind: match box_node.kind {
+            // CVS eqn_box_new leaves the root with the default EQN_TEXT type.
+            // A text-free content container is a sequence, not an atom.
+            EquationKind::Text if box_node.text.is_none() && !box_node.children.is_empty() => {
+                IrKind::Sequence
+            }
             EquationKind::Text => IrKind::Text,
-            EquationKind::Subexpression => IrKind::Subexpression,
-            EquationKind::List => IrKind::List,
+            EquationKind::Subexpression => IrKind::Operation,
+            // CVS eqn.c uses expectargs=1 for transparent font/size wrappers.
+            // eqn_term.c also skips a Pile's singleton row wrapper. Resolve
+            // both distinctions here; consumers must not interpret counters.
+            EquationKind::List
+                if box_node.expected_args == 1 || pile_row && box_node.actual_args <= 1 =>
+            {
+                IrKind::Sequence
+            }
+            EquationKind::List => IrKind::Group,
             EquationKind::Pile => IrKind::Pile,
             EquationKind::Matrix => IrKind::Matrix,
         },
@@ -28,25 +45,19 @@ fn expression_from_box(box_node: &EquationBox) -> EquationExpression {
             EquationFont::Fat => IrFont::Fat,
             EquationFont::Italic => IrFont::Italic,
         },
-        position: match box_node.position {
-            EquationPosition::None => IrPosition::None,
-            EquationPosition::Superscript => IrPosition::Superscript,
-            EquationPosition::SubscriptSuperscript => IrPosition::SubscriptSuperscript,
-            EquationPosition::Subscript => IrPosition::Subscript,
-            EquationPosition::To => IrPosition::To,
-            EquationPosition::From => IrPosition::From,
-            EquationPosition::FromTo => IrPosition::FromTo,
-            EquationPosition::Over => IrPosition::Over,
-            EquationPosition::Sqrt => IrPosition::Sqrt,
+        operator: match box_node.position {
+            EquationPosition::None => IrOperator::None,
+            EquationPosition::Superscript => IrOperator::Superscript,
+            EquationPosition::SubscriptSuperscript => IrOperator::SubscriptSuperscript,
+            EquationPosition::Subscript => IrOperator::Subscript,
+            EquationPosition::To => IrOperator::UpperLimit,
+            EquationPosition::From => IrOperator::LowerLimit,
+            EquationPosition::FromTo => IrOperator::LowerUpperLimits,
+            EquationPosition::Over => IrOperator::Fraction,
+            EquationPosition::Sqrt => IrOperator::SquareRoot,
         },
         size: (box_node.size != i32::MIN).then_some(box_node.size),
-        // CVS eqn.c::eqn_box_new initializes expectargs to UINT_MAX for a
-        // list with no fixed grammar maximum. Do not leak that sentinel into
-        // source-neutral IR or the unpublished JSON contract.
-        expected_args: (box_node.expected_args != u32::MAX as usize)
-            .then_some(box_node.expected_args),
-        actual_args: box_node.actual_args,
-        summarized_operand_group: false,
+        operand_scope: EquationOperandScope::Atomic,
         // CVS eqn.c::eqn_next substitutes aliases before eqn_parse's font
         // splitting. Only a complete unquoted token is eligible for the GNU
         // enhancement; source-neutral IR projects stored text verbatim.
@@ -55,6 +66,10 @@ fn expression_from_box(box_node: &EquationBox) -> EquationExpression {
         right: box_node.right.as_deref().map(super::visible_text),
         top: box_node.top.as_deref().map(super::visible_text),
         bottom: box_node.bottom.as_deref().map(super::visible_text),
-        children: box_node.children.iter().map(expression_from_box).collect(),
+        children: box_node
+            .children
+            .iter()
+            .map(|child| expression_from_box_in_row(child, box_node.kind == EquationKind::Pile))
+            .collect(),
     }
 }

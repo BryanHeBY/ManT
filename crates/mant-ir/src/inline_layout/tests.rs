@@ -29,11 +29,9 @@ fn equation(value: &str) -> Inline {
         expression: crate::EquationExpression {
             kind: crate::EquationKind::Text,
             font: crate::EquationFont::None,
-            position: crate::EquationPosition::None,
+            operator: crate::EquationOperator::None,
             size: None,
-            expected_args: Some(0),
-            actual_args: 0,
-            summarized_operand_group: false,
+            operand_scope: crate::EquationOperandScope::Atomic,
             text: Some(value.into()),
             left: None,
             right: None,

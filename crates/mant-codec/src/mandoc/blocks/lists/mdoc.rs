@@ -556,7 +556,11 @@ fn lower_mdoc_column_list(
             u16::try_from(crate::mandoc::roff_escape::width_sample(declared)).unwrap_or(u16::MAX)
         })
         .collect();
-    // Pinned mdoc_term.c::termp_it_pre chooses source device preferences.
+    // Resolve the pinned mdoc_term.c::termp_it_pre widths, gap and extra-field
+    // capacity here. term_ascii.c::ascii_advance/locale_advance also caps each
+    // printed alignment region at 256 cells. That executed-device result is
+    // exported as a generic layout preference, not a source-authored setting
+    // or a consumer allocation budget.
     let gap = match column_widths.len() {
         n if n < 5 => 4,
         5 => 3,
@@ -565,7 +569,7 @@ fn lower_mdoc_column_list(
     let column_preferences = mant_ir::ColumnPreferences {
         widths: column_widths,
         gap_columns: gap,
-        advance_limit_columns: Some(256),
+        max_alignment_padding_columns: Some(256),
         extra_width_columns: Some(10),
     };
     let origins = mant_ir::geometry::DeclaredColumns::new(&column_preferences);

@@ -64,19 +64,19 @@ fn table_preferences_round_trip_actual_query_and_independent_document_json() {
         ColumnPreferences {
             widths: vec![8, 1],
             gap_columns: 4,
-            advance_limit_columns: Some(256),
+            max_alignment_padding_columns: Some(256),
             extra_width_columns: Some(10),
         },
         ColumnPreferences {
             widths: vec![u16::MAX, 0],
             gap_columns: u16::MAX,
-            advance_limit_columns: Some(u16::MAX),
+            max_alignment_padding_columns: Some(u16::MAX),
             extra_width_columns: Some(u16::MAX),
         },
         ColumnPreferences {
             widths: vec![],
             gap_columns: 0,
-            advance_limit_columns: Some(0),
+            max_alignment_padding_columns: Some(0),
             extra_width_columns: Some(0),
         },
         ColumnPreferences {
@@ -85,7 +85,7 @@ fn table_preferences_round_trip_actual_query_and_independent_document_json() {
         },
     ] {
         let preferences = json!({"widths":expected.widths,"gapColumns":expected.gap_columns,
-            "advanceLimitColumns":expected.advance_limit_columns,"extraWidthColumns":expected.extra_width_columns});
+            "maxAlignmentPaddingColumns":expected.max_alignment_padding_columns,"extraWidthColumns":expected.extra_width_columns});
         let source = table_query(Some(preferences));
         let parsed: QueryBundle = serde_json::from_str(&source.to_string()).unwrap();
         let (preferences, rows) = table(&parsed.document.as_ref().unwrap().sections[0].blocks);
@@ -97,12 +97,20 @@ fn table_preferences_round_trip_actual_query_and_independent_document_json() {
         let value: Value = serde_json::from_str(&wire).unwrap();
         let encoded = &value["document"]["sections"][0]["blocks"][0];
         assert!(encoded.get("columnWidths").is_none());
+        assert!(
+            encoded["columnPreferences"]
+                .get("advanceLimitColumns")
+                .is_none()
+        );
         assert_eq!(
             encoded.get("columnPreferences").is_none(),
             expected.is_empty()
         );
-        if expected.advance_limit_columns == Some(0) {
-            assert_eq!(encoded["columnPreferences"]["advanceLimitColumns"], 0);
+        if expected.max_alignment_padding_columns == Some(0) {
+            assert_eq!(
+                encoded["columnPreferences"]["maxAlignmentPaddingColumns"],
+                0
+            );
             assert_eq!(encoded["columnPreferences"]["extraWidthColumns"], 0);
         }
         let document: DocumentResponse =
@@ -122,7 +130,7 @@ fn absent_empty_and_null_optional_constraints_have_the_same_canonical_defaults()
         None,
         Some(json!({})),
         Some(json!({"widths":[],"gapColumns":2})),
-        Some(json!({"advanceLimitColumns":null,"extraWidthColumns":null})),
+        Some(json!({"maxAlignmentPaddingColumns":null,"extraWidthColumns":null})),
     ] {
         let source = table_query(preferences);
         let parsed: QueryBundle = serde_json::from_str(&source.to_string()).unwrap();
@@ -159,7 +167,7 @@ fn current_preferences_reject_unknown_null_required_and_out_of_range_fields() {
     for field in [
         "widths",
         "gapColumns",
-        "advanceLimitColumns",
+        "maxAlignmentPaddingColumns",
         "extraWidthColumns",
     ] {
         for invalid in [json!(-1), json!(65536), json!(1.5), json!("1"), json!(true)] {
@@ -230,15 +238,36 @@ fn retired_width_arrays_and_mixed_table_shapes_are_rejected() {
 }
 
 #[test]
+fn retired_device_advance_fields_are_rejected_without_silent_migration() {
+    for old_value in [Value::Null, json!(0), json!(256)] {
+        for new_value in [None, Some(json!(0)), Some(json!(256))] {
+            let mut preferences = json!({"advanceLimitColumns": old_value});
+            if let Some(new_value) = new_value {
+                preferences["maxAlignmentPaddingColumns"] = new_value;
+            }
+            assert!(
+                serde_json::from_str::<ColumnPreferences>(&preferences.to_string()).is_err(),
+                "accepted retired preferences: {preferences}"
+            );
+            let source = table_query(Some(preferences));
+            assert!(serde_json::from_str::<QueryBundle>(&source.to_string()).is_err());
+            assert!(
+                serde_json::from_str::<DocumentResponse>(&source["document"].to_string()).is_err()
+            );
+        }
+    }
+}
+
+#[test]
 fn raw_current_table_wire_rejects_duplicate_preferences_and_each_preference_field() {
-    let accepted = r#"{"type":"table","rows":[],"columnPreferences":{"widths":[8,1],"gapColumns":4,"advanceLimitColumns":256,"extraWidthColumns":10}}"#;
+    let accepted = r#"{"type":"table","rows":[],"columnPreferences":{"widths":[8,1],"gapColumns":4,"maxAlignmentPaddingColumns":256,"extraWidthColumns":10}}"#;
     assert!(serde_json::from_str::<Block>(accepted).is_ok());
     for wire in [
         accepted.replace("\"widths\":[8,1]", "\"widths\":[8,1],\"widths\":[3]"),
         accepted.replace("\"gapColumns\":4", "\"gapColumns\":4,\"gapColumns\":0"),
         accepted.replace(
-            "\"advanceLimitColumns\":256",
-            "\"advanceLimitColumns\":256,\"advanceLimitColumns\":0",
+            "\"maxAlignmentPaddingColumns\":256",
+            "\"maxAlignmentPaddingColumns\":256,\"maxAlignmentPaddingColumns\":0",
         ),
         accepted.replace(
             "\"extraWidthColumns\":10",

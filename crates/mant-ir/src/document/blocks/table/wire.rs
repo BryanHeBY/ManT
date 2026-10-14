@@ -14,7 +14,7 @@ struct ColumnPreferencesWire {
     #[serde(default = "super::default_column_gap")]
     gap_columns: u16,
     #[serde(default)]
-    advance_limit_columns: Option<u16>,
+    max_alignment_padding_columns: Option<u16>,
     #[serde(default)]
     extra_width_columns: Option<u16>,
 }

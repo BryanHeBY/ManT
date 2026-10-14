@@ -107,7 +107,7 @@ fn defensive_placement_fallback_reuses_prepared_rows_without_a_tree_access() {
         let columns = DeclaredColumns::new(&mant_ir::ColumnPreferences {
             widths: vec![3, 3],
             gap_columns: 4,
-            advance_limit_columns: Some(256),
+            max_alignment_padding_columns: Some(256),
             extra_width_columns: Some(10),
         })
         .unwrap();

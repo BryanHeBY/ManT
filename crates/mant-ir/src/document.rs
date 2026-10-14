@@ -17,7 +17,9 @@ pub use blocks::{
 pub use diagnostic::{
     Diagnostic, DiagnosticImpact, DiagnosticLevel, content_complete, semantics_complete,
 };
-pub use equation::{EquationExpression, EquationFont, EquationKind, EquationPosition};
+pub use equation::{
+    EquationExpression, EquationFont, EquationKind, EquationOperandScope, EquationOperator,
+};
 pub use inline::{Inline, LinkTarget};
 pub use source::{DocumentSource, SourceFormat, SourceSpan, TextRange, TextSize};
 

@@ -1105,18 +1105,8 @@
         "description": "Source-neutral preferences for measured table columns.",
         "type": "object",
         "properties": {
-          "advanceLimitColumns": {
-            "description": "Optional maximum advance toward a preferred field origin. Zero disables\nthat advance; absence leaves it unrestricted by the source device.",
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "uint16",
-            "maximum": 65535,
-            "minimum": 0
-          },
           "extraWidthColumns": {
-            "description": "Optional capacity of fields beyond the declared widths. These fields\nshare the end of all declarations as their preferred origin.",
+            "description": "Resolved optional content capacity of fields beyond the declared widths.\nRetained content is never clipped. These fields share the end of all\ndeclarations as their preferred origin.",
             "type": [
               "integer",
               "null"
@@ -1128,6 +1118,16 @@
           "gapColumns": {
             "description": "Whitespace between columns, excluding any renderer's structural glyph.",
             "type": "integer",
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0
+          },
+          "maxAlignmentPaddingColumns": {
+            "description": "Optional maximum alignment-padding region after the preceding field's\ncontent extent, excluding ordinary trailing spaces from that extent.\nPreserved trailing output occupies this region and is never clipped.\nZero adds no alignment padding; absence leaves this preference unbounded.\nThis is a resolved layout preference, not a consumer work budget.\nPlacement takes the greater of the full output end and the content end\nplus the capped distance toward the preferred origin.",
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "uint16",
             "maximum": 65535,
             "minimum": 0
@@ -1940,15 +1940,9 @@
         ]
       },
       "EquationExpression": {
-        "description": "Self-contained equation box copied from the parser before it is freed.",
+        "description": "Resolved mathematical structure independent from a source parser.",
         "type": "object",
         "properties": {
-          "actualArgs": {
-            "description": "Parser recorded argument count.",
-            "type": "integer",
-            "format": "uint",
-            "minimum": 0
-          },
           "bottom": {
             "description": "Decoration below the expression.",
             "type": [
@@ -1957,27 +1951,18 @@
             ]
           },
           "children": {
-            "description": "Ordered children; matrix children retain parsed column order.",
+            "description": "Ordered operands; matrix children retain column order.",
             "type": "array",
             "items": {
               "$ref": "#/$defs/EquationExpression"
             }
           },
-          "expectedArgs": {
-            "description": "Grammar maximum argument count, or no fixed maximum when absent.\nThis can differ from the actual child count.",
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "uint",
-            "minimum": 0
-          },
           "font": {
-            "description": "Parsed font selection.",
+            "description": "Resolved font presentation.",
             "$ref": "#/$defs/EquationFont"
           },
           "kind": {
-            "description": "Box role.",
+            "description": "Mathematical role.",
             "$ref": "#/$defs/EquationKind"
           },
           "left": {
@@ -1987,9 +1972,13 @@
               "null"
             ]
           },
-          "position": {
-            "description": "Positional operator.",
-            "$ref": "#/$defs/EquationPosition"
+          "operandScope": {
+            "description": "Mathematical scope retained by an opaque text payload.",
+            "$ref": "#/$defs/EquationOperandScope"
+          },
+          "operator": {
+            "description": "Resolved mathematical operator.",
+            "$ref": "#/$defs/EquationOperator"
           },
           "right": {
             "description": "Closing fence.",
@@ -1999,16 +1988,12 @@
             ]
           },
           "size": {
-            "description": "Parsed font size, or the parser's default when absent.",
+            "description": "Resolved font size, or inherited/default presentation when absent.",
             "type": [
               "integer",
               "null"
             ],
             "format": "int32"
-          },
-          "summarizedOperandGroup": {
-            "description": "A depth-summarized leaf still needs grouping when used as an operand.\nAbsent for ordinary parsed boxes.",
-            "type": "boolean"
           },
           "text": {
             "description": "Atom spelling, when present.",
@@ -2029,118 +2014,137 @@
         "required": [
           "kind",
           "font",
-          "position",
-          "actualArgs",
+          "operator",
           "children"
         ]
       },
       "EquationFont": {
-        "description": "Parsed font selection for an equation box.",
+        "description": "Resolved mathematical font presentation.",
         "oneOf": [
           {
             "description": "Inherited/default font.",
             "type": "string",
-            "const": "None"
+            "const": "none"
           },
           {
             "description": "Roman font.",
             "type": "string",
-            "const": "Roman"
+            "const": "roman"
           },
           {
             "description": "Bold font.",
             "type": "string",
-            "const": "Bold"
+            "const": "bold"
           },
           {
             "description": "Fat font.",
             "type": "string",
-            "const": "Fat"
+            "const": "fat"
           },
           {
             "description": "Italic font.",
             "type": "string",
-            "const": "Italic"
+            "const": "italic"
           }
         ]
       },
       "EquationKind": {
-        "description": "Structural role of one parsed equation box.",
+        "description": "Source-neutral role of one mathematical expression.",
         "oneOf": [
           {
             "description": "Number, variable, operator, or other text atom.",
             "type": "string",
-            "const": "Text"
+            "const": "text"
           },
           {
-            "description": "Positioned subexpression such as a fraction or script.",
+            "description": "Mathematical operation such as a fraction or script.",
             "type": "string",
-            "const": "Subexpression"
+            "const": "operation"
           },
           {
-            "description": "Group or ordered expression list.",
+            "description": "Ordered expressions without an additional operation boundary.",
             "type": "string",
-            "const": "List"
+            "const": "sequence"
+          },
+          {
+            "description": "Expressions sharing an explicit operation boundary.",
+            "type": "string",
+            "const": "group"
           },
           {
             "description": "Vertical pile of expression rows.",
             "type": "string",
-            "const": "Pile"
+            "const": "pile"
           },
           {
-            "description": "Matrix whose parsed children are columns.",
+            "description": "Matrix whose children retain column and row structure.",
             "type": "string",
-            "const": "Matrix"
+            "const": "matrix"
           }
         ]
       },
-      "EquationPosition": {
-        "description": "Operator relating children of a parsed subexpression.",
+      "EquationOperandScope": {
+        "description": "Operation boundary of an opaque equation payload.\n\nA readable text atom can stand for a complete compound expression even\nwhen its internal structure is unavailable. This describes its mathematical\nscope, independently of the producer or why that structure is unavailable.",
         "oneOf": [
           {
-            "description": "No positional operator.",
+            "description": "No additional grouping is required by the opaque payload itself.",
             "type": "string",
-            "const": "None"
+            "const": "atomic"
+          },
+          {
+            "description": "The payload is a complete compound operand rather than one atom.",
+            "type": "string",
+            "const": "compound"
+          }
+        ]
+      },
+      "EquationOperator": {
+        "description": "Mathematical operator relating the operands of a subexpression.",
+        "oneOf": [
+          {
+            "description": "No mathematical operation.",
+            "type": "string",
+            "const": "none"
           },
           {
             "description": "Superscript.",
             "type": "string",
-            "const": "Superscript"
+            "const": "superscript"
           },
           {
             "description": "Subscript and superscript.",
             "type": "string",
-            "const": "SubscriptSuperscript"
+            "const": "subscript-superscript"
           },
           {
             "description": "Subscript.",
             "type": "string",
-            "const": "Subscript"
+            "const": "subscript"
           },
           {
             "description": "Upper limit.",
             "type": "string",
-            "const": "To"
+            "const": "upper-limit"
           },
           {
             "description": "Lower limit.",
             "type": "string",
-            "const": "From"
+            "const": "lower-limit"
           },
           {
             "description": "Lower and upper limits.",
             "type": "string",
-            "const": "FromTo"
+            "const": "lower-upper-limits"
           },
           {
             "description": "Fraction.",
             "type": "string",
-            "const": "Over"
+            "const": "fraction"
           },
           {
             "description": "Square root.",
             "type": "string",
-            "const": "Sqrt"
+            "const": "square-root"
           }
         ]
       },
@@ -3342,7 +3346,7 @@
             }
           },
           "breakAfter": {
-            "description": "Close the current physical data row after this cell, before the next.\nThe row can be occupied by an earlier cell or already exist as an empty\nstructural row. This adds neither body scalars nor an additional row.",
+            "description": "The current physical data row ends after this cell, before the next.\nThe row can be occupied by an earlier cell or already exist as an empty\nstructural row. This adds neither body scalars nor an additional row.\nThis is a resolved topology fact, not a line-break instruction.",
             "type": "boolean"
           },
           "columnSpan": {
@@ -3353,7 +3357,7 @@
             "minimum": 0
           },
           "kind": {
-            "description": "Effective native cell content after tbl layout-rule precedence.",
+            "description": "Effective cell content after the producer resolves source rule precedence.",
             "$ref": "#/$defs/TableCellKind"
           },
           "rowSpan": {
@@ -4231,18 +4235,8 @@
         "description": "Source-neutral preferences for measured table columns.",
         "type": "object",
         "properties": {
-          "advanceLimitColumns": {
-            "description": "Optional maximum advance toward a preferred field origin. Zero disables\nthat advance; absence leaves it unrestricted by the source device.",
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "uint16",
-            "maximum": 65535,
-            "minimum": 0
-          },
           "extraWidthColumns": {
-            "description": "Optional capacity of fields beyond the declared widths. These fields\nshare the end of all declarations as their preferred origin.",
+            "description": "Resolved optional content capacity of fields beyond the declared widths.\nRetained content is never clipped. These fields share the end of all\ndeclarations as their preferred origin.",
             "type": [
               "integer",
               "null"
@@ -4254,6 +4248,16 @@
           "gapColumns": {
             "description": "Whitespace between columns, excluding any renderer's structural glyph.",
             "type": "integer",
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0
+          },
+          "maxAlignmentPaddingColumns": {
+            "description": "Optional maximum alignment-padding region after the preceding field's\ncontent extent, excluding ordinary trailing spaces from that extent.\nPreserved trailing output occupies this region and is never clipped.\nZero adds no alignment padding; absence leaves this preference unbounded.\nThis is a resolved layout preference, not a consumer work budget.\nPlacement takes the greater of the full output end and the content end\nplus the capped distance toward the preferred origin.",
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "uint16",
             "maximum": 65535,
             "minimum": 0
@@ -5080,15 +5084,9 @@
         ]
       },
       "EquationExpression": {
-        "description": "Self-contained equation box copied from the parser before it is freed.",
+        "description": "Resolved mathematical structure independent from a source parser.",
         "type": "object",
         "properties": {
-          "actualArgs": {
-            "description": "Parser recorded argument count.",
-            "type": "integer",
-            "format": "uint",
-            "minimum": 0
-          },
           "bottom": {
             "description": "Decoration below the expression.",
             "type": [
@@ -5097,27 +5095,18 @@
             ]
           },
           "children": {
-            "description": "Ordered children; matrix children retain parsed column order.",
+            "description": "Ordered operands; matrix children retain column order.",
             "type": "array",
             "items": {
               "$ref": "#/$defs/EquationExpression"
             }
           },
-          "expectedArgs": {
-            "description": "Grammar maximum argument count, or no fixed maximum when absent.\nThis can differ from the actual child count.",
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "uint",
-            "minimum": 0
-          },
           "font": {
-            "description": "Parsed font selection.",
+            "description": "Resolved font presentation.",
             "$ref": "#/$defs/EquationFont"
           },
           "kind": {
-            "description": "Box role.",
+            "description": "Mathematical role.",
             "$ref": "#/$defs/EquationKind"
           },
           "left": {
@@ -5127,9 +5116,13 @@
               "null"
             ]
           },
-          "position": {
-            "description": "Positional operator.",
-            "$ref": "#/$defs/EquationPosition"
+          "operandScope": {
+            "description": "Mathematical scope retained by an opaque text payload.",
+            "$ref": "#/$defs/EquationOperandScope"
+          },
+          "operator": {
+            "description": "Resolved mathematical operator.",
+            "$ref": "#/$defs/EquationOperator"
           },
           "right": {
             "description": "Closing fence.",
@@ -5139,16 +5132,12 @@
             ]
           },
           "size": {
-            "description": "Parsed font size, or the parser's default when absent.",
+            "description": "Resolved font size, or inherited/default presentation when absent.",
             "type": [
               "integer",
               "null"
             ],
             "format": "int32"
-          },
-          "summarizedOperandGroup": {
-            "description": "A depth-summarized leaf still needs grouping when used as an operand.\nAbsent for ordinary parsed boxes.",
-            "type": "boolean"
           },
           "text": {
             "description": "Atom spelling, when present.",
@@ -5169,118 +5158,137 @@
         "required": [
           "kind",
           "font",
-          "position",
-          "actualArgs",
+          "operator",
           "children"
         ]
       },
       "EquationFont": {
-        "description": "Parsed font selection for an equation box.",
+        "description": "Resolved mathematical font presentation.",
         "oneOf": [
           {
             "description": "Inherited/default font.",
             "type": "string",
-            "const": "None"
+            "const": "none"
           },
           {
             "description": "Roman font.",
             "type": "string",
-            "const": "Roman"
+            "const": "roman"
           },
           {
             "description": "Bold font.",
             "type": "string",
-            "const": "Bold"
+            "const": "bold"
           },
           {
             "description": "Fat font.",
             "type": "string",
-            "const": "Fat"
+            "const": "fat"
           },
           {
             "description": "Italic font.",
             "type": "string",
-            "const": "Italic"
+            "const": "italic"
           }
         ]
       },
       "EquationKind": {
-        "description": "Structural role of one parsed equation box.",
+        "description": "Source-neutral role of one mathematical expression.",
         "oneOf": [
           {
             "description": "Number, variable, operator, or other text atom.",
             "type": "string",
-            "const": "Text"
+            "const": "text"
           },
           {
-            "description": "Positioned subexpression such as a fraction or script.",
+            "description": "Mathematical operation such as a fraction or script.",
             "type": "string",
-            "const": "Subexpression"
+            "const": "operation"
           },
           {
-            "description": "Group or ordered expression list.",
+            "description": "Ordered expressions without an additional operation boundary.",
             "type": "string",
-            "const": "List"
+            "const": "sequence"
+          },
+          {
+            "description": "Expressions sharing an explicit operation boundary.",
+            "type": "string",
+            "const": "group"
           },
           {
             "description": "Vertical pile of expression rows.",
             "type": "string",
-            "const": "Pile"
+            "const": "pile"
           },
           {
-            "description": "Matrix whose parsed children are columns.",
+            "description": "Matrix whose children retain column and row structure.",
             "type": "string",
-            "const": "Matrix"
+            "const": "matrix"
           }
         ]
       },
-      "EquationPosition": {
-        "description": "Operator relating children of a parsed subexpression.",
+      "EquationOperandScope": {
+        "description": "Operation boundary of an opaque equation payload.\n\nA readable text atom can stand for a complete compound expression even\nwhen its internal structure is unavailable. This describes its mathematical\nscope, independently of the producer or why that structure is unavailable.",
         "oneOf": [
           {
-            "description": "No positional operator.",
+            "description": "No additional grouping is required by the opaque payload itself.",
             "type": "string",
-            "const": "None"
+            "const": "atomic"
+          },
+          {
+            "description": "The payload is a complete compound operand rather than one atom.",
+            "type": "string",
+            "const": "compound"
+          }
+        ]
+      },
+      "EquationOperator": {
+        "description": "Mathematical operator relating the operands of a subexpression.",
+        "oneOf": [
+          {
+            "description": "No mathematical operation.",
+            "type": "string",
+            "const": "none"
           },
           {
             "description": "Superscript.",
             "type": "string",
-            "const": "Superscript"
+            "const": "superscript"
           },
           {
             "description": "Subscript and superscript.",
             "type": "string",
-            "const": "SubscriptSuperscript"
+            "const": "subscript-superscript"
           },
           {
             "description": "Subscript.",
             "type": "string",
-            "const": "Subscript"
+            "const": "subscript"
           },
           {
             "description": "Upper limit.",
             "type": "string",
-            "const": "To"
+            "const": "upper-limit"
           },
           {
             "description": "Lower limit.",
             "type": "string",
-            "const": "From"
+            "const": "lower-limit"
           },
           {
             "description": "Lower and upper limits.",
             "type": "string",
-            "const": "FromTo"
+            "const": "lower-upper-limits"
           },
           {
             "description": "Fraction.",
             "type": "string",
-            "const": "Over"
+            "const": "fraction"
           },
           {
             "description": "Square root.",
             "type": "string",
-            "const": "Sqrt"
+            "const": "square-root"
           }
         ]
       },
@@ -7296,7 +7304,7 @@
             }
           },
           "breakAfter": {
-            "description": "Close the current physical data row after this cell, before the next.\nThe row can be occupied by an earlier cell or already exist as an empty\nstructural row. This adds neither body scalars nor an additional row.",
+            "description": "The current physical data row ends after this cell, before the next.\nThe row can be occupied by an earlier cell or already exist as an empty\nstructural row. This adds neither body scalars nor an additional row.\nThis is a resolved topology fact, not a line-break instruction.",
             "type": "boolean"
           },
           "columnSpan": {
@@ -7307,7 +7315,7 @@
             "minimum": 0
           },
           "kind": {
-            "description": "Effective native cell content after tbl layout-rule precedence.",
+            "description": "Effective cell content after the producer resolves source rule precedence.",
             "$ref": "#/$defs/TableCellKind"
           },
           "rowSpan": {
@@ -10427,18 +10435,8 @@
         "description": "Source-neutral preferences for measured table columns.",
         "type": "object",
         "properties": {
-          "advanceLimitColumns": {
-            "description": "Optional maximum advance toward a preferred field origin. Zero disables\nthat advance; absence leaves it unrestricted by the source device.",
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "uint16",
-            "maximum": 65535,
-            "minimum": 0
-          },
           "extraWidthColumns": {
-            "description": "Optional capacity of fields beyond the declared widths. These fields\nshare the end of all declarations as their preferred origin.",
+            "description": "Resolved optional content capacity of fields beyond the declared widths.\nRetained content is never clipped. These fields share the end of all\ndeclarations as their preferred origin.",
             "type": [
               "integer",
               "null"
@@ -10450,6 +10448,16 @@
           "gapColumns": {
             "description": "Whitespace between columns, excluding any renderer's structural glyph.",
             "type": "integer",
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0
+          },
+          "maxAlignmentPaddingColumns": {
+            "description": "Optional maximum alignment-padding region after the preceding field's\ncontent extent, excluding ordinary trailing spaces from that extent.\nPreserved trailing output occupies this region and is never clipped.\nZero adds no alignment padding; absence leaves this preference unbounded.\nThis is a resolved layout preference, not a consumer work budget.\nPlacement takes the greater of the full output end and the content end\nplus the capped distance toward the preferred origin.",
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "uint16",
             "maximum": 65535,
             "minimum": 0
@@ -11341,15 +11349,9 @@
         ]
       },
       "EquationExpression": {
-        "description": "Self-contained equation box copied from the parser before it is freed.",
+        "description": "Resolved mathematical structure independent from a source parser.",
         "type": "object",
         "properties": {
-          "actualArgs": {
-            "description": "Parser recorded argument count.",
-            "type": "integer",
-            "format": "uint",
-            "minimum": 0
-          },
           "bottom": {
             "description": "Decoration below the expression.",
             "type": [
@@ -11358,27 +11360,18 @@
             ]
           },
           "children": {
-            "description": "Ordered children; matrix children retain parsed column order.",
+            "description": "Ordered operands; matrix children retain column order.",
             "type": "array",
             "items": {
               "$ref": "#/$defs/EquationExpression"
             }
           },
-          "expectedArgs": {
-            "description": "Grammar maximum argument count, or no fixed maximum when absent.\nThis can differ from the actual child count.",
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "uint",
-            "minimum": 0
-          },
           "font": {
-            "description": "Parsed font selection.",
+            "description": "Resolved font presentation.",
             "$ref": "#/$defs/EquationFont"
           },
           "kind": {
-            "description": "Box role.",
+            "description": "Mathematical role.",
             "$ref": "#/$defs/EquationKind"
           },
           "left": {
@@ -11388,9 +11381,13 @@
               "null"
             ]
           },
-          "position": {
-            "description": "Positional operator.",
-            "$ref": "#/$defs/EquationPosition"
+          "operandScope": {
+            "description": "Mathematical scope retained by an opaque text payload.",
+            "$ref": "#/$defs/EquationOperandScope"
+          },
+          "operator": {
+            "description": "Resolved mathematical operator.",
+            "$ref": "#/$defs/EquationOperator"
           },
           "right": {
             "description": "Closing fence.",
@@ -11400,16 +11397,12 @@
             ]
           },
           "size": {
-            "description": "Parsed font size, or the parser's default when absent.",
+            "description": "Resolved font size, or inherited/default presentation when absent.",
             "type": [
               "integer",
               "null"
             ],
             "format": "int32"
-          },
-          "summarizedOperandGroup": {
-            "description": "A depth-summarized leaf still needs grouping when used as an operand.\nAbsent for ordinary parsed boxes.",
-            "type": "boolean"
           },
           "text": {
             "description": "Atom spelling, when present.",
@@ -11430,118 +11423,137 @@
         "required": [
           "kind",
           "font",
-          "position",
-          "actualArgs",
+          "operator",
           "children"
         ]
       },
       "EquationFont": {
-        "description": "Parsed font selection for an equation box.",
+        "description": "Resolved mathematical font presentation.",
         "oneOf": [
           {
             "description": "Inherited/default font.",
             "type": "string",
-            "const": "None"
+            "const": "none"
           },
           {
             "description": "Roman font.",
             "type": "string",
-            "const": "Roman"
+            "const": "roman"
           },
           {
             "description": "Bold font.",
             "type": "string",
-            "const": "Bold"
+            "const": "bold"
           },
           {
             "description": "Fat font.",
             "type": "string",
-            "const": "Fat"
+            "const": "fat"
           },
           {
             "description": "Italic font.",
             "type": "string",
-            "const": "Italic"
+            "const": "italic"
           }
         ]
       },
       "EquationKind": {
-        "description": "Structural role of one parsed equation box.",
+        "description": "Source-neutral role of one mathematical expression.",
         "oneOf": [
           {
             "description": "Number, variable, operator, or other text atom.",
             "type": "string",
-            "const": "Text"
+            "const": "text"
           },
           {
-            "description": "Positioned subexpression such as a fraction or script.",
+            "description": "Mathematical operation such as a fraction or script.",
             "type": "string",
-            "const": "Subexpression"
+            "const": "operation"
           },
           {
-            "description": "Group or ordered expression list.",
+            "description": "Ordered expressions without an additional operation boundary.",
             "type": "string",
-            "const": "List"
+            "const": "sequence"
+          },
+          {
+            "description": "Expressions sharing an explicit operation boundary.",
+            "type": "string",
+            "const": "group"
           },
           {
             "description": "Vertical pile of expression rows.",
             "type": "string",
-            "const": "Pile"
+            "const": "pile"
           },
           {
-            "description": "Matrix whose parsed children are columns.",
+            "description": "Matrix whose children retain column and row structure.",
             "type": "string",
-            "const": "Matrix"
+            "const": "matrix"
           }
         ]
       },
-      "EquationPosition": {
-        "description": "Operator relating children of a parsed subexpression.",
+      "EquationOperandScope": {
+        "description": "Operation boundary of an opaque equation payload.\n\nA readable text atom can stand for a complete compound expression even\nwhen its internal structure is unavailable. This describes its mathematical\nscope, independently of the producer or why that structure is unavailable.",
         "oneOf": [
           {
-            "description": "No positional operator.",
+            "description": "No additional grouping is required by the opaque payload itself.",
             "type": "string",
-            "const": "None"
+            "const": "atomic"
+          },
+          {
+            "description": "The payload is a complete compound operand rather than one atom.",
+            "type": "string",
+            "const": "compound"
+          }
+        ]
+      },
+      "EquationOperator": {
+        "description": "Mathematical operator relating the operands of a subexpression.",
+        "oneOf": [
+          {
+            "description": "No mathematical operation.",
+            "type": "string",
+            "const": "none"
           },
           {
             "description": "Superscript.",
             "type": "string",
-            "const": "Superscript"
+            "const": "superscript"
           },
           {
             "description": "Subscript and superscript.",
             "type": "string",
-            "const": "SubscriptSuperscript"
+            "const": "subscript-superscript"
           },
           {
             "description": "Subscript.",
             "type": "string",
-            "const": "Subscript"
+            "const": "subscript"
           },
           {
             "description": "Upper limit.",
             "type": "string",
-            "const": "To"
+            "const": "upper-limit"
           },
           {
             "description": "Lower limit.",
             "type": "string",
-            "const": "From"
+            "const": "lower-limit"
           },
           {
             "description": "Lower and upper limits.",
             "type": "string",
-            "const": "FromTo"
+            "const": "lower-upper-limits"
           },
           {
             "description": "Fraction.",
             "type": "string",
-            "const": "Over"
+            "const": "fraction"
           },
           {
             "description": "Square root.",
             "type": "string",
-            "const": "Sqrt"
+            "const": "square-root"
           }
         ]
       },
@@ -12440,7 +12452,7 @@
             }
           },
           "breakAfter": {
-            "description": "Close the current physical data row after this cell, before the next.\nThe row can be occupied by an earlier cell or already exist as an empty\nstructural row. This adds neither body scalars nor an additional row.",
+            "description": "The current physical data row ends after this cell, before the next.\nThe row can be occupied by an earlier cell or already exist as an empty\nstructural row. This adds neither body scalars nor an additional row.\nThis is a resolved topology fact, not a line-break instruction.",
             "type": "boolean"
           },
           "columnSpan": {
@@ -12451,7 +12463,7 @@
             "minimum": 0
           },
           "kind": {
-            "description": "Effective native cell content after tbl layout-rule precedence.",
+            "description": "Effective cell content after the producer resolves source rule precedence.",
             "$ref": "#/$defs/TableCellKind"
           },
           "rowSpan": {
@@ -13957,18 +13969,8 @@
         "description": "Source-neutral preferences for measured table columns.",
         "type": "object",
         "properties": {
-          "advanceLimitColumns": {
-            "description": "Optional maximum advance toward a preferred field origin. Zero disables\nthat advance; absence leaves it unrestricted by the source device.",
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "uint16",
-            "maximum": 65535,
-            "minimum": 0
-          },
           "extraWidthColumns": {
-            "description": "Optional capacity of fields beyond the declared widths. These fields\nshare the end of all declarations as their preferred origin.",
+            "description": "Resolved optional content capacity of fields beyond the declared widths.\nRetained content is never clipped. These fields share the end of all\ndeclarations as their preferred origin.",
             "type": [
               "integer",
               "null"
@@ -13980,6 +13982,16 @@
           "gapColumns": {
             "description": "Whitespace between columns, excluding any renderer's structural glyph.",
             "type": "integer",
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0
+          },
+          "maxAlignmentPaddingColumns": {
+            "description": "Optional maximum alignment-padding region after the preceding field's\ncontent extent, excluding ordinary trailing spaces from that extent.\nPreserved trailing output occupies this region and is never clipped.\nZero adds no alignment padding; absence leaves this preference unbounded.\nThis is a resolved layout preference, not a consumer work budget.\nPlacement takes the greater of the full output end and the content end\nplus the capped distance toward the preferred origin.",
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "uint16",
             "maximum": 65535,
             "minimum": 0
@@ -14968,15 +14980,9 @@
         ]
       },
       "EquationExpression": {
-        "description": "Self-contained equation box copied from the parser before it is freed.",
+        "description": "Resolved mathematical structure independent from a source parser.",
         "type": "object",
         "properties": {
-          "actualArgs": {
-            "description": "Parser recorded argument count.",
-            "type": "integer",
-            "format": "uint",
-            "minimum": 0
-          },
           "bottom": {
             "description": "Decoration below the expression.",
             "type": [
@@ -14985,27 +14991,18 @@
             ]
           },
           "children": {
-            "description": "Ordered children; matrix children retain parsed column order.",
+            "description": "Ordered operands; matrix children retain column order.",
             "type": "array",
             "items": {
               "$ref": "#/$defs/EquationExpression"
             }
           },
-          "expectedArgs": {
-            "description": "Grammar maximum argument count, or no fixed maximum when absent.\nThis can differ from the actual child count.",
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "uint",
-            "minimum": 0
-          },
           "font": {
-            "description": "Parsed font selection.",
+            "description": "Resolved font presentation.",
             "$ref": "#/$defs/EquationFont"
           },
           "kind": {
-            "description": "Box role.",
+            "description": "Mathematical role.",
             "$ref": "#/$defs/EquationKind"
           },
           "left": {
@@ -15015,9 +15012,13 @@
               "null"
             ]
           },
-          "position": {
-            "description": "Positional operator.",
-            "$ref": "#/$defs/EquationPosition"
+          "operandScope": {
+            "description": "Mathematical scope retained by an opaque text payload.",
+            "$ref": "#/$defs/EquationOperandScope"
+          },
+          "operator": {
+            "description": "Resolved mathematical operator.",
+            "$ref": "#/$defs/EquationOperator"
           },
           "right": {
             "description": "Closing fence.",
@@ -15027,16 +15028,12 @@
             ]
           },
           "size": {
-            "description": "Parsed font size, or the parser's default when absent.",
+            "description": "Resolved font size, or inherited/default presentation when absent.",
             "type": [
               "integer",
               "null"
             ],
             "format": "int32"
-          },
-          "summarizedOperandGroup": {
-            "description": "A depth-summarized leaf still needs grouping when used as an operand.\nAbsent for ordinary parsed boxes.",
-            "type": "boolean"
           },
           "text": {
             "description": "Atom spelling, when present.",
@@ -15057,118 +15054,137 @@
         "required": [
           "kind",
           "font",
-          "position",
-          "actualArgs",
+          "operator",
           "children"
         ]
       },
       "EquationFont": {
-        "description": "Parsed font selection for an equation box.",
+        "description": "Resolved mathematical font presentation.",
         "oneOf": [
           {
             "description": "Inherited/default font.",
             "type": "string",
-            "const": "None"
+            "const": "none"
           },
           {
             "description": "Roman font.",
             "type": "string",
-            "const": "Roman"
+            "const": "roman"
           },
           {
             "description": "Bold font.",
             "type": "string",
-            "const": "Bold"
+            "const": "bold"
           },
           {
             "description": "Fat font.",
             "type": "string",
-            "const": "Fat"
+            "const": "fat"
           },
           {
             "description": "Italic font.",
             "type": "string",
-            "const": "Italic"
+            "const": "italic"
           }
         ]
       },
       "EquationKind": {
-        "description": "Structural role of one parsed equation box.",
+        "description": "Source-neutral role of one mathematical expression.",
         "oneOf": [
           {
             "description": "Number, variable, operator, or other text atom.",
             "type": "string",
-            "const": "Text"
+            "const": "text"
           },
           {
-            "description": "Positioned subexpression such as a fraction or script.",
+            "description": "Mathematical operation such as a fraction or script.",
             "type": "string",
-            "const": "Subexpression"
+            "const": "operation"
           },
           {
-            "description": "Group or ordered expression list.",
+            "description": "Ordered expressions without an additional operation boundary.",
             "type": "string",
-            "const": "List"
+            "const": "sequence"
+          },
+          {
+            "description": "Expressions sharing an explicit operation boundary.",
+            "type": "string",
+            "const": "group"
           },
           {
             "description": "Vertical pile of expression rows.",
             "type": "string",
-            "const": "Pile"
+            "const": "pile"
           },
           {
-            "description": "Matrix whose parsed children are columns.",
+            "description": "Matrix whose children retain column and row structure.",
             "type": "string",
-            "const": "Matrix"
+            "const": "matrix"
           }
         ]
       },
-      "EquationPosition": {
-        "description": "Operator relating children of a parsed subexpression.",
+      "EquationOperandScope": {
+        "description": "Operation boundary of an opaque equation payload.\n\nA readable text atom can stand for a complete compound expression even\nwhen its internal structure is unavailable. This describes its mathematical\nscope, independently of the producer or why that structure is unavailable.",
         "oneOf": [
           {
-            "description": "No positional operator.",
+            "description": "No additional grouping is required by the opaque payload itself.",
             "type": "string",
-            "const": "None"
+            "const": "atomic"
+          },
+          {
+            "description": "The payload is a complete compound operand rather than one atom.",
+            "type": "string",
+            "const": "compound"
+          }
+        ]
+      },
+      "EquationOperator": {
+        "description": "Mathematical operator relating the operands of a subexpression.",
+        "oneOf": [
+          {
+            "description": "No mathematical operation.",
+            "type": "string",
+            "const": "none"
           },
           {
             "description": "Superscript.",
             "type": "string",
-            "const": "Superscript"
+            "const": "superscript"
           },
           {
             "description": "Subscript and superscript.",
             "type": "string",
-            "const": "SubscriptSuperscript"
+            "const": "subscript-superscript"
           },
           {
             "description": "Subscript.",
             "type": "string",
-            "const": "Subscript"
+            "const": "subscript"
           },
           {
             "description": "Upper limit.",
             "type": "string",
-            "const": "To"
+            "const": "upper-limit"
           },
           {
             "description": "Lower limit.",
             "type": "string",
-            "const": "From"
+            "const": "lower-limit"
           },
           {
             "description": "Lower and upper limits.",
             "type": "string",
-            "const": "FromTo"
+            "const": "lower-upper-limits"
           },
           {
             "description": "Fraction.",
             "type": "string",
-            "const": "Over"
+            "const": "fraction"
           },
           {
             "description": "Square root.",
             "type": "string",
-            "const": "Sqrt"
+            "const": "square-root"
           }
         ]
       },
@@ -18190,7 +18206,7 @@
             }
           },
           "breakAfter": {
-            "description": "Close the current physical data row after this cell, before the next.\nThe row can be occupied by an earlier cell or already exist as an empty\nstructural row. This adds neither body scalars nor an additional row.",
+            "description": "The current physical data row ends after this cell, before the next.\nThe row can be occupied by an earlier cell or already exist as an empty\nstructural row. This adds neither body scalars nor an additional row.\nThis is a resolved topology fact, not a line-break instruction.",
             "type": "boolean"
           },
           "columnSpan": {
@@ -18201,7 +18217,7 @@
             "minimum": 0
           },
           "kind": {
-            "description": "Effective native cell content after tbl layout-rule precedence.",
+            "description": "Effective cell content after the producer resolves source rule precedence.",
             "$ref": "#/$defs/TableCellKind"
           },
           "rowSpan": {

@@ -19,6 +19,20 @@ publish at `0.13.0`; independently versioned `mant-sources` publishes at
 
 ### mant-ir, mant-protocol, mant-codec, mant-loader, mant-query, mant-render, mant-engine, mant-ui and mant 0.13.0
 
+- Normalize equations into source-neutral text, operations, sequences, groups,
+  piles and matrices. Replace `EquationPosition`/`position` with
+  `EquationOperator`/`operator` and descriptive fraction, square-root and limit
+  names; serialize equation enums as kebab-case. Remove parser argument counters
+  and replace `summarizedOperandGroup` with mathematical `operandScope`.
+  Producers retain grouping and complete readable text, including opaque/deep
+  operands; update Rust constructors and regenerate unreleased v0.13 clients.
+  Retired fields/enum spellings are rejected; frozen v0.12 contracts are unchanged.
+- Replace table `advance_limit_columns`/`advanceLimitColumns` with
+  `max_alignment_padding_columns`/`maxAlignmentPaddingColumns`, a declarative
+  alignment-region preference rather than a formatter advance instruction.
+  Preserve placement, authored trailing spaces, extra-field capacity and cell
+  row boundaries. The native producer retains the historical 256-cell mapping;
+  the separate consumer padding/work budget is not document metadata.
 - Add source-neutral row alignment and first-visual indentation preferences to
   owner-local `InlineLayout`. `RowLayoutHint::indent_columns` still corrects both
   first and continued origins; the new `first_line_indent_columns` corrects only

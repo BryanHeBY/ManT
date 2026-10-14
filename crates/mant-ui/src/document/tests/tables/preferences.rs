@@ -81,7 +81,7 @@ fn full_query_padding_fallback_preserves_all_cells_at_maximum_viewport() {
             }],
             column_preferences: mant_ir::ColumnPreferences {
                 widths: vec![u16::MAX; count],
-                advance_limit_columns: Some(256),
+                max_alignment_padding_columns: Some(256),
                 extra_width_columns: Some(10),
                 ..Default::default()
             },

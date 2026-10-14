@@ -259,7 +259,7 @@ fn generic_preferences_preserve_default_typography_and_custom_gaps() {
         {
             *column_preferences = mant_ir::ColumnPreferences {
                 widths: vec![598, 1],
-                advance_limit_columns: limit,
+                max_alignment_padding_columns: limit,
                 ..Default::default()
             };
         }
@@ -301,7 +301,7 @@ fn generated_padding_fallback_preserves_every_serialized_cell_once() {
             column_preferences, ..
         } = &mut block
         {
-            column_preferences.advance_limit_columns = None;
+            column_preferences.max_alignment_padding_columns = None;
         }
         let wire = serde_json::to_string(&block).unwrap();
         assert!(!wire.contains("columnWidths"));
@@ -321,7 +321,7 @@ fn generated_padding_fallback_preserves_every_serialized_cell_once() {
     {
         layout.indent_columns = 4090;
         column_preferences.gap_columns = 2;
-        column_preferences.advance_limit_columns = None;
+        column_preferences.max_alignment_padding_columns = None;
     }
     let output = renderer.render_blocks(&[block], 0);
     assert_eq!(
@@ -457,7 +457,7 @@ fn nested_tables_keep_actual_parent_and_completed_tail_receipts() {
         } = &mut inner
         {
             layout.indent_columns = inner_offset;
-            column_preferences.advance_limit_columns = None;
+            column_preferences.max_alignment_padding_columns = None;
         }
         let outer = navigation_table(&[1], parent, vec![vec![inner]]);
         let output = renderer.render_blocks(&[outer], 0);
@@ -483,7 +483,7 @@ fn nested_tables_keep_actual_parent_and_completed_tail_receipts() {
             column_preferences, ..
         } = &mut inner
         {
-            column_preferences.advance_limit_columns = None;
+            column_preferences.max_alignment_padding_columns = None;
         }
         let outer = navigation_table(&[1, 1], 0, vec![vec![inner], vec![paragraph("B", 0)]]);
         assert_eq!(renderer.render_blocks(&[outer], 0), "A\n\nB");

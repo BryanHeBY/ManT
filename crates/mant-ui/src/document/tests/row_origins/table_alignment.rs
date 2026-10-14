@@ -223,7 +223,7 @@ fn declared_alignment_does_not_cross_the_next_actual_field_after_a_capped_advanc
         else {
             unreachable!()
         };
-        column_preferences.advance_limit_columns = Some(2);
+        column_preferences.max_alignment_padding_columns = Some(2);
         rows.truncate(1);
         let rendered = DocumentView::new(&query).render(20);
         let x = &rendered.search("X")[0];

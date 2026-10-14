@@ -275,7 +275,7 @@ fn assert_reading(content: &ResolvedContent, case: &Value) {
     let (preferences, rows) = table(content);
     assert_eq!(json!(preferences.widths), case["declarations"]);
     assert_eq!(json!(preferences.gap_columns), case["gap"]);
-    assert_eq!(preferences.advance_limit_columns, Some(256));
+    assert_eq!(preferences.max_alignment_padding_columns, Some(256));
     assert_eq!(preferences.extra_width_columns, Some(10));
     let [row] = rows else {
         panic!("one original row")

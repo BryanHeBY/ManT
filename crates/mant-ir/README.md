@@ -69,12 +69,12 @@ text to simulate padding.
 - Change an unreleased wire family deliberately and document migration. Never
   rewrite a frozen schema or weaken an assertion to hide a representation loss.
 
-Existing native-compatibility fields are not precedents for new execution
-fields. In particular, equation parser arity counters require normalization
-into mathematical groups/sequences, and the table `advance_limit_columns`
-device bound requires a separately verified migration. Removing a field must
-preserve the actual distinction it currently carries; a renamed execution
-field is not a normalized result.
+Native compatibility is resolved before publication: equation parser counters
+become mathematical sequences/groups, not IR fields. A table's optional
+`max_alignment_padding_columns` describes a resolved alignment region; its
+historical native-device origin does not make it an author-declared width or a
+consumer work budget. Removing a field must preserve the actual distinction it
+currently carries; a renamed execution field is not a normalized result.
 
 ## Model at a glance
 
@@ -202,17 +202,21 @@ compactness. Frontends cap a resolved boundary at 4096 rows, without merging
 literal blank lines. Visual wrapping never changes source lines or entry facts.
 
 `Block::Table.column_preferences` carries `ColumnPreferences`: preferred content
-widths, a default two-cell gap, and optional advance/extra-field constraints.
+widths, a default two-cell gap, and optional alignment-region/extra-field constraints.
 Generic readers resolve these at the actual viewport; they do not infer native
 gap rules from the width count. Empty widths use content-derived layout with the
-supplied gap; advance/extra-field constraints are retained but apply only to
+supplied gap; alignment/extra-field constraints are retained but apply only to
 declared-field layout. The codec supplies mdoc's explicit 4/3/1 gap,
-256-cell advance limit and ten-cell extra-field content capacity, excluding any
-added gap. An independent 4096-cell generated-padding budget falls back to source
+256-cell maximum alignment region and ten-cell extra-field content capacity,
+excluding any added gap. This region is a resolved historical native-device
+preference, not an author-declared limit. Retained trailing spaces occupy the
+region and are never clipped. An independent 4096-cell generated-padding budget
+falls back to source
 order while preserving every prepared and later cell. Cell trees, spans,
 reading order and links remain authoritative and are never replaced by a
 pre-wrapped second body. JSON uses the closed `columnPreferences` object and
-rejects the retired `columnWidths` field. Only the complete default is omitted;
+rejects the retired `columnWidths` and `advanceLimitColumns` fields.
+Only the complete default is omitted;
 zero constraints remain distinct from absence.
 
 `TableCell.break_after` (`breakAfter`) defaults to false. True closes the current
@@ -222,6 +226,15 @@ adds no body scalar or additional empty row. Navigation-only carrier rows remain
 nonprinting. This boundary remains distinct from an inline break's open tail and
 an already completed empty row. Producers resolve it; readers consume the fact
 without source formatter state.
+
+`EquationExpression` contains mathematical text, operations, sequences, groups,
+piles and matrices. Producers resolve native counters into scope boundaries;
+readers never replay parser rules. `operator` names fractions, roots, scripts
+and limits, while `operand_scope` preserves an opaque compound operand's scope
+independently from diagnostic provenance. The shared readable projection is not
+a second editable body or a substitute for structured math-capable output.
+In unreleased 0.13, equation enums use kebab-case, `EquationOperator` replaces
+`EquationPosition`, and parser counters/`summarizedOperandGroup` are retired.
 
 Literal rows are content: an explicit empty text row in `Preformatted` is
 different from an anchor-only block and ends the preceding gap boundary.

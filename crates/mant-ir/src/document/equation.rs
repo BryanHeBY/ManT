@@ -2,29 +2,66 @@
 //!
 //! The projection is `ManT`'s reading contract, not a terminal or `MathML` formatter.
 
-use super::is_false;
-
-/// Structural role of one parsed equation box.
+/// Source-neutral role of one mathematical expression.
 #[derive(
     serde::Deserialize, serde::Serialize, schemars::JsonSchema, Clone, Copy, Debug, Eq, PartialEq,
 )]
+#[serde(rename_all = "kebab-case")]
 pub enum EquationKind {
     /// Number, variable, operator, or other text atom.
     Text,
-    /// Positioned subexpression such as a fraction or script.
-    Subexpression,
-    /// Group or ordered expression list.
-    List,
+    /// Mathematical operation such as a fraction or script.
+    Operation,
+    /// Ordered expressions without an additional operation boundary.
+    Sequence,
+    /// Expressions sharing an explicit operation boundary.
+    Group,
     /// Vertical pile of expression rows.
     Pile,
-    /// Matrix whose parsed children are columns.
+    /// Matrix whose children retain column and row structure.
     Matrix,
 }
 
-/// Parsed font selection for an equation box.
+/// Operation boundary of an opaque equation payload.
+///
+/// A readable text atom can stand for a complete compound expression even
+/// when its internal structure is unavailable. This describes its mathematical
+/// scope, independently of the producer or why that structure is unavailable.
+#[derive(
+    serde::Deserialize,
+    serde::Serialize,
+    schemars::JsonSchema,
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    Eq,
+    PartialEq,
+)]
+#[serde(rename_all = "kebab-case")]
+pub enum EquationOperandScope {
+    /// No additional grouping is required by the opaque payload itself.
+    #[default]
+    Atomic,
+    /// The payload is a complete compound operand rather than one atom.
+    Compound,
+}
+
+impl EquationOperandScope {
+    #[expect(
+        clippy::trivially_copy_pass_by_ref,
+        reason = "serde skip_serializing_if requires a reference-taking predicate"
+    )]
+    fn is_atomic(&self) -> bool {
+        *self == Self::Atomic
+    }
+}
+
+/// Resolved mathematical font presentation.
 #[derive(
     serde::Deserialize, serde::Serialize, schemars::JsonSchema, Clone, Copy, Debug, Eq, PartialEq,
 )]
+#[serde(rename_all = "kebab-case")]
 pub enum EquationFont {
     /// Inherited/default font.
     None,
@@ -38,12 +75,13 @@ pub enum EquationFont {
     Italic,
 }
 
-/// Operator relating children of a parsed subexpression.
+/// Mathematical operator relating the operands of a subexpression.
 #[derive(
     serde::Deserialize, serde::Serialize, schemars::JsonSchema, Clone, Copy, Debug, Eq, PartialEq,
 )]
-pub enum EquationPosition {
-    /// No positional operator.
+#[serde(rename_all = "kebab-case")]
+pub enum EquationOperator {
+    /// No mathematical operation.
     None,
     /// Superscript.
     Superscript,
@@ -52,42 +90,35 @@ pub enum EquationPosition {
     /// Subscript.
     Subscript,
     /// Upper limit.
-    To,
+    UpperLimit,
     /// Lower limit.
-    From,
+    LowerLimit,
     /// Lower and upper limits.
-    FromTo,
+    LowerUpperLimits,
     /// Fraction.
-    Over,
+    Fraction,
     /// Square root.
-    Sqrt,
+    SquareRoot,
 }
 
-/// Self-contained equation box copied from the parser before it is freed.
+/// Resolved mathematical structure independent from a source parser.
 #[derive(
     serde::Deserialize, serde::Serialize, schemars::JsonSchema, Clone, Debug, Eq, PartialEq,
 )]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct EquationExpression {
-    /// Box role.
+    /// Mathematical role.
     pub kind: EquationKind,
-    /// Parsed font selection.
+    /// Resolved font presentation.
     pub font: EquationFont,
-    /// Positional operator.
-    pub position: EquationPosition,
-    /// Parsed font size, or the parser's default when absent.
+    /// Resolved mathematical operator.
+    pub operator: EquationOperator,
+    /// Resolved font size, or inherited/default presentation when absent.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub size: Option<i32>,
-    /// Grammar maximum argument count, or no fixed maximum when absent.
-    /// This can differ from the actual child count.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub expected_args: Option<usize>,
-    /// Parser recorded argument count.
-    pub actual_args: usize,
-    /// A depth-summarized leaf still needs grouping when used as an operand.
-    /// Absent for ordinary parsed boxes.
-    #[serde(default, skip_serializing_if = "is_false")]
-    pub summarized_operand_group: bool,
+    /// Mathematical scope retained by an opaque text payload.
+    #[serde(default, skip_serializing_if = "EquationOperandScope::is_atomic")]
+    pub operand_scope: EquationOperandScope,
     /// Atom spelling, when present.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub text: Option<String>,
@@ -103,7 +134,7 @@ pub struct EquationExpression {
     /// Decoration below the expression.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bottom: Option<String>,
-    /// Ordered children; matrix children retain parsed column order.
+    /// Ordered operands; matrix children retain column order.
     pub children: Vec<Self>,
 }
 
@@ -135,17 +166,11 @@ impl ProjectionFences<'_> {
 }
 
 fn opens_scope(fence: &str) -> bool {
-    matches!(
-        fence,
-        "(" | "[" | "{" | "<" | "|" | "‖" | "⌈" | "⌊" | "\\[lc]" | "\\[lf]"
-    )
+    matches!(fence, "(" | "[" | "{" | "<" | "|" | "‖" | "⌈" | "⌊")
 }
 
 fn closes_scope(fence: &str) -> bool {
-    matches!(
-        fence,
-        ")" | "]" | "}" | ">" | "|" | "‖" | "⌉" | "⌋" | "\\[rc]" | "\\[rf]"
-    )
+    matches!(fence, ")" | "]" | "}" | ">" | "|" | "‖" | "⌉" | "⌋")
 }
 
 impl EquationExpression {
@@ -176,14 +201,13 @@ impl EquationExpression {
             }
             ProjectionContext::Operand => self.needs_operand_group(),
             ProjectionContext::PileRow => {
-                incomplete_fence
-                    || self.is_explicit_group() && self.actual_args > 1 && !self.has_fence()
+                incomplete_fence || self.is_explicit_group() && !self.has_fence()
             }
         };
         if grouped {
             output.push('(');
         }
-        if self.position == EquationPosition::Sqrt {
+        if self.operator == EquationOperator::SquareRoot {
             output.push_str("sqrt(");
         }
         fences.append_open(output);
@@ -192,17 +216,17 @@ impl EquationExpression {
         }
         if self.kind == EquationKind::Matrix {
             self.append_matrix(output);
-        } else if self.kind == EquationKind::Subexpression
-            && self.position != EquationPosition::None
-            && self.position != EquationPosition::Sqrt
+        } else if self.kind == EquationKind::Operation
+            && self.operator != EquationOperator::None
+            && self.operator != EquationOperator::SquareRoot
         {
             let mut children = self.children.iter();
             if let Some(base) = children.next() {
                 base.append_in_context(output, ProjectionContext::Operand);
             }
-            let operator = match self.position {
-                EquationPosition::Over => " / ",
-                EquationPosition::Superscript | EquationPosition::To => " ^ ",
+            let operator = match self.operator {
+                EquationOperator::Fraction => " / ",
+                EquationOperator::Superscript | EquationOperator::UpperLimit => " ^ ",
                 _ => " _ ",
             };
             if let Some(argument) = children.next() {
@@ -210,8 +234,8 @@ impl EquationExpression {
                 argument.append_in_context(output, ProjectionContext::Operand);
             }
             if matches!(
-                self.position,
-                EquationPosition::FromTo | EquationPosition::SubscriptSuperscript
+                self.operator,
+                EquationOperator::LowerUpperLimits | EquationOperator::SubscriptSuperscript
             ) && let Some(upper) = children.next()
             {
                 output.push_str(" ^ ");
@@ -223,19 +247,18 @@ impl EquationExpression {
             }
         } else {
             for (index, child) in self.children.iter().enumerate() {
-                let joins = self.kind != EquationKind::Pile || child.actual_args != 1;
-                if index > 0 && !(joins && joins_explicit_group(&self.children[index - 1], child)) {
+                if index > 0 && !joins_explicit_group(&self.children[index - 1], child) {
                     output.push(' ');
                 }
-                let child_context = if index == 0 && self.position == EquationPosition::Sqrt {
-                    // CVS eqn_term.c::eqn_box supplies the sqrt operand's
-                    // outer delimiters itself; the readable sqrt(...) does too.
+                let child_context = if index == 0 && self.operator == EquationOperator::SquareRoot {
+                    // The readable square-root notation provides its own
+                    // outer operation boundary.
                     ProjectionContext::Root
                 } else if index == 0 && (self.top.is_some() || self.bottom.is_some()) {
                     ProjectionContext::Operand
                 } else if self.kind == EquationKind::Pile {
-                    // CVS eqn_term.c::eqn_box skips a singleton row List and
-                    // groups only rows containing multiple expressions.
+                    // The producer resolves row scope: a transparent singleton
+                    // row is a Sequence; a bounded multi-operand row is a Group.
                     ProjectionContext::PileRow
                 } else {
                     ProjectionContext::Sequence {
@@ -252,7 +275,7 @@ impl EquationExpression {
             output.push('_');
         }
         fences.append_close(output);
-        if self.position == EquationPosition::Sqrt {
+        if self.operator == EquationOperator::SquareRoot {
             output.push(')');
         }
         if grouped {
@@ -264,20 +287,17 @@ impl EquationExpression {
         const MAX_MATRIX_RECTANGULAR_SLOTS: usize = 16 * 1024;
         const MAX_MATRIX_RECTANGULAR_SEPARATOR_BYTES: usize = 32 * 1024;
 
-        // CVS eqn_html.c::eqn_box enters its row/column branch only for a
-        // non-singleton List operand. Other operands remain ordinary boxes.
-        // Check every level before interpreting it as columns and rows;
-        // malformed or alternative shapes still own visible operands.
+        // A matrix's column group contains vertical piles of expression rows.
+        // Check every level before projecting that shape; alternative
+        // operands remain visible rather than being discarded as empty cells.
         let columns = self.children.first().filter(|list| {
             self.children.len() == 1
-                && list.kind == EquationKind::List
-                && list.expected_args != Some(1)
+                && list.kind == EquationKind::Group
                 && list.children.iter().all(|column| {
                     column.kind == EquationKind::Pile
-                        && column
-                            .children
-                            .iter()
-                            .all(|row| row.kind == EquationKind::List)
+                        && column.children.iter().all(|row| {
+                            matches!(row.kind, EquationKind::Sequence | EquationKind::Group)
+                        })
                 })
         });
         let Some(columns) = columns else {
@@ -292,15 +312,15 @@ impl EquationExpression {
             return;
         };
         let columns = &columns.children;
-        // Unlike the pinned HTML renderer, retain rows of later columns when
-        // the first column is shorter.
+        // Every retained row is part of the matrix, even when its first column
+        // is shorter than another column.
         let rows = columns
             .iter()
             .map(|column| column.children.len())
             .max()
             .unwrap_or(0);
-        // CVS eqn_html.c::eqn_box prints every row/column slot, including
-        // empty cells. That rectangle can be quadratic in the parsed boxes
+        // Printing every row/column slot, including empty cells, can be
+        // quadratic in the expression nodes
         // for unequal columns. Bound both visits and the bytes introduced by
         // its ", "/"; " separators; actual cell text is visited only once.
         let actual_cells = columns.iter().try_fold(0usize, |count, column| {
@@ -359,14 +379,13 @@ impl EquationExpression {
 }
 
 fn joins_explicit_group(previous: &EquationExpression, current: &EquationExpression) -> bool {
-    // CVS eqn_term.c::eqn_box suppresses space before a grouped EQN_LIST
-    // following another list or an alphabetic/escape-led atom, except when
-    // that list directly contains a pile or matrix.
+    // A bounded argument group follows a name or another expression group
+    // without a separator. Vertical or matrix arguments remain distinct.
     current.is_explicit_group()
         && current.children.first().is_some_and(|child| {
             child.kind != EquationKind::Pile && child.kind != EquationKind::Matrix
         })
-        && (previous.kind == EquationKind::List
+        && (matches!(previous.kind, EquationKind::Sequence | EquationKind::Group)
             || previous.text.as_deref().is_some_and(|text| {
                 text.chars()
                     .next()
@@ -376,8 +395,7 @@ fn joins_explicit_group(previous: &EquationExpression, current: &EquationExpress
 
 impl EquationExpression {
     fn projection_fences(&self) -> ProjectionFences<'_> {
-        // CVS eqn.c::eqn_parse stores left/right independently, and
-        // eqn_html.c::eqn_box emits them unchanged as mfenced attributes.
+        // Left and right fences are independent authored content.
         // Parentheses added by this projection are separate scope markers;
         // never infer or replace an author's visible fence from its mate.
         ProjectionFences {
@@ -391,7 +409,6 @@ impl EquationExpression {
     }
 
     fn has_scope_fence_pair(&self) -> bool {
-        // The pinned parser accepts arbitrary left/right text independently.
         // Only test each side's ability to mark its own boundary; never
         // require its glyph to be the other side's conventional mate.
         self.left.as_deref().is_some_and(opens_scope)
@@ -399,27 +416,27 @@ impl EquationExpression {
     }
 
     fn is_explicit_group(&self) -> bool {
-        self.kind == EquationKind::List && self.expected_args != Some(1)
+        self.kind == EquationKind::Group
     }
 
-    /// Whether a positional or decorated parent needs to group this operand.
-    /// Explicit Lists and decorated boxes retain their scope; a transparent
-    /// List inherits its child's scope.
+    /// Whether an operator or decorated parent needs to group this operand.
+    /// Explicit Groups and decorated expressions retain their scope; a
+    /// transparent Sequence inherits its child's scope.
     #[must_use]
     pub fn needs_operand_group(&self) -> bool {
-        if self.summarized_operand_group {
+        if self.operand_scope == EquationOperandScope::Compound {
             return true;
         }
         if self.has_fence() {
             return !self.has_scope_fence_pair();
         }
-        if self.kind == EquationKind::Matrix || self.position == EquationPosition::Sqrt {
+        if self.kind == EquationKind::Matrix || self.operator == EquationOperator::SquareRoot {
             return false;
         }
         if self.is_explicit_group() || self.top.is_some() || self.bottom.is_some() {
             return true;
         }
-        if self.kind == EquationKind::Subexpression && self.position != EquationPosition::None {
+        if self.kind == EquationKind::Operation && self.operator != EquationOperator::None {
             return true;
         }
         if self.children.len() > 1 || self.text.is_some() && !self.children.is_empty() {
@@ -443,11 +460,9 @@ mod tests {
         let expression = EquationExpression {
             kind: EquationKind::Text,
             font: EquationFont::Italic,
-            position: EquationPosition::None,
+            operator: EquationOperator::None,
             size: None,
-            expected_args: Some(0),
-            actual_args: 0,
-            summarized_operand_group: false,
+            operand_scope: EquationOperandScope::Atomic,
             text: Some("ldots".to_owned()),
             left: None,
             right: None,
@@ -459,5 +474,99 @@ mod tests {
         let encoded = serde_json::to_string(&expression).expect("encode equation");
         let decoded: EquationExpression = serde_json::from_str(&encoded).expect("decode equation");
         assert_eq!(decoded.readable_text(), "ldots");
+    }
+
+    fn atom(value: &str) -> EquationExpression {
+        EquationExpression {
+            kind: EquationKind::Text,
+            font: EquationFont::None,
+            operator: EquationOperator::None,
+            size: None,
+            operand_scope: EquationOperandScope::Atomic,
+            text: Some(value.into()),
+            left: None,
+            right: None,
+            top: None,
+            bottom: None,
+            children: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn source_neutral_scope_distinguishes_groups_sequences_and_opaque_operands() {
+        // These are independently authored IR expressions, not parsed roff.
+        let mut grouped = atom("");
+        grouped.kind = EquationKind::Group;
+        grouped.text = None;
+        grouped.children = vec![atom("b")];
+        let mut sequence = grouped.clone();
+        sequence.kind = EquationKind::Sequence;
+        sequence.children = vec![atom("a"), grouped.clone()];
+        assert_eq!(sequence.readable_text(), "a(b)");
+        sequence.children[1].kind = EquationKind::Sequence;
+        assert_eq!(sequence.readable_text(), "a b");
+
+        let mut compound = atom("a + b");
+        compound.operand_scope = EquationOperandScope::Compound;
+        assert_eq!(compound.readable_text(), "a + b");
+        let mut fraction = atom("");
+        fraction.kind = EquationKind::Operation;
+        fraction.operator = EquationOperator::Fraction;
+        fraction.text = None;
+        fraction.children = vec![compound, atom("c")];
+        assert_eq!(fraction.readable_text(), "(a + b) / c");
+    }
+
+    #[test]
+    fn opaque_scope_is_canonical_and_parser_execution_fields_are_rejected() {
+        let atom = atom("x");
+        let mut encoded = serde_json::to_value(&atom).unwrap();
+        assert!(encoded.get("operandScope").is_none());
+        assert_eq!(encoded["kind"], "text");
+        assert_eq!(encoded["font"], "none");
+        assert_eq!(encoded["operator"], "none");
+        for retired in ["expectedArgs", "actualArgs", "summarizedOperandGroup"] {
+            let mut hostile = encoded.clone();
+            hostile[retired] = serde_json::json!(0);
+            assert!(serde_json::from_value::<EquationExpression>(hostile).is_err());
+        }
+        let mut retired_kind = encoded.clone();
+        retired_kind["kind"] = serde_json::json!("List");
+        assert!(serde_json::from_value::<EquationExpression>(retired_kind).is_err());
+        let mut retired_operator = encoded.clone();
+        retired_operator["position"] = serde_json::json!("Over");
+        assert!(serde_json::from_value::<EquationExpression>(retired_operator).is_err());
+        encoded["operandScope"] = serde_json::json!("compound");
+        let compound: EquationExpression = serde_json::from_value(encoded).unwrap();
+        assert!(compound.needs_operand_group());
+        assert_eq!(compound.readable_text(), "x");
+        let encoded = serde_json::to_string(&compound).unwrap();
+        let decoded: EquationExpression = serde_json::from_str(&encoded).unwrap();
+        assert_eq!(decoded, compound);
+    }
+
+    #[test]
+    fn independently_authored_fences_are_visible_literals_not_roff_escapes() {
+        let mut group = atom("");
+        group.kind = EquationKind::Group;
+        group.text = None;
+        group.children = vec![atom("x")];
+        group.left = Some("⌈".into());
+        group.right = Some("⌉".into());
+        assert!(!group.needs_operand_group());
+        assert_eq!(group.readable_text(), "⌈x⌉");
+
+        // A Markdown or foreign producer may store these exact literal bytes.
+        // The IR must not run a source decoder or treat them as Unicode fences.
+        group.left = Some(r"\[lc]".into());
+        group.right = Some(r"\[rc]".into());
+        assert!(group.needs_operand_group());
+        assert_eq!(group.readable_text(), r"\[lc]x\[rc]");
+        let mut fraction = atom("");
+        fraction.kind = EquationKind::Operation;
+        fraction.operator = EquationOperator::Fraction;
+        fraction.text = None;
+        fraction.children = vec![group, atom("y")];
+        assert_eq!(fraction.readable_text(), r"(\[lc]x\[rc]) / y");
     }
 }

@@ -104,7 +104,7 @@ fn nested_definition_cells_keep_content_order_and_entry_identity() {
         &mant_ir::ColumnPreferences {
             widths: vec![1, 1],
             gap_columns: 4,
-            advance_limit_columns: Some(256),
+            max_alignment_padding_columns: Some(256),
             extra_width_columns: Some(10),
         }
     );

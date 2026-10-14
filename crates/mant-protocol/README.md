@@ -35,6 +35,13 @@ measurement, signed origin composition/reparenting and bounded gap composition.
 terminal viewport state. Cell coordinates remain distinct from the byte/scalar
 positions used by semantic bindings and explanation evidence.
 
+The unreleased v0.13 document model contains resolved mathematical sequences,
+groups and operators, not equation parser counters. Equation enums use
+kebab-case; migrate `position` to `operator` and opaque grouping to
+`operandScope`. Table alignment regions use `maxAlignmentPaddingColumns`,
+not the retired `advanceLimitColumns`. See the IR manual for exact semantics;
+published v0.12 schemas and examples remain frozen.
+
 Original owner slice-to-scalar conversion belongs to `mant-ir` through
 `project_content_slice` and `RootTextRange`. Protocol response locations remain
 relative to their returned payload; render-owned presentation bindings reuse the IR rule

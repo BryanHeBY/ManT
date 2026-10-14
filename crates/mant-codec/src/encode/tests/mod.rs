@@ -62,7 +62,7 @@ fn native_column_preferences(widths: &[u16]) -> mant_ir::ColumnPreferences {
             5 => 3,
             _ => 1,
         },
-        advance_limit_columns: Some(256),
+        max_alignment_padding_columns: Some(256),
         extra_width_columns: Some(10),
     }
 }

@@ -74,6 +74,76 @@ fn assert_decoration_projection(source_expression: &str, expected: &str) {
     );
 }
 
+fn lowered_expression(source_expression: &str) -> mant_ir::EquationExpression {
+    let source = format!(".TH REVIEW 7\n.SH DESCRIPTION\n.EQ\n{source_expression}\n.EN\n");
+    let document = parse_manual_bytes(std::path::Path::new("review.7"), source.as_bytes())
+        .expect("IR equation parse");
+    let Block::Equation {
+        expression: Some(expression),
+        ..
+    } = &document.sections[0].blocks[0]
+    else {
+        panic!("structured equation");
+    };
+    expression.clone()
+}
+
+#[test]
+fn resolved_equation_groups_and_rows_need_no_parser_counters() {
+    // Every exact input was run with the fixed CVS -Tutf8/-Thtml/-Ttree
+    // reference before these assertions. eqn.c uses singleton List wrappers
+    // for presentation, whereas braces establish an operand boundary.
+    // eqn_term.c::eqn_box skips a Pile's singleton row wrapper but never
+    // erases an authored group nested inside that row; eqn_html.c retains rows.
+    use mant_ir::EquationKind::{Group, Operation, Pile, Sequence};
+
+    let named_group = lowered_expression("f { a }");
+    assert_eq!(named_group.kind, Sequence);
+    assert_eq!(named_group.children[1].kind, Group);
+    assert_eq!(named_group.readable_text(), "f(a)");
+
+    let script = lowered_expression("a sup { b }");
+    assert_eq!(script.children[0].kind, Operation);
+    assert_eq!(script.children[0].children[1].kind, Group);
+    assert_eq!(script.readable_text(), "a ^ (b)");
+
+    let mixed_rows = lowered_expression("pile { a above c + d }");
+    let pile = &mixed_rows.children[0];
+    assert_eq!(pile.kind, Pile);
+    assert_eq!(pile.children[0].kind, Sequence);
+    assert_eq!(pile.children[1].kind, Group);
+    assert_eq!(mixed_rows.readable_text(), "a(c + d)");
+
+    let nested_groups = lowered_expression("pile { { a + b } above { c + d } }");
+    for row in &nested_groups.children[0].children {
+        assert_eq!(row.kind, Sequence);
+        assert_eq!(row.children[0].kind, Group);
+    }
+    assert_eq!(nested_groups.readable_text(), "(a + b) (c + d)");
+
+    let encoded = serde_json::to_string(&nested_groups).unwrap();
+    for retired in ["expectedArgs", "actualArgs", "summarizedOperandGroup"] {
+        assert!(!encoded.contains(retired));
+    }
+    let decoded: mant_ir::EquationExpression = serde_json::from_str(&encoded).unwrap();
+    assert_eq!(decoded, nested_groups);
+}
+
+#[test]
+fn font_split_operand_scope_is_resolved_before_native_counts_are_removed() {
+    // This exact input was checked with fixed CVS -Tutf8/-Thtml/-Ttree.
+    // eqn.c's font-splitting branch puts the initial atom into a new List
+    // without incrementing args: the b0 List has two children but args=1.
+    // Its Group scope must survive; only the Pile's direct row is transparent.
+    let expression = lowered_expression("pile { a sub b0 above c }");
+    let row = &expression.children[0].children[0];
+    assert_eq!(row.kind, mant_ir::EquationKind::Sequence);
+    let operand = &row.children[0].children[1];
+    assert_eq!(operand.kind, mant_ir::EquationKind::Group);
+    assert_eq!(operand.children.len(), 2);
+    assert_eq!(expression.readable_text(), "a _ (b 0) c");
+}
+
 #[test]
 fn matrix_projection_preserves_non_column_operands() {
     // Each exact source was checked with the fixed -Thtml/-Tutf8/-Tlint oracle

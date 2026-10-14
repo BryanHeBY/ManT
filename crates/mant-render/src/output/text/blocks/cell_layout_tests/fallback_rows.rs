@@ -83,7 +83,7 @@ fn empty_cells_at_the_edges_do_not_claim_rows_in_late_fallback() {
             else {
                 unreachable!()
             };
-            column_preferences.advance_limit_columns = None;
+            column_preferences.max_alignment_padding_columns = None;
             let output = renderer(&paint).render_blocks(&[block], 0);
             assert_eq!(undecorated(&output), "BODY");
         }

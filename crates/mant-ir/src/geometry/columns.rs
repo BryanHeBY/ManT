@@ -1,16 +1,15 @@
 //! Bounded placement of declared table fields, shared by terminal consumers.
 
 /// Maximum generated padding in one physical row before source-order fallback.
-/// This bounds output work independently of any source device advance limit.
+/// This bounds output work independently of document alignment preferences.
 pub const MAX_COLUMN_PADDING: usize = 4096;
 /// Dense declared placement is bounded independently of inbound IR lengths.
 pub const MAX_DECLARED_COLUMNS: usize = 256;
 
-/// Extent used to decide whether the next declared field can stay on this
-/// row. CVS `term_fill()` records the last graph before ordinary trailing
-/// spaces; they remain pending padding in `term_field()`. Fixed spaces,
-/// tabs and every other glyph retain their extent. Decoration is removed
-/// before calling this helper, and the original output is kept separately.
+/// Content extent used to decide whether the next preferred field can share
+/// this row. Ordinary trailing spaces occupy alignment padding rather than
+/// extending content; fixed spaces, tabs and every other glyph retain their
+/// extent. Measure before decoration and retain the complete output separately.
 #[must_use]
 pub fn declared_field_width(text: &str) -> usize {
     super::text_width(text.trim_end_matches(' '))
@@ -43,14 +42,14 @@ impl ColumnFieldWidth {
 }
 
 /// Measured declaration widths, excluding the inter-column gap. These are
-/// display cells of the producer's reading device, not fixed viewport widths.
+/// display-cell layout preferences, not fixed viewport widths.
 #[derive(Clone, Debug)]
 pub struct DeclaredColumns {
     starts: Vec<usize>,
     undeclared_start: usize,
     ends: Vec<usize>,
     extra_width: Option<usize>,
-    advance_limit: Option<usize>,
+    alignment_padding_limit: Option<usize>,
 }
 
 /// One cell-local physical row and its final column in the reading projection.
@@ -91,7 +90,7 @@ impl DeclaredColumns {
             ends,
             undeclared_start: offset,
             extra_width: preferences.extra_width_columns.map(usize::from),
-            advance_limit: preferences.advance_limit_columns.map(usize::from),
+            alignment_padding_limit: preferences.max_alignment_padding_columns.map(usize::from),
         })
     }
 
@@ -114,7 +113,7 @@ impl DeclaredColumns {
         })
     }
 
-    /// Lay out complete cells in execution order. A subsequent cell follows
+    /// Lay out complete cells in reading order. A subsequent cell follows
     /// the last physical row of its predecessor, never its first row. Widths
     /// are measured before ANSI/style wrappers. Long fields retain content
     /// and move the next field to a distinct physical row.
@@ -156,14 +155,16 @@ impl DeclaredColumns {
                     output_end = 0;
                     generated_padding = 0;
                 }
-                // Advance from the last graph while retaining all pending
-                // author output. A source cap and the output-work bound are
-                // distinct: neither discards glyphs or clips author padding.
-                let advance = start.saturating_sub(content_end);
-                let advance = self
-                    .advance_limit
-                    .map_or(advance, |limit| advance.min(limit));
-                let column = content_end.saturating_add(advance).max(output_end);
+                // Bound the alignment region after the content extent. Any
+                // preserved tail occupies that region without being clipped;
+                // the independent output-work bound does not alter this fact.
+                let alignment_padding = start.saturating_sub(content_end);
+                let alignment_padding = self
+                    .alignment_padding_limit
+                    .map_or(alignment_padding, |limit| alignment_padding.min(limit));
+                let column = content_end
+                    .saturating_add(alignment_padding)
+                    .max(output_end);
                 generated_padding =
                     generated_padding.saturating_add(column.saturating_sub(output_end));
                 if generated_padding > MAX_COLUMN_PADDING
@@ -193,7 +194,7 @@ mod tests {
         crate::ColumnPreferences {
             widths: values.to_vec(),
             gap_columns: 4,
-            advance_limit_columns: Some(256),
+            max_alignment_padding_columns: Some(256),
             extra_width_columns: Some(10),
         }
     }
@@ -308,9 +309,9 @@ mod tests {
     }
 
     #[test]
-    fn device_advance_is_capped_after_the_graph_before_preserved_tail_padding() {
-        // A supplied device limit applies after graph measurement; preserved
-        // trailing author padding remains independent of the capped advance.
+    fn alignment_region_is_capped_after_content_without_clipping_preserved_tail() {
+        // Preserved trailing spaces occupy the alignment region without being
+        // discarded or charged again as newly generated padding.
         let columns = DeclaredColumns::new(&preferences(&[u16::MAX; 3])).unwrap();
         let placed = columns
             .place(&[
@@ -346,11 +347,11 @@ mod tests {
         assert_eq!(complete[2][0].cell, 1);
     }
     #[test]
-    fn generic_gaps_and_source_advance_limits_are_independent() {
+    fn column_gaps_and_alignment_padding_constraints_are_independent() {
         for (limit, expected) in [(None, 600), (Some(0), 1), (Some(256), 257)] {
             let preferences = crate::ColumnPreferences {
                 widths: vec![598, 1],
-                advance_limit_columns: limit,
+                max_alignment_padding_columns: limit,
                 ..Default::default()
             };
             let columns = DeclaredColumns::new(&preferences).unwrap();
@@ -421,7 +422,7 @@ mod tests {
         assert_eq!(author[0][0].column, 0);
         let zero = DeclaredColumns::new(&crate::ColumnPreferences {
             widths: vec![u16::MAX; 256],
-            advance_limit_columns: Some(0),
+            max_alignment_padding_columns: Some(0),
             ..Default::default()
         })
         .unwrap();

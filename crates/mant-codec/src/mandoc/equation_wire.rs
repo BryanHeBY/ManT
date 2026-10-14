@@ -2,7 +2,8 @@
 
 use mant_ir::{
     Block, Diagnostic, DiagnosticImpact, DiagnosticLevel, Document, EquationExpression,
-    EquationFont, EquationKind, EquationPosition, Inline, LayoutHint, Section, SourceSpan,
+    EquationFont, EquationKind, EquationOperandScope, EquationOperator, Inline, LayoutHint,
+    Section, SourceSpan,
 };
 use serde::de::{Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 
@@ -198,12 +199,13 @@ fn visit_inlines(inlines: &mut [Inline], array_depth: usize, summary: &mut Summa
 }
 
 fn bound_expression(expression: &mut EquationExpression, object_depth: usize, value: &str) -> bool {
+    let compound_operand = expression.needs_operand_group();
     let changed = fold_expression(expression, object_depth);
     if changed && expression.readable_text() != value {
         // A folded child can acquire a different sequence/operand context.
         // Fold at the expression root in that case, retaining its exact
         // authoritative readable payload and the parent document's text.
-        *expression = readable_leaf(value.to_owned(), false);
+        *expression = readable_leaf(value.to_owned(), compound_operand);
     }
     changed
 }
@@ -418,15 +420,17 @@ impl<'de> Visitor<'de> for JsonDepthVisitor {
     }
 }
 
-fn readable_leaf(text: String, summarized_operand_group: bool) -> EquationExpression {
+fn readable_leaf(text: String, compound_operand: bool) -> EquationExpression {
     EquationExpression {
         kind: EquationKind::Text,
         font: EquationFont::None,
-        position: EquationPosition::None,
+        operator: EquationOperator::None,
         size: None,
-        expected_args: None,
-        actual_args: 0,
-        summarized_operand_group,
+        operand_scope: if compound_operand {
+            EquationOperandScope::Compound
+        } else {
+            EquationOperandScope::Atomic
+        },
         text: Some(text),
         left: None,
         right: None,
@@ -443,6 +447,34 @@ mod tests {
         DefinitionItem, DefinitionLayout, DocumentMeta, DocumentSource, Heading, SourceFormat,
         TableCell, TableCellKind, TableRow, TableRowKind,
     };
+
+    #[test]
+    fn root_fallback_preserves_compound_scope_without_exposing_summary_state() {
+        // Independently authored IR: this expression already owns its result
+        // structure and does not execute or interpret any roff source.
+        let mut group = readable_leaf(String::new(), false);
+        group.kind = EquationKind::Group;
+        group.text = None;
+        group.children = vec![readable_leaf("a".into(), false)];
+        let mut expression = readable_leaf(String::new(), false);
+        expression.kind = EquationKind::Sequence;
+        expression.text = None;
+        expression.children = vec![readable_leaf("f".into(), false), group];
+        let value = expression.readable_text();
+        assert_eq!(value, "f(a)");
+
+        // Folding the nested Group changes its sequence context. The root
+        // fallback must retain both its full payload and operation boundary.
+        assert!(bound_expression(
+            &mut expression,
+            MAX_SAFE_CONTAINER_DEPTH - 2,
+            &value
+        ));
+        assert_eq!(expression.kind, EquationKind::Text);
+        assert_eq!(expression.operand_scope, EquationOperandScope::Compound);
+        assert_eq!(expression.children, []);
+        assert_eq!(expression.readable_text(), value);
+    }
 
     #[test]
     fn probe_uses_the_json_readers_recursion_guard() {

@@ -362,14 +362,16 @@ fn ragged_matrix_keeps_later_column_rows_through_ir_json() {
     // retain it, so the shared reading projection uses the longest column.
     assert_eq!(expression.children[0].kind, mant_ir::EquationKind::Matrix);
     assert_eq!(value, "matrix(a, b; , c)");
-    // CVS eqn.c::eqn_box_new uses UINT_MAX for an unbounded list, and
-    // EQN_DEFSIZE is INT_MIN. The IR has no parser sentinel numerals.
+    // The exact source was checked with fixed CVS -Tutf8/-Thtml/-Ttree.
+    // Native argument counters are resolved into Group/Sequence nodes by
+    // lowering, and EQN_DEFSIZE's INT_MIN becomes inherited presentation.
     let wire = serde_json::to_value(&document).unwrap();
     assert!(
         wire["blocks"][0]["expression"]
             .get("expectedArgs")
             .is_none()
     );
+    assert!(wire["blocks"][0]["expression"].get("actualArgs").is_none());
     assert!(
         wire["blocks"][0]["expression"]["children"][0]
             .get("size")
@@ -912,7 +914,7 @@ fn bl_column_widths_measure_executed_device_glyphs() {
         &mant_ir::ColumnPreferences {
             widths: vec![2, 2, 4],
             gap_columns: 4,
-            advance_limit_columns: Some(256),
+            max_alignment_padding_columns: Some(256),
             extra_width_columns: Some(10),
         }
     );
@@ -943,7 +945,7 @@ fn bl_column_widths_saturate_at_the_ir_bound() {
         &mant_ir::ColumnPreferences {
             widths: vec![u16::MAX, 3],
             gap_columns: 4,
-            advance_limit_columns: Some(256),
+            max_alignment_padding_columns: Some(256),
             extra_width_columns: Some(10),
         }
     );

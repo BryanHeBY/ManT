@@ -21,7 +21,7 @@ pub(super) fn render_declared_columns(
         table
             .layout
             .column_preferences
-            .advance_limit_columns
+            .max_alignment_padding_columns
             .map_or(start, |limit| {
                 start.min(usize::from(limit).saturating_mul(index))
             })
@@ -183,7 +183,7 @@ fn placed_column_row(
         let row = &cells[piece.cell][piece.line];
         row.source_end.is_none() && row.line.spans.iter().all(|span| span.content.is_empty())
     }) {
-        // Empty device rows have no advance; their table/parent origins
+        // Empty content rows have no alignment padding; their table/parent origins
         // cannot become visible blank cells. Anchors still own this row.
         spans.clear();
     }

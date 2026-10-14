@@ -187,11 +187,14 @@ it represents that requested spacing, never an empty navigation placeholder.
 
 Lists contain block-capable items so nested lists and displays do not flatten into prose. Each definition term is a `DefinitionTerm { content, inline_layout }` with one authoritative inline tree and optional row corrections; its JSON object uses `content` and `inlineLayout`. `DefinitionItem.terms` is an array of these objects, not an array of inline arrays. Descriptions contain blocks. Table cells likewise contain blocks even when a source parser currently produces a single paragraph.
 
-An equation expression retains the parser's box kind, font, position operator,
-fences, decorations, argument counts, and ordered children. Default font size
-and an unbounded grammar argument count are absent rather than exposed as
-parser-specific sentinel integers. Matrix children
-retain their columns and rows. `EquationExpression::readable_text()` supplies
+An equation expression retains mathematical structure, not parser boxes or
+argument counters. `EquationKind` distinguishes `Text`, `Operation`, `Sequence`,
+`Group`, `Pile`, and `Matrix`: a sequence orders expressions without introducing
+an operation boundary; a group supplies that boundary. `EquationOperator`
+describes fractions, square roots, scripts and limits independently from screen
+position. Resolved fonts, optional size, visible fences/decorations and ordered
+children remain available to math-capable consumers. Matrix children retain
+their columns and rows. `EquationExpression::readable_text()` supplies
 the shared, source-neutral text projection; a block's `value` is a compatibility
 cache and must agree with that projection whenever `expression` is present.
 Validation reports a content-coverage error for a mismatch. This projection is
@@ -200,7 +203,9 @@ The roff producer counts JSON container depth from the final document position,
 including enclosing sections, lists, definitions, tables, and styled inlines.
 When a complete formula exceeds the remaining reader budget, the affected
 subtree becomes a text leaf retaining its complete readable text.
-`summarizedOperandGroup` records whether its parent must still group the operand;
+`operandScope: "compound"` retains the mathematical scope of an opaque compound
+operand; the default `"atomic"` is omitted. This is independent of the reason
+structure is unavailable, rather than an execution or summarization flag.
 `manual.equation-structure-depth-summarized` reports lost structure as
 `semantic-coverage`. Deep surrounding document containers are likewise reduced
 to readable text with `manual.document-structure-depth-summarized`, including
@@ -210,6 +215,14 @@ unusual remaining structure still exceeds it. These reductions leave
 `contentComplete` true and `semanticsComplete` false. If the owned tree was
 already truncated, its separate `content-coverage` diagnostic still reports
 missing source content.
+
+In the unreleased `0.13.0` API, migrate `EquationPosition`/`position` to
+`EquationOperator`/`operator`, `Subexpression` to `Operation`, and parser `List`
+to producer-resolved `Sequence` or `Group`. Operator names are `Fraction`,
+`SquareRoot`, `UpperLimit`, `LowerLimit`, `LowerUpperLimits`, and the existing
+script variants. All equation enums serialize as kebab-case. The retired
+`expectedArgs`, `actualArgs`, `summarizedOperandGroup` and `position` fields are
+rejected, not silently interpreted. Published v0.12 snapshots remain unchanged.
 
 ### Consecutive declaration context
 
@@ -252,15 +265,16 @@ Every canonical ID in `DocumentIndex` is a local navigation target, including en
 `Table.column_preferences: ColumnPreferences` carries optional reading preferences,
 serialized as `columnPreferences`. Its closed object has `widths`, an ordered
 array of preferred content widths excluding the gap; `gapColumns`, the preferred
-inter-column blank count; optional `advanceLimitColumns`, limiting one positioning
-advance; and optional `extraWidthColumns`, the content capacity for fields beyond
+inter-column blank count; optional `maxAlignmentPaddingColumns`, limiting the
+alignment region after the preceding field's content extent; and optional
+`extraWidthColumns`, the content capacity for fields beyond
 the declarations, excluding any added gap. Those fields share the preferred
 origin after all declared fields. Every supplied number is an integer from 0
 through 65535. These are display-cell preferences, not final viewport coordinates
 or another cell body.
 The source-neutral default is `{ widths: [], gap_columns: 2,
-advance_limit_columns: None, extra_width_columns: None }`. Empty widths select
-content-derived layout, where a custom gap still applies. Nondefault advance and
+max_alignment_padding_columns: None, extra_width_columns: None }`. Empty widths select
+content-derived layout, where a custom gap still applies. Nondefault alignment and
 extra-field constraints remain in canonical JSON even with empty widths, but
 apply only to declared-field layout. Explicit zero is retained;
 `Some(0)` differs from an absent constraint. Optional constraints accept null as
@@ -268,18 +282,26 @@ absence and serialize by omission. The object and its widths/gap cannot be null.
 Missing preferences and `{}` use the same default, and canonical output omits
 only that complete default. Positional arrays are rejected even when empty.
 Unknown or duplicate fields, the retired
-`columnWidths` array, and mixed old/new shapes are rejected.
+`columnWidths` array, `advanceLimitColumns`, and mixed old/new shapes are rejected.
 
-The producer resolves source escapes and source-specific gap/advance rules.
+The producer resolves source escapes and source-specific layout rules.
 For mdoc column lists it supplies measured widths, a 4/3/1-cell gap, a 256-cell
-advance limit and extra-field width 10. Generic consumers use the supplied
+maximum alignment region and extra-field width 10. The region preserves the
+historical native-device mapping; it is not an author-declared constraint.
+If `contentEnd` excludes ordinary trailing spaces and `outputEnd` includes all
+retained output, the next origin is
+`max(outputEnd, contentEnd + min(max(preferredOrigin - contentEnd, 0), limit))`.
+Trailing spaces occupy the region and are never clipped; zero means no added
+alignment padding, and an absent limit leaves the region unbounded.
+Generic consumers use the supplied
 preferences without interpreting a macro or inferring a gap from the width count.
 They measure and wrap at the actual viewport before collision and placement.
 More than 256 declared or actual columns, incompatible spans/rules, and signed
 descendant origins use the existing source-order fallback; every cell keeps its
 content and owner. The independent 4096-cell generated-padding budget uses that
 fallback when exceeded, retaining every later cell as well as the cells already
-prepared. It does not impose a source advance limit. ANSI decoration never changes
+prepared. This consumer work budget is separate from the alignment preference.
+ANSI decoration never changes
 measurement. TUI resizing may stack cells while retaining links, anchors, search
 ranges and selection coordinates.
 Owner row alignment is applied after intrinsic cell measurement and final
