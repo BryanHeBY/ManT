@@ -195,7 +195,7 @@
         "description": "Exact schema marker for a local document catalog.",
         "oneOf": [
           {
-            "description": "Version 0.12 of the pre-stable document-catalog protocol.",
+            "description": "Version 0.13 of the pre-stable document-catalog protocol.",
             "type": "string",
             "const": "mant.catalog/v0.13"
           }
@@ -2148,7 +2148,7 @@
         "description": "Exact schema marker for selected query content.",
         "oneOf": [
           {
-            "description": "Version 0.12 of the pre-stable excerpt protocol.",
+            "description": "Version 0.13 of the pre-stable excerpt protocol.",
             "type": "string",
             "const": "mant.excerpt/v0.13"
           }
@@ -9159,7 +9159,7 @@
         "description": "Exact schema marker for a query outline response.",
         "oneOf": [
           {
-            "description": "Version 0.12 of the pre-stable outline protocol.",
+            "description": "Version 0.13 of the pre-stable outline protocol.",
             "type": "string",
             "const": "mant.outline/v0.13"
           }
@@ -10962,7 +10962,7 @@
         "description": "Exact schema marker for a normalized structured document response.",
         "oneOf": [
           {
-            "description": "Version 0.12 of the pre-stable structured-document protocol.",
+            "description": "Version 0.13 of the pre-stable structured-document protocol.",
             "type": "string",
             "const": "mant.document/v0.13"
           }
@@ -17406,7 +17406,7 @@
         "description": "Exact schema marker for a resolved scope query.",
         "oneOf": [
           {
-            "description": "Version 0.12 of the pre-stable scope-query result.",
+            "description": "Version 0.13 of the pre-stable scope-query result.",
             "type": "string",
             "const": "mant.scope-query/v0.13"
           }
@@ -18738,7 +18738,7 @@
         "description": "Exact schema marker for a scope-query request.",
         "oneOf": [
           {
-            "description": "Version 0.12 of the pre-stable scope-query request.",
+            "description": "Version 0.13 of the pre-stable scope-query request.",
             "type": "string",
             "const": "mant.scope-request/v0.13"
           }
@@ -19769,7 +19769,7 @@
         "description": "Exact schema marker for structure-aware search results.",
         "oneOf": [
           {
-            "description": "Version 0.12 of the pre-stable search protocol.",
+            "description": "Version 0.13 of the pre-stable search protocol.",
             "type": "string",
             "const": "mant.search/v0.13"
           }

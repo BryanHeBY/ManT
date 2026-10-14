@@ -13,6 +13,10 @@ that crate was not published for that change.
 
 ## Unreleased
 
+The pending product release is `mant 0.13.0`. The ten native/IR/reader crates
+publish at `0.13.0`; independently versioned `mant-sources` publishes at
+`0.10.2`. Release dates remain unset until the release is frozen.
+
 ### mant-ir, mant-protocol, mant-codec, mant-loader, mant-query, mant-render, mant-engine, mant-ui and mant 0.13.0
 
 - Add source-neutral row alignment and first-visual indentation preferences to
@@ -37,13 +41,14 @@ that crate was not published for that change.
   already published: its closed schemas and checked-in examples stay frozen.
   Existing `v0.12` markers are not accepted by the new family; negotiate complete
   discriminators. The independent doctor, tldr-update and Markdown-coordinate
-  contracts, `libmandoc-rs 0.12.0` and `mant-sources 0.10.1` remain unchanged.
+  contracts remain unchanged. Coordinate native dependents on
+  `libmandoc-rs ^0.13.0`; storage/configuration contracts are unchanged.
 
-### libmandoc-rs and mant-codec
+### libmandoc-rs and mant-codec 0.13.0
 
 - Refresh the pinned mandoc CVS source to `cvs-20261013T025419Z`, with a new
-  independently reproduced pristine oracle. Preserve the local patch series,
-  crate versions and IR schema. Restore no-fill mode when a list item implicitly
+  independently reproduced pristine oracle. Preserve the local patch series
+  and owned AST shape. Restore no-fill mode when a list item implicitly
   closes a display; fix horizontal-rule drawing with escaped delimiters and
   retire the upstream macOS sandbox-init probe.
 - Match the upstream complete-spelling rule for escaped special-character
@@ -52,19 +57,39 @@ that crate was not published for that change.
   Preserve HTML-compatible link identity and source-owned field consumption.
   Re-run active fixture sources before updating their oracle bindings; retain
   historical captures under their original identities.
+- Publish the refreshed native catalog as `libmandoc-rs 0.13.0`, not a 0.12
+  patch: `special_character(":")` now returns `Visible('\u{200b}')` instead of
+  `ZeroWidth`. `Visible` denotes a catalog scalar, not terminal cell width;
+  review matches that classified `:` as a zero-width graph control. Native
+  reference bytes also follow the new formatter. Upgrade all native dependents
+  together because the `links` boundary cannot link both minor versions.
+
+### mant-sources 0.10.2
+
+- Update private download/archive dependencies, including `ureq 3.4.2`,
+  `zip 9.0.3`, `zstd 0.14.2` and `sha2 0.11.1`. Preserve bounded extraction,
+  unsafe-path/link rejection and transactional updates; public APIs, directory
+  resolution, `mant.toml` and source ownership remain unchanged.
 
 ### Dependency maintenance
 
 - Upgrade the exactly paired MCP SDK and generated macros to `3.5.1`, retaining
   the Rust `1.88` floor and existing feature selection. Update the locked native
-  build dependency `cc` to `1.6.0` in both workspace and fuzz graphs, and regenerate
-  the distributable Rust dependency notices. The pinned mandoc source/reference
-  and native v0.12 wire contracts remain unchanged.
+  build dependency `cc` to `1.8.0` in both workspace and fuzz graphs, and regenerate
+  the distributable Rust dependency notices. SDK maintenance itself does not
+  change native wire contracts.
+- Refresh remaining major direct dependencies to their current stable releases,
+  including `clap 4.6.7`, `libc 0.2.190`, `schemars 1.2.3`, `signal-hook 0.4.5`,
+  `textwrap 0.16.4`, `thiserror 2.0.21`, `tokio 1.53.3`, `serde_json 1.0.154`
+  and `toml 1.1.8`. Keep existing features, the Rust 1.88 floor and frozen v0.12
+  snapshots; synchronize workspace, fuzz and independent-consumer lockfiles.
+- Lock `rustls 0.23.46` to include the fixes for RUSTSEC-2026-0346 through
+  RUSTSEC-2026-0349 without broadening TLS features.
 - Refresh commit-pinned workflow dependencies: install-action `2.87.26`,
   upload-artifact `7.0.2`, download-artifact `8.0.2` and CodeQL `4.38.3`.
   Keep existing workflow permissions, tool versions and release boundaries.
 
-### mant-codec
+### mant-codec 0.13.0
 
 - Preserve the actual destination of a single TLDR `More information:` link
   before flattening presentation markup. Exclude surrounding sentence punctuation
@@ -84,7 +109,15 @@ that crate was not published for that change.
   third-party caches. Preserve release artifacts and the locked mandoc oracle;
   retain actual archive-source tests rather than substituting checkout binaries.
 
-### mant-ui
+### mant-ui and mant 0.13.0
+
+- Read with Content focus by default and use less-style movement/search:
+  `j/k`, `g/G`, half-page `d/u` or `Ctrl+d/u`, full-page Space/`f`/`b`, and
+  `Tab` to switch to Outline. `/`/`?` previews case-sensitive regex matches
+  while typing; `n`/`N` repeats/reverses the confirmed direction. These are
+  deliberate default changes; see the updated manual and F1 help. Uppercase
+  `B` replaces lowercase `b` for toggling the sidebar, and F1 replaces `?` for
+  opening help. CLI/protocol search defaults are unchanged.
 
 - Make TUI search follow less-style reading: case-sensitive regexes by default,
   `/` forward and `?` backward from the current position, with `n` repeating

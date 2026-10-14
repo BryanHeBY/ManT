@@ -414,10 +414,20 @@ fn source_consumers_require_the_shared_configuration_expansion_baseline() {
         ("mant-loader", include_str!("../../mant-loader/Cargo.toml")),
         ("mant", include_str!("../Cargo.toml")),
     ] {
+        let manifest = toml::from_str::<toml::Value>(manifest).expect("valid crate manifest");
+        let requirement = manifest["dependencies"]["mant-sources"]["version"]
+            .as_str()
+            .expect("explicit source dependency requirement");
+        let parts: Vec<u64> = requirement
+            .strip_prefix('^')
+            .expect("caret source dependency requirement")
+            .split('.')
+            .map(|part| part.parse().expect("numeric version component"))
+            .collect();
+        assert_eq!(parts.len(), 3, "{name} needs a complete minimum version");
+        // The expansion contract is a minimum, not a permanently pinned patch.
         assert!(
-            manifest.lines().any(|line| {
-                line.starts_with("mant-sources = ") && line.contains("version = \"^0.10.1\"")
-            }),
+            (parts[0], parts[1], parts[2]) >= (0, 10, 1),
             "{name} does not require the mant-sources shared configuration expansion baseline"
         );
     }

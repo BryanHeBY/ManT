@@ -70,16 +70,34 @@ sequences.
 `F10` opens the menu; `Alt+M/E/V/N/S/H` opens Manual, Edit, View, Navigate,
 Search or Help directly, with underlined initials identifying the keys.
 Within menus, letters or Left/Right switch menus, Up/Down selects an item,
-Enter/Space runs it and Escape/F10 returns. `?` displays keyboard help.
+Enter/Space runs it and Escape/F10 returns. `F1` displays keyboard help.
 macOS Option-key reporting depends on the terminal profile: Apple Terminal
 offers **Use Option as Meta key**, while iTerm2 offers **Esc+** for the chosen
 Option key. F10 followed by a letter or arrow remains the non-Alt path.
 
-`Ctrl+F` or `/` finds page text; `Ctrl+G` finds current-document Outline titles,
+Documents start with Content focus. `Tab`/`Shift+Tab` switches between Content
+and the visible Outline. In Content, `j/k` scroll by a row, `g/G` jump to the
+start/end, `d/u` or `Ctrl+d/u` scroll half a viewport, and Space/`f`/`b` page
+down/up. PageDown/PageUp retain full-page movement with one row of overlap.
+Outline's Space folds nodes and Enter activates them. Uppercase-character `B`
+toggles the sidebar in either region; lowercase `b` never toggles it.
+
+`Ctrl+F` or `/` opens forward page search; `?` opens backward page search.
+Both page and Outline search default to case-sensitive Rust regexes. In the
+field, `Ctrl+R` toggles Literal, `Alt+C` cycles Sensitive/Ignore/Smart case, and
+`Alt+W` toggles wrapping (off by default); the Search menu exposes the same modes.
+Typing previews highlights without moving the reading position. Enter confirms
+and returns to reading with highlights retained; empty Enter repeats the last
+confirmed pattern. Invalid regexes remain editable without literal fallback.
+
+`Ctrl+G` finds current-document Outline titles,
 entry names/forms and inventoried reference labels/targets, including folded
 nodes. Both use the bottom field but retain separate drafts, queries and cursors.
-Confirm with Enter, then use Up/Down or Enter to cycle matches. `n`/`Shift+N`
-resumes the last confirmed search scope. Outline results count nodes once,
+Up/Down selects live results and confirms the draft. Outside the field, `n`
+repeats the last search direction and uppercase `N` reverses it in the last
+confirmed scope. Large searches run in cancellable batches; provisional counts
+are marked `searching`, and incomplete inventories never wrap.
+Outline results count nodes once,
 exclude generated grouping labels and keep logical results stable through
 resize. Visited ancestors are temporarily revealed; Escape retains only the
 exit position's required path. Search never opens linked documents itself.

@@ -90,11 +90,13 @@ fn extract_zip(path: &Path, destination: &Path) -> Result<(), String> {
         let mut entry = archive
             .by_index(index)
             .map_err(|error| format!("could not read ZIP entry {index}: {error}"))?;
-        let raw_name = entry.name();
+        let raw_name = entry
+            .name()
+            .map_err(|error| format!("could not decode ZIP entry {index} name: {error}"))?;
         entry
             .enclosed_name()
-            .ok_or_else(|| format!("ZIP entry '{}' has an unsafe path", entry.name()))?;
-        let path = match normalize_archive_name(raw_name)? {
+            .ok_or_else(|| format!("ZIP entry '{raw_name}' has an unsafe path"))?;
+        let path = match normalize_archive_name(&raw_name)? {
             Some(path) => path,
             None if entry.is_dir() => continue,
             None => {
@@ -592,6 +594,21 @@ mod tests {
         let error = extract_archive(&archive, &destination).expect_err("reject parent path");
         assert!(error.contains("unsafe path"), "{error}");
         assert!(!destination.join("escape.md").exists());
+        fs::remove_dir_all(root).expect("remove fixture");
+    }
+
+    #[test]
+    fn preserves_unicode_zip_document_names() {
+        let root = temp("zip-unicode-name");
+        let archive = root.join("download");
+        let destination = root.join("tree");
+        fs::create_dir_all(&root).expect("create fixture");
+        fs::write(&archive, zip_bytes(&[("docs/工具.md", b"# tool")])).expect("write archive");
+        extract_archive(&archive, &destination).expect("extract Unicode archive");
+        assert_eq!(
+            fs::read_to_string(destination.join("docs/工具.md")).expect("read document"),
+            "# tool"
+        );
         fs::remove_dir_all(root).expect("remove fixture");
     }
 

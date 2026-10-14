@@ -141,7 +141,7 @@ jobs:
             rust_target: x86_64-pc-windows-msvc
             os: windows-2025
           # macOS remains available as a local source build. Public macOS
-          # archives and hosted CI stay disabled until releases can be
+          # archives stay disabled until releases can be
           # Developer ID-signed and notarized for Gatekeeper.
     runs-on: ${{ matrix.os }}
     timeout-minutes: 40

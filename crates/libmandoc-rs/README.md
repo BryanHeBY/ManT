@@ -35,6 +35,23 @@ run a pager. The optional reference renderers format the native tree in the
 same call that parses it; they do not turn the owned Rust AST into a second
 document model, and `ManT`'s existing engine integration remains unchanged.
 
+## Upgrading from 0.12
+
+Version 0.13 selects mandoc `cvs-20261013T025419Z`. Its public special-character
+catalog now resolves `special_character(":")` to
+`Some(SpecialCharacter::Visible('\u{200b}'))`, rather than `ZeroWidth`.
+`Visible` identifies a Unicode scalar, not a promise of a printable terminal
+cell: consumers must keep catalog lookup separate from device formatting.
+The terminal escape still supplies an optional breakpoint; literal U+200B and
+zero-width graph controls have different formatter semantics. Review exhaustive
+matches that previously treated `:` as a `ZeroWidth` control.
+
+The owned AST shape and diagnostic classifications are unchanged. The new CVS
+formatter also fixes implicit no-fill display closure and escaped-delimiter
+horizontal rules; reference bytes can therefore differ from 0.12.
+Coordinate the `^0.13.0` upgrade across all native dependents because Cargo's
+`links` boundary does not permit linking both minor versions together.
+
 ## Features
 
 The default features preserve the existing compatibility enhancements. Native
