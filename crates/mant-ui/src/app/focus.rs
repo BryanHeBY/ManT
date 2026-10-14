@@ -82,11 +82,11 @@ impl App {
         };
         let hints = [
             format!(
-                "{name} · j/k {action}{switch} · B sidebar · / find · Ctrl+G outline · Ctrl+O open · ? help "
+                "{name} · j/k {action}{switch} · B sidebar · / ? find · Ctrl+G outline · Ctrl+O open · F1 help "
             ),
-            format!("{name} · j/k {action}{switch} · ? help "),
-            format!("{name}{switch} · ? help "),
-            format!("{name} · ? help "),
+            format!("{name} · j/k {action}{switch} · F1 help "),
+            format!("{name}{switch} · F1 help "),
+            format!("{name} · F1 help "),
             format!("{name} "),
         ];
         hints

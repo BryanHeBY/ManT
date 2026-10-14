@@ -51,7 +51,7 @@ pub(crate) use self::outline::{OutlineField, OutlineRecord};
 #[cfg(test)]
 pub(crate) use self::search::LiteralSearch;
 pub use self::search::RenderedSearchMatch;
-pub(crate) use self::search::{MAX_QUERY_BYTES, SearchStream};
+pub(crate) use self::search::{MAX_QUERY_BYTES, PatternStream};
 #[cfg(test)]
 use self::search::{RenderedSearchFragment, RenderedSearchSourceCell};
 use self::search::{RenderedSearchRecord, search_records_for_lines};

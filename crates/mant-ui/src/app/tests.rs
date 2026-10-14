@@ -494,12 +494,12 @@ fn edit_menu_width_fits_its_longest_item() {
 }
 
 #[test]
-fn question_mark_opens_and_closes_keyboard_help() {
+fn f1_opens_and_escape_closes_keyboard_help() {
     let backend = TestBackend::new(100, 22);
     let mut terminal = Terminal::new(backend).expect("test terminal");
     let mut app = App::new(&navigation_bundle());
 
-    app.handle_key(KeyEvent::new(KeyCode::Char('?'), KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::F(1), KeyModifiers::NONE));
     terminal.draw(|frame| app.draw(frame)).expect("draw help");
     assert!(
         terminal
@@ -508,7 +508,7 @@ fn question_mark_opens_and_closes_keyboard_help() {
             .contains("Keyboard Shortcuts")
     );
 
-    app.handle_key(KeyEvent::new(KeyCode::Char('?'), KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert_eq!(app.overlay, Overlay::None);
 }
 
@@ -606,6 +606,7 @@ mod entries;
 mod hierarchy_geometry;
 mod keyboard;
 mod layout;
+mod less_search;
 mod live_search;
 mod menus;
 mod navigation;

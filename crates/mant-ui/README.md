@@ -30,11 +30,14 @@ catalog, search, and cross-document interactions without serializing the IR.
   source row; Enter on a reference explicitly opens it while Enter/Space on an
   owner retain folding. `O` opens the reference chooser and Shift+Y copies a
   reference target (choosing first when invoked on an associated owner).
-- Live literal page/Outline search with active and inactive match highlighting.
-  Query edits are debounced and retire obsolete work; a scalar-folded streaming
-  prefix matcher yields even inside a long record. Previewing does not navigate.
-  Enter or result arrows confirm; unfinished scans disclose provisional counts
-  and defer end wrapping. Page results cap matches and visual fragments, while
+- Live page/Outline search defaults to case-sensitive Rust regexes. `/` and `?`
+  select forward/backward page search; `n` repeats and `N` reverses the direction.
+  `Ctrl+R` toggles Literal, `Alt+C` cycles case modes, and `Alt+W` toggles wrapping
+  (default off); menus expose the same choices. Query edits are debounced and
+  retire obsolete work. Previewing does not navigate. Enter confirms relative
+  to the current position and returns to reading with highlights retained;
+  empty Enter repeats the last pattern. F1 opens keyboard help. Unfinished scans
+  disclose provisional counts; truncated inventories never wrap. Page results cap matches and visual fragments, while
   existing Outline text/field bounds remain independent.
 - Current-snapshot Outline finding through `Ctrl+G` and the Search menu.
   Complete labels, entry names/forms and inventoried reference labels/targets
@@ -105,8 +108,8 @@ Live search reuses the current viewport's shared immutable rendering instead of
 rebuilding a view for every query. Search records preserve logical phrases across
 soft wraps and retain cell boundaries and generated-padding exclusions. The
 stream matcher returns original UTF-8 byte ranges; projection uses binary-search
-cell lookup. Queries are bounded to 4 KiB; each timer slice charges 8 KiB of
-source/record work before yielding, with a 100 ms typing debounce and 8 ms slice
+cell lookup. Queries are bounded to 4 KiB; each timer slice charges 8,192 units of
+matching/record work before yielding, with a 100 ms typing debounce and 8 ms slice
 wakeup. These are work bounds, not a hard wall-time deadline.
 Preview redraws are coalesced to 50 ms intervals; explicit input/result navigation
 and completed scans redraw immediately. Initial view/layout
@@ -115,7 +118,19 @@ snapshots are prepared lazily, with only one extra rendering retained. Width
 changes cancel old cell results and rescan at the new width; current-source
 match ranges retain the active hit where available. Page inventories retain at
 most 4,096 matches and 32,768 fragments. No per-query folded copy of the entire
-document, worker thread or new dependency is needed. Hosts must continue driving
+document or worker thread is needed. Regex compilation uses `regex-automata`'s
+Thompson NFA with a 2 MiB compiled-size limit. The resumable executor follows
+upstream `PikeVM`'s ordered closures and leftmost-first/greedy rules, yielding
+within closures and byte transitions; assertions inspect the complete logical
+record. Exact literal HIR patterns use KMP for efficient byte-bounded scanning.
+Compile work is synchronous and size-bounded, not a hard wall-time guarantee.
+Regex errors remain errors, never literal fallbacks. Like CLI search, patterns
+that can match empty text, invalid UTF-8 matches, look-around and backreferences
+are not accepted. Logical records, not width-dependent rows, define anchors;
+matches do not cross separate paragraphs or Outline fields. Inline regex flags
+override the field's base case mode. The public synchronous `RenderedDocument::search`
+literal API keeps its existing behavior; TUI defaults do not change protocol defaults.
+Hosts must continue driving
 `tick` and `next_wakeup` while a scan is pending, even without keyboard events.
 
 One private pointer owner retains the live gesture, selection and coalesced

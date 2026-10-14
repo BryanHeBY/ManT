@@ -7,11 +7,46 @@ fn key(app: &mut App, code: KeyCode) {
 }
 fn query(app: &mut App, value: &str) {
     app.open_outline_search();
+    // Structural inventory tests explicitly opt into literal/ignore-case;
+    // default Regex/Case behavior is covered in less_search.
+    if app.outline_search.input.options.syntax != mant_protocol::SearchSyntax::Literal {
+        app.handle_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL));
+    }
+    if app.outline_search.input.options.case != mant_protocol::SearchCase::Insensitive {
+        app.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::ALT));
+    }
     app.handle_key(KeyEvent::new(KeyCode::Char('u'), KeyModifiers::CONTROL));
     for character in value.chars() {
         key(app, KeyCode::Char(character));
     }
     key(app, KeyCode::Enter);
+    for _ in 0..10_000 {
+        if let Some(at) = app.outline_search.deadline {
+            app.tick(at);
+        } else {
+            break;
+        }
+    }
+}
+fn preview_query(app: &mut App, value: &str) {
+    app.open_outline_search();
+    if app.outline_search.input.options.syntax != mant_protocol::SearchSyntax::Literal {
+        app.handle_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL));
+    }
+    if app.outline_search.input.options.case != mant_protocol::SearchCase::Insensitive {
+        app.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::ALT));
+    }
+    for character in value.chars() {
+        key(app, KeyCode::Char(character));
+    }
+    for _ in 0..10_000 {
+        if let Some(at) = app.outline_search.deadline {
+            app.tick(at);
+        } else {
+            break;
+        }
+    }
+    key(app, KeyCode::Down);
 }
 fn markdown(source: &str) -> ResolvedContent {
     let mut bundle = mant_loader::load_markdown_text(source, None).unwrap();
@@ -56,7 +91,7 @@ fn shortcut_and_menu_open_the_shared_field_without_stealing_modal_input() {
     assert!(app.search_is_open());
     let mut terminal = Terminal::new(TestBackend::new(100, 24)).unwrap();
     terminal.draw(|frame| app.draw(frame)).unwrap();
-    assert!(terminal.backend().to_string().contains("Find Outline:"));
+    assert!(terminal.backend().to_string().contains("Find Outline /"));
     app.close_search();
     app.activate_menu_action(MenuAction::FindOutline);
     assert!(app.outline_search.input.is_open());
@@ -79,7 +114,7 @@ fn closed_entries_match_names_aliases_and_full_forms_once_per_node() {
             "help-option"
         );
         assert!(app.visible_navigation_indices().contains(&app.selected));
-        assert!(!app.outline_search.revealed.is_empty());
+        assert!(!app.expanded.is_empty());
         assert!(app.take_open_request().is_none());
     }
     assert_eq!(highlighted(&app, theme::SEARCH_ACTIVE), "LANG");
@@ -119,7 +154,7 @@ fn target_groups_do_not_duplicate_real_reference_results_or_open_targets() {
     assert!(highlighted(&app, theme::SEARCH_ACTIVE).contains("target"));
     assert!(app.take_open_request().is_none());
     assert!(app.take_external_request().is_none());
-    key(&mut app, KeyCode::Down);
+    key(&mut app, KeyCode::Char('n'));
     assert_eq!(app.outline_search.active_match, 1);
     assert!(app.take_open_request().is_none());
 }
@@ -152,7 +187,7 @@ fn temporary_paths_stay_visible_until_exit_without_expanding_matched_subtrees() 
         "# Catalog\n\n## First\n\n### Needle A\n\n#### Child A\n\n## Second\n\n### Needle B\n\n#### Child B\n",
     ));
     app.expanded.clear();
-    query(&mut app, "needle");
+    preview_query(&mut app, "needle");
     let first = app.navigation_ancestors(app.selected);
     let first_id = app.session.document.navigation()[app.selected].id.clone();
     assert!(!app.navigation_is_expanded(&first_id));
@@ -173,15 +208,16 @@ fn temporary_paths_stay_visible_until_exit_without_expanding_matched_subtrees() 
 }
 
 #[test]
-fn arrows_enter_and_n_cycle_nodes_with_wraparound() {
+fn n_cycles_nodes_with_explicit_wrap_enabled() {
     let mut app = App::new(&markdown(
         "# Catalog\n\n## Needle A\n\n## Needle B\n\n## Needle C\n",
     ));
+    app.outline_search.input.wrap = true;
     query(&mut app, "needle");
     assert_eq!(app.outline_search.matches.len(), 3);
-    key(&mut app, KeyCode::Up);
+    key(&mut app, KeyCode::Char('N'));
     assert_eq!(app.outline_search.active_match, 2);
-    key(&mut app, KeyCode::Enter);
+    key(&mut app, KeyCode::Char('n'));
     assert_eq!(app.outline_search.active_match, 0);
     key(&mut app, KeyCode::Char('n'));
     assert_eq!(app.outline_search.active_match, 1);
@@ -203,6 +239,10 @@ fn scopes_keep_separate_drafts_queries_and_cursor_positions() {
         key(&mut app, KeyCode::Char(character));
     }
     key(&mut app, KeyCode::Enter);
+    app.open_search();
+    for character in "help".chars() {
+        key(&mut app, KeyCode::Char(character));
+    }
     key(&mut app, KeyCode::Left);
     key(&mut app, KeyCode::Char('!'));
     let page_cursor = app.search.cursor;
@@ -233,7 +273,7 @@ fn no_match_and_empty_queries_do_not_move_selection_or_load_a_document() {
     assert_eq!(app.session.content_scroll, scroll);
     let mut terminal = Terminal::new(TestBackend::new(100, 24)).unwrap();
     terminal.draw(|frame| app.draw(frame)).unwrap();
-    assert!(terminal.backend().to_string().contains("No matches"));
+    assert!(terminal.backend().to_string().contains("Pattern not found"));
     query(&mut app, "");
     assert!(app.outline_search.matches.is_empty());
     assert!(app.take_open_request().is_none());
@@ -266,11 +306,11 @@ fn logical_results_survive_sidebar_reflow_and_full_label_mode() {
 }
 
 #[test]
-fn unicode_fold_and_grapheme_highlights_share_the_page_matcher() {
+fn unicode_and_grapheme_highlights_keep_original_ranges() {
     let mut app = App::new(&markdown(
         "# Catalog\n\n## İSTANBUL 界 e\u{301} 👩\u{200d}💻\n\n## İSTANBUL 界 e\u{301} 👩\u{200d}💻 again\n",
     ));
-    for text in ["i\u{307}", "界", "e\u{301}", "👩\u{200d}💻"] {
+    for text in ["İ", "界", "e\u{301}", "👩\u{200d}💻"] {
         query(&mut app, text);
         assert_eq!(app.outline_search.matches.len(), 2, "{text}");
         let text_highlight = highlighted(&app, theme::SEARCH_ACTIVE);
@@ -299,13 +339,29 @@ fn hidden_match_context_is_visible_without_expanding_every_full_label() {
 fn menu_help_and_mouse_cursor_use_the_outline_scope() {
     let mut app = App::new(&entries());
     query(&mut app, "LANG");
+    app.open_outline_search();
+    for character in "LANG".chars() {
+        key(&mut app, KeyCode::Char(character));
+    }
+    for _ in 0..10_000 {
+        if let Some(at) = app.outline_search.deadline {
+            app.tick(at);
+        } else {
+            break;
+        }
+    }
     let mut terminal = Terminal::new(TestBackend::new(100, 24)).unwrap();
     terminal.draw(|frame| app.draw(frame)).unwrap();
     let screen = terminal.backend().to_string();
     assert!(screen.contains("1/1 nodes"));
     app.handle_mouse(MouseEvent {
         kind: MouseEventKind::Down(MouseButton::Left),
-        column: app.geometry.status.x + 17,
+        column: app.geometry.status.x
+            + u16::try_from(unicode_width::UnicodeWidthStr::width(
+                app.search_prompt().as_str(),
+            ))
+            .unwrap()
+            + 2,
         row: app.geometry.status.y,
         modifiers: KeyModifiers::NONE,
     });
@@ -338,7 +394,7 @@ fn a_new_snapshot_cannot_reuse_old_outline_indices_or_node_matches() {
 fn manual_folds_and_collapse_all_are_not_overwritten_by_temporary_reveals() {
     let mut app = App::new(&markdown("# Catalog\n\n## Parent\n\n### Needle\n"));
     app.expanded.clear();
-    query(&mut app, "needle");
+    preview_query(&mut app, "needle");
     let ancestor = app
         .navigation_ancestors(app.selected)
         .last()
@@ -413,6 +469,10 @@ fn partial_index_coverage_is_disclosed_even_behind_a_long_query() {
     terminal.draw(|frame| app.draw(frame)).unwrap();
     assert!(terminal.backend().to_string().contains("partial"));
     query(&mut app, &"missing".repeat(20));
+    app.open_outline_search();
+    for character in "missing".repeat(20).chars() {
+        key(&mut app, KeyCode::Char(character));
+    }
     terminal.draw(|frame| app.draw(frame)).unwrap();
     assert!(terminal.backend().to_string().contains("partial"));
 }

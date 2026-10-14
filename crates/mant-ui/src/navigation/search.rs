@@ -28,18 +28,18 @@ const MAX_RANGES: usize = 32768;
 pub(crate) struct OutlineScan {
     record: usize,
     field: usize,
-    stream: crate::document::SearchStream,
+    stream: crate::document::PatternStream,
     ranges: Vec<Range<usize>>,
     fields: Vec<FieldHit>,
     remaining: usize,
 }
 
 impl OutlineScan {
-    pub(crate) fn new(query: &str) -> Self {
+    pub(crate) fn with_stream(stream: crate::document::PatternStream) -> Self {
         Self {
             record: 0,
             field: 0,
-            stream: crate::document::SearchStream::new(query),
+            stream,
             ranges: Vec::new(),
             fields: Vec::new(),
             remaining: MAX_RANGES,
@@ -98,7 +98,7 @@ impl OutlineScan {
                 self.remaining -= 1;
                 self.ranges.push(range);
             }
-            if self.stream.offset == field.text.len() {
+            if self.stream.is_done() {
                 if !self.ranges.is_empty() {
                     self.fields.push(FieldHit {
                         field: field.clone(),

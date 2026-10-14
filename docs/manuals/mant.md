@@ -852,19 +852,46 @@ terminal accepted it.
 
 ### Page Search
 
-- `Ctrl+F`, `/`: Open the bottom `Find Page` field.
-- `Enter`: Confirm a query or select the next match.
-- `n`: Select the next confirmed match.
-- `Shift+N`: Select the previous confirmed match.
-- `Escape`: Close search and remove match highlighting.
+- `Ctrl+F`, `/`: Open forward search in the bottom `Find Page` field.
+- `?`: Open backward page search (help is available with `F1`).
+- `Enter`: Confirm, select relative to the current reading position, and return
+  to reading. An empty field repeats the previously confirmed pattern.
+- `n`: Repeat the confirmed search direction; uppercase `N` reverses it.
+- `Ctrl+R` in the field: Toggle Regex/Literal.
+- `Alt+C` in the field: Cycle Sensitive/Ignore/Smart case.
+- `Alt+W` in the field: Toggle wrapping, disabled by default.
+- `Escape`: Cancel a draft or remove retained highlighting while reading.
 
-Typing previews case-insensitive literal matches after a short pause, without
+Both page and Outline searches default to **case-sensitive Rust regular
+expressions**. Modes and direction appear in the field and are also available
+through the Search menu. Smart case ignores case only when the pattern has no
+uppercase characters; it is opt-in. Inline regex flags such as `(?i)foo` and
+`(?-i)foo` override the base case mode. Literal mode interprets every character
+as ordinary text, making `[options]` and paths easy to find without escaping.
+No closing `/` delimiter is required: the field contains only the pattern.
+Vim magic modes and `\c`/`\C` are not implemented.
+Narrow fields use `P`/`O` for Page/Outline, `R`/`L` for Regex/Literal,
+`Aa`/`aa`/`S` for Sensitive/Ignore/Smart case and `W` for opt-in wrap.
+These TUI defaults do not change CLI or protocol search defaults.
+
+Useful regexes include `--(git-dir|work-tree)=`, `\bneedle\b`, and `^--help`.
+Anchors refer to logical records (paragraphs, hard rows or table cells), not
+terminal-width-dependent wrapped rows. Matches do not cross separate records
+or Outline fields. Look-around, backreferences, invalid UTF-8 matches and
+patterns that can match empty text (such as `^` alone or `a*`) are not accepted.
+Invalid/incomplete regexes show an error while remaining editable; they cannot
+be confirmed and never silently fall back to literal matching.
+
+Typing previews matches after a short pause, without
 moving the page or switching documents. `Up`/`Down` selects live results and
-confirms the draft; `Enter` confirms and reveals a match, then selects the next
-one on subsequent presses. Matches stay highlighted while the field is open,
-and explicit result navigation moves the active match into view.
-Closing the field removes highlighting but retains the confirmed query, so
-`n`, `Shift+N`, and the Search menu can resume navigation. Unconfirmed drafts
+confirms the draft. `Enter` confirms and reveals a match at or after the current
+viewport top for forward search, or at or before it for backward search; it
+then returns input to the previous reading region. Matches remain highlighted
+after confirmation. Searches stop at boundaries with a notice by default.
+Opt-in wrapping waits for the relevant scan to finish and reports a wrap;
+partial result inventories never wrap.
+Escape removes highlighting but retains the confirmed query and its options, so
+`n`, uppercase `N`, and the Search menu can resume navigation. Unconfirmed drafts
 do not replace that query. Opening a field again or resuming an interrupted
 search can restart its bounded scan.
 
@@ -873,8 +900,8 @@ last active search scope. Opening another modal surface cancels deferred result
 navigation so a background scan cannot jump behind a menu or finder; matching
 may finish without moving the reader.
 
-Large documents are scanned in resumable byte-bounded slices, including inside
-a single long paragraph. `Searching`/`searching` indicates provisional counts,
+Large documents are scanned in resumable work-bounded slices, including inside
+a single long paragraph and complex regex transitions. `Searching`/`searching` indicates provisional counts,
 not a verified miss. Result navigation waits for the remaining scan before
 wrapping to the opposite end. Query edits, scope switches, field closure and
 document changes retire obsolete work; terminal reflow retires stale cell
@@ -888,12 +915,15 @@ Page results retain at most 4,096 matches and 32,768 visual fragments, with
 
 - `Ctrl+G`: Open `Find Outline` in the same bottom search field. The Search
   menu also exposes `Find in Outline`; opening it shows the Outline sidebar.
-- `Enter`: Confirm the query; after confirmation, select the next matching node.
+- `Enter`: Confirm relative to the selected node and return to reading with
+  highlights retained.
 - `Up` / `Down`: Confirm the draft and select a live matching node. Completed
-  results wrap at the ends; `n` / `Shift+N` also navigate confirmed results.
+  results stop at the ends unless wrapping is explicitly enabled; `n` / `N`
+  repeat/reverse the last confirmed search direction.
 - `Escape`: Close the field, remove highlighting and retain the current position.
 
-Outline search is a case-insensitive literal search of the current document,
+Outline search uses the same regex/literal and case controls as page search,
+with the selected node as its search origin. It searches the current document,
 not a filter of visible rows and not a search of the document catalog. It
 includes complete section titles, entry names/aliases and declarations, and
 the labels and targets of references already inventoried for the Outline.
@@ -949,7 +979,7 @@ Navigate contains backward/forward history and current-document movement.
 - `F10`: Open the menu bar.
 - `Alt+M`, `Alt+E`, `Alt+V`, `Alt+N`, `Alt+S`, `Alt+H`: Open Manual, Edit,
   View, Navigate, Search, or Help directly. Each title's initial is underlined.
-- `?`: Show keyboard shortcuts.
+- `F1`: Show keyboard shortcuts (`?` searches backward).
 - `q`: Quit.
 
 Idle status hints are English, matching the menus and keyboard help. They name

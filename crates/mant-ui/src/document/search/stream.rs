@@ -5,8 +5,6 @@
 
 use std::{collections::VecDeque, ops::Range};
 
-pub(crate) const MAX_QUERY_BYTES: usize = 4096;
-
 #[derive(Debug, Clone)]
 pub(crate) struct SearchStream {
     needle: Vec<u8>,

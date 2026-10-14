@@ -45,12 +45,7 @@ impl App {
             self.open_menu(id);
             return UpdateOutcome::Redraw;
         }
-        if key.modifiers == KeyModifiers::CONTROL && matches!(key.code, KeyCode::Char('g' | 'G')) {
-            self.open_outline_search();
-            return UpdateOutcome::Redraw;
-        }
-        if key.modifiers == KeyModifiers::CONTROL && matches!(key.code, KeyCode::Char('f' | 'F')) {
-            self.open_search();
+        if self.search_control_key(key) {
             return UpdateOutcome::Redraw;
         }
         if self.search_is_open() {
@@ -59,11 +54,12 @@ impl App {
         }
         if key.code == KeyCode::Char('/') {
             self.open_search();
+            self.search.direction = 1;
             return UpdateOutcome::Redraw;
         }
         if key.code == KeyCode::Char('?') {
-            self.overlay = Overlay::Help;
-            self.help_scroll = 0;
+            self.open_search();
+            self.search.direction = -1;
             return UpdateOutcome::Redraw;
         }
         if let Some(outcome) = self.reading_key(key) {
@@ -76,6 +72,10 @@ impl App {
             return UpdateOutcome::Unchanged;
         }
         match key.code {
+            KeyCode::Esc if self.search.highlighted || self.outline_search.input.highlighted => {
+                self.search.close();
+                self.close_outline_search();
+            }
             KeyCode::Esc if self.pointer.clear_selection() => {}
             KeyCode::Char('q' | 'Q') => self.quit = true,
             KeyCode::Char('n') if key.modifiers.contains(KeyModifiers::SHIFT) => {
@@ -109,6 +109,23 @@ impl App {
             _ => return UpdateOutcome::Unchanged,
         }
         UpdateOutcome::Redraw
+    }
+
+    fn search_control_key(&mut self, key: KeyEvent) -> bool {
+        match key.code {
+            KeyCode::F(1) => {
+                self.overlay = Overlay::Help;
+                self.help_scroll = 0;
+            }
+            KeyCode::Char('g' | 'G') if key.modifiers == KeyModifiers::CONTROL => {
+                self.open_outline_search();
+            }
+            KeyCode::Char('f' | 'F') if key.modifiers == KeyModifiers::CONTROL => {
+                self.open_search();
+            }
+            _ => return false,
+        }
+        true
     }
 
     /// Apply one mouse event using geometry retained from the last frame.

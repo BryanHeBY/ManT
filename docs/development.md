@@ -338,11 +338,15 @@ manual source or Markdown file:
 cargo run --locked -p mant-ui --example live_search_profile -- /path/to/gcc.1.gz --help
 ```
 
-Scan work is byte-bounded even within long records; initial renderer preparation
+Scan work is transition-bounded even within long records/epsilon closures;
+exact literal patterns retain the byte-bounded KMP fast path. Regex behavior
+is compared with the upstream engine across scan budgets, including Unicode
+boundaries, greedy/lazy repetition and branch priority. Initial renderer preparation
 is measured separately and is not a promised wall-time-bounded search slice.
 No host-specific performance threshold is asserted in CI. Deterministic reader
 tests cover debounce/cancellation, partial counts, result navigation, Unicode
-folding, reflow and focus/overlay ownership using source-neutral input.
+case policies, regex errors, direction/origin, nonwrapping boundaries, retained
+highlighting, reflow and focus/overlay ownership using source-neutral input.
 
 Run formatting and strict Clippy before the complete verification script.
 Prefer named execution arguments and helpers that correspond to actual

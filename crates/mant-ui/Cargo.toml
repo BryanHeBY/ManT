@@ -20,6 +20,8 @@ mant-ir = { path = "../mant-ir", version = "^0.12.0" }
 mant-protocol = { path = "../mant-protocol", version = "^0.12.0" }
 mant-render = { path = "../mant-render", version = "^0.12.0" }
 ratatui.workspace = true
+regex-automata.workspace = true
+regex-syntax.workspace = true
 unicode-width.workspace = true
 
 [dev-dependencies]

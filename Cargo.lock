@@ -1084,6 +1084,8 @@ dependencies = [
  "mant-query",
  "mant-render",
  "ratatui",
+ "regex-automata",
+ "regex-syntax",
  "serde_json",
  "tokio",
  "unicode-width",

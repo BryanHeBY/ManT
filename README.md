@@ -138,20 +138,26 @@ labels, while keeping name colors, original text and source emphasis intact.
 - The upper-right tab strip keeps successfully opened documents in first-open
   order; click a tab to return to its last selected node.
 - `Alt+Left` / `Alt+Right` move backward and forward through document jumps.
-- `Ctrl+F` or `/` opens live full-page search. Typing previews highlights without
-  moving the page or opening another document; Enter confirms and reveals a hit.
+- `Ctrl+F` or `/` opens forward page search; `?` searches backward. Searches
+  default to case-sensitive Rust regular expressions. In the field, `Ctrl+R`
+  toggles literal matching, `Alt+C` cycles Sensitive/Ignore/Smart case, and
+  `Alt+W` toggles wrapping (off by default). The Search menu exposes these modes.
+  Typing previews highlights without moving the page or opening another document;
+  Enter selects from the current reading position and returns to reading with
+  highlights retained. Empty Enter repeats the previously confirmed pattern.
 - `Ctrl+G` searches the current Outline's complete titles, entry names/forms
   and document-reference labels/targets, including folded nodes. Both scopes
   share the bottom search field but keep separate queries and editing positions.
   Both fields update after a short typing pause; Up/Down selects live results
-  and confirms the draft, while Enter confirms and then cycles results. Outline counts
+  and confirms the draft, while Enter confirms and returns to reading. Outline counts
   are per node; generated `Entries`/`Doc Refs` labels are not search results.
-- `n` and `Shift+N` resume the next and previous match in the last confirmed or
-  navigated search scope. Outline finding reveals ancestor paths temporarily;
+- `n` repeats the last search direction and uppercase `N` reverses it, in the
+  last confirmed or navigated scope. Outline finding reveals ancestor paths temporarily;
   Escape removes highlighting and retains only the current position's path.
-- Large searches advance in cancellable byte-bounded slices, including within
+- Large searches advance in cancellable work-bounded slices, including within
   long paragraphs. `searching` means counts are provisional; `partial` discloses
-  result/index limits. Navigation waits for unfinished results before wrapping.
+  result/index limits. Searches stop at boundaries by default; opt-in wrapping
+  waits for unfinished results and never wraps a truncated result inventory.
 - Mouse drag selects and immediately copies rendered text as plain text; a
   short confirmation appears after success. `y` or `Ctrl+Shift+C` copies the
   current selection again, as does right-clicking inside the document.
@@ -161,7 +167,7 @@ labels, while keeping name colors, original text and source emphasis intact.
   Navigate, Search, or Help directly. Underlined initials identify these keys.
   Inside a menu, letters or Left/Right switch menus, Up/Down select an item,
   Enter/Space runs it, and Escape/F10 returns to reading or search.
-- `?` opens scrollable keyboard help, and `q` quits. Idle bottom hints adapt to
+- `F1` opens scrollable keyboard help, and `q` quits. Idle bottom hints adapt to
   terminal width; errors, search and menu feedback take priority. No first-run
   marker or keybinding configuration file is created.
 

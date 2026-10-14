@@ -8,8 +8,11 @@ use ratatui::text::{Line, Span, Text};
 use super::{RenderedDocument, RenderedSelection, WrappedLine};
 use crate::theme;
 
+#[cfg(test)]
 mod stream;
-pub(crate) use stream::{MAX_QUERY_BYTES, SearchStream};
+pub(crate) const MAX_QUERY_BYTES: usize = 4096;
+mod pattern;
+pub(crate) use pattern::PatternStream;
 
 /// One exact visual-row range found in a width-dependent document rendering.
 #[derive(Debug, Clone, PartialEq, Eq)]

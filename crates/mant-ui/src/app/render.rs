@@ -244,7 +244,7 @@ impl App {
             .with_entry_labels(self.session.document.entry_labels());
         let expanded = self.effective_expanded();
         let presentation = navigation::search::OutlinePresentation::new(
-            if self.outline_search.input.is_open() {
+            if self.outline_search.input.highlighted {
                 &self.outline_search.matches
             } else {
                 &[]
@@ -380,7 +380,7 @@ impl App {
             .entry(render_width)
             .or_insert_with(|| std::sync::Arc::new(self.session.document.render(render_width)));
         if !self.outline_search.input.is_open()
-            && (self.search.is_open() || self.search.job.is_some())
+            && (self.search.highlighted || self.search.job.is_some())
             && (!self.search.matching_query.is_empty() || !self.search.query.is_empty())
             && self.search.render_width != render_width
         {
@@ -545,10 +545,12 @@ impl App {
         let cursor_character = after_cursor.chars().next();
         let cursor_bytes = cursor_character.map_or(0, char::len_utf8);
         let after_cursor = &after_cursor[cursor_bytes..];
-        let prompt = format!("{}{}", self.search_prompt(), input.draft);
+        let prefix = self.search_prompt_for_width(area.width);
+        let prefix_width = prefix.width();
+        let prompt = format!("{prefix}{}", input.draft);
         frame.render_widget(
             Paragraph::new(Line::from(vec![
-                Span::styled(self.search_prompt(), style.fg(theme::YELLOW)),
+                Span::styled(prefix, style.fg(theme::YELLOW)),
                 Span::styled(
                     before_cursor.to_owned(),
                     style.fg(theme::TEXT).bg(theme::SURFACE),
@@ -579,19 +581,41 @@ impl App {
                     .alignment(Alignment::Right),
                 area,
             );
-        } else if feedback.limited || feedback.pending || input.input_limited {
+        } else if feedback.limited
+            || feedback.pending
+            || input.input_limited
+            || input.error.is_some()
+        {
             // Coverage and input bounds remain visible behind a long query.
-            frame.render_widget(
-                Paragraph::new(if feedback.limited {
-                    " partial "
-                } else if input.input_limited {
-                    " query limit "
+            let mut label = if input.error.is_some() {
+                " invalid regex "
+            } else if feedback.limited {
+                " partial "
+            } else if input.input_limited {
+                " query limit "
+            } else {
+                " searching "
+            };
+            let available = usize::from(area.width).saturating_sub(prefix_width + 1);
+            if label.width() > available {
+                label = if input.error.is_some() {
+                    " ERR "
                 } else {
-                    " searching "
-                })
-                .alignment(Alignment::Right)
-                .style(suffix_style),
-                area,
+                    " + "
+                };
+            }
+            if label.width() > available {
+                return;
+            }
+            let width = u16::try_from(label.width()).unwrap_or_default();
+            frame.render_widget(
+                Paragraph::new(label).style(suffix_style),
+                Rect::new(
+                    area.right().saturating_sub(width),
+                    area.y,
+                    width,
+                    area.height,
+                ),
             );
         }
     }
@@ -622,7 +646,12 @@ impl App {
         } else {
             &input.query
         };
-        let mut suffix = if input.input_limited {
+        let mut suffix = if let Some(error) = &input.error {
+            format!(
+                " Invalid regex: {} · Edit query ",
+                error.lines().last().unwrap_or("invalid pattern")
+            )
+        } else if input.input_limited {
             " Query limit: 4096 bytes · Edit query · Esc close ".to_owned()
         } else if pending {
             format!(" Searching · {count} found · Enter select · Esc close ")
@@ -639,11 +668,7 @@ impl App {
                     active + 1,
                     count,
                     if outline { " nodes" } else { "" },
-                    if input.is_editing() {
-                        "Enter select"
-                    } else {
-                        "Enter next"
-                    },
+                    "Enter select",
                 )
             }
         } else {
@@ -656,7 +681,7 @@ impl App {
             text: suffix,
             pending,
             limited,
-            missing: count == 0 && !pending && !effective_query.is_empty(),
+            missing: input.error.is_none() && count == 0 && !pending && !effective_query.is_empty(),
         }
     }
 

@@ -6,6 +6,13 @@ fn page(text: &str) -> ResolvedContent {
 }
 
 fn type_query(app: &mut App, query: &str) {
+    if !app.search_is_open() {
+        if app.search_target == super::super::outline_search::SearchTarget::Outline {
+            app.open_outline_search();
+        } else {
+            app.open_search();
+        }
+    }
     app.handle_key(KeyEvent::new(KeyCode::Char('u'), KeyModifiers::CONTROL));
     for character in query.chars() {
         app.handle_key(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE));
@@ -24,7 +31,7 @@ fn finish(app: &mut App) {
 
 #[test]
 fn preview_is_debounced_highlights_without_confirmation_and_reuses_layout() {
-    let mut app = App::new(&page("a searchable phrase and another SEARCHABLE phrase"));
+    let mut app = App::new(&page("a searchable phrase and another searchable phrase"));
     let mut terminal = Terminal::new(TestBackend::new(100, 20)).unwrap();
     terminal.draw(|frame| app.draw(frame)).unwrap();
     let width = app.geometry.content.width;
@@ -78,7 +85,7 @@ fn a_long_single_record_yields_and_old_queries_cannot_publish_after_edits() {
     let screen = terminal.backend().to_string();
     assert!(screen.contains("Searching") || screen.contains("searching"));
     assert!(!screen.contains("No matches"));
-    type_query(&mut app, "i\u{307}stanbul");
+    type_query(&mut app, "İstanbul");
     let new_deadline = app.search.deadline.unwrap();
     app.tick(old_deadline);
     assert_eq!(app.search.matches, Vec::new());
@@ -114,14 +121,14 @@ fn navigation_waits_for_later_matches_instead_of_wrapping_partial_results() {
     assert_eq!(app.search.scope_matches.len(), 1);
     assert!(app.search.job.is_some());
     let first = app.session.content_scroll;
-    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE));
     assert_eq!(app.session.content_scroll, first);
     assert_eq!(app.search.active_match, 0);
     finish(&mut app);
     assert_eq!(app.search.active_match, 1);
     assert!(app.session.content_scroll > first);
-    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-    assert_eq!(app.search.active_match, 0);
+    app.handle_key(KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE));
+    assert_eq!(app.search.active_match, 1, "default search does not wrap");
 }
 
 #[test]
@@ -154,7 +161,7 @@ fn reflow_discards_stale_cell_ranges_and_retains_the_active_source_match() {
     app.open_search();
     type_query(&mut app, "searchable phrase");
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE));
     assert_eq!(app.search.active_match, 1);
     let mut narrow = Terminal::new(TestBackend::new(28, 20)).unwrap();
     narrow.draw(|frame| app.draw(frame)).unwrap();
@@ -246,7 +253,7 @@ fn cancelling_preview_retains_confirmed_query_and_active_hit_in_both_scopes() {
     app.open_search();
     type_query(&mut app, "needle");
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE));
     assert_eq!(app.search.active_match, 1);
     type_query(&mut app, "absent");
     finish(&mut app);
@@ -267,7 +274,7 @@ fn cancelling_preview_retains_confirmed_query_and_active_hit_in_both_scopes() {
     app.open_outline_search();
     type_query(&mut app, "needle");
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE));
     assert_eq!(app.outline_search.active_match, 1);
     type_query(&mut app, "absent");
     finish(&mut app);
@@ -385,8 +392,11 @@ fn active_scope_menu_navigation_confirms_preview_like_result_arrows() {
     app.activate_menu_action(MenuAction::FindNext);
     assert_eq!(app.search.query, "absent");
     assert!(!app.search.is_editing());
-    assert_eq!(app.search.active_match, 1);
+    assert_eq!(app.search.active_match, 0);
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE));
-    assert_eq!(app.search.active_match, 0);
+    assert_eq!(
+        app.search.active_match, 1,
+        "default search stops at the last match"
+    );
 }

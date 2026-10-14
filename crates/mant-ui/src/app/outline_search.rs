@@ -5,7 +5,7 @@ use std::{borrow::Cow, collections::HashSet, time::Instant};
 
 use super::{
     App,
-    search::{SearchCommand, SearchInput},
+    search::{SearchCommand, SearchInput, SearchMode, SearchOptions},
 };
 use crate::{document::OutlineRecord, navigation::search::OutlineHit};
 
@@ -38,8 +38,11 @@ pub(super) struct OutlineSearchState {
     pub(super) job: Option<crate::navigation::search::OutlineScan>,
     pending_move: Option<isize>,
     matching_query: String,
+    matching_options: SearchOptions,
+    initial_node: Option<usize>,
+    initial_direction: isize,
     status: ScanStatus,
-    confirmed_target: Option<(String, usize)>,
+    confirmed_target: Option<(String, SearchOptions, usize)>,
     restart_target: Option<usize>,
     repaint: super::search::SearchRepaint,
 }
@@ -60,11 +63,56 @@ impl App {
     pub(super) fn search_is_open(&self) -> bool {
         self.active_search_input().is_open()
     }
-    pub(super) fn search_prompt(&self) -> &'static str {
-        match self.search_target {
-            SearchTarget::Page => " Find Page: ",
-            SearchTarget::Outline => " Find Outline: ",
+    pub(super) fn search_prompt(&self) -> String {
+        self.search_prompt_for_width(self.geometry.status.width)
+    }
+    pub(super) fn search_prompt_for_width(&self, width: u16) -> String {
+        let input = self.active_search_input();
+        let direction = if input.direction > 0 { '/' } else { '?' };
+        if width <= 20 {
+            return format!("{direction} ");
         }
+        if width < 70 {
+            return format!(
+                "{}{direction} [{} {}{}]: ",
+                if self.search_target == SearchTarget::Page {
+                    'P'
+                } else {
+                    'O'
+                },
+                if input.options.syntax == mant_protocol::SearchSyntax::Regex {
+                    'R'
+                } else {
+                    'L'
+                },
+                match input.options.case {
+                    mant_protocol::SearchCase::Sensitive => "Aa",
+                    mant_protocol::SearchCase::Insensitive => "aa",
+                    mant_protocol::SearchCase::Smart => "S",
+                },
+                if input.wrap { " W" } else { "" }
+            );
+        }
+        format!(
+            " Find {} {} [{} · {}{}]: ",
+            if self.search_target == SearchTarget::Page {
+                "Page"
+            } else {
+                "Outline"
+            },
+            direction,
+            if input.options.syntax == mant_protocol::SearchSyntax::Regex {
+                "Regex"
+            } else {
+                "Literal"
+            },
+            match input.options.case {
+                mant_protocol::SearchCase::Sensitive => "Case",
+                mant_protocol::SearchCase::Insensitive => "Ignore case",
+                mant_protocol::SearchCase::Smart => "Smart case",
+            },
+            if input.wrap { " · Wrap" } else { "" }
+        )
     }
     pub(super) fn open_outline_search(&mut self) {
         if self.search_target == SearchTarget::Outline && self.outline_search.input.is_open() {
@@ -86,6 +134,7 @@ impl App {
             self.outline_search.input.query.clone()
         };
         if self.outline_search.matching_query != value
+            || self.outline_search.matching_options != self.outline_search.input.effective_options()
             || self.outline_search.status != ScanStatus::Complete
         {
             self.start_outline_search(&value, Instant::now() + super::search::SEARCH_DEBOUNCE);
@@ -96,7 +145,7 @@ impl App {
     }
 
     pub(super) fn finish_outline_search(&mut self, suspend: bool) {
-        if self.outline_search.input.is_open() {
+        if self.outline_search.input.is_open() || self.outline_search.input.highlighted {
             // Only the current selection's path becomes a lasting expansion.
             // User-owned folds were never overwritten by search exploration.
             if !self.outline_search.revealed.is_empty() {
@@ -113,7 +162,9 @@ impl App {
             }
             self.outline_search.deadline = None;
             self.outline_search.pending_move = None;
-            if self.outline_search.matching_query != self.outline_search.input.query {
+            if self.outline_search.matching_query != self.outline_search.input.query
+                || self.outline_search.matching_options != self.outline_search.input.options
+            {
                 self.outline_search.matches.clear();
             }
             self.navigation_viewport_request = Some(super::NavigationViewportRequest::Reveal {
@@ -131,40 +182,91 @@ impl App {
             }
             SearchCommand::Close => self.close_outline_search(),
             SearchCommand::Confirm => {
+                self.notice = None;
                 self.last_search_target = SearchTarget::Outline;
+                let query = self.outline_search.input.query.clone();
+                if self.outline_search.matching_query != query
+                    || self.outline_search.matching_options != self.outline_search.input.options
+                {
+                    self.start_outline_search(&query, Instant::now());
+                }
                 if self.outline_search.job.is_some() {
                     self.outline_search.deadline = Some(Instant::now());
                 }
                 self.outline_search.pending_move = Some(0);
+                self.outline_search.initial_node = Some(self.selected);
+                self.outline_search.initial_direction = self.outline_search.input.direction;
+                self.outline_search.input.mode = SearchMode::Closed;
                 self.advance_outline_search(Instant::now());
                 self.fulfill_outline_search_move();
             }
             SearchCommand::Next => {
+                let initial = self.outline_search.input.has_changed_draft()
+                    || self.outline_search.confirmed_target.is_none();
                 self.outline_search.input.confirm_navigation();
                 self.last_search_target = SearchTarget::Outline;
-                self.select_outline_relative(1);
+                if initial {
+                    self.outline_search.initial_node = Some(self.selected);
+                    self.outline_search.initial_direction = self.outline_search.input.direction;
+                    self.outline_search.pending_move = Some(0);
+                    self.outline_search.deadline =
+                        self.outline_search.job.as_ref().map(|_| Instant::now());
+                    self.advance_outline_search(Instant::now());
+                    self.fulfill_outline_search_move();
+                } else {
+                    self.select_outline_relative(self.outline_search.input.direction);
+                }
             }
             SearchCommand::Previous => {
+                let initial = self.outline_search.input.has_changed_draft()
+                    || self.outline_search.confirmed_target.is_none();
                 self.outline_search.input.confirm_navigation();
                 self.last_search_target = SearchTarget::Outline;
-                self.select_outline_relative(-1);
+                if initial {
+                    self.outline_search.initial_node = Some(self.selected);
+                    self.outline_search.initial_direction = -self.outline_search.input.direction;
+                    self.outline_search.pending_move = Some(0);
+                    self.outline_search.deadline =
+                        self.outline_search.job.as_ref().map(|_| Instant::now());
+                    self.advance_outline_search(Instant::now());
+                    self.fulfill_outline_search_move();
+                } else {
+                    self.select_outline_relative(-self.outline_search.input.direction);
+                }
             }
         }
     }
     pub(super) fn select_last_search_relative(&mut self, delta: isize) {
         if self.search_is_open() && self.search_target == self.last_search_target {
-            self.active_search_input_mut().confirm_navigation();
+            self.handle_search_key(crossterm::event::KeyEvent::new(
+                if delta > 0 {
+                    crossterm::event::KeyCode::Down
+                } else {
+                    crossterm::event::KeyCode::Up
+                },
+                crossterm::event::KeyModifiers::NONE,
+            ));
+            return;
         }
         match self.last_search_target {
-            SearchTarget::Page => self.select_search_relative(delta),
-            SearchTarget::Outline => self.select_outline_relative(delta),
+            SearchTarget::Page => {
+                self.search.highlighted = true;
+                self.select_search_relative(delta * self.search.repeat_direction());
+            }
+            SearchTarget::Outline => {
+                self.outline_search.input.highlighted = true;
+                self.select_outline_relative(delta * self.outline_search.input.repeat_direction());
+            }
         }
     }
     fn select_outline_relative(&mut self, delta: isize) {
+        self.notice = None;
         if !self.outline_search.input.is_open()
             && self.outline_search.job.is_none()
             && (self.outline_search.status != ScanStatus::Complete
-                || self.outline_search.matching_query != self.outline_search.input.query)
+                || self.outline_search.matching_query != self.outline_search.input.query
+                || self.outline_search.matching_options
+                    != self.outline_search.input.effective_options())
         {
             let query = self.outline_search.input.query.clone();
             self.start_outline_search(&query, Instant::now());
@@ -172,6 +274,19 @@ impl App {
         if self.outline_search.job.is_some() {
             self.outline_search.deadline = Some(Instant::now());
             self.advance_outline_search(Instant::now());
+        }
+        if self.outline_search.restart_target.is_none()
+            && self
+                .outline_search
+                .matches
+                .get(self.outline_search.active_match)
+                .is_some_and(|hit| hit.node_index != self.selected)
+        {
+            self.outline_search.initial_node = Some(self.selected);
+            self.outline_search.initial_direction = delta;
+            self.outline_search.pending_move = Some(0);
+            self.fulfill_outline_search_move();
+            return;
         }
         if self.outline_search.job.is_some() {
             self.outline_search.deadline = Some(Instant::now());
@@ -195,6 +310,20 @@ impl App {
         }
         let current = isize::try_from(self.outline_search.active_match).unwrap_or_default();
         let count = isize::try_from(count).unwrap_or(isize::MAX);
+        if !(0..count).contains(&(current + delta)) {
+            if !self.outline_search.input.wrap || self.outline_search.limited {
+                self.notice = Some(
+                    if self.outline_search.limited {
+                        "Search results are partial"
+                    } else {
+                        "No more matches in search direction"
+                    }
+                    .to_owned(),
+                );
+                return;
+            }
+            self.notice = Some("Search wrapped".to_owned());
+        }
         self.outline_search.active_match =
             usize::try_from((current + delta).rem_euclid(count)).unwrap_or_default();
         self.select_active_outline_match();
@@ -211,8 +340,11 @@ impl App {
         if !self.outline_search.input.is_editing()
             && self.outline_search.matching_query == self.outline_search.input.query
         {
-            self.outline_search.confirmed_target =
-                Some((self.outline_search.input.query.clone(), index));
+            self.outline_search.confirmed_target = Some((
+                self.outline_search.input.query.clone(),
+                self.outline_search.input.options,
+                index,
+            ));
         }
         let anchor = hit.fields.first().map(|field| field.field.anchor.clone());
         let ancestors = self.navigation_ancestors(index);
@@ -251,8 +383,10 @@ impl App {
             .outline_search
             .confirmed_target
             .as_ref()
-            .filter(|(confirmed, _)| confirmed == query)
-            .map(|(_, node)| *node);
+            .filter(|(confirmed, options, _)| {
+                confirmed == query && *options == self.outline_search.input.effective_options()
+            })
+            .map(|(_, _, node)| *node);
         self.outline_search.matches.clear();
         self.outline_search.active_match = 0;
         self.outline_search.limited = self.outline_search.index_limited;
@@ -263,13 +397,26 @@ impl App {
             .into_iter()
             .collect();
         query.clone_into(&mut self.outline_search.matching_query);
+        self.outline_search.matching_options = self.outline_search.input.effective_options();
+        self.outline_search.input.error = None;
         self.outline_search.status = if query.is_empty() {
             ScanStatus::Complete
         } else {
             ScanStatus::Running
         };
-        self.outline_search.job =
-            (!query.is_empty()).then(|| crate::navigation::search::OutlineScan::new(query));
+        self.outline_search.job = if query.is_empty() {
+            None
+        } else {
+            let options = self.outline_search.input.effective_options();
+            match crate::document::PatternStream::compile(query, options.syntax, options.case) {
+                Ok(stream) => Some(crate::navigation::search::OutlineScan::with_stream(stream)),
+                Err(error) => {
+                    self.outline_search.input.error = Some(error);
+                    self.outline_search.status = ScanStatus::Complete;
+                    None
+                }
+            }
+        };
         self.outline_search.deadline = self.outline_search.job.as_ref().map(|_| deadline);
     }
 
@@ -331,7 +478,38 @@ impl App {
         };
         let count = self.outline_search.matches.len();
         if delta == 0 && count > 0 {
+            if let Some(node) = self.outline_search.initial_node {
+                let direction = self.outline_search.initial_direction;
+                let index = if direction > 0 {
+                    self.outline_search
+                        .matches
+                        .iter()
+                        .position(|hit| hit.node_index >= node)
+                } else {
+                    self.outline_search
+                        .matches
+                        .iter()
+                        .rposition(|hit| hit.node_index <= node)
+                };
+                if direction < 0 && self.outline_search.job.is_some() {
+                    return;
+                }
+                if let Some(index) = index {
+                    self.outline_search.active_match = index;
+                } else if self.outline_search.job.is_some() {
+                    return;
+                } else if self.outline_search.input.wrap && !self.outline_search.limited {
+                    self.outline_search.active_match = if direction > 0 { 0 } else { count - 1 };
+                    self.notice = Some("Search wrapped".to_owned());
+                } else {
+                    self.outline_search.pending_move = None;
+                    self.outline_search.initial_node = None;
+                    self.notice = Some("Pattern not found in search direction".to_owned());
+                    return;
+                }
+            }
             self.outline_search.pending_move = None;
+            self.outline_search.initial_node = None;
             self.select_active_outline_match();
         } else if count > 0
             && (self.outline_search.job.is_none()
@@ -342,6 +520,16 @@ impl App {
             self.move_outline_result(delta);
         } else if self.outline_search.job.is_none() {
             self.outline_search.pending_move = None;
+            if count == 0 && !self.outline_search.input.query.is_empty() {
+                self.notice = Some(
+                    if self.outline_search.limited {
+                        "No indexed matches · partial"
+                    } else {
+                        "Pattern not found"
+                    }
+                    .to_owned(),
+                );
+            }
         }
     }
     pub(super) fn navigation_is_expanded(&self, id: &str) -> bool {

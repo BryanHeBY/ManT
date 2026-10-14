@@ -1,7 +1,7 @@
 //! Owns search-field editing and translates keys into document-level commands.
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use unicode_width::UnicodeWidthChar;
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use std::{
     ops::Range,
@@ -12,6 +12,22 @@ use std::{
 
 use super::App;
 use crate::RenderedSearchMatch;
+use mant_protocol::{SearchCase, SearchSyntax};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct SearchOptions {
+    pub(super) syntax: SearchSyntax,
+    pub(super) case: SearchCase,
+}
+
+impl Default for SearchOptions {
+    fn default() -> Self {
+        Self {
+            syntax: SearchSyntax::Regex,
+            case: SearchCase::Sensitive,
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub(super) struct ScopedRenderedSearchMatch {
@@ -45,6 +61,7 @@ pub(super) struct SearchState {
     pub(super) active_match: usize,
     pub(super) render_width: u16,
     pub(super) matching_query: String,
+    matching_options: SearchOptions,
     pub(super) job: Option<PageSearchJob>,
     pub(super) deadline: Option<Instant>,
     pub(super) limited: bool,
@@ -53,7 +70,9 @@ pub(super) struct SearchState {
     pending_move: Option<isize>,
     prepared: Option<(usize, u16, Arc<crate::RenderedDocument>)>,
     reflow_target: Option<SearchAnchor>,
-    confirmed_target: Option<(String, SearchAnchor)>,
+    confirmed_target: Option<(String, SearchOptions, SearchAnchor)>,
+    initial_position: Option<(usize, usize)>,
+    initial_direction: isize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -105,7 +124,7 @@ pub(super) struct PageSearchJob {
     document: usize,
     record: usize,
     fragments: usize,
-    stream: crate::document::SearchStream,
+    stream: crate::document::PatternStream,
 }
 
 /// Common input editor; each search surface owns its own query and cursor.
@@ -117,6 +136,13 @@ pub(super) struct SearchInput {
     pub(super) cursor: usize,
     pub(super) query: String,
     pub(super) input_limited: bool,
+    pub(super) options: SearchOptions,
+    confirmed_options: SearchOptions,
+    pub(super) direction: isize,
+    confirmed_direction: isize,
+    pub(super) error: Option<String>,
+    pub(super) wrap: bool,
+    pub(super) highlighted: bool,
 }
 
 impl Default for SearchInput {
@@ -128,6 +154,13 @@ impl Default for SearchInput {
             cursor: 0,
             query: String::new(),
             input_limited: false,
+            options: SearchOptions::default(),
+            confirmed_options: SearchOptions::default(),
+            direction: 1,
+            confirmed_direction: 1,
+            error: None,
+            wrap: false,
+            highlighted: false,
         }
     }
 }
@@ -141,22 +174,36 @@ impl SearchInput {
         self.mode.is_editing()
     }
 
-    fn effective_query(&self) -> &str {
+    pub(super) fn effective_query(&self) -> &str {
         if self.is_editing() {
             &self.draft
         } else {
             &self.query
         }
     }
+    pub(super) fn effective_options(&self) -> SearchOptions {
+        if self.is_editing() {
+            self.options
+        } else {
+            self.confirmed_options
+        }
+    }
+    pub(super) fn repeat_direction(&self) -> isize {
+        self.confirmed_direction
+    }
+    pub(super) fn has_changed_draft(&self) -> bool {
+        self.is_editing() && (self.draft != self.query || self.options != self.confirmed_options)
+    }
 
     pub(super) fn open(&mut self) {
+        self.highlighted = true;
         if let Some(mode) = self.resume_mode.take() {
             self.mode = mode;
             return;
         }
-        self.mode = SearchMode::Open { editing: false };
-        self.draft.clone_from(&self.query);
-        self.cursor = self.draft.len();
+        self.mode = SearchMode::Open { editing: true };
+        self.draft.clear();
+        self.cursor = 0;
     }
 
     pub(super) fn close(&mut self) {
@@ -165,19 +212,27 @@ impl SearchInput {
         self.draft.clear();
         self.cursor = 0;
         self.input_limited = false;
+        self.options = self.confirmed_options;
+        self.direction = self.confirmed_direction;
+        self.error = None;
+        self.highlighted = false;
     }
 
     pub(super) fn confirm_navigation(&mut self) {
         if self.is_editing() {
             self.query.clone_from(&self.draft);
+            self.confirmed_options = self.options;
+            self.confirmed_direction = self.direction;
             self.mode = SearchMode::Open { editing: false };
         }
     }
 
     pub(super) fn suspend(&mut self) {
+        self.highlighted = false;
         if self.is_open() {
             self.resume_mode = Some(self.mode);
             self.mode = SearchMode::Closed;
+            self.highlighted = false;
         }
     }
 
@@ -185,28 +240,64 @@ impl SearchInput {
         self.cursor = cursor_byte_at_column(&self.draft, column);
     }
 
-    pub(super) fn handle_key(&mut self, key: KeyEvent, has_matches: bool) -> SearchCommand {
+    fn reuse_empty_pattern(&mut self) -> bool {
+        if !self.draft.is_empty() {
+            return true;
+        }
+        self.draft.clone_from(&self.query);
+        self.cursor = self.draft.len();
+        if !self.draft.is_empty()
+            && let Err(error) = crate::document::PatternStream::compile(
+                &self.draft,
+                self.options.syntax,
+                self.options.case,
+            )
+        {
+            self.error = Some(error);
+            self.mode = SearchMode::Open { editing: true };
+            return false;
+        }
+        true
+    }
+
+    pub(super) fn handle_key(&mut self, key: KeyEvent, _has_matches: bool) -> SearchCommand {
         let previous = self.draft.clone();
         match key.code {
             KeyCode::Esc => return SearchCommand::Close,
             KeyCode::Enter => {
-                if !self.is_editing() && self.draft == self.query {
-                    return SearchCommand::Next;
+                if self.error.is_some() {
+                    return SearchCommand::None;
+                }
+                if !self.reuse_empty_pattern() {
+                    return SearchCommand::None;
                 }
                 self.query.clone_from(&self.draft);
+                self.confirmed_options = self.options;
+                self.confirmed_direction = self.direction;
                 self.mode = SearchMode::Open { editing: false };
                 return SearchCommand::Confirm;
             }
-            KeyCode::Char('n' | 'N')
-                if !self.is_editing() && self.draft == self.query && has_matches =>
-            {
-                return if key.code == KeyCode::Char('N')
-                    || key.modifiers.contains(KeyModifiers::SHIFT)
-                {
-                    SearchCommand::Previous
+            KeyCode::Char('r' | 'R') if key.modifiers == KeyModifiers::CONTROL => {
+                self.options.syntax = if self.options.syntax == SearchSyntax::Regex {
+                    SearchSyntax::Literal
                 } else {
-                    SearchCommand::Next
+                    SearchSyntax::Regex
                 };
+                self.mode = SearchMode::Open { editing: true };
+                return SearchCommand::Changed;
+            }
+            KeyCode::Char('c' | 'C') if key.modifiers == KeyModifiers::ALT => {
+                self.options.case = match self.options.case {
+                    SearchCase::Sensitive => SearchCase::Insensitive,
+                    SearchCase::Insensitive => SearchCase::Smart,
+                    SearchCase::Smart => SearchCase::Sensitive,
+                };
+                self.mode = SearchMode::Open { editing: true };
+                return SearchCommand::Changed;
+            }
+            KeyCode::Char('w' | 'W') if key.modifiers == KeyModifiers::ALT => {
+                self.wrap = !self.wrap;
+                return SearchCommand::None;
             }
             KeyCode::Backspace => {
                 if let Some(previous) = previous_char_boundary(&self.draft, self.cursor) {
@@ -239,8 +330,8 @@ impl SearchInput {
                 self.cursor = 0;
                 self.mode = SearchMode::Open { editing: true };
             }
-            KeyCode::Down => return SearchCommand::Next,
-            KeyCode::Up => return SearchCommand::Previous,
+            KeyCode::Down if self.error.is_none() => return SearchCommand::Next,
+            KeyCode::Up if self.error.is_none() => return SearchCommand::Previous,
             KeyCode::Char(character)
                 if !key
                     .modifiers
@@ -293,10 +384,14 @@ impl SearchState {
         self.input.close();
         self.matches.clear();
         self.pending_move = None;
-        if self.job.take().is_some() || self.matching_query != self.query {
+        if self.job.take().is_some()
+            || self.matching_query != self.query
+            || self.matching_options != self.options
+        {
             self.restart_needed = true;
-            if self.matching_query != self.query {
+            if self.matching_query != self.query || self.matching_options != self.options {
                 self.scope_matches.clear();
+                self.matches.clear();
             }
         }
         self.deadline = None;
@@ -325,6 +420,7 @@ impl App {
         if self.search.restart_needed
             || self.search.render_width != self.geometry.content.width.max(1)
             || self.search.matching_query != self.search.effective_query()
+            || self.search.matching_options != self.search.effective_options()
         {
             self.refresh_search(self.geometry.content.width.max(1));
         }
@@ -349,21 +445,73 @@ impl App {
             SearchCommand::Changed => self.schedule_page_search(Instant::now()),
             SearchCommand::Close => self.close_search(),
             SearchCommand::Confirm => {
+                self.notice = None;
+                self.search.initial_direction = self.search.direction;
                 self.last_search_target = super::outline_search::SearchTarget::Page;
                 self.ensure_page_search();
                 self.search.pending_move = Some(0);
+                self.search.initial_position = Some((
+                    self.scope_documents
+                        .iter()
+                        .position(|document| Arc::ptr_eq(document, &self.session.current_bundle))
+                        .unwrap_or(0),
+                    self.session.content_scroll,
+                ));
+                self.search.mode = SearchMode::Closed;
                 self.advance_page_search(Instant::now());
                 self.fulfill_page_search_move();
             }
             SearchCommand::Next => {
+                let initial = self.search.is_editing()
+                    && (self.search.draft != self.search.query
+                        || self.search.options != self.search.confirmed_options
+                        || self.search.confirmed_target.is_none());
                 self.search.confirm_navigation();
                 self.last_search_target = super::outline_search::SearchTarget::Page;
-                self.select_search_relative(1);
+                if initial {
+                    self.ensure_page_search();
+                    self.search.initial_direction = self.search.direction;
+                    self.search.initial_position = Some((
+                        self.scope_documents
+                            .iter()
+                            .position(|document| {
+                                Arc::ptr_eq(document, &self.session.current_bundle)
+                            })
+                            .unwrap_or(0),
+                        self.session.content_scroll,
+                    ));
+                    self.search.pending_move = Some(0);
+                    self.advance_page_search(Instant::now());
+                    self.fulfill_page_search_move();
+                } else {
+                    self.select_search_relative(self.search.direction);
+                }
             }
             SearchCommand::Previous => {
+                let initial = self.search.is_editing()
+                    && (self.search.draft != self.search.query
+                        || self.search.options != self.search.confirmed_options
+                        || self.search.confirmed_target.is_none());
                 self.search.confirm_navigation();
                 self.last_search_target = super::outline_search::SearchTarget::Page;
-                self.select_search_relative(-1);
+                if initial {
+                    self.ensure_page_search();
+                    self.search.initial_direction = -self.search.direction;
+                    self.search.initial_position = Some((
+                        self.scope_documents
+                            .iter()
+                            .position(|document| {
+                                Arc::ptr_eq(document, &self.session.current_bundle)
+                            })
+                            .unwrap_or(0),
+                        self.session.content_scroll,
+                    ));
+                    self.search.pending_move = Some(0);
+                    self.advance_page_search(Instant::now());
+                    self.fulfill_page_search_move();
+                } else {
+                    self.select_search_relative(-self.search.direction);
+                }
             }
         }
     }
@@ -372,7 +520,9 @@ impl App {
         self.search.restart_needed = false;
         self.search.repaint = SearchRepaint::default();
         let query = self.search.effective_query().to_owned();
-        self.search.reflow_target = if self.search.matching_query == query {
+        self.search.reflow_target = if self.search.matching_query == query
+            && self.search.matching_options == self.search.effective_options()
+        {
             self.search
                 .scope_matches
                 .get(self.search.active_match)
@@ -386,20 +536,38 @@ impl App {
             self.search
                 .confirmed_target
                 .as_ref()
-                .filter(|(confirmed, _)| *confirmed == query)
-                .map(|(_, anchor)| anchor.clone())
+                .filter(|(confirmed, options, _)| {
+                    *confirmed == query && *options == self.search.effective_options()
+                })
+                .map(|(_, _, anchor)| anchor.clone())
         };
         self.search.matching_query = query;
+        self.search.matching_options = self.search.effective_options();
         self.search.scope_matches.clear();
         self.search.matches.clear();
         self.search.active_match = 0;
         self.search.limited = false;
-        self.search.job = (!self.search.matching_query.is_empty()).then(|| PageSearchJob {
-            document: 0,
-            record: 0,
-            fragments: 0,
-            stream: crate::document::SearchStream::new(&self.search.matching_query),
-        });
+        self.search.error = None;
+        self.search.job = if self.search.matching_query.is_empty() {
+            None
+        } else {
+            match crate::document::PatternStream::compile(
+                &self.search.matching_query,
+                self.search.matching_options.syntax,
+                self.search.matching_options.case,
+            ) {
+                Ok(stream) => Some(PageSearchJob {
+                    document: 0,
+                    record: 0,
+                    fragments: 0,
+                    stream,
+                }),
+                Err(error) => {
+                    self.search.error = Some(error);
+                    None
+                }
+            }
+        };
         self.search.deadline = self.search.job.as_ref().map(|_| Instant::now());
         self.search.render_width = width;
     }
@@ -414,6 +582,7 @@ impl App {
         if self.search.restart_needed
             || self.search.render_width != self.geometry.content.width.max(1)
             || self.search.matching_query != self.search.effective_query()
+            || self.search.matching_options != self.search.effective_options()
         {
             self.refresh_search(self.geometry.content.width.max(1));
         }
@@ -501,7 +670,7 @@ impl App {
                     });
                 }
             }
-            if job.stream.offset == text.len() {
+            if job.stream.is_done() {
                 job.record += 1;
                 job.stream.reset();
                 budget = budget.saturating_sub(1);
@@ -538,7 +707,39 @@ impl App {
         };
         let count = self.search.scope_matches.len();
         if delta == 0 && count > 0 {
+            if let Some((document, row)) = self.search.initial_position {
+                let direction = self.search.initial_direction;
+                let index =
+                    if direction > 0 {
+                        self.search.scope_matches.iter().position(|hit| {
+                            (hit.document_index, hit.rendered.row) >= (document, row)
+                        })
+                    } else {
+                        self.search.scope_matches.iter().rposition(|hit| {
+                            (hit.document_index, hit.rendered.row) <= (document, row)
+                        })
+                    };
+                // A backward candidate is final only after the earlier scope
+                // has been scanned; never publish an arbitrary partial hit.
+                if direction < 0 && self.search.job.is_some() {
+                    return;
+                }
+                if let Some(index) = index {
+                    self.search.active_match = index;
+                } else if self.search.job.is_some() {
+                    return;
+                } else if self.search.wrap && !self.search.limited {
+                    self.search.active_match = if direction > 0 { 0 } else { count - 1 };
+                    self.notice = Some("Search wrapped".to_owned());
+                } else {
+                    self.search.pending_move = None;
+                    self.search.initial_position = None;
+                    self.notice = Some("Pattern not found in search direction".to_owned());
+                    return;
+                }
+            }
             self.search.pending_move = None;
+            self.search.initial_position = None;
             self.select_active_search_match();
         } else if count > 0
             && (self.search.job.is_none()
@@ -549,13 +750,47 @@ impl App {
             self.move_page_result(delta);
         } else if self.search.job.is_none() {
             self.search.pending_move = None;
+            if count == 0 && !self.search.query.is_empty() {
+                self.notice = Some(
+                    if self.search.limited {
+                        "No indexed matches · partial"
+                    } else {
+                        "Pattern not found"
+                    }
+                    .to_owned(),
+                );
+            }
         }
     }
 
     pub(super) fn select_search_relative(&mut self, delta: isize) {
+        self.notice = None;
         self.ensure_page_search();
+        self.sync_current_search_matches();
         if self.search.job.is_some() {
             self.advance_page_search(Instant::now());
+        }
+        if self.search.reflow_target.is_none()
+            && self
+                .search
+                .scope_matches
+                .get(self.search.active_match)
+                .is_some_and(|hit| {
+                    !self.is_current_search_document(hit.document_index)
+                        || hit.rendered.row != self.session.content_scroll
+                })
+        {
+            self.search.initial_position = Some((
+                self.scope_documents
+                    .iter()
+                    .position(|document| Arc::ptr_eq(document, &self.session.current_bundle))
+                    .unwrap_or(0),
+                self.session.content_scroll,
+            ));
+            self.search.initial_direction = delta;
+            self.search.pending_move = Some(0);
+            self.fulfill_page_search_move();
+            return;
         }
         if self.search.job.is_some()
             && (self.search.reflow_target.is_some()
@@ -575,8 +810,22 @@ impl App {
         }
         let length = isize::try_from(self.search.scope_matches.len()).unwrap_or(isize::MAX);
         let current = isize::try_from(self.search.active_match).unwrap_or_default();
-        self.search.active_match =
-            usize::try_from((current + delta).rem_euclid(length)).unwrap_or_default();
+        let next = current + delta;
+        if !(0..length).contains(&next) {
+            if !self.search.wrap || self.search.limited {
+                self.notice = Some(
+                    if self.search.limited {
+                        "Search results are partial"
+                    } else {
+                        "No more matches in search direction"
+                    }
+                    .to_owned(),
+                );
+                return;
+            }
+            self.notice = Some("Search wrapped".to_owned());
+        }
+        self.search.active_match = usize::try_from(next.rem_euclid(length)).unwrap_or_default();
         self.select_active_search_match();
     }
 
@@ -592,6 +841,7 @@ impl App {
         if !self.search.is_editing() && self.search.matching_query == self.search.query {
             self.search.confirmed_target = Some((
                 self.search.query.clone(),
+                self.search.effective_options(),
                 SearchAnchor {
                     document: search_match.document_index,
                     record: search_match.record,
@@ -633,7 +883,7 @@ impl App {
     }
 
     fn sync_current_search_matches(&mut self) {
-        if !self.search.is_open() {
+        if !self.search.highlighted {
             self.search.matches.clear();
             return;
         }
@@ -653,7 +903,7 @@ impl App {
     }
 
     pub(super) fn move_search_cursor_to(&mut self, column: u16) {
-        let prefix_width = u16::try_from(self.search_prompt().len()).unwrap_or(u16::MAX);
+        let prefix_width = u16::try_from(self.search_prompt().width()).unwrap_or(u16::MAX);
         let text_column =
             usize::from(column.saturating_sub(self.geometry.status.x.saturating_add(prefix_width)));
         self.active_search_input_mut()

@@ -101,6 +101,10 @@ pub(super) enum MenuAction {
     First,
     Last,
     Find,
+    FindBackward,
+    SearchCase,
+    SearchSyntax,
+    SearchWrap,
     FindOutline,
     FindNext,
     FindPrevious,
@@ -240,11 +244,31 @@ const SEARCH_MENU: &[MenuEntry] = &[
         shortcut: "N",
         action: MenuAction::FindPrevious,
     },
+    MenuEntry {
+        label: "Find Backward in Page",
+        shortcut: "?",
+        action: MenuAction::FindBackward,
+    },
+    MenuEntry {
+        label: "Cycle Case: Sensitive / Ignore / Smart",
+        shortcut: "Alt+C (Search)",
+        action: MenuAction::SearchCase,
+    },
+    MenuEntry {
+        label: "Toggle Regex / Literal",
+        shortcut: "Ctrl+R (Search)",
+        action: MenuAction::SearchSyntax,
+    },
+    MenuEntry {
+        label: "Toggle Search Wrap",
+        shortcut: "Alt+W (Search)",
+        action: MenuAction::SearchWrap,
+    },
 ];
 
 const HELP_MENU: &[MenuEntry] = &[MenuEntry {
     label: "Keyboard Shortcuts",
-    shortcut: "?",
+    shortcut: "F1",
     action: MenuAction::Help,
 }];
 
@@ -289,7 +313,7 @@ impl App {
         match self.overlay {
             Overlay::None => {}
             Overlay::Help => match key.code {
-                KeyCode::Esc | KeyCode::Char('?') => self.overlay = Overlay::None,
+                KeyCode::Esc | KeyCode::F(1) | KeyCode::Char('?') => self.overlay = Overlay::None,
                 KeyCode::Down | KeyCode::Char('j') => {
                     self.help_scroll = self.help_scroll.saturating_add(1);
                 }
@@ -494,7 +518,39 @@ impl App {
             MenuAction::FirstChild => self.expand_or_select_child(),
             MenuAction::First => self.select_edge(false),
             MenuAction::Last => self.select_edge(true),
-            MenuAction::Find => self.open_search(),
+            MenuAction::Find => {
+                self.open_search();
+                self.search.direction = 1;
+            }
+            MenuAction::FindBackward => {
+                self.open_search();
+                self.search.direction = -1;
+            }
+            MenuAction::SearchCase | MenuAction::SearchSyntax | MenuAction::SearchWrap => {
+                let editing = self.search_is_open();
+                if self.last_search_target == super::outline_search::SearchTarget::Outline {
+                    self.open_outline_search();
+                } else {
+                    self.open_search();
+                }
+                if !editing {
+                    let input = self.active_search_input_mut();
+                    input.draft.clone_from(&input.query);
+                    input.cursor = input.draft.len();
+                }
+                self.handle_search_key(KeyEvent::new(
+                    KeyCode::Char(match action {
+                        MenuAction::SearchCase => 'c',
+                        MenuAction::SearchSyntax => 'r',
+                        _ => 'w',
+                    }),
+                    if matches!(action, MenuAction::SearchSyntax) {
+                        KeyModifiers::CONTROL
+                    } else {
+                        KeyModifiers::ALT
+                    },
+                ));
+            }
             MenuAction::FindOutline => self.open_outline_search(),
             MenuAction::FindNext => self.select_last_search_relative(1),
             MenuAction::FindPrevious => self.select_last_search_relative(-1),
@@ -653,9 +709,13 @@ impl App {
             Line::raw("Ctrl+O       find and open a document"),
             Line::raw("top tabs     switch opened documents"),
             Line::raw("Alt+←/→      back / forward"),
-            Line::raw("Ctrl+F or /  find in current page"),
+            Line::raw("Ctrl+F / / · ?  find forward / backward in page"),
             Line::raw("Ctrl+G       find outline titles, entries and links"),
-            Line::raw("n / N        next / previous in last search scope"),
+            Line::raw("n / N        repeat search direction / reverse"),
+            Line::raw("search       Regex + case-sensitive by default"),
+            Line::raw("Ctrl+R (Search)  toggle Regex / Literal"),
+            Line::raw("Alt+C (Search)  Sensitive / Ignore / Smart case"),
+            Line::raw("Alt+W (Search)  toggle wrap (default off)"),
             Line::raw("drag / Shift+click  select+copy / extend"),
             Line::raw("right-click   copy selected plain text"),
             Line::raw("y / Ctrl+Shift+C  copy selected plain text"),
@@ -665,7 +725,8 @@ impl App {
             Line::raw("g/G · Home/End  first/last in focused region"),
             Line::raw("d/u · Ctrl+d/u  scroll Content by half a viewport"),
             Line::raw("Space/f/b (Content) · PgDn/PgUp  page down/up"),
-            Line::raw("search       live highlights; Enter/↑/↓ select"),
+            Line::raw("search       live highlights; Enter selects and returns"),
+            Line::raw("F1           help · Esc cancels / clears highlights"),
             Line::raw("B (uppercase)  toggle Outline sidebar"),
         ];
         let width = 76.min(frame.area().width.saturating_sub(2));

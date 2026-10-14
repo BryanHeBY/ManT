@@ -60,6 +60,15 @@ that crate was not published for that change.
 
 ### mant-ui
 
+- Make TUI search follow less-style reading: case-sensitive regexes by default,
+  `/` forward and `?` backward from the current position, with `n` repeating
+  and `N` reversing the last direction. Enter confirms and returns to reading
+  with highlights retained; empty Enter repeats the last pattern. F1 opens help.
+  Add explicit Literal, Ignore/Smart case and opt-in Wrap controls in the search
+  field and menu. Invalid patterns stay editable without literal fallbacks;
+  default searches stop at boundaries and partial results never wrap.
+  Keep live previews responsive through long records and complex regexes,
+  preserve logical anchors through reflow, and retain CLI/protocol defaults.
 - Open documents with Content focus: browse with `j/k`, `g/G` and half-page
   `d/u` or `Ctrl+d/u`; use Space/`f`/`b` or page keys for full-page reading.
   Tab/Shift+Tab switches to/from Outline without moving the page. Space folds

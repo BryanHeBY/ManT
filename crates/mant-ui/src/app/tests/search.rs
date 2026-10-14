@@ -15,7 +15,7 @@ fn confirmed_search_reports_no_matches_in_the_bottom_bar() {
 
     terminal.draw(|frame| app.draw(frame)).expect("draw app");
 
-    assert!(terminal.backend().to_string().contains("No matches"));
+    assert!(terminal.backend().to_string().contains("Pattern not found"));
 }
 
 #[test]
@@ -46,7 +46,12 @@ fn clicking_the_search_field_moves_its_unicode_aware_cursor() {
 
     app.handle_mouse(MouseEvent {
         kind: MouseEventKind::Down(MouseButton::Left),
-        column: app.geometry.status.x + 13,
+        column: app.geometry.status.x
+            + u16::try_from(unicode_width::UnicodeWidthStr::width(
+                app.search_prompt().as_str(),
+            ))
+            .unwrap()
+            + 1,
         row: app.geometry.status.y,
         modifiers: KeyModifiers::NONE,
     });
@@ -57,10 +62,11 @@ fn clicking_the_search_field_moves_its_unicode_aware_cursor() {
 }
 
 #[test]
-fn arrows_cycle_confirmed_search_results_without_requerying() {
+fn n_and_n_uppercase_cycle_confirmed_search_results_without_requerying() {
     let backend = TestBackend::new(100, 18);
     let mut terminal = Terminal::new(backend).expect("test terminal");
     let mut app = App::new(&navigation_bundle());
+    app.search.wrap = true;
     terminal.draw(|frame| app.draw(frame)).expect("draw app");
     app.handle_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
     for character in "help".chars() {
@@ -69,9 +75,9 @@ fn arrows_cycle_confirmed_search_results_without_requerying() {
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     assert!(app.search.matches.len() >= 2);
 
-    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE));
     assert_eq!(app.search.active_match, 1);
-    app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Char('N'), KeyModifiers::NONE));
     assert_eq!(app.search.active_match, 0);
 
     app.handle_key(KeyEvent::new(KeyCode::Char('N'), KeyModifiers::SHIFT));
@@ -151,6 +157,7 @@ fn search_menu_actions_keep_confirmed_results_available() {
     let backend = TestBackend::new(100, 18);
     let mut terminal = Terminal::new(backend).expect("test terminal");
     let mut app = App::new(&navigation_bundle());
+    app.search.wrap = true;
     terminal.draw(|frame| app.draw(frame)).expect("draw app");
     app.handle_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
     for character in "help".chars() {
@@ -169,7 +176,7 @@ fn search_menu_actions_keep_confirmed_results_available() {
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
     assert_eq!(app.overlay, Overlay::None);
-    assert!(app.search.is_open());
+    assert!(!app.search.is_open());
     assert_eq!(app.search.active_match, app.search.matches.len() - 1);
 
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));

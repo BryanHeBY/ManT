@@ -863,30 +863,33 @@ fn closing_search_removes_highlights_but_retains_navigation() {
     terminal.draw(|frame| app.draw(frame)).expect("draw app");
 
     app.handle_key(KeyEvent::new(KeyCode::Char('f'), KeyModifiers::CONTROL));
-    for character in "show".chars() {
+    for character in "Show".chars() {
         app.handle_key(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE));
     }
     assert_eq!(app.search.matches.len(), 0);
     assert!(app.search.is_editing());
 
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    assert_eq!(app.search.query, "show");
+    assert_eq!(app.search.query, "Show");
     assert_eq!(app.search.matches.len(), 1);
     assert!(!app.search.is_editing());
 
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert_eq!(app.search.mode, SearchMode::Closed);
-    assert_eq!(app.search.query, "show");
+    assert_eq!(app.search.query, "Show");
     assert_eq!(app.search.matches.len(), 0);
     assert_eq!(app.search.scope_matches.len(), 1);
 
     app.handle_key(KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE));
-    assert_eq!(app.search.matches.len(), 0);
+    assert_eq!(app.search.matches.len(), 1);
     app.refresh_search(80);
     app.tick(app.search.deadline.expect("resumable refresh"));
-    assert_eq!(app.search.matches.len(), 0);
+    assert_eq!(app.search.matches.len(), 1);
 
     app.open_search();
+    for character in "Show".chars() {
+        app.handle_key(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE));
+    }
     app.tick(app.search.deadline.expect("new-width search"));
     assert_eq!(app.search.matches.len(), 1);
 }
